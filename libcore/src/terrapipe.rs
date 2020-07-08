@@ -21,13 +21,24 @@
 
 //! This is the implementation of the terrabasedb/RFC#1
 
+use std::fmt;
+
+/// The 'TP' protocol tag used in the meta frame
 const MF_PROTOCOL_TAG: &'static str = "TP";
+/// The 'Q' tag used in the meta frame
 const MF_QUERY_TAG: &'static str = "Q";
+/// The 'R' tag used in the meta frame
+const MF_RESULT_TAG: &'static str = "R";
+/// 'SET' tag in the meta frame
 const MF_QUERY_SET_TAG: &'static str = "SET";
+/// 'GET' tag in the meta frame
 const MF_QUERY_GET_TAG: &'static str = "GET";
+/// 'UPDATE' tag in the meta frame
 const MF_QUERY_UPDATE_TAG: &'static str = "UPDATE";
+/// 'DEL' tag in the meta frame
 const MF_QUERY_DEL_TAG: &'static str = "DEL";
 
+/// A macro to easily create result packets - to be used by servers
 macro_rules! result_packet {
     ($version:expr, $respcode:expr, $data:expr) => {{
         let data = $data.to_string();
@@ -41,6 +52,7 @@ macro_rules! result_packet {
     }};
 }
 
+/// A macro to easily create query packets - to be used by clients
 macro_rules! query_packet {
     ($version:expr, $querytype:expr, $data:expr) => {
         format!(
@@ -133,9 +145,11 @@ impl ToString for TPQueryType {
     }
 }
 
-/// Errors that may occur while parsing a query packet
+/// Errors that may occur while parsing a query/result packet
 #[derive(Debug, PartialEq)]
-pub enum TPQueryError {
+pub enum TPError {
+    /// `0: Okay`
+    Okay,
     /// `1: Not Found`
     ///
     /// The target resource could not be found
@@ -174,6 +188,31 @@ pub enum TPQueryError {
     CorruptPacket,
 }
 
+impl TPError {
+    /// Returns a `TPError` variant from an `u8` and returns `None` if it
+    /// isn't a valid code
+    pub fn from_u8(code: u8) -> Option<Self> {
+        use TPError::*;
+        let val = match code {
+            0 => Okay,
+            1 => NotFound,
+            2 => OverwriteError,
+            3 => MethodNotAllowed,
+            4 => InternalServerError,
+            5 => InvalidMetaframe,
+            6 => CorruptDataframe,
+            7 => ProtocolVersionMismatch,
+            8 => CorruptPacket,
+            _ => return None,
+        };
+        Some(val)
+    }
+}
+
+/// Errors that may occur while parsing a query packet
+#[derive(Debug, PartialEq)]
+pub struct TPQueryError(TPError);
+
 #[cfg(test)]
 #[test]
 fn test_result_macros() {
@@ -185,37 +224,43 @@ fn test_result_macros() {
     assert_eq!(query, query_should_be);
     assert_eq!(result, result_should_be);
 }
-
+/// Parse a query packet that is sent by the client
+/// ## Returns
+/// This returns a `TPQueryMethod` which can be used to execute the action or
+/// it returns a `TPQueryError` in the case an error occurs while parsing the packet
 pub fn parse_query_packet(
     packet: String,
     self_version: &Version,
 ) -> Result<TPQueryMethod, TPQueryError> {
     let rlines: Vec<&str> = packet.lines().collect();
     if rlines.len() < 2 {
-        return Err(TPQueryError::CorruptPacket);
+        return Err(TPQueryError(TPError::CorruptPacket));
     }
     let metaframe: Vec<&str> = rlines[0].split("/").collect();
     if metaframe.len() != 4 {
-        return Err(TPQueryError::InvalidMetaframe);
+        return Err(TPQueryError(TPError::InvalidMetaframe));
     }
 
-    if metaframe[0] != MF_PROTOCOL_TAG {
-        return Err(TPQueryError::InvalidMetaframe);
+    if metaframe[0].ne(MF_PROTOCOL_TAG) {
+        return Err(TPQueryError(TPError::InvalidMetaframe));
     }
     if let Some(v) = Version::new_from_str(metaframe[1]) {
         if self_version.is_compatible_with(&v) {
             ()
         } else {
-            return Err(TPQueryError::ProtocolVersionMismatch);
+            return Err(TPQueryError(TPError::ProtocolVersionMismatch));
         }
     }
 
-    if metaframe[2] != MF_QUERY_TAG {
-        return Err(TPQueryError::InvalidMetaframe);
+    if metaframe[2].ne(MF_QUERY_TAG) {
+        return Err(TPQueryError(TPError::InvalidMetaframe));
     }
+    /* TODO: This is temporary - the dataframe in the future may be
+    multiple lines long
+    */
     let dataframe: Vec<&str> = rlines[1].split_whitespace().collect();
     if dataframe.len() == 0 {
-        return Err(TPQueryError::CorruptDataframe);
+        return Err(TPQueryError(TPError::CorruptDataframe));
     }
     match metaframe[3] {
         MF_QUERY_GET_TAG => {
@@ -251,9 +296,81 @@ pub fn parse_query_packet(
             }
         }
         // Some random illegal command
-        _ => return Err(TPQueryError::MethodNotAllowed),
+        _ => return Err(TPQueryError(TPError::MethodNotAllowed)),
     }
-    Err(TPQueryError::CorruptDataframe)
+    Err(TPQueryError(TPError::CorruptDataframe))
+}
+
+/// Errors that may occur while parsing a result packet
+#[derive(Debug, PartialEq)]
+pub enum TPResultError {
+    /// The standard `TPError`s
+    StandardError(TPError),
+    /// In the event someone tried to parse a result from a _patched_ server
+    /// which sent a weird error code, use this variant
+    UnrecognizedError(String),
+}
+
+/// `TPResult` is type alias for `String`
+pub type TPResult = String;
+
+/// Parse a result packet sent by the server
+/// ## Returns
+/// If there was no error in parsing the packet, then a `TPResult` is returned.
+/// Otherwise a `TPResultError` is returned
+pub fn parse_result_packet(
+    packet: String,
+    self_version: &Version,
+) -> Result<TPResult, TPResultError> {
+    use TPResultError::*;
+    let rlines: Vec<&str> = packet.lines().collect();
+    if rlines.len() < 2 {
+        return Err(StandardError(TPError::CorruptPacket));
+    }
+
+    let metaframe: Vec<&str> = rlines[0].split("/").collect();
+    if metaframe.len() != 5 {
+        return Err(StandardError(TPError::InvalidMetaframe));
+    }
+    let dataframe: Vec<&str> = rlines[1].split(" ").collect();
+
+    if metaframe[0].ne(MF_PROTOCOL_TAG) || metaframe[2].ne(MF_RESULT_TAG) {
+        return Err(StandardError(TPError::InvalidMetaframe));
+    }
+
+    // Check version compatibility
+    if let Some(version) = Version::new_from_str(metaframe[1]) {
+        if !self_version.is_compatible_with(&version) {
+            return Err(StandardError(TPError::ProtocolVersionMismatch));
+        }
+    } else {
+        return Err(StandardError(TPError::InvalidMetaframe));
+    }
+
+    let respcode = match metaframe[4].parse::<u8>() {
+        Ok(v) => v,
+        Err(_) => return Err(UnrecognizedError(metaframe[4].to_owned())),
+    };
+
+    if let Some(respcode) = TPError::from_u8(respcode) {
+        match respcode {
+            Okay => {
+                // Enter dataframe and check result
+                if let Some(value) = dataframe.get(0) {
+                    if dataframe.get(1).is_none() {
+                        return Ok(value.to_string());
+                    } else {
+                        return Err(StandardError(TPError::CorruptDataframe));
+                    }
+                } else {
+                    return Err(StandardError(TPError::CorruptDataframe));
+                }
+            }
+            x @ _ => return Err(StandardError(x)),
+        }
+    } else {
+        return Err(UnrecognizedError(respcode.to_string()));
+    }
 }
 
 #[cfg(test)]
@@ -263,4 +380,14 @@ fn test_query_packet_parsing() {
     let query_should_be = TPQueryMethod::GET("sayan".to_owned());
     let parsed_qpacket = parse_query_packet(qpacket, &Version(0, 1, 0)).unwrap();
     assert_eq!(query_should_be, parsed_qpacket);
+}
+
+#[cfg(test)]
+#[test]
+fn test_result_packet_parsing() {
+    let v = Version(0, 1, 0);
+    let rpacket = result_packet!(v, 0, 18);
+    let result_should_be = 18.to_string();
+    let parsed_rpacket = parse_result_packet(rpacket, &v).unwrap();
+    assert_eq!(result_should_be, parsed_rpacket);
 }
