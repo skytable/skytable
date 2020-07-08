@@ -229,7 +229,7 @@ fn test_result_macros() {
 /// This returns a `TPQueryMethod` which can be used to execute the action or
 /// it returns a `TPQueryError` in the case an error occurs while parsing the packet
 pub fn parse_query_packet(
-    packet: String,
+    packet: &String,
     self_version: &Version,
 ) -> Result<TPQueryMethod, TPQueryError> {
     let rlines: Vec<&str> = packet.lines().collect();
@@ -319,7 +319,7 @@ pub type TPResult = String;
 /// If there was no error in parsing the packet, then a `TPResult` is returned.
 /// Otherwise a `TPResultError` is returned
 pub fn parse_result_packet(
-    packet: String,
+    packet: &String,
     self_version: &Version,
 ) -> Result<TPResult, TPResultError> {
     use TPResultError::*;
@@ -347,7 +347,7 @@ pub fn parse_result_packet(
         return Err(StandardError(TPError::InvalidMetaframe));
     }
 
-    let respcode = match metaframe[4].parse::<u8>() {
+    let respcode = match metaframe[3].parse::<u8>() {
         Ok(v) => v,
         Err(_) => return Err(UnrecognizedError(metaframe[4].to_owned())),
     };
@@ -378,7 +378,7 @@ pub fn parse_result_packet(
 fn test_query_packet_parsing() {
     let qpacket = query_packet!(Version(0, 1, 0), TPQueryType::GET, "sayan");
     let query_should_be = TPQueryMethod::GET("sayan".to_owned());
-    let parsed_qpacket = parse_query_packet(qpacket, &Version(0, 1, 0)).unwrap();
+    let parsed_qpacket = parse_query_packet(&qpacket, &Version(0, 1, 0)).unwrap();
     assert_eq!(query_should_be, parsed_qpacket);
 }
 
@@ -388,6 +388,36 @@ fn test_result_packet_parsing() {
     let v = Version(0, 1, 0);
     let rpacket = result_packet!(v, 0, 18);
     let result_should_be = 18.to_string();
-    let parsed_rpacket = parse_result_packet(rpacket, &v).unwrap();
+    let parsed_rpacket = parse_result_packet(&rpacket, &v).unwrap();
     assert_eq!(result_should_be, parsed_rpacket);
+}
+
+#[cfg(test)]
+#[test]
+fn benchmark_packet_parsing() {
+    let version = Version(0, 1, 0);
+    use devtimer;
+    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    // First generate about 5000 random keys and 5000 random values
+    let rankeys: Vec<String> = (0..5000)
+        .map(|_| thread_rng().sample_iter(&Alphanumeric).take(30).collect())
+        .collect();
+    let ranvalues: Vec<String> = (0..5000)
+        .map(|_| thread_rng().sample_iter(&Alphanumeric).take(30).collect())
+        .collect();
+    let queries: Vec<String> = (0..5000)
+        .map(|n| query_packet!(version, TPQueryType::GET, rankeys[n]))
+        .collect();
+    let results: Vec<String> = (0..5000)
+        .map(|n| result_packet!(version, 0, ranvalues[n]))
+        .collect();
+
+    let qpacket_bench = devtimer::run_benchmark(5000, |n| {
+        parse_query_packet(&queries[n], &version).unwrap();
+    });
+    let rpacket_bench = devtimer::run_benchmark(5000, |n| {
+        parse_result_packet(&results[n], &version).unwrap();
+    });
+    qpacket_bench.print_stats();
+    rpacket_bench.print_stats();
 }
