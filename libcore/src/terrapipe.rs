@@ -43,7 +43,7 @@ macro_rules! result_packet {
     ($version:expr, $respcode:expr, $data:expr) => {{
         let data = $data.to_string();
         format!(
-            "TP/{}/R/{}/{}\n{}",
+            "TP/{}/R/{}/{}\n\n{}",
             $version.to_string(),
             $respcode,
             data.len(),
@@ -56,7 +56,7 @@ macro_rules! result_packet {
 macro_rules! query_packet {
     ($version:expr, $querytype:expr, $data:expr) => {
         format!(
-            "TP/{}/Q/{}\n{}",
+            "TP/{}/Q/{}\n\n{}",
             $version.to_string(),
             $querytype.to_string(),
             $data
@@ -219,8 +219,8 @@ fn test_result_macros() {
     let proto_version = Version(0, 1, 0);
     let query = query_packet!(proto_version, TPQueryType::GET, "sayan");
     let result = result_packet!(proto_version, 0, 17);
-    let query_should_be = "TP/0.1.0/Q/GET\nsayan".to_owned();
-    let result_should_be = "TP/0.1.0/R/0/2\n17".to_owned();
+    let query_should_be = "TP/0.1.0/Q/GET\n\nsayan".to_owned();
+    let result_should_be = "TP/0.1.0/R/0/2\n\n17".to_owned();
     assert_eq!(query, query_should_be);
     assert_eq!(result, result_should_be);
 }
@@ -258,10 +258,10 @@ pub fn parse_query_packet(
     /* TODO: This is temporary - the dataframe in the future may be
     multiple lines long
     */
-    let dataframe: Vec<&str> = rlines[1].split_whitespace().collect();
-    if dataframe.len() == 0 {
-        return Err(TPQueryError(TPError::CorruptDataframe));
-    }
+    let dataframe: Vec<&str> = match rlines.get(2) {
+        Some(s) => s.split_whitespace().collect(),
+        None => return Err(TPQueryError(TPError::CorruptDataframe)),
+    };
     match metaframe[3] {
         MF_QUERY_GET_TAG => {
             // This is a GET query
@@ -332,7 +332,10 @@ pub fn parse_result_packet(
     if metaframe.len() != 5 {
         return Err(StandardError(TPError::InvalidMetaframe));
     }
-    let dataframe: Vec<&str> = rlines[1].split(" ").collect();
+    let dataframe: Vec<&str> = match rlines.get(2) {
+        Some(s) => s.split_whitespace().collect(),
+        None => return Err(StandardError(TPError::CorruptDataframe)),
+    };
 
     if metaframe[0].ne(MF_PROTOCOL_TAG) || metaframe[2].ne(MF_RESULT_TAG) {
         return Err(StandardError(TPError::InvalidMetaframe));
@@ -420,4 +423,44 @@ fn benchmark_packet_parsing() {
     });
     qpacket_bench.print_stats();
     rpacket_bench.print_stats();
+}
+
+#[cfg(test)]
+#[test]
+fn test_qpacket_error() {
+    let v = Version(0, 1, 0);
+    let ep_bad_mf_tp_tag = "AP/0.1.0/Q/GET\n\nsayan".to_owned();
+    let eq_invalid_mf = TPQueryError(TPError::InvalidMetaframe);
+    assert_eq!(
+        parse_query_packet(&ep_bad_mf_tp_tag, &v).err().unwrap(),
+        eq_invalid_mf
+    );
+    let ep_bad_mf_q_tag = "TP/0.1.0/W/GET\n\nsayan".to_owned();
+    assert_eq!(
+        parse_query_packet(&ep_bad_mf_q_tag, &v).err().unwrap(),
+        eq_invalid_mf
+    );
+    let ep_bad_mf_version = "TP/0.1/W/GET\n\nsayan".to_owned();
+    assert_eq!(
+        parse_query_packet(&ep_bad_mf_version, &v).err().unwrap(),
+        eq_invalid_mf
+    );
+    let eq_method_not_allowed = TPQueryError(TPError::MethodNotAllowed);
+    let ep_bad_mf_method = "TP/0.1.0/Q/WTH\n\nsayan".to_owned();
+    assert_eq!(
+        parse_query_packet(&ep_bad_mf_method, &v).err().unwrap(),
+        eq_method_not_allowed
+    );
+    let ep_corruptpacket = "TP/0.1.0/Q/GET".to_owned();
+    let eq_corruptpacket = TPQueryError(TPError::CorruptPacket);
+    assert_eq!(
+        parse_query_packet(&ep_corruptpacket, &v).err().unwrap(),
+        eq_corruptpacket
+    );
+    let ep_corrupt_df = "TP/0.1.0/Q/GET\n\n".to_owned();
+    let eq_corrupt_df = TPQueryError(TPError::CorruptDataframe);
+    assert_eq!(
+        parse_query_packet(&ep_corrupt_df, &v).err().unwrap(),
+        eq_corrupt_df
+    );
 }
