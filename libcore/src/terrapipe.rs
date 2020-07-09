@@ -355,13 +355,22 @@ pub fn parse_result_packet(
         Err(_) => return Err(UnrecognizedError(metaframe[4].to_owned())),
     };
 
+    let respsize = match metaframe[4].parse::<usize>() {
+        Ok(r) => r,
+        Err(_) => return Err(StandardError(TPError::InvalidMetaframe)),
+    };
+
     if let Some(respcode) = TPError::from_u8(respcode) {
         match respcode {
-            Okay => {
+            TPError::Okay => {
                 // Enter dataframe and check result
                 if let Some(value) = dataframe.get(0) {
                     if dataframe.get(1).is_none() {
-                        return Ok(value.to_string());
+                        if value.len() == respsize {
+                            return Ok(value.to_string());
+                        } else {
+                            return Err(StandardError(TPError::CorruptDataframe));
+                        }
                     } else {
                         return Err(StandardError(TPError::CorruptDataframe));
                     }
@@ -462,5 +471,44 @@ fn test_qpacket_error() {
     assert_eq!(
         parse_query_packet(&ep_corrupt_df, &v).err().unwrap(),
         eq_corrupt_df
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn test_rpacket_error() {
+    let v = Version(0, 1, 0);
+    use TPResultError::*;
+    let bad_tp_tag = "AP/0.1.0/R/5\n\nsayan".to_owned();
+    let bad_version = "TP/0.1/R/0/5\n\nsayan".to_owned();
+    let bad_mf_r_tag = "TP/0.1.0/X/0/5\n\nsayan".to_owned();
+    let bad_mf_no_size = "TP/0.1.0/R/0\n\nsayan".to_owned();
+    let bad_df = "TP/0.1.0/R/0/5\n\n".to_owned();
+    let bad_df_size = "TP/0.1.0/0/4\n\nsaya".to_owned();
+    let err_invalid_mf = StandardError(TPError::InvalidMetaframe);
+    let err_corrupt_df = StandardError(TPError::CorruptDataframe);
+    assert_eq!(
+        parse_result_packet(&bad_tp_tag, &v).err().unwrap(),
+        err_invalid_mf
+    );
+    assert_eq!(
+        parse_result_packet(&bad_version, &v).err().unwrap(),
+        err_invalid_mf
+    );
+    assert_eq!(
+        parse_result_packet(&bad_mf_r_tag, &v).err().unwrap(),
+        err_invalid_mf
+    );
+    assert_eq!(
+        parse_result_packet(&bad_mf_no_size, &v).err().unwrap(),
+        err_invalid_mf
+    );
+    assert_eq!(
+        parse_result_packet(&bad_df, &v).err().unwrap(),
+        err_corrupt_df
+    );
+    assert_eq!(
+        parse_result_packet(&bad_df_size, &v).err().unwrap(),
+        err_invalid_mf
     );
 }
