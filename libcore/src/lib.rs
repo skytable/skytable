@@ -19,4 +19,4 @@
  *
 */
 
-mod terrapipe;
+pub mod terrapipe;
