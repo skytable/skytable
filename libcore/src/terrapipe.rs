@@ -197,6 +197,7 @@ impl QueryMetaframe {
     }
 }
 
+#[derive(Debug)]
 pub struct Dataframe(String);
 
 impl Dataframe {

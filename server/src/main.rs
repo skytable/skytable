@@ -18,66 +18,56 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+
+// Internal modules
 use libcore::terrapipe::{
     Dataframe, QueryMetaframe, QueryMethod, ResponseBytes, ResponseCodes, Version,
     DEF_Q_META_BUFSIZE,
 };
-use std::io::prelude::*;
-use std::io::{BufReader, ErrorKind};
-use std::net::{TcpListener, TcpStream};
-use std::process;
 
 const SELF_VERSION: Version = Version(0, 1, 0);
 
-const EXIT_ERROR: fn(&'static str) -> ! = |err| {
-    eprintln!("error: {}", err);
-    process::exit(0x100);
-};
+static ADDR: &'static str = "127.0.0.1:2003";
 
-fn main() {
-    let listener = match TcpListener::bind("127.0.0.1:2003") {
-        Ok(binding) => binding,
-        Err(e) => match e.kind() {
-            ErrorKind::AddrInUse => {
-                EXIT_ERROR("Cannot bind to port 2003 as it is already in use");
-            }
-            // TODO: Need proper error handling
-            _ => {
-                EXIT_ERROR("Some other error occurred!");
-            }
-        },
-    };
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        handle_stream(stream);
+#[tokio::main]
+async fn main() {
+    let mut listener = TcpListener::bind(ADDR).await.unwrap();
+    println!("Server running on terrapipe://127.0.0.1:2003");
+
+    loop {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        tokio::spawn(async move {
+            let mut meta_buffer = String::with_capacity(DEF_Q_META_BUFSIZE);
+            let mut reader = BufReader::with_capacity(DEF_Q_META_BUFSIZE, &mut socket);
+            reader.read_line(&mut meta_buffer).await.unwrap();
+            let mf = match QueryMetaframe::from_buffer(&SELF_VERSION, &meta_buffer) {
+                Ok(m) => m,
+                Err(e) => {
+                    return close_conn_with_error(socket, e.response_bytes(&SELF_VERSION)).await
+                }
+            };
+            let mut data_buffer = vec![0; mf.get_content_size()];
+            reader.read(&mut data_buffer).await.unwrap();
+            let df = match Dataframe::from_buffer(mf.get_content_size(), data_buffer) {
+                Ok(d) => d,
+                Err(e) => {
+                    return close_conn_with_error(socket, e.response_bytes(&SELF_VERSION)).await
+                }
+            };
+            return execute_query(socket, mf, df).await;
+        });
     }
 }
 
-fn handle_stream(mut stream: TcpStream) {
-    // The largest command that we have right now is UPDATE
-    // Which along with the size will mount to 26 + 20 = 460usize
-    let mut meta_buffer = String::with_capacity(DEF_Q_META_BUFSIZE);
-    let mut bufreader = BufReader::with_capacity(DEF_Q_META_BUFSIZE, &stream);
-    bufreader.read_line(&mut meta_buffer).unwrap();
-    let mf = match QueryMetaframe::from_buffer(&SELF_VERSION, &meta_buffer) {
-        Ok(m) => m,
-        Err(e) => return close_conn_with_error(stream, e.response_bytes(&SELF_VERSION)),
-    };
-    let mut data_buffer = vec![0; mf.get_content_size()];
-    bufreader.read(&mut data_buffer).unwrap();
-    let df = match Dataframe::from_buffer(mf.get_content_size(), data_buffer) {
-        Ok(d) => d,
-        Err(e) => return close_conn_with_error(stream, e.response_bytes(&SELF_VERSION)),
-    };
-    execute_query(stream, mf, df);
+async fn close_conn_with_error(mut stream: TcpStream, bytes: Vec<u8>) {
+    stream.write_all(&bytes).await.unwrap()
 }
 
-fn close_conn_with_error(mut stream: TcpStream, error: Vec<u8>) {
-    stream.write(&error).unwrap();
-}
-
-// TODO: This is a dummy implementation
-pub fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
+async fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
     let vars = df.deflatten();
     use QueryMethod::*;
     match mf.get_method() {
@@ -89,6 +79,7 @@ pub fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
             } else {
                 stream
                     .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
+                    .await
                     .unwrap();
             }
         }
@@ -98,6 +89,7 @@ pub fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
             } else if vars.len() < 2 {
                 stream
                     .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
+                    .await
                     .unwrap();
             } else {
                 eprintln!("ERROR: Cannot do multiple SETs just yet");
@@ -109,6 +101,7 @@ pub fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
             } else if vars.len() < 2 {
                 stream
                     .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
+                    .await
                     .unwrap();
             } else {
                 eprintln!("ERROR: Cannot do multiple UPDATEs just yet");
@@ -122,6 +115,7 @@ pub fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
             } else {
                 stream
                     .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
+                    .await
                     .unwrap();
             }
         }
