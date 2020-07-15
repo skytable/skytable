@@ -2,7 +2,7 @@
  * Created on Mon Jul 13 2020
  *
  * This file is a part of the source code for the Terrabase database
- * Copyright (c) 2020 Sayan Nandan
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by

@@ -2,7 +2,7 @@
  * Created on Mon Jul 13 2020
  *
  * This file is a part of the source code for the Terrabase database
- * Copyright (c) 2020 Sayan Nandan
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,7 +19,6 @@
  *
 */
 
-use super::SELF_VERSION;
 use libcore::terrapipe::{
     Dataframe, QueryMetaframe, ResponseBytes, ResponseCodes, DEF_Q_META_BUFSIZE,
 };
@@ -49,7 +48,7 @@ impl Connection {
                 return Err(ResponseCodes::InternalServerError);
             }
         }
-        let qmf = match QueryMetaframe::from_buffer(&SELF_VERSION, &meta_buffer) {
+        let qmf = match QueryMetaframe::from_buffer(&meta_buffer) {
             Ok(qmf) => qmf,
             Err(e) => return Err(e),
         };

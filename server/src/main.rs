@@ -2,7 +2,7 @@
  * Created on Thu Jul 02 2020
  *
  * This file is a part of the source code for the Terrabase database
- * Copyright (c) 2020 Sayan Nandan
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -22,19 +22,16 @@
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::task;
 
 mod coredb;
 mod dbnet;
 use std::cmp::Ordering;
 use std::sync::Arc;
 // Internal modules
-use libcore::response_packet;
 use libcore::terrapipe::{
     Dataframe, QueryMetaframe, QueryMethod, ResponseBytes, ResponseCodes, Version,
     DEF_Q_META_BUFSIZE,
 };
-const SELF_VERSION: Version = Version(0, 1, 0);
 
 static ADDR: &'static str = "127.0.0.1:2003";
 
@@ -50,19 +47,15 @@ async fn main() {
             let mut meta_buffer = String::with_capacity(DEF_Q_META_BUFSIZE);
             let mut reader = BufReader::with_capacity(DEF_Q_META_BUFSIZE, &mut socket);
             reader.read_line(&mut meta_buffer).await.unwrap();
-            let mf = match QueryMetaframe::from_buffer(&SELF_VERSION, &meta_buffer) {
+            let mf = match QueryMetaframe::from_buffer(&meta_buffer) {
                 Ok(m) => m,
-                Err(e) => {
-                    return close_conn_with_error(socket, e.response_bytes(&SELF_VERSION)).await
-                }
+                Err(e) => return close_conn_with_error(socket, e.response_bytes()).await,
             };
             let mut data_buffer = vec![0; mf.get_content_size()];
             reader.read(&mut data_buffer).await.unwrap();
             let df = match Dataframe::from_buffer(mf.get_content_size(), data_buffer) {
                 Ok(d) => d,
-                Err(e) => {
-                    return close_conn_with_error(socket, e.response_bytes(&SELF_VERSION)).await
-                }
+                Err(e) => return close_conn_with_error(socket, e.response_bytes()).await,
             };
             return execute_query(socket, handle, mf, df).await;
         });
@@ -93,10 +86,7 @@ async fn execute_query(
                 }
                 _ => ResponseCodes::CorruptDataframe,
             };
-            stream
-                .write(&result.response_bytes(&SELF_VERSION))
-                .await
-                .unwrap();
+            stream.write(&result.response_bytes()).await.unwrap();
         }
         SET => {
             let result = match vars.len().cmp(&2) {
@@ -107,10 +97,7 @@ async fn execute_query(
                 _ => ResponseCodes::CorruptDataframe,
             };
             handle.print_debug_table();
-            stream
-                .write(&result.response_bytes(&SELF_VERSION))
-                .await
-                .unwrap();
+            stream.write(&result.response_bytes()).await.unwrap();
         }
         UPDATE => {
             let result = match vars.len().cmp(&2) {
@@ -121,10 +108,7 @@ async fn execute_query(
                 _ => ResponseCodes::CorruptDataframe,
             };
             handle.print_debug_table();
-            stream
-                .write(&result.response_bytes(&SELF_VERSION))
-                .await
-                .unwrap();
+            stream.write(&result.response_bytes()).await.unwrap();
         }
         DEL => {
             let result = match vars.len().cmp(&1) {
@@ -135,10 +119,7 @@ async fn execute_query(
                 _ => ResponseCodes::CorruptDataframe,
             };
             handle.print_debug_table();
-            stream
-                .write(&result.response_bytes(&SELF_VERSION))
-                .await
-                .unwrap();
+            stream.write(&result.response_bytes()).await.unwrap();
         }
     }
 }

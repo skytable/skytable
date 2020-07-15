@@ -2,7 +2,7 @@
  * Created on Thu Jul 02 2020
  *
  * This file is a part of the source code for the Terrabase database
- * Copyright (c) 2020 Sayan Nandan
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -21,10 +21,11 @@
 #![allow(unused)]
 
 //! This is an implementation of [Terrabase/RFC1](https://github.com/terrabasedb/rfcs/pull/1)
-
+use lazy_static::lazy_static;
 use std::fmt;
 use std::mem;
 
+pub const SELF_VERSION: Version = Version(0, 1, 0);
 pub const MF_PROTOCOL_TAG: &'static str = "TP";
 pub const MF_QUERY_TAG: &'static str = "Q";
 pub const MF_RESPONSE_TAG: &'static str = "R";
@@ -35,20 +36,31 @@ pub const MF_METHOD_UPDATE: &'static str = "UPDATE";
 pub const MF_METHOD_DEL: &'static str = "DEL";
 pub const DEF_Q_META_BUFSIZE: usize = 46;
 pub const DEF_R_META_BUFSIZE: usize = 40;
-#[macro_export]
-macro_rules! response_packet {
-    ($version:expr, $respcode:expr, $data:expr) => {{
+
+const RESPONSE_PACKET: fn(version: Version, respcode: u8, data: &str) -> Vec<u8> =
+    |version, respcode, data| {
         let res = format!(
             "TP/{}.{}.{}/R/{}/{}\n{}",
-            $version.0,
-            $version.1,
-            $version.2,
-            $respcode,
-            $data.len(),
-            $data,
+            version.0,
+            version.1,
+            version.2,
+            respcode,
+            data.len(),
+            data,
         );
         res.as_bytes().to_vec()
-    }};
+    };
+
+lazy_static! {
+    static ref RESP_OKAY_EMPTY: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 0, "");
+    static ref RESP_NOT_FOUND: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 1, "");
+    static ref RESP_OVERWRITE_ERROR: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 2, "");
+    static ref RESP_METHOD_NOT_ALLOWED: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 3, "");
+    static ref RESP_INTERNAL_SERVER_ERROR: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 4, "");
+    static ref RESP_INVALID_MF: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 5, "");
+    static ref RESP_CORRUPT_DF: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 6, "");
+    static ref RESP_PROTOCOL_VERSION_MISMATCH: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 7, "");
+    static ref RESP_CORRUPT_PACKET: Vec<u8> = RESPONSE_PACKET(SELF_VERSION, 8, "");
 }
 
 pub struct Version(pub u8, pub u8, pub u8);
@@ -110,28 +122,28 @@ impl ResponseCodes {
 }
 
 pub trait ResponseBytes {
-    fn response_bytes(&self, v: &Version) -> Vec<u8>;
+    fn response_bytes(&self) -> Vec<u8>;
 }
 
 impl ResponseBytes for ResponseCodes {
-    fn response_bytes(&self, v: &Version) -> Vec<u8> {
+    fn response_bytes(&self) -> Vec<u8> {
         use ResponseCodes::*;
         match self {
             Okay(val) => {
                 if let Some(dat) = val {
-                    response_packet!(v, 0, dat)
+                    RESPONSE_PACKET(SELF_VERSION, 0, dat)
                 } else {
-                    response_packet!(v, 0, "")
+                    RESP_OKAY_EMPTY.to_vec()
                 }
             }
-            NotFound => response_packet!(v, 1, ""),
-            OverwriteError => response_packet!(v, 2, ""),
-            MethodNotAllowed => response_packet!(v, 3, ""),
-            InternalServerError => response_packet!(v, 4, ""),
-            InvalidMetaframe => response_packet!(v, 5, ""),
-            CorruptDataframe => response_packet!(v, 6, ""),
-            ProtocolVersionMismatch => response_packet!(v, 7, ""),
-            CorruptPacket => response_packet!(v, 8, ""),
+            NotFound => RESP_NOT_FOUND.to_vec(),
+            OverwriteError => RESP_OVERWRITE_ERROR.to_vec(),
+            MethodNotAllowed => RESP_METHOD_NOT_ALLOWED.to_vec(),
+            InternalServerError => RESP_INTERNAL_SERVER_ERROR.to_vec(),
+            InvalidMetaframe => RESP_INVALID_MF.to_vec(),
+            CorruptDataframe => RESP_CORRUPT_DF.to_vec(),
+            ProtocolVersionMismatch => RESP_PROTOCOL_VERSION_MISMATCH.to_vec(),
+            CorruptPacket => RESP_CORRUPT_PACKET.to_vec(),
         }
     }
 }
@@ -151,10 +163,7 @@ pub struct QueryMetaframe {
 }
 
 impl QueryMetaframe {
-    pub fn from_buffer(
-        self_version: &Version,
-        buf: &String,
-    ) -> Result<QueryMetaframe, ResponseCodes> {
+    pub fn from_buffer(buf: &String) -> Result<QueryMetaframe, ResponseCodes> {
         let mf_parts: Vec<&str> = buf.split(MF_SEPARATOR).collect();
         if mf_parts.len() != 5 {
             return Err(ResponseCodes::InvalidMetaframe);
@@ -166,7 +175,7 @@ impl QueryMetaframe {
             None => return Err(ResponseCodes::InvalidMetaframe),
             Some(v) => v,
         };
-        if self_version.incompatible_with(&version) {
+        if SELF_VERSION.incompatible_with(&version) {
             return Err(ResponseCodes::ProtocolVersionMismatch);
         }
         // The size may have extra code point 0s - remove them
@@ -224,7 +233,7 @@ fn test_metaframe() {
     let mut goodframe = String::from("TP/0.1.0/Q/GET/5");
     // let mut goodframe = [0u8; DEF_Q_META_BUFSIZE];
     // write!(&mut goodframe[..], "TP/0.1.1/Q/GET/5").unwrap();
-    let res = QueryMetaframe::from_buffer(&v, &goodframe);
+    let res = QueryMetaframe::from_buffer(&goodframe);
     let mf_should_be = QueryMetaframe {
         content_size: 5,
         method: QueryMethod::GET,
@@ -249,9 +258,7 @@ fn benchmark_metaframe_parsing() {
         metaframes.push(buf);
     });
     let b = run_benchmark(50000, |n| {
-        let _ = QueryMetaframe::from_buffer(&v, &metaframes[n])
-            .ok()
-            .unwrap();
+        let _ = QueryMetaframe::from_buffer(&metaframes[n]).ok().unwrap();
     });
     b.print_stats();
 }
