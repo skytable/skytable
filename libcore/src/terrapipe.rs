@@ -35,11 +35,11 @@ pub const MF_METHOD_UPDATE: &'static str = "UPDATE";
 pub const MF_METHOD_DEL: &'static str = "DEL";
 pub const DEF_Q_META_BUFSIZE: usize = 46;
 pub const DEF_R_META_BUFSIZE: usize = 40;
-
+#[macro_export]
 macro_rules! response_packet {
     ($version:expr, $respcode:expr, $data:expr) => {{
         let res = format!(
-            "TP/{}.{}.{}/R/{}/{}\n\n{}",
+            "TP/{}.{}.{}/R/{}/{}\n{}",
             $version.0,
             $version.1,
             $version.2,
@@ -79,7 +79,7 @@ impl Version {
 }
 
 pub enum ResponseCodes {
-    Okay,                    // Code: 0
+    Okay(Option<String>),    // Code: 0
     NotFound,                // Code: 1
     OverwriteError,          // Code: 2
     MethodNotAllowed,        // Code: 3
@@ -94,7 +94,7 @@ impl ResponseCodes {
     pub fn from_u8(code: u8) -> Option<Self> {
         use ResponseCodes::*;
         let c = match code {
-            0 => Okay,
+            0 => Okay(None),
             1 => NotFound,
             2 => OverwriteError,
             3 => MethodNotAllowed,
@@ -117,9 +117,12 @@ impl ResponseBytes for ResponseCodes {
     fn response_bytes(&self, v: &Version) -> Vec<u8> {
         use ResponseCodes::*;
         match self {
-            Okay => {
-                // We will never need an implementation for Okay
-                unimplemented!()
+            Okay(val) => {
+                if let Some(dat) = val {
+                    response_packet!(v, 0, dat)
+                } else {
+                    response_packet!(v, 0, "")
+                }
             }
             NotFound => response_packet!(v, 1, ""),
             OverwriteError => response_packet!(v, 2, ""),
@@ -150,8 +153,8 @@ pub struct QueryMetaframe {
 impl QueryMetaframe {
     pub fn from_buffer(
         self_version: &Version,
-        buf: &String
-    ) -> Result<QueryMetaframe, impl ResponseBytes> {
+        buf: &String,
+    ) -> Result<QueryMetaframe, ResponseCodes> {
         let mf_parts: Vec<&str> = buf.split(MF_SEPARATOR).collect();
         if mf_parts.len() != 5 {
             return Err(ResponseCodes::InvalidMetaframe);
@@ -172,10 +175,9 @@ impl QueryMetaframe {
             Ok(csize) => csize,
             Err(e) => {
                 eprintln!("Errored: {}", e);
-                return Err(ResponseCodes::InvalidMetaframe)
-            },
+                return Err(ResponseCodes::InvalidMetaframe);
+            }
         };
-        
         let method = match mf_parts[3] {
             MF_METHOD_GET => QueryMethod::GET,
             MF_METHOD_SET => QueryMethod::SET,
@@ -201,10 +203,7 @@ impl QueryMetaframe {
 pub struct Dataframe(String);
 
 impl Dataframe {
-    pub fn from_buffer(
-        target_size: usize,
-        buffer: Vec<u8>,
-    ) -> Result<Dataframe, impl ResponseBytes> {
+    pub fn from_buffer(target_size: usize, buffer: Vec<u8>) -> Result<Dataframe, ResponseCodes> {
         let buffer = String::from_utf8_lossy(&buffer);
         let buffer = buffer.trim();
         if buffer.len() != target_size {
@@ -250,7 +249,9 @@ fn benchmark_metaframe_parsing() {
         metaframes.push(buf);
     });
     let b = run_benchmark(50000, |n| {
-        let _ = QueryMetaframe::from_buffer(&v, &metaframes[n]).ok().unwrap();
+        let _ = QueryMetaframe::from_buffer(&v, &metaframes[n])
+            .ok()
+            .unwrap();
     });
     b.print_stats();
 }

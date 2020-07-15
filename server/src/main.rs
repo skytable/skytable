@@ -22,13 +22,18 @@
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::task;
 
+mod coredb;
+mod dbnet;
+use std::cmp::Ordering;
+use std::sync::Arc;
 // Internal modules
+use libcore::response_packet;
 use libcore::terrapipe::{
     Dataframe, QueryMetaframe, QueryMethod, ResponseBytes, ResponseCodes, Version,
     DEF_Q_META_BUFSIZE,
 };
-
 const SELF_VERSION: Version = Version(0, 1, 0);
 
 static ADDR: &'static str = "127.0.0.1:2003";
@@ -37,8 +42,9 @@ static ADDR: &'static str = "127.0.0.1:2003";
 async fn main() {
     let mut listener = TcpListener::bind(ADDR).await.unwrap();
     println!("Server running on terrapipe://127.0.0.1:2003");
-
+    let db = coredb::CoreDB::new();
     loop {
+        let handle = db.get_handle();
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let mut meta_buffer = String::with_capacity(DEF_Q_META_BUFSIZE);
@@ -58,7 +64,7 @@ async fn main() {
                     return close_conn_with_error(socket, e.response_bytes(&SELF_VERSION)).await
                 }
             };
-            return execute_query(socket, mf, df).await;
+            return execute_query(socket, handle, mf, df).await;
         });
     }
 }
@@ -67,57 +73,72 @@ async fn close_conn_with_error(mut stream: TcpStream, bytes: Vec<u8>) {
     stream.write_all(&bytes).await.unwrap()
 }
 
-async fn execute_query(mut stream: TcpStream, mf: QueryMetaframe, df: Dataframe) {
+async fn execute_query(
+    mut stream: TcpStream,
+    handle: Arc<coredb::Coretable>,
+    mf: QueryMetaframe,
+    df: Dataframe,
+) {
     let vars = df.deflatten();
     use QueryMethod::*;
     match mf.get_method() {
         GET => {
-            if vars.len() == 1 {
-                println!("GET {}", vars[0]);
-            } else if vars.len() > 1 {
-                eprintln!("ERROR: Cannot do multiple GETs just yet");
-            } else {
-                stream
-                    .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
-                    .await
-                    .unwrap();
-            }
+            let result = match vars.len().cmp(&1) {
+                Ordering::Equal => {
+                    if let Ok(v) = handle.get(vars[0]) {
+                        ResponseCodes::Okay(Some(v.to_string()))
+                    } else {
+                        ResponseCodes::NotFound
+                    }
+                }
+                _ => ResponseCodes::CorruptDataframe,
+            };
+            stream
+                .write(&result.response_bytes(&SELF_VERSION))
+                .await
+                .unwrap();
         }
         SET => {
-            if vars.len() == 2 {
-                println!("SET {} {}", vars[0], vars[1]);
-            } else if vars.len() < 2 {
-                stream
-                    .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
-                    .await
-                    .unwrap();
-            } else {
-                eprintln!("ERROR: Cannot do multiple SETs just yet");
-            }
+            let result = match vars.len().cmp(&2) {
+                Ordering::Equal => match handle.set(vars[0], vars[1]) {
+                    Ok(_) => ResponseCodes::Okay(None),
+                    Err(e) => e,
+                },
+                _ => ResponseCodes::CorruptDataframe,
+            };
+            handle.print_debug_table();
+            stream
+                .write(&result.response_bytes(&SELF_VERSION))
+                .await
+                .unwrap();
         }
         UPDATE => {
-            if vars.len() == 2 {
-                println!("UPDATE {} {}", vars[0], vars[1]);
-            } else if vars.len() < 2 {
-                stream
-                    .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
-                    .await
-                    .unwrap();
-            } else {
-                eprintln!("ERROR: Cannot do multiple UPDATEs just yet");
-            }
+            let result = match vars.len().cmp(&2) {
+                Ordering::Equal => match handle.update(vars[0], vars[1]) {
+                    Ok(_) => ResponseCodes::Okay(None),
+                    Err(e) => e,
+                },
+                _ => ResponseCodes::CorruptDataframe,
+            };
+            handle.print_debug_table();
+            stream
+                .write(&result.response_bytes(&SELF_VERSION))
+                .await
+                .unwrap();
         }
         DEL => {
-            if vars.len() == 1 {
-                println!("DEL {}", vars[0]);
-            } else if vars.len() > 1 {
-                eprintln!("ERROR: Cannot do multiple DELs just yet")
-            } else {
-                stream
-                    .write(&ResponseCodes::CorruptPacket.response_bytes(&SELF_VERSION))
-                    .await
-                    .unwrap();
-            }
+            let result = match vars.len().cmp(&1) {
+                Ordering::Equal => match handle.del(vars[0]) {
+                    Ok(_) => ResponseCodes::Okay(None),
+                    Err(e) => e,
+                },
+                _ => ResponseCodes::CorruptDataframe,
+            };
+            handle.print_debug_table();
+            stream
+                .write(&result.response_bytes(&SELF_VERSION))
+                .await
+                .unwrap();
         }
     }
 }
