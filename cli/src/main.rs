@@ -29,7 +29,7 @@ fn main() {
     println!("{}", MSG_WELCOME);
     loop {
         let mut buffer = String::new();
-        print!("terrabase> ");
+        print!("tsh> ");
         match io::stdout().flush() {
             Ok(_) => (),
             Err(_) => argparse::EXIT_ERROR("Failed to flush output stream"),
@@ -38,13 +38,10 @@ fn main() {
             Ok(_) => (),
             Err(_) => argparse::EXIT_ERROR("Failed to read line and append to buffer"),
         };
-        let cmds = match argparse::parse_args(buffer) {
-            Ok(cmds) => cmds,
-            Err(e) => {
-                eprintln!("{}", e);
-                continue;
-            }
-        };
-        println!("{:#?}", cmds);
+        if buffer.len() != 0 {
+            argparse::run(buffer);
+        } else {
+            continue;
+        }
     }
 }

@@ -64,6 +64,7 @@ impl Coretable {
             Err(ResponseCodes::NotFound)
         }
     }
+    #[cfg(debug)]
     pub fn print_debug_table(&self) {
         println!("{:#?}", *self.coremap.read().unwrap());
     }

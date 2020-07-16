@@ -96,6 +96,7 @@ async fn execute_query(
                 },
                 _ => ResponseCodes::CorruptDataframe,
             };
+            #[cfg(debug)]
             handle.print_debug_table();
             stream.write(&result.response_bytes()).await.unwrap();
         }
@@ -107,6 +108,7 @@ async fn execute_query(
                 },
                 _ => ResponseCodes::CorruptDataframe,
             };
+            #[cfg(debug)]
             handle.print_debug_table();
             stream.write(&result.response_bytes()).await.unwrap();
         }
@@ -118,7 +120,9 @@ async fn execute_query(
                 },
                 _ => ResponseCodes::CorruptDataframe,
             };
+            #[cfg(debug)]
             handle.print_debug_table();
+
             stream.write(&result.response_bytes()).await.unwrap();
         }
     }

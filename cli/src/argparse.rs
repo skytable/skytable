@@ -19,195 +19,160 @@
  *
 */
 
-use std::fmt;
+use libcore::terrapipe::DEF_R_META_BUFSIZE;
+use libcore::terrapipe::{Dataframe, ResponseCodes::*, ResultMetaframe, Version, QUERY_PACKET};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::process;
 
-/// `SET` command line argument
-const ARG_SET: &'static str = "set";
-/// `GET` command line argument
-const ARG_GET: &'static str = "get";
-/// `UPDATE` command line argument
-const ARG_UPDATE: &'static str = "update";
-/// `EXIT` command line argument
-const ARG_EXIT: &'static str = "exit";
-/// Error message when trying to get multiple keys at the same time (TEMP)
-const ERR_GET_MULTIPLE: &'static str = "GET only supports fetching one key at a time";
-/// Error message when trying to set multiple keys at the same time (TEMP)
-const ERR_SET_MULTIPLE: &'static str = "SET only supports setting one key at a time";
-/// Error message when trying to update multiple keys at the same time (TEMP)
-const ERR_UPDATE_MULTIPLE: &'static str = "UPDATE only supports updating one key at a time";
-
-/// Representation for a key/value pair
-#[derive(Debug, PartialEq)]
-pub struct KeyValue(Key, String);
-
-/// `Key` an alias for `String`
-pub type Key = String;
-
-/// Directly parsed commands from the command line
-#[derive(Debug, PartialEq)]
-pub enum Commands {
-    /// A `GET` command
-    GET,
-    /// A `SET` command
-    SET,
-    /// An `UPDATE` command
-    UPDATE,
-}
-
-/// Prepared commands that can be executed
-#[derive(Debug, PartialEq)]
-pub enum FinalCommands {
-    /// Parsed `GET` command
-    GET(Key),
-    /// Parsed `SET` command
-    SET(KeyValue),
-    /// Parsed `UPDATE` command
-    UPDATE(KeyValue),
-}
-
-/// Errors that may occur while parsing arguments
-#[derive(Debug, PartialEq)]
-pub enum ArgsError {
-    /// Expected more arguments
-    ExpectedMoreArgs,
-    /// Failed to fetch an argument
-    ArgGetError,
-    /// Unexpected argument
-    UndefinedArgError(String),
-    /// Other error
-    Other(&'static str),
-}
-
-impl fmt::Display for ArgsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ArgsError::*;
-        match self {
-            ExpectedMoreArgs => write!(f, "error: Expected more arguments"),
-            ArgGetError => write!(f, "error: Failed to get argument"),
-            UndefinedArgError(arg) => write!(f, "error: Undefined argument '{}'", arg),
-            Other(e) => write!(f, "error: {}", e),
-        }
-    }
-}
-
-/// Exits the process with an error message
-pub const EXIT_ERROR: fn(&'static str) -> ! = |err| {
-    eprintln!("error: {}", err);
+const ARG_GET: &'static str = "GET";
+const ARG_SET: &'static str = "SET";
+const ARG_UPDATE: &'static str = "UPDATE";
+const ARG_DEL: &'static str = "DEL";
+const ARG_EXIT: &'static str = "EXIT";
+const ERR_MULTIPLE_GET: &'static str = "Multiple GETs aren't supported yet";
+const ERR_MULTIPLE_SET: &'static str = "Multiple SETs aren't supported yet";
+const ERR_MULTIPLE_UPDATE: &'static str = "Multiple UPDATEs aren't supported yet";
+const ERR_MULTIPLE_DEL: &'static str = "Multiple DELs aren't supported yet";
+const SELF_VERSION: Version = Version(0, 1, 0);
+const ADDR: &'static str = "127.0.0.1:2003";
+pub const EXIT_ERROR: fn(error: &str) -> ! = |error| {
+    eprintln!("error: {}", error);
     process::exit(0x100);
 };
 
-/// ### Parse a `String` argument into a corresponding `FinalCommands` variant
-/// #### Errors
-/// This returns an `Err(ArgsError)` if it fails to parse the arguments and the errors
-/// can be displayed directly (i.e the errors implement the `fmt::Display` trait)
-pub fn parse_args(args: String) -> Result<FinalCommands, ArgsError> {
-    let args: Vec<String> = args
-        .split_whitespace()
-        .map(|v| v.to_lowercase().to_string())
-        .collect();
-    // HACK(@ohsayan) This is a temporary workaround we will need a proper parser
-    let primary_arg = match args.get(0) {
-        Some(arg) => arg,
-        None => {
-            return Err(ArgsError::ArgGetError);
+const NORMAL_ERROR: fn(error: &str) = |error| {
+    eprintln!("error: {}", error);
+};
+
+pub fn run(args: String) {
+    let args: Vec<&str> = args.split_whitespace().collect();
+    match args[0].to_uppercase().as_str() {
+        ARG_GET => {
+            if let Some(key) = args.get(1) {
+                if args.get(2).is_none() {
+                    send_query(QUERY_PACKET(
+                        SELF_VERSION,
+                        ARG_GET.to_owned(),
+                        key.to_string(),
+                    ));
+                } else {
+                    NORMAL_ERROR(ERR_MULTIPLE_GET);
+                }
+            } else {
+                NORMAL_ERROR("Expected one more argument");
+            }
         }
-    };
-    let mut actions = Vec::with_capacity(3);
-    match primary_arg.as_str() {
-        ARG_GET => actions.push(Commands::GET),
-        ARG_SET => actions.push(Commands::SET),
-        ARG_UPDATE => actions.push(Commands::UPDATE),
+        ARG_SET => {
+            if let Some(key) = args.get(1) {
+                if let Some(value) = args.get(2) {
+                    if args.get(3).is_none() {
+                        send_query(QUERY_PACKET(
+                            SELF_VERSION,
+                            ARG_SET.to_owned(),
+                            format!("{} {}", key, value),
+                        ))
+                    } else {
+                        NORMAL_ERROR(ERR_MULTIPLE_SET);
+                    }
+                } else {
+                    NORMAL_ERROR("Expected one more argument");
+                }
+            } else {
+                NORMAL_ERROR("Expected more arguments");
+            }
+        }
+        ARG_UPDATE => {
+            if let Some(key) = args.get(1) {
+                if let Some(value) = args.get(2) {
+                    if args.get(3).is_none() {
+                        send_query(QUERY_PACKET(
+                            SELF_VERSION,
+                            ARG_UPDATE.to_owned(),
+                            format!("{} {}", key, value),
+                        ))
+                    } else {
+                        NORMAL_ERROR(ERR_MULTIPLE_UPDATE);
+                    }
+                } else {
+                    NORMAL_ERROR("Expected one more argument");
+                }
+            } else {
+                NORMAL_ERROR("Expected more arguments");
+            }
+        }
+        ARG_DEL => {
+            if let Some(key) = args.get(1) {
+                if args.get(2).is_none() {
+                    send_query(QUERY_PACKET(
+                        SELF_VERSION,
+                        ARG_DEL.to_owned(),
+                        key.to_string(),
+                    ));
+                } else {
+                    NORMAL_ERROR(ERR_MULTIPLE_DEL);
+                }
+            } else {
+                NORMAL_ERROR("Expected one more argument");
+            }
+        }
         ARG_EXIT => {
             println!("Goodbye!");
-            process::exit(0x00);
+            process::exit(0x100)
         }
-        _ => {
-            return Err(ArgsError::UndefinedArgError(primary_arg.to_owned()));
-        }
-    }
-
-    match actions[0] {
-        Commands::GET => {
-            // Now read next command
-            if let Some(arg) = args.get(1) {
-                if args.get(2).is_none() {
-                    return Ok(FinalCommands::GET(arg.to_string()));
-                } else {
-                    return Err(ArgsError::Other(ERR_GET_MULTIPLE));
-                }
-            } else {
-                return Err(ArgsError::ExpectedMoreArgs);
-            }
-        }
-        Commands::SET => {
-            // Now read next command
-            if let (Some(key), Some(value)) = (args.get(1), args.get(2)) {
-                if args.get(3).is_none() {
-                    return Ok(FinalCommands::SET(KeyValue(
-                        key.to_string(),
-                        value.to_string(),
-                    )));
-                } else {
-                    return Err(ArgsError::Other(ERR_SET_MULTIPLE));
-                }
-            } else {
-                return Err(ArgsError::ExpectedMoreArgs);
-            }
-        }
-        Commands::UPDATE => {
-            if let (Some(key), Some(value)) = (args.get(1), args.get(2)) {
-                if args.get(3).is_none() {
-                    return Ok(FinalCommands::UPDATE(KeyValue(
-                        key.to_string(),
-                        value.to_string(),
-                    )));
-                } else {
-                    return Err(ArgsError::Other(ERR_UPDATE_MULTIPLE));
-                }
-            } else {
-                return Err(ArgsError::ExpectedMoreArgs);
-            }
-        }
+        _ => NORMAL_ERROR("Unknown command"),
     }
 }
 
-#[cfg(test)]
-#[test]
-fn test_argparse_valid_cmds() {
-    let test_set_arg1 = "set sayan 100".to_owned();
-    let test_set_arg2 = "SET sayan 100".to_owned();
-    let test_set_arg3 = "SeT sayan 100".to_owned();
-    let test_get_arg1 = "get sayan".to_owned();
-    let test_get_arg2 = "GET sayan".to_owned();
-    let test_get_arg3 = "GeT sayan".to_owned();
-    let test_set_result: Result<FinalCommands, ArgsError> = Ok(FinalCommands::SET(KeyValue(
-        "sayan".to_owned(),
-        "100".to_owned(),
-    )));
-    let test_get_result: Result<FinalCommands, ArgsError> =
-        Ok(FinalCommands::GET("sayan".to_owned()));
-    assert_eq!(parse_args(test_get_arg1), test_get_result);
-    assert_eq!(parse_args(test_get_arg2), test_get_result);
-    assert_eq!(parse_args(test_get_arg3), test_get_result);
-    assert_eq!(parse_args(test_set_arg1), test_set_result);
-    assert_eq!(parse_args(test_set_arg2), test_set_result);
-    assert_eq!(parse_args(test_set_arg3), test_set_result);
-}
-
-#[cfg(test)]
-#[test]
-fn test_argparse_invalid_cmds() {
-    let test_multiple_get = "get sayan supersayan".to_owned();
-    let test_multiple_set = "set sayan 18 supersayan 118".to_owned();
-    let test_multiple_update = "update sayan 19 supersayan 119".to_owned();
-    let result_multiple_get: Result<FinalCommands, ArgsError> =
-        Err(ArgsError::Other(ERR_GET_MULTIPLE));
-    let result_multiple_set: Result<FinalCommands, ArgsError> =
-        Err(ArgsError::Other(ERR_SET_MULTIPLE));
-    let result_multiple_update: Result<FinalCommands, ArgsError> =
-        Err(ArgsError::Other(ERR_UPDATE_MULTIPLE));
-    assert_eq!(parse_args(test_multiple_get), result_multiple_get);
-    assert_eq!(parse_args(test_multiple_set), result_multiple_set);
-    assert_eq!(parse_args(test_multiple_update), result_multiple_update);
+fn send_query(query: Vec<u8>) {
+    let mut binding = match TcpStream::connect(ADDR) {
+        Ok(b) => b,
+        Err(_) => EXIT_ERROR("Couldn't connect to Terrabase"),
+    };
+    match binding.write(&query) {
+        Ok(_) => (),
+        Err(_) => EXIT_ERROR("Couldn't read data from socket"),
+    }
+    let mut bufreader = BufReader::new(binding);
+    let mut buf = String::with_capacity(DEF_R_META_BUFSIZE);
+    match bufreader.read_line(&mut buf) {
+        Ok(_) => (),
+        Err(_) => EXIT_ERROR("Failed to read line from socket"),
+    }
+    let rmf = match ResultMetaframe::from_buffer(buf) {
+        Ok(mf) => mf,
+        Err(e) => {
+            NORMAL_ERROR(&e.to_string());
+            return;
+        }
+    };
+    match &rmf.response {
+        Okay(_) => (),
+        x @ _ => {
+            NORMAL_ERROR(&x.to_string());
+            return;
+        }
+    }
+    let mut data_buffer = vec![0; rmf.get_content_size()];
+    match bufreader.read(&mut data_buffer) {
+        Ok(_) => (),
+        Err(_) => EXIT_ERROR("Failed to read line from socket"),
+    }
+    let df = match Dataframe::from_buffer(rmf.get_content_size(), data_buffer) {
+        Ok(d) => d,
+        Err(e) => {
+            NORMAL_ERROR(&e.to_string());
+            return;
+        }
+    };
+    let res = df.deflatten();
+    if res.len() == 0 {
+        return;
+    } else {
+        if res.len() == 1 {
+            println!("{}", res[0]);
+        } else {
+            println!("{:?}", res);
+        }
+    }
 }

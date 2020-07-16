@@ -344,10 +344,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "terrabase-cli"
-version = "0.1.0"
-
-[[package]]
 name = "tokio"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,6 +376,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tsh"
+version = "0.1.0"
+dependencies = [
+ "libcore",
 ]
 
 [[package]]

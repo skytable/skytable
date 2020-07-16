@@ -53,8 +53,9 @@ pub const DEF_Q_META_BUFSIZE: usize = 46;
 /// and the maximum size of the response metaframe is 20 - the buffer size is kept at 40
 pub const DEF_R_META_BUFSIZE: usize = 40;
 
+// HACK(@ohsayan) This is a temporary workaround since `const fn`s don't support `match` yet
 /// Constant function to generate a response packet
-const RESPONSE_PACKET: fn(version: Version, respcode: u8, data: &str) -> Vec<u8> =
+pub const RESPONSE_PACKET: fn(version: Version, respcode: u8, data: &str) -> Vec<u8> =
     |version, respcode, data| {
         let res = format!(
             "TP/{}.{}.{}/R/{}/{}\n{}",
@@ -68,8 +69,9 @@ const RESPONSE_PACKET: fn(version: Version, respcode: u8, data: &str) -> Vec<u8>
         res.as_bytes().to_vec()
     };
 
+// HACK(@ohsayan) This is a temporary workaround since `const fn`s don't support `match` yet
 /// Constant function to generate a query packet
-const QUERY_PACKET: fn(version: Version, method: String, data: String) -> Vec<u8> =
+pub const QUERY_PACKET: fn(version: Version, method: String, data: String) -> Vec<u8> =
     |version, method, data| {
         let res = format!(
             "TP/{}.{}.{}/Q/{}/{}\n{}",
@@ -138,6 +140,7 @@ impl Version {
     }
 }
 
+#[derive(Debug)]
 /// Response codes which are returned by the server
 pub enum ResponseCodes {
     /// `0` : Okay
@@ -158,6 +161,32 @@ pub enum ResponseCodes {
     ProtocolVersionMismatch,
     /// `8` : Corrupt Packet
     CorruptPacket,
+}
+
+impl fmt::Display for ResponseCodes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ResponseCodes::*;
+        match self {
+            Okay(v) => {
+                if let Some(v) = v {
+                    write!(f, "{}", v)
+                } else {
+                    write!(f, "")
+                }
+            }
+            NotFound => write!(f, "The target could not be found"),
+            OverwriteError => write!(f, "Existing values cannot be overwritten"),
+            MethodNotAllowed => write!(f, "The method is not supported"),
+            InternalServerError => write!(f, "An internal server error occurred"),
+            InvalidMetaframe => write!(f, "The query had an invalid metaframe"),
+            CorruptDataframe => write!(f, "The query did not contain the required data"),
+            ProtocolVersionMismatch => write!(
+                f,
+                "The server doesn't support the protocol being used"
+            ),
+            CorruptPacket => write!(f, "The query did not have the required data"),
+        }
+    }
 }
 
 impl ResponseCodes {
@@ -341,6 +370,17 @@ fn benchmark_metaframe_parsing() {
     b.print_stats();
 }
 
+impl fmt::Display for ResultError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ResultError::*;
+        match self {
+            StandardError(r) => write!(f, "{}", r),
+            UnknownError(u) => write!(f, "The server responded with '{}'", u),
+        }
+    }
+}
+
+#[derive(Debug)]
 /// Errors that may occur when parsing a response packet from the server
 pub enum ResultError {
     /// A standard response code used by the Terrapipe protocol
@@ -349,10 +389,11 @@ pub enum ResultError {
     UnknownError(String),
 }
 
+#[derive(Debug)]
 /// A result metaframe
 pub struct ResultMetaframe {
     content_size: usize,
-    response: ResponseCodes,
+    pub response: ResponseCodes,
 }
 
 impl ResultMetaframe {
@@ -390,5 +431,8 @@ impl ResultMetaframe {
             content_size,
             response,
         })
+    }
+    pub fn get_content_size(&self) -> usize {
+        self.content_size
     }
 }
