@@ -1,51 +1,48 @@
 # Terrabase - The new in-memory database
-Terrabase is a **new in-memory database** that aims to **fill the gap** between **key/value stores**, 
-**document stores** and **columnar stores**, by providing the *best of three worlds* - **simplicity**, 
-**flexibility** and **querying**. 
-
-Right now, Terrabase is a complete work in progress and is under
-rapid development, but, you can still have fun with it!
-
-## Getting started
-
-For now the only way to use terrabase is by building it from source. I will be adding instructions on
-the same soon.
+Terrabase is an effort to provide the best of key/value stores, document stores and columnar databases - **simplicity, flexibility and queryability at scale**. This project is currently in a <b>pre-alpha</b> stage and is undergoing rapid development.
 
 ## Status
 
-Terrabase, at this moment, can only parse arguments in REPL mode and report errors.
-This is what you can do:
-```shell
-$./terrabase
-Terrabase | Version 0.1.0
-Copyright (c) 2020 Sayan Nandan
-terrabase> set sayan 17
-SET(
-    KeyValue(
-        "sayan",
-        "17",
-    ),
-)
-terrabase> get sayan
-GET(
-    "sayan",
-)
-terrabase> exit
-Goodbye!
-$
-```
+As noted earlier, Terrabase is pre-alpha software and the entire API is subject to major breaking changes, at the moment.
 
-More functionality to follow soon!
+## Getting started
+
+We have an experimnetal client and server implementations for the database already. You can download a pre-built binary for `x86_64-linux` in the releases section and try it out! 
+
+* First unzip the file
+* Start the database server by running `./terrabase` 
+* Start the client by running `./tsh` 
+* You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` ! 
+
+## Goals
+
+* Fast
+* Designed to provide <b>safe flexibility</b>
+* Multithreaded ✓
+* Memory-safe ✓
+* Resource friendly ✓
+* Scalable
+* Simplicity
+
+## Versioning
+
+This project strictly follows semver, however, since this project is currently in the development phase (0.x.y), the API may change unpredictably
+
+## Community
+
+A project which is powered by the community believes in the power of community!
+<html>
+<a href="https://gitter.im/terrabasehq/community"><img src="https://img.shields.io/badge/CHAT%20ON-GITTER-ed1965?logo=gitter&style=for-the-badge"></img>
+</a>
+<a href="https://join.slack.com/t/terrabasedb/shared_invite/zt-fnkfgzf7-~WO~RzGUUvTiYV4iPAMiiQ"><img src="https://img.shields.io/badge/Discuss%20on-SLACK-4A154B?logo=slack&style=for-the-badge"></img>
+</a><a href="https://discord.gg/QptWFdx"><img src="https://img.shields.io/badge/TALK-On%20Discord-7289DA?logo=discord&style=for-the-badge"></img>
+</a>
+</html>
 
 ## Contributing
 
-YES - I need you! This is an open-source project and it relies on contributions from hackers 
-across the globe. Again, I will be adding contributing instructions in a while.
+Yes - this project needs you! We want hackers from all across the globe to help us create the next-generation database. Read the guide [here](./CONTRIBUTING.md).
 
 ## License
 
-This project is licensed under the AGPL-3.0 license. This means, if you end up using this database 
-with your app, without any modifications, then you don't have to do anything. However, if you plan
-to provide access to this database over a network or you want to distribute a modified version, then
-you'll have to open-source your code. This is not legal advice, but it's an easy-to-understand human
-version of the AGPL license. You can read the long-form [here](https://opensource.org/licenses/AGPL-3.0).
+This project is licensed under the [AGPL-3.0 License](./LICENSE).
