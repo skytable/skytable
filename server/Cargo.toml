@@ -8,6 +8,5 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "0.2.21", features = ["full"] }
-# Import `libcore` which contains code for terrapipe and other utils
-libcore = {path="../libcore"}
 bytes = "0.5.6"
+corelib = {path ="../corelib"}

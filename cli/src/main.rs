@@ -28,20 +28,6 @@ const MSG_WELCOME: &'static str = "Terrabase | Version 0.1.0\nCopyright (c) 2020
 fn main() {
     println!("{}", MSG_WELCOME);
     loop {
-        let mut buffer = String::new();
-        print!("tsh> ");
-        match io::stdout().flush() {
-            Ok(_) => (),
-            Err(_) => argparse::EXIT_ERROR("Failed to flush output stream"),
-        };
-        match io::stdin().read_line(&mut buffer) {
-            Ok(_) => (),
-            Err(_) => argparse::EXIT_ERROR("Failed to read line and append to buffer"),
-        };
-        if buffer.len() != 0 {
-            argparse::run(buffer);
-        } else {
-            continue;
-        }
+        
     }
 }
