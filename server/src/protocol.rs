@@ -19,10 +19,9 @@
  *
 */
 
-use bytes::{Buf, Bytes};
 use corelib::responses;
 use corelib::ActionType;
-use std::io::{BufRead, Cursor};
+use std::panic;
 
 #[derive(Debug, PartialEq)]
 pub struct PreQMF {
@@ -105,4 +104,31 @@ fn test_get_sizes() {
     let retbuf = "10#20#30#".to_owned();
     let sizes = get_sizes(retbuf).unwrap();
     assert_eq!(sizes, vec![10usize, 20usize, 30usize]);
+}
+
+pub fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
+    skip_sequence
+        .into_iter()
+        .scan(buf.into_iter(), |databuf, size| {
+            let tok: Vec<u8> = databuf.take(size).collect();
+            let _ = databuf.next();
+            Some(String::from_utf8_lossy(&tok).to_string())
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[test]
+fn test_extract_idents() {
+    let testbuf = "set\nsayan\n17\n".as_bytes().to_vec();
+    let skip_sequence: Vec<usize> = vec![3, 5, 2];
+    let res = extract_idents(testbuf, skip_sequence);
+    assert_eq!(
+        vec!["set".to_owned(), "sayan".to_owned(), "17".to_owned()],
+        res
+    );
+    let badbuf = vec![0, 0, 159, 146, 150];
+    let skip_sequence: Vec<usize> = vec![1, 2];
+    let res = extract_idents(badbuf, skip_sequence);
+    assert_eq!(res[1], "��");
 }
