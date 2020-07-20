@@ -150,11 +150,11 @@ pub async fn read_query(mut stream: &mut TcpStream) -> Result<QueryDataframe, im
         vec![0; pqmf.content_size],
     );
     bufreader.read_line(&mut metalayout_buf).await.unwrap();
-    bufreader.read(&mut dataframe_buf).await.unwrap();
     let ss = match get_sizes(metalayout_buf) {
         Ok(ss) => ss,
         Err(e) => return Err(e),
     };
+    bufreader.read(&mut dataframe_buf).await.unwrap();
     let qdf = QueryDataframe {
         data: extract_idents(dataframe_buf, ss),
         actiontype: pqmf.action_type,

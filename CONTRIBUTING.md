@@ -1,6 +1,6 @@
 # Contribution guidelines
 Firstly, thank you for your interest in contributing to this project. This project is powered by the community 
-and relies on hackers across the globe to contribute code to move this code forward. 
+and relies on hackers across the globe to contribute code to move this project forward.
 
 You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 

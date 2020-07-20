@@ -23,6 +23,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 mod coredb;
 mod protocol;
+use coredb::CoreDB;
 use corelib::terrapipe::RespBytes;
 use protocol::read_query;
 static ADDR: &'static str = "127.0.0.1:2003";
@@ -31,7 +32,9 @@ static ADDR: &'static str = "127.0.0.1:2003";
 async fn main() {
     let mut listener = TcpListener::bind(ADDR).await.unwrap();
     println!("Server running on terrapipe://127.0.0.1:2003");
+    let db = CoreDB::new();
     loop {
+        let handle = db.get_handle();
         let (mut socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
             let q = read_query(&mut socket).await;
@@ -39,7 +42,7 @@ async fn main() {
                 Ok(q) => q,
                 Err(e) => return close_conn_with_error(socket, e).await,
             };
-            println!("{:#?}", df);
+            socket.write_all(&handle.execute_query(df)).await.unwrap();
         });
     }
 }

@@ -22,16 +22,22 @@
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
 pub const DEF_QMETALAYOUT_BUFSIZE: usize = 1024;
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
-
+pub mod tags {
+    pub const TAG_GET: &'static str = "GET";
+    pub const TAG_SET: &'static str = "SET";
+    pub const TAG_UPDATE: &'static str = "UPDATE";
+    pub const TAG_DEL: &'static str = "DEL";
+    pub const TAG_HEYA: &'static str = "HEYA";
+}
 pub mod responses {
     use lazy_static::lazy_static;
     lazy_static! {
-        pub static ref RESP_OKAY_EMPTY: Vec<u8> = "0!0!0#".as_bytes().to_owned();
-        pub static ref RESP_NOT_FOUND: Vec<u8> = "1!0!0#".as_bytes().to_owned();
-        pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "2!0!0#".as_bytes().to_owned();
-        pub static ref RESP_INVALID_MF: Vec<u8> = "3!0!0#".as_bytes().to_owned();
-        pub static ref RESP_INCOMPLETE: Vec<u8> = "4!0!0#".as_bytes().to_owned();
-        pub static ref RESP_SERVER_ERROR: Vec<u8> = "5!0!0#".as_bytes().to_owned();
+        pub static ref RESP_OKAY_EMPTY: Vec<u8> = "0!0!0".as_bytes().to_owned();
+        pub static ref RESP_NOT_FOUND: Vec<u8> = "1!0!0".as_bytes().to_owned();
+        pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "2!0!0".as_bytes().to_owned();
+        pub static ref RESP_INVALID_MF: Vec<u8> = "3!0!0".as_bytes().to_owned();
+        pub static ref RESP_INCOMPLETE: Vec<u8> = "4!0!0".as_bytes().to_owned();
+        pub static ref RESP_SERVER_ERROR: Vec<u8> = "5!0!0".as_bytes().to_owned();
     }
 }
 
@@ -86,7 +92,7 @@ impl RespBytes for RespCodes {
         use responses::*;
         use RespCodes::*;
         match self {
-            EmptyResponseOkay => RESP_NOT_FOUND.to_owned(),
+            EmptyResponseOkay => RESP_OKAY_EMPTY.to_owned(),
             NotFound => RESP_NOT_FOUND.to_owned(),
             OverwriteError => RESP_OVERWRITE_ERROR.to_owned(),
             InvalidMetaframe => RESP_INVALID_MF.to_owned(),
@@ -129,10 +135,10 @@ impl SimpleResponse {
             size_tracker: 0,
         }
     }
-    pub fn add_data(&mut self, data: &str) {
+    pub fn add_data(&mut self, data: String) {
         self.metalayout_buf.push_str(&format!("{}#", data.len()));
         self.size_tracker += data.len() + 1;
-        self.dataframe_buf.push_str(data);
+        self.dataframe_buf.push_str(&data);
         self.dataframe_buf.push('\n');
     }
     pub fn prepare_response(&self) -> Vec<u8> {
@@ -159,14 +165,14 @@ impl RespBytes for SimpleResponse {
 #[test]
 fn test_simple_response() {
     let mut s = ResponseBuilder::new_simple(RespCodes::EmptyResponseOkay);
-    s.add_data("Sayan");
-    s.add_data("loves");
-    s.add_data("you");
-    s.add_data("if");
-    s.add_data("you");
-    s.add_data("send");
-    s.add_data("UTF8");
-    s.add_data("bytes");
+    s.add_data("Sayan".to_owned());
+    s.add_data("loves".to_owned());
+    s.add_data("you".to_owned());
+    s.add_data("if".to_owned());
+    s.add_data("you".to_owned());
+    s.add_data("send".to_owned());
+    s.add_data("UTF8".to_owned());
+    s.add_data("bytes".to_owned());
     assert_eq!(
         String::from_utf8_lossy(&s.into_response()),
         String::from("0!39!16\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n")
