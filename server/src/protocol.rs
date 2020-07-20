@@ -19,10 +19,9 @@
  *
 */
 
-use corelib::responses;
-use corelib::ActionType;
-use corelib::{DEF_QDATAFRAME_BUSIZE, DEF_QMETALAYOUT_BUFSIZE, DEF_QMETALINE_BUFSIZE};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use corelib::terrapipe::{ActionType, QueryDataframe};
+use corelib::terrapipe::{RespBytes, RespCodes, DEF_QMETALINE_BUFSIZE};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
 use tokio::net::TcpStream;
 
@@ -34,7 +33,7 @@ pub struct PreQMF {
 }
 
 impl PreQMF {
-    pub fn from_buffer(buf: String) -> Result<Self, Vec<u8>> {
+    pub fn from_buffer(buf: String) -> Result<Self, RespCodes> {
         let buf: Vec<&str> = buf.split('!').collect();
         if let (Some(atype), Some(csize), Some(metaline_size)) =
             (buf.get(0), buf.get(1), buf.get(2))
@@ -43,7 +42,7 @@ impl PreQMF {
                 let atype = match atype {
                     '*' => ActionType::Simple,
                     '$' => ActionType::Pipeline,
-                    _ => return Err(responses::RESP_INVALID_MF.to_owned()),
+                    _ => return Err(RespCodes::InvalidMetaframe),
                 };
                 let csize = csize.trim().trim_matches(char::from(0));
                 let metaline_size = metaline_size.trim().trim_matches(char::from(0));
@@ -55,22 +54,17 @@ impl PreQMF {
                         content_size: csize,
                         metaline_size,
                     });
-                } else {
-                    return Err(responses::RESP_INVALID_MF.to_owned());
                 }
-            } else {
-                Err(responses::RESP_INVALID_MF.to_owned())
             }
-        } else {
-            Err(responses::RESP_INVALID_MF.to_owned())
         }
+        Err(RespCodes::InvalidMetaframe)
     }
 }
 
 #[cfg(test)]
 #[test]
 fn test_preqmf() {
-    let read_what = "+!12!4".to_owned();
+    let read_what = "*!12!4".to_owned();
     let preqmf = PreQMF::from_buffer(read_what).unwrap();
     let pqmf_should_be = PreQMF {
         action_type: ActionType::Simple,
@@ -88,7 +82,7 @@ fn test_preqmf() {
     assert_eq!(preqmf, pqmf_should_be);
 }
 
-pub fn get_sizes(stream: String) -> Result<Vec<usize>, Vec<u8>> {
+pub fn get_sizes(stream: String) -> Result<Vec<usize>, RespCodes> {
     let sstr: Vec<&str> = stream.split('#').collect();
     let mut sstr_iter = sstr.into_iter().peekable();
     let mut sizes = Vec::with_capacity(sstr_iter.len());
@@ -98,7 +92,7 @@ pub fn get_sizes(stream: String) -> Result<Vec<usize>, Vec<u8>> {
             if let Ok(val) = size.parse::<usize>() {
                 sizes.push(val);
             } else {
-                return Err(responses::RESP_INVALID_MF.to_owned());
+                return Err(RespCodes::InvalidMetaframe);
             }
         } else {
             break;
@@ -143,13 +137,7 @@ fn test_extract_idents() {
     assert_eq!(res[1], "��");
 }
 
-#[derive(Debug)]
-pub struct Dataframe {
-    data: Vec<String>,
-    actiontype: ActionType,
-}
-
-pub async fn read_query(mut stream: &mut TcpStream) -> Result<Dataframe, Vec<u8>> {
+pub async fn read_query(mut stream: &mut TcpStream) -> Result<QueryDataframe, impl RespBytes> {
     let mut bufreader = BufReader::new(&mut stream);
     let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
     bufreader.read_line(&mut metaline_buf).await.unwrap();
@@ -167,9 +155,9 @@ pub async fn read_query(mut stream: &mut TcpStream) -> Result<Dataframe, Vec<u8>
         Ok(ss) => ss,
         Err(e) => return Err(e),
     };
-    let dataframe = Dataframe {
+    let qdf = QueryDataframe {
         data: extract_idents(dataframe_buf, ss),
         actiontype: pqmf.action_type,
     };
-    Ok(dataframe)
+    Ok(qdf)
 }

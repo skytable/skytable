@@ -19,11 +19,11 @@
  *
 */
 
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 mod coredb;
 mod protocol;
+use corelib::terrapipe::RespBytes;
 use protocol::read_query;
 static ADDR: &'static str = "127.0.0.1:2003";
 
@@ -44,6 +44,6 @@ async fn main() {
     }
 }
 
-async fn close_conn_with_error(mut stream: TcpStream, bytes: Vec<u8>) {
-    stream.write_all(&bytes).await.unwrap()
+async fn close_conn_with_error(mut stream: TcpStream, bytes: impl RespBytes) {
+    stream.write_all(&bytes.into_response()).await.unwrap()
 }

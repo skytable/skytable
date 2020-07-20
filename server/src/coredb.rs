@@ -19,7 +19,7 @@
  *
 */
 
-use corelib::responses::*;
+use corelib::terrapipe::responses::*;
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::{Arc, RwLock};
 
