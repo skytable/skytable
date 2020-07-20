@@ -19,7 +19,9 @@
  *
 */
 
-pub const DEF_QMETA_BUFSIZE: usize = 44;
+pub const DEF_QMETALINE_BUFSIZE: usize = 44;
+pub const DEF_QMETALAYOUT_BUFSIZE: usize = 1024;
+pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
 
 pub mod responses {
     use lazy_static::lazy_static;

@@ -22,11 +22,9 @@
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-
-mod protocol;
 mod coredb;
-use std::cmp::Ordering;
-use std::sync::Arc;
+mod protocol;
+use protocol::read_query;
 static ADDR: &'static str = "127.0.0.1:2003";
 
 #[tokio::main]
@@ -35,7 +33,14 @@ async fn main() {
     println!("Server running on terrapipe://127.0.0.1:2003");
     loop {
         let (mut socket, _) = listener.accept().await.unwrap();
-        tokio::spawn(async move {});
+        tokio::spawn(async move {
+            let q = read_query(&mut socket).await;
+            let df = match q {
+                Ok(q) => q,
+                Err(e) => return close_conn_with_error(socket, e).await,
+            };
+            println!("{:#?}", df);
+        });
     }
 }
 

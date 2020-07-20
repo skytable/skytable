@@ -21,7 +21,10 @@
 
 use corelib::responses;
 use corelib::ActionType;
-use std::panic;
+use corelib::{DEF_QDATAFRAME_BUSIZE, DEF_QMETALAYOUT_BUFSIZE, DEF_QMETALINE_BUFSIZE};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+use tokio::net::TcpStream;
 
 #[derive(Debug, PartialEq)]
 pub struct PreQMF {
@@ -38,23 +41,29 @@ impl PreQMF {
         {
             if let Some(atype) = atype.chars().next() {
                 let atype = match atype {
-                    '+' => ActionType::Simple,
+                    '*' => ActionType::Simple,
                     '$' => ActionType::Pipeline,
                     _ => return Err(responses::RESP_INVALID_MF.to_owned()),
                 };
-                let (csize, metaline_size) =
-                    match (csize.parse::<usize>(), metaline_size.parse::<usize>()) {
-                        (Ok(x), Ok(y)) => (x, y),
-                        _ => return Err(responses::RESP_INVALID_MF.to_owned()),
-                    };
-                return Ok(PreQMF {
-                    action_type: atype,
-                    content_size: csize,
-                    metaline_size,
-                });
+                let csize = csize.trim().trim_matches(char::from(0));
+                let metaline_size = metaline_size.trim().trim_matches(char::from(0));
+                if let (Ok(csize), Ok(metaline_size)) =
+                    (csize.parse::<usize>(), metaline_size.parse::<usize>())
+                {
+                    return Ok(PreQMF {
+                        action_type: atype,
+                        content_size: csize,
+                        metaline_size,
+                    });
+                } else {
+                    return Err(responses::RESP_INVALID_MF.to_owned());
+                }
+            } else {
+                Err(responses::RESP_INVALID_MF.to_owned())
             }
+        } else {
+            Err(responses::RESP_INVALID_MF.to_owned())
         }
-        Err(responses::RESP_INVALID_MF.to_owned())
     }
 }
 
@@ -106,12 +115,13 @@ fn test_get_sizes() {
     assert_eq!(sizes, vec![10usize, 20usize, 30usize]);
 }
 
-pub fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
+fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
     skip_sequence
         .into_iter()
         .scan(buf.into_iter(), |databuf, size| {
             let tok: Vec<u8> = databuf.take(size).collect();
             let _ = databuf.next();
+            // FIXME(ohsayan): This is quite slow, we'll have to use SIMD in the future
             Some(String::from_utf8_lossy(&tok).to_string())
         })
         .collect()
@@ -131,4 +141,35 @@ fn test_extract_idents() {
     let skip_sequence: Vec<usize> = vec![1, 2];
     let res = extract_idents(badbuf, skip_sequence);
     assert_eq!(res[1], "��");
+}
+
+#[derive(Debug)]
+pub struct Dataframe {
+    data: Vec<String>,
+    actiontype: ActionType,
+}
+
+pub async fn read_query(mut stream: &mut TcpStream) -> Result<Dataframe, Vec<u8>> {
+    let mut bufreader = BufReader::new(&mut stream);
+    let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
+    bufreader.read_line(&mut metaline_buf).await.unwrap();
+    let pqmf = match PreQMF::from_buffer(metaline_buf) {
+        Ok(pq) => pq,
+        Err(e) => return Err(e),
+    };
+    let (mut metalayout_buf, mut dataframe_buf) = (
+        String::with_capacity(pqmf.metaline_size),
+        vec![0; pqmf.content_size],
+    );
+    bufreader.read_line(&mut metalayout_buf).await.unwrap();
+    bufreader.read(&mut dataframe_buf).await.unwrap();
+    let ss = match get_sizes(metalayout_buf) {
+        Ok(ss) => ss,
+        Err(e) => return Err(e),
+    };
+    let dataframe = Dataframe {
+        data: extract_idents(dataframe_buf, ss),
+        actiontype: pqmf.action_type,
+    };
+    Ok(dataframe)
 }
