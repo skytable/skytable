@@ -19,28 +19,48 @@
  *
 */
 
+//! This implements the Terrapipe protocol
+
+/// Default query metaline buffer size
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
+/// Default query metalayout buffer size
 pub const DEF_QMETALAYOUT_BUFSIZE: usize = 1024;
+/// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
 pub mod tags {
+    //! This module is a collection of tags/strings used for evaluating queries
+    //! and responses
+    /// `GET` command tag
     pub const TAG_GET: &'static str = "GET";
+    /// `SET` command tag
     pub const TAG_SET: &'static str = "SET";
+    /// `UPDATE` command tag
     pub const TAG_UPDATE: &'static str = "UPDATE";
+    /// `DEL` command tag
     pub const TAG_DEL: &'static str = "DEL";
+    /// `HEYA` command tag
     pub const TAG_HEYA: &'static str = "HEYA";
 }
 pub mod responses {
+    //! Empty responses, mostly errors, which are statically compiled
     use lazy_static::lazy_static;
     lazy_static! {
+        /// Empty `0`(Okay) response - without any content
         pub static ref RESP_OKAY_EMPTY: Vec<u8> = "0!0!0".as_bytes().to_owned();
+        /// `1` Not found response
         pub static ref RESP_NOT_FOUND: Vec<u8> = "1!0!0".as_bytes().to_owned();
+        /// `2` Overwrite Error response
         pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "2!0!0".as_bytes().to_owned();
+        /// `3` Invalid Metaframe response
         pub static ref RESP_INVALID_MF: Vec<u8> = "3!0!0".as_bytes().to_owned();
+        /// `4` Incomplete frame response
         pub static ref RESP_INCOMPLETE: Vec<u8> = "4!0!0".as_bytes().to_owned();
+        /// `5` Internal server error response
         pub static ref RESP_SERVER_ERROR: Vec<u8> = "5!0!0".as_bytes().to_owned();
     }
 }
 
+/// Response codes returned by the server
 #[derive(Debug, PartialEq)]
 pub enum RespCodes {
     /// `0`: Okay (Empty Response) - use the `ResponseBuilder` for building
@@ -75,6 +95,7 @@ impl From<RespCodes> for u8 {
     }
 }
 
+/// Representation of the query action type - pipelined or simple
 #[derive(Debug, PartialEq)]
 pub enum ActionType {
     Simple,
@@ -103,22 +124,28 @@ impl RespBytes for RespCodes {
     }
 }
 
+/// The query dataframe
 #[derive(Debug)]
 pub struct QueryDataframe {
+    /// The data part
     pub data: Vec<String>,
+    /// The query action type
     pub actiontype: ActionType,
 }
 
+/// This is enum represents types of responses which can be built from it
 pub enum ResponseBuilder {
     SimpleResponse, // TODO: Add pipelined response builder here
 }
 
 impl ResponseBuilder {
+    /// Create a new simple response
     pub fn new_simple(respcode: RespCodes) -> SimpleResponse {
         SimpleResponse::new(respcode.into())
     }
 }
 
+/// Representation of a simple response
 pub struct SimpleResponse {
     respcode: u8,
     metalayout_buf: String,
@@ -127,6 +154,8 @@ pub struct SimpleResponse {
 }
 
 impl SimpleResponse {
+    /// Create a new response with just a response code
+    /// The data has to be added by using the `add_data()` member function
     pub fn new(respcode: u8) -> Self {
         SimpleResponse {
             respcode,
@@ -135,13 +164,17 @@ impl SimpleResponse {
             size_tracker: 0,
         }
     }
+    /// Add data to the response
     pub fn add_data(&mut self, data: String) {
-        self.metalayout_buf.push_str(&format!("{}#", data.len()));
-        self.size_tracker += data.len() + 1;
+        let datstr = data.len().to_string();
+        self.metalayout_buf.push_str(&format!("{}#", datstr.len()));
+        self.size_tracker += datstr.len() + 1;
         self.dataframe_buf.push_str(&data);
         self.dataframe_buf.push('\n');
     }
-    pub fn prepare_response(&self) -> Vec<u8> {
+    /// Internal function used in the implementation of the `RespBytes` trait
+    /// for creating a `Vec<u8>` which can be written to a TCP stream
+    fn prepare_response(&self) -> Vec<u8> {
         format!(
             "{}!{}!{}\n{}\n{}",
             self.respcode,

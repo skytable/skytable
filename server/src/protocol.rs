@@ -21,8 +21,7 @@
 
 use corelib::terrapipe::{ActionType, QueryDataframe};
 use corelib::terrapipe::{RespBytes, RespCodes, DEF_QMETALINE_BUFSIZE};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
-
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 #[derive(Debug, PartialEq)]
@@ -115,7 +114,7 @@ fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
         .scan(buf.into_iter(), |databuf, size| {
             let tok: Vec<u8> = databuf.take(size).collect();
             let _ = databuf.next();
-            // FIXME(ohsayan): This is quite slow, we'll have to use SIMD in the future
+            // FIXME(@ohsayan): This is quite slow, we'll have to use SIMD in the future
             Some(String::from_utf8_lossy(&tok).to_string())
         })
         .collect()
@@ -137,27 +136,46 @@ fn test_extract_idents() {
     assert_eq!(res[1], "��");
 }
 
-pub async fn read_query(mut stream: &mut TcpStream) -> Result<QueryDataframe, impl RespBytes> {
-    let mut bufreader = BufReader::new(&mut stream);
-    let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
-    bufreader.read_line(&mut metaline_buf).await.unwrap();
-    let pqmf = match PreQMF::from_buffer(metaline_buf) {
-        Ok(pq) => pq,
-        Err(e) => return Err(e),
-    };
-    let (mut metalayout_buf, mut dataframe_buf) = (
-        String::with_capacity(pqmf.metaline_size),
-        vec![0; pqmf.content_size],
-    );
-    bufreader.read_line(&mut metalayout_buf).await.unwrap();
-    let ss = match get_sizes(metalayout_buf) {
-        Ok(ss) => ss,
-        Err(e) => return Err(e),
-    };
-    bufreader.read(&mut dataframe_buf).await.unwrap();
-    let qdf = QueryDataframe {
-        data: extract_idents(dataframe_buf, ss),
-        actiontype: pqmf.action_type,
-    };
-    Ok(qdf)
+pub struct Connection {
+    stream: TcpStream,
+}
+
+impl Connection {
+    pub fn new(stream: TcpStream) -> Self {
+        Connection { stream }
+    }
+    pub async fn read_query(&mut self) -> Result<QueryDataframe, impl RespBytes> {
+        let mut bufreader = BufReader::new(&mut self.stream);
+        let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
+        bufreader.read_line(&mut metaline_buf).await.unwrap();
+        let pqmf = match PreQMF::from_buffer(metaline_buf) {
+            Ok(pq) => pq,
+            Err(e) => return Err(e),
+        };
+        let (mut metalayout_buf, mut dataframe_buf) = (
+            String::with_capacity(pqmf.metaline_size),
+            vec![0; pqmf.content_size],
+        );
+        bufreader.read_line(&mut metalayout_buf).await.unwrap();
+        let ss = match get_sizes(metalayout_buf) {
+            Ok(ss) => ss,
+            Err(e) => return Err(e),
+        };
+        bufreader.read(&mut dataframe_buf).await.unwrap();
+        let qdf = QueryDataframe {
+            data: extract_idents(dataframe_buf, ss),
+            actiontype: pqmf.action_type,
+        };
+        Ok(qdf)
+    }
+    pub async fn write_response(&mut self, resp: Vec<u8>) {
+        if let Ok(_) = self.stream.write(&resp).await {
+            return;
+        } else {
+            eprintln!("Error writing response to {:?}", self.stream.peer_addr())
+        }
+    }
+    pub async fn close_conn_with_error(&mut self, bytes: impl RespBytes) {
+        self.stream.write_all(&bytes.into_response()).await.unwrap()
+    }
 }

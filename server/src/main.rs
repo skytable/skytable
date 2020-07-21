@@ -19,13 +19,12 @@
  *
 */
 
-use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 mod coredb;
+mod dbnet;
 mod protocol;
 use coredb::CoreDB;
-use corelib::terrapipe::RespBytes;
-use protocol::read_query;
+use protocol::Connection;
 static ADDR: &'static str = "127.0.0.1:2003";
 
 #[tokio::main]
@@ -35,18 +34,15 @@ async fn main() {
     let db = CoreDB::new();
     loop {
         let handle = db.get_handle();
-        let (mut socket, _) = listener.accept().await.unwrap();
+        let (socket, _) = listener.accept().await.unwrap();
         tokio::spawn(async move {
-            let q = read_query(&mut socket).await;
+            let mut con = Connection::new(socket);
+            let q = con.read_query().await;
             let df = match q {
                 Ok(q) => q,
-                Err(e) => return close_conn_with_error(socket, e).await,
+                Err(e) => return con.close_conn_with_error(e).await,
             };
-            socket.write_all(&handle.execute_query(df)).await.unwrap();
+            con.write_response(handle.execute_query(df)).await;
         });
     }
-}
-
-async fn close_conn_with_error(mut stream: TcpStream, bytes: impl RespBytes) {
-    stream.write_all(&bytes.into_response()).await.unwrap()
 }

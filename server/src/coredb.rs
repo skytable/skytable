@@ -20,14 +20,16 @@
 */
 
 use corelib::terrapipe::QueryDataframe;
-use corelib::terrapipe::{responses, tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
+use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::{Arc, RwLock};
 
-pub type DbResult<T> = Result<T, RespCodes>;
+/// Results from actions on the Database
+pub type ActionResult<T> = Result<T, RespCodes>;
 
 pub struct CoreDB {
     shared: Arc<Coretable>,
+    terminate: bool,
 }
 
 pub struct Coretable {
@@ -35,14 +37,14 @@ pub struct Coretable {
 }
 
 impl Coretable {
-    pub fn get(&self, key: &str) -> DbResult<String> {
+    pub fn get(&self, key: &str) -> ActionResult<String> {
         if let Some(value) = self.coremap.read().unwrap().get(key) {
             Ok(value.to_string())
         } else {
             Err(RespCodes::NotFound)
         }
     }
-    pub fn set(&self, key: &str, value: &str) -> DbResult<()> {
+    pub fn set(&self, key: &str, value: &str) -> ActionResult<()> {
         match self.coremap.write().unwrap().entry(key.to_string()) {
             Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
             Entry::Vacant(e) => {
@@ -51,7 +53,7 @@ impl Coretable {
             }
         }
     }
-    pub fn update(&self, key: &str, value: &str) -> DbResult<()> {
+    pub fn update(&self, key: &str, value: &str) -> ActionResult<()> {
         match self.coremap.write().unwrap().entry(key.to_string()) {
             Entry::Occupied(ref mut e) => {
                 e.insert(value.to_string());
@@ -60,7 +62,7 @@ impl Coretable {
             Entry::Vacant(_) => Err(RespCodes::NotFound),
         }
     }
-    pub fn del(&self, key: &str) -> DbResult<()> {
+    pub fn del(&self, key: &str) -> ActionResult<()> {
         if let Some(_) = self.coremap.write().unwrap().remove(&key.to_owned()) {
             Ok(())
         } else {
@@ -169,9 +171,23 @@ impl CoreDB {
             shared: Arc::new(Coretable {
                 coremap: RwLock::new(HashMap::new()),
             }),
+            terminate: false,
         }
     }
     pub fn get_handle(&self) -> Arc<Coretable> {
         Arc::clone(&self.shared)
+    }
+}
+
+impl Drop for CoreDB {
+    // This prevents us from killing the database, in the event someone tries
+    // to access it
+    fn drop(&mut self) {
+        if Arc::strong_count(&self.shared) == 1 {
+            // Acquire a lock to prevent anyone from writing something
+            let coremap = self.shared.coremap.write().unwrap();
+            self.terminate = true;
+            drop(coremap);
+        }
     }
 }
