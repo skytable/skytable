@@ -24,7 +24,7 @@
 /// Default query metaline buffer size
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
 /// Default query metalayout buffer size
-pub const DEF_QMETALAYOUT_BUFSIZE: usize = 1024;
+pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
 /// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
 pub mod tags {
@@ -176,7 +176,7 @@ impl SimpleResponse {
     /// for creating a `Vec<u8>` which can be written to a TCP stream
     fn prepare_response(&self) -> Vec<u8> {
         format!(
-            "{}!{}!{}\n{}\n{}",
+            "*!{}!{}!{}\n{}\n{}",
             self.respcode,
             self.size_tracker,
             self.metalayout_buf.len(),
@@ -210,4 +210,64 @@ fn test_simple_response() {
         String::from_utf8_lossy(&s.into_response()),
         String::from("0!39!16\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n")
     );
+}
+
+pub enum QueryBuilder {
+    SimpleQuery,
+    // TODO(@ohsayan): Add pipelined queries here
+}
+// TODO(@ohsayan): I think we should move the client stuff into a separate repo
+// altogether to let users customize the client as they like and avoid licensing
+// issues
+
+impl QueryBuilder {
+    pub fn new_simple() -> SimpleQuery {
+        SimpleQuery::new()
+    }
+}
+
+pub struct SimpleQuery {
+    metaline: String,
+    metalayout: String,
+    dataframe: String,
+    size_tracker: usize,
+}
+
+impl SimpleQuery {
+    pub fn new() -> Self {
+        let mut metaline = String::with_capacity(DEF_QMETALINE_BUFSIZE);
+        metaline.push_str("*!");
+        SimpleQuery {
+            metaline,
+            size_tracker: 0,
+            metalayout: String::with_capacity(DEF_QMETALAYOUT_BUFSIZE),
+            dataframe: String::with_capacity(DEF_QDATAFRAME_BUSIZE),
+        }
+    }
+    pub fn add(&mut self, cmd: &str) {
+        let ref mut layout = self.metalayout;
+        let ref mut df = self.dataframe;
+        let len = cmd.len().to_string();
+        self.size_tracker += cmd.len() + 1;
+        layout.push_str(&len);
+        layout.push('#');
+        df.push_str(cmd);
+        df.push('\n');
+    }
+    pub fn from_cmd(&mut self, cmd: String) {
+        cmd.split_whitespace().for_each(|val| self.add(val));
+    }
+    pub fn prepare_response(&self) -> (usize, Vec<u8>) {
+        let resp = format!(
+            "{}{}!{}\n{}\n{}",
+            self.metaline,
+            self.size_tracker,
+            self.metalayout.len(),
+            self.metalayout,
+            self.dataframe
+        )
+        .as_bytes()
+        .to_owned();
+        (resp.len(), resp)
+    }
 }

@@ -10,7 +10,7 @@ As noted earlier, Terrabase is pre-alpha software and the entire API is subject 
 We have an experimental client and server implementation for the database already. You can download a pre-built binary for `x86_64-linux` in the releases section and try it out!
 
 * First unzip the file
-* Start the database server by running `./terrabase` 
+* Start the database server by running `./tdb` 
 * Start the client by running `./tsh` 
 * You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` ! 
 

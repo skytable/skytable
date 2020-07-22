@@ -269,7 +269,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terrabase"
+name = "tdb"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -315,6 +315,9 @@ dependencies = [
 [[package]]
 name = "tsh"
 version = "0.1.0"
+dependencies = [
+ "corelib",
+]
 
 [[package]]
 name = "unicode-xid"

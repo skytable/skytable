@@ -19,15 +19,11 @@
  *
 */
 
-use std::io;
-use std::io::prelude::*;
 mod argparse;
 
-const MSG_WELCOME: &'static str = "Terrabase | Version 0.1.0\nCopyright (c) 2020 Sayan Nandan";
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.1.0";
 
 fn main() {
     println!("{}", MSG_WELCOME);
-    loop {
-        
-    }
+    argparse::execute_query();
 }

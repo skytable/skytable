@@ -58,6 +58,8 @@ impl Terminator {
     }
 }
 
+// We'll use the idea of gracefully shutting down from tokio
+
 pub struct Listener {
     /// An atomic reference to the coretable
     db: CoreDB,
@@ -131,9 +133,10 @@ impl CHandler {
                     return;
                 }
             };
+            eprintln!("{:?}", try_df);
             match try_df {
-                Ok(df) => return self.con.write_response(self.db.execute_query(df)).await,
-                Err(e) => return self.con.close_conn_with_error(e).await,
+                Ok(df) => self.con.write_response(self.db.execute_query(df)).await,
+                Err(e) => self.con.close_conn_with_error(e).await,
             }
         }
     }

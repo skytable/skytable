@@ -144,7 +144,7 @@ impl Connection {
     pub fn new(stream: TcpStream) -> Self {
         Connection { stream }
     }
-    pub async fn read_query(&mut self) -> Result<QueryDataframe, impl RespBytes> {
+    pub async fn read_query(&mut self) -> Result<QueryDataframe, RespCodes> {
         let mut bufreader = BufReader::new(&mut self.stream);
         let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
         bufreader.read_line(&mut metaline_buf).await.unwrap();
