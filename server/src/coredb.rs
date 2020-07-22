@@ -22,30 +22,32 @@
 use corelib::terrapipe::QueryDataframe;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use std::collections::{hash_map::Entry, HashMap};
-use std::sync::{Arc, RwLock};
+use std::sync::{self, Arc, RwLock};
 
 /// Results from actions on the Database
 pub type ActionResult<T> = Result<T, RespCodes>;
 
+#[derive(Debug, Clone)]
 pub struct CoreDB {
     shared: Arc<Coretable>,
     terminate: bool,
 }
 
+#[derive(Debug)]
 pub struct Coretable {
     coremap: RwLock<HashMap<String, String>>,
 }
 
-impl Coretable {
+impl CoreDB {
     pub fn get(&self, key: &str) -> ActionResult<String> {
-        if let Some(value) = self.coremap.read().unwrap().get(key) {
+        if let Some(value) = self.acquire_read().get(key) {
             Ok(value.to_string())
         } else {
             Err(RespCodes::NotFound)
         }
     }
     pub fn set(&self, key: &str, value: &str) -> ActionResult<()> {
-        match self.coremap.write().unwrap().entry(key.to_string()) {
+        match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
             Entry::Vacant(e) => {
                 let _ = e.insert(value.to_string());
@@ -54,7 +56,7 @@ impl Coretable {
         }
     }
     pub fn update(&self, key: &str, value: &str) -> ActionResult<()> {
-        match self.coremap.write().unwrap().entry(key.to_string()) {
+        match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(ref mut e) => {
                 e.insert(value.to_string());
                 Ok(())
@@ -63,7 +65,7 @@ impl Coretable {
         }
     }
     pub fn del(&self, key: &str) -> ActionResult<()> {
-        if let Some(_) = self.coremap.write().unwrap().remove(&key.to_owned()) {
+        if let Some(_) = self.acquire_write().remove(&key.to_owned()) {
             Ok(())
         } else {
             Err(RespCodes::NotFound)
@@ -163,9 +165,6 @@ impl Coretable {
         }
         RespCodes::InvalidMetaframe.into_response()
     }
-}
-
-impl CoreDB {
     pub fn new() -> Self {
         CoreDB {
             shared: Arc::new(Coretable {
@@ -174,8 +173,11 @@ impl CoreDB {
             terminate: false,
         }
     }
-    pub fn get_handle(&self) -> Arc<Coretable> {
-        Arc::clone(&self.shared)
+    fn acquire_write(&self) -> sync::RwLockWriteGuard<'_, HashMap<String, String>> {
+        self.shared.coremap.write().unwrap()
+    }
+    fn acquire_read(&self) -> sync::RwLockReadGuard<'_, HashMap<String, String>> {
+        self.shared.coremap.read().unwrap()
     }
 }
 

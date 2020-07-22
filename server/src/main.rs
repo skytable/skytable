@@ -24,25 +24,14 @@ mod coredb;
 mod dbnet;
 mod protocol;
 use coredb::CoreDB;
+use dbnet::run;
 use protocol::Connection;
+use tokio::signal;
 static ADDR: &'static str = "127.0.0.1:2003";
 
 #[tokio::main]
 async fn main() {
-    let mut listener = TcpListener::bind(ADDR).await.unwrap();
+    let listener = TcpListener::bind(ADDR).await.unwrap();
     println!("Server running on terrapipe://127.0.0.1:2003");
-    let db = CoreDB::new();
-    loop {
-        let handle = db.get_handle();
-        let (socket, _) = listener.accept().await.unwrap();
-        tokio::spawn(async move {
-            let mut con = Connection::new(socket);
-            let q = con.read_query().await;
-            let df = match q {
-                Ok(q) => q,
-                Err(e) => return con.close_conn_with_error(e).await,
-            };
-            con.write_response(handle.execute_query(df)).await;
-        });
-    }
+    run(listener, signal::ctrl_c()).await;
 }

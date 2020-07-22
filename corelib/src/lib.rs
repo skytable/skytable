@@ -23,3 +23,6 @@
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
 pub mod terrapipe;
+
+use std::error::Error;
+pub type TResult<T> = Result<T, Box<dyn Error>>;
