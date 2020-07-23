@@ -21,7 +21,7 @@
 
 use crate::client::Client;
 use std::io::{self, prelude::*};
-use tokio::signal;
+use std::process;
 const ADDR: &'static str = "127.0.0.1:2003";
 pub async fn execute_query() {
     let mut client = match Client::new(ADDR).await {
@@ -40,6 +40,10 @@ pub async fn execute_query() {
         io::stdin()
             .read_line(&mut rl)
             .expect("Couldn't read line, this is a serious error!");
-        client.run(rl, signal::ctrl_c()).await;
+        if rl.trim().to_uppercase() == "EXIT" {
+            println!("Goodbye!");
+            process::exit(0x100);
+        }
+        client.run(rl).await;
     }
 }

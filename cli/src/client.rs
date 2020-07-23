@@ -99,21 +99,13 @@ impl Client {
         let con = TcpStream::connect(addr).await?;
         Ok(Client { con })
     }
-    pub async fn run(&mut self, cmd: String, sig: impl Future) {
+    pub async fn run(&mut self, cmd: String) {
         if cmd.len() == 0 {
             return;
         } else {
             let mut qbuilder = QueryBuilder::new_simple();
             qbuilder.from_cmd(cmd);
-            let q = tokio::select! {
-                query = self.run_query(qbuilder.prepare_response()) => query,
-                _ = sig => {
-                    println!("Goodbye!");
-                    // Terminate the connection
-                    process::exit(0x100);
-                }
-            };
-            match q {
+            match self.run_query(qbuilder.prepare_response()).await {
                 Ok(res) => {
                     res.into_iter().for_each(|val| println!("{}", val));
                     return;
