@@ -57,7 +57,7 @@ pub mod responses {
         /// `3` Invalid Metaframe response
         pub static ref RESP_INVALID_MF: Vec<u8> = "*!3!0!0\n".as_bytes().to_owned();
         /// `4` ArgumentError frame response
-        pub static ref RESP_ArgumentError: Vec<u8> = "*!4!0!0\n".as_bytes().to_owned();
+        pub static ref RESP_ARG_ERROR: Vec<u8> = "*!4!0!0\n".as_bytes().to_owned();
         /// `5` Internal server error response
         pub static ref RESP_SERVER_ERROR: Vec<u8> = "*!5!0!0\n".as_bytes().to_owned();
     }
@@ -216,7 +216,7 @@ impl RespBytes for RespCodes {
             NotFound => RESP_NOT_FOUND.to_owned(),
             OverwriteError => RESP_OVERWRITE_ERROR.to_owned(),
             InvalidMetaframe => RESP_INVALID_MF.to_owned(),
-            ArgumentError => RESP_ArgumentError.to_owned(),
+            ArgumentError => RESP_ARG_ERROR.to_owned(),
             ServerError => RESP_SERVER_ERROR.to_owned(),
             OtherError(e) => match e {
                 Some(e) => {
