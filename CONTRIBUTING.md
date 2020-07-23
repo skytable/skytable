@@ -10,7 +10,7 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
 * `FIXME(@<username>)` : Use this when you have made an implementation that can be improved in the future, such as improved efficiency
 * `HACK(@<username>)` : Use this when the code you are using a temporary workaround
-* `TODO(@<username>)` : Use this when you have kept something ArgumentError
+* `TODO(@<username>)` : Use this when you have kept something incomplete
 
 ### Formatting
 
