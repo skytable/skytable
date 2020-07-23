@@ -133,7 +133,6 @@ impl CHandler {
                     return;
                 }
             };
-            eprintln!("{:?}", try_df);
             match try_df {
                 Ok(df) => self.con.write_response(self.db.execute_query(df)).await,
                 Err(e) => self.con.close_conn_with_error(e).await,

@@ -19,7 +19,7 @@
  *
 */
 
-use corelib::terrapipe::QueryDataframe;
+use crate::protocol::QueryDataframe;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::{self, Arc, RwLock};
@@ -95,8 +95,7 @@ impl CoreDB {
                                 Ok(v) => v,
                                 Err(e) => return e.into_response(),
                             };
-                            let mut resp =
-                                ResponseBuilder::new_simple(RespCodes::EmptyResponseOkay);
+                            let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
                             resp.add_data(res.to_owned());
                             return resp.into_response();
                         }
@@ -111,7 +110,7 @@ impl CoreDB {
                                     Ok(_) => {
                                         #[cfg(Debug)]
                                         self.print_debug_table();
-                                        return RespCodes::EmptyResponseOkay.into_response();
+                                        return RespCodes::Okay.into_response();
                                     }
                                     Err(e) => return e.into_response(),
                                 }
@@ -130,7 +129,7 @@ impl CoreDB {
                                             #[cfg(Debug)]
                                             self.print_debug_table();
 
-                                            RespCodes::EmptyResponseOkay.into_response()
+                                            RespCodes::Okay.into_response()
                                         }
                                     }
                                     Err(e) => return e.into_response(),
@@ -148,22 +147,28 @@ impl CoreDB {
                                     #[cfg(Debug)]
                                     self.print_debug_table();
 
-                                    return RespCodes::EmptyResponseOkay.into_response();
+                                    return RespCodes::Okay.into_response();
                                 }
                                 Err(e) => return e.into_response(),
                             }
+                        } else {
                         }
                     }
                 }
                 tags::TAG_HEYA => {
-                    let mut resp = ResponseBuilder::new_simple(RespCodes::EmptyResponseOkay);
-                    resp.add_data("HEY!".to_owned());
-                    return resp.into_response();
+                    if buf.next().is_none() {
+                        let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
+                        resp.add_data("HEY!".to_owned());
+                        return resp.into_response();
+                    }
                 }
-                _ => return RespCodes::OtherError("Unknown command".to_owned()).into_response(),
+                _ => {
+                    return RespCodes::OtherError(Some("Unknown command".to_owned()))
+                        .into_response()
+                }
             }
         }
-        RespCodes::InvalidMetaframe.into_response()
+        RespCodes::ArgumentError.into_response()
     }
     pub fn new() -> Self {
         CoreDB {

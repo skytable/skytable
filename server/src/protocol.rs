@@ -19,10 +19,19 @@
  *
 */
 
-use corelib::terrapipe::{ActionType, QueryDataframe};
+use corelib::terrapipe::{extract_idents, get_sizes, ActionType};
 use corelib::terrapipe::{RespBytes, RespCodes, DEF_QMETALINE_BUFSIZE};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
+
+/// The query dataframe
+#[derive(Debug)]
+pub struct QueryDataframe {
+    /// The data part
+    pub data: Vec<String>,
+    /// The query action type
+    pub actiontype: ActionType,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct PreQMF {
@@ -81,61 +90,6 @@ fn test_preqmf() {
     assert_eq!(preqmf, pqmf_should_be);
 }
 
-pub fn get_sizes(stream: String) -> Result<Vec<usize>, RespCodes> {
-    let sstr: Vec<&str> = stream.split('#').collect();
-    let mut sstr_iter = sstr.into_iter().peekable();
-    let mut sizes = Vec::with_capacity(sstr_iter.len());
-    while let Some(size) = sstr_iter.next() {
-        if sstr_iter.peek().is_some() {
-            // Skip the last element
-            if let Ok(val) = size.parse::<usize>() {
-                sizes.push(val);
-            } else {
-                return Err(RespCodes::InvalidMetaframe);
-            }
-        } else {
-            break;
-        }
-    }
-    Ok(sizes)
-}
-
-#[cfg(test)]
-#[test]
-fn test_get_sizes() {
-    let retbuf = "10#20#30#".to_owned();
-    let sizes = get_sizes(retbuf).unwrap();
-    assert_eq!(sizes, vec![10usize, 20usize, 30usize]);
-}
-
-fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
-    skip_sequence
-        .into_iter()
-        .scan(buf.into_iter(), |databuf, size| {
-            let tok: Vec<u8> = databuf.take(size).collect();
-            let _ = databuf.next();
-            // FIXME(@ohsayan): This is quite slow, we'll have to use SIMD in the future
-            Some(String::from_utf8_lossy(&tok).to_string())
-        })
-        .collect()
-}
-
-#[cfg(test)]
-#[test]
-fn test_extract_idents() {
-    let testbuf = "set\nsayan\n17\n".as_bytes().to_vec();
-    let skip_sequence: Vec<usize> = vec![3, 5, 2];
-    let res = extract_idents(testbuf, skip_sequence);
-    assert_eq!(
-        vec!["set".to_owned(), "sayan".to_owned(), "17".to_owned()],
-        res
-    );
-    let badbuf = vec![0, 0, 159, 146, 150];
-    let skip_sequence: Vec<usize> = vec![1, 2];
-    let res = extract_idents(badbuf, skip_sequence);
-    assert_eq!(res[1], "��");
-}
-
 pub struct Connection {
     stream: TcpStream,
 }
@@ -176,6 +130,6 @@ impl Connection {
         }
     }
     pub async fn close_conn_with_error(&mut self, bytes: impl RespBytes) {
-        self.stream.write_all(&bytes.into_response()).await.unwrap()
+        self.stream.write_all(&bytes.into_response()).await.unwrap();
     }
 }

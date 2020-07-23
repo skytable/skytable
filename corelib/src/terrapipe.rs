@@ -19,7 +19,10 @@
  *
 */
 
-//! This implements the Terrapipe protocol
+//! This implements primitives for the Terrapipe protocol
+
+use std::error::Error;
+use std::fmt;
 
 /// Default query metaline buffer size
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
@@ -46,18 +49,73 @@ pub mod responses {
     use lazy_static::lazy_static;
     lazy_static! {
         /// Empty `0`(Okay) response - without any content
-        pub static ref RESP_OKAY_EMPTY: Vec<u8> = "0!0!0".as_bytes().to_owned();
+        pub static ref RESP_OKAY_EMPTY: Vec<u8> = "*!0!0!0\n".as_bytes().to_owned();
         /// `1` Not found response
-        pub static ref RESP_NOT_FOUND: Vec<u8> = "1!0!0".as_bytes().to_owned();
+        pub static ref RESP_NOT_FOUND: Vec<u8> = "*!1!0!0\n".as_bytes().to_owned();
         /// `2` Overwrite Error response
-        pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "2!0!0".as_bytes().to_owned();
+        pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "*!2!0!0\n".as_bytes().to_owned();
         /// `3` Invalid Metaframe response
-        pub static ref RESP_INVALID_MF: Vec<u8> = "3!0!0".as_bytes().to_owned();
-        /// `4` Incomplete frame response
-        pub static ref RESP_INCOMPLETE: Vec<u8> = "4!0!0".as_bytes().to_owned();
+        pub static ref RESP_INVALID_MF: Vec<u8> = "*!3!0!0\n".as_bytes().to_owned();
+        /// `4` ArgumentError frame response
+        pub static ref RESP_ArgumentError: Vec<u8> = "*!4!0!0\n".as_bytes().to_owned();
         /// `5` Internal server error response
-        pub static ref RESP_SERVER_ERROR: Vec<u8> = "5!0!0".as_bytes().to_owned();
+        pub static ref RESP_SERVER_ERROR: Vec<u8> = "*!5!0!0\n".as_bytes().to_owned();
     }
+}
+
+pub fn get_sizes(stream: String) -> Result<Vec<usize>, RespCodes> {
+    let sstr: Vec<&str> = stream.split('#').collect();
+    let mut sstr_iter = sstr.into_iter().peekable();
+    let mut sizes = Vec::with_capacity(sstr_iter.len());
+    while let Some(size) = sstr_iter.next() {
+        if sstr_iter.peek().is_some() {
+            // Skip the last element
+            if let Ok(val) = size.parse::<usize>() {
+                sizes.push(val);
+            } else {
+                return Err(RespCodes::InvalidMetaframe);
+            }
+        } else {
+            break;
+        }
+    }
+    Ok(sizes)
+}
+
+#[cfg(test)]
+#[test]
+fn test_get_sizes() {
+    let retbuf = "10#20#30#".to_owned();
+    let sizes = get_sizes(retbuf).unwrap();
+    assert_eq!(sizes, vec![10usize, 20usize, 30usize]);
+}
+
+pub fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
+    skip_sequence
+        .into_iter()
+        .scan(buf.into_iter(), |databuf, size| {
+            let tok: Vec<u8> = databuf.take(size).collect();
+            let _ = databuf.next();
+            // FIXME(@ohsayan): This is quite slow, we'll have to use SIMD in the future
+            Some(String::from_utf8_lossy(&tok).to_string())
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[test]
+fn test_extract_idents() {
+    let testbuf = "set\nsayan\n17\n".as_bytes().to_vec();
+    let skip_sequence: Vec<usize> = vec![3, 5, 2];
+    let res = extract_idents(testbuf, skip_sequence);
+    assert_eq!(
+        vec!["set".to_owned(), "sayan".to_owned(), "17".to_owned()],
+        res
+    );
+    let badbuf = vec![0, 0, 159, 146, 150];
+    let skip_sequence: Vec<usize> = vec![1, 2];
+    let res = extract_idents(badbuf, skip_sequence);
+    assert_eq!(res[1], "��");
 }
 
 /// Response codes returned by the server
@@ -65,33 +123,74 @@ pub mod responses {
 pub enum RespCodes {
     /// `0`: Okay (Empty Response) - use the `ResponseBuilder` for building
     /// responses that contain data
-    EmptyResponseOkay,
+    Okay,
     /// `1`: Not Found
     NotFound,
     /// `2`: Overwrite Error
     OverwriteError,
     /// `3`: Invalid Metaframe
     InvalidMetaframe,
-    /// `4`: Incomplete
-    Incomplete,
+    /// `4`: ArgumentError
+    ArgumentError,
     /// `5`: Server Error
     ServerError,
-    /// `6`: Some other error - the wrapped `String` will be returned in the response body
-    OtherError(String),
+    /// `6`: Some other error - the wrapped `String` will be returned in the response body.
+    /// Just a note, this gets quite messy, especially when we're using it for deconding responses
+    OtherError(Option<String>),
 }
+
+impl fmt::Display for RespCodes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use RespCodes::*;
+        match self {
+            Okay => unimplemented!(),
+            NotFound => write!(f, "ERROR: Couldn't find the key"),
+            OverwriteError => write!(f, "ERROR: Existing values cannot be overwritten"),
+            InvalidMetaframe => write!(f, "ERROR: Invalid metaframe"),
+            ArgumentError => write!(f, "ERROR: The command is not in the correct format"),
+            ServerError => write!(f, "ERROR: The server had an internal error"),
+            OtherError(e) => match e {
+                None => write!(f, "ERROR: Some unknown error occurred"),
+                Some(e) => write!(f, "ERROR: {}", e),
+            },
+        }
+    }
+}
+
+impl Error for RespCodes {}
 
 impl From<RespCodes> for u8 {
     fn from(rcode: RespCodes) -> u8 {
         use RespCodes::*;
         match rcode {
-            EmptyResponseOkay => 0,
+            Okay => 0,
             NotFound => 1,
             OverwriteError => 2,
             InvalidMetaframe => 3,
-            Incomplete => 4,
+            ArgumentError => 4,
             ServerError => 5,
             OtherError(_) => 6,
         }
+    }
+}
+
+impl RespCodes {
+    pub fn from_str(val: &str, extra: Option<String>) -> Option<Self> {
+        use RespCodes::*;
+        let res = match val.parse::<u8>() {
+            Ok(val) => match val {
+                0 => Okay,
+                1 => NotFound,
+                2 => OverwriteError,
+                3 => InvalidMetaframe,
+                4 => ArgumentError,
+                5 => ServerError,
+                6 => OtherError(extra),
+                _ => return None,
+            },
+            Err(_) => return None,
+        };
+        Some(res)
     }
 }
 
@@ -113,26 +212,26 @@ impl RespBytes for RespCodes {
         use responses::*;
         use RespCodes::*;
         match self {
-            EmptyResponseOkay => RESP_OKAY_EMPTY.to_owned(),
+            Okay => RESP_OKAY_EMPTY.to_owned(),
             NotFound => RESP_NOT_FOUND.to_owned(),
             OverwriteError => RESP_OVERWRITE_ERROR.to_owned(),
             InvalidMetaframe => RESP_INVALID_MF.to_owned(),
-            Incomplete => RESP_INCOMPLETE.to_owned(),
+            ArgumentError => RESP_ArgumentError.to_owned(),
             ServerError => RESP_SERVER_ERROR.to_owned(),
-            OtherError(e) => format!("6!{}!#{}", e.len(), e.len()).as_bytes().to_owned(),
+            OtherError(e) => match e {
+                Some(e) => {
+                    let dl = e.len().to_string();
+                    format!("*!6!{}!{}\n#{}\n{}", e.len(), dl.len(), dl, e)
+                        .as_bytes()
+                        .to_owned()
+                }
+                None => format!("*!6!0!0\n").as_bytes().to_owned(),
+            },
         }
     }
 }
 
-/// The query dataframe
 #[derive(Debug)]
-pub struct QueryDataframe {
-    /// The data part
-    pub data: Vec<String>,
-    /// The query action type
-    pub actiontype: ActionType,
-}
-
 /// This is enum represents types of responses which can be built from it
 pub enum ResponseBuilder {
     SimpleResponse, // TODO: Add pipelined response builder here
@@ -145,12 +244,12 @@ impl ResponseBuilder {
     }
 }
 
+#[derive(Debug)]
 /// Representation of a simple response
 pub struct SimpleResponse {
     respcode: u8,
     metalayout_buf: String,
     dataframe_buf: String,
-    size_tracker: usize,
 }
 
 impl SimpleResponse {
@@ -161,14 +260,11 @@ impl SimpleResponse {
             respcode,
             metalayout_buf: String::with_capacity(2),
             dataframe_buf: String::with_capacity(40),
-            size_tracker: 0,
         }
     }
     /// Add data to the response
     pub fn add_data(&mut self, data: String) {
-        let datstr = data.len().to_string();
-        self.metalayout_buf.push_str(&format!("{}#", datstr.len()));
-        self.size_tracker += datstr.len() + 1;
+        self.metalayout_buf.push_str(&format!("{}#", data.len()));
         self.dataframe_buf.push_str(&data);
         self.dataframe_buf.push('\n');
     }
@@ -178,7 +274,7 @@ impl SimpleResponse {
         format!(
             "*!{}!{}!{}\n{}\n{}",
             self.respcode,
-            self.size_tracker,
+            self.dataframe_buf.len(),
             self.metalayout_buf.len(),
             self.metalayout_buf,
             self.dataframe_buf
@@ -197,7 +293,7 @@ impl RespBytes for SimpleResponse {
 #[cfg(test)]
 #[test]
 fn test_simple_response() {
-    let mut s = ResponseBuilder::new_simple(RespCodes::EmptyResponseOkay);
+    let mut s = ResponseBuilder::new_simple(RespCodes::Okay);
     s.add_data("Sayan".to_owned());
     s.add_data("loves".to_owned());
     s.add_data("you".to_owned());

@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 corelib = {path = "../corelib"}
+tokio = {version = "0.2.22", features = ["full"]}
