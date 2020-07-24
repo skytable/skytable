@@ -23,11 +23,11 @@ use corelib::{
     terrapipe::{self, ActionType, QueryBuilder, RespCodes, DEF_QMETALAYOUT_BUFSIZE},
     TResult,
 };
-use std::{error::Error, fmt, process};
+use std::{error::Error, fmt};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use std::future::Future;
 
+/// Errors that may occur while parsing responses from the server
 #[derive(Debug)]
 pub enum ClientError {
     RespCode(RespCodes),
@@ -48,10 +48,12 @@ impl fmt::Display for ClientError {
 
 impl Error for ClientError {}
 
+/// A client
 pub struct Client {
     con: TcpStream,
 }
 
+/// The Request metaline
 pub struct RMetaline {
     content_size: usize,
     metalayout_size: usize,
@@ -60,6 +62,7 @@ pub struct RMetaline {
 }
 
 impl RMetaline {
+    /// Decode a metaline from a `String` buffer
     pub fn from_buf(buf: String) -> TResult<Self> {
         let parts: Vec<&str> = buf.split('!').collect();
         if let (Some(resptype), Some(respcode), Some(clength), Some(metalayout_size)) =
@@ -95,10 +98,13 @@ impl RMetaline {
 }
 
 impl Client {
+    /// Create a new client instance
     pub async fn new(addr: &str) -> TResult<Self> {
         let con = TcpStream::connect(addr).await?;
         Ok(Client { con })
     }
+    /// Run a query read from stdin. This function will take care of everything
+    /// including printing errors
     pub async fn run(&mut self, cmd: String) {
         if cmd.len() == 0 {
             return;
@@ -117,6 +123,7 @@ impl Client {
             };
         }
     }
+    /// Run a query, reading and writng to the stream
     async fn run_query(&mut self, (_, query_bytes): (usize, Vec<u8>)) -> TResult<Vec<String>> {
         self.con.write_all(&query_bytes).await?;
         let mut metaline_buf = String::with_capacity(DEF_QMETALAYOUT_BUFSIZE);

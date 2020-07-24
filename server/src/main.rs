@@ -33,5 +33,7 @@ static ADDR: &'static str = "127.0.0.1:2003";
 async fn main() {
     let listener = TcpListener::bind(ADDR).await.unwrap();
     println!("Server running on terrapipe://127.0.0.1:2003");
+    // Start the server which asynchronously waits for a CTRL+C signal
+    // which will safely shut down the server
     run(listener, signal::ctrl_c()).await;
 }

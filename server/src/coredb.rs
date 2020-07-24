@@ -27,18 +27,23 @@ use std::sync::{self, Arc, RwLock};
 /// Results from actions on the Database
 pub type ActionResult<T> = Result<T, RespCodes>;
 
+/// This is a thread-safe database handle, which on cloning simply
+/// gives another atomic reference to the `Coretable`
 #[derive(Debug, Clone)]
 pub struct CoreDB {
     shared: Arc<Coretable>,
     terminate: bool,
 }
 
+/// The `Coretable` holds all the key-value pairs in a `HashMap`
+/// wrapped in a Read/Write lock
 #[derive(Debug)]
 pub struct Coretable {
     coremap: RwLock<HashMap<String, String>>,
 }
 
 impl CoreDB {
+    /// GET a `key`
     pub fn get(&self, key: &str) -> ActionResult<String> {
         if let Some(value) = self.acquire_read().get(key) {
             Ok(value.to_string())
@@ -46,6 +51,7 @@ impl CoreDB {
             Err(RespCodes::NotFound)
         }
     }
+    /// SET a `key` to `value`
     pub fn set(&self, key: &str, value: &str) -> ActionResult<()> {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
@@ -55,6 +61,7 @@ impl CoreDB {
             }
         }
     }
+    /// UPDATE a `key` to `value`
     pub fn update(&self, key: &str, value: &str) -> ActionResult<()> {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(ref mut e) => {
@@ -64,6 +71,7 @@ impl CoreDB {
             Entry::Vacant(_) => Err(RespCodes::NotFound),
         }
     }
+    /// DEL a `key`
     pub fn del(&self, key: &str) -> ActionResult<()> {
         if let Some(_) = self.acquire_write().remove(&key.to_owned()) {
             Ok(())
@@ -72,10 +80,12 @@ impl CoreDB {
         }
     }
     #[cfg(Debug)]
+    /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
         println!("{:#?}", *self.coremap.read().unwrap());
     }
 
+    /// Execute a query that has already been validated by `Connection::read_query`
     pub fn execute_query(&self, df: QueryDataframe) -> Vec<u8> {
         match df.actiontype {
             ActionType::Simple => self.execute_simple(df.data),
@@ -83,12 +93,14 @@ impl CoreDB {
             ActionType::Pipeline => unimplemented!(),
         }
     }
+
+    /// Execute a simple(*) query
     pub fn execute_simple(&self, buf: Vec<String>) -> Vec<u8> {
         let mut buf = buf.into_iter();
         while let Some(token) = buf.next() {
             match token.to_uppercase().as_str() {
                 tags::TAG_GET => {
-                    // This is a GET request
+                    // This is a GET query
                     if let Some(key) = buf.next() {
                         if buf.next().is_none() {
                             let res = match self.get(&key.to_string()) {
@@ -102,7 +114,7 @@ impl CoreDB {
                     }
                 }
                 tags::TAG_SET => {
-                    // This is a SET request
+                    // This is a SET query
                     if let Some(key) = buf.next() {
                         if let Some(value) = buf.next() {
                             if buf.next().is_none() {
@@ -139,7 +151,7 @@ impl CoreDB {
                     }
                 }
                 tags::TAG_DEL => {
-                    // This is a GET request
+                    // This is a DEL query
                     if let Some(key) = buf.next() {
                         if buf.next().is_none() {
                             match self.del(&key.to_string()) {
@@ -170,6 +182,7 @@ impl CoreDB {
         }
         RespCodes::ArgumentError.into_response()
     }
+    /// Create a new `CoreDB` instance
     pub fn new() -> Self {
         CoreDB {
             shared: Arc::new(Coretable {
@@ -178,9 +191,11 @@ impl CoreDB {
             terminate: false,
         }
     }
+    /// Acquire a write lock
     fn acquire_write(&self) -> sync::RwLockWriteGuard<'_, HashMap<String, String>> {
         self.shared.coremap.write().unwrap()
     }
+    /// Acquire a read lock
     fn acquire_read(&self) -> sync::RwLockReadGuard<'_, HashMap<String, String>> {
         self.shared.coremap.read().unwrap()
     }

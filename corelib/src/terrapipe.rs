@@ -341,6 +341,7 @@ impl SimpleQuery {
         }
     }
     pub fn add(&mut self, cmd: &str) {
+        // FIXME(@ohsayan): This should take the UTF8 repr's length
         let ref mut layout = self.metalayout;
         let ref mut df = self.dataframe;
         let len = cmd.len().to_string();

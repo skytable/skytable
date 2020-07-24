@@ -35,12 +35,19 @@ pub struct QueryDataframe {
 
 #[derive(Debug, PartialEq)]
 pub struct PreQMF {
+    /// The type of action: Simple/Pipelined
     action_type: ActionType,
+    /// The content size excluding the metaline length
     content_size: usize,
+    /// The length of the metaline
     metaline_size: usize,
 }
 
 impl PreQMF {
+    /// Create a new PreQueryMetaframe from a `String`
+    /// ## Errors
+    /// This returns `Respcodes` as an error and hence this error can be directly
+    /// written to the stream
     pub fn from_buffer(buf: String) -> Result<Self, RespCodes> {
         let buf: Vec<&str> = buf.split('!').collect();
         if let (Some(atype), Some(csize), Some(metaline_size)) =
@@ -90,25 +97,36 @@ fn test_preqmf() {
     assert_eq!(preqmf, pqmf_should_be);
 }
 
+/// A TCP connection wrapper
 pub struct Connection {
     stream: TcpStream,
 }
 
 impl Connection {
+    /// Initiailize a new `Connection` instance
     pub fn new(stream: TcpStream) -> Self {
         Connection { stream }
     }
+    /// Read a query
+    ///
+    /// This will return a QueryDataframe if parsing is successful - otherwise
+    /// it returns a `RespCodes` variant which can be converted into a response
     pub async fn read_query(&mut self) -> Result<QueryDataframe, RespCodes> {
         let mut bufreader = BufReader::new(&mut self.stream);
         let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
+        // First read the metaline
+        // TODO: We will use a read buffer in the future and then do all the
+        // actions below to improve efficiency - it would be way more efficient
         bufreader.read_line(&mut metaline_buf).await.unwrap();
         let pqmf = PreQMF::from_buffer(metaline_buf)?;
         let (mut metalayout_buf, mut dataframe_buf) = (
             String::with_capacity(pqmf.metaline_size),
             vec![0; pqmf.content_size],
         );
+        // Read the metalayout
         bufreader.read_line(&mut metalayout_buf).await.unwrap();
         let ss = get_sizes(metalayout_buf)?;
+        // Read the dataframe
         bufreader.read(&mut dataframe_buf).await.unwrap();
         let qdf = QueryDataframe {
             data: extract_idents(dataframe_buf, ss),
@@ -116,6 +134,7 @@ impl Connection {
         };
         Ok(qdf)
     }
+    /// Write a response to the stream
     pub async fn write_response(&mut self, resp: Vec<u8>) {
         if let Err(_) = self.stream.write_all(&resp).await {
             eprintln!(
@@ -124,6 +143,7 @@ impl Connection {
             );
             return;
         }
+        // Flush the stream to make sure that the data was delivered
         if let Err(_) = self.stream.flush().await {
             eprintln!(
                 "Error while flushing data to stream: {:?}",
@@ -132,6 +152,8 @@ impl Connection {
             return;
         }
     }
+    /// Wraps around the `write_response` used to differentiate between a
+    /// success response and an error response
     pub async fn close_conn_with_error(&mut self, bytes: impl RespBytes) {
         self.write_response(bytes.into_response()).await
     }

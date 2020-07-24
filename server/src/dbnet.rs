@@ -37,6 +37,7 @@ pub struct Terminator {
 }
 
 impl Terminator {
+    /// Create a new `Terminator` instance
     pub fn new(signal: broadcast::Receiver<()>) -> Self {
         Terminator {
             // Don't terminate on creation!
@@ -44,9 +45,11 @@ impl Terminator {
             signal,
         }
     }
+    /// Check if the signal is a termination signal
     pub fn is_termination_signal(&self) -> bool {
         self.terminate
     }
+    /// Check if a shutdown signal was received
     pub async fn receive_signal(&mut self) {
         // The server may have already been terminated
         // In that event, just return
@@ -60,6 +63,7 @@ impl Terminator {
 
 // We'll use the idea of gracefully shutting down from tokio
 
+/// A listener
 pub struct Listener {
     /// An atomic reference to the coretable
     db: CoreDB,
@@ -75,6 +79,7 @@ pub struct Listener {
     terminate_rx: mpsc::Receiver<()>,
 }
 
+/// A per-connection handler
 struct CHandler {
     db: CoreDB,
     con: Connection,
@@ -84,6 +89,7 @@ struct CHandler {
 }
 
 impl Listener {
+    /// Accept an incoming connection
     async fn accept(&mut self) -> TResult<TcpStream> {
         // We will steal the idea of Ethernet's backoff for connection errors
         let mut backoff = 1;
@@ -104,6 +110,7 @@ impl Listener {
             backoff *= 2;
         }
     }
+    /// Run the server
     pub async fn run(&mut self) -> TResult<()> {
         loop {
             // Take the permit first, but we won't use it right now
@@ -125,6 +132,7 @@ impl Listener {
 }
 
 impl CHandler {
+    /// Process the incoming connection
     async fn run(&mut self) {
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
@@ -143,10 +151,13 @@ impl CHandler {
 
 impl Drop for CHandler {
     fn drop(&mut self) {
+        // Make sure that the permit is returned to the semaphore
+        // in the case that there is a panic inside
         self.climit.add_permits(1);
     }
 }
 
+/// Start the server waiting for incoming connections or a CTRL+C signal
 pub async fn run(listener: TcpListener, sig: impl Future) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
