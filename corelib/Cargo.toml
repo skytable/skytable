@@ -1,14 +1,10 @@
 [package]
-name = "libcore"
+name = "corelib"
 version = "0.1.0"
-authors = ["Sayan Nandan <nandansayan@outlook.com>"]
+authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
-
-[dev-dependencies]
-devtimer = "4.0.0"
-rand = "0.7.3"
+lazy_static = "1.4.0"

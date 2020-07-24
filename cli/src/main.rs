@@ -2,7 +2,7 @@
  * Created on Wed Jul 01 2020
  *
  * This file is a part of the source code for the Terrabase database
- * Copyright (c) 2020 Sayan Nandan
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,32 +19,13 @@
  *
 */
 
-use std::io;
-use std::io::prelude::*;
 mod argparse;
+mod client;
+use tokio;
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.1.0";
 
-const MSG_WELCOME: &'static str = "Terrabase | Version 0.1.0\nCopyright (c) 2020 Sayan Nandan";
-
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("{}", MSG_WELCOME);
-    loop {
-        let mut buffer = String::new();
-        print!("terrabase> ");
-        match io::stdout().flush() {
-            Ok(_) => (),
-            Err(_) => argparse::EXIT_ERROR("Failed to flush output stream"),
-        };
-        match io::stdin().read_line(&mut buffer) {
-            Ok(_) => (),
-            Err(_) => argparse::EXIT_ERROR("Failed to read line and append to buffer"),
-        };
-        let cmds = match argparse::parse_args(buffer) {
-            Ok(cmds) => cmds,
-            Err(e) => {
-                eprintln!("{}", e);
-                continue;
-            }
-        };
-        println!("{:#?}", cmds);
-    }
+    argparse::execute_query().await;
 }
