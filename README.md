@@ -1,6 +1,6 @@
 # Terrabase**DB** - The next-generation database
 
-![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-success?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Rust?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
 
 ## What is TerrabaseDB?
 
@@ -14,10 +14,12 @@ As noted earlier, TerrabaseDB is pre-alpha software and the entire API is subjec
 
 We have an experimental client and server implementation for the database already. You can download a pre-built binary for `x86_64-linux` in the releases section and try it out!
 
-* First unzip the file
+* Download the files `tdb-x86_64*` and `tsh-x86_64*`
+* Rename the files to tdb and tsh for ease
+* Run `chmod +x tdb tsh`
 * Start the database server by running `./tdb`
 * Start the client by running `./tsh`
-* You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` ! 
+* You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` !
 
 ## Goals
 
@@ -33,6 +35,10 @@ We have an experimental client and server implementation for the database alread
 
 This project strictly follows semver, however, since this project is currently in the development phase (0.x.y), the API may change unpredictably
 
+## Contributing
+
+**Yes!** - this project **needs you**! We want hackers, like you, from all across the globe to help us create the next-generation database. Read the guide [here](./CONTRIBUTING.md).
+
 ## Community
 
 A project which is powered by the community believes in the power of community!
@@ -43,10 +49,6 @@ A project which is powered by the community believes in the power of community!
 </a><a href="https://discord.gg/QptWFdx"><img src="https://img.shields.io/badge/TALK-On%20Discord-7289DA?logo=discord&style=for-the-badge"></img>
 </a>
 </html>
-
-## Contributing
-
-Yes - this project needs you! We want hackers from all across the globe to help us create the next-generation database. Read the guide [here](./CONTRIBUTING.md).
 
 ## License
 

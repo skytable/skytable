@@ -17,6 +17,14 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
 * All Rust code should be formatted using `rustfmt`
 
+### Parts of the project
+
+The project root has three main directories:
+
+* `cli` : This contains code for `tsh` which is the command-line client for TDB
+* `libcore` : This contains function, structs, ... used by both the `cli` and the `server`
+* `server` : This contains code for the main database server
+
 ## Steps
 
 1. Fork the repository
