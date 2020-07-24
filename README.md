@@ -1,17 +1,23 @@
-# Terrabase - The new in-memory database
-Terrabase is an effort to provide the best of key/value stores, document stores and columnar databases - **simplicity, flexibility and queryability at scale**. This project is currently in a <b>pre-alpha</b> stage and is undergoing rapid development.
+# Terrabase**DB** - The next-generation database
+
+![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square)
+![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-success?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/terrabasedb/terrabase?style=flat-square)
+
+## What is TerrabaseDB?
+
+TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases - **simplicity, flexibility and queryability at scale**. This project is currently in a <b>pre-alpha</b> stage and is undergoing rapid development.
 
 ## Status
 
-As noted earlier, Terrabase is pre-alpha software and the entire API is subject to major breaking changes, at the moment.
+As noted earlier, TerrabaseDB is pre-alpha software and the entire API is subject to major breaking changes, at the moment.
 
 ## Getting started
 
 We have an experimental client and server implementation for the database already. You can download a pre-built binary for `x86_64-linux` in the releases section and try it out!
 
 * First unzip the file
-* Start the database server by running `./tdb` 
-* Start the client by running `./tsh` 
+* Start the database server by running `./tdb`
+* Start the client by running `./tsh`
 * You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` ! 
 
 ## Goals

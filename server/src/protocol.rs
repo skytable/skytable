@@ -102,19 +102,13 @@ impl Connection {
         let mut bufreader = BufReader::new(&mut self.stream);
         let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
         bufreader.read_line(&mut metaline_buf).await.unwrap();
-        let pqmf = match PreQMF::from_buffer(metaline_buf) {
-            Ok(pq) => pq,
-            Err(e) => return Err(e),
-        };
+        let pqmf = PreQMF::from_buffer(metaline_buf)?;
         let (mut metalayout_buf, mut dataframe_buf) = (
             String::with_capacity(pqmf.metaline_size),
             vec![0; pqmf.content_size],
         );
         bufreader.read_line(&mut metalayout_buf).await.unwrap();
-        let ss = match get_sizes(metalayout_buf) {
-            Ok(ss) => ss,
-            Err(e) => return Err(e),
-        };
+        let ss = get_sizes(metalayout_buf)?;
         bufreader.read(&mut dataframe_buf).await.unwrap();
         let qdf = QueryDataframe {
             data: extract_idents(dataframe_buf, ss),
@@ -123,13 +117,22 @@ impl Connection {
         Ok(qdf)
     }
     pub async fn write_response(&mut self, resp: Vec<u8>) {
-        if let Ok(_) = self.stream.write(&resp).await {
+        if let Err(_) = self.stream.write_all(&resp).await {
+            eprintln!(
+                "Error while writing to stream: {:?}",
+                self.stream.peer_addr()
+            );
             return;
-        } else {
-            eprintln!("Error writing response to {:?}", self.stream.peer_addr())
+        }
+        if let Err(_) = self.stream.flush().await {
+            eprintln!(
+                "Error while flushing data to stream: {:?}",
+                self.stream.peer_addr()
+            );
+            return;
         }
     }
     pub async fn close_conn_with_error(&mut self, bytes: impl RespBytes) {
-        self.stream.write_all(&bytes.into_response()).await.unwrap();
+        self.write_response(bytes.into_response()).await
     }
 }
