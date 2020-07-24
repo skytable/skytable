@@ -1,4 +1,5 @@
 # Contribution guidelines
+
 Firstly, thank you for your interest in contributing to this project. This project is powered by the community 
 and relies on hackers across the globe to contribute code to move this project forward.
 
@@ -14,7 +15,7 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
 ### Formatting
 
-* All Rust code should be formatted using `rustfmt` 
+* All Rust code should be formatted using `rustfmt`
 
 ## Steps
 
@@ -23,4 +24,10 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 3. Sign the CLA (if you haven't signed it already)
 4. One of the maintainers will review your patch and suggest changes if required
 5. Once your patch is approved, it will be merged into the respective branch
-6. Done, you're now one of the [contributors](./CONTRIBUTORS.md)!
+6. Done, you're now one of the [contributors](./CONTRIBUTORS.md) 🎉
+
+## Testing locally
+
+1. Install rust (stable)
+2. Run `cargo build --verbose && cargo test --verbose`
+3. That's it!

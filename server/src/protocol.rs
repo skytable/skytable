@@ -115,7 +115,7 @@ impl Connection {
         let mut bufreader = BufReader::new(&mut self.stream);
         let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
         // First read the metaline
-        // TODO: We will use a read buffer in the future and then do all the
+        // TODO(@ohsayan): We will use a read buffer in the future and then do all the
         // actions below to improve efficiency - it would be way more efficient
         bufreader.read_line(&mut metaline_buf).await.unwrap();
         let pqmf = PreQMF::from_buffer(metaline_buf)?;
