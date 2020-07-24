@@ -1,0 +1,11 @@
+server: server/**/*
+corelib: corelib/**/*
+cli: cli/**/*
+docs: ./*.md
+build:
+  - ./*/*.toml
+  - ./*.toml
+  - ./*.lock
+workflow:
+ - ./.github/*.yml
+ - ./.github/**/*.yml
