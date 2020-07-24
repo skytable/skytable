@@ -1,7 +1,6 @@
 # Terrabase**DB** - The next-generation database
 
-![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square)
-![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-success?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/terrabasedb/terrabase?style=flat-square)
+![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-success?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
 
 ## What is TerrabaseDB?
 
