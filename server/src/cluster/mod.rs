@@ -1,5 +1,5 @@
 /*
- * Created on Thu Jul 02 2020
+ * Created on Sun Jul 26 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,22 +19,25 @@
  *
 */
 
-use tokio::net::TcpListener;
-mod coredb;
-mod dbnet;
-mod protocol;
-use coredb::CoreDB;
-use dbnet::run;
-use protocol::Connection;
-use tokio::signal;
-mod cluster;
-static ADDR: &'static str = "127.0.0.1:2003";
+//! This module implements consistent hashing
+//! with the [Maglev Hasing algorithm](https://research.google.com/pubs/archive/44824.pdf)
 
-#[tokio::main]
-async fn main() {
-    let listener = TcpListener::bind(ADDR).await.unwrap();
-    println!("Server running on terrapipe://127.0.0.1:2003");
-    // Start the server which asynchronously waits for a CTRL+C signal
-    // which will safely shut down the server
-    run(listener, signal::ctrl_c()).await;
+// TODO(@ohsayan): Use the Lucas method instead
+fn easy_prime(num: u64) -> bool {
+    for val in 2..num - 1 {
+        if num % val == 1 {
+            return false;
+        };
+    }
+    true
+}
+
+const BIGM: u64 = 65537;
+
+pub struct Maglev {
+    n: u64,
+    m: u64,
+    perm: Vec<Vec<u64>>,
+    lookup: Vec<usize>,
+    nodes: Vec<String>,
 }
