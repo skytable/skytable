@@ -25,6 +25,9 @@ The project root has three main directories:
 * `libcore` : This contains function, structs, ... used by both the `cli` and the `server`
 * `server` : This contains code for the main database server
 
+### Branches
+The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download the sources from the tags. Usually, when a feature is worked on, the work will be done on a separate branch, and then it will be merged into next.
+
 ## Steps
 
 1. Fork the repository
