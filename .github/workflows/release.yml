@@ -1,0 +1,192 @@
+on:
+  push:
+    tags:
+      - "v*"
+
+name: Release
+
+env:
+  RELEASE_TDB: tdb
+  RELEASE_TSH: tsh
+  RELEASE_DIR: artifacts
+  GITHUB_REF: "${{ github.ref }}"
+  WINDOWS_TARGET: x86_64-pc-windows-msvc
+  MACOS_TARGET: x86_64-apple-darwin
+  LINUX_TARGET: x86_64-unknown-linux-gnu
+
+jobs:
+  build:
+    name: Build artifacts
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [linux, macos, windows]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            rust: stable
+          - build: macos
+            os: macos-latest
+            rust: stable
+          - build: windows
+            os: windows-latest
+            rust: stable
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v1
+        if: matrix.rust
+        with:
+          path: ~/.cargo/registry
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v1
+        if: matrix.rust
+        with:
+          path: ~/.cargo/git
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@v1
+        if: matrix.rust
+        with:
+          path: target
+          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.build }}-target-
+
+      - name: Query version number
+        id: get_version
+        shell: bash
+        run: |
+          echo "using version tag ${GITHUB_REF:10}"
+          echo ::set-output name=version::"${GITHUB_REF:10}"
+
+      - name: Install Rust
+        if: matrix.rust
+        run: |
+          rustup update ${{ matrix.rust }} --no-self-update
+          rustup default ${{ matrix.rust }}
+
+      - name: Build (Linux)
+        if: matrix.build == 'linux'
+        run: |
+          rustup target add ${{ env.LINUX_TARGET }}
+          cargo build --release --target ${{ env.LINUX_TARGET }}
+
+      - name: Build (MacOS)
+        if: matrix.build == 'macos'
+        run: cargo build --release
+
+      - name: Build (Windows)
+        if: matrix.build == 'windows'
+        run: cargo build --release
+        env:
+          RUSTFLAGS: -Ctarget-feature=+crt-static
+
+      - name: Create artifact directory
+        run: |
+          mkdir ${{ env.RELEASE_DIR }}
+          mkdir dist
+
+      - name: Create Build (Linux)
+        if: matrix.build == 'linux'
+        run: |
+          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TDB }} ./dist
+          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TSH }} ./dist
+          zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip ./dist/tsh ./dist/tdb -j
+
+      - name: Create Build (Windows)
+        if: matrix.build == 'windows'
+        shell: bash
+        run: |
+          mv ./target/release/${{ env.RELEASE_TDB }}.exe ./dist
+          mv ./target/release/${{ env.RELEASE_TSH }}.exe ./dist
+          7z a -tzip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip ./dist/*
+
+      - name: Create Build (MacOS)
+        if: matrix.build == 'macos'
+        run: |
+          mv ./target/release/${{ env.RELEASE_TDB }} ./dist
+          mv ./target/release/${{ env.RELEASE_TSH }} ./dist
+          zip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip ./dist/tsh ./dist/tdb -j
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ matrix.build }}
+          path: ./${{ env.RELEASE_DIR }}
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query version number
+        id: get_version
+        shell: bash
+        run: |
+          echo "using version tag ${GITHUB_REF:10}"
+          echo ::set-output name=version::"${GITHUB_REF:10}"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          release_name: ${{ steps.get_version.outputs.VERSION }}
+          prerelease: true
+
+      - name: Download Linux bundle
+        uses: actions/download-artifact@v1
+        with:
+          name: linux
+
+      - name: Download Windows bundle
+        uses: actions/download-artifact@v1
+        with:
+          name: windows
+
+      - name: Download MacOS bundle
+        uses: actions/download-artifact@v1
+        with:
+          name: macos
+
+      - name: Release Linux bundle
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip
+          asset_content_type: application/octet-stream
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip
+
+      - name: Release Windows bundle
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./windows/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip
+          asset_content_type: application/octet-stream
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip
+
+      - name: Release MacOS bundle
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./macos/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip
+          asset_content_type: application/octet-stream
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip

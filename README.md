@@ -10,11 +10,15 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 
 As noted earlier, TerrabaseDB is pre-alpha software and the entire API is subject to major breaking changes, at the moment.
 
+## Platforms
+![Linux supported](https://img.shields.io/badge/Linux%20x86__64-supported%20✓-228B22?style=flat-square&logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%20x86__64-supported%20✓-228B22?style=flat-square&logo=windows)
+
 ## Getting started
 
-We have an experimental client and server implementation for the database already. You can download a pre-built binary for `x86_64-linux` in the releases section and try it out!
+We have experimnetal client and server implementations for the database already.
+The releases are uploaded in bundles, for example, `tdb-bundle-v0.2.0-x86_64-unknown-linux-gnu.zip`. Each bundle contains `tdb` and `tsh`, that is, the database server and the client command-line tool.
 
-* Download the files `tdb-x86_64*` and `tsh-x86_64*`
+* Download a bundle for your platform from [releases](https://github.com/terrabasedb/terrabase/releases)
 * Rename the files to tdb and tsh for ease
 * Run `chmod +x tdb tsh`
 * Start the database server by running `./tdb`
