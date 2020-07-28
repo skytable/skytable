@@ -11,8 +11,11 @@ env:
   RELEASE_DIR: artifacts
   GITHUB_REF: "${{ github.ref }}"
   WINDOWS_TARGET: x86_64-pc-windows-msvc
+  WINDOWS64_NAME: x86_64-windows
   MACOS_TARGET: x86_64-apple-darwin
+  MACOS64_NAME: x86_64-macos
   LINUX_TARGET: x86_64-unknown-linux-gnu
+  LINUX64_NAME: x86_64-linux-gnu
 
 jobs:
   build:
@@ -101,7 +104,7 @@ jobs:
         run: |
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TDB }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TSH }} ./dist
-          zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip ./dist/tsh ./dist/tdb -j
+          zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/tsh ./dist/tdb -j
 
       - name: Create Build (Windows)
         if: matrix.build == 'windows'
@@ -109,14 +112,14 @@ jobs:
         run: |
           mv ./target/release/${{ env.RELEASE_TDB }}.exe ./dist
           mv ./target/release/${{ env.RELEASE_TSH }}.exe ./dist
-          7z a -tzip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip ./dist/*
+          7z a -tzip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip ./dist/*
 
       - name: Create Build (MacOS)
         if: matrix.build == 'macos'
         run: |
           mv ./target/release/${{ env.RELEASE_TDB }} ./dist
           mv ./target/release/${{ env.RELEASE_TSH }} ./dist
-          zip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip ./dist/tsh ./dist/tdb -j
+          zip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/tsh ./dist/tdb -j
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
@@ -167,9 +170,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip
+          asset_path: ./linux/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX_TARGET }}.zip
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
 
       - name: Release Windows bundle
         uses: actions/upload-release-asset@v1
@@ -177,9 +180,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./windows/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip
+          asset_path: ./windows/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.zip
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
 
       - name: Release MacOS bundle
         uses: actions/upload-release-asset@v1
@@ -187,6 +190,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./macos/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip
+          asset_path: ./macos/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS_TARGET }}.zip
+          asset_name: tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip

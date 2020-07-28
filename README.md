@@ -1,6 +1,6 @@
 # Terrabase**DB** - The next-generation database
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Rust?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
 
 ## What is TerrabaseDB?
 
@@ -15,12 +15,11 @@ As noted earlier, TerrabaseDB is pre-alpha software and the entire API is subjec
 
 ## Getting started
 
-We have experimnetal client and server implementations for the database already.
+We have experimental client and server implementations for the database already.
 The releases are uploaded in bundles, for example, `tdb-bundle-v0.2.0-x86_64-unknown-linux-gnu.zip`. Each bundle contains `tdb` and `tsh`, that is, the database server and the client command-line tool.
 
 * Download a bundle for your platform from [releases](https://github.com/terrabasedb/terrabase/releases)
-* Rename the files to tdb and tsh for ease
-* Run `chmod +x tdb tsh`
+* Run `chmod +x tdb tsh` (on Unix systems)
 * Start the database server by running `./tdb`
 * Start the client by running `./tsh`
 * You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` !
