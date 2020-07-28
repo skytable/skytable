@@ -23,10 +23,11 @@ use crate::protocol::QueryDataframe;
 use bincode;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use corelib::TResult;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::{hash_map::Entry, HashMap};
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::sync::{self, Arc, RwLock};
+use std::sync::Arc;
 
 /// Results from actions on the Database
 pub type ActionResult<T> = Result<T, RespCodes>;
@@ -206,12 +207,12 @@ impl CoreDB {
         }
     }
     /// Acquire a write lock
-    fn acquire_write(&self) -> sync::RwLockWriteGuard<'_, HashMap<String, String>> {
-        self.shared.coremap.write().unwrap()
+    fn acquire_write(&self) -> RwLockWriteGuard<'_, HashMap<String, String>> {
+        self.shared.coremap.write()
     }
     /// Acquire a read lock
-    fn acquire_read(&self) -> sync::RwLockReadGuard<'_, HashMap<String, String>> {
-        self.shared.coremap.read().unwrap()
+    fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, String>> {
+        self.shared.coremap.read()
     }
     pub fn flush_db(&self) -> TResult<()> {
         let encoded = bincode::serialize(&*self.acquire_read())?;
@@ -238,7 +239,7 @@ impl Drop for CoreDB {
     fn drop(&mut self) {
         if Arc::strong_count(&self.shared) == 1 {
             // Acquire a lock to prevent anyone from writing something
-            let coremap = self.shared.coremap.write().unwrap();
+            let coremap = self.shared.coremap.write();
             self.terminate = true;
             drop(coremap);
         }

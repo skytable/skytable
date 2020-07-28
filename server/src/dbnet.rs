@@ -172,7 +172,7 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
     let mut server = Listener {
         listener,
         db,
-        climit: Arc::new(Semaphore::new(10000)),
+        climit: Arc::new(Semaphore::new(50000)),
         signal,
         terminate_tx,
         terminate_rx,
