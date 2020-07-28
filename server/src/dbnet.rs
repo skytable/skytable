@@ -22,6 +22,7 @@
 use crate::{Connection, CoreDB};
 use corelib::TResult;
 use std::future::Future;
+use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
@@ -161,9 +162,16 @@ impl Drop for CHandler {
 pub async fn run(listener: TcpListener, sig: impl Future) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
+    let db = match CoreDB::new() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("ERROR: {}", e);
+            process::exit(0x100);
+        }
+    };
     let mut server = Listener {
         listener,
-        db: CoreDB::new(),
+        db,
         climit: Arc::new(Semaphore::new(10000)),
         signal,
         terminate_tx,
@@ -172,15 +180,21 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
     tokio::select! {
         _ = server.run() => {}
         _ = sig => {
-            println!("Shuttting down...")
+            println!("Shutting down...")
         }
     }
     let Listener {
         mut terminate_rx,
         terminate_tx,
         signal,
+        db,
         ..
     } = server;
+    if let Ok(_) = db.flush_db() {
+        ()
+    } else {
+        eprintln!("ERROR: Couldn't flush database! All data created in this session will be lost");
+    }
     drop(signal);
     drop(terminate_tx);
     let _ = terminate_rx.recv().await;

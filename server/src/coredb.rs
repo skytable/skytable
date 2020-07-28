@@ -20,8 +20,12 @@
 */
 
 use crate::protocol::QueryDataframe;
+use bincode;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
+use corelib::TResult;
 use std::collections::{hash_map::Entry, HashMap};
+use std::fs;
+use std::io::{ErrorKind, Write};
 use std::sync::{self, Arc, RwLock};
 
 /// Results from actions on the Database
@@ -183,12 +187,22 @@ impl CoreDB {
         RespCodes::ArgumentError.into_response()
     }
     /// Create a new `CoreDB` instance
-    pub fn new() -> Self {
-        CoreDB {
-            shared: Arc::new(Coretable {
-                coremap: RwLock::new(HashMap::new()),
-            }),
-            terminate: false,
+    pub fn new() -> TResult<Self> {
+        let coretable = CoreDB::get_saved()?;
+        if let Some(coretable) = coretable {
+            Ok(CoreDB {
+                shared: Arc::new(Coretable {
+                    coremap: RwLock::new(coretable),
+                }),
+                terminate: false,
+            })
+        } else {
+            Ok(CoreDB {
+                shared: Arc::new(Coretable {
+                    coremap: RwLock::new(HashMap::new()),
+                }),
+                terminate: false,
+            })
         }
     }
     /// Acquire a write lock
@@ -198,6 +212,23 @@ impl CoreDB {
     /// Acquire a read lock
     fn acquire_read(&self) -> sync::RwLockReadGuard<'_, HashMap<String, String>> {
         self.shared.coremap.read().unwrap()
+    }
+    pub fn flush_db(&self) -> TResult<()> {
+        let encoded = bincode::serialize(&*self.acquire_read())?;
+        let mut file = fs::File::create("./data.bin")?;
+        file.write_all(&encoded)?;
+        Ok(())
+    }
+    pub fn get_saved() -> TResult<Option<HashMap<String, String>>> {
+        let file = match fs::read("./data.bin") {
+            Ok(f) => f,
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => return Ok(None),
+                _ => return Err("Couldn't read flushed data from disk".into()),
+            },
+        };
+        let parsed: HashMap<String, String> = bincode::deserialize(&file)?;
+        Ok(Some(parsed))
     }
 }
 
