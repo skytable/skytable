@@ -19,9 +19,13 @@
  *
 */
 
-use corelib::terrapipe::{extract_idents, get_sizes, ActionType};
-use corelib::terrapipe::{RespBytes, RespCodes, DEF_QMETALINE_BUFSIZE};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use bytes::{Buf, BytesMut};
+use corelib::terrapipe::{extract_idents, ActionType};
+use corelib::terrapipe::{RespBytes, RespCodes};
+use std::error::Error;
+use std::io::{BufRead, Cursor, Result as IoResult};
+use std::net::SocketAddr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 
 /// The query dataframe
@@ -33,128 +37,167 @@ pub struct QueryDataframe {
     pub actiontype: ActionType,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct PreQMF {
-    /// The type of action: Simple/Pipelined
-    action_type: ActionType,
-    /// The content size excluding the metaline length
-    content_size: usize,
-    /// The length of the metaline
-    metaline_size: usize,
+pub enum QueryParseResult {
+    Query(QueryDataframe),
+    RespCode(Vec<u8>),
+    Incomplete,
 }
 
-impl PreQMF {
-    /// Create a new PreQueryMetaframe from a `String`
-    /// ## Errors
-    /// This returns `Respcodes` as an error and hence this error can be directly
-    /// written to the stream
-    pub fn from_buffer(buf: String) -> Result<Self, RespCodes> {
-        let buf: Vec<&str> = buf.split('!').collect();
-        if let (Some(atype), Some(csize), Some(metaline_size)) =
-            (buf.get(0), buf.get(1), buf.get(2))
-        {
-            if let Some(atype) = atype.chars().next() {
-                let atype = match atype {
-                    '*' => ActionType::Simple,
-                    '$' => ActionType::Pipeline,
-                    _ => return Err(RespCodes::InvalidMetaframe),
-                };
-                let csize = csize.trim().trim_matches(char::from(0));
-                let metaline_size = metaline_size.trim().trim_matches(char::from(0));
-                if let (Ok(csize), Ok(metaline_size)) =
-                    (csize.parse::<usize>(), metaline_size.parse::<usize>())
-                {
-                    return Ok(PreQMF {
-                        action_type: atype,
-                        content_size: csize,
-                        metaline_size,
-                    });
-                }
-            }
-        }
-        Err(RespCodes::InvalidMetaframe)
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn test_preqmf() {
-    let read_what = "*!12!4".to_owned();
-    let preqmf = PreQMF::from_buffer(read_what).unwrap();
-    let pqmf_should_be = PreQMF {
-        action_type: ActionType::Simple,
-        content_size: 12,
-        metaline_size: 4,
-    };
-    assert_eq!(pqmf_should_be, preqmf);
-    let a_pipe = "$!12!4".to_owned();
-    let preqmf = PreQMF::from_buffer(a_pipe).unwrap();
-    let pqmf_should_be = PreQMF {
-        action_type: ActionType::Pipeline,
-        content_size: 12,
-        metaline_size: 4,
-    };
-    assert_eq!(preqmf, pqmf_should_be);
-}
+use QueryParseResult::*;
 
 /// A TCP connection wrapper
 pub struct Connection {
-    stream: TcpStream,
+    writer: BufWriter<TcpStream>,
+    buffer: BytesMut,
 }
 
 impl Connection {
     /// Initiailize a new `Connection` instance
     pub fn new(stream: TcpStream) -> Self {
-        Connection { stream }
+        Connection {
+            writer: BufWriter::new(stream),
+            buffer: BytesMut::with_capacity(4096),
+        }
     }
-    /// Read a query
-    ///
-    /// This will return a QueryDataframe if parsing is successful - otherwise
-    /// it returns a `RespCodes` variant which can be converted into a response
-    pub async fn read_query(&mut self) -> Result<QueryDataframe, RespCodes> {
-        let mut bufreader = BufReader::new(&mut self.stream);
-        let mut metaline_buf = String::with_capacity(DEF_QMETALINE_BUFSIZE);
-        // First read the metaline
-        // TODO(@ohsayan): We will use a read buffer in the future and then do all the
-        // actions below to improve efficiency - it would be way more efficient
-        bufreader.read_line(&mut metaline_buf).await.unwrap();
-        let pqmf = PreQMF::from_buffer(metaline_buf)?;
-        let (mut metalayout_buf, mut dataframe_buf) = (
-            String::with_capacity(pqmf.metaline_size),
-            vec![0; pqmf.content_size],
-        );
-        // Read the metalayout
-        bufreader.read_line(&mut metalayout_buf).await.unwrap();
-        let ss = get_sizes(metalayout_buf)?;
-        // Read the dataframe
-        bufreader.read(&mut dataframe_buf).await.unwrap();
-        let qdf = QueryDataframe {
-            data: extract_idents(dataframe_buf, ss),
-            actiontype: pqmf.action_type,
+    pub async fn read_query(&mut self) -> Result<QueryParseResult, String> {
+        use QueryParseResult::*;
+        loop {
+            match self.writer.read_buf(&mut self.buffer).await {
+                Ok(0) => {
+                    if self.buffer.is_empty() {
+                        return Err(format!("{:?} didn't send any data", self.get_peer()).into());
+                    } else {
+                        return Err(format!(
+                            "Connection reset while reading from: {:?}",
+                            self.get_peer()
+                        )
+                        .into());
+                    }
+                }
+                Ok(_) => (),
+                Err(e) => return Err(format!("{}", e)),
+            }
+            match self.parse_query().await? {
+                Incomplete => (),
+                x @ _ => return Ok(x),
+            }
+        }
+    }
+    async fn parse_query(&mut self) -> Result<QueryParseResult, String> {
+        let mut metaline = Vec::with_capacity(46);
+        let mut i = 0;
+        let mut first_linefeed = None;
+        while i < self.buffer.len() {
+            if self.buffer[i] == b'\n' {
+                first_linefeed = Some(i);
+                break;
+            }
+            i = i + 1;
+        }
+        if first_linefeed.is_none() {
+            return Ok(RespCode(RespCodes::InvalidMetaframe.into_response()));
+        }
+        metaline.extend_from_slice(&self.buffer[..first_linefeed.unwrap()]);
+        let actiontype = match metaline.get(0) {
+            Some(42) => ActionType::Simple,
+            Some(36) => ActionType::Pipeline,
+            _ => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
         };
-        Ok(qdf)
+        let sizes = match self.get_frame_sizes(&metaline[1..]) {
+            Some(s) => s,
+            None => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
+        };
+        eprintln!("Got frame sizes: {:?}", sizes);
+        // Check if the thing is incomplete
+        if self.buffer.remaining() < (sizes[0] + sizes[1]) {
+            return Ok(Incomplete);
+        }
+        // We have read from 0 to metaline.len()+1
+        // We need to read till (metaline.len())+1+metalayout.len()
+        // Now parse the sizes
+        let ss = match self
+            .get_skip_sequence(&self.buffer[metaline.len() + 1..(metaline.len() + 1 + sizes[1])])
+        {
+            Some(s) => s,
+            None => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
+        };
+        let data = self.read_dataframe(&self.buffer[(..)], ss);
+        Ok(Query(QueryDataframe { data, actiontype }))
     }
-    /// Write a response to the stream
+    fn get_frame_sizes(&self, metaline: &[u8]) -> Option<Vec<usize>> {
+        if let Some(s) = self.extract_sizes_splitoff(metaline, b'!', 2) {
+            if s.len() == 2 {
+                Some(s)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    fn get_skip_sequence(&self, metalayout: &[u8]) -> Option<Vec<usize>> {
+        let l = metalayout.len() / 2;
+        self.extract_sizes_splitoff(metalayout, b'#', l)
+    }
+    fn read_dataframe(&self, dataframe: &[u8], skips: Vec<usize>) -> Vec<String> {
+        extract_idents(dataframe.to_owned(), skips)
+    }
+    fn extract_sizes_splitoff(
+        &self,
+        buf: &[u8],
+        splitoff: u8,
+        sizehint: usize,
+    ) -> Option<Vec<usize>> {
+        let mut sizes = Vec::with_capacity(sizehint);
+        let len = buf.len() - 1;
+        let mut i = 0;
+        while i < len {
+            if buf[i] == splitoff {
+                // This is a hash
+                let mut res: usize = 0;
+                // Move to the next element
+                i = i + 1;
+                while i < len {
+                    if buf[i] != splitoff {
+                        let num: usize = match buf[i].checked_sub(48) {
+                            Some(s) => s.into(),
+                            None => return None,
+                        };
+                        res = res * 10 + num;
+                        i = i + 1;
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+                println!("{}", res);
+                sizes.push(res.into());
+                continue;
+            } else {
+                // Technically, we should never reach here, but if we do
+                // clearly, it's an error by the client-side driver
+                return None;
+            }
+        }
+        Some(sizes)
+    }
+    fn get_peer(&self) -> IoResult<SocketAddr> {
+        self.writer.get_ref().peer_addr()
+    }
     pub async fn write_response(&mut self, resp: Vec<u8>) {
-        if let Err(_) = self.stream.write_all(&resp).await {
-            eprintln!(
-                "Error while writing to stream: {:?}",
-                self.stream.peer_addr()
-            );
+        if let Err(_) = self.writer.write_all(&resp).await {
+            eprintln!("Error while writing to stream: {:?}", self.get_peer());
             return;
         }
         // Flush the stream to make sure that the data was delivered
-        if let Err(_) = self.stream.flush().await {
-            eprintln!(
-                "Error while flushing data to stream: {:?}",
-                self.stream.peer_addr()
-            );
+        if let Err(_) = self.writer.flush().await {
+            eprintln!("Error while flushing data to stream: {:?}", self.get_peer());
             return;
         }
     }
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
-    pub async fn close_conn_with_error(&mut self, bytes: impl RespBytes) {
-        self.write_response(bytes.into_response()).await
+    pub async fn close_conn_with_error(&mut self, bytes: Vec<u8>) {
+        self.write_response(bytes).await
     }
 }
