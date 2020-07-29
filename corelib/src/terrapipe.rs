@@ -355,6 +355,7 @@ impl SimpleQuery {
         let ref mut layout = self.metalayout;
         let ref mut df = self.dataframe;
         let len = cmd.len().to_string();
+        // Include the newline character in total size
         self.size_tracker += cmd.len() + 1;
         layout.push('#');
         layout.push_str(&len);
@@ -369,7 +370,7 @@ impl SimpleQuery {
             "{}{}!{}\n{}\n{}",
             self.metaline,
             self.size_tracker,
-            self.metalayout.len(),
+            self.metalayout.len() + 1 , // include the new line character
             self.metalayout,
             self.dataframe
         )

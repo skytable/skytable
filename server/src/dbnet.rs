@@ -19,11 +19,7 @@
  *
 */
 
-use crate::{
-    protocol::QueryParseResult::{self, *},
-    Connection, CoreDB,
-};
-use corelib::terrapipe::RespBytes;
+use crate::{protocol::QueryParseResult::*, Connection, CoreDB};
 use corelib::TResult;
 use std::future::Future;
 use std::process;

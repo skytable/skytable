@@ -19,13 +19,12 @@
  *
 */
 
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 use corelib::terrapipe::{extract_idents, ActionType};
 use corelib::terrapipe::{RespBytes, RespCodes};
-use std::error::Error;
-use std::io::{BufRead, Cursor, Result as IoResult};
+use std::io::Result as IoResult;
 use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 /// The query dataframe
@@ -37,6 +36,7 @@ pub struct QueryDataframe {
     pub actiontype: ActionType,
 }
 
+#[derive(Debug)]
 pub enum QueryParseResult {
     Query(QueryDataframe),
     RespCode(Vec<u8>),
@@ -47,7 +47,7 @@ use QueryParseResult::*;
 
 /// A TCP connection wrapper
 pub struct Connection {
-    writer: BufWriter<TcpStream>,
+    stream: TcpStream,
     buffer: BytesMut,
 }
 
@@ -55,74 +55,83 @@ impl Connection {
     /// Initiailize a new `Connection` instance
     pub fn new(stream: TcpStream) -> Self {
         Connection {
-            writer: BufWriter::new(stream),
+            stream,
             buffer: BytesMut::with_capacity(4096),
         }
     }
     pub async fn read_query(&mut self) -> Result<QueryParseResult, String> {
-        use QueryParseResult::*;
+        self.read_again().await?;
         loop {
-            match self.writer.read_buf(&mut self.buffer).await {
-                Ok(0) => {
-                    if self.buffer.is_empty() {
-                        return Err(format!("{:?} didn't send any data", self.get_peer()).into());
-                    } else {
-                        return Err(format!(
-                            "Connection reset while reading from: {:?}",
-                            self.get_peer()
-                        )
-                        .into());
-                    }
+            match self.try_query().await? {
+                x @ Query(_) | x @ RespCode(_) => return Ok(x),
+                _ => (),
+            }
+            self.read_again().await?;
+        }
+    }
+    async fn try_query(&mut self) -> Result<QueryParseResult, String> {
+        self.parse_query().await
+    }
+    async fn read_again(&mut self) -> Result<(), String> {
+        match self.stream.read_buf(&mut self.buffer).await {
+            Ok(0) => {
+                if self.buffer.is_empty() {
+                    return Err(format!("{:?} didn't send any data", self.get_peer()).into());
+                } else {
+                    return Err(format!(
+                        "Connection reset while reading from: {:?}",
+                        self.get_peer()
+                    )
+                    .into());
                 }
-                Ok(_) => (),
-                Err(e) => return Err(format!("{}", e)),
             }
-            match self.parse_query().await? {
-                Incomplete => (),
-                x @ _ => return Ok(x),
-            }
+            Ok(_) => Ok(()),
+            Err(e) => return Err(format!("{}", e)),
         }
     }
     async fn parse_query(&mut self) -> Result<QueryParseResult, String> {
-        let mut metaline = Vec::with_capacity(46);
-        let mut i = 0;
-        let mut first_linefeed = None;
-        while i < self.buffer.len() {
-            if self.buffer[i] == b'\n' {
-                first_linefeed = Some(i);
-                break;
-            }
-            i = i + 1;
-        }
-        if first_linefeed.is_none() {
-            return Ok(RespCode(RespCodes::InvalidMetaframe.into_response()));
-        }
-        metaline.extend_from_slice(&self.buffer[..first_linefeed.unwrap()]);
-        let actiontype = match metaline.get(0) {
-            Some(42) => ActionType::Simple,
-            Some(36) => ActionType::Pipeline,
-            _ => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
-        };
-        let sizes = match self.get_frame_sizes(&metaline[1..]) {
-            Some(s) => s,
-            None => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
-        };
-        eprintln!("Got frame sizes: {:?}", sizes);
-        // Check if the thing is incomplete
-        if self.buffer.remaining() < (sizes[0] + sizes[1]) {
+        if self.buffer.is_empty() {
             return Ok(Incomplete);
         }
-        // We have read from 0 to metaline.len()+1
-        // We need to read till (metaline.len())+1+metalayout.len()
-        // Now parse the sizes
-        let ss = match self
-            .get_skip_sequence(&self.buffer[metaline.len() + 1..(metaline.len() + 1 + sizes[1])])
-        {
+        let mut lf_1: Option<usize> = None;
+        let mut i: usize = 4; // Minimum size of metaline, so skip the first 5 elements
+        let ref buf = self.buffer;
+        while i < buf.len() {
+            if buf[i] == b'\n' {
+                lf_1 = Some(i);
+                break;
+            }
+            i = i + 1
+        }
+        if lf_1.is_none() {
+            return Ok(RespCode(RespCodes::InvalidMetaframe.into_response()));
+        }
+        let actiontype = match buf[0] {
+            b'*' => ActionType::Simple,
+            b'$' => ActionType::Pipeline,
+            _ => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
+        };
+        let lf_1 = lf_1.unwrap();
+        let frame_sizes = match self.get_frame_sizes(&buf[1..lf_1]) {
             Some(s) => s,
             None => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
         };
-        let data = self.read_dataframe(&self.buffer[(..)], ss);
-        Ok(Query(QueryDataframe { data, actiontype }))
+        let metalayout_idx = lf_1 + 1..(lf_1 + frame_sizes[1]);
+        let skip_seq = match self.get_skip_sequence(&buf[metalayout_idx]) {
+            Some(s) => s,
+            None => return Ok(RespCode(RespCodes::InvalidMetaframe.into_response())),
+        };
+        let endofmetaframe = lf_1 + frame_sizes[1];
+        let remaining = buf.len() - endofmetaframe;
+        if remaining < frame_sizes[1] {
+            return Ok(Incomplete);
+        }
+        let df = self.read_dataframe(&buf[endofmetaframe + 1..buf.len() - 1], skip_seq);
+        println!("Dataframe: '{:?}'", df);
+        Ok(Query(QueryDataframe {
+            data: df,
+            actiontype,
+        }))
     }
     fn get_frame_sizes(&self, metaline: &[u8]) -> Option<Vec<usize>> {
         if let Some(s) = self.extract_sizes_splitoff(metaline, b'!', 2) {
@@ -149,7 +158,7 @@ impl Connection {
         sizehint: usize,
     ) -> Option<Vec<usize>> {
         let mut sizes = Vec::with_capacity(sizehint);
-        let len = buf.len() - 1;
+        let len = buf.len();
         let mut i = 0;
         while i < len {
             if buf[i] == splitoff {
@@ -170,7 +179,6 @@ impl Connection {
                         break;
                     }
                 }
-                println!("{}", res);
                 sizes.push(res.into());
                 continue;
             } else {
@@ -182,15 +190,15 @@ impl Connection {
         Some(sizes)
     }
     fn get_peer(&self) -> IoResult<SocketAddr> {
-        self.writer.get_ref().peer_addr()
+        self.stream.peer_addr()
     }
     pub async fn write_response(&mut self, resp: Vec<u8>) {
-        if let Err(_) = self.writer.write_all(&resp).await {
+        if let Err(_) = self.stream.write_all(&resp).await {
             eprintln!("Error while writing to stream: {:?}", self.get_peer());
             return;
         }
         // Flush the stream to make sure that the data was delivered
-        if let Err(_) = self.writer.flush().await {
+        if let Err(_) = self.stream.flush().await {
             eprintln!("Error while flushing data to stream: {:?}", self.get_peer());
             return;
         }
