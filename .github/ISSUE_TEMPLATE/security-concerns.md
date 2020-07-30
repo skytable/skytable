@@ -1,0 +1,15 @@
+---
+name: Security concerns
+about: Share concerns regarding security
+title: 'Security: '
+labels: security
+assignees: ''
+
+---
+
+**Description**
+<!-- briefly describe how this affects you and other users -->
+
+**Suggested solutions**
+<!-- if you have any idea for resolving the performance 
+concern, share it here. Leave it blank if you aren't sure -->
