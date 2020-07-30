@@ -25,7 +25,6 @@ mod dbnet;
 mod protocol;
 use coredb::CoreDB;
 use dbnet::run;
-use protocol::Connection;
 use tokio::signal;
 static ADDR: &'static str = "127.0.0.1:2003";
 

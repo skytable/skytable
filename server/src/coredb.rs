@@ -19,7 +19,7 @@
  *
 */
 
-use crate::protocol::QueryDataframe;
+use crate::protocol::deserializer::Query;
 use bincode;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use corelib::TResult;
@@ -91,7 +91,7 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub fn execute_query(&self, df: QueryDataframe) -> Vec<u8> {
+    pub fn execute_query(&self, df: Query) -> Vec<u8> {
         match df.actiontype {
             ActionType::Simple => self.execute_simple(df.data),
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
