@@ -19,7 +19,8 @@
  *
 */
 
-use crate::{Connection, CoreDB};
+use crate::protocol::{Connection, QueryResult::*};
+use crate::CoreDB;
 use corelib::TResult;
 use std::future::Future;
 use std::process;
@@ -143,8 +144,12 @@ impl CHandler {
                 }
             };
             match try_df {
-                Ok(df) => self.con.write_response(self.db.execute_query(df)).await,
-                Err(e) => return self.con.close_conn_with_error(e).await,
+                Ok(Q(s)) => self.con.write_response(self.db.execute_query(s)).await,
+                Ok(E(r)) => self.con.close_conn_with_error(r).await,
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return;
+                }
             }
         }
     }

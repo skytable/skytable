@@ -19,7 +19,7 @@
  *
 */
 
-use crate::protocol::QueryDataframe;
+use crate::protocol::Query;
 use bincode;
 use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
 use corelib::TResult;
@@ -91,7 +91,7 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub fn execute_query(&self, df: QueryDataframe) -> Vec<u8> {
+    pub fn execute_query(&self, df: Query) -> Vec<u8> {
         match df.actiontype {
             ActionType::Simple => self.execute_simple(df.data),
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
@@ -188,6 +188,9 @@ impl CoreDB {
         RespCodes::ArgumentError.into_response()
     }
     /// Create a new `CoreDB` instance
+    ///
+    /// This also checks if a local backup of previously saved data is available.
+    /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new() -> TResult<Self> {
         let coretable = CoreDB::get_saved()?;
         if let Some(coretable) = coretable {
@@ -214,12 +217,14 @@ impl CoreDB {
     fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, String>> {
         self.shared.coremap.read()
     }
+    /// Flush the contents of the in-memory table onto disk
     pub fn flush_db(&self) -> TResult<()> {
         let encoded = bincode::serialize(&*self.acquire_read())?;
         let mut file = fs::File::create("./data.bin")?;
         file.write_all(&encoded)?;
         Ok(())
     }
+    /// Try to get the saved data from disk
     pub fn get_saved() -> TResult<Option<HashMap<String, String>>> {
         let file = match fs::read("./data.bin") {
             Ok(f) => f,

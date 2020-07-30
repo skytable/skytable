@@ -304,7 +304,9 @@ fn test_simple_response() {
     s.add_data("bytes".to_owned());
     assert_eq!(
         String::from_utf8_lossy(&s.into_response()),
-        String::from("*!0!39!16\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n")
+        String::from(
+            "*!0!39!16\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n"
+        )
     );
 }
 
@@ -345,9 +347,10 @@ impl SimpleQuery {
         let ref mut layout = self.metalayout;
         let ref mut df = self.dataframe;
         let len = cmd.len().to_string();
+        // Include the newline character in total size
         self.size_tracker += cmd.len() + 1;
-        layout.push_str(&len);
         layout.push('#');
+        layout.push_str(&len);
         df.push_str(cmd);
         df.push('\n');
     }
@@ -359,7 +362,7 @@ impl SimpleQuery {
             "{}{}!{}\n{}\n{}",
             self.metaline,
             self.size_tracker,
-            self.metalayout.len(),
+            self.metalayout.len() + 1, // include the new line character
             self.metalayout,
             self.dataframe
         )
