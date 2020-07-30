@@ -60,8 +60,6 @@ pub mod responses {
         pub static ref RESP_ARG_ERROR: Vec<u8> = "*!4!0!0\n".as_bytes().to_owned();
         /// `5` Internal server error response
         pub static ref RESP_SERVER_ERROR: Vec<u8> = "*!5!0!0\n".as_bytes().to_owned();
-        /// `6` Internal server error response
-        pub static ref RESP_INCOMPLETE: Vec<u8> = "*!6!0!0\n".as_bytes().to_owned();
     }
 }
 
@@ -136,9 +134,7 @@ pub enum RespCodes {
     ArgumentError,
     /// `5`: Server Error
     ServerError,
-    /// `6`: Incomplete
-    Incomplete,
-    /// `7`: Some other error - the wrapped `String` will be returned in the response body.
+    /// `6`: Some other error - the wrapped `String` will be returned in the response body.
     /// Just a note, this gets quite messy, especially when we're using it for deconding responses
     OtherError(Option<String>),
 }
@@ -153,7 +149,6 @@ impl fmt::Display for RespCodes {
             InvalidMetaframe => write!(f, "ERROR: Invalid metaframe"),
             ArgumentError => write!(f, "ERROR: The command is not in the correct format"),
             ServerError => write!(f, "ERROR: The server had an internal error"),
-            Incomplete => write!(f, "ERROR: The packet is incomplete"),
             OtherError(e) => match e {
                 None => write!(f, "ERROR: Some unknown error occurred"),
                 Some(e) => write!(f, "ERROR: {}", e),
@@ -174,8 +169,7 @@ impl From<RespCodes> for u8 {
             InvalidMetaframe => 3,
             ArgumentError => 4,
             ServerError => 5,
-            Incomplete => 6,
-            OtherError(_) => 7,
+            OtherError(_) => 6,
         }
     }
 }
@@ -191,8 +185,7 @@ impl RespCodes {
                 3 => InvalidMetaframe,
                 4 => ArgumentError,
                 5 => ServerError,
-                6 => Incomplete,
-                7 => OtherError(extra),
+                6 => OtherError(extra),
                 _ => return None,
             },
             Err(_) => return None,
@@ -225,15 +218,14 @@ impl RespBytes for RespCodes {
             InvalidMetaframe => RESP_INVALID_MF.to_owned(),
             ArgumentError => RESP_ARG_ERROR.to_owned(),
             ServerError => RESP_SERVER_ERROR.to_owned(),
-            Incomplete => RESP_INCOMPLETE.to_owned(),
             OtherError(e) => match e {
                 Some(e) => {
                     let dl = e.len().to_string();
-                    format!("*!7!{}!{}\n#{}\n{}", e.len(), dl.len(), dl, e)
+                    format!("*!6!{}!{}\n#{}\n{}", e.len(), dl.len(), dl, e)
                         .as_bytes()
                         .to_owned()
                 }
-                None => format!("*!7!0!0\n").as_bytes().to_owned(),
+                None => format!("*!6!0!0\n").as_bytes().to_owned(),
             },
         }
     }
@@ -370,7 +362,7 @@ impl SimpleQuery {
             "{}{}!{}\n{}\n{}",
             self.metaline,
             self.size_tracker,
-            self.metalayout.len() + 1 , // include the new line character
+            self.metalayout.len() + 1, // include the new line character
             self.metalayout,
             self.dataframe
         )

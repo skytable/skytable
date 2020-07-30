@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.3.1 [2020-07-30]
+
+> No breaking changes
+
+This release fixes #7
+
 ## Version 0.3.0 [2020-07-28]
 
 > No breaking changes

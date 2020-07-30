@@ -22,7 +22,7 @@ The releases are uploaded in bundles, for example, `tdb-bundle-v0.2.0-x86_64-unk
 
 * Download a bundle for your platform from [releases](https://github.com/terrabasedb/terrabase/releases)
 * Unzip the downloaded bundle
-* Run `chmod +x tdb tsh` (on Unix systems)
+* Make the files executable (run `chmod +x tdb tsh` on Unix systems)
 * Start the database server by running `./tdb`
 * Start the client by running `./tsh`
 * You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` !
