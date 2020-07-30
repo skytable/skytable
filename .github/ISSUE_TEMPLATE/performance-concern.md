@@ -1,0 +1,15 @@
+---
+name: Performance concerns
+about: Share concerns regarding performance
+title: 'Performance: '
+labels: performance
+assignees: ''
+
+---
+
+**Description**
+<!-- briefly describe your concern -->
+
+**Suggested solutions**
+<!-- if you have any idea for resolving the performance 
+concern, share it here. Leave it blank if you aren't sure -->
