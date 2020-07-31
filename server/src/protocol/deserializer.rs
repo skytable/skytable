@@ -63,20 +63,22 @@ impl<'a> Navigator<'a> {
         let ref mut cursor = self.cursor;
         let start = cursor.position() as usize;
         let end = match beforehint {
-            // The end will be the current position + the moved position
+            // The end will be the current position + the moved position - 1
             Some(hint) => (start + hint),
             None => cursor.get_ref().len() - 1,
         };
         for i in start..end {
             // If the current character is a `\n` byte, then return this slice
-            if cursor.get_ref()[i] == b'\n' {
-                if let Some(slice) = cursor.get_ref().get(start..i) {
-                    // Only move the cursor ahead if the bytes could be fetched
-                    // otherwise the next time we try to get anything, the
-                    // cursor would crash. If we don't change the cursor position
-                    // we will keep moving over stale data
-                    cursor.set_position((i + 1) as u64);
-                    return Some(slice);
+            if let Some(rf) = cursor.get_ref().get(i) {
+                if *rf == b'\n' {
+                    if let Some(slice) = cursor.get_ref().get(start..i) {
+                        // Only move the cursor ahead if the bytes could be fetched
+                        // otherwise the next time we try to get anything, the
+                        // cursor would crash. If we don't change the cursor position
+                        // we will keep moving over stale data
+                        cursor.set_position((i + 1) as u64);
+                        return Some(slice);
+                    }
                 }
             }
         }

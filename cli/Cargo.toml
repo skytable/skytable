@@ -9,3 +9,7 @@ edition = "2018"
 [dependencies]
 corelib = {path = "../corelib"}
 tokio = {version = "0.2.22", features = ["full"]}
+
+[dev-dependencies]
+rand = "0.7.3"
+devtimer = "4.0.0"

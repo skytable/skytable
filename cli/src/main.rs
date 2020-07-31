@@ -24,6 +24,9 @@ mod client;
 use tokio;
 const MSG_WELCOME: &'static str = "TerrabaseDB v0.1.0";
 
+#[cfg(test)]
+mod benchmark;
+
 #[tokio::main]
 async fn main() {
     println!("{}", MSG_WELCOME);
