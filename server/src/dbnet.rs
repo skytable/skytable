@@ -127,7 +127,9 @@ impl Listener {
                 _term_sig_tx: self.terminate_tx.clone(),
             };
             tokio::spawn(async move {
-                chandle.run().await;
+                if let Err(e) = chandle.run().await {
+                    eprintln!("Error: {}", e);
+                }
             });
         }
     }
@@ -135,23 +137,22 @@ impl Listener {
 
 impl CHandler {
     /// Process the incoming connection
-    async fn run(&mut self) {
+    async fn run(&mut self) -> TResult<()> {
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,
                 _ = self.terminator.receive_signal() => {
-                    return;
+                    return Ok(());
                 }
             };
             match try_df {
-                Ok(Q(s)) => self.con.write_response(self.db.execute_query(s)).await,
-                Ok(E(r)) => self.con.close_conn_with_error(r).await,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    return;
-                }
+                Ok(Q(s)) => self.con.write_response(self.db.execute_query(s)).await?,
+                Ok(E(r)) => self.con.close_conn_with_error(r).await?,
+                Ok(Empty) => return Ok(()),
+                Err(e) => return Err(e.into()),
             }
         }
+        Ok(())
     }
 }
 
