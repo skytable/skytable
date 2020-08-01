@@ -1,60 +1,50 @@
-# Terrabase**DB** - The next-generation database
+<html>
+<div align="center">
+<img src="https://raw.githubusercontent.com/terrabasedb/docs/master/docs/assets/img/favicon.ico" height=64 width=64 style="float:left">
+<h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/Status-Pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/Development-Actively%20Developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/status-pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+
+</div>
+</html>
 
 ## What is TerrabaseDB?
 
-TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases - **simplicity, flexibility and queryability at scale**. This project is currently in a <b>pre-alpha</b> stage and is undergoing rapid development.
-
-## Status
-
-**Currently**, TDB is a **persistent key/value store**. 
-As noted earlier, TerrabaseDB is pre-alpha software and the entire API is subject to major breaking changes, at the moment.
-
-## Platforms
-
-![Linux supported](https://img.shields.io/badge/Linux%20x86__64-supported%20✓-228B22?style=flat-square&logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%20x86__64-supported%20✓-228B22?style=flat-square&logo=windows)
+TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. TDB is curently in a pre-alpha stage, but can be used as a **performant** and **persistent key-value store**.
 
 ## Getting started
 
-We have experimental client and server implementations for the database already.
-The releases are uploaded in bundles, for example, `tdb-bundle-v0.2.0-x86_64-unknown-linux-gnu.zip` . Each bundle contains `tdb` and `tsh` , that is, the database server and the client command-line tool.
+1. Download a bundle for your platform from [here ⬇️ ](https://github.com/terrabasedb/terrabase/releases)
+2. Unzip the bundle
+3. Make the files executable (run `chmod +x tdb tsh` on *nix systems)
+4. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
 
-* Download a bundle for your platform from [releases](https://github.com/terrabasedb/terrabase/releases)
-* Unzip the downloaded bundle
-* Make the files executable (run `chmod +x tdb tsh` on Unix systems)
-* Start the database server by running `./tdb`
-* Start the client by running `./tsh`
-* You can run commands like `SET sayan 17` , `GET cat` , `UPDATE cat 100` or `DEL cat` !
+## Clients 🔌
 
-## Goals
+We're officially working on a [Python Driver](https://github.com/terrabasedb/python-driver) and we plan to support more languages along the way 🎉! You're free to write your own clients - all you need to do is implement the simple and performant [Terrapipe protocol spec](https://git.io/JJZ4Z).
 
-* Fast
-* Designed to provide <b>safe flexibility</b>
-* Multithreaded ✓
-* Memory-safe ✓
-* Resource friendly ✓
-* Scalable
-* Simplicity
+## Community 👐
 
-## Versioning
+A project which is powered by the community believes in the power of community! If you get stuck anywhere - here are your options!
+<html>
+<a href="https://gitter.im/terrabasehq/community"><img src="https://img.shields.io/badge/chat%20on-gitter-ed1965?logo=gitter&style=flat-square"></img>
+</a>
+<a href="https://join.slack.com/t/terrabasedb/shared_invite/zt-fnkfgzf7-~WO~RzGUUvTiYV4iPAMiiQ"><img src="https://img.shields.io/badge/discuss%20on-slack-4A154B?logo=slack&style=flat-square"></img>
+</a><a href="https://discord.gg/QptWFdx"><img src="https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square"></img></a>
+</html>
+
+## Platforms 💻
+
+![Linux supported](https://img.shields.io/badge/Linux%20x86__64-supported%20✓-228B22?style=flat-square&logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%20x86__64-supported%20✓-228B22?style=flat-square&logo=windows)
+
+## Versioning 
 
 This project strictly follows semver, however, since this project is currently in the development phase (0.x.y), the API may change unpredictably
 
 ## Contributing
 
-**Yes!** - this project **needs you**! We want hackers, like you, from all across the globe to help us create the next-generation database. Read the guide [here](./CONTRIBUTING.md).
-
-## Community
-
-A project which is powered by the community believes in the power of community!
-<html>
-<a href="https://gitter.im/terrabasehq/community"><img src="https://img.shields.io/badge/CHAT%20ON-GITTER-ed1965?logo=gitter&style=for-the-badge"></img>
-</a>
-<a href="https://join.slack.com/t/terrabasedb/shared_invite/zt-fnkfgzf7-~WO~RzGUUvTiYV4iPAMiiQ"><img src="https://img.shields.io/badge/Discuss%20on-SLACK-4A154B?logo=slack&style=for-the-badge"></img>
-</a><a href="https://discord.gg/QptWFdx"><img src="https://img.shields.io/badge/TALK-On%20Discord-7289DA?logo=discord&style=for-the-badge"></img>
-</a>
-</html>
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the <html>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="49" height="20" role="img" aria-label="easyfix"><title>easyfix</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="49" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="0" height="20" fill="#c71585"/><rect x="0" width="49" height="20" fill="#c71585"/><rect width="49" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana, Geneva, DejaVu Sans, sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="390">easyfix</text><text x="245" y="140" transform="scale(.1)" fill="#fff" textLength="390">easyfix</text></g></svg></html> label. Read the guide [here](./CONTRIBUTING.md).
 
 ## License
 

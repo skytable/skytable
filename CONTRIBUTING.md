@@ -1,11 +1,17 @@
 # Contribution guidelines
 
-Firstly, thank you for your interest in contributing to this project. This project is powered by the community 
-and relies on hackers across the globe to contribute code to move this project forward.
+Firstly, thank you ❤️ for your interest in contributing to this project! This project is powered by the community
+and relies on hackers across the globe 🌐 to report bugs, send suggestions 💡 and contribute code to move this project forward ⏩.
 
 You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
-## Coding guidelines
+## Ways to contribute
+
+* **#1**: Report bugs 🐞
+* **#2**: Give us ideas 💡
+* **#3**: Send patches
+
+## Coding guidelines 👩‍💻 👨‍💻 
 
 ### Conventions
 
@@ -26,6 +32,7 @@ The project root has three main directories:
 * `server` : This contains code for the main database server
 
 ### Branches
+
 The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download the sources from the tags. Usually, when a feature is worked on, the work will be done on a separate branch, and then it will be merged into next.
 
 ## Steps
