@@ -17,7 +17,8 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 1. Download a bundle for your platform from [here ⬇️ ](https://github.com/terrabasedb/terrabase/releases)
 2. Unzip the bundle
 3. Make the files executable (run `chmod +x tdb tsh` on *nix systems)
-4. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
+4. First run `tdb` to start the database server and then run `tsh` to start the interactive shell
+5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
 
 ## Clients 🔌
 
@@ -43,8 +44,7 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the <html>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="49" height="20" role="img" aria-label="easyfix"><title>easyfix</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="49" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="0" height="20" fill="#c71585"/><rect x="0" width="49" height="20" fill="#c71585"/><rect width="49" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana, Geneva, DejaVu Sans, sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="245" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="390">easyfix</text><text x="245" y="140" transform="scale(.1)" fill="#fff" textLength="390">easyfix</text></g></svg></html> label. Read the guide [here](./CONTRIBUTING.md).
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the ![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md).
 
 ## License
 
