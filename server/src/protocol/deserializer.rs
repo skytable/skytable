@@ -48,7 +48,7 @@ pub struct Navigator<'a> {
 }
 impl<'a> Navigator<'a> {
     /// Create a new `Navigator` instance
-    pub fn new(buffer: &'a mut BytesMut) -> Self {
+    pub fn new<'b: 'a>(buffer: &'b BytesMut) -> Self {
         Navigator {
             cursor: Cursor::new(&buffer[..]),
         }
@@ -136,17 +136,19 @@ impl Metaline {
             }
             // The first byte is always a `*` or `$` depending on the
             // type of query
-            let actiontype = match mline[0] {
+            // UNSAFE(@ohsayan): This is safe because we already know the size
+            let actiontype = match unsafe { mline.get_unchecked(0) } {
                 b'$' => ActionType::Pipeline,
                 b'*' => ActionType::Simple,
                 _ => return None,
             };
             // Get the frame sizes: the first index is the content size
             // and the second index is the metalayout size
-            if let Some(sizes) = get_frame_sizes(&mline[1..]) {
+            // UNSAFE(@ohsayan): This is safe because we already know the size
+            if let Some(sizes) = get_frame_sizes(unsafe { &mline.get_unchecked(1..) }) {
                 return Some(Metaline {
-                    content_size: sizes[0],
-                    metalayout_size: sizes[1],
+                    content_size: unsafe { *sizes.get_unchecked(0) },
+                    metalayout_size: unsafe { *sizes.get_unchecked(1) },
                     actiontype,
                 });
             }
@@ -249,19 +251,22 @@ fn extract_sizes_splitoff(buf: &[u8], splitoff: u8, sizehint: usize) -> Option<V
     let len = buf.len();
     let mut i = 0;
     while i < len {
-        if buf[i] == splitoff {
+        // UNSAFE(@ohsayan): This is safe because we already know the size
+        if unsafe { *buf.get_unchecked(i) } == splitoff {
             // This is a hash
             let mut res: usize = 0;
             // Move to the next element
             i = i + 1;
             while i < len {
                 // Only proceed if the current byte is not the separator
-                if buf[i] != splitoff {
+                // UNSAFE(@ohsayan): This is safe because we already know the size
+                if unsafe { *buf.get_unchecked(i) } != splitoff {
                     // Make sure we don't go wrong here
                     // 48 is the unicode byte for 0 so 48-48 should give 0
                     // Also the subtraction shouldn't give something greater
                     // than 9, otherwise it is a different character
-                    let num: usize = match buf[i].checked_sub(48) {
+                    // UNSAFE(@ohsayan): This is safe because we already know the size
+                    let num: usize = match unsafe { *buf.get_unchecked(i) }.checked_sub(48) {
                         Some(s) => s.into(),
                         None => return None,
                     };
