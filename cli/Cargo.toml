@@ -9,7 +9,10 @@ edition = "2018"
 [dependencies]
 corelib = {path = "../corelib"}
 tokio = {version = "0.2.22", features = ["full"]}
-
-[dev-dependencies]
 rand = "0.7.3"
 devtimer = "4.0.0"
+
+[[bin]]
+path="src/bin/benchmark.rs"
+name = "tdb-bench"
+version = "0.1.0"
