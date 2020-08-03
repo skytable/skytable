@@ -111,7 +111,7 @@ impl Client {
         } else {
             let mut qbuilder = QueryBuilder::new_simple();
             qbuilder.from_cmd(cmd);
-            match self.run_query(qbuilder.prepare_response()).await {
+            match self.run_query(qbuilder.prepare_query()).await {
                 Ok(res) => {
                     res.into_iter().for_each(|val| println!("{}", val));
                     return;

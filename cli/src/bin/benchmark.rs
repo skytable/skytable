@@ -155,7 +155,7 @@ mod benchtool {
                 q.add("SET");
                 q.add(&keys[idx]);
                 q.add(&values[idx]);
-                q.prepare_response().1
+                q.prepare_query().1
             })
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
@@ -163,7 +163,7 @@ mod benchtool {
                 let mut q = QueryBuilder::new_simple();
                 q.add("GET");
                 q.add(&keys[idx]);
-                q.prepare_response().1
+                q.prepare_query().1
             })
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
@@ -171,7 +171,7 @@ mod benchtool {
                 let mut q = QueryBuilder::new_simple();
                 q.add("DEL");
                 q.add(&keys[idx]);
-                q.prepare_response().1
+                q.prepare_query().1
             })
             .collect();
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());

@@ -317,7 +317,6 @@ pub struct SimpleQuery {
 
 impl SimpleQuery {
     pub fn new() -> Self {
-        let mut metaline = String::with_capacity(DEF_QMETALINE_BUFSIZE);
         SimpleQuery {
             metalayout: String::with_capacity(DEF_QMETALAYOUT_BUFSIZE),
             dataframe: String::with_capacity(DEF_QDATAFRAME_BUSIZE),
@@ -336,7 +335,7 @@ impl SimpleQuery {
     pub fn from_cmd(&mut self, cmd: String) {
         cmd.split_whitespace().for_each(|val| self.add(val));
     }
-    pub fn prepare_response(&self) -> (usize, Vec<u8>) {
+    pub fn prepare_query(&self) -> (usize, Vec<u8>) {
         let resp = format!(
             "*!{}!{}\n{}\n{}",
             self.dataframe.len(),
