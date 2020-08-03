@@ -291,7 +291,7 @@ fn test_simple_response() {
     assert_eq!(
         String::from_utf8_lossy(&s.into_response()),
         String::from(
-            "*!0!39!16\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n"
+            "*!0!39!17\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n"
         )
     );
 }
