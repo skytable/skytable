@@ -23,6 +23,7 @@ use tokio::net::TcpListener;
 mod coredb;
 mod dbnet;
 mod protocol;
+mod queryengine;
 use coredb::CoreDB;
 use dbnet::run;
 use tokio::signal;

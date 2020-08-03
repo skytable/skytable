@@ -108,7 +108,7 @@ mod benchtool {
         if args.len() != 3 {
             eprintln!(
                 "Insufficient arguments!\
-                \nUSAGE: benchmark <connections> <queries> <packetsize-in-bytes>"
+                \nUSAGE: tdb-bench <connections> <queries> <packetsize-in-bytes>"
             );
             std::process::exit(0x100);
         }

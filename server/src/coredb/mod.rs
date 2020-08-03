@@ -19,9 +19,12 @@
  *
 */
 
+//! # The core database engine
+
 use crate::protocol::Query;
+use crate::queryengine;
 use bincode;
-use corelib::terrapipe::{tags, ActionType, RespBytes, RespCodes, ResponseBuilder};
+use corelib::terrapipe::{ActionType, RespCodes};
 use corelib::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::{hash_map::Entry, HashMap};
@@ -93,100 +96,12 @@ impl CoreDB {
     /// Execute a query that has already been validated by `Connection::read_query`
     pub fn execute_query(&self, df: Query) -> Vec<u8> {
         match df.actiontype {
-            ActionType::Simple => self.execute_simple(df.data),
+            ActionType::Simple => queryengine::execute_simple(&self, df.data),
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             ActionType::Pipeline => unimplemented!(),
         }
     }
 
-    /// Execute a simple(*) query
-    pub fn execute_simple(&self, buf: Vec<String>) -> Vec<u8> {
-        let mut buf = buf.into_iter();
-        while let Some(token) = buf.next() {
-            match token.to_uppercase().as_str() {
-                tags::TAG_GET => {
-                    // This is a GET query
-                    if let Some(key) = buf.next() {
-                        if buf.next().is_none() {
-                            let res = match self.get(&key.to_string()) {
-                                Ok(v) => v,
-                                Err(e) => return e.into_response(),
-                            };
-                            let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
-                            resp.add_data(res.to_owned());
-                            return resp.into_response();
-                        }
-                    }
-                }
-                tags::TAG_SET => {
-                    // This is a SET query
-                    if let Some(key) = buf.next() {
-                        if let Some(value) = buf.next() {
-                            if buf.next().is_none() {
-                                match self.set(&key.to_string(), &value.to_string()) {
-                                    Ok(_) => {
-                                        #[cfg(Debug)]
-                                        self.print_debug_table();
-                                        return RespCodes::Okay.into_response();
-                                    }
-                                    Err(e) => return e.into_response(),
-                                }
-                            }
-                        }
-                    }
-                }
-                tags::TAG_UPDATE => {
-                    // This is an UPDATE query
-                    if let Some(key) = buf.next() {
-                        if let Some(value) = buf.next() {
-                            if buf.next().is_none() {
-                                match self.update(&key.to_string(), &value.to_string()) {
-                                    Ok(_) => {
-                                        return {
-                                            #[cfg(Debug)]
-                                            self.print_debug_table();
-
-                                            RespCodes::Okay.into_response()
-                                        }
-                                    }
-                                    Err(e) => return e.into_response(),
-                                }
-                            }
-                        }
-                    }
-                }
-                tags::TAG_DEL => {
-                    // This is a DEL query
-                    if let Some(key) = buf.next() {
-                        if buf.next().is_none() {
-                            match self.del(&key.to_string()) {
-                                Ok(_) => {
-                                    #[cfg(Debug)]
-                                    self.print_debug_table();
-
-                                    return RespCodes::Okay.into_response();
-                                }
-                                Err(e) => return e.into_response(),
-                            }
-                        } else {
-                        }
-                    }
-                }
-                tags::TAG_HEYA => {
-                    if buf.next().is_none() {
-                        let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
-                        resp.add_data("HEY!".to_owned());
-                        return resp.into_response();
-                    }
-                }
-                _ => {
-                    return RespCodes::OtherError(Some("Unknown command".to_owned()))
-                        .into_response()
-                }
-            }
-        }
-        RespCodes::ArgumentError.into_response()
-    }
     /// Create a new `CoreDB` instance
     ///
     /// This also checks if a local backup of previously saved data is available.

@@ -30,20 +30,6 @@ pub const DEF_QMETALINE_BUFSIZE: usize = 44;
 pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
 /// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
-pub mod tags {
-    //! This module is a collection of tags/strings used for evaluating queries
-    //! and responses
-    /// `GET` command tag
-    pub const TAG_GET: &'static str = "GET";
-    /// `SET` command tag
-    pub const TAG_SET: &'static str = "SET";
-    /// `UPDATE` command tag
-    pub const TAG_UPDATE: &'static str = "UPDATE";
-    /// `DEL` command tag
-    pub const TAG_DEL: &'static str = "DEL";
-    /// `HEYA` command tag
-    pub const TAG_HEYA: &'static str = "HEYA";
-}
 pub mod responses {
     //! Empty responses, mostly errors, which are statically compiled
     use lazy_static::lazy_static;
@@ -275,7 +261,7 @@ impl SimpleResponse {
             "*!{}!{}!{}\n{}\n{}",
             self.respcode,
             self.dataframe_buf.len(),
-            self.metalayout_buf.len(),
+            self.metalayout_buf.len() + 1,
             self.metalayout_buf,
             self.dataframe_buf
         )
@@ -325,19 +311,14 @@ impl QueryBuilder {
 }
 
 pub struct SimpleQuery {
-    metaline: String,
     metalayout: String,
     dataframe: String,
-    size_tracker: usize,
 }
 
 impl SimpleQuery {
     pub fn new() -> Self {
         let mut metaline = String::with_capacity(DEF_QMETALINE_BUFSIZE);
-        metaline.push_str("*!");
         SimpleQuery {
-            metaline,
-            size_tracker: 0,
             metalayout: String::with_capacity(DEF_QMETALAYOUT_BUFSIZE),
             dataframe: String::with_capacity(DEF_QDATAFRAME_BUSIZE),
         }
@@ -347,8 +328,6 @@ impl SimpleQuery {
         let ref mut layout = self.metalayout;
         let ref mut df = self.dataframe;
         let len = cmd.len().to_string();
-        // Include the newline character in total size
-        self.size_tracker += cmd.len() + 1;
         layout.push('#');
         layout.push_str(&len);
         df.push_str(cmd);
@@ -359,9 +338,8 @@ impl SimpleQuery {
     }
     pub fn prepare_response(&self) -> (usize, Vec<u8>) {
         let resp = format!(
-            "{}{}!{}\n{}\n{}",
-            self.metaline,
-            self.size_tracker,
+            "*!{}!{}\n{}\n{}",
+            self.dataframe.len(),
             self.metalayout.len() + 1, // include the new line character
             self.metalayout,
             self.dataframe
