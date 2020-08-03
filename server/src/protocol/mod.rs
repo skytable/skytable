@@ -100,8 +100,12 @@ impl Connection {
                     return Ok(());
                 } else {
                     return Err(format!(
-                        "Connection reset while reading from: {:?}",
-                        self.get_peer()
+                        "Connection reset while reading from {}",
+                        if let Ok(p) = self.get_peer() {
+                            p.to_string()
+                        } else {
+                            "peer".to_owned()
+                        }
                     )
                     .into());
                 }
