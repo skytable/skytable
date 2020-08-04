@@ -19,6 +19,10 @@
  *
 */
 
+//! # The `Response` module
+//! This module can be used to build responses that can be sent to clients.
+//! It prepares packets following the Terrapipe protocol.
+
 pub struct SResp {
     metaline: Vec<u8>,
     metalayout: Vec<u8>,

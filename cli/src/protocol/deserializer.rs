@@ -19,6 +19,8 @@
  *
 */
 
+//! This module provides methods to deserialize an incoming response packet
+
 use corelib::de::*;
 use corelib::terrapipe::*;
 use std::fmt;
@@ -59,7 +61,6 @@ impl Metaline {
             if mline.len() < 7 {
                 return None;
             }
-            println!("DEBUG: Got metaline");
             let resp_type = match unsafe { mline.get_unchecked(0) } {
                 b'$' => ActionType::Pipeline,
                 b'*' => ActionType::Simple,
@@ -69,15 +70,11 @@ impl Metaline {
                 // TODO(@ohsayan): Enable pipelined responses to be parsed
                 unimplemented!("Pipelined responses cannot be parsed yet");
             }
-            println!("DEBUG: Got resptype");
             let respcode = match RespCodes::from_utf8(unsafe { *mline.get_unchecked(2) }) {
                 Some(rc) => rc,
                 None => return None,
             };
-            println!("DEBUG: Got respcode");
             if let Some(sizes) = get_frame_sizes(unsafe { mline.get_unchecked(3..) }) {
-                println!("DEBUG: Got frame sizes");
-                println!("DEBUG: These are the sizes: '{:#?}'", sizes);
                 return Some(Metaline {
                     content_size: unsafe { *sizes.get_unchecked(0) },
                     metalayout_size: unsafe { *sizes.get_unchecked(1) },
@@ -96,9 +93,7 @@ struct Metalayout(Vec<usize>);
 impl Metalayout {
     pub fn from_navigator(nav: &mut Navigator, mlayoutsize: usize) -> Option<Self> {
         if let Some(layout) = nav.get_line(Some(mlayoutsize)) {
-            println!("DEBUG: Got layout line");
             if let Some(skip_sequence) = get_skip_sequence(&layout) {
-                println!("DEBUG: Got skip sequence");
                 return Some(Metalayout(skip_sequence));
             }
         }
@@ -126,7 +121,6 @@ impl Response {
             }
             if let Some(layout) = Metalayout::from_navigator(&mut nav, metaline.metalayout_size) {
                 if let Some(content) = nav.get_exact(metaline.content_size) {
-                    println!("DEBUG: Got content");
                     let data = extract_idents(content, layout.0);
                     if is_other_error {
                         if data.len() == 1 {

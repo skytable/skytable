@@ -19,26 +19,41 @@
  *
 */
 
+//! # The `Query` module
+//! This module can be used to build queries that can be sent to the database
+//! server. It prepares packets following the Terrapipe protocol.
+
+use crate::terrapipe::DEF_QMETALINE_BUFSIZE;
+
+/// A `QueryBuilder` which enables building simple and pipelined queries
 pub enum QueryBuilder {
+    /// A `SimpleQuery`
     SimpleQuery,
     // TODO(@ohsayan): Add pipelined queries here
 }
 
 impl QueryBuilder {
+    /// Instantiate a new `SimpleQuery` instance which can be used to build
+    /// queries
     pub fn new_simple() -> SimpleQuery {
         SimpleQuery::new()
     }
 }
 
+/// A simple query is used for simple queries - queries that run only one command
 pub struct SimpleQuery {
+    /// The metaline of the simple query
     metaline: Vec<u8>,
+    /// The metalayout of the simple query
     metalayout: Vec<u8>,
+    /// The dataframe of the simple query
     dataframe: Vec<u8>,
 }
 
 impl SimpleQuery {
+    /// Create a new `SimpleQuery` object
     pub fn new() -> Self {
-        let mut metaline = Vec::with_capacity(46);
+        let mut metaline = Vec::with_capacity(DEF_QMETALINE_BUFSIZE);
         metaline.push(b'*');
         metaline.push(b'!');
         SimpleQuery {
@@ -47,6 +62,9 @@ impl SimpleQuery {
             dataframe: Vec::with_capacity(1024),
         }
     }
+    /// Add an item to the query packet
+    ///
+    /// This accepts anything which can be turned into a sequence of bytes
     pub fn add(&mut self, cmd: impl Into<Vec<u8>>) {
         let cmd = cmd.into();
         let l = cmd.len().to_string();
@@ -55,6 +73,7 @@ impl SimpleQuery {
         self.dataframe.extend(&cmd);
         self.dataframe.push(b'\n');
     }
+    /// Prepare a query packet that can be directly written to the socket
     pub fn prepare_query(mut self) -> Vec<u8> {
         self.metaline
             .extend(self.dataframe.len().to_string().as_bytes());
@@ -65,6 +84,7 @@ impl SimpleQuery {
         self.metalayout.push(b'\n');
         [self.metaline, self.metalayout, self.dataframe].concat()
     }
+    /// Create a query from a command line input - usually separated by whitespaces
     pub fn from_cmd(&mut self, cmd: String) {
         let cmd: Vec<&str> = cmd.split_whitespace().collect();
         cmd.into_iter().for_each(|val| self.add(val));

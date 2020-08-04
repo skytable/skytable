@@ -93,10 +93,6 @@ impl Connection {
             // The connection was possibly reset
             return ClientResult::Empty(0);
         }
-        println!(
-            "The server gave: '{}'",
-            String::from_utf8_lossy(&self.buffer)
-        );
         let nav = Navigator::new(&self.buffer);
         Response::from_navigator(nav)
     }

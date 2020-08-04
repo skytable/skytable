@@ -19,5 +19,9 @@
  *
 */
 
+//! This module contains submodules for building:
+//! - Queries (the `query` module)
+//! - Responses (the `response` module)
+
 pub mod query;
 pub mod response;
