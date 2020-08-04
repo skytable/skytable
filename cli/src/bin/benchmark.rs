@@ -20,9 +20,8 @@
 */
 
 //! A generic module for benchmarking SET/GET operations
-//! **NOTE:** This is experimental and only uses a single connection. So any
-//! benchmark comparisons you might do - aren't fair since it is likely
-//! that most of them were done using parallel connections
+//! **NOTE:** This is experimental and may show incorrect results - that is,
+//! the response times may be shown to be slower than they actually are
 
 mod benchtool {
     use corelib::builders::query::QueryBuilder;
@@ -194,7 +193,7 @@ mod benchtool {
         }
         drop(getpool);
         dt.stop_timer("GET").unwrap();
-        println!("Benchmark completed! Removing created keys");
+        println!("Benchmark completed! Removing created keys...");
         let mut delpool = Netpool::new(max_connections);
         // Delete all the created keys
         for packet in del_packs {
@@ -203,12 +202,12 @@ mod benchtool {
         drop(delpool);
         println!("==========RESULTS==========");
         println!(
-            "{} SETs/sec",
-            calc(max_queries, dt.time_in_nanos("SET").unwrap())
-        );
-        println!(
             "{} GETs/sec",
             calc(max_queries, dt.time_in_nanos("GET").unwrap())
+        );
+        println!(
+            "{} SETs/sec",
+            calc(max_queries, dt.time_in_nanos("SET").unwrap())
         );
         println!("===========================");
     }
