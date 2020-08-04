@@ -196,10 +196,19 @@ impl RespBytes for RespCodes {
             ServerError => RESP_SERVER_ERROR.to_owned(),
             OtherError(e) => match e {
                 Some(e) => {
-                    let dl = e.len().to_string();
-                    format!("*!6!{}!{}\n#{}\n{}", e.len(), dl.len(), dl, e)
-                        .as_bytes()
-                        .to_owned()
+                    // The dataframe len includes the LF character
+                    let dataframe_len = e.len() + 1;
+                    // The metalayout len includes a LF and '#' character
+                    let metalayout_len = e.len().to_string().len() + 2;
+                    format!(
+                        "*!6!{}!{}\n#{}\n{}\n",
+                        dataframe_len,
+                        metalayout_len,
+                        e.len(),
+                        e
+                    )
+                    .as_bytes()
+                    .to_owned()
                 }
                 None => format!("*!6!0!0\n").as_bytes().to_owned(),
             },
