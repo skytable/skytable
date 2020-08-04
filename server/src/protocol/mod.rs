@@ -21,9 +21,9 @@
 
 mod deserializer;
 use bytes::{Buf, BytesMut};
+use corelib::de::*;
 use corelib::terrapipe::RespBytes;
 use corelib::TResult;
-use deserializer::Navigator;
 pub use deserializer::{
     Query,
     QueryParseResult::{self, *},
@@ -32,9 +32,6 @@ use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
-
-/// The size of the read buffer in bytes
-const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 
 /// A TCP connection wrapper
 pub struct Connection {

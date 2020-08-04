@@ -24,12 +24,14 @@
 use crate::protocol::Query;
 use crate::queryengine;
 use bincode;
+use bytes::Bytes;
 use corelib::terrapipe::{ActionType, RespCodes};
 use corelib::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::{hash_map::Entry, HashMap};
 use std::fs;
 use std::io::{ErrorKind, Write};
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 /// Results from actions on the Database
@@ -47,33 +49,48 @@ pub struct CoreDB {
 /// wrapped in a Read/Write lock
 #[derive(Debug)]
 pub struct Coretable {
-    coremap: RwLock<HashMap<String, String>>,
+    coremap: RwLock<HashMap<String, Data>>,
 }
+
+#[derive(Debug)]
+pub struct Data {
+    blob: Bytes,
+}
+
+impl Data {
+    pub fn from(val: &String) -> Self {
+        Data {
+            blob: Bytes::copy_from_slice(val.as_bytes()),
+        }
+    }
+}
+
+type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 
 impl CoreDB {
     /// GET a `key`
-    pub fn get(&self, key: &str) -> ActionResult<String> {
+    pub fn get(&self, key: &str) -> ActionResult<Bytes> {
         if let Some(value) = self.acquire_read().get(key) {
-            Ok(value.to_string())
+            Ok(value.blob.to_owned())
         } else {
             Err(RespCodes::NotFound)
         }
     }
     /// SET a `key` to `value`
-    pub fn set(&self, key: &str, value: &str) -> ActionResult<()> {
+    pub fn set(&self, key: &str, value: &String) -> ActionResult<()> {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
             Entry::Vacant(e) => {
-                let _ = e.insert(value.to_string());
+                let _ = e.insert(Data::from(&value));
                 Ok(())
             }
         }
     }
     /// UPDATE a `key` to `value`
-    pub fn update(&self, key: &str, value: &str) -> ActionResult<()> {
+    pub fn update(&self, key: &str, value: &String) -> ActionResult<()> {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(ref mut e) => {
-                e.insert(value.to_string());
+                e.insert(Data::from(&value));
                 Ok(())
             }
             Entry::Vacant(_) => Err(RespCodes::NotFound),
@@ -125,22 +142,27 @@ impl CoreDB {
         }
     }
     /// Acquire a write lock
-    fn acquire_write(&self) -> RwLockWriteGuard<'_, HashMap<String, String>> {
+    fn acquire_write(&self) -> RwLockWriteGuard<'_, HashMap<String, Data>> {
         self.shared.coremap.write()
     }
     /// Acquire a read lock
-    fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, String>> {
+    fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, Data>> {
         self.shared.coremap.read()
     }
     /// Flush the contents of the in-memory table onto disk
-    pub fn flush_db(&self) -> TResult<()> {
-        let encoded = bincode::serialize(&*self.acquire_read())?;
+    pub fn flush_db(self) -> TResult<()> {
+        let data = self.acquire_read();
+        let ds: DiskStore = (
+            data.keys().into_iter().map(|val| val.to_string()).collect(),
+            data.values().map(|val| val.blob.to_vec()).collect(),
+        );
+        let encoded = bincode::serialize(&ds)?;
         let mut file = fs::File::create("./data.bin")?;
         file.write_all(&encoded)?;
         Ok(())
     }
     /// Try to get the saved data from disk
-    pub fn get_saved() -> TResult<Option<HashMap<String, String>>> {
+    pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
         let file = match fs::read("./data.bin") {
             Ok(f) => f,
             Err(e) => match e.kind() {
@@ -148,7 +170,16 @@ impl CoreDB {
                 _ => return Err("Couldn't read flushed data from disk".into()),
             },
         };
-        let parsed: HashMap<String, String> = bincode::deserialize(&file)?;
+        let parsed: DiskStore = bincode::deserialize(&file)?;
+        let parsed: HashMap<String, Data> =
+            HashMap::from_iter(parsed.0.into_iter().zip(parsed.1.into_iter()).map(
+                |(key, value)| {
+                    let data = Data {
+                        blob: Bytes::from(value),
+                    };
+                    (key, data)
+                },
+            ));
         Ok(Some(parsed))
     }
 }

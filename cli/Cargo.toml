@@ -11,6 +11,7 @@ corelib = {path = "../corelib"}
 tokio = {version = "0.2.22", features = ["full"]}
 rand = "0.7.3"
 devtimer = "4.0.0"
+bytes = "0.5.6"
 
 [[bin]]
 path="src/bin/benchmark.rs"

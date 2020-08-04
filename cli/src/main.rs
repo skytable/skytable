@@ -20,7 +20,7 @@
 */
 
 mod argparse;
-mod client;
+mod protocol;
 use tokio;
 const MSG_WELCOME: &'static str = "TerrabaseDB v0.1.0";
 

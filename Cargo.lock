@@ -53,6 +53,7 @@ dependencies = [
 name = "corelib"
 version = "0.3.1"
 dependencies = [
+ "bytes",
  "lazy_static",
 ]
 
@@ -466,6 +467,7 @@ dependencies = [
 name = "tsh"
 version = "0.3.1"
 dependencies = [
+ "bytes",
  "corelib",
  "devtimer",
  "rand",

@@ -25,12 +25,12 @@
 //! that most of them were done using parallel connections
 
 mod benchtool {
-    use corelib::terrapipe::QueryBuilder;
+    use corelib::builders::query::QueryBuilder;
     use devtimer::DevTime;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
     use std::io::prelude::*;
-    use std::net::TcpStream;
+    use std::net::{self, TcpStream};
     use std::sync::mpsc;
     use std::sync::Arc;
     use std::sync::Mutex;
@@ -73,7 +73,10 @@ mod benchtool {
                             connection.write_all(&someaction).unwrap();
                             connection.read(&mut vec![0; 1024]).unwrap();
                         }
-                        WhatToDo::Nothing => break,
+                        WhatToDo::Nothing => {
+                            connection.shutdown(net::Shutdown::Both).unwrap();
+                            break;
+                        }
                     }
                 }
             });
@@ -153,25 +156,25 @@ mod benchtool {
             .map(|idx| {
                 let mut q = QueryBuilder::new_simple();
                 q.add("SET");
-                q.add(&keys[idx]);
-                q.add(&values[idx]);
-                q.prepare_query().1
+                q.add(keys[idx].clone());
+                q.add(values[idx].clone());
+                q.prepare_query()
             })
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| {
                 let mut q = QueryBuilder::new_simple();
                 q.add("GET");
-                q.add(&keys[idx]);
-                q.prepare_query().1
+                q.add(keys[idx].clone());
+                q.prepare_query()
             })
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| {
                 let mut q = QueryBuilder::new_simple();
                 q.add("DEL");
-                q.add(&keys[idx]);
-                q.prepare_query().1
+                q.add(keys[idx].clone());
+                q.prepare_query()
             })
             .collect();
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());

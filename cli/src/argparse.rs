@@ -19,16 +19,15 @@
  *
 */
 
-use crate::client::Client;
+use crate::protocol;
 use std::io::{self, prelude::*};
 use std::process;
-const ADDR: &'static str = "127.0.0.1:2003";
 pub async fn execute_query() {
-    let mut client = match Client::new(ADDR).await {
+    let mut con = match protocol::Connection::new().await {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Error: {}", e);
-            return;
+            eprintln!("ERROR: {}", e);
+            process::exit(0x100);
         }
     };
     loop {
@@ -44,6 +43,6 @@ pub async fn execute_query() {
             println!("Goodbye!");
             process::exit(0x100);
         }
-        client.run(rl).await;
+        con.run_query(rl).await;
     }
 }

@@ -22,7 +22,8 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
-use corelib::terrapipe::{RespBytes, RespCodes, ResponseBuilder};
+use corelib::builders::response::*;
+use corelib::terrapipe::{RespBytes, RespCodes};
 pub mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
@@ -51,9 +52,9 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                             Ok(v) => v,
                             Err(e) => return e.into_response(),
                         };
-                        let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
-                        resp.add_data(res.to_owned());
-                        return resp.into_response();
+                        let mut resp = SResp::new(RespCodes::Okay.into());
+                        resp.add(res.to_vec());
+                        return cat(resp.prepare_query());
                     }
                 }
             }
@@ -113,13 +114,17 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
             }
             tags::TAG_HEYA => {
                 if buf.next().is_none() {
-                    let mut resp = ResponseBuilder::new_simple(RespCodes::Okay);
-                    resp.add_data("HEY!".to_owned());
-                    return resp.into_response();
+                    let mut resp = SResp::new(RespCodes::Okay.into());
+                    resp.add("HEY!");
+                    return cat(resp.prepare_query());
                 }
             }
             _ => return RespCodes::OtherError(Some("Unknown command".to_owned())).into_response(),
         }
     }
     RespCodes::ArgumentError.into_response()
+}
+
+fn cat((a, b, c): (Vec<u8>, Vec<u8>, Vec<u8>)) -> Vec<u8> {
+    [a, b, c].concat()
 }
