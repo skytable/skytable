@@ -26,9 +26,7 @@ use corelib::de::*;
 use corelib::terrapipe::*;
 use corelib::TResult;
 use deserializer::{ClientResult, Response};
-use std::io::Result as IoResult;
-use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 pub struct Connection {
     stream: TcpStream,
@@ -82,8 +80,8 @@ impl Connection {
                     eprintln!("{}", r);
                     return;
                 }
-                ClientResult::InvalidResponse(f) => {
-                    self.buffer.advance(f);
+                ClientResult::InvalidResponse(_) => {
+                    self.buffer.clear();
                     eprintln!("{}", ClientResult::InvalidResponse(0));
                     return;
                 }
@@ -95,11 +93,11 @@ impl Connection {
             // The connection was possibly reset
             return ClientResult::Empty(0);
         }
+        println!(
+            "The server gave: '{}'",
+            String::from_utf8_lossy(&self.buffer)
+        );
         let nav = Navigator::new(&self.buffer);
         Response::from_navigator(nav)
-    }
-    /// Get the peer address
-    fn get_peer(&self) -> IoResult<SocketAddr> {
-        self.stream.peer_addr()
     }
 }
