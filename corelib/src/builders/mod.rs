@@ -1,5 +1,5 @@
 /*
- * Created on Mon Jul 20 2020
+ * Created on Tue Aug 04 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,12 +19,5 @@
  *
 */
 
-//! The core library for the Terrabase database
-//! This contains modules which are shared by both the `cli` and the `server` modules
-
-pub mod builders;
-pub mod de;
-pub mod terrapipe;
-use std::error::Error;
-/// A generic result
-pub type TResult<T> = Result<T, Box<dyn Error>>;
+pub mod query;
+pub mod response;

@@ -19,10 +19,16 @@
  *
 */
 
-//! This implements primitives for the Terrapipe protocol
+//! # The Terrapipe protocol
+//! This module implements primitives for the Terrapipe protocol
+//!
+//! Query and Response packet handling modules can be found in the `de`, `query`
+//! and `response` modules from the crate root.
 
 use std::error::Error;
 use std::fmt;
+
+pub const ADDR: &'static str = "127.0.0.1:2003";
 
 /// Default query metaline buffer size
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
@@ -47,61 +53,6 @@ pub mod responses {
         /// `5` Internal server error response
         pub static ref RESP_SERVER_ERROR: Vec<u8> = "*!5!0!0\n".as_bytes().to_owned();
     }
-}
-
-pub fn get_sizes(stream: String) -> Result<Vec<usize>, RespCodes> {
-    let sstr: Vec<&str> = stream.split('#').collect();
-    let mut sstr_iter = sstr.into_iter().peekable();
-    let mut sizes = Vec::with_capacity(sstr_iter.len());
-    while let Some(size) = sstr_iter.next() {
-        if sstr_iter.peek().is_some() {
-            // Skip the last element
-            if let Ok(val) = size.parse::<usize>() {
-                sizes.push(val);
-            } else {
-                return Err(RespCodes::InvalidMetaframe);
-            }
-        } else {
-            break;
-        }
-    }
-    Ok(sizes)
-}
-
-#[cfg(test)]
-#[test]
-fn test_get_sizes() {
-    let retbuf = "10#20#30#".to_owned();
-    let sizes = get_sizes(retbuf).unwrap();
-    assert_eq!(sizes, vec![10usize, 20usize, 30usize]);
-}
-
-pub fn extract_idents(buf: Vec<u8>, skip_sequence: Vec<usize>) -> Vec<String> {
-    skip_sequence
-        .into_iter()
-        .scan(buf.into_iter(), |databuf, size| {
-            let tok: Vec<u8> = databuf.take(size).collect();
-            let _ = databuf.next();
-            // FIXME(@ohsayan): This is quite slow, we'll have to use SIMD in the future
-            Some(String::from_utf8_lossy(&tok).to_string())
-        })
-        .collect()
-}
-
-#[cfg(test)]
-#[test]
-fn test_extract_idents() {
-    let testbuf = "set\nsayan\n17\n".as_bytes().to_vec();
-    let skip_sequence: Vec<usize> = vec![3, 5, 2];
-    let res = extract_idents(testbuf, skip_sequence);
-    assert_eq!(
-        vec!["set".to_owned(), "sayan".to_owned(), "17".to_owned()],
-        res
-    );
-    let badbuf = vec![0, 0, 159, 146, 150];
-    let skip_sequence: Vec<usize> = vec![1, 2];
-    let res = extract_idents(badbuf, skip_sequence);
-    assert_eq!(res[1], "��");
 }
 
 /// Response codes returned by the server
@@ -129,7 +80,7 @@ impl fmt::Display for RespCodes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use RespCodes::*;
         match self {
-            Okay => unimplemented!(),
+            Okay => write!(f, ""),
             NotFound => write!(f, "ERROR: Couldn't find the key"),
             OverwriteError => write!(f, "ERROR: Existing values cannot be overwritten"),
             InvalidMetaframe => write!(f, "ERROR: Invalid metaframe"),
@@ -160,6 +111,21 @@ impl From<RespCodes> for u8 {
     }
 }
 
+impl From<RespCodes> for char {
+    fn from(rcode: RespCodes) -> char {
+        use RespCodes::*;
+        match rcode {
+            Okay => '0',
+            NotFound => '1',
+            OverwriteError => '2',
+            InvalidMetaframe => '3',
+            ArgumentError => '4',
+            ServerError => '5',
+            OtherError(_) => '6',
+        }
+    }
+}
+
 impl RespCodes {
     pub fn from_str(val: &str, extra: Option<String>) -> Option<Self> {
         use RespCodes::*;
@@ -177,6 +143,30 @@ impl RespCodes {
             Err(_) => return None,
         };
         Some(res)
+    }
+    pub fn from_u8(val: u8, extra: Option<String>) -> Option<Self> {
+        use RespCodes::*;
+        let res = match val {
+            0 => Okay,
+            1 => NotFound,
+            2 => OverwriteError,
+            3 => InvalidMetaframe,
+            4 => ArgumentError,
+            5 => ServerError,
+            6 => OtherError(extra),
+            _ => return None,
+        };
+        Some(res)
+    }
+    pub fn from_utf8(val: u8) -> Option<Self> {
+        let result = match val.checked_sub(48) {
+            Some(r) => r,
+            None => return None,
+        };
+        if result > 6 {
+            return None;
+        }
+        return RespCodes::from_u8(result, None);
     }
 }
 
@@ -214,137 +204,5 @@ impl RespBytes for RespCodes {
                 None => format!("*!6!0!0\n").as_bytes().to_owned(),
             },
         }
-    }
-}
-
-#[derive(Debug)]
-/// This is enum represents types of responses which can be built from it
-pub enum ResponseBuilder {
-    SimpleResponse, // TODO: Add pipelined response builder here
-}
-
-impl ResponseBuilder {
-    /// Create a new simple response
-    pub fn new_simple(respcode: RespCodes) -> SimpleResponse {
-        SimpleResponse::new(respcode.into())
-    }
-}
-
-#[derive(Debug)]
-/// Representation of a simple response
-pub struct SimpleResponse {
-    respcode: u8,
-    metalayout_buf: String,
-    dataframe_buf: String,
-}
-
-impl SimpleResponse {
-    /// Create a new response with just a response code
-    /// The data has to be added by using the `add_data()` member function
-    pub fn new(respcode: u8) -> Self {
-        SimpleResponse {
-            respcode,
-            metalayout_buf: String::with_capacity(2),
-            dataframe_buf: String::with_capacity(40),
-        }
-    }
-    /// Add data to the response
-    pub fn add_data(&mut self, data: String) {
-        self.metalayout_buf.push_str(&format!("{}#", data.len()));
-        self.dataframe_buf.push_str(&data);
-        self.dataframe_buf.push('\n');
-    }
-    /// Internal function used in the implementation of the `RespBytes` trait
-    /// for creating a `Vec<u8>` which can be written to a TCP stream
-    fn prepare_response(&self) -> Vec<u8> {
-        format!(
-            "*!{}!{}!{}\n{}\n{}",
-            self.respcode,
-            self.dataframe_buf.len(),
-            self.metalayout_buf.len() + 1,
-            self.metalayout_buf,
-            self.dataframe_buf
-        )
-        .as_bytes()
-        .to_owned()
-    }
-}
-
-impl RespBytes for SimpleResponse {
-    fn into_response(&self) -> Vec<u8> {
-        self.prepare_response()
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn test_simple_response() {
-    let mut s = ResponseBuilder::new_simple(RespCodes::Okay);
-    s.add_data("Sayan".to_owned());
-    s.add_data("loves".to_owned());
-    s.add_data("you".to_owned());
-    s.add_data("if".to_owned());
-    s.add_data("you".to_owned());
-    s.add_data("send".to_owned());
-    s.add_data("UTF8".to_owned());
-    s.add_data("bytes".to_owned());
-    assert_eq!(
-        String::from_utf8_lossy(&s.into_response()),
-        String::from(
-            "*!0!39!17\n5#5#3#2#3#4#4#5#\nSayan\nloves\nyou\nif\nyou\nsend\nUTF8\nbytes\n"
-        )
-    );
-}
-
-pub enum QueryBuilder {
-    SimpleQuery,
-    // TODO(@ohsayan): Add pipelined queries here
-}
-// TODO(@ohsayan): I think we should move the client stuff into a separate repo
-// altogether to let users customize the client as they like and avoid licensing
-// issues
-
-impl QueryBuilder {
-    pub fn new_simple() -> SimpleQuery {
-        SimpleQuery::new()
-    }
-}
-
-pub struct SimpleQuery {
-    metalayout: String,
-    dataframe: String,
-}
-
-impl SimpleQuery {
-    pub fn new() -> Self {
-        SimpleQuery {
-            metalayout: String::with_capacity(DEF_QMETALAYOUT_BUFSIZE),
-            dataframe: String::with_capacity(DEF_QDATAFRAME_BUSIZE),
-        }
-    }
-    pub fn add(&mut self, cmd: &str) {
-        // FIXME(@ohsayan): This should take the UTF8 repr's length
-        let ref mut layout = self.metalayout;
-        let ref mut df = self.dataframe;
-        let len = cmd.len().to_string();
-        layout.push('#');
-        layout.push_str(&len);
-        df.push_str(cmd);
-        df.push('\n');
-    }
-    pub fn from_cmd(&mut self, cmd: String) {
-        cmd.split_whitespace().for_each(|val| self.add(val));
-    }
-    pub fn prepare_query(&self) -> (usize, Vec<u8>) {
-        let resp = format!(
-            "*!{}!{}\n{}\n{}",
-            self.dataframe.len(),
-            self.metalayout.len() + 1, // include the new line character
-            self.metalayout,
-            self.dataframe
-        )
-        .as_bytes()
-        .to_owned();
-        (resp.len(), resp)
     }
 }
