@@ -20,6 +20,15 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 4. First run `tdb` to start the database server and then run `tsh` to start the interactive shell
 5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
 
+## Supported actions
+
+* GET
+* SET
+* UPDATE
+* DEL
+
+And, a lot more actions are coming soon!
+
 ## Clients 🔌
 
 We're officially working on a [Python Driver](https://github.com/terrabasedb/python-driver) and we plan to support more languages along the way 🎉! You're free to write your own clients - all you need to do is implement the simple and performant [Terrapipe protocol spec](https://git.io/JJZ4Z).
@@ -44,7 +53,11 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the ![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md).
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the 
+
+![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md)
+
+.
 
 ## License
 
