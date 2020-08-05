@@ -80,15 +80,15 @@ impl fmt::Display for RespCodes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use RespCodes::*;
         match self {
-            Okay => write!(f, ""),
-            NotFound => write!(f, "ERROR: Couldn't find the key"),
-            OverwriteError => write!(f, "ERROR: Existing values cannot be overwritten"),
-            InvalidMetaframe => write!(f, "ERROR: Invalid metaframe"),
-            ArgumentError => write!(f, "ERROR: The command is not in the correct format"),
-            ServerError => write!(f, "ERROR: The server had an internal error"),
+            Okay => Ok(()),
+            NotFound => writeln!(f, "ERROR: Couldn't find the key"),
+            OverwriteError => writeln!(f, "ERROR: Existing values cannot be overwritten"),
+            InvalidMetaframe => writeln!(f, "ERROR: Invalid metaframe"),
+            ArgumentError => writeln!(f, "ERROR: The command is not in the correct format"),
+            ServerError => writeln!(f, "ERROR: The server had an internal error"),
             OtherError(e) => match e {
-                None => write!(f, "ERROR: Some unknown error occurred"),
-                Some(e) => write!(f, "ERROR: {}", e),
+                None => writeln!(f, "ERROR: Some unknown error occurred"),
+                Some(e) => writeln!(f, "ERROR: {}", e),
             },
         }
     }

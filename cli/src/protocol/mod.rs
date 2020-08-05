@@ -70,6 +70,9 @@ impl Connection {
                 }
                 ClientResult::Response(r, f) => {
                     self.buffer.advance(f);
+                    if r.len() == 0 {
+                        return;
+                    }
                     for tok in r {
                         println!("{}", tok);
                     }
@@ -77,7 +80,7 @@ impl Connection {
                 }
                 ClientResult::RespCode(r, f) => {
                     self.buffer.advance(f);
-                    eprintln!("{}", r);
+                    eprint!("{}", r);
                     return;
                 }
                 ClientResult::InvalidResponse(_) => {
