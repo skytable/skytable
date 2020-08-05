@@ -21,17 +21,14 @@
 
 //! # The core database engine
 
+use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
-use bincode;
 use bytes::Bytes;
 use corelib::terrapipe::{ActionType, RespCodes};
 use corelib::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::{hash_map::Entry, HashMap};
-use std::fs;
-use std::io::{ErrorKind, Write};
-use std::iter::FromIterator;
 use std::sync::Arc;
 
 /// Results from actions on the Database
@@ -63,9 +60,13 @@ impl Data {
             blob: Bytes::copy_from_slice(val.as_bytes()),
         }
     }
+    pub fn from_blob(blob: Bytes) -> Self {
+        Data { blob }
+    }
+    pub fn get_blob(&self) -> &Bytes {
+        &self.blob
+    }
 }
-
-type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 
 impl CoreDB {
     /// GET a `key`
@@ -124,7 +125,7 @@ impl CoreDB {
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new() -> TResult<Self> {
-        let coretable = CoreDB::get_saved()?;
+        let coretable = diskstore::get_saved()?;
         if let Some(coretable) = coretable {
             Ok(CoreDB {
                 shared: Arc::new(Coretable {
@@ -151,36 +152,9 @@ impl CoreDB {
     }
     /// Flush the contents of the in-memory table onto disk
     pub fn flush_db(self) -> TResult<()> {
-        let data = self.acquire_read();
-        let ds: DiskStore = (
-            data.keys().into_iter().map(|val| val.to_string()).collect(),
-            data.values().map(|val| val.blob.to_vec()).collect(),
-        );
-        let encoded = bincode::serialize(&ds)?;
-        let mut file = fs::File::create("./data.bin")?;
-        file.write_all(&encoded)?;
+        let data = &*self.acquire_write();
+        diskstore::flush_data(data)?;
         Ok(())
-    }
-    /// Try to get the saved data from disk
-    pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
-        let file = match fs::read("./data.bin") {
-            Ok(f) => f,
-            Err(e) => match e.kind() {
-                ErrorKind::NotFound => return Ok(None),
-                _ => return Err("Couldn't read flushed data from disk".into()),
-            },
-        };
-        let parsed: DiskStore = bincode::deserialize(&file)?;
-        let parsed: HashMap<String, Data> =
-            HashMap::from_iter(parsed.0.into_iter().zip(parsed.1.into_iter()).map(
-                |(key, value)| {
-                    let data = Data {
-                        blob: Bytes::from(value),
-                    };
-                    (key, data)
-                },
-            ));
-        Ok(Some(parsed))
     }
 }
 

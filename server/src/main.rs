@@ -22,6 +22,7 @@
 use tokio::net::TcpListener;
 mod coredb;
 mod dbnet;
+mod diskstore;
 mod protocol;
 mod queryengine;
 use coredb::CoreDB;
