@@ -22,10 +22,11 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 
 ## Supported actions
 
-* GET
-* SET
-* UPDATE
-* DEL
+* `HEYA` - A ping message to check if everything's fine
+* `GET` - Get a key
+* `SET` - Set a key
+* `UPDATE` - Update the value of a key which has already been created with `SET`
+* `DEL` - Delete a key
 
 And, a lot more actions are coming soon!
 
@@ -53,9 +54,7 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the 
-
-![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md)
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the ![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md).
 
 .
 
