@@ -106,7 +106,7 @@ jobs:
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TDB }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TSH }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/tsh ./dist/tdb ./dist/ -j
+          zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/tsh ./dist/tdb ./dist/tdb-bench -j
 
       - name: Create Build (Windows)
         if: matrix.build == 'windows'
