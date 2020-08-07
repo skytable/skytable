@@ -24,7 +24,7 @@
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::terrapipe::{RespBytes, RespCodes};
-pub mod tags {
+mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
     /// `GET` command tag
@@ -37,6 +37,8 @@ pub mod tags {
     pub const TAG_DEL: &'static str = "DEL";
     /// `HEYA` command tag
     pub const TAG_HEYA: &'static str = "HEYA";
+    /// `EXISTS` command tag
+    pub const TAG_EXISTS: &'static str = "EXISTS";
 }
 
 /// Execute a simple(*) query
@@ -54,7 +56,7 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                         };
                         let mut resp = SResp::new(RespCodes::Okay.into());
                         resp.add(res.to_vec());
-                        return cat(resp.prepare_query());
+                        return cat(resp.prepare_response());
                     }
                 }
             }
@@ -112,11 +114,23 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                     }
                 }
             }
+            tags::TAG_EXISTS => {
+                // This is an `EXISTS` query
+                if let Some(key) = buf.next() {
+                    if buf.next().is_none() {
+                        let ex = db.exists(&key) as u8;
+                        let mut resp = SResp::new(RespCodes::Okay.into());
+                        resp.add(ex.to_string());
+                        return cat(resp.prepare_response());
+                    }
+                }
+            }
             tags::TAG_HEYA => {
+                // This is a `HEYA` query
                 if buf.next().is_none() {
                     let mut resp = SResp::new(RespCodes::Okay.into());
                     resp.add("HEY!");
-                    return cat(resp.prepare_query());
+                    return cat(resp.prepare_response());
                 }
             }
             _ => return RespCodes::OtherError(Some("Unknown command".to_owned())).into_response(),

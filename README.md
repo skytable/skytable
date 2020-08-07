@@ -26,6 +26,7 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 * `GET` - Get a key
 * `SET` - Set a key
 * `UPDATE` - Update the value of a key which has already been created with `SET`
+* `EXISTS` - Check if a key exists
 * `DEL` - Delete a key
 
 And, a lot more actions are coming soon!

@@ -50,7 +50,7 @@ impl SResp {
         self.dataframe.extend(&cmd);
         self.dataframe.push(b'\n');
     }
-    pub fn prepare_query(mut self) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    pub fn prepare_response(mut self) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         self.metaline
             .extend(self.dataframe.len().to_string().as_bytes());
         self.metaline.push(b'!');

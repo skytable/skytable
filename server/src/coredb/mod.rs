@@ -105,6 +105,12 @@ impl CoreDB {
             Err(RespCodes::NotFound)
         }
     }
+
+    /// Check if a `key` exists
+    pub fn exists(&self, key: &str) -> bool {
+        self.acquire_read().contains_key(&key.to_owned())
+    }
+
     #[cfg(Debug)]
     /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
