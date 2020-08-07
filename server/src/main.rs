@@ -29,11 +29,23 @@ use coredb::CoreDB;
 use dbnet::run;
 use tokio::signal;
 static ADDR: &'static str = "127.0.0.1:2003";
-
+static MSG: &'static str = "TerrabaseDB v0.3.1 | https://github.com/terrabasedb/terrabase\nServer running on terrapipe://127.0.0.1:2003";
+static TEXT: &'static str =
+    "     _______                       _                        _____   ____  
+     |__   __|                     | |                      |  __ \\ |  _ \\ 
+        | |  ___  _ __  _ __  __ _ | |__    __ _  ___   ___ | |  | || |_) |
+        | | / _ \\| '__|| '__|/ _` || '_ \\  / _` |/ __| / _ \\| |  | ||  _ < 
+        | ||  __/| |   | |  | (_| || |_) || (_| |\\__ \\|  __/| |__| || |_) |
+        |_| \\___||_|   |_|   \\__,_||_.__/  \\__,_||___/ \\___||_____/ |____/
+        
+        +-++-++-+ +-++-++-++-+ +-++-++-++-++-+ +-++-++-++-++-++-++-++-+
+        |T||h||e| |n||e||x||t| |N||o||S||Q||L| |d||a||t||a||b||a||s||e|
+        +-++-++-+ +-++-++-++-+ +-++-++-++-++-+ +-++-++-++-++-++-++-++-+    
+";
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind(ADDR).await.unwrap();
-    println!("Server running on terrapipe://127.0.0.1:2003");
+    println!("{}\n{}", TEXT, MSG);
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     run(listener, signal::ctrl_c()).await;
