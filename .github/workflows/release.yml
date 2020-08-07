@@ -8,6 +8,7 @@ name: Release
 env:
   RELEASE_TDB: tdb
   RELEASE_TSH: tsh
+  RELEASE_BENCH: tdb-bench
   RELEASE_DIR: artifacts
   GITHUB_REF: "${{ github.ref }}"
   WINDOWS_TARGET: x86_64-pc-windows-msvc
@@ -104,6 +105,7 @@ jobs:
         run: |
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TDB }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_TSH }} ./dist
+          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_BENCH }} ./dist
           zip ./${{ env.RELEASE_DIR}}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/tsh ./dist/tdb -j
 
       - name: Create Build (Windows)
@@ -112,6 +114,7 @@ jobs:
         run: |
           mv ./target/release/${{ env.RELEASE_TDB }}.exe ./dist
           mv ./target/release/${{ env.RELEASE_TSH }}.exe ./dist
+          mv ./target/release/${{ env.RELEASE_BENCH }}.exe ./dist
           7z a -tzip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip ./dist/*
 
       - name: Create Build (MacOS)
@@ -119,6 +122,7 @@ jobs:
         run: |
           mv ./target/release/${{ env.RELEASE_TDB }} ./dist
           mv ./target/release/${{ env.RELEASE_TSH }} ./dist
+          mv ./target/release/${{ env.RELEASE_BENCH }} ./dist
           zip ./${{ env.RELEASE_DIR }}/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/tsh ./dist/tdb -j
 
       - name: Upload binaries

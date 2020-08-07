@@ -7,5 +7,5 @@ build:
   - ./*.toml
   - ./*.lock
 workflow:
- - ./.github/*.yml
- - ./.github/**/*.yml
+ - .github/*.yml
+ - .github/**/*.yml

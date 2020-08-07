@@ -22,7 +22,7 @@
 mod argparse;
 mod protocol;
 use tokio;
-const MSG_WELCOME: &'static str = "TerrabaseDB v0.3.1";
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.3.2";
 
 #[tokio::main]
 async fn main() {

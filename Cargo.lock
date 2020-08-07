@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "corelib"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "lazy_static",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "tdb"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bincode",
  "bytes",
@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "tsh"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytes",
  "corelib",

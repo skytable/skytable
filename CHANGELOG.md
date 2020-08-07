@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.3.2 [2020-08-07]
+
+> No breaking changes
+
+The `tsh` component printed the wrong version number. This has been fixed.
+
 ## Version 0.3.1 [2020-08-05]
 
 > This release introduces breaking changes
