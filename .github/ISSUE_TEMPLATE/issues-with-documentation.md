@@ -1,6 +1,6 @@
 ---
-name: Issues with documentation
-about: Report incorrect/ambiguous/incorrect/missing documentation
+name: Issues 🤔 with documentation 🧾
+about: Found any incorrect/missing/ambiguous documentation? Use this issue type
 title: 'Docs: '
 labels: documentation
 assignees: ''

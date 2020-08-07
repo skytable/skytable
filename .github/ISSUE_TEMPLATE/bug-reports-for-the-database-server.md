@@ -1,6 +1,6 @@
 ---
-name: Bug reports for the database server
-about: Create a bug report to help us improve the database server tdb
+name: 🐞 Bug reports for the database server 📑
+about: Found something wrong with the database server? Report it here
 title: 'Server: '
 labels: bug, server
 assignees: ''

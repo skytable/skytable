@@ -1,6 +1,6 @@
 ---
-name: Bug reports for the CLI client
-about: Create a report to help us improve the command-line client tsh
+name: 🐞 Bug reports for the CLI client
+about: Found something wrong with tsh? Report them here
 title: 'CLI: '
 labels: bug, cli
 assignees: ''

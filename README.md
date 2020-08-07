@@ -57,7 +57,6 @@ This project strictly follows semver, however, since this project is currently i
 
 **Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the ![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md).
 
-.
 
 ## License
 

@@ -1,6 +1,6 @@
 ---
 name: Performance concerns
-about: Share concerns regarding performance
+about: Have a concern about performance? Use this template
 title: 'Performance: '
 labels: performance
 assignees: ''
