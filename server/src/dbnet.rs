@@ -204,4 +204,5 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
     drop(signal);
     drop(terminate_tx);
     let _ = terminate_rx.recv().await;
+    println!("Goodbye :)");
 }
