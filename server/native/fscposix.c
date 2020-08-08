@@ -19,53 +19,47 @@
  *
  */
 
-#ifdef __unix__
-#define isnix
-#elif defined(__WIN32)
-#define iswindows
-#elif defined(macintosh || Macintosh || (__APPLE__ && __MACH__))
-#define ismac
-#endif
-
-#ifdef isnix
 #include <errno.h>
 #include <fcntl.h>
 
-// Lock a file on the record level
+/* Lock a file */
 int lock_file(int descriptor) {
   if (descriptor < 0) {
-    return EBADF; // Bad file descriptor
+    return EBADF;
   }
 
-  struct flock file;
-  file.l_type = F_WRLCK;    // Acquire a write-level lock
-  file.l_whence = SEEK_SET; // From beginning of file
-  file.l_start = 0;         // Lock begins from 0
-  file.l_len = 0;           // Lock until EOF
+  struct flock fl;
 
-  if (fcntl(descriptor, F_SETLKW, &file) == -1) {
-    return errno; // Couldn't get record level lock
-  }
+  /* Lock the whole file - not just a part of it! */
+  fl.l_type = F_WRLCK;
+  fl.l_whence = SEEK_SET;
+  fl.l_start = 0;
+  fl.l_len = 0;
 
-  return 0;
-}
-
-// Unlock a file on the record level
-int unlock_file(int descriptor) {
-  struct flock file;
-
-  if (descriptor < 0) {
-    return EBADF; // Bad file descriptor
-  }
-
-  file.l_type = F_UNLCK;
-  file.l_whence = SEEK_SET;
-  file.l_len = 0;
-
-  if (fcntl(descriptor, F_SETLKW, &file) == -1) {
+  if (fcntl(descriptor, F_SETLKW, &fl) == -1) {
     return errno;
   }
 
   return 0;
 }
-#endif
+
+/* Unlock a file */
+int unlock_file(int descriptor) {
+  struct flock fl;
+
+  if (descriptor < 0) {
+    return EBADF;
+  }
+
+  /* Unlock the whole file - not just a part of it! */
+  fl.l_type = F_UNLCK;
+  fl.l_whence = SEEK_SET;
+  fl.l_start = 0;
+  fl.l_len = 0;
+
+  if (fcntl(descriptor, F_SETLKW, &fl) == -1) {
+    return errno;
+  }
+
+  return 0;
+}
