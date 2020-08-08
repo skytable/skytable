@@ -3,14 +3,14 @@
 <img src="https://raw.githubusercontent.com/terrabasedb/docs/master/docs/assets/img/favicon.ico" height=64 width=64 style="float:left">
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Pre-Alpha](https://img.shields.io/badge/status-pre--alpha-critical?style=flat-square) ![Version: 0.1.0](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
 
 </div>
 </html>
 
 ## What is TerrabaseDB?
 
-TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. TDB is curently in a pre-alpha stage, but can be used as a **performant** and **persistent key-value store**.
+TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. TDB is curently in an alpha stage, but can be used as a **performant** and **persistent key-value store**.
 
 ## Getting started
 
