@@ -20,10 +20,24 @@
 */
 
 use crate::protocol;
+use corelib::terrapipe::ADDR;
+use std::env;
 use std::io::{self, prelude::*};
 use std::process;
 pub async fn execute_query() {
-    let mut con = match protocol::Connection::new().await {
+    let args: Vec<String> = env::args().skip(1).collect();
+    if args.len() > 1 {
+        eprintln!("Incorrect number of arguments\n\tUSAGE tsh [host]");
+    }
+    let host = match args.get(0) {
+        Some(h) => {
+            let mut addr = h.clone();
+            addr.push_str(":2003");
+            addr
+        }
+        None => ADDR.to_owned(),
+    };
+    let mut con = match protocol::Connection::new(&host).await {
         Ok(c) => c,
         Err(e) => {
             eprintln!("ERROR: {}", e);

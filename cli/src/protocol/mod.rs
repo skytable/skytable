@@ -23,7 +23,6 @@ mod deserializer;
 use bytes::{Buf, BytesMut};
 use corelib::builders::query::*;
 use corelib::de::*;
-use corelib::terrapipe::*;
 use corelib::TResult;
 use deserializer::{ClientResult, Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -34,8 +33,8 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub async fn new() -> TResult<Self> {
-        let stream = TcpStream::connect(ADDR).await?;
+    pub async fn new(host: &str) -> TResult<Self> {
+        let stream = TcpStream::connect(host).await?;
         Ok(Connection {
             stream,
             buffer: BytesMut::with_capacity(BUF_CAP),

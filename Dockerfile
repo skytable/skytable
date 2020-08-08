@@ -22,6 +22,6 @@ RUN \
 
 CMD ["tdb"]
 
-EXPOSE 2003
+EXPOSE 2003/tcp
 
 ARG DEBIAN_FRONTEND=noninteractive
