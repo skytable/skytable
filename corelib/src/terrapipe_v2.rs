@@ -261,6 +261,119 @@ mod builders {
             query.into_query()
         )
     }
+
+    pub trait IntoTpResponse {
+        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>);
+    }
+
+    impl IntoTpResponse for String {
+        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
+            let mut sizes = Vec::with_capacity(2);
+            let mut bts = Vec::with_capacity(self.len() + 1);
+            bts.push(b'+');
+            bts.extend(self.as_bytes().to_owned());
+            sizes.push(bts.len());
+            bts.push(b'\n');
+            (sizes, bts)
+        }
+    }
+
+    impl IntoTpResponse for &str {
+        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
+            let mut sizes = Vec::with_capacity(2);
+            let mut bts = Vec::with_capacity(self.len() + 1);
+            bts.push(b'+');
+            bts.extend(self.as_bytes().to_owned());
+            sizes.push(bts.len());
+            bts.push(b'\n');
+            (sizes, bts)
+        }
+    }
+
+    impl IntoTpResponse for RespCodes {
+        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
+            use RespCodes::*;
+            match self {
+                Okay => (vec![3], vec![b'!', b'0']),
+                NotFound => (vec![3], vec![b'!', b'1']),
+                OverwriteError => (vec![3], vec![b'!', b'2']),
+                InvalidMetaframe => (vec![3], vec![b'!', b'3']),
+                ArgumentError => (vec![3], vec![b'!', b'4']),
+                ServerError => (vec![3], vec![b'!', b'5']),
+                OtherError(e) => {
+                    if let Some(e) = e {
+                        let mut respline = e.as_bytes().to_owned();
+                        respline.push(b'\n');
+                        // One for the ! character and one for the LF
+                        let resplen = respline.len() + 2;
+                        (vec![resplen], [vec![b'!'], respline].concat())
+                    } else {
+                        (vec![3], vec![b'!', b'6'])
+                    }
+                }
+            }
+        }
+    }
+
+    pub enum ResponseBuilder {
+        Simple(SResp),
+        // TODO(@ohsayan): Add pipelined responses here
+    }
+
+    impl ResponseBuilder {
+        pub fn new_simple() -> SResp {
+            SResp::new()
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    pub struct SResp {
+        metaline: Vec<u8>,
+        metalayout: Vec<u8>,
+        dataframe: Vec<u8>,
+    }
+
+    impl SResp {
+        pub fn new() -> Self {
+            let mut metaline = Vec::with_capacity(DEF_QMETALINE_BUFSIZE);
+            metaline.push(b'*');
+            metaline.push(b'!');
+            SResp {
+                metaline,
+                metalayout: Vec::with_capacity(128),
+                dataframe: Vec::with_capacity(1024),
+            }
+        }
+        pub fn add_group(&mut self, args: impl IntoTpResponse) {
+            let (skips, action_bytes) = args.into_tp_response();
+            self.dataframe.extend(action_bytes);
+            skips.into_iter().for_each(|skip| {
+                self.metalayout.push(b'#');
+                self.metalayout.extend(skip.to_string().as_bytes());
+            });
+        }
+        pub fn into_response(mut self) -> Vec<u8> {
+            self.metaline
+                .extend(self.dataframe.len().to_string().as_bytes());
+            self.metaline.push(b'!');
+            self.metaline
+                .extend((self.metalayout.len() + 1).to_string().as_bytes());
+            self.metaline.push(b'\n');
+            self.metalayout.push(b'\n');
+            [self.metaline, self.metalayout, self.dataframe].concat()
+        }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_sresp() {
+        let mut builder = ResponseBuilder::new_simple();
+        builder.add_group("HEY!".to_owned());
+        println!("{}", String::from_utf8_lossy(&builder.into_response()));
+        let mut builder = ResponseBuilder::new_simple();
+        builder.add_group(RespCodes::Okay);
+        println!("{}", String::from_utf8_lossy(&builder.into_response()));
+    }
 }
 
 #[cfg(test)]
