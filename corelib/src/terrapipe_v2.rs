@@ -28,89 +28,101 @@
 //! currently
 
 #[derive(Debug, PartialEq)]
-enum DataType {
-    St(String),
-    Arr(Vec<String>),
-}
+pub struct Action(Vec<String>);
 
-// TODO(@ohsayan): Optmimize this function
-fn parse_dataframe(df: Vec<u8>, sizes: Vec<usize>) -> Vec<DataType> {
-    unsafe {
-        (0..sizes.len())
-            .into_iter()
-            .scan((df.into_iter(), sizes.into_iter()), |(df, sizes), _| {
-                let cursize = match sizes.next() {
-                    Some(s) => s,
-                    _ => return None,
-                };
-                let curline: Vec<u8> = df.take(cursize).collect();
-                if curline.len() == 0 {
-                    return None;
-                }
-                let _ = df.next();
-                match curline.get_unchecked(0) {
-                    b'+' => {
-                        // This is a string
-                        return Some(DataType::St(
-                            String::from_utf8_lossy(&curline.get_unchecked(1..)).to_string(),
-                        ));
-                    }
-                    b'&' => {
-                        // This is an array
-                        let mut remsize = 0;
-                        let mut it = curline.into_iter().skip(1).peekable();
-                        while let Some(tok) = it.next() {
-                            if it.next().is_some() {
-                                let s: usize = match tok.checked_sub(48) {
-                                    Some(x) => x.into(),
-                                    _ => return None,
-                                };
-                                remsize += s;
+pub fn parse_df(buf: Vec<u8>, sizes: Vec<usize>, nc: usize) -> Option<Vec<Action>> {
+    let (mut i, mut pos) = (0, 0);
+    if buf.len() < 1 || sizes.len() < 1 {
+        // Having fun, eh? Why're you giving empty dataframes?
+        return None;
+    }
+    let mut commands = Vec::with_capacity(nc);
+    while i < sizes.len() && pos < buf.len() {
+        // Allocate everything first
+        unsafe {
+            let cursize = sizes.get_unchecked(0);
+            i += 1; // We've just read a line push it ahead
+                    // Get the current line-> pos..pos+cursize+1
+            let curline = match buf.get(pos..pos + cursize + 1) {
+                Some(line) => line,
+                None => return None,
+            };
+            // We've read `cursize` number of elements, so skip them
+            // Also skip the newline
+            pos += cursize + 1;
+            if *curline.get_unchecked(0) == b'&' {
+                // A valid action array
+                let mut cursize = 0usize; // The number of elements in this action array
+                let mut k = 1; // Skip the '&' character in `curline`
+                while k < (curline.len() - 1) {
+                    let cur_dig: usize = match curline.get_unchecked(k).checked_sub(48) {
+                        Some(dig) => {
+                            if dig > 9 {
+                                // For the UTF8 character to be a number (0-9)
+                                // `dig` must be lesser than 9, since `48` is the UTF8
+                                // code for 0
+                                return None;
+                            } else {
+                                dig.into()
                             }
                         }
-                        let array_elems: Vec<String> = sizes
-                            .take(remsize)
-                            .into_iter()
-                            .scan(0, |_, size| {
-                                let tok: Vec<u8> = df.take(size).collect();
-                                let _ = df.next();
-                                Some(
-                                    String::from_utf8_lossy(&tok.get_unchecked(..size - 1))
-                                        .to_string(),
-                                )
-                            })
-                            .collect();
-                        // .into_iter()
-                        // .map(|elemsize| {
-                        //     let v: Vec<u8> = df.take(elemsize).collect();
-                        //     let _ = df.next();
-                        //     String::from_utf8_lossy(&v.get_unchecked(..v.len() - 1)).to_string()
-                        // })
-                        // .collect();
-                        return Some(DataType::Arr(array_elems));
-                    }
-                    _ => return None,
+                        None => return None,
+                    };
+                    cursize = (cursize * 10) + cur_dig;
+                    k += 1;
                 }
-            })
-            .collect()
+                let mut toks: Vec<String> = sizes
+                    .iter()
+                    .take(cursize)
+                    .map(|sz| String::with_capacity(*sz))
+                    .collect();
+                let mut l = 0;
+                // We now know the array size, so let's parse it!
+                // Get all the sizes of the array elements
+                let arr_elem_sizes = match sizes.get(i..(i + cursize)) {
+                    Some(sizes) => sizes,
+                    None => return None,
+                };
+                i += cursize; // We've already read `cursize` items from the `sizes` array
+                arr_elem_sizes
+                    .into_iter()
+                    .zip(toks.iter_mut())
+                    .for_each(|(size, empty_buf)| {
+                        let extracted = match buf.get(pos..pos + size) {
+                            Some(ex) => ex,
+                            None => return (),
+                        };
+                        pos += size + 1; // Advance `pos` by `sz` and `1` for the newline
+                        l += 1; // Move ahead
+                        *empty_buf = String::from_utf8_lossy(extracted).to_string();
+                    });
+                if toks.len() != cursize {
+                    return None;
+                }
+                // We're done with parsing the entire array, return it
+                commands.push(Action(toks));
+            } else {
+                i += 1;
+                continue;
+            }
+        }
     }
+    Some(commands)
 }
 
 #[cfg(test)]
 #[test]
 fn test_df() {
-    let ss: Vec<usize> = vec![4, 3, 6, 7, 7];
-    let df = "+GET\n&3\n+sayan\n+foobar\n+opnsrc\n".as_bytes().to_owned();
-    let parsed = parse_dataframe(df, ss);
+    let ss: Vec<usize> = vec![2, 3, 5, 6, 6];
+    let df = "&4\nGET\nsayan\nfoobar\nopnsrc\n".as_bytes().to_owned();
+    let parsed = parse_df(df, ss, 1).unwrap();
     assert_eq!(
         parsed,
-        vec![
-            DataType::St("GET".to_owned()),
-            DataType::Arr(vec![
-                "sayan".to_owned(),
-                "foobar".to_owned(),
-                "opnsrc".to_owned(),
-            ])
-        ]
+        vec![Action(vec![
+            "GET".to_owned(),
+            "sayan".to_owned(),
+            "foobar".to_owned(),
+            "opnsrc".to_owned()
+        ])]
     );
 }
