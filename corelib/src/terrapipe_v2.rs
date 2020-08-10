@@ -30,6 +30,17 @@
 #[derive(Debug, PartialEq)]
 pub struct Action(Vec<String>);
 
+type Dataset = Vec<String>;
+
+pub enum Actions {
+    DEL(Dataset),
+    EXISTS(Dataset),
+    GET(Dataset),
+    HEYA,
+    SET(Dataset),
+    UPDATE(Dataset),
+}
+
 pub fn parse_df(buf: Vec<u8>, sizes: Vec<usize>, nc: usize) -> Option<Vec<Action>> {
     let (mut i, mut pos) = (0, 0);
     if buf.len() < 1 || sizes.len() < 1 {

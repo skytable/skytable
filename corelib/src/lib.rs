@@ -25,7 +25,9 @@
 pub mod builders;
 pub mod de;
 pub mod terrapipe;
-mod terrapipe_v2;
 use std::error::Error;
 /// A generic result
 pub type TResult<T> = Result<T, Box<dyn Error>>;
+
+#[cfg(feature = "terrapipev2")]
+pub mod terrapipe_v2;
