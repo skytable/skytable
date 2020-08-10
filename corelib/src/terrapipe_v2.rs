@@ -47,7 +47,7 @@ pub fn parse_df(buf: Vec<u8>, sizes: Vec<usize>, nc: usize) -> Option<Vec<Action
         // Having fun, eh? Why're you giving empty dataframes?
         return None;
     }
-    let mut commands = Vec::with_capacity(nc);
+    let mut tokens = Vec::with_capacity(nc);
     while i < sizes.len() && pos < buf.len() {
         // Allocate everything first
         unsafe {
@@ -111,14 +111,156 @@ pub fn parse_df(buf: Vec<u8>, sizes: Vec<usize>, nc: usize) -> Option<Vec<Action
                     return None;
                 }
                 // We're done with parsing the entire array, return it
-                commands.push(Action(toks));
+                tokens.push(Action(toks));
             } else {
                 i += 1;
                 continue;
             }
         }
     }
-    Some(commands)
+    Some(tokens)
+}
+
+mod builders {
+    use crate::terrapipe::*;
+    pub trait IntoTpArgs {
+        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>);
+    }
+    // A simple action like `HEYA`
+    impl IntoTpArgs for String {
+        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
+            let mut sizeline = vec![b'&'];
+            let mut sizes = Vec::with_capacity(2);
+            sizeline.push(b'1');
+            sizes.push(sizeline.len());
+            sizeline.push(b'\n');
+            let mut bts = self.as_bytes().to_owned();
+            sizes.push(bts.len());
+            bts.push(b'\n');
+            let qbytes = [sizeline, bts].concat();
+            (sizes, qbytes)
+        }
+    }
+
+    impl IntoTpArgs for &str {
+        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
+            let mut sizeline = vec![b'&'];
+            let mut sizes = Vec::with_capacity(2);
+            sizeline.push(b'1');
+            sizes.push(sizeline.len());
+            sizeline.push(b'\n');
+            let mut bts = self.as_bytes().to_owned();
+            sizes.push(bts.len());
+            bts.push(b'\n');
+            let qbytes = [sizeline, bts].concat();
+            (sizes, qbytes)
+        }
+    }
+
+    // Actions like ["GET", "foo", "bar", "sayan"]
+    impl IntoTpArgs for &[&str] {
+        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
+            let mut sizes = Vec::with_capacity(self.len());
+            let mut sizeline = vec![b'&'];
+            sizeline.extend(self.len().to_string().as_bytes());
+            sizes.push(sizeline.len());
+            sizeline.push(b'\n');
+            let arg_bytes = [
+                sizeline,
+                self.into_iter()
+                    .map(|arg| {
+                        let mut x = arg.as_bytes().to_owned();
+                        sizes.push(x.len());
+                        x.push(b'\n');
+                        x
+                    })
+                    .flatten()
+                    .collect::<Vec<u8>>(),
+            ]
+            .concat();
+            (sizes, arg_bytes)
+        }
+    }
+
+    pub enum QueryBuilder {
+        Simple(SQuery),
+        // TODO(@ohsayan): Implement pipelined queries
+    }
+
+    impl QueryBuilder {
+        pub fn new_simple() -> SQuery {
+            SQuery::new()
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    pub struct SQuery {
+        metaline: Vec<u8>,
+        metalayout: Vec<u8>,
+        dataframe: Vec<u8>,
+    }
+
+    impl SQuery {
+        pub fn new() -> Self {
+            let mut metaline = Vec::with_capacity(DEF_QMETALINE_BUFSIZE);
+            metaline.push(b'*');
+            metaline.push(b'!');
+            SQuery {
+                metaline,
+                metalayout: Vec::with_capacity(128),
+                dataframe: Vec::with_capacity(512),
+            }
+        }
+        pub fn add_action(&mut self, args: impl IntoTpArgs) {
+            let (skips, action_bytes) = args.into_tp_args();
+            self.dataframe.extend(action_bytes);
+            skips.into_iter().for_each(|skip| {
+                self.metalayout.push(b'#');
+                self.metalayout.extend(skip.to_string().as_bytes());
+            });
+        }
+        pub fn into_query(mut self) -> Vec<u8> {
+            self.metaline
+                .extend(self.dataframe.len().to_string().as_bytes());
+            self.metaline.push(b'!');
+            self.metaline
+                .extend((self.metalayout.len() + 1).to_string().as_bytes());
+            self.metaline.push(b'\n');
+            self.metalayout.push(b'\n');
+            [self.metaline, self.metalayout, self.dataframe].concat()
+        }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_traits() {
+        let arg = ["get", "sayan", "foo", "bar"];
+        let (sizes, resp) = arg.into_tp_args();
+        let resp_should_be = "&4\nget\nsayan\nfoo\nbar\n".as_bytes();
+        let sizes_should_be: Vec<usize> = vec![2, 3, 5, 3, 3];
+        assert_eq!(resp, resp_should_be);
+        assert_eq!(sizes, sizes_should_be);
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_querybuilder() {
+        let mut query = QueryBuilder::new_simple();
+        query.add_action("heya");
+        assert_eq!(
+            "*!8!5\n#2#4\n&1\nheya\n".as_bytes().to_owned(),
+            query.into_query()
+        );
+        let mut query = QueryBuilder::new_simple();
+        let action = ["get", "sayan", "foo", "bar"];
+        query.add_action(&action[..]);
+        assert_eq!(
+            "*!21!11\n#2#3#5#3#3\n&4\nget\nsayan\nfoo\nbar\n"
+                .as_bytes()
+                .to_owned(),
+            query.into_query()
+        )
+    }
 }
 
 #[cfg(test)]

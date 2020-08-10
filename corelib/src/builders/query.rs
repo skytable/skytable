@@ -90,12 +90,3 @@ impl SimpleQuery {
         cmd.into_iter().for_each(|val| self.add(val));
     }
 }
-
-#[test]
-fn test_squery() {
-    let mut q = SimpleQuery::new();
-    q.add("SET");
-    q.add("sayan");
-    q.add("17");
-    println!("{}", String::from_utf8_lossy(&q.prepare_query()));
-}
