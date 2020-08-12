@@ -38,8 +38,20 @@ pub enum ClientResult {
 impl fmt::Display for ClientResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ClientResult::*;
+        use RespCodes::*;
         match self {
-            RespCode(r, _) => r.fmt(f),
+            RespCode(r, _) => match r {
+                Okay => Ok(()),
+                NotFound => writeln!(f, "ERROR: Couldn't find the key"),
+                OverwriteError => writeln!(f, "ERROR: Existing values cannot be overwritten"),
+                InvalidMetaframe => writeln!(f, "ERROR: Invalid metaframe"),
+                ArgumentError => writeln!(f, "ERROR: The command is not in the correct format"),
+                ServerError => writeln!(f, "ERROR: The server had an internal error"),
+                OtherError(e) => match e {
+                    None => writeln!(f, "ERROR: Some unknown error occurred"),
+                    Some(e) => writeln!(f, "ERROR: {}", e),
+                },
+            },
             InvalidResponse(_) => write!(f, "ERROR: The server sent an invalid response"),
             Response(_, _) => unimplemented!(),
             Empty(_) => write!(f, ""),

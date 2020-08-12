@@ -76,26 +76,6 @@ pub enum RespCodes {
     OtherError(Option<String>),
 }
 
-impl fmt::Display for RespCodes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use RespCodes::*;
-        match self {
-            Okay => Ok(()),
-            NotFound => writeln!(f, "ERROR: Couldn't find the key"),
-            OverwriteError => writeln!(f, "ERROR: Existing values cannot be overwritten"),
-            InvalidMetaframe => writeln!(f, "ERROR: Invalid metaframe"),
-            ArgumentError => writeln!(f, "ERROR: The command is not in the correct format"),
-            ServerError => writeln!(f, "ERROR: The server had an internal error"),
-            OtherError(e) => match e {
-                None => writeln!(f, "ERROR: Some unknown error occurred"),
-                Some(e) => writeln!(f, "ERROR: {}", e),
-            },
-        }
-    }
-}
-
-impl Error for RespCodes {}
-
 impl From<RespCodes> for u8 {
     fn from(rcode: RespCodes) -> u8 {
         use RespCodes::*;

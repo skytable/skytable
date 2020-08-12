@@ -140,8 +140,8 @@ mod builders {
             fn into_pre_resp(self) -> PRTuple;
         }
 
-        /// Trait implementors should return a data group in the response packet. It have
-        /// a structure, which has the following general format:
+        /// Trait implementors should return a data group in the response packet.
+        /// It should have a structure, which has the following general format:
         /// ```text
         /// &<n>\n
         /// <symbol>item[0]\n
@@ -165,16 +165,12 @@ mod builders {
             fn into_response(self) -> Vec<u8>;
         }
 
-        impl PreResp for String {
+        impl<T> PreResp for T
+        where
+            T: ToString,
+        {
             fn into_pre_resp(self) -> PRTuple {
-                let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
-                (df_bytes.len() - 1, df_bytes)
-            }
-        }
-
-        impl PreResp for &str {
-            fn into_pre_resp(self) -> PRTuple {
-                let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
+                let df_bytes = [&[b'+'], self.to_string().as_bytes(), &[b'\n']].concat();
                 (df_bytes.len() - 1, df_bytes)
             }
         }
@@ -235,23 +231,17 @@ mod builders {
                 (metalayout, dataframe)
             }
         }
-        // For responses which just have one String
-        impl IntoRespGroup for String {
+        // For responses which just have one value
+        impl<T> IntoRespGroup for T
+        where
+            T: ToString,
+        {
             fn into_resp_group(self) -> RespTuple {
+                let st = self.to_string();
                 let metalayout =
-                    [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
+                    [&[b'#', b'2', b'#'], (st.len() + 1).to_string().as_bytes()].concat();
                 let dataframe =
-                    [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
-                (metalayout, dataframe)
-            }
-        }
-        // For responses which just have one str
-        impl IntoRespGroup for &str {
-            fn into_resp_group(self) -> RespTuple {
-                let metalayout =
-                    [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
-                let dataframe =
-                    [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
+                    [&[b'&', b'1', b'\n'], &[b'+'][..], st.as_bytes(), &[b'\n']].concat();
                 (metalayout, dataframe)
             }
         }
@@ -354,26 +344,13 @@ mod builders {
             }
         }
 
-        // For an entire response which only comprises of a string
-        impl IntoResponse for String {
+        // For an entire response which only comprises of a single value
+        impl<T> IntoResponse for T
+        where
+            T: ToString,
+        {
             fn into_response(self) -> Vec<u8> {
-                let (metalayout, dataframe) = self.into_resp_group();
-                let metaline = [
-                    &[b'*', b'!'],
-                    dataframe.len().to_string().as_bytes(),
-                    &[b'!'],
-                    metalayout.len().to_string().as_bytes(),
-                    &[b'\n'],
-                ]
-                .concat();
-                [metaline, metalayout, dataframe].concat()
-            }
-        }
-
-        // For an entire response which only comprises of a string
-        impl IntoResponse for &str {
-            fn into_response(self) -> Vec<u8> {
-                let (metalayout, dataframe) = self.into_resp_group();
+                let (metalayout, dataframe) = self.to_string().into_resp_group();
                 let metaline = [
                     &[b'*', b'!'],
                     dataframe.len().to_string().as_bytes(),
