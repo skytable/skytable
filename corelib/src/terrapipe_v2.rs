@@ -127,11 +127,12 @@ mod builders {
     pub const DF_BUF: usize = 256;
     mod response {
         use super::{DF_BUF, MLINE_BUF, ML_BUF};
+        use crate::terrapipe::RespCodes;
 
-        /// The bytes for the df, the sizes to skip through
-        type PRTuple = (Vec<u8>, usize);
+        /// The the size to skip through, dataframe bytes
+        type PRTuple = (usize, Vec<u8>);
 
-        /// The bytes for the df, the bytes for the sizes (inclusive of the `#` character)
+        /// The bytes for the sizes (inclusive of the `#` character), the bytes for the df
         type RespTuple = (Vec<u8>, Vec<u8>);
 
         /// This trait will return: ([<symbol>, val.as_bytes(), '\n'], len(1+val.len()))
@@ -167,18 +168,48 @@ mod builders {
         impl PreResp for String {
             fn into_pre_resp(self) -> PRTuple {
                 let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
-                let len = df_bytes.len() - 1;
-                (df_bytes, len)
+                (df_bytes.len() - 1, df_bytes)
             }
         }
 
         impl PreResp for &str {
             fn into_pre_resp(self) -> PRTuple {
                 let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
-                let len = df_bytes.len() - 1;
-                (df_bytes, len)
+                (df_bytes.len() - 1, df_bytes)
             }
         }
+
+        impl PreResp for RespCodes {
+            fn into_pre_resp(self) -> PRTuple {
+                let bytes = match self {
+                    RespCodes::Okay => "!0\n".as_bytes().to_owned(),
+                    RespCodes::NotFound => "!1\n".as_bytes().to_owned(),
+                    RespCodes::OverwriteError => "!2\n".as_bytes().to_owned(),
+                    RespCodes::InvalidMetaframe => "!3\n".as_bytes().to_owned(),
+                    RespCodes::ArgumentError => "!4\n".as_bytes().to_owned(),
+                    RespCodes::ServerError => "!5\n".as_bytes().to_owned(),
+                    RespCodes::OtherError(maybe_err) => {
+                        if let Some(err) = maybe_err {
+                            [&[b'!'], err.as_bytes(), &[b'\n']].concat()
+                        } else {
+                            "!6\n".as_bytes().to_owned()
+                        }
+                    }
+                };
+                (bytes.len() - 1, bytes)
+            }
+        }
+
+        // For responses which just have one response code as a group
+        impl IntoRespGroup for RespCodes {
+            fn into_resp_group(self) -> RespTuple {
+                let (size, data) = self.into_pre_resp();
+                let metalayout_ext = [&[b'#', b'2', b'#'], size.to_string().as_bytes()].concat();
+                let dataframe_ext = [vec![b'&', b'1', b'\n'], data].concat();
+                (metalayout_ext, dataframe_ext)
+            }
+        }
+
         impl IntoRespGroup for RespGroup {
             fn into_resp_group(self) -> RespTuple {
                 // Get the number of items in the data group, convert it into it's UTF-8
@@ -201,7 +232,7 @@ mod builders {
                 ]
                 .concat();
                 let dataframe = [sizeline, self.df_bytes].concat();
-                (dataframe, metalayout)
+                (metalayout, dataframe)
             }
         }
         // For responses which just have one String
@@ -211,7 +242,7 @@ mod builders {
                     [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
                 let dataframe =
                     [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
-                (dataframe, metalayout)
+                (metalayout, dataframe)
             }
         }
         // For responses which just have one str
@@ -221,7 +252,7 @@ mod builders {
                     [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
                 let dataframe =
                     [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
-                (dataframe, metalayout)
+                (metalayout, dataframe)
             }
         }
         #[cfg(test)]
@@ -230,12 +261,12 @@ mod builders {
             let mut dg = RespGroup::new();
             dg.add_item("HEYA");
             dg.add_item(String::from("sayan"));
-            let (df, layout) = dg.into_resp_group();
+            let (layout, df) = dg.into_resp_group();
             assert_eq!("&2\n+HEYA\n+sayan\n".as_bytes().to_vec(), df);
             assert_eq!("#2#5#6".as_bytes().to_vec(), layout);
             let one_string_response = "OKAY".into_resp_group();
-            assert_eq!("&1\n+OKAY\n".as_bytes().to_owned(), one_string_response.0);
-            assert_eq!("#2#5".as_bytes().to_owned(), one_string_response.1);
+            assert_eq!("&1\n+OKAY\n".as_bytes().to_owned(), one_string_response.1);
+            assert_eq!("#2#5".as_bytes().to_owned(), one_string_response.0);
         }
 
         /// A response group which is a data group in a dataframe
@@ -256,7 +287,7 @@ mod builders {
             }
             /// Add an item to the `RespGroup`
             pub fn add_item<T: PreResp>(&mut self, item: T) {
-                let (append_bytes, size) = item.into_pre_resp();
+                let (size, append_bytes) = item.into_pre_resp();
                 self.df_bytes.extend(append_bytes);
                 self.sizes.push(size);
             }
@@ -291,7 +322,7 @@ mod builders {
                 }
             }
             pub fn add_group<T: IntoRespGroup>(&mut self, group: T) {
-                let (dataframe_ext, metalayout_ext) = group.into_resp_group();
+                let (metalayout_ext, dataframe_ext) = group.into_resp_group();
                 self.dataframe.extend(dataframe_ext);
                 self.metalayout.extend(metalayout_ext);
             }
@@ -323,16 +354,63 @@ mod builders {
             }
         }
 
+        // For an entire response which only comprises of a string
+        impl IntoResponse for String {
+            fn into_response(self) -> Vec<u8> {
+                let (metalayout, dataframe) = self.into_resp_group();
+                let metaline = [
+                    &[b'*', b'!'],
+                    dataframe.len().to_string().as_bytes(),
+                    &[b'!'],
+                    metalayout.len().to_string().as_bytes(),
+                    &[b'\n'],
+                ]
+                .concat();
+                [metaline, metalayout, dataframe].concat()
+            }
+        }
+
+        // For an entire response which only comprises of a string
+        impl IntoResponse for &str {
+            fn into_response(self) -> Vec<u8> {
+                let (metalayout, dataframe) = self.into_resp_group();
+                let metaline = [
+                    &[b'*', b'!'],
+                    dataframe.len().to_string().as_bytes(),
+                    &[b'!'],
+                    metalayout.len().to_string().as_bytes(),
+                    &[b'\n'],
+                ]
+                .concat();
+                [metaline, metalayout, dataframe].concat()
+            }
+        }
+
         #[cfg(test)]
         #[test]
         fn test_datagroup() {
             let mut datagroup = RespGroup::new();
             datagroup.add_item("HEY!");
             datagroup.add_item("four");
+            datagroup.add_item(RespCodes::Okay);
             let mut builder = ResponseBuilder::new_simple();
             builder.add_group(datagroup);
             assert_eq!(
-                "*!15!7\n#2#5#5\n&2\n+HEY!\n+four\n".as_bytes().to_owned(),
+                "*!18!9\n#2#5#5#2\n&3\n+HEY!\n+four\n!0\n"
+                    .as_bytes()
+                    .to_owned(),
+                builder.into_response()
+            );
+            let mut builder = ResponseBuilder::new_simple();
+            builder.add_group(RespCodes::Okay);
+            assert_eq!(
+                "*!6!5\n#2#2\n&1\n!0\n".as_bytes().to_owned(),
+                builder.into_response()
+            );
+            let mut builder = ResponseBuilder::new_simple();
+            builder.add_group("four");
+            assert_eq!(
+                "*!9!5\n#2#5\n&1\n+four\n".as_bytes().to_owned(),
                 builder.into_response()
             );
         }
