@@ -122,257 +122,220 @@ pub fn parse_df(buf: Vec<u8>, sizes: Vec<usize>, nc: usize) -> Option<Vec<Action
 }
 
 mod builders {
-    use crate::terrapipe::*;
-    pub trait IntoTpArgs {
-        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>);
-    }
-    // A simple action like `HEYA`
-    impl IntoTpArgs for String {
-        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
-            let mut sizeline = vec![b'&'];
-            let mut sizes = Vec::with_capacity(2);
-            sizeline.push(b'1');
-            sizes.push(sizeline.len());
-            sizeline.push(b'\n');
-            let mut bts = self.as_bytes().to_owned();
-            sizes.push(bts.len());
-            bts.push(b'\n');
-            let qbytes = [sizeline, bts].concat();
-            (sizes, qbytes)
+    pub const MLINE_BUF: usize = 46;
+    pub const ML_BUF: usize = 64;
+    pub const DF_BUF: usize = 256;
+    mod response {
+        use super::{DF_BUF, MLINE_BUF, ML_BUF};
+
+        /// The bytes for the df, the sizes to skip through
+        type PRTuple = (Vec<u8>, usize);
+
+        /// The bytes for the df, the bytes for the sizes (inclusive of the `#` character)
+        type RespTuple = (Vec<u8>, Vec<u8>);
+
+        /// This trait will return: ([<symbol>, val.as_bytes(), '\n'], len(1+val.len()))
+        pub trait PreResp {
+            fn into_pre_resp(self) -> PRTuple;
         }
-    }
 
-    impl IntoTpArgs for &str {
-        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
-            let mut sizeline = vec![b'&'];
-            let mut sizes = Vec::with_capacity(2);
-            sizeline.push(b'1');
-            sizes.push(sizeline.len());
-            sizeline.push(b'\n');
-            let mut bts = self.as_bytes().to_owned();
-            sizes.push(bts.len());
-            bts.push(b'\n');
-            let qbytes = [sizeline, bts].concat();
-            (sizes, qbytes)
+        /// Trait implementors should return a data group in the response packet. It have
+        /// a structure, which has the following general format:
+        /// ```text
+        /// &<n>\n
+        /// <symbol>item[0]\n
+        /// <symbol>item[1]\n
+        /// ...
+        /// <symbol>item[n-1]\n
+        /// <symbol>item[n]\n
+        /// ```
+        pub trait IntoRespGroup {
+            fn into_resp_group(self) -> RespTuple;
         }
-    }
 
-    // Actions like ["GET", "foo", "bar", "sayan"]
-    impl IntoTpArgs for &[&str] {
-        fn into_tp_args(self) -> (Vec<usize>, Vec<u8>) {
-            let mut sizes = Vec::with_capacity(self.len());
-            let mut sizeline = vec![b'&'];
-            sizeline.extend(self.len().to_string().as_bytes());
-            sizes.push(sizeline.len());
-            sizeline.push(b'\n');
-            let arg_bytes = [
-                sizeline,
-                self.into_iter()
-                    .map(|arg| {
-                        let mut x = arg.as_bytes().to_owned();
-                        sizes.push(x.len());
-                        x.push(b'\n');
-                        x
-                    })
-                    .flatten()
-                    .collect::<Vec<u8>>(),
-            ]
-            .concat();
-            (sizes, arg_bytes)
+        /// Trait implementors must return a **complete** response packet  
+        /// A complete response packet looks like:
+        /// ```text
+        /// <* or $>!<CONTENT_LENGTH>!<METALAYOUT_LENGTH>\n
+        /// #a#b#c#d ...\n
+        /// < --- data --- >
+        /// ```
+        pub trait IntoResponse {
+            fn into_response(self) -> Vec<u8>;
         }
-    }
 
-    pub enum QueryBuilder {
-        Simple(SQuery),
-        // TODO(@ohsayan): Implement pipelined queries
-    }
-
-    impl QueryBuilder {
-        pub fn new_simple() -> SQuery {
-            SQuery::new()
-        }
-    }
-
-    #[derive(Debug, PartialEq)]
-    pub struct SQuery {
-        metaline: Vec<u8>,
-        metalayout: Vec<u8>,
-        dataframe: Vec<u8>,
-    }
-
-    impl SQuery {
-        pub fn new() -> Self {
-            let mut metaline = Vec::with_capacity(DEF_QMETALINE_BUFSIZE);
-            metaline.push(b'*');
-            metaline.push(b'!');
-            SQuery {
-                metaline,
-                metalayout: Vec::with_capacity(128),
-                dataframe: Vec::with_capacity(512),
+        impl PreResp for String {
+            fn into_pre_resp(self) -> PRTuple {
+                let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
+                let len = df_bytes.len() - 1;
+                (df_bytes, len)
             }
         }
-        pub fn add_action(&mut self, args: impl IntoTpArgs) {
-            let (skips, action_bytes) = args.into_tp_args();
-            self.dataframe.extend(action_bytes);
-            skips.into_iter().for_each(|skip| {
-                self.metalayout.push(b'#');
-                self.metalayout.extend(skip.to_string().as_bytes());
-            });
+
+        impl PreResp for &str {
+            fn into_pre_resp(self) -> PRTuple {
+                let df_bytes = [&[b'+'], self.as_bytes(), &[b'\n']].concat();
+                let len = df_bytes.len() - 1;
+                (df_bytes, len)
+            }
         }
-        pub fn into_query(mut self) -> Vec<u8> {
-            self.metaline
-                .extend(self.dataframe.len().to_string().as_bytes());
-            self.metaline.push(b'!');
-            self.metaline
-                .extend((self.metalayout.len() + 1).to_string().as_bytes());
-            self.metaline.push(b'\n');
-            self.metalayout.push(b'\n');
-            [self.metaline, self.metalayout, self.dataframe].concat()
+        impl IntoRespGroup for RespGroup {
+            fn into_resp_group(self) -> RespTuple {
+                // Get the number of items in the data group, convert it into it's UTF-8
+                // equivalent.
+                let sizeline =
+                    [&[b'&'], self.sizes.len().to_string().as_bytes(), &[b'\n']].concat();
+                // Now we have the &<n>\n line
+                // All we need to know is: add this line to the data bytes
+                // also we need to add the len of the sizeline - 1 to the sizes
+                let sizes: Vec<u8> = self
+                    .sizes
+                    .into_iter()
+                    .map(|size| [&[b'#'], size.to_string().as_bytes()].concat())
+                    .flatten()
+                    .collect();
+                let metalayout = [
+                    vec![b'#'],
+                    (sizeline.len() - 1).to_string().as_bytes().to_vec(),
+                    sizes,
+                ]
+                .concat();
+                let dataframe = [sizeline, self.df_bytes].concat();
+                (dataframe, metalayout)
+            }
         }
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn test_traits() {
-        let arg = ["get", "sayan", "foo", "bar"];
-        let (sizes, resp) = arg.into_tp_args();
-        let resp_should_be = "&4\nget\nsayan\nfoo\nbar\n".as_bytes();
-        let sizes_should_be: Vec<usize> = vec![2, 3, 5, 3, 3];
-        assert_eq!(resp, resp_should_be);
-        assert_eq!(sizes, sizes_should_be);
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn test_querybuilder() {
-        let mut query = QueryBuilder::new_simple();
-        query.add_action("heya");
-        assert_eq!(
-            "*!8!5\n#2#4\n&1\nheya\n".as_bytes().to_owned(),
-            query.into_query()
-        );
-        let mut query = QueryBuilder::new_simple();
-        let action = ["get", "sayan", "foo", "bar"];
-        query.add_action(&action[..]);
-        assert_eq!(
-            "*!21!11\n#2#3#5#3#3\n&4\nget\nsayan\nfoo\nbar\n"
-                .as_bytes()
-                .to_owned(),
-            query.into_query()
-        )
-    }
-
-    pub trait IntoTpResponse {
-        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>);
-    }
-
-    impl IntoTpResponse for String {
-        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
-            let mut sizes = Vec::with_capacity(2);
-            let mut bts = Vec::with_capacity(self.len() + 1);
-            bts.push(b'+');
-            bts.extend(self.as_bytes().to_owned());
-            sizes.push(bts.len());
-            bts.push(b'\n');
-            (sizes, bts)
+        // For responses which just have one String
+        impl IntoRespGroup for String {
+            fn into_resp_group(self) -> RespTuple {
+                let metalayout =
+                    [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
+                let dataframe =
+                    [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
+                (dataframe, metalayout)
+            }
         }
-    }
-
-    impl IntoTpResponse for &str {
-        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
-            let mut sizes = Vec::with_capacity(2);
-            let mut bts = Vec::with_capacity(self.len() + 1);
-            bts.push(b'+');
-            bts.extend(self.as_bytes().to_owned());
-            sizes.push(bts.len());
-            bts.push(b'\n');
-            (sizes, bts)
+        // For responses which just have one str
+        impl IntoRespGroup for &str {
+            fn into_resp_group(self) -> RespTuple {
+                let metalayout =
+                    [&[b'#', b'2', b'#'], (self.len() + 1).to_string().as_bytes()].concat();
+                let dataframe =
+                    [&[b'&', b'1', b'\n'], &[b'+'][..], self.as_bytes(), &[b'\n']].concat();
+                (dataframe, metalayout)
+            }
         }
-    }
+        #[cfg(test)]
+        #[test]
+        fn test_data_group_resp_trait_impl() {
+            let mut dg = RespGroup::new();
+            dg.add_item("HEYA");
+            dg.add_item(String::from("sayan"));
+            let (df, layout) = dg.into_resp_group();
+            assert_eq!("&2\n+HEYA\n+sayan\n".as_bytes().to_vec(), df);
+            assert_eq!("#2#5#6".as_bytes().to_vec(), layout);
+            let one_string_response = "OKAY".into_resp_group();
+            assert_eq!("&1\n+OKAY\n".as_bytes().to_owned(), one_string_response.0);
+            assert_eq!("#2#5".as_bytes().to_owned(), one_string_response.1);
+        }
 
-    impl IntoTpResponse for RespCodes {
-        fn into_tp_response(&self) -> (Vec<usize>, Vec<u8>) {
-            use RespCodes::*;
-            match self {
-                Okay => (vec![3], vec![b'!', b'0']),
-                NotFound => (vec![3], vec![b'!', b'1']),
-                OverwriteError => (vec![3], vec![b'!', b'2']),
-                InvalidMetaframe => (vec![3], vec![b'!', b'3']),
-                ArgumentError => (vec![3], vec![b'!', b'4']),
-                ServerError => (vec![3], vec![b'!', b'5']),
-                OtherError(e) => {
-                    if let Some(e) = e {
-                        let mut respline = e.as_bytes().to_owned();
-                        respline.push(b'\n');
-                        // One for the ! character and one for the LF
-                        let resplen = respline.len() + 2;
-                        (vec![resplen], [vec![b'!'], respline].concat())
-                    } else {
-                        (vec![3], vec![b'!', b'6'])
-                    }
+        /// A response group which is a data group in a dataframe
+        pub struct RespGroup {
+            /// The skips sequence as `usize`s (i.e `#1#2#3...`)
+            sizes: Vec<usize>,
+            /// The bytes which can be appended to an existing dataframe
+            df_bytes: Vec<u8>,
+        }
+
+        impl RespGroup {
+            /// Create a new `RespGroup`
+            pub fn new() -> Self {
+                RespGroup {
+                    sizes: Vec::with_capacity(ML_BUF),
+                    df_bytes: Vec::with_capacity(DF_BUF),
                 }
             }
-        }
-    }
-
-    pub enum ResponseBuilder {
-        Simple(SResp),
-        // TODO(@ohsayan): Add pipelined responses here
-    }
-
-    impl ResponseBuilder {
-        pub fn new_simple() -> SResp {
-            SResp::new()
-        }
-    }
-
-    #[derive(Debug, PartialEq)]
-    pub struct SResp {
-        metaline: Vec<u8>,
-        metalayout: Vec<u8>,
-        dataframe: Vec<u8>,
-    }
-
-    impl SResp {
-        pub fn new() -> Self {
-            let mut metaline = Vec::with_capacity(DEF_QMETALINE_BUFSIZE);
-            metaline.push(b'*');
-            metaline.push(b'!');
-            SResp {
-                metaline,
-                metalayout: Vec::with_capacity(128),
-                dataframe: Vec::with_capacity(1024),
+            /// Add an item to the `RespGroup`
+            pub fn add_item<T: PreResp>(&mut self, item: T) {
+                let (append_bytes, size) = item.into_pre_resp();
+                self.df_bytes.extend(append_bytes);
+                self.sizes.push(size);
             }
         }
-        pub fn add_group(&mut self, args: impl IntoTpResponse) {
-            let (skips, action_bytes) = args.into_tp_response();
-            self.dataframe.extend(action_bytes);
-            skips.into_iter().for_each(|skip| {
-                self.metalayout.push(b'#');
-                self.metalayout.extend(skip.to_string().as_bytes());
-            });
-        }
-        pub fn into_response(mut self) -> Vec<u8> {
-            self.metaline
-                .extend(self.dataframe.len().to_string().as_bytes());
-            self.metaline.push(b'!');
-            self.metaline
-                .extend((self.metalayout.len() + 1).to_string().as_bytes());
-            self.metaline.push(b'\n');
-            self.metalayout.push(b'\n');
-            [self.metaline, self.metalayout, self.dataframe].concat()
-        }
-    }
 
-    #[cfg(test)]
-    #[test]
-    fn test_sresp() {
-        let mut builder = ResponseBuilder::new_simple();
-        builder.add_group("HEY!".to_owned());
-        println!("{}", String::from_utf8_lossy(&builder.into_response()));
-        let mut builder = ResponseBuilder::new_simple();
-        builder.add_group(RespCodes::Okay);
-        println!("{}", String::from_utf8_lossy(&builder.into_response()));
+        pub enum ResponseBuilder {
+            Simple(SResp),
+            // TODO(@ohsayan): Add pipelined response builder
+        }
+
+        impl ResponseBuilder {
+            pub fn new_simple() -> SResp {
+                SResp::new()
+            }
+        }
+
+        pub struct SResp {
+            metaline: Vec<u8>,
+            metalayout: Vec<u8>,
+            dataframe: Vec<u8>,
+        }
+
+        impl SResp {
+            pub fn new() -> Self {
+                let mut metaline = Vec::with_capacity(MLINE_BUF);
+                metaline.push(b'*');
+                metaline.push(b'!');
+                SResp {
+                    metaline,
+                    metalayout: Vec::with_capacity(ML_BUF),
+                    dataframe: Vec::with_capacity(DF_BUF),
+                }
+            }
+            pub fn add_group<T: IntoRespGroup>(&mut self, group: T) {
+                let (dataframe_ext, metalayout_ext) = group.into_resp_group();
+                self.dataframe.extend(dataframe_ext);
+                self.metalayout.extend(metalayout_ext);
+            }
+        }
+
+        impl IntoResponse for SResp {
+            fn into_response(self) -> Vec<u8> {
+                /* UNSAFE(@ohsayan): We know what we're doing here: We convert an immutable reference
+                to an `SRESP` to avoid `concat`ing over and over again
+                 */
+                unsafe {
+                    // Convert the immutable references to mutable references
+                    // because we don't want to use concat()
+                    let self_ptr = &self as *const _;
+                    let self_mut = self_ptr as *mut SResp;
+                    // We need to add a newline to the metalayout
+                    (*self_mut).metalayout.push(b'\n');
+                    // Now add the content length + ! + metalayout length + '\n'
+                    (*self_mut)
+                        .metaline
+                        .extend(self.dataframe.len().to_string().as_bytes());
+                    (*self_mut).metaline.push(b'!');
+                    (*self_mut)
+                        .metaline
+                        .extend((*self_mut).metalayout.len().to_string().as_bytes());
+                    (*self_mut).metaline.push(b'\n');
+                } // The raw pointers are dropped here
+                [self.metaline, self.metalayout, self.dataframe].concat()
+            }
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_datagroup() {
+            let mut datagroup = RespGroup::new();
+            datagroup.add_item("HEY!");
+            datagroup.add_item("four");
+            let mut builder = ResponseBuilder::new_simple();
+            builder.add_group(datagroup);
+            assert_eq!(
+                "*!15!7\n#2#5#5\n&2\n+HEY!\n+four\n".as_bytes().to_owned(),
+                builder.into_response()
+            );
+        }
     }
 }
 
