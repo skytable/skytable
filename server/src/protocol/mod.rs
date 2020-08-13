@@ -21,8 +21,8 @@
 
 mod deserializer;
 use bytes::{Buf, BytesMut};
+use corelib::builders::response::IntoResponse;
 use corelib::de::*;
-use corelib::terrapipe::RespBytes;
 use corelib::TResult;
 pub use deserializer::{
     Query,

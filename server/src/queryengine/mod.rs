@@ -23,7 +23,8 @@
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
-use corelib::terrapipe::{RespBytes, RespCodes};
+use corelib::de::Action;
+use corelib::terrapipe::RespCodes;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
@@ -42,8 +43,8 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
-    let mut buf = buf.into_iter();
+pub fn execute_simple(db: &CoreDB, mut buf: Vec<Action>) -> Vec<u8> {
+    let mut buf = (*buf[0].0).into_iter();
     while let Some(token) = buf.next() {
         match token.to_uppercase().as_str() {
             tags::TAG_GET => {
@@ -54,9 +55,9 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                             Ok(v) => v,
                             Err(e) => return e.into_response(),
                         };
-                        let mut resp = SResp::new(RespCodes::Okay.into());
-                        resp.add(res.to_vec());
-                        return cat(resp.prepare_response());
+                        let mut resp = SResp::new();
+                        resp.add_group(BytesWrapper(res));
+                        return resp.into_response();
                     }
                 }
             }
@@ -110,7 +111,6 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                             }
                             Err(e) => return e.into_response(),
                         }
-                    } else {
                     }
                 }
             }
@@ -119,18 +119,16 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<String>) -> Vec<u8> {
                 if let Some(key) = buf.next() {
                     if buf.next().is_none() {
                         let ex = db.exists(&key) as u8;
-                        let mut resp = SResp::new(RespCodes::Okay.into());
-                        resp.add(ex.to_string());
-                        return cat(resp.prepare_response());
+                        let mut resp = SResp::new();
+                        resp.add_group(ex);
+                        return resp.into_response();
                     }
                 }
             }
             tags::TAG_HEYA => {
                 // This is a `HEYA` query
                 if buf.next().is_none() {
-                    let mut resp = SResp::new(RespCodes::Okay.into());
-                    resp.add("HEY!");
-                    return cat(resp.prepare_response());
+                    return "HEY!".into_response();
                 }
             }
             _ => return RespCodes::OtherError(Some("Unknown command".to_owned())).into_response(),

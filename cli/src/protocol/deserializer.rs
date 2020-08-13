@@ -30,7 +30,7 @@ use std::fmt;
 pub enum ClientResult {
     RespCode(RespCodes, usize),
     InvalidResponse(usize),
-    Response(Vec<String>, usize),
+    Response(Vec<Action>, usize),
     Empty(usize),
     Incomplete(usize),
 }
@@ -133,18 +133,20 @@ impl Response {
             }
             if let Some(layout) = Metalayout::from_navigator(&mut nav, metaline.metalayout_size) {
                 if let Some(content) = nav.get_exact(metaline.content_size) {
-                    let data = extract_idents(content, layout.0);
-                    if is_other_error {
-                        if data.len() == 1 {
-                            return ClientResult::RespCode(
-                                RespCodes::OtherError(Some(unsafe {
-                                    data.get_unchecked(0).clone()
-                                })),
-                                nav.get_pos_usize(),
-                            );
+                    let data = parse_df(content, layout.0, 1);
+                    if let Some(data) = data {
+                        if is_other_error {
+                            if data.len() == 1 {
+                                return ClientResult::RespCode(
+                                    RespCodes::OtherError(Some(unsafe {
+                                        data.get_unchecked(0)[0].clone()
+                                    })),
+                                    nav.get_pos_usize(),
+                                );
+                            }
                         }
+                        return ClientResult::Response(data, nav.get_pos_usize());
                     }
-                    return ClientResult::Response(data, nav.get_pos_usize());
                 }
             }
         }

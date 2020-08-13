@@ -20,11 +20,13 @@
 */
 
 //! # `de`
-//! The `de` module provides primitive for deserialization primitives for parsing
+//! The `de` module provides primitives for deserialization primitives for parsing
 //! query and response packets
 
 use bytes::BytesMut;
+use std::fmt;
 use std::io::Cursor;
+use std::ops::Deref;
 
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
@@ -175,31 +177,139 @@ pub fn extract_sizes_splitoff(buf: &[u8], splitoff: u8, sizehint: usize) -> Opti
     }
     Some(sizes)
 }
-/// Extract the tokens from the slice using the `skip_sequence`
-pub fn extract_idents(buf: &[u8], skip_sequence: Vec<usize>) -> Vec<String> {
-    skip_sequence
-        .into_iter()
-        .scan(buf.into_iter(), |databuf, size| {
-            let tok: Vec<u8> = databuf.take(size).map(|val| *val).collect();
-            let _ = databuf.next();
-            // FIXME(@ohsayan): This is quite slow, we'll have to use SIMD in the future
-            Some(String::from_utf8_lossy(&tok).to_string())
-        })
-        .collect()
+
+#[derive(Debug, PartialEq)]
+pub struct Action(pub Vec<String>);
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.len() == 0 {
+            return write!(f, "[]");
+        }
+        let mut it = self.0.iter().peekable();
+        write!(f, "[ ");
+        while let Some(token) = it.next() {
+            if it.peek().is_some() {
+                write!(f, "{}", token)?;
+                write!(f, ", ")?;
+            } else {
+                write!(f, "{}", token)?;
+                write!(f, "]")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Action {
+    pub fn new(v: Vec<String>) -> Self {
+        Action(v)
+    }
+    pub fn finish_into_vector(self) -> Vec<String> {
+        self.0
+    }
+}
+
+impl Deref for Action {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub fn parse_df(buf: &[u8], sizes: Vec<usize>, nc: usize) -> Option<Vec<Action>> {
+    let (mut i, mut pos) = (0, 0);
+    if buf.len() < 1 || sizes.len() < 1 {
+        // Having fun, eh? Why're you giving empty dataframes?
+        return None;
+    }
+    let mut tokens = Vec::with_capacity(nc);
+    while i < sizes.len() && pos < buf.len() {
+        // Allocate everything first
+        unsafe {
+            let cursize = sizes.get_unchecked(0);
+            i += 1; // We've just read a line push it ahead
+                    // Get the current line-> pos..pos+cursize+1
+            let curline = match buf.get(pos..pos + cursize + 1) {
+                Some(line) => line,
+                None => return None,
+            };
+            // We've read `cursize` number of elements, so skip them
+            // Also skip the newline
+            pos += cursize + 1;
+            if *curline.get_unchecked(0) == b'&' {
+                // A valid action array
+                let mut cursize = 0usize; // The number of elements in this action array
+                let mut k = 1; // Skip the '&' character in `curline`
+                while k < (curline.len() - 1) {
+                    let cur_dig: usize = match curline.get_unchecked(k).checked_sub(48) {
+                        Some(dig) => {
+                            if dig > 9 {
+                                // For the UTF8 character to be a number (0-9)
+                                // `dig` must be lesser than 9, since `48` is the UTF8
+                                // code for 0
+                                return None;
+                            } else {
+                                dig.into()
+                            }
+                        }
+                        None => return None,
+                    };
+                    cursize = (cursize * 10) + cur_dig;
+                    k += 1;
+                }
+                let mut toks: Vec<String> = sizes
+                    .iter()
+                    .take(cursize)
+                    .map(|sz| String::with_capacity(*sz))
+                    .collect();
+                let mut l = 0;
+                // We now know the array size, so let's parse it!
+                // Get all the sizes of the array elements
+                let arr_elem_sizes = match sizes.get(i..(i + cursize)) {
+                    Some(sizes) => sizes,
+                    None => return None,
+                };
+                i += cursize; // We've already read `cursize` items from the `sizes` array
+                arr_elem_sizes
+                    .into_iter()
+                    .zip(toks.iter_mut())
+                    .for_each(|(size, empty_buf)| {
+                        let extracted = match buf.get(pos..pos + size) {
+                            Some(ex) => ex,
+                            None => return (),
+                        };
+                        pos += size + 1; // Advance `pos` by `sz` and `1` for the newline
+                        l += 1; // Move ahead
+                        *empty_buf = String::from_utf8_lossy(extracted).to_string();
+                    });
+                if toks.len() != cursize {
+                    return None;
+                }
+                // We're done with parsing the entire array, return it
+                tokens.push(Action(toks));
+            } else {
+                i += 1;
+                continue;
+            }
+        }
+    }
+    Some(tokens)
 }
 
 #[cfg(test)]
 #[test]
-fn test_extract_idents() {
-    let testbuf = "set\nsayan\n17\n".as_bytes().to_vec();
-    let skip_sequence: Vec<usize> = vec![3, 5, 2];
-    let res = extract_idents(&testbuf, skip_sequence);
+fn test_df() {
+    let ss: Vec<usize> = vec![2, 3, 5, 6, 6];
+    let df = "&4\nGET\nsayan\nfoobar\nopnsrc\n".as_bytes().to_owned();
+    let parsed = parse_df(&df, ss, 1).unwrap();
     assert_eq!(
-        vec!["set".to_owned(), "sayan".to_owned(), "17".to_owned()],
-        res
+        parsed,
+        vec![Action(vec![
+            "GET".to_owned(),
+            "sayan".to_owned(),
+            "foobar".to_owned(),
+            "opnsrc".to_owned()
+        ])]
     );
-    let badbuf = vec![0, 0, 159, 146, 150];
-    let skip_sequence: Vec<usize> = vec![1, 2];
-    let res = extract_idents(&badbuf, skip_sequence);
-    assert_eq!(res[1], "��");
 }

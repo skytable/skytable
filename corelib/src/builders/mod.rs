@@ -25,3 +25,7 @@
 
 pub mod query;
 pub mod response;
+
+pub const MLINE_BUF: usize = 46;
+pub const ML_BUF: usize = 64;
+pub const DF_BUF: usize = 256;

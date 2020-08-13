@@ -24,7 +24,7 @@
 //! the response times may be shown to be slower than they actually are
 
 mod benchtool {
-    use corelib::builders::query::QueryBuilder;
+    use corelib::builders::query::*;
     use devtimer::DevTime;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
@@ -153,27 +153,33 @@ mod benchtool {
             .collect();
         let set_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| {
-                let mut q = QueryBuilder::new_simple();
-                q.add("SET");
-                q.add(keys[idx].clone());
-                q.add(values[idx].clone());
-                q.prepare_query()
+                let mut g = QueryGroup::new();
+                g.add_item("SET");
+                g.add_item(&keys[idx]);
+                g.add_item(&values[idx]);
+                let mut q = SQuery::new();
+                q.add_group(g);
+                q.into_query()
             })
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| {
-                let mut q = QueryBuilder::new_simple();
-                q.add("GET");
-                q.add(keys[idx].clone());
-                q.prepare_query()
+                let mut g = QueryGroup::new();
+                g.add_item("GET");
+                g.add_item(&keys[idx]);
+                let mut q = SQuery::new();
+                q.add_group(g);
+                q.into_query()
             })
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| {
-                let mut q = QueryBuilder::new_simple();
-                q.add("DEL");
-                q.add(keys[idx].clone());
-                q.prepare_query()
+                let mut g = QueryGroup::new();
+                g.add_item("DEL");
+                g.add_item(&keys[idx]);
+                let mut q = SQuery::new();
+                q.add_group(g);
+                q.into_query()
             })
             .collect();
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());

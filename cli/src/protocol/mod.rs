@@ -43,7 +43,7 @@ impl Connection {
     pub async fn run_query(&mut self, query: String) {
         let mut qbuilder = QueryBuilder::new_simple();
         qbuilder.from_cmd(query);
-        match self.stream.write_all(&qbuilder.prepare_query()).await {
+        match self.stream.write_all(&qbuilder.into_query()).await {
             Ok(_) => (),
             Err(_) => {
                 eprintln!("ERROR: Couldn't write data to socket");
@@ -72,8 +72,8 @@ impl Connection {
                     if r.len() == 0 {
                         return;
                     }
-                    for tok in r {
-                        println!("{}", tok);
+                    for group in r {
+                        println!("{}", group);
                     }
                     return;
                 }

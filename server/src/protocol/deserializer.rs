@@ -112,7 +112,7 @@ impl Metalayout {
 #[derive(Debug, PartialEq)]
 pub struct Query {
     /// A stream of tokens parsed from the dataframe
-    pub data: Vec<String>,
+    pub data: Vec<Action>,
     /// The type of query - `Simple` or `Pipeline`
     pub actiontype: ActionType,
 }
@@ -128,16 +128,19 @@ impl Query {
             if let Some(metalayout) = Metalayout::from_navigator(&mut nav, metaline.metalayout_size)
             {
                 if let Some(content) = nav.get_exact(metaline.content_size) {
-                    let data = extract_idents(content, metalayout.0);
-                    // Return the parsed query and the amount by which the buffer
-                    // must `advance`
-                    return QueryParseResult::Parsed((
-                        Query {
-                            data,
-                            actiontype: metaline.actiontype,
-                        },
-                        nav.get_pos_usize(),
-                    ));
+                    // TODO(@ohsayan): Add nc for pipelined commands here
+                    let data = parse_df(content, metalayout.0, 1);
+                    if let Some(df) = data {
+                        // Return the parsed query and the amount by which the buffer
+                        // must `advance`
+                        return QueryParseResult::Parsed((
+                            Query {
+                                data: df,
+                                actiontype: metaline.actiontype,
+                            },
+                            nav.get_pos_usize(),
+                        ));
+                    }
                 } else {
                     // Since we couldn't get the slice, this means that the
                     // query packet was incomplete, return that error
@@ -156,17 +159,19 @@ impl Query {
 fn test_query() {
     use bytes::{Buf, BytesMut};
     let mut mybuf = BytesMut::from("*!14!7\n#3#5#3\nSET\nsayan\n123\n".as_bytes());
-    let resulting_data_should_be: Vec<String> = "SET sayan 123"
-        .split_whitespace()
-        .map(|val| val.to_string())
-        .collect();
+    let resulting_data_should_be: Action = Action::new(
+        "SET sayan 123"
+            .split_whitespace()
+            .map(|val| val.to_string())
+            .collect(),
+    );
     let nav = Navigator::new(&mut mybuf);
     let query = Query::from_navigator(nav);
     if let QueryParseResult::Parsed((query, forward)) = query {
         assert_eq!(
             query,
             Query {
-                data: resulting_data_should_be,
+                data: vec![resulting_data_should_be],
                 actiontype: ActionType::Simple,
             }
         );

@@ -28,6 +28,3 @@ pub mod terrapipe;
 use std::error::Error;
 /// A generic result
 pub type TResult<T> = Result<T, Box<dyn Error>>;
-
-#[cfg(feature = "terrapipev2")]
-pub mod terrapipe_v2;

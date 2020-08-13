@@ -36,24 +36,6 @@ pub const DEF_QMETALINE_BUFSIZE: usize = 44;
 pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
 /// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
-pub mod responses {
-    //! Empty responses, mostly errors, which are statically compiled
-    use lazy_static::lazy_static;
-    lazy_static! {
-        /// Empty `0`(Okay) response - without any content
-        pub static ref RESP_OKAY_EMPTY: Vec<u8> = "*!0!0!0\n".as_bytes().to_owned();
-        /// `1` Not found response
-        pub static ref RESP_NOT_FOUND: Vec<u8> = "*!1!0!0\n".as_bytes().to_owned();
-        /// `2` Overwrite Error response
-        pub static ref RESP_OVERWRITE_ERROR: Vec<u8> = "*!2!0!0\n".as_bytes().to_owned();
-        /// `3` Invalid Metaframe response
-        pub static ref RESP_INVALID_MF: Vec<u8> = "*!3!0!0\n".as_bytes().to_owned();
-        /// `4` ArgumentError frame response
-        pub static ref RESP_ARG_ERROR: Vec<u8> = "*!4!0!0\n".as_bytes().to_owned();
-        /// `5` Internal server error response
-        pub static ref RESP_SERVER_ERROR: Vec<u8> = "*!5!0!0\n".as_bytes().to_owned();
-    }
-}
 
 /// Response codes returned by the server
 #[derive(Debug, PartialEq)]
@@ -155,43 +137,4 @@ impl RespCodes {
 pub enum ActionType {
     Simple,
     Pipeline,
-}
-
-/// Anything that implements this trait can be written to a `TCPStream`, i.e it can
-/// be used to return a response
-pub trait RespBytes {
-    fn into_response(&self) -> Vec<u8>;
-}
-
-impl RespBytes for RespCodes {
-    fn into_response(&self) -> Vec<u8> {
-        use responses::*;
-        use RespCodes::*;
-        match self {
-            Okay => RESP_OKAY_EMPTY.to_owned(),
-            NotFound => RESP_NOT_FOUND.to_owned(),
-            OverwriteError => RESP_OVERWRITE_ERROR.to_owned(),
-            InvalidMetaframe => RESP_INVALID_MF.to_owned(),
-            ArgumentError => RESP_ARG_ERROR.to_owned(),
-            ServerError => RESP_SERVER_ERROR.to_owned(),
-            OtherError(e) => match e {
-                Some(e) => {
-                    // The dataframe len includes the LF character
-                    let dataframe_len = e.len() + 1;
-                    // The metalayout len includes a LF and '#' character
-                    let metalayout_len = e.len().to_string().len() + 2;
-                    format!(
-                        "*!6!{}!{}\n#{}\n{}\n",
-                        dataframe_len,
-                        metalayout_len,
-                        e.len(),
-                        e
-                    )
-                    .as_bytes()
-                    .to_owned()
-                }
-                None => format!("*!6!0!0\n").as_bytes().to_owned(),
-            },
-        }
-    }
 }
