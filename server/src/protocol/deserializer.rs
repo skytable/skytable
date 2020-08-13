@@ -158,7 +158,7 @@ impl Query {
 #[test]
 fn test_query() {
     use bytes::{Buf, BytesMut};
-    let mut mybuf = BytesMut::from("*!14!7\n#3#5#3\nSET\nsayan\n123\n".as_bytes());
+    let mut mybuf = BytesMut::from("*!17!9\n#2#3#5#3\n&3\nSET\nsayan\n123\n".as_bytes());
     let resulting_data_should_be: Action = Action::new(
         "SET sayan 123"
             .split_whitespace()
@@ -167,6 +167,7 @@ fn test_query() {
     );
     let nav = Navigator::new(&mut mybuf);
     let query = Query::from_navigator(nav);
+    println!("{:#?}", query);
     if let QueryParseResult::Parsed((query, forward)) = query {
         assert_eq!(
             query,
