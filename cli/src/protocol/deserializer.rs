@@ -21,6 +21,7 @@
 
 //! This module provides methods to deserialize an incoming response packet
 
+use corelib::builders::MLINE_BUF;
 use corelib::de::*;
 use corelib::terrapipe::*;
 use std::fmt;
@@ -64,13 +65,12 @@ struct Metaline {
     content_size: usize,
     metalayout_size: usize,
     resp_type: ActionType,
-    respcode: RespCodes,
 }
 
 impl Metaline {
     pub fn from_navigator(nav: &mut Navigator) -> Option<Self> {
-        if let Some(mline) = nav.get_line(Some(DEF_QMETALINE_BUFSIZE)) {
-            if mline.len() < 7 {
+        if let Some(mline) = nav.get_line(Some(MLINE_BUF)) {
+            if mline.len() < 5 {
                 return None;
             }
             let resp_type = match unsafe { mline.get_unchecked(0) } {
@@ -82,16 +82,11 @@ impl Metaline {
                 // TODO(@ohsayan): Enable pipelined responses to be parsed
                 unimplemented!("Pipelined responses cannot be parsed yet");
             }
-            let respcode = match RespCodes::from_utf8(unsafe { *mline.get_unchecked(2) }) {
-                Some(rc) => rc,
-                None => return None,
-            };
-            if let Some(sizes) = get_frame_sizes(unsafe { mline.get_unchecked(3..) }) {
+            if let Some(sizes) = get_frame_sizes(unsafe { mline.get_unchecked(1..) }) {
                 return Some(Metaline {
                     content_size: unsafe { *sizes.get_unchecked(0) },
                     metalayout_size: unsafe { *sizes.get_unchecked(1) },
                     resp_type,
-                    respcode,
                 });
             }
         }
@@ -122,29 +117,10 @@ pub struct Response {
 impl Response {
     pub fn from_navigator(mut nav: Navigator) -> ClientResult {
         if let Some(metaline) = Metaline::from_navigator(&mut nav) {
-            let mut is_other_error = false;
-            match metaline.respcode {
-                RespCodes::Okay => (),
-                RespCodes::OtherError(_) => is_other_error = true,
-                x @ _ => return ClientResult::RespCode(x, nav.get_pos_usize()),
-            }
-            if metaline.content_size == 0 && metaline.metalayout_size == 0 {
-                return ClientResult::RespCode(metaline.respcode, nav.get_pos_usize());
-            }
             if let Some(layout) = Metalayout::from_navigator(&mut nav, metaline.metalayout_size) {
                 if let Some(content) = nav.get_exact(metaline.content_size) {
                     let data = parse_df(content, layout.0, 1);
                     if let Some(data) = data {
-                        if is_other_error {
-                            if data.len() == 1 {
-                                return ClientResult::RespCode(
-                                    RespCodes::OtherError(Some(unsafe {
-                                        data.get_unchecked(0)[0].clone()
-                                    })),
-                                    nav.get_pos_usize(),
-                                );
-                            }
-                        }
                         return ClientResult::Response(data, nav.get_pos_usize());
                     }
                 }

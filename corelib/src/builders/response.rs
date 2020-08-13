@@ -268,7 +268,8 @@ where
     T: ToString,
 {
     fn into_response(self) -> Vec<u8> {
-        let (metalayout, dataframe) = self.to_string().into_resp_group();
+        let (mut metalayout, dataframe) = self.to_string().into_resp_group();
+        metalayout.push(b'\n');
         let metaline = [
             &[b'*', b'!'],
             dataframe.len().to_string().as_bytes(),
@@ -298,7 +299,8 @@ impl IntoResponse for BytesWrapper {
 
 impl IntoResponse for RespCodes {
     fn into_response(self) -> Vec<u8> {
-        let (metalayout, dataframe) = self.into_resp_group();
+        let (mut metalayout, dataframe) = self.into_resp_group();
+        metalayout.push(b'\n');
         let metaline = [
             &[b'*', b'!'],
             dataframe.len().to_string().as_bytes(),

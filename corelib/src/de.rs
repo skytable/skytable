@@ -183,17 +183,25 @@ pub struct Action(pub Vec<String>);
 
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        /* 
+        TODO(@ohsayan): Implement proper formatting for the response. That is,
+        for `!` print the respective error code, for `+` print the corresponding
+        array or single-value 
+        */
         if self.0.len() == 0 {
             return write!(f, "[]");
         }
+        if self.0.len() == 1 {
+            return write!(f, "{}", &self.0[0][1..]);
+        }
         let mut it = self.0.iter().peekable();
-        write!(f, "[ ");
+        write!(f, "[")?;
         while let Some(token) = it.next() {
             if it.peek().is_some() {
-                write!(f, "{}", token)?;
+                write!(f, "\"{}\"", token)?;
                 write!(f, ", ")?;
             } else {
-                write!(f, "{}", token)?;
+                write!(f, "\"{}\"", token)?;
                 write!(f, "]")?;
             }
         }
