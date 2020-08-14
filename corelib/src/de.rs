@@ -209,6 +209,14 @@ impl fmt::Display for Action {
     }
 }
 
+impl IntoIterator for Action {
+    type Item = String;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Action {
     pub fn new(v: Vec<String>) -> Self {
         Action(v)
