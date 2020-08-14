@@ -26,6 +26,7 @@ use corelib::builders::response::*;
 use corelib::de::Action;
 use corelib::terrapipe::RespCodes;
 mod get;
+mod set;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses

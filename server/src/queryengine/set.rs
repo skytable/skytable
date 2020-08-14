@@ -19,41 +19,43 @@
  *
 */
 
-//! # `GET` queries
-//! This module provides functions to work with `GET` queries
+//! # `SET` queries
+//! This module provides functions to work with `SET` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::Action;
 use corelib::terrapipe::RespCodes;
 
-/// Run a `GET` query
-pub fn get(handle: &CoreDB, act: Action) -> Vec<u8> {
-    if act.len() < 2 {
+/// Run a `SET` query
+pub fn set(handle: &CoreDB, act: Action) -> Vec<u8> {
+    if (act.len() - 1) & 1 != 0 {
         return RespCodes::ArgumentError.into_response();
     }
     let mut resp = SResp::new();
     let mut respgroup = RespGroup::new();
-    act.into_iter()
-        .skip(1)
-        .for_each(|key| match handle.get(&key) {
-            Ok(byts) => respgroup.add_item(BytesWrapper(byts)),
+    act[1..]
+        .chunks_exact(2)
+        .for_each(|key| match handle.set(&key[0], &key[1]) {
+            Ok(_) => respgroup.add_item(RespCodes::Okay),
             Err(e) => respgroup.add_item(e),
         });
     resp.add_group(respgroup);
     resp.into_response()
 }
 
-#[cfg(test)]
 #[test]
-fn test_get() {
+fn test_set() {
     let db = CoreDB::new().unwrap();
-    let _ = db.set(&"foo1".to_owned(), &"bar".to_owned()).unwrap();
-    let _ = db.set(&"foo2".to_owned(), &"bar".to_owned()).unwrap();
-    let r = get(
-        &db,
-        Action::new(vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()]),
-    );
+    let act = Action::new(vec![
+        "SET".to_owned(),
+        "foo1".to_owned(),
+        "bar".to_owned(),
+        "foo2".to_owned(),
+        "bar".to_owned(),
+    ]);
+    let r = set(&db, act);
+    assert!(db.exists("foo1") && db.exists("foo2"));
     db.finish_db(true, true, true);
-    assert_eq!("*!13!7\n#2#4#4\n&2\n+bar\n+bar\n".as_bytes().to_owned(), r);
+    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
 }

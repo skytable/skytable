@@ -162,6 +162,13 @@ impl CoreDB {
         diskstore::flush_data(data)?;
         Ok(())
     }
+
+    /// **⚠⚠⚠ This deletes everything stored in the in-memory table**
+    pub fn finish_db(self, areyousure: bool, areyouverysure: bool, areyousupersure: bool) {
+        if areyousure && areyouverysure && areyousupersure {
+            self.acquire_write().clear()
+        }
+    }
 }
 
 impl Drop for CoreDB {
