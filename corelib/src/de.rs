@@ -25,7 +25,6 @@
 
 use bytes::BytesMut;
 use std::fmt;
-use std::io::Cursor;
 use std::ops::Deref;
 
 /// The size of the read buffer in bytes
@@ -35,13 +34,15 @@ pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 /// a mutable `BytesMut` object
 pub struct Navigator<'a> {
     /// The cursor
-    cursor: Cursor<&'a [u8]>,
+    buf: &'a [u8],
+    position: usize,
 }
 impl<'a> Navigator<'a> {
     /// Create a new `Navigator` instance
     pub fn new<'b: 'a>(buffer: &'b BytesMut) -> Self {
         Navigator {
-            cursor: Cursor::new(&buffer[..]),
+            buf: &buffer,
+            position: 0,
         }
     }
     /// Get a line from a buffer
@@ -51,23 +52,22 @@ impl<'a> Navigator<'a> {
     /// Note that this `beforehint` is optional and in case no hint as available,
     /// just pass `None`
     pub fn get_line(&mut self, beforehint: Option<usize>) -> Option<&'a [u8]> {
-        let ref mut cursor = self.cursor;
-        let start = cursor.position() as usize;
+        let start = self.position;
         let end = match beforehint {
             // The end will be the current position + the moved position - 1
             Some(hint) => (start + hint),
-            None => cursor.get_ref().len() - 1,
+            None => self.buf.len() - 1,
         };
         for i in start..end {
             // If the current character is a `\n` byte, then return this slice
-            if let Some(rf) = cursor.get_ref().get(i) {
+            if let Some(rf) = self.buf.get(i) {
                 if *rf == b'\n' {
-                    if let Some(slice) = cursor.get_ref().get(start..i) {
+                    if let Some(slice) = self.buf.get(start..i) {
                         // Only move the cursor ahead if the bytes could be fetched
                         // otherwise the next time we try to get anything, the
                         // cursor would crash. If we don't change the cursor position
                         // we will keep moving over stale data
-                        cursor.set_position((i + 1) as u64);
+                        self.position = i + 1;
                         return Some(slice);
                     }
                 }
@@ -78,15 +78,14 @@ impl<'a> Navigator<'a> {
     }
     /// Get an exact number of bytes from a buffer
     pub fn get_exact(&mut self, exact: usize) -> Option<&'a [u8]> {
-        let ref mut cursor = self.cursor;
         // The start position should be set to the current position of the
         // cursor, otherwise we'll move from start, which is erroneous
-        let start = cursor.position() as usize;
+        let start = self.position;
         // The end position will be the current position + number of bytes to be read
         let end = start + exact;
-        if let Some(chunk) = cursor.get_ref().get(start..end) {
+        if let Some(chunk) = self.buf.get(start..end) {
             // Move the cursor ahead - only if we could get the slice
-            self.cursor.set_position(end as u64);
+            self.position = end;
             Some(chunk)
         } else {
             // If we're here, then the slice couldn't be extracted, probably
@@ -94,9 +93,8 @@ impl<'a> Navigator<'a> {
             None
         }
     }
-    /// Get the cursor's position as an `usize`
     pub fn get_pos_usize(&self) -> usize {
-        self.cursor.position() as usize
+        self.position
     }
 }
 #[cfg(test)]
@@ -183,10 +181,10 @@ pub struct Action(pub Vec<String>);
 
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        /* 
+        /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
         for `!` print the respective error code, for `+` print the corresponding
-        array or single-value 
+        array or single-value
         */
         if self.0.len() == 0 {
             return write!(f, "[]");

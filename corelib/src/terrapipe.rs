@@ -25,9 +25,6 @@
 //! Query and Response packet handling modules can be found in the `de`, `query`
 //! and `response` modules from the crate root.
 
-use std::error::Error;
-use std::fmt;
-
 pub const ADDR: &'static str = "127.0.0.1:2003";
 
 /// Default query metaline buffer size
@@ -36,6 +33,21 @@ pub const DEF_QMETALINE_BUFSIZE: usize = 44;
 pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
 /// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
+
+pub mod responses {
+    use crate::builders::response::*;
+    use crate::terrapipe::RespCodes;
+    use lazy_static::lazy_static;
+    lazy_static! {
+        pub static ref OKAY: Vec<u8> = RespCodes::Okay.into_response();
+        pub static ref NOT_FOUND: Vec<u8> = RespCodes::NotFound.into_response();
+        pub static ref OVERWRITE_ERROR: Vec<u8> = RespCodes::OverwriteError.into_response();
+        pub static ref INVALID_MF: Vec<u8> = RespCodes::InvalidMetaframe.into_response();
+        pub static ref ARG_ERR: Vec<u8> = RespCodes::ArgumentError.into_response();
+        pub static ref SERVER_ERR: Vec<u8> = RespCodes::ServerError.into_response();
+        pub static ref OTHER_ERR: Vec<u8> = RespCodes::OtherError(None).into_response();
+    }
+}
 
 /// Response codes returned by the server
 #[derive(Debug, PartialEq)]

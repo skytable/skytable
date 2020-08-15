@@ -24,7 +24,7 @@
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::Action;
-use corelib::terrapipe::RespCodes;
+use corelib::terrapipe::{responses, RespCodes};
 mod get;
 mod set;
 mod tags {
@@ -71,8 +71,10 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<Action>) -> Vec<u8> {
                             match db.set(&key.to_string(), &value.to_string()) {
                                 Ok(_) => {
                                     #[cfg(Debug)]
-                                    db.print_debug_table();
-                                    return RespCodes::Okay.into_response();
+                                    {
+                                        db.print_debug_table();
+                                    }
+                                    return responses::OKAY.to_owned();
                                 }
                                 Err(e) => return e.into_response(),
                             }
@@ -87,12 +89,11 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<Action>) -> Vec<u8> {
                         if buf.next().is_none() {
                             match db.update(&key.to_string(), &value.to_string()) {
                                 Ok(_) => {
-                                    return {
-                                        #[cfg(Debug)]
+                                    #[cfg(Debug)]
+                                    {
                                         db.print_debug_table();
-
-                                        RespCodes::Okay.into_response()
                                     }
+                                    return responses::OKAY.to_owned();
                                 }
                                 Err(e) => return e.into_response(),
                             }
@@ -107,9 +108,11 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<Action>) -> Vec<u8> {
                         match db.del(&key.to_string()) {
                             Ok(_) => {
                                 #[cfg(Debug)]
-                                db.print_debug_table();
+                                {
+                                    db.print_debug_table();
+                                }
 
-                                return RespCodes::Okay.into_response();
+                                return responses::OKAY.to_owned();
                             }
                             Err(e) => return e.into_response(),
                         }
@@ -136,5 +139,5 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<Action>) -> Vec<u8> {
             _ => return RespCodes::OtherError(Some("Unknown command".to_owned())).into_response(),
         }
     }
-    RespCodes::ArgumentError.into_response()
+    responses::ARG_ERR.to_owned()
 }
