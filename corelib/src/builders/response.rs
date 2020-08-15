@@ -31,7 +31,10 @@ use bytes::Bytes;
 type PRTuple = (usize, Vec<u8>);
 
 /// The bytes for the sizes (inclusive of the `#` character), the bytes for the df
-type RespTuple = (Vec<u8>, Vec<u8>);
+type RGTuple = (Vec<u8>, Vec<u8>);
+
+/// The metaline, metalayout and dataframe in order
+pub type Response = (Vec<u8>, Vec<u8>, Vec<u8>);
 
 pub struct BytesWrapper(pub Bytes);
 
@@ -51,7 +54,7 @@ pub trait PreResp {
 /// <symbol>item[n]\n
 /// ```
 pub trait IntoRespGroup {
-    fn into_resp_group(self) -> RespTuple;
+    fn into_resp_group(self) -> RGTuple;
 }
 
 /// Trait implementors must return a **complete** response packet  
@@ -62,7 +65,7 @@ pub trait IntoRespGroup {
 /// < --- data --- >
 /// ```
 pub trait IntoResponse {
-    fn into_response(self) -> Vec<u8>;
+    fn into_response(self) -> Response;
 }
 
 impl<T> PreResp for T
@@ -105,7 +108,7 @@ impl PreResp for RespCodes {
 
 // For responses which just have one response code as a group
 impl IntoRespGroup for RespCodes {
-    fn into_resp_group(self) -> RespTuple {
+    fn into_resp_group(self) -> RGTuple {
         let (size, data) = self.into_pre_resp();
         let metalayout_ext = [&[b'#', b'2', b'#'], size.to_string().as_bytes()].concat();
         let dataframe_ext = [vec![b'&', b'1', b'\n'], data].concat();
@@ -114,7 +117,7 @@ impl IntoRespGroup for RespCodes {
 }
 
 impl IntoRespGroup for BytesWrapper {
-    fn into_resp_group(self) -> RespTuple {
+    fn into_resp_group(self) -> RGTuple {
         let (size, data) = self.into_pre_resp();
         let metalayout_ext = [&[b'#', b'2', b'#'], size.to_string().as_bytes()].concat();
         let dataframe_ext = [vec![b'&', b'1', b'\n'], data].concat();
@@ -123,7 +126,7 @@ impl IntoRespGroup for BytesWrapper {
 }
 
 impl IntoRespGroup for RespGroup {
-    fn into_resp_group(self) -> RespTuple {
+    fn into_resp_group(self) -> RGTuple {
         // Get the number of items in the data group, convert it into it's UTF-8
         // equivalent.
         let sizeline = [&[b'&'], self.sizes.len().to_string().as_bytes(), &[b'\n']].concat();
@@ -151,7 +154,7 @@ impl<T> IntoRespGroup for T
 where
     T: ToString,
 {
-    fn into_resp_group(self) -> RespTuple {
+    fn into_resp_group(self) -> RGTuple {
         let st = self.to_string();
         let metalayout = [&[b'#', b'2', b'#'], (st.len() + 1).to_string().as_bytes()].concat();
         let dataframe = [&[b'&', b'1', b'\n'], &[b'+'][..], st.as_bytes(), &[b'\n']].concat();
@@ -237,7 +240,7 @@ impl SResp {
 }
 
 impl IntoResponse for SResp {
-    fn into_response(self) -> Vec<u8> {
+    fn into_response(self) -> Response {
         /* UNSAFE(@ohsayan): We know what we're doing here: We convert an immutable reference
         to an `SRESP` to avoid `concat`ing over and over again
          */
@@ -258,7 +261,7 @@ impl IntoResponse for SResp {
                 .extend((*self_mut).metalayout.len().to_string().as_bytes());
             (*self_mut).metaline.push(b'\n');
         } // The raw pointers are dropped here
-        [self.metaline, self.metalayout, self.dataframe].concat()
+        (self.metaline, self.metalayout, self.dataframe)
     }
 }
 
@@ -267,7 +270,7 @@ impl<T> IntoResponse for T
 where
     T: ToString,
 {
-    fn into_response(self) -> Vec<u8> {
+    fn into_response(self) -> Response {
         let (mut metalayout, dataframe) = self.to_string().into_resp_group();
         metalayout.push(b'\n');
         let metaline = [
@@ -278,12 +281,12 @@ where
             &[b'\n'],
         ]
         .concat();
-        [metaline, metalayout, dataframe].concat()
+        (metaline, metalayout, dataframe)
     }
 }
 
 impl IntoResponse for BytesWrapper {
-    fn into_response(self) -> Vec<u8> {
+    fn into_response(self) -> Response {
         let (metalayout, dataframe) = self.into_resp_group();
         let metaline = [
             &[b'*', b'!'],
@@ -293,12 +296,12 @@ impl IntoResponse for BytesWrapper {
             &[b'\n'],
         ]
         .concat();
-        [metaline, metalayout, dataframe].concat()
+        (metaline, metalayout, dataframe)
     }
 }
 
 impl IntoResponse for RespCodes {
-    fn into_response(self) -> Vec<u8> {
+    fn into_response(self) -> Response {
         let (mut metalayout, dataframe) = self.into_resp_group();
         metalayout.push(b'\n');
         let metaline = [
@@ -309,7 +312,7 @@ impl IntoResponse for RespCodes {
             &[b'\n'],
         ]
         .concat();
-        [metaline, metalayout, dataframe].concat()
+        (metaline, metalayout, dataframe)
     }
 }
 
@@ -322,22 +325,25 @@ fn test_datagroup() {
     datagroup.add_item(RespCodes::Okay);
     let mut builder = ResponseBuilder::new_simple();
     builder.add_group(datagroup);
+    let resp = builder.into_response();
     assert_eq!(
         "*!18!9\n#2#5#5#2\n&3\n+HEY!\n+four\n!0\n"
             .as_bytes()
             .to_owned(),
-        builder.into_response()
+        [resp.0, resp.1, resp.2].concat()
     );
     let mut builder = ResponseBuilder::new_simple();
     builder.add_group(RespCodes::Okay);
+    let resp = builder.into_response();
     assert_eq!(
         "*!6!5\n#2#2\n&1\n!0\n".as_bytes().to_owned(),
-        builder.into_response()
+        [resp.0, resp.1, resp.2].concat()
     );
     let mut builder = ResponseBuilder::new_simple();
     builder.add_group("four");
+    let resp = builder.into_response();
     assert_eq!(
         "*!9!5\n#2#5\n&1\n+four\n".as_bytes().to_owned(),
-        builder.into_response()
+        [resp.0, resp.1, resp.2].concat()
     );
 }

@@ -24,11 +24,11 @@
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
-use corelib::de::Action;
+use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
 /// Run a `SET` query
-pub fn set(handle: &CoreDB, act: Action) -> Vec<u8> {
+pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
     if (act.len() - 1) & 1 != 0 {
         return RespCodes::ArgumentError.into_response();
     }
@@ -47,14 +47,15 @@ pub fn set(handle: &CoreDB, act: Action) -> Vec<u8> {
 #[test]
 fn test_set() {
     let db = CoreDB::new().unwrap();
-    let act = Action::new(vec![
+    let act = DataGroup::new(vec![
         "SET".to_owned(),
         "foo1".to_owned(),
         "bar".to_owned(),
         "foo2".to_owned(),
         "bar".to_owned(),
     ]);
-    let r = set(&db, act);
+    let (r1, r2, r3) = set(&db, act);
+    let r = [r1, r2, r3].concat();
     assert!(db.exists("foo1") && db.exists("foo2"));
     db.finish_db(true, true, true);
     assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);

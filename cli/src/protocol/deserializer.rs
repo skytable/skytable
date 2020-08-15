@@ -31,7 +31,7 @@ use std::fmt;
 pub enum ClientResult {
     RespCode(RespCodes, usize),
     InvalidResponse(usize),
-    Response(Vec<Action>, usize),
+    Response(Vec<DataGroup>, usize),
     Empty(usize),
     Incomplete(usize),
 }

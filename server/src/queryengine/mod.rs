@@ -23,7 +23,7 @@
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
-use corelib::de::Action;
+use corelib::de::DataGroup;
 use corelib::terrapipe::{responses, RespCodes};
 mod get;
 mod set;
@@ -45,7 +45,7 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub fn execute_simple(db: &CoreDB, buf: Vec<Action>) -> Vec<u8> {
+pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
     let mut buf = (*buf[0].0).into_iter();
     while let Some(token) = buf.next() {
         match token.to_uppercase().as_str() {

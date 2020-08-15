@@ -22,6 +22,7 @@
 mod deserializer;
 use bytes::{Buf, BytesMut};
 use corelib::builders::response::IntoResponse;
+use corelib::builders::response::Response;
 use corelib::de::*;
 use corelib::TResult;
 pub use deserializer::{
@@ -47,7 +48,7 @@ pub enum QueryResult {
     /// A parsed `Query` object
     Q(Query),
     /// An error response
-    E(Vec<u8>),
+    E(Response),
     /// A closed connection
     Empty,
 }
@@ -116,15 +117,17 @@ impl Connection {
         self.stream.get_ref().peer_addr()
     }
     /// Write a response to the stream
-    pub async fn write_response(&mut self, resp: Vec<u8>) -> TResult<()> {
-        self.stream.write_all(&resp).await?;
+    pub async fn write_response(&mut self, (mline, mlayout, df): Response) -> TResult<()> {
+        self.stream.write_all(&mline).await?;
+        self.stream.write_all(&mlayout).await?;
+        self.stream.write_all(&df).await?;
         // Flush the stream to make sure that the data was delivered
         self.stream.flush().await?;
         Ok(())
     }
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
-    pub async fn close_conn_with_error(&mut self, bytes: Vec<u8>) -> TResult<()> {
-        self.write_response(bytes).await
+    pub async fn close_conn_with_error(&mut self, resp: Response) -> TResult<()> {
+        self.write_response(resp).await
     }
 }

@@ -39,13 +39,13 @@ pub mod responses {
     use crate::terrapipe::RespCodes;
     use lazy_static::lazy_static;
     lazy_static! {
-        pub static ref OKAY: Vec<u8> = RespCodes::Okay.into_response();
-        pub static ref NOT_FOUND: Vec<u8> = RespCodes::NotFound.into_response();
-        pub static ref OVERWRITE_ERROR: Vec<u8> = RespCodes::OverwriteError.into_response();
-        pub static ref INVALID_MF: Vec<u8> = RespCodes::InvalidMetaframe.into_response();
-        pub static ref ARG_ERR: Vec<u8> = RespCodes::ArgumentError.into_response();
-        pub static ref SERVER_ERR: Vec<u8> = RespCodes::ServerError.into_response();
-        pub static ref OTHER_ERR: Vec<u8> = RespCodes::OtherError(None).into_response();
+        pub static ref OKAY: Response = RespCodes::Okay.into_response();
+        pub static ref NOT_FOUND: Response = RespCodes::NotFound.into_response();
+        pub static ref OVERWRITE_ERROR: Response = RespCodes::OverwriteError.into_response();
+        pub static ref INVALID_MF: Response = RespCodes::InvalidMetaframe.into_response();
+        pub static ref ARG_ERR: Response = RespCodes::ArgumentError.into_response();
+        pub static ref SERVER_ERR: Response = RespCodes::ServerError.into_response();
+        pub static ref OTHER_ERR: Response = RespCodes::OtherError(None).into_response();
     }
 }
 

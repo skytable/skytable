@@ -30,11 +30,12 @@ use std::ops::Deref;
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 
-/// A navigator is a wrapper around a `Cursor` which efficiently navigates over
-/// a mutable `BytesMut` object
+/// A navigator is a wrapper around an indexed-based position tracker which
+/// efficiently navigates over a `BytesMut` object
 pub struct Navigator<'a> {
-    /// The cursor
+    /// The buffer which is a `&[u8]`
     buf: &'a [u8],
+    /// The current position of this `Navigator` instance
     position: usize,
 }
 impl<'a> Navigator<'a> {
@@ -63,9 +64,9 @@ impl<'a> Navigator<'a> {
             if let Some(rf) = self.buf.get(i) {
                 if *rf == b'\n' {
                     if let Some(slice) = self.buf.get(start..i) {
-                        // Only move the cursor ahead if the bytes could be fetched
+                        // Only move the Navigator ahead if the bytes could be fetched
                         // otherwise the next time we try to get anything, the
-                        // cursor would crash. If we don't change the cursor position
+                        // Navigator would crash. If we don't change the Navigator's position
                         // we will keep moving over stale data
                         self.position = i + 1;
                         return Some(slice);
@@ -79,12 +80,12 @@ impl<'a> Navigator<'a> {
     /// Get an exact number of bytes from a buffer
     pub fn get_exact(&mut self, exact: usize) -> Option<&'a [u8]> {
         // The start position should be set to the current position of the
-        // cursor, otherwise we'll move from start, which is erroneous
+        // Navigator, otherwise we'll move from start, which is erroneous
         let start = self.position;
         // The end position will be the current position + number of bytes to be read
         let end = start + exact;
         if let Some(chunk) = self.buf.get(start..end) {
-            // Move the cursor ahead - only if we could get the slice
+            // Move the Navigator ahead - only if we could get the slice
             self.position = end;
             Some(chunk)
         } else {
@@ -93,6 +94,7 @@ impl<'a> Navigator<'a> {
             None
         }
     }
+    /// Get the current position of the navigator
     pub fn get_pos_usize(&self) -> usize {
         self.position
     }
@@ -176,10 +178,11 @@ pub fn extract_sizes_splitoff(buf: &[u8], splitoff: u8, sizehint: usize) -> Opti
     Some(sizes)
 }
 
+/// A wrapper around a `Vec<String>` which represents a data group in the dataframe
 #[derive(Debug, PartialEq)]
-pub struct Action(pub Vec<String>);
+pub struct DataGroup(pub Vec<String>);
 
-impl fmt::Display for Action {
+impl fmt::Display for DataGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
@@ -207,7 +210,7 @@ impl fmt::Display for Action {
     }
 }
 
-impl IntoIterator for Action {
+impl IntoIterator for DataGroup {
     type Item = String;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
@@ -215,23 +218,35 @@ impl IntoIterator for Action {
     }
 }
 
-impl Action {
+impl DataGroup {
+    /// Create a new `DataGroup`
     pub fn new(v: Vec<String>) -> Self {
-        Action(v)
+        DataGroup(v)
     }
+    /// Drops the `DataGroup` instance returning the `Vec<String>` that it held
     pub fn finish_into_vector(self) -> Vec<String> {
         self.0
     }
 }
 
-impl Deref for Action {
+impl Deref for DataGroup {
     type Target = Vec<String>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-pub fn parse_df(buf: &[u8], sizes: Vec<usize>, nc: usize) -> Option<Vec<Action>> {
+/// # The Dataframe Parser
+///
+/// This functions accepts:
+/// - a `buf` as a slice (`&[u8]`) which should be the dataframe
+/// of a query or response packet
+/// - `sizes` which is the result of parsing the metalayout and is referred to as the
+/// "skip sequence", since it dictates the size of each data item in a datagroup
+/// - `nc` is essentially an optional argument, but still needs to be passed. This is
+/// only there to avoid too many relocations in the case of pipelined queries. A minimum of
+/// one should be passed for standard performance
+pub fn parse_df(buf: &[u8], sizes: Vec<usize>, nc: usize) -> Option<Vec<DataGroup>> {
     let (mut i, mut pos) = (0, 0);
     if buf.len() < 1 || sizes.len() < 1 {
         // Having fun, eh? Why're you giving empty dataframes?
@@ -301,7 +316,7 @@ pub fn parse_df(buf: &[u8], sizes: Vec<usize>, nc: usize) -> Option<Vec<Action>>
                     return None;
                 }
                 // We're done with parsing the entire array, return it
-                tokens.push(Action(toks));
+                tokens.push(DataGroup(toks));
             } else {
                 i += 1;
                 continue;
@@ -319,7 +334,7 @@ fn test_df() {
     let parsed = parse_df(&df, ss, 1).unwrap();
     assert_eq!(
         parsed,
-        vec![Action(vec![
+        vec![DataGroup(vec![
             "GET".to_owned(),
             "sayan".to_owned(),
             "foobar".to_owned(),

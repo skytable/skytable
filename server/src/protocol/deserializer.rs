@@ -112,7 +112,7 @@ impl Metalayout {
 #[derive(Debug, PartialEq)]
 pub struct Query {
     /// A stream of tokens parsed from the dataframe
-    pub data: Vec<Action>,
+    pub data: Vec<DataGroup>,
     /// The type of query - `Simple` or `Pipeline`
     pub actiontype: ActionType,
 }
@@ -159,7 +159,7 @@ impl Query {
 fn test_query() {
     use bytes::{Buf, BytesMut};
     let mut mybuf = BytesMut::from("*!17!9\n#2#3#5#3\n&3\nSET\nsayan\n123\n".as_bytes());
-    let resulting_data_should_be: Action = Action::new(
+    let resulting_data_should_be: DataGroup = DataGroup::new(
         "SET sayan 123"
             .split_whitespace()
             .map(|val| val.to_string())

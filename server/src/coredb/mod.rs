@@ -25,6 +25,7 @@ use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
+use corelib::builders::response::Response;
 use corelib::terrapipe::{ActionType, RespCodes};
 use corelib::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -49,20 +50,25 @@ pub struct Coretable {
     coremap: RwLock<HashMap<String, Data>>,
 }
 
+/// A wrapper for `Bytes`
 #[derive(Debug)]
 pub struct Data {
+    /// The blob of data
     blob: Bytes,
 }
 
 impl Data {
-    pub fn from(val: &String) -> Self {
+    /// Create a new blob from a string
+    pub fn from_string(val: &String) -> Self {
         Data {
             blob: Bytes::copy_from_slice(val.as_bytes()),
         }
     }
+    /// Create a new blob from an existing `Bytes` instance
     pub fn from_blob(blob: Bytes) -> Self {
         Data { blob }
     }
+    /// Get the inner blob (raw `Bytes`)
     pub fn get_blob(&self) -> &Bytes {
         &self.blob
     }
@@ -82,7 +88,7 @@ impl CoreDB {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
             Entry::Vacant(e) => {
-                let _ = e.insert(Data::from(&value));
+                let _ = e.insert(Data::from_string(&value));
                 Ok(())
             }
         }
@@ -91,7 +97,7 @@ impl CoreDB {
     pub fn update(&self, key: &str, value: &String) -> ActionResult<()> {
         match self.acquire_write().entry(key.to_string()) {
             Entry::Occupied(ref mut e) => {
-                e.insert(Data::from(&value));
+                e.insert(Data::from_string(&value));
                 Ok(())
             }
             Entry::Vacant(_) => Err(RespCodes::NotFound),
@@ -118,7 +124,7 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub fn execute_query(&self, df: Query) -> Vec<u8> {
+    pub fn execute_query(&self, df: Query) -> Response {
         match df.actiontype {
             ActionType::Simple => queryengine::execute_simple(&self, df.data),
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet

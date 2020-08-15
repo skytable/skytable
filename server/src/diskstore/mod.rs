@@ -19,6 +19,8 @@
  *
 */
 
+//! This module provides tools for handling persistently stored data
+
 use crate::coredb::Data;
 use bincode;
 use bytes::Bytes;
@@ -54,6 +56,9 @@ pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
 }
 
 /// Flush the in-memory table onto disk
+///
+/// This functions takes the entire in-memory table and writes it to the disk,
+/// more specifically, the `data.bin` file
 pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
     let ds: DiskStore = (
         data.keys().into_iter().map(|val| val.to_string()).collect(),
