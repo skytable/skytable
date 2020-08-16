@@ -150,7 +150,7 @@ impl Query {
         }
         // If we're here - it clearly means that the metaline/metalayout failed
         // to parse - we return a standard invalid metaframe `RespCodes`
-        QueryParseResult::RespCode(RespCodes::InvalidMetaframe)
+        QueryParseResult::RespCode(RespCodes::PacketError)
     }
 }
 

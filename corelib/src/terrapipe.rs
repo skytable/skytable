@@ -42,8 +42,8 @@ pub mod responses {
         pub static ref OKAY: Response = RespCodes::Okay.into_response();
         pub static ref NOT_FOUND: Response = RespCodes::NotFound.into_response();
         pub static ref OVERWRITE_ERROR: Response = RespCodes::OverwriteError.into_response();
-        pub static ref INVALID_MF: Response = RespCodes::InvalidMetaframe.into_response();
-        pub static ref ARG_ERR: Response = RespCodes::ArgumentError.into_response();
+        pub static ref INVALID_MF: Response = RespCodes::PacketError.into_response();
+        pub static ref ARG_ERR: Response = RespCodes::ActionError.into_response();
         pub static ref SERVER_ERR: Response = RespCodes::ServerError.into_response();
         pub static ref OTHER_ERR: Response = RespCodes::OtherError(None).into_response();
     }
@@ -59,10 +59,10 @@ pub enum RespCodes {
     NotFound,
     /// `2`: Overwrite Error
     OverwriteError,
-    /// `3`: Invalid Metaframe
-    InvalidMetaframe,
-    /// `4`: ArgumentError
-    ArgumentError,
+    /// `3`: Packet Error
+    PacketError,
+    /// `4`: ActionError
+    ActionError,
     /// `5`: Server Error
     ServerError,
     /// `6`: Some other error - the wrapped `String` will be returned in the response body.
@@ -77,8 +77,8 @@ impl From<RespCodes> for u8 {
             Okay => 0,
             NotFound => 1,
             OverwriteError => 2,
-            InvalidMetaframe => 3,
-            ArgumentError => 4,
+            PacketError => 3,
+            ActionError => 4,
             ServerError => 5,
             OtherError(_) => 6,
         }
@@ -92,8 +92,8 @@ impl From<RespCodes> for char {
             Okay => '0',
             NotFound => '1',
             OverwriteError => '2',
-            InvalidMetaframe => '3',
-            ArgumentError => '4',
+            PacketError => '3',
+            ActionError => '4',
             ServerError => '5',
             OtherError(_) => '6',
         }
@@ -108,8 +108,8 @@ impl RespCodes {
                 0 => Okay,
                 1 => NotFound,
                 2 => OverwriteError,
-                3 => InvalidMetaframe,
-                4 => ArgumentError,
+                3 => PacketError,
+                4 => ActionError,
                 5 => ServerError,
                 6 => OtherError(extra),
                 _ => return None,
@@ -124,8 +124,8 @@ impl RespCodes {
             0 => Okay,
             1 => NotFound,
             2 => OverwriteError,
-            3 => InvalidMetaframe,
-            4 => ArgumentError,
+            3 => PacketError,
+            4 => ActionError,
             5 => ServerError,
             6 => OtherError(extra),
             _ => return None,

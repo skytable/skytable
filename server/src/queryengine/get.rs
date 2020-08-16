@@ -30,7 +30,7 @@ use corelib::terrapipe::RespCodes;
 /// Run a `GET` query
 pub fn get(handle: &CoreDB, act: DataGroup) -> Response {
     if act.len() < 2 {
-        return RespCodes::ArgumentError.into_response();
+        return RespCodes::ActionError.into_response();
     }
     let mut resp = SResp::new();
     let mut respgroup = RespGroup::new();

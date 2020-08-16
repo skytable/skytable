@@ -91,8 +91,8 @@ impl PreResp for RespCodes {
             RespCodes::Okay => "!0\n".as_bytes().to_owned(),
             RespCodes::NotFound => "!1\n".as_bytes().to_owned(),
             RespCodes::OverwriteError => "!2\n".as_bytes().to_owned(),
-            RespCodes::InvalidMetaframe => "!3\n".as_bytes().to_owned(),
-            RespCodes::ArgumentError => "!4\n".as_bytes().to_owned(),
+            RespCodes::PacketError => "!3\n".as_bytes().to_owned(),
+            RespCodes::ActionError => "!4\n".as_bytes().to_owned(),
             RespCodes::ServerError => "!5\n".as_bytes().to_owned(),
             RespCodes::OtherError(maybe_err) => {
                 if let Some(err) = maybe_err {
