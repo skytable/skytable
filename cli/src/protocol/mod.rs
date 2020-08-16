@@ -77,16 +77,6 @@ impl Connection {
                     }
                     return;
                 }
-                x @ ClientResult::RespCode(_, _) => {
-                    match x {
-                        ClientResult::RespCode(_, f) => {
-                            self.buffer.advance(f);
-                        }
-                        _ => unimplemented!(),
-                    }
-                    eprint!("{}", x);
-                    return;
-                }
                 ClientResult::InvalidResponse(_) => {
                     self.buffer.clear();
                     eprintln!("{}", ClientResult::InvalidResponse(0));

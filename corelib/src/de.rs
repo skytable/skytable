@@ -23,6 +23,7 @@
 //! The `de` module provides primitives for deserialization primitives for parsing
 //! query and response packets
 
+use crate::terrapipe::RespCodes;
 use bytes::BytesMut;
 use std::fmt;
 use std::ops::Deref;
@@ -184,32 +185,142 @@ pub struct DataGroup(pub Vec<String>);
 
 impl fmt::Display for DataGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use termion::{color, style};
         /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
         for `!` print the respective error code, for `+` print the corresponding
         array or single-value
         */
-        if self.0.len() == 0 {
+        if self.len() == 0 {
+            // The server returned a zero-sized array
             return write!(f, "[]");
         }
-        if self.0.len() == 1 {
-            return write!(f, "{}", &self.0[0][1..]);
-        }
-        let mut it = self.0.iter().peekable();
-        write!(f, "[")?;
-        while let Some(token) = it.next() {
-            if it.peek().is_some() {
-                write!(f, "\"{}\"", token)?;
-                write!(f, ", ")?;
-            } else {
-                write!(f, "\"{}\"", token)?;
-                write!(f, "]")?;
+        for token in self.iter() {
+            if token.len() == 0 {
+                write!(f, "\"\"")?;
+                continue;
+            }
+            let mut byter = token.bytes();
+            match byter.next().unwrap() {
+                b'!' => {
+                    // This is an error
+                    match byter.next() {
+                        Some(tok) => match RespCodes::from_utf8(tok) {
+                            Some(code) => {
+                                use RespCodes::*;
+                                match code {
+                                    Okay => write!(
+                                        f,
+                                        "{}(Okay){}",
+                                        color::Fg(color::Rgb(2, 117, 216)),
+                                        style::Reset
+                                    )?,
+                                    NotFound => write!(
+                                        f,
+                                        "{}ERROR: Couldn't find the key{}",
+                                        color::Fg(color::LightRed),
+                                        style::Reset
+                                    )?,
+                                    OverwriteError => {
+                                        write!(
+                                            f,
+                                            "{}ERROR: Existing values cannot be overwritten{}",
+                                            color::Fg(color::LightRed),
+                                            style::Reset
+                                        )?;
+                                    }
+                                    PacketError => {
+                                        write!(
+                                            f,
+                                            "{}ERROR: An invalid request was sent{}",
+                                            color::Fg(color::LightRed),
+                                            style::Reset
+                                        )?;
+                                    }
+                                    ActionError => write!(
+                                        f,
+                                        "{}ERROR: The action is not in the correct format{}",
+                                        color::Fg(color::LightRed),
+                                        style::Reset
+                                    )?,
+                                    ServerError => write!(
+                                        f,
+                                        "{}(Server Error){}",
+                                        color::Fg(color::LightRed),
+                                        style::Reset
+                                    )?,
+                                    OtherError(_) => {
+                                        let rem = byter.collect::<Vec<u8>>();
+                                        if rem.len() == 0 {
+                                            write!(
+                                                f,
+                                                "{}(Unknown Error){}",
+                                                color::Fg(color::LightRed),
+                                                style::Reset
+                                            )?;
+                                        } else {
+                                            write!(
+                                                f,
+                                                "{}({}){}",
+                                                color::Fg(color::LightRed),
+                                                String::from_utf8_lossy(&rem),
+                                                style::Reset
+                                            )?;
+                                        }
+                                    }
+                                }
+                            }
+                            None => {
+                                let rem = byter.collect::<Vec<u8>>();
+                                if rem.len() == 0 {
+                                    write!(
+                                        f,
+                                        "{}(Unknown Error){}",
+                                        color::Fg(color::LightRed),
+                                        style::Reset
+                                    )?;
+                                } else {
+                                    write!(
+                                        f,
+                                        "{}({}{}){}",
+                                        tok,
+                                        color::Fg(color::LightRed),
+                                        String::from_utf8_lossy(&rem),
+                                        style::Reset
+                                    )?;
+                                }
+                            }
+                        },
+                        None => write!(
+                            f,
+                            "{}(Unknown Error){}",
+                            color::Fg(color::LightRed),
+                            style::Reset
+                        )?,
+                    }
+                }
+                b'+' => {
+                    // This is a positive response
+                    let rem = byter.collect::<Vec<u8>>();
+                    write!(f, "\"{}\"", String::from_utf8_lossy(&rem))?;
+                }
+                x @ _ => {
+                    // Unknown response
+                    let rem = byter.collect::<Vec<u8>>();
+                    write!(
+                        f,
+                        "{}Unknown response: \"{}{}\"{}",
+                        color::Fg(color::Rgb(255, 69, 0)),
+                        x,
+                        String::from_utf8_lossy(&rem),
+                        style::Reset
+                    )?;
+                }
             }
         }
         Ok(())
     }
 }
-
 impl IntoIterator for DataGroup {
     type Item = String;
     type IntoIter = std::vec::IntoIter<Self::Item>;
