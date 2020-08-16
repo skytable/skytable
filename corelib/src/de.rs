@@ -184,8 +184,11 @@ pub fn extract_sizes_splitoff(buf: &[u8], splitoff: u8, sizehint: usize) -> Opti
 pub struct DataGroup(pub Vec<String>);
 
 impl fmt::Display for DataGroup {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, mut f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use termion::{color, style};
+        fn write_error<T: fmt::Display>(f: &mut fmt::Formatter<'_>, item: T) -> fmt::Result {
+            write!(f, "{}{}{}", color::Fg(color::LightRed), item, style::Reset)
+        }
         /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
         for `!` print the respective error code, for `+` print the corresponding
@@ -215,56 +218,37 @@ impl fmt::Display for DataGroup {
                                         color::Fg(color::Rgb(2, 117, 216)),
                                         style::Reset
                                     )?,
-                                    NotFound => write!(
-                                        f,
-                                        "{}ERROR: Couldn't find the key{}",
-                                        color::Fg(color::LightRed),
-                                        style::Reset
-                                    )?,
+                                    NotFound => {
+                                        write_error(&mut f, "ERROR: Couldn't find the key")?
+                                    }
                                     OverwriteError => {
-                                        write!(
-                                            f,
-                                            "{}ERROR: Existing values cannot be overwritten{}",
-                                            color::Fg(color::LightRed),
-                                            style::Reset
+                                        write_error(
+                                            &mut f,
+                                            "ERROR: Existing values cannot be overwritten",
                                         )?;
                                     }
                                     PacketError => {
-                                        write!(
-                                            f,
-                                            "{}ERROR: An invalid request was sent{}",
-                                            color::Fg(color::LightRed),
-                                            style::Reset
-                                        )?;
+                                        write_error(&mut f, "ERROR: An invalid request was sent")?;
                                     }
-                                    ActionError => write!(
-                                        f,
-                                        "{}ERROR: The action is not in the correct format{}",
-                                        color::Fg(color::LightRed),
-                                        style::Reset
+                                    ActionError => write_error(
+                                        &mut f,
+                                        "ERROR: The action is not in the correct format",
                                     )?,
-                                    ServerError => write!(
-                                        f,
-                                        "{}(Server Error){}",
-                                        color::Fg(color::LightRed),
-                                        style::Reset
+                                    ServerError => write_error(
+                                        &mut f,
+                                        "ERROR: An error occurred on the serve-side",
                                     )?,
                                     OtherError(_) => {
                                         let rem = byter.collect::<Vec<u8>>();
                                         if rem.len() == 0 {
-                                            write!(
-                                                f,
-                                                "{}(Unknown Error){}",
-                                                color::Fg(color::LightRed),
-                                                style::Reset
+                                            write_error(
+                                                &mut f,
+                                                "ERROR: An unknown error occurred",
                                             )?;
                                         } else {
-                                            write!(
-                                                f,
-                                                "{}({}){}",
-                                                color::Fg(color::LightRed),
-                                                String::from_utf8_lossy(&rem),
-                                                style::Reset
+                                            write_error(
+                                                &mut f,
+                                                format!("ERROR: {}", String::from_utf8_lossy(&rem)),
                                             )?;
                                         }
                                     }
@@ -273,30 +257,20 @@ impl fmt::Display for DataGroup {
                             None => {
                                 let rem = byter.collect::<Vec<u8>>();
                                 if rem.len() == 0 {
-                                    write!(
-                                        f,
-                                        "{}(Unknown Error){}",
-                                        color::Fg(color::LightRed),
-                                        style::Reset
-                                    )?;
+                                    write_error(&mut f, "ERROR: An unknown error occurred")?;
                                 } else {
-                                    write!(
-                                        f,
-                                        "{}({}{}){}",
-                                        tok,
-                                        color::Fg(color::LightRed),
-                                        String::from_utf8_lossy(&rem),
-                                        style::Reset
+                                    write_error(
+                                        &mut f,
+                                        format!(
+                                            "ERROR: '{}{}'",
+                                            char::from(tok),
+                                            String::from_utf8_lossy(&rem)
+                                        ),
                                     )?;
                                 }
                             }
                         },
-                        None => write!(
-                            f,
-                            "{}(Unknown Error){}",
-                            color::Fg(color::LightRed),
-                            style::Reset
-                        )?,
+                        None => write_error(&mut f, "ERROR: An unknown error occurred")?,
                     }
                 }
                 b'+' => {
