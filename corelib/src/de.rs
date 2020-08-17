@@ -184,10 +184,30 @@ pub fn extract_sizes_splitoff(buf: &[u8], splitoff: u8, sizehint: usize) -> Opti
 pub struct DataGroup(pub Vec<String>);
 
 impl fmt::Display for DataGroup {
-    fn fmt(&self, mut f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use termion::{color, style};
-        fn write_error<T: fmt::Display>(f: &mut fmt::Formatter<'_>, item: T) -> fmt::Result {
-            write!(f, "{}{}{}", color::Fg(color::LightRed), item, style::Reset)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use std::io::Write;
+        use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+        fn write_with_col<T: fmt::Display>(item: T, color: Option<Color>) -> fmt::Result {
+            let mut stdout = StandardStream::stdout(ColorChoice::Always);
+            if let Err(_) = stdout.set_color(ColorSpec::new().set_fg(color)) {
+                return Err(fmt::Error);
+            }
+            if let Err(_) = write!(&mut stdout, "{}", item) {
+                return Err(fmt::Error);
+            }
+            if stdout.reset().is_err() {
+                return Err(fmt::Error);
+            }
+            Ok(())
+        }
+        fn write_okay<T: fmt::Display>(item: T) -> fmt::Result {
+            write_with_col(item, Some(Color::Cyan))
+        }
+        fn write_warning<T: fmt::Display>(item: T) -> fmt::Result {
+            write_with_col(item, Some(Color::Yellow))
+        }
+        fn write_error<T: fmt::Display>(item: T) -> fmt::Result {
+            write_with_col(item, Some(Color::Red))
         }
         /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
@@ -212,44 +232,33 @@ impl fmt::Display for DataGroup {
                             Some(code) => {
                                 use RespCodes::*;
                                 match code {
-                                    Okay => write!(
-                                        f,
-                                        "{}(Okay){}",
-                                        color::Fg(color::Rgb(2, 117, 216)),
-                                        style::Reset
-                                    )?,
+                                    Okay => write_okay("(Okay)")?,
                                     NotFound => {
-                                        write_error(&mut f, "ERROR: Couldn't find the key")?
+                                        write_error("ERROR: Couldn't find the key")?;
                                     }
                                     OverwriteError => {
                                         write_error(
-                                            &mut f,
                                             "ERROR: Existing values cannot be overwritten",
                                         )?;
                                     }
                                     PacketError => {
-                                        write_error(&mut f, "ERROR: An invalid request was sent")?;
+                                        write_error("ERROR: An invalid request was sent")?;
                                     }
                                     ActionError => write_error(
-                                        &mut f,
                                         "ERROR: The action is not in the correct format",
                                     )?,
-                                    ServerError => write_error(
-                                        &mut f,
-                                        "ERROR: An error occurred on the serve-side",
-                                    )?,
+                                    ServerError => {
+                                        write_error("ERROR: An error occurred on the serve-side")?
+                                    }
                                     OtherError(_) => {
                                         let rem = byter.collect::<Vec<u8>>();
                                         if rem.len() == 0 {
-                                            write_error(
-                                                &mut f,
-                                                "ERROR: An unknown error occurred",
-                                            )?;
+                                            write_error("ERROR: An unknown error occurred")?;
                                         } else {
-                                            write_error(
-                                                &mut f,
-                                                format!("ERROR: {}", String::from_utf8_lossy(&rem)),
-                                            )?;
+                                            write_error(format!(
+                                                "ERROR: {}",
+                                                String::from_utf8_lossy(&rem)
+                                            ))?;
                                         }
                                     }
                                 }
@@ -257,20 +266,17 @@ impl fmt::Display for DataGroup {
                             None => {
                                 let rem = byter.collect::<Vec<u8>>();
                                 if rem.len() == 0 {
-                                    write_error(&mut f, "ERROR: An unknown error occurred")?;
+                                    write_error("ERROR: An unknown error occurred")?;
                                 } else {
-                                    write_error(
-                                        &mut f,
-                                        format!(
-                                            "ERROR: '{}{}'",
-                                            char::from(tok),
-                                            String::from_utf8_lossy(&rem)
-                                        ),
-                                    )?;
+                                    write_error(format!(
+                                        "ERROR: '{}{}'",
+                                        char::from(tok),
+                                        String::from_utf8_lossy(&rem)
+                                    ))?;
                                 }
                             }
                         },
-                        None => write_error(&mut f, "ERROR: An unknown error occurred")?,
+                        None => write_error("ERROR: An unknown error occurred")?,
                     }
                 }
                 b'+' => {
@@ -281,14 +287,11 @@ impl fmt::Display for DataGroup {
                 x @ _ => {
                     // Unknown response
                     let rem = byter.collect::<Vec<u8>>();
-                    write!(
-                        f,
-                        "{}Unknown response: \"{}{}\"{}",
-                        color::Fg(color::Rgb(255, 69, 0)),
+                    write_warning(format!(
+                        "Unknown response: \"{}{}\"",
                         x,
-                        String::from_utf8_lossy(&rem),
-                        style::Reset
-                    )?;
+                        String::from_utf8_lossy(&rem)
+                    ))?;
                 }
             }
         }
