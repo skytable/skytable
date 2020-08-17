@@ -165,11 +165,11 @@ impl IntoQuery for SQuery {
             // Now add the content length + ! + metalayout length + '\n'
             (*self_mut)
                 .metaline
-                .extend(self.dataframe.len().to_string().as_bytes());
+                .extend(self.dataframe.len().to_string().into_bytes());
             (*self_mut).metaline.push(b'!');
             (*self_mut)
                 .metaline
-                .extend((*self_mut).metalayout.len().to_string().as_bytes());
+                .extend((*self_mut).metalayout.len().to_string().into_bytes());
             (*self_mut).metaline.push(b'\n');
         } // The raw pointers are dropped here
         [self.metaline, self.metalayout, self.dataframe].concat()

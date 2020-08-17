@@ -77,7 +77,7 @@ impl IntoRespGroup for ExceptFor {
         except_for_line.push(b'^');
         let mut it = self.0.into_iter().peekable();
         while let Some(item) = it.next() {
-            except_for_line.extend(item.to_string().as_bytes());
+            except_for_line.extend(item.to_string().into_bytes());
             if it.peek().is_some() {
                 except_for_line.push(b',');
             } else {
@@ -129,7 +129,7 @@ fn test_exceptfor() {
 /// items to be able to write to the stream.
 /*
 HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
-use explicit declarations of asynchoronous functions
+use explicit declarations for asynchoronous functions
 */
 pub trait Writable {
     fn write<'s>(
@@ -142,7 +142,10 @@ impl Writable for (Vec<u8>, Vec<u8>, Vec<u8>) {
     fn write<'s>(
         self,
         con: &'s mut BufWriter<TcpStream>,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's)>> {
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's)>>
+    where
+        Self: Sync,
+    {
         async fn write_bytes(
             con: &mut BufWriter<TcpStream>,
             (abyte, bbyte, cbyte): Response,
