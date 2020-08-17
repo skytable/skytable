@@ -22,7 +22,12 @@
 //! Utilities for handling queries
 //!
 
+use crate::protocol::Connection;
 use corelib::builders::response::*;
+use corelib::TResult;
+use std::error::Error;
+use std::future::Future;
+use std::pin::Pin;
 
 /// # `ExceptFor`
 ///
@@ -112,4 +117,23 @@ fn test_exceptfor() {
     let (r1, r2, r3) = exfor.into_response();
     let r = [r1, r2, r3].concat();
     assert_eq!("*!8!5\n#1#5\n&1\n^1,2\n".as_bytes().to_owned(), r);
+}
+
+pub trait Writable {
+    fn write<'s, T>(
+        self,
+        con: &mut Connection,
+    ) -> Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
+}
+
+impl Writable for (Vec<u8>, Vec<u8>, Vec<u8>) {
+    fn write<'s, T>(
+        self,
+        con: &mut Connection,
+    ) -> Pin<Box<(dyn Future<Output = T> + Send + Sync + 's)>> {
+        async fn write_bytes(con: &mut Connection, tuple: Response) -> Result<(), Box<dyn Error>> {
+            con.write_response(tuple).await
+        }
+        todo!()
+    }
 }
