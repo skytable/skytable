@@ -20,6 +20,7 @@
 */
 
 mod deserializer;
+use crate::queryengine::queryutil::Writable;
 use bytes::{Buf, BytesMut};
 use corelib::builders::response::IntoResponse;
 use corelib::builders::response::Response;
@@ -117,10 +118,8 @@ impl Connection {
         self.stream.get_ref().peer_addr()
     }
     /// Write a response to the stream
-    pub async fn write_response(&mut self, (mline, mlayout, df): Response) -> TResult<()> {
-        self.stream.write_all(&mline).await?;
-        self.stream.write_all(&mlayout).await?;
-        self.stream.write_all(&df).await?;
+    pub async fn write_response(&mut self, streamer: impl Writable) -> TResult<()> {
+        streamer.write(&mut self.stream).await?;
         // Flush the stream to make sure that the data was delivered
         self.stream.flush().await?;
         Ok(())

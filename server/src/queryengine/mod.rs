@@ -26,7 +26,7 @@ use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::{responses, RespCodes};
 mod get;
-mod queryutil;
+pub mod queryutil;
 mod set;
 mod update;
 mod tags {

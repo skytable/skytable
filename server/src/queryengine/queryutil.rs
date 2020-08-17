@@ -22,12 +22,13 @@
 //! Utilities for handling queries
 //!
 
-use crate::protocol::Connection;
 use corelib::builders::response::*;
-use corelib::TResult;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
+use tokio::net::TcpStream;
 
 /// # `ExceptFor`
 ///
@@ -119,21 +120,38 @@ fn test_exceptfor() {
     assert_eq!("*!8!5\n#1#5\n&1\n^1,2\n".as_bytes().to_owned(), r);
 }
 
+/// # The `Writable` trait
+/// All trait implementors are given access to an asynchronous stream to which
+/// they must write a response.
+///
+/// As we will eventually move towards a second
+/// iteration of the structure of response packets, we will need to let several
+/// items to be able to write to the stream.
+/*
+HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
+use explicit declarations of asynchoronous functions
+*/
 pub trait Writable {
-    fn write<'s, T>(
+    fn write<'s>(
         self,
-        con: &mut Connection,
-    ) -> Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
 }
 
 impl Writable for (Vec<u8>, Vec<u8>, Vec<u8>) {
-    fn write<'s, T>(
+    fn write<'s>(
         self,
-        con: &mut Connection,
-    ) -> Pin<Box<(dyn Future<Output = T> + Send + Sync + 's)>> {
-        async fn write_bytes(con: &mut Connection, tuple: Response) -> Result<(), Box<dyn Error>> {
-            con.write_response(tuple).await
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's)>> {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            (abyte, bbyte, cbyte): Response,
+        ) -> Result<(), Box<dyn Error>> {
+            con.write_all(&abyte).await?;
+            con.write_all(&bbyte).await?;
+            con.write_all(&cbyte).await?;
+            Ok(())
         }
-        todo!()
+        Box::pin(write_bytes(con, self))
     }
 }
