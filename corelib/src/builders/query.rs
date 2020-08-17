@@ -31,7 +31,7 @@ type PQTuple = (usize, Vec<u8>);
 /// The bytes for the metalayout, the bytes for the dataframe
 type QueryTuple = (Vec<u8>, Vec<u8>);
 
-/// This trait will return: ([val.as_bytes(), '\n'], len(val.len()))
+/// This trait will return: ([val.into_bytes(), '\n'], len(val.len()))
 pub trait PreQuery {
     fn into_pre_query(self) -> PQTuple;
 }
@@ -66,7 +66,10 @@ where
     T: ToString,
 {
     fn into_pre_query(self) -> PQTuple {
-        let df_bytes = [self.to_string().as_bytes(), &[b'\n']].concat();
+        let self_bytes = self.to_string().into_bytes();
+        let mut df_bytes = Vec::with_capacity(self_bytes.len() + 1);
+        df_bytes.extend(self_bytes);
+        df_bytes.push(b'\n');
         (df_bytes.len() - 1, df_bytes)
     }
 }
@@ -102,8 +105,16 @@ where
 {
     fn into_query_group(self) -> QueryTuple {
         let st = self.to_string();
-        let metalayout = [&[b'#', b'2', b'#'], (st.len()).to_string().as_bytes()].concat();
-        let dataframe = [&[b'&', b'1', b'\n'], &[b'+'][..], st.as_bytes(), &[b'\n']].concat();
+        let self_bytes = self.to_string().into_bytes();
+        let len = (st.len()).to_string().into_bytes();
+        let mut metalayout = Vec::with_capacity(3 + (len.len()));
+        let mut dataframe = Vec::with_capacity(5 + (self_bytes.len()));
+        metalayout.extend(&[b'#', b'2', b'#']);
+        metalayout.extend(len);
+        dataframe.extend(&[b'&', b'1', b'\n']);
+        dataframe.push(b'+');
+        dataframe.extend(self_bytes);
+        dataframe.push(b'\n');
         (metalayout, dataframe)
     }
 }
@@ -183,14 +194,14 @@ where
 {
     fn into_query(self) -> Vec<u8> {
         let (metalayout, dataframe) = self.to_string().into_query_group();
-        let metaline = [
-            &[b'*', b'!'],
-            dataframe.len().to_string().as_bytes(),
-            &[b'!'],
-            metalayout.len().to_string().as_bytes(),
-            &[b'\n'],
-        ]
-        .concat();
+        let df_len = dataframe.len().to_string().into_bytes();
+        let ml_len = metalayout.len().to_string().into_bytes();
+        let mut metaline = Vec::with_capacity(4 + df_len.len() + ml_len.len());
+        metaline.extend(&[b'*', b'!']);
+        metaline.extend(df_len);
+        metaline.push(b'\n');
+        metaline.extend(ml_len);
+        metaline.push(b'\n');
         [metaline, metalayout, dataframe].concat()
     }
 }
@@ -199,19 +210,29 @@ impl IntoQueryGroup for QueryGroup {
     fn into_query_group(self) -> QueryTuple {
         // Get the number of items in the data group, convert it into it's UTF-8
         // equivalent.
-        let sizeline = [&[b'&'], self.sizes.len().to_string().as_bytes(), &[b'\n']].concat();
+        let self_len_bytes = self.sizes.len().to_string().into_bytes();
+        let mut sizeline = Vec::with_capacity(2 + self_len_bytes.len());
+        sizeline.push(b'&');
+        sizeline.extend(self_len_bytes);
+        sizeline.push(b'\n');
         // Now we have the &<n>\n line
         // All we need to know is: add this line to the data bytes
         // also we need to add the len of the sizeline - 1 to the sizes
         let sizes: Vec<u8> = self
             .sizes
             .into_iter()
-            .map(|size| [&[b'#'], size.to_string().as_bytes()].concat())
+            .map(|size| {
+                let size_bytes = size.to_string().into_bytes();
+                let mut sizepack = Vec::with_capacity(1 + size_bytes.len());
+                sizepack.push(b'#');
+                sizepack.extend(size_bytes);
+                sizepack
+            })
             .flatten()
             .collect();
         let metalayout = [
             vec![b'#'],
-            (sizeline.len() - 1).to_string().as_bytes().to_vec(),
+            (sizeline.len() - 1).to_string().into_bytes().to_vec(),
             sizes,
         ]
         .concat();

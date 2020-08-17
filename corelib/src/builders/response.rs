@@ -38,7 +38,7 @@ pub type Response = (Vec<u8>, Vec<u8>, Vec<u8>);
 
 pub struct BytesWrapper(pub Bytes);
 
-/// This trait will return: ([<symbol>, val.as_bytes(), '\n'], len(1+val.len()))
+/// This trait will return: ([<symbol>, val.into_bytes(), '\n'], len(1+val.len()))
 pub trait PreResp {
     fn into_pre_resp(self) -> PRTuple;
 }
@@ -73,7 +73,11 @@ where
     T: ToString,
 {
     fn into_pre_resp(self) -> PRTuple {
-        let df_bytes = [&[b'+'], self.to_string().as_bytes(), &[b'\n']].concat();
+        let self_bytes = self.to_string().into_bytes();
+        let mut df_bytes = Vec::with_capacity(2 + self_bytes.len());
+        df_bytes.push(b'+');
+        df_bytes.extend(self_bytes);
+        df_bytes.push(b'\n');
         (df_bytes.len() - 1, df_bytes)
     }
 }
@@ -96,7 +100,11 @@ impl PreResp for RespCodes {
             RespCodes::ServerError => "!5\n".as_bytes().to_owned(),
             RespCodes::OtherError(maybe_err) => {
                 if let Some(err) = maybe_err {
-                    [&[b'!'], err.as_bytes(), &[b'\n']].concat()
+                    let mut vc = Vec::with_capacity(err.len() + 2);
+                    vc.push(b'!');
+                    vc.extend(err.into_bytes());
+                    vc.push(b'\n');
+                    vc
                 } else {
                     "!6\n".as_bytes().to_owned()
                 }
@@ -110,8 +118,13 @@ impl PreResp for RespCodes {
 impl IntoRespGroup for RespCodes {
     fn into_resp_group(self) -> RGTuple {
         let (size, data) = self.into_pre_resp();
-        let metalayout_ext = [&[b'#', b'2', b'#'], size.to_string().as_bytes()].concat();
-        let dataframe_ext = [vec![b'&', b'1', b'\n'], data].concat();
+        let self_bytes = size.to_string().into_bytes();
+        let mut metalayout_ext = Vec::with_capacity(3 + self_bytes.len());
+        metalayout_ext.extend(&[b'#', b'2', b'#']);
+        metalayout_ext.extend(size.to_string().into_bytes());
+        let mut dataframe_ext = Vec::with_capacity(3 + data.len());
+        dataframe_ext.extend(&[b'&', b'1', b'\n']);
+        dataframe_ext.extend(data);
         (metalayout_ext, dataframe_ext)
     }
 }
@@ -119,8 +132,13 @@ impl IntoRespGroup for RespCodes {
 impl IntoRespGroup for BytesWrapper {
     fn into_resp_group(self) -> RGTuple {
         let (size, data) = self.into_pre_resp();
-        let metalayout_ext = [&[b'#', b'2', b'#'], size.to_string().as_bytes()].concat();
-        let dataframe_ext = [vec![b'&', b'1', b'\n'], data].concat();
+        let size_string = size.to_string().into_bytes();
+        let mut metalayout_ext = Vec::with_capacity(3 + (size_string.len()));
+        metalayout_ext.extend(&[b'#', b'2', b'#']);
+        metalayout_ext.extend(size_string);
+        let mut dataframe_ext = Vec::with_capacity(3 + data.len());
+        dataframe_ext.extend(&[b'&', b'1', b'\n']);
+        dataframe_ext.extend(data);
         (metalayout_ext, dataframe_ext)
     }
 }
@@ -129,19 +147,29 @@ impl IntoRespGroup for RespGroup {
     fn into_resp_group(self) -> RGTuple {
         // Get the number of items in the data group, convert it into it's UTF-8
         // equivalent.
-        let sizeline = [&[b'&'], self.sizes.len().to_string().as_bytes(), &[b'\n']].concat();
+        let self_size_into_bytes = self.sizes.len().to_string().into_bytes();
+        let mut sizeline = Vec::with_capacity(2 + self_size_into_bytes.len());
+        sizeline.push(b'&');
+        sizeline.extend(self_size_into_bytes);
+        sizeline.push(b'\n');
         // Now we have the &<n>\n line
         // All we need to know is: add this line to the data bytes
         // also we need to add the len of the sizeline - 1 to the sizes
         let sizes: Vec<u8> = self
             .sizes
             .into_iter()
-            .map(|size| [&[b'#'], size.to_string().as_bytes()].concat())
+            .map(|size| {
+                let size_as_bytes = size.to_string().into_bytes();
+                let mut vc = Vec::with_capacity(size_as_bytes.len() + 1);
+                vc.push(b'#');
+                vc.extend(size_as_bytes);
+                vc
+            })
             .flatten()
             .collect();
         let metalayout = [
             vec![b'#'],
-            (sizeline.len() - 1).to_string().as_bytes().to_vec(),
+            (sizeline.len() - 1).to_string().into_bytes().to_vec(),
             sizes,
         ]
         .concat();
@@ -155,9 +183,15 @@ where
     T: ToString,
 {
     fn into_resp_group(self) -> RGTuple {
-        let st = self.to_string();
-        let metalayout = [&[b'#', b'2', b'#'], (st.len() + 1).to_string().as_bytes()].concat();
-        let dataframe = [&[b'&', b'1', b'\n'], &[b'+'][..], st.as_bytes(), &[b'\n']].concat();
+        let st = self.to_string().into_bytes();
+        let st_len = (st.len() + 1).to_string().into_bytes();
+        let mut metalayout = Vec::with_capacity(3 + st_len.len());
+        metalayout.extend(&[b'#', b'2', b'#']);
+        metalayout.extend(st_len);
+        let mut dataframe = Vec::with_capacity(5 + st.len());
+        dataframe.extend(&[b'&', b'1', b'\n', b'+']);
+        dataframe.extend(st);
+        dataframe.push(b'\n');
         (metalayout, dataframe)
     }
 }
@@ -254,11 +288,11 @@ impl IntoResponse for SResp {
             // Now add the content length + ! + metalayout length + '\n'
             (*self_mut)
                 .metaline
-                .extend(self.dataframe.len().to_string().as_bytes());
+                .extend(self.dataframe.len().to_string().into_bytes());
             (*self_mut).metaline.push(b'!');
             (*self_mut)
                 .metaline
-                .extend((*self_mut).metalayout.len().to_string().as_bytes());
+                .extend((*self_mut).metalayout.len().to_string().into_bytes());
             (*self_mut).metaline.push(b'\n');
         } // The raw pointers are dropped here
         (self.metaline, self.metalayout, self.dataframe)
@@ -273,14 +307,14 @@ where
     fn into_response(self) -> Response {
         let (mut metalayout, dataframe) = self.to_string().into_resp_group();
         metalayout.push(b'\n');
-        let metaline = [
-            &[b'*', b'!'],
-            dataframe.len().to_string().as_bytes(),
-            &[b'!'],
-            metalayout.len().to_string().as_bytes(),
-            &[b'\n'],
-        ]
-        .concat();
+        let df_len_bytes = dataframe.len().to_string().into_bytes();
+        let ml_len_bytes = metalayout.len().to_string().into_bytes();
+        let mut metaline = Vec::with_capacity(5 + df_len_bytes.len() + ml_len_bytes.len());
+        metaline.extend(&[b'*', b'!']);
+        metaline.extend(df_len_bytes);
+        metaline.push(b'!');
+        metaline.extend(ml_len_bytes);
+        metaline.push(b'\n');
         (metaline, metalayout, dataframe)
     }
 }
@@ -288,14 +322,13 @@ where
 impl IntoResponse for BytesWrapper {
     fn into_response(self) -> Response {
         let (metalayout, dataframe) = self.into_resp_group();
-        let metaline = [
-            &[b'*', b'!'],
-            dataframe.len().to_string().as_bytes(),
-            &[b'!'],
-            metalayout.len().to_string().as_bytes(),
-            &[b'\n'],
-        ]
-        .concat();
+        let df_len_bytes = dataframe.len().to_string().into_bytes();
+        let ml_len_bytes = metalayout.len().to_string().into_bytes();
+        let mut metaline = Vec::with_capacity(4 + df_len_bytes.len() + ml_len_bytes.len());
+        metaline.extend(&[b'*', b'!']);
+        metaline.extend(df_len_bytes);
+        metaline.push(b'!');
+        metaline.extend(ml_len_bytes);
         (metaline, metalayout, dataframe)
     }
 }
@@ -304,14 +337,14 @@ impl IntoResponse for RespCodes {
     fn into_response(self) -> Response {
         let (mut metalayout, dataframe) = self.into_resp_group();
         metalayout.push(b'\n');
-        let metaline = [
-            &[b'*', b'!'],
-            dataframe.len().to_string().as_bytes(),
-            &[b'!'],
-            metalayout.len().to_string().as_bytes(),
-            &[b'\n'],
-        ]
-        .concat();
+        let df_len_bytes = dataframe.len().to_string().into_bytes();
+        let ml_len_bytes = metalayout.len().to_string().into_bytes();
+        let mut metaline = Vec::with_capacity(4 + df_len_bytes.len() + ml_len_bytes.len());
+        metaline.extend(&[b'*', b'!']);
+        metaline.extend(df_len_bytes);
+        metaline.push(b'!');
+        metaline.extend(ml_len_bytes);
+        metaline.push(b'!');
         (metaline, metalayout, dataframe)
     }
 }

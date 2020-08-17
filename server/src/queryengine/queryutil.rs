@@ -88,7 +88,7 @@ impl IntoRespGroup for ExceptFor {
         metalayout_ext.push(b'#');
         metalayout_ext.push(b'1');
         metalayout_ext.push(b'#');
-        metalayout_ext.extend(except_for_line.len().to_string().as_bytes());
+        metalayout_ext.extend(except_for_line.len().to_string().into_bytes());
         let dataframe_ext = [vec![b'&', b'1', b'\n'], except_for_line].concat();
         (metalayout_ext, dataframe_ext)
     }
@@ -98,14 +98,14 @@ impl IntoResponse for ExceptFor {
     fn into_response(self) -> Response {
         let (mut metalayout_ext, df_ext) = self.into_resp_group();
         metalayout_ext.push(b'\n');
-        let metaline = [
-            &[b'*', b'!'],
-            df_ext.len().to_string().as_bytes(),
-            &[b'!'],
-            metalayout_ext.len().to_string().as_bytes(),
-            &[b'\n'],
-        ]
-        .concat();
+        let df_len_bytes = df_ext.len().to_string().into_bytes();
+        let ml_len_bytes = metalayout_ext.len().to_string().into_bytes();
+        let mut metaline = Vec::with_capacity(4 + df_len_bytes.len() + ml_len_bytes.len());
+        metaline.extend(&[b'*', b'!']);
+        metaline.extend(df_len_bytes);
+        metaline.push(b'!');
+        metaline.extend(ml_len_bytes);
+        metaline.push(b'\n');
         (metaline, metalayout_ext, df_ext)
     }
 }
