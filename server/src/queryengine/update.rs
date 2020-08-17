@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Mon Aug 17 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,16 +19,16 @@
  *
 */
 
-//! # `SET` queries
-//! This module provides functions to work with `SET` queries
+//! # `UPDATE` queries
+//! This module provides functions to work with `UPDATE` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
-/// Run a `SET` query
-pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
+/// Run an `UPDATE` query
+pub fn update(handle: &CoreDB, act: DataGroup) -> Response {
     if (act.len() - 1) & 1 != 0 {
         return RespCodes::ActionError.into_response();
     }
@@ -36,7 +36,7 @@ pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
     let mut respgroup = RespGroup::new();
     act[1..]
         .chunks_exact(2)
-        .for_each(|key| match handle.set(&key[0], &key[1]) {
+        .for_each(|key| match handle.update(&key[0], &key[1]) {
             Ok(_) => respgroup.add_item(RespCodes::Okay),
             Err(e) => respgroup.add_item(e),
         });
@@ -45,18 +45,20 @@ pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
 }
 
 #[test]
-fn test_set() {
+fn test_update() {
     let db = CoreDB::new().unwrap();
+    db.set("foo", &"bar".to_owned()).unwrap();
+    assert_eq!(db.get("foo").unwrap(), "bar");
     let act = DataGroup::new(vec![
-        "SET".to_owned(),
-        "foo1".to_owned(),
-        "bar".to_owned(),
-        "foo2".to_owned(),
-        "bar".to_owned(),
+        "UPDATE".to_owned(),
+        "foo".to_owned(),
+        "newbar".to_owned(),
+        "foo".to_owned(),
+        "latestbar".to_owned(),
     ]);
-    let (r1, r2, r3) = set(&db, act);
+    let (r1, r2, r3) = update(&db, act);
     let r = [r1, r2, r3].concat();
-    assert!(db.get("foo1").unwrap() == "bar" && db.get("foo2").unwrap() == "bar");
+    assert_eq!(db.get("foo").unwrap(), "latestbar");
     db.finish_db(true, true, true);
     assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
 }

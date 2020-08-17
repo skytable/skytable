@@ -27,6 +27,7 @@ use corelib::de::DataGroup;
 use corelib::terrapipe::{responses, RespCodes};
 mod get;
 mod set;
+mod update;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
