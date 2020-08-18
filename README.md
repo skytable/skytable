@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/terrabasedb/docs/master/docs/assets/img/favicon.ico" height=64 width=64 style="float:left">
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest by date)](https://img.shields.io/github/v/tag/terrabasedb/terrabase.svg?style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabase?include_prereleases&sort=semver&style=flat-square) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/terrabasedb/terrabase?label=commits&style=flat-square)
 
 </div>
 </html>
@@ -12,7 +12,7 @@
 
 TerrabaseDB (or TDB for short) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. TDB is curently in an alpha stage, but can be used as a **performant** and **persistent key-value store**.
 
-## Getting started
+## Getting started 🚀
 
 1. Download a bundle for your platform from [here ⬇️ ](https://github.com/terrabasedb/terrabase/releases)
 2. Unzip the bundle
@@ -55,7 +55,7 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the ![easyfix](https://img.shields.io/badge/easyfix-C71585) label. Read the guide [here](./CONTRIBUTING.md).
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/easyfix-C71585>](https://github.com/terrabasedb/terrabase/labels/easyfix) label. Read the guide [here](./CONTRIBUTING.md).
 
 
 ## License
