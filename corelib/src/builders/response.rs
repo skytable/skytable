@@ -114,6 +114,31 @@ impl PreResp for RespCodes {
     }
 }
 
+#[cfg(test)]
+#[test]
+fn test_preresp_trait_impl_respcodes() {
+    let okay_resp = RespCodes::Okay.into_pre_resp();
+    assert_eq!(2, okay_resp.0);
+    assert_eq!("!0\n".as_bytes().to_owned(), okay_resp.1);
+}
+
+#[cfg(test)]
+#[test]
+fn test_preresp_trait_impl_blanket() {
+    let blanket_resp = 23.into_pre_resp();
+    assert_eq!(blanket_resp.0, 3);
+    assert_eq!("+23\n".as_bytes().to_owned(), blanket_resp.1);
+}
+
+#[cfg(test)]
+#[test]
+fn test_preresp_trait_impl_byteswrapper() {
+    let bytes_wrapper = BytesWrapper(Bytes::from("coolvalue"));
+    let bytes_wrapper_resp = bytes_wrapper.into_pre_resp();
+    assert_eq!(10, bytes_wrapper_resp.0);
+    assert_eq!("+coolvalue\n".as_bytes().to_owned(), bytes_wrapper_resp.1);
+}
+
 // For responses which just have one response code as a group
 impl IntoRespGroup for RespCodes {
     fn into_resp_group(self) -> RGTuple {
@@ -197,7 +222,7 @@ where
 }
 #[cfg(test)]
 #[test]
-fn test_data_group_resp_trait_impl() {
+fn test_respgroup_trait_impl_datagroup() {
     let mut dg = RespGroup::new();
     dg.add_item("HEYA");
     dg.add_item(String::from("sayan"));
@@ -212,6 +237,30 @@ fn test_data_group_resp_trait_impl() {
     let (layout, df) = dg.into_resp_group();
     assert_eq!("&1\n+100\n".as_bytes().to_owned(), df);
     assert_eq!("#2#4".as_bytes().to_owned(), layout);
+}
+
+#[cfg(test)]
+#[test]
+fn test_respgroup_trait_impl_respcodes() {
+    let dg = RespCodes::Okay.into_resp_group();
+    assert_eq!("#2#2".as_bytes().to_owned(), dg.0);
+    assert_eq!("&1\n!0\n".as_bytes().to_owned(), dg.1);
+}
+
+#[cfg(test)]
+#[test]
+fn test_respgroup_trait_impl_blanket() {
+    let dg = "four".into_resp_group();
+    assert_eq!("#2#5".as_bytes().to_owned(), dg.0);
+    assert_eq!("&1\n+four\n".as_bytes().to_owned(), dg.1);
+}
+
+#[cfg(test)]
+#[test]
+fn test_respgroup_trait_impl_byteswrapper() {
+    let dg = BytesWrapper(Bytes::from("coolvalue")).into_resp_group();
+    assert_eq!("#2#10".as_bytes().to_owned(), dg.0);
+    assert_eq!("&1\n+coolvalue\n".as_bytes().to_owned(), dg.1);
 }
 
 /// A response group which is a data group in a dataframe
@@ -351,7 +400,7 @@ impl IntoResponse for RespCodes {
 
 #[cfg(test)]
 #[test]
-fn test_datagroup() {
+fn test_intoresponse_trait_impl_datagroup() {
     let mut datagroup = RespGroup::new();
     datagroup.add_item("HEY!");
     datagroup.add_item("four");
