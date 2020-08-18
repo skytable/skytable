@@ -117,10 +117,10 @@ impl CoreDB {
         self.acquire_read().contains_key(&key.to_owned())
     }
 
-    #[cfg(Debug)]
+    #[cfg(debug_assertions)]
     /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
-        println!("{:#?}", *self.coremap.read().unwrap());
+        println!("{:#?}", *self.acquire_read());
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`

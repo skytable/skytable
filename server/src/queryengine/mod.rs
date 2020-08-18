@@ -72,7 +72,7 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
                         if buf.next().is_none() {
                             match db.set(&key.to_string(), &value.to_string()) {
                                 Ok(_) => {
-                                    #[cfg(Debug)]
+                                    #[cfg(debug_assertions)]
                                     {
                                         db.print_debug_table();
                                     }
@@ -91,7 +91,7 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
                         if buf.next().is_none() {
                             match db.update(&key.to_string(), &value.to_string()) {
                                 Ok(_) => {
-                                    #[cfg(Debug)]
+                                    #[cfg(debug_assertions)]
                                     {
                                         db.print_debug_table();
                                     }
@@ -109,7 +109,7 @@ pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
                     if buf.next().is_none() {
                         match db.del(&key.to_string()) {
                             Ok(_) => {
-                                #[cfg(Debug)]
+                                #[cfg(debug_assertions)]
                                 {
                                     db.print_debug_table();
                                 }

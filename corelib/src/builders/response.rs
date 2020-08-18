@@ -344,7 +344,7 @@ impl IntoResponse for RespCodes {
         metaline.extend(df_len_bytes);
         metaline.push(b'!');
         metaline.extend(ml_len_bytes);
-        metaline.push(b'!');
+        metaline.push(b'\n');
         (metaline, metalayout, dataframe)
     }
 }
