@@ -21,6 +21,7 @@
 
 use crate::protocol::{Connection, QueryResult::*};
 use crate::CoreDB;
+use corelib::util::terminal;
 use corelib::TResult;
 use std::future::Future;
 use std::process;
@@ -163,6 +164,7 @@ impl Drop for CHandler {
         self.climit.add_permits(1);
     }
 }
+use std::io::{self, prelude::*};
 
 /// Start the server waiting for incoming connections or a CTRL+C signal
 pub async fn run(listener: TcpListener, sig: impl Future) {
@@ -197,12 +199,25 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
         ..
     } = server;
     if let Ok(_) = db.flush_db() {
+        terminal::write_success("Successfully saved data to disk\n").unwrap();
         ()
     } else {
-        eprintln!("ERROR: Couldn't flush database! All data created in this session will be lost");
+        terminal::write_error("Failed to flush data to disk\n").unwrap();
+        loop {
+            // Keep looping until we successfully write the in-memory table to disk
+            terminal::write_warning("Press enter to try again...").unwrap();
+            io::stdout().flush().unwrap();
+            io::stdin().read(&mut [0]).unwrap();
+            if let Ok(_) = db.flush_db() {
+                terminal::write_success("Successfully saved data to disk\n").unwrap();
+                break;
+            } else {
+                continue;
+            }
+        }
     }
     drop(signal);
     drop(terminate_tx);
     let _ = terminate_rx.recv().await;
-    println!("Goodbye :)");
+    terminal::write_okay("Goodbye :)\n").unwrap();
 }

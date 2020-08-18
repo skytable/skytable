@@ -30,8 +30,7 @@ use dbnet::run;
 use tokio::signal;
 static ADDR: &'static str = "127.0.0.1:2003";
 static MSG: &'static str = "TerrabaseDB v0.3.2 | https://github.com/terrabasedb/terrabase\nServer running on terrapipe://127.0.0.1:2003";
-static TEXT: &'static str =
-    "     _______                       _                        _____   ____  
+static TEXT: &'static str = " _______                       _                        _____   ____  
      |__   __|                     | |                      |  __ \\ |  _ \\ 
         | |  ___  _ __  _ __  __ _ | |__    __ _  ___   ___ | |  | || |_) |
         | | / _ \\| '__|| '__|/ _` || '_ \\  / _` |/ __| / _ \\| |  | ||  _ < 

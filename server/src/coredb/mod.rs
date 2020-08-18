@@ -163,7 +163,7 @@ impl CoreDB {
         self.shared.coremap.read()
     }
     /// Flush the contents of the in-memory table onto disk
-    pub fn flush_db(self) -> TResult<()> {
+    pub fn flush_db(&self) -> TResult<()> {
         let data = &*self.acquire_write();
         diskstore::flush_data(data)?;
         Ok(())

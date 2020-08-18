@@ -185,30 +185,7 @@ pub struct DataGroup(pub Vec<String>);
 
 impl fmt::Display for DataGroup {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use std::io::Write;
-        use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-        fn write_with_col<T: fmt::Display>(item: T, color: Option<Color>) -> fmt::Result {
-            let mut stdout = StandardStream::stdout(ColorChoice::Always);
-            if let Err(_) = stdout.set_color(ColorSpec::new().set_fg(color)) {
-                return Err(fmt::Error);
-            }
-            if let Err(_) = write!(&mut stdout, "{}", item) {
-                return Err(fmt::Error);
-            }
-            if stdout.reset().is_err() {
-                return Err(fmt::Error);
-            }
-            Ok(())
-        }
-        fn write_okay<T: fmt::Display>(item: T) -> fmt::Result {
-            write_with_col(item, Some(Color::Cyan))
-        }
-        fn write_warning<T: fmt::Display>(item: T) -> fmt::Result {
-            write_with_col(item, Some(Color::Yellow))
-        }
-        fn write_error<T: fmt::Display>(item: T) -> fmt::Result {
-            write_with_col(item, Some(Color::Red))
-        }
+        use crate::util::terminal::*;
         /*
         TODO(@ohsayan): Implement proper formatting for the response. That is,
         for `!` print the respective error code, for `+` print the corresponding
@@ -234,7 +211,8 @@ impl fmt::Display for DataGroup {
                                 match code {
                                     Okay => write_okay("(Okay)")?,
                                     NotFound => {
-                                        write_error("ERROR: Couldn't find the key")?;
+                                        // `NotFound` is the same as a `Nil` value
+                                        write_error("(Nil)")?;
                                     }
                                     OverwriteError => {
                                         write_error(
