@@ -200,60 +200,62 @@ impl fmt::Display for DataGroup {
                 write!(f, "\"\"")?;
                 continue;
             }
-            let mut byter = token.bytes();
+            let mut byter = token.bytes().peekable();
             match byter.next().unwrap() {
                 b'!' => {
                     // This is an error
                     match byter.next() {
-                        Some(tok) => match RespCodes::from_utf8(tok) {
-                            Some(code) => {
-                                use RespCodes::*;
-                                match code {
-                                    Okay => write_okay("(Okay)")?,
-                                    NotFound => {
-                                        // `NotFound` is the same as a `Nil` value
-                                        write_error("(Nil)")?;
-                                    }
-                                    OverwriteError => {
-                                        write_error(
-                                            "ERROR: Existing values cannot be overwritten",
-                                        )?;
-                                    }
-                                    PacketError => {
-                                        write_error("ERROR: An invalid request was sent")?;
-                                    }
-                                    ActionError => write_error(
-                                        "ERROR: The action is not in the correct format",
-                                    )?,
-                                    ServerError => {
-                                        write_error("ERROR: An error occurred on the serve-side")?
-                                    }
-                                    OtherError(_) => {
-                                        let rem = byter.collect::<Vec<u8>>();
-                                        if rem.len() == 0 {
-                                            write_error("ERROR: An unknown error occurred")?;
-                                        } else {
-                                            write_error(format!(
-                                                "ERROR: {}",
-                                                String::from_utf8_lossy(&rem)
-                                            ))?;
+                        Some(tok) => {
+                            match RespCodes::from_utf8(tok) {
+                                Some(code) => {
+                                    use RespCodes::*;
+                                    match code {
+                                        Okay => write_okay("(Okay)")?,
+                                        NotFound => {
+                                            // `NotFound` is the same as a `Nil` value
+                                            write_error("(Nil)")?;
+                                        }
+                                        OverwriteError => {
+                                            write_error(
+                                                "ERROR: Existing values cannot be overwritten",
+                                            )?;
+                                        }
+                                        PacketError => {
+                                            write_error("ERROR: An invalid request was sent")?;
+                                        }
+                                        ActionError => write_error(
+                                            "ERROR: The action is not in the correct format",
+                                        )?,
+                                        ServerError => write_error(
+                                            "ERROR: An error occurred on the serve-side",
+                                        )?,
+                                        OtherError(_) => {
+                                            let rem = byter.collect::<Vec<u8>>();
+                                            if rem.len() == 0 {
+                                                write_error("ERROR: An unknown error occurred")?;
+                                            } else {
+                                                write_error(format!(
+                                                    "ERROR: {}",
+                                                    String::from_utf8_lossy(&rem)
+                                                ))?;
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            None => {
-                                let rem = byter.collect::<Vec<u8>>();
-                                if rem.len() == 0 {
-                                    write_error("ERROR: An unknown error occurred")?;
-                                } else {
-                                    write_error(format!(
-                                        "ERROR: '{}{}'",
-                                        char::from(tok),
-                                        String::from_utf8_lossy(&rem)
-                                    ))?;
+                                None => {
+                                    let rem = byter.collect::<Vec<u8>>();
+                                    if rem.len() == 0 {
+                                        write_error("ERROR: An unknown error occurred")?;
+                                    } else {
+                                        write_error(format!(
+                                            "ERROR: '{}{}'",
+                                            char::from(tok),
+                                            String::from_utf8_lossy(&rem)
+                                        ))?;
+                                    }
                                 }
                             }
-                        },
+                        }
                         None => write_error("ERROR: An unknown error occurred")?,
                     }
                 }
@@ -272,6 +274,7 @@ impl fmt::Display for DataGroup {
                     ))?;
                 }
             }
+            write!(f, "\n")?;
         }
         Ok(())
     }

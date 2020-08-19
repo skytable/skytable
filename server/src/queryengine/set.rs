@@ -28,7 +28,7 @@ use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
 /// Run a `SET` query
-pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
+pub fn set(handle: &CoreDB, act: Vec<String>) -> Response {
     if (act.len() - 1) & 1 != 0 {
         return RespCodes::ActionError.into_response();
     }
@@ -47,13 +47,13 @@ pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
 #[test]
 fn test_set() {
     let db = CoreDB::new().unwrap();
-    let act = DataGroup::new(vec![
+    let act = vec![
         "SET".to_owned(),
         "foo1".to_owned(),
         "bar".to_owned(),
         "foo2".to_owned(),
         "bar".to_owned(),
-    ]);
+    ];
     let (r1, r2, r3) = set(&db, act);
     let r = [r1, r2, r3].concat();
     assert!(db.get("foo1").unwrap() == "bar" && db.get("foo2").unwrap() == "bar");

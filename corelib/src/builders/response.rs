@@ -84,7 +84,10 @@ where
 
 impl PreResp for BytesWrapper {
     fn into_pre_resp(self) -> PRTuple {
-        let df_bytes = [&[b'+'], &self.0[..], &[b'\n']].concat();
+        let mut df_bytes = Vec::with_capacity(2 + self.0.len());
+        df_bytes.push(b'+');
+        df_bytes.extend(self.0);
+        df_bytes.push(b'\n');
         (df_bytes.len() - 1, df_bytes)
     }
 }

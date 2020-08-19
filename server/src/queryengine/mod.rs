@@ -25,10 +25,13 @@ use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::{responses, RespCodes};
+mod del;
+mod exists;
 mod get;
 pub mod queryutil;
 mod set;
 mod update;
+use std::mem;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
@@ -47,99 +50,22 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
-    let mut buf = (*buf[0].0).into_iter();
-    while let Some(token) = buf.next() {
-        match token.to_uppercase().as_str() {
-            tags::TAG_GET => {
-                // This is a GET query
-                if let Some(key) = buf.next() {
-                    if buf.next().is_none() {
-                        let res = match db.get(&key.to_string()) {
-                            Ok(v) => v,
-                            Err(e) => return e.into_response(),
-                        };
-                        let mut resp = SResp::new();
-                        resp.add_group(BytesWrapper(res));
-                        return resp.into_response();
-                    }
-                }
-            }
-            tags::TAG_SET => {
-                // This is a SET query
-                if let Some(key) = buf.next() {
-                    if let Some(value) = buf.next() {
-                        if buf.next().is_none() {
-                            match db.set(&key.to_string(), &value.to_string()) {
-                                Ok(_) => {
-                                    #[cfg(debug_assertions)]
-                                    {
-                                        db.print_debug_table();
-                                    }
-                                    return responses::OKAY.to_owned();
-                                }
-                                Err(e) => return e.into_response(),
-                            }
-                        }
-                    }
-                }
-            }
-            tags::TAG_UPDATE => {
-                // This is an UPDATE query
-                if let Some(key) = buf.next() {
-                    if let Some(value) = buf.next() {
-                        if buf.next().is_none() {
-                            match db.update(&key.to_string(), &value.to_string()) {
-                                Ok(_) => {
-                                    #[cfg(debug_assertions)]
-                                    {
-                                        db.print_debug_table();
-                                    }
-                                    return responses::OKAY.to_owned();
-                                }
-                                Err(e) => return e.into_response(),
-                            }
-                        }
-                    }
-                }
-            }
-            tags::TAG_DEL => {
-                // This is a DEL query
-                if let Some(key) = buf.next() {
-                    if buf.next().is_none() {
-                        match db.del(&key.to_string()) {
-                            Ok(_) => {
-                                #[cfg(debug_assertions)]
-                                {
-                                    db.print_debug_table();
-                                }
-
-                                return responses::OKAY.to_owned();
-                            }
-                            Err(e) => return e.into_response(),
-                        }
-                    }
-                }
-            }
-            tags::TAG_EXISTS => {
-                // This is an `EXISTS` query
-                if let Some(key) = buf.next() {
-                    if buf.next().is_none() {
-                        let ex = db.exists(&key) as u8;
-                        let mut resp = SResp::new();
-                        resp.add_group(ex);
-                        return resp.into_response();
-                    }
-                }
-            }
-            tags::TAG_HEYA => {
-                // This is a `HEYA` query
-                if buf.next().is_none() {
-                    return "HEY!".into_response();
-                }
-            }
-            _ => return RespCodes::OtherError(Some("Unknown command".to_owned())).into_response(),
-        }
+pub fn execute_simple(db: &CoreDB, mut buf: Vec<DataGroup>) -> Response {
+    if buf.len() != 1 {
+        return responses::ARG_ERR.to_owned();
     }
-    responses::ARG_ERR.to_owned()
+    // TODO(@ohsayan): See how efficient this actually is
+    let dg = mem::take(&mut buf[0].0); // get the datagroup, emptying the dg in the buf
+    if dg.len() < 1 {
+        return responses::ARG_ERR.to_owned();
+    }
+    match unsafe { dg.get_unchecked(0).to_uppercase().as_str() } {
+        tags::TAG_GET => get::get(db, dg),
+        tags::TAG_SET => set::set(db, dg),
+        tags::TAG_EXISTS => exists::exists(db, dg),
+        tags::TAG_DEL => del::del(db, dg),
+        tags::TAG_UPDATE => update::update(db, dg),
+        tags::TAG_HEYA => "HEYA".into_response(),
+        _ => responses::ARG_ERR.to_owned(),
+    }
 }

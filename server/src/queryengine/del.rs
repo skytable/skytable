@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Wed Aug 19 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,16 +19,16 @@
  *
 */
 
-//! # `GET` queries
-//! This module provides functions to work with `GET` queries
+//! # `DEL` queries
+//! This module provides functions to work with `DEL` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
-/// Run a `GET` query
-pub fn get(handle: &CoreDB, act: Vec<String>) -> Response {
+/// Run a `DEL` query
+pub fn del(handle: &CoreDB, act: Vec<String>) -> Response {
     if act.len() < 2 {
         return RespCodes::ActionError.into_response();
     }
@@ -36,25 +36,10 @@ pub fn get(handle: &CoreDB, act: Vec<String>) -> Response {
     let mut respgroup = RespGroup::new();
     act.into_iter()
         .skip(1)
-        .for_each(|key| match handle.get(&key) {
-            Ok(byts) => respgroup.add_item(BytesWrapper(byts)),
+        .for_each(|key| match handle.del(&key) {
+            Ok(_) => respgroup.add_item(RespCodes::Okay),
             Err(e) => respgroup.add_item(e),
         });
     resp.add_group(respgroup);
     resp.into_response()
-}
-
-#[cfg(test)]
-#[test]
-fn test_get() {
-    let db = CoreDB::new().unwrap();
-    let _ = db.set(&"foo1".to_owned(), &"bar".to_owned()).unwrap();
-    let _ = db.set(&"foo2".to_owned(), &"bar".to_owned()).unwrap();
-    let (r1, r2, r3) = get(
-        &db,
-        vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()],
-    );
-    let r = [r1, r2, r3].concat();
-    db.finish_db(true, true, true);
-    assert_eq!("*!13!7\n#2#4#4\n&2\n+bar\n+bar\n".as_bytes().to_owned(), r);
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Wed Aug 19 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,42 +19,42 @@
  *
 */
 
-//! # `GET` queries
-//! This module provides functions to work with `GET` queries
+//! # `EXISTS` queries
+//! This module provides functions to work with `EXISTS` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
-/// Run a `GET` query
-pub fn get(handle: &CoreDB, act: Vec<String>) -> Response {
+/// Run an `EXISTS` query
+pub fn exists(handle: &CoreDB, act: Vec<String>) -> Response {
     if act.len() < 2 {
         return RespCodes::ActionError.into_response();
     }
     let mut resp = SResp::new();
     let mut respgroup = RespGroup::new();
-    act.into_iter()
-        .skip(1)
-        .for_each(|key| match handle.get(&key) {
-            Ok(byts) => respgroup.add_item(BytesWrapper(byts)),
-            Err(e) => respgroup.add_item(e),
-        });
+    act.into_iter().skip(1).for_each(|key| {
+        if handle.exists(&key) {
+            respgroup.add_item(RespCodes::Okay);
+        } else {
+            respgroup.add_item(RespCodes::NotFound);
+        }
+    });
     resp.add_group(respgroup);
     resp.into_response()
 }
 
 #[cfg(test)]
 #[test]
-fn test_get() {
+fn test_exists() {
     let db = CoreDB::new().unwrap();
-    let _ = db.set(&"foo1".to_owned(), &"bar".to_owned()).unwrap();
-    let _ = db.set(&"foo2".to_owned(), &"bar".to_owned()).unwrap();
-    let (r1, r2, r3) = get(
-        &db,
-        vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()],
-    );
-    let r = [r1, r2, r3].concat();
+    db.set(&"foo".to_owned(), &"foobar".to_owned()).unwrap();
+    db.set(&"superfoo".to_owned(), &"superbar".to_owned())
+        .unwrap();
+    let query = vec!["EXISTS".to_owned(), "foo".to_owned(), "superfoo".to_owned()];
+    let (r1, r2, r3) = exists(&db, query);
     db.finish_db(true, true, true);
-    assert_eq!("*!13!7\n#2#4#4\n&2\n+bar\n+bar\n".as_bytes().to_owned(), r);
+    let r = [r1, r2, r3].concat();
+    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
 }

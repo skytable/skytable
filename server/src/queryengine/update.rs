@@ -28,7 +28,7 @@ use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
 /// Run an `UPDATE` query
-pub fn update(handle: &CoreDB, act: DataGroup) -> Response {
+pub fn update(handle: &CoreDB, act: Vec<String>) -> Response {
     if (act.len() - 1) & 1 != 0 {
         return RespCodes::ActionError.into_response();
     }
@@ -49,13 +49,13 @@ fn test_update() {
     let db = CoreDB::new().unwrap();
     db.set("foo", &"bar".to_owned()).unwrap();
     assert_eq!(db.get("foo").unwrap(), "bar");
-    let act = DataGroup::new(vec![
+    let act = vec![
         "UPDATE".to_owned(),
         "foo".to_owned(),
         "newbar".to_owned(),
         "foo".to_owned(),
         "latestbar".to_owned(),
-    ]);
+    ];
     let (r1, r2, r3) = update(&db, act);
     let r = [r1, r2, r3].concat();
     assert_eq!(db.get("foo").unwrap(), "latestbar");
