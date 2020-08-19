@@ -46,6 +46,8 @@ pub mod responses {
         pub static ref ARG_ERR: Response = RespCodes::ActionError.into_response();
         pub static ref SERVER_ERR: Response = RespCodes::ServerError.into_response();
         pub static ref OTHER_ERR: Response = RespCodes::OtherError(None).into_response();
+        pub static ref UNKNOWN_COMMAND: Response =
+            RespCodes::OtherError(Some(String::from("Unknown command"))).into_response();
     }
 }
 

@@ -66,6 +66,6 @@ pub fn execute_simple(db: &CoreDB, mut buf: Vec<DataGroup>) -> Response {
         tags::TAG_DEL => del::del(db, dg),
         tags::TAG_UPDATE => update::update(db, dg),
         tags::TAG_HEYA => "HEYA".into_response(),
-        _ => responses::ARG_ERR.to_owned(),
+        _ => responses::UNKNOWN_COMMAND.to_owned(),
     }
 }
