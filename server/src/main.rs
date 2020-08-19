@@ -24,6 +24,7 @@ mod coredb;
 mod dbnet;
 mod diskstore;
 mod protocol;
+mod kvengine;
 mod queryengine;
 use coredb::CoreDB;
 use dbnet::run;

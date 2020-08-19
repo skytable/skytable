@@ -19,42 +19,27 @@
  *
 */
 
-//! # `EXISTS` queries
-//! This module provides functions to work with `EXISTS` queries
+//! # `DEL` queries
+//! This module provides functions to work with `DEL` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
-/// Run an `EXISTS` query
-pub fn exists(handle: &CoreDB, act: Vec<String>) -> Response {
+/// Run a `DEL` query
+pub fn del(handle: &CoreDB, act: DataGroup) -> Response {
     if act.len() < 2 {
         return RespCodes::ActionError.into_response();
     }
     let mut resp = SResp::new();
     let mut respgroup = RespGroup::new();
-    act.into_iter().skip(1).for_each(|key| {
-        if handle.exists(&key) {
-            respgroup.add_item(RespCodes::Okay);
-        } else {
-            respgroup.add_item(RespCodes::NotFound);
-        }
-    });
+    act.into_iter()
+        .skip(1)
+        .for_each(|key| match handle.del(&key) {
+            Ok(_) => respgroup.add_item(RespCodes::Okay),
+            Err(e) => respgroup.add_item(e),
+        });
     resp.add_group(respgroup);
     resp.into_response()
-}
-
-#[cfg(test)]
-#[test]
-fn test_exists() {
-    let db = CoreDB::new().unwrap();
-    db.set(&"foo".to_owned(), &"foobar".to_owned()).unwrap();
-    db.set(&"superfoo".to_owned(), &"superbar".to_owned())
-        .unwrap();
-    let query = vec!["EXISTS".to_owned(), "foo".to_owned(), "superfoo".to_owned()];
-    let (r1, r2, r3) = exists(&db, query);
-    db.finish_db(true, true, true);
-    let r = [r1, r2, r3].concat();
-    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
 }

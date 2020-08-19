@@ -24,13 +24,9 @@
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
-use corelib::terrapipe::{responses, RespCodes};
-mod del;
-mod exists;
-mod get;
+use corelib::terrapipe::responses;
 pub mod queryutil;
-mod set;
-mod update;
+use crate::kvengine;
 use std::mem;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
@@ -50,22 +46,21 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub fn execute_simple(db: &CoreDB, mut buf: Vec<DataGroup>) -> Response {
-    if buf.len() != 1 {
-        return responses::ARG_ERR.to_owned();
-    }
-    // TODO(@ohsayan): See how efficient this actually is
-    let dg = mem::take(&mut buf[0].0); // get the datagroup, emptying the dg in the buf
-    if dg.len() < 1 {
-        return responses::ARG_ERR.to_owned();
-    }
-    match unsafe { dg.get_unchecked(0).to_uppercase().as_str() } {
-        tags::TAG_GET => get::get(db, dg),
-        tags::TAG_SET => set::set(db, dg),
-        tags::TAG_EXISTS => exists::exists(db, dg),
-        tags::TAG_DEL => del::del(db, dg),
-        tags::TAG_UPDATE => update::update(db, dg),
-        tags::TAG_HEYA => "HEYA".into_response(),
-        _ => responses::UNKNOWN_COMMAND.to_owned(),
-    }
+pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
+    let mut responses: Vec<Response> = buf
+        .into_iter()
+        .map(|dg| match dg.get(0) {
+            Some(act) => match act.to_uppercase().as_str() {
+                tags::TAG_GET => kvengine::get::get(&db, dg),
+                tags::TAG_SET => kvengine::set::set(&db, dg),
+                tags::TAG_UPDATE => kvengine::update::update(&db, dg),
+                tags::TAG_DEL => kvengine::del::del(&db, dg),
+                tags::TAG_EXISTS => kvengine::exists::exists(&db, dg),
+                tags::TAG_HEYA => kvengine::heya::heya(),
+                _ => responses::UNKNOWN_COMMAND.to_owned(),
+            },
+            None => responses::PACKET_ERROR.to_owned(),
+        })
+        .collect();
+    responses.pop().unwrap()
 }

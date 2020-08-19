@@ -28,7 +28,7 @@ use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
 /// Run a `GET` query
-pub fn get(handle: &CoreDB, act: Vec<String>) -> Response {
+pub fn get(handle: &CoreDB, act: DataGroup) -> Response {
     if act.len() < 2 {
         return RespCodes::ActionError.into_response();
     }
@@ -52,7 +52,7 @@ fn test_get() {
     let _ = db.set(&"foo2".to_owned(), &"bar".to_owned()).unwrap();
     let (r1, r2, r3) = get(
         &db,
-        vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()],
+        DataGroup::new(vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()]),
     );
     let r = [r1, r2, r3].concat();
     db.finish_db(true, true, true);

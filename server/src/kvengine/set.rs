@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Fri Aug 14 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,27 +19,44 @@
  *
 */
 
-//! # `DEL` queries
-//! This module provides functions to work with `DEL` queries
+//! # `SET` queries
+//! This module provides functions to work with `SET` queries
 
 use crate::coredb::CoreDB;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::RespCodes;
 
-/// Run a `DEL` query
-pub fn del(handle: &CoreDB, act: Vec<String>) -> Response {
-    if act.len() < 2 {
+/// Run a `SET` query
+pub fn set(handle: &CoreDB, act: DataGroup) -> Response {
+    if (act.len() - 1) & 1 != 0 {
         return RespCodes::ActionError.into_response();
     }
     let mut resp = SResp::new();
     let mut respgroup = RespGroup::new();
-    act.into_iter()
-        .skip(1)
-        .for_each(|key| match handle.del(&key) {
+    act[1..]
+        .chunks_exact(2)
+        .for_each(|key| match handle.set(&key[0], &key[1]) {
             Ok(_) => respgroup.add_item(RespCodes::Okay),
             Err(e) => respgroup.add_item(e),
         });
     resp.add_group(respgroup);
     resp.into_response()
+}
+
+#[test]
+fn test_set() {
+    let db = CoreDB::new().unwrap();
+    let act = vec![
+        "SET".to_owned(),
+        "foo1".to_owned(),
+        "bar".to_owned(),
+        "foo2".to_owned(),
+        "bar".to_owned(),
+    ];
+    let (r1, r2, r3) = set(&db, DataGroup::new(act));
+    let r = [r1, r2, r3].concat();
+    assert!(db.get("foo1").unwrap() == "bar" && db.get("foo2").unwrap() == "bar");
+    db.finish_db(true, true, true);
+    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
 }

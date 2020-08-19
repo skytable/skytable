@@ -26,7 +26,9 @@
 use crate::terrapipe::RespCodes;
 use bytes::BytesMut;
 use std::fmt;
+use std::iter::Skip;
 use std::ops::Deref;
+use std::vec::IntoIter;
 
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
@@ -281,7 +283,7 @@ impl fmt::Display for DataGroup {
 }
 impl IntoIterator for DataGroup {
     type Item = String;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }

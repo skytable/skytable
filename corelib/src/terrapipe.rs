@@ -42,12 +42,13 @@ pub mod responses {
         pub static ref OKAY: Response = RespCodes::Okay.into_response();
         pub static ref NOT_FOUND: Response = RespCodes::NotFound.into_response();
         pub static ref OVERWRITE_ERROR: Response = RespCodes::OverwriteError.into_response();
-        pub static ref INVALID_MF: Response = RespCodes::PacketError.into_response();
+        pub static ref PACKET_ERROR: Response = RespCodes::PacketError.into_response();
         pub static ref ARG_ERR: Response = RespCodes::ActionError.into_response();
         pub static ref SERVER_ERR: Response = RespCodes::ServerError.into_response();
         pub static ref OTHER_ERR: Response = RespCodes::OtherError(None).into_response();
         pub static ref UNKNOWN_COMMAND: Response =
             RespCodes::OtherError(Some(String::from("Unknown command"))).into_response();
+        pub static ref HEYA: Response = "HEY!".into_response();
     }
 }
 
