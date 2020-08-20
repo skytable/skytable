@@ -19,12 +19,13 @@
  *
 */
 
-//! Utilities for handling queries
+//! Utilities for generating responses, which are only used by the `server`
 //!
 
-use corelib::builders::response::*;
+use corelib::builders::{self, response::*};
 use std::error::Error;
 use std::future::Future;
+use std::mem;
 use std::pin::Pin;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
@@ -52,72 +53,87 @@ use tokio::net::TcpStream;
 /// this, the `ExceptFor` type exists. Though we could've returned the count of the number of elements
 /// which existed, it would not provide any information on what existed and what didn't which might be
 /// needed at times.
-pub struct ExceptFor(Vec<usize>);
+pub struct ExceptFor {
+    df_ext: Vec<u8>,
+}
 
-const EXCEPTFOR_CAP: usize = 10;
+const EXFOR_CAP: usize = 2 * 10;
 
 impl ExceptFor {
-    /// Create a new `ExceptFor` instance
     pub fn new() -> Self {
-        ExceptFor(Vec::with_capacity(EXCEPTFOR_CAP))
+        let mut df_ext = Vec::with_capacity(EXFOR_CAP + 2);
+        df_ext.push(b'^');
+        ExceptFor { df_ext }
     }
-    /// Add an index to `ExceptFor`
+    pub fn with_space_for(howmany: usize) -> Self {
+        let mut df_ext = vec![b'^'];
+        df_ext.reserve(howmany);
+        ExceptFor { df_ext }
+    }
+    /// This will essentially add 'idx,' to the `df_ext` field as bytes
     pub fn add(&mut self, idx: usize) {
-        self.0.push(idx);
-    }
-    /// Drop the object returning the inner-vector
-    pub fn finish_into_vec(self) -> Vec<usize> {
-        self.0
+        self.df_ext.extend(idx.to_string().into_bytes());
+        self.df_ext.push(b',');
     }
 }
 
 impl IntoRespGroup for ExceptFor {
-    fn into_resp_group(self) -> (Vec<u8>, Vec<u8>) {
-        let mut except_for_line = Vec::with_capacity((self.0.len() * 2) + 2);
-        except_for_line.push(b'^');
-        let mut it = self.0.into_iter().peekable();
-        while let Some(item) = it.next() {
-            except_for_line.extend(item.to_string().into_bytes());
-            if it.peek().is_some() {
-                except_for_line.push(b',');
-            } else {
-                except_for_line.push(b'\n');
-            }
+    fn into_resp_group(self) -> RGTuple {
+        // self_len is the length of the exceptfor line in bytes
+        let self_len = self.df_ext.len().to_string().into_bytes();
+        // The size_of(self_len) + size_of('#1#<bytes>')
+        let mut metalayout = Vec::with_capacity(self_len.len() + 4);
+        let mut dataframe = Vec::with_capacity(self.df_ext.len() + 3);
+        metalayout.extend(&[b'#', b'2', b'#']);
+        metalayout.extend(self_len);
+        // Preallocate capacity for the dataframe: df_ext.len() + len("&1\n")
+        dataframe.extend(&[b'&', b'1', b'\n']);
+        unsafe {
+            // Add a newline
+            let self_ptr = &self as *const _;
+            let self_mut_ptr = self_ptr as *mut ExceptFor;
+            let mut_ref = &mut (*self_mut_ptr);
+            let _ = mem::replace(&mut mut_ref.df_ext[(*self_mut_ptr).df_ext.len() - 1], b'\n');
         }
-        let mut metalayout_ext = Vec::with_capacity(EXCEPTFOR_CAP);
-        metalayout_ext.push(b'#');
-        metalayout_ext.push(b'1');
-        metalayout_ext.push(b'#');
-        metalayout_ext.extend(except_for_line.len().to_string().into_bytes());
-        let dataframe_ext = [vec![b'&', b'1', b'\n'], except_for_line].concat();
-        (metalayout_ext, dataframe_ext)
+        dataframe.extend(self.df_ext);
+        (metalayout, dataframe)
     }
+}
+
+#[cfg(test)]
+#[test]
+fn test_intorespgroup_trait_impl_exceptfor() {
+    let mut exceptfor = ExceptFor::new();
+    exceptfor.add(1);
+    exceptfor.add(2);
+    let (ml, df) = exceptfor.into_resp_group();
+    assert_eq!("#2#5".as_bytes().to_owned(), ml);
+    assert_eq!("&1\n^1,2\n".as_bytes().to_owned(), df);
 }
 
 impl IntoResponse for ExceptFor {
     fn into_response(self) -> Response {
-        let (mut metalayout_ext, df_ext) = self.into_resp_group();
+        let (mut metalayout_ext, dataframe) = self.into_resp_group();
         metalayout_ext.push(b'\n');
-        let df_len_bytes = df_ext.len().to_string().into_bytes();
-        let ml_len_bytes = metalayout_ext.len().to_string().into_bytes();
-        let mut metaline = Vec::with_capacity(4 + df_len_bytes.len() + ml_len_bytes.len());
+        let mut metaline = Vec::with_capacity(builders::MLINE_BUF);
         metaline.extend(&[b'*', b'!']);
-        metaline.extend(df_len_bytes);
+        metaline.extend(dataframe.len().to_string().into_bytes());
         metaline.push(b'!');
-        metaline.extend(ml_len_bytes);
+        metaline.extend(metalayout_ext.len().to_string().into_bytes());
         metaline.push(b'\n');
-        (metaline, metalayout_ext, df_ext)
+        (metaline, metalayout_ext, dataframe)
     }
 }
 
+#[cfg(test)]
 #[test]
-fn test_exceptfor() {
-    let mut exfor = ExceptFor::new();
-    exfor.add(1);
-    exfor.add(2);
-    let (r1, r2, r3) = exfor.into_response();
+fn test_intoresponse_trait_impl_exceptfor() {
+    let mut exceptfor = ExceptFor::new();
+    exceptfor.add(1);
+    exceptfor.add(3);
+    let (r1, r2, r3) = exceptfor.into_response();
     let r = [r1, r2, r3].concat();
-    assert_eq!("*!8!5\n#1#5\n&1\n^1,2\n".as_bytes().to_owned(), r);
+    assert_eq!("*!8!5\n#2#5\n&1\n^1,3\n".as_bytes().to_owned(), r);
 }
 
 /// # The `Writable` trait

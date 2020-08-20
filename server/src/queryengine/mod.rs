@@ -22,12 +22,10 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
+use crate::kvengine;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
 use corelib::terrapipe::responses;
-pub mod queryutil;
-use crate::kvengine;
-use std::mem;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses

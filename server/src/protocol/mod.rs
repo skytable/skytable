@@ -20,7 +20,7 @@
 */
 
 mod deserializer;
-use crate::queryengine::queryutil::Writable;
+use crate::resputil::Writable;
 use bytes::{Buf, BytesMut};
 use corelib::builders::response::IntoResponse;
 use corelib::builders::response::Response;

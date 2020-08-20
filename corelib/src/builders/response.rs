@@ -28,10 +28,10 @@ use crate::terrapipe::RespCodes;
 use bytes::Bytes;
 
 /// The size to skip through, dataframe bytes
-type PRTuple = (usize, Vec<u8>);
+pub type PRTuple = (usize, Vec<u8>);
 
 /// The bytes for the sizes (inclusive of the `#` character), the bytes for the df
-type RGTuple = (Vec<u8>, Vec<u8>);
+pub type RGTuple = (Vec<u8>, Vec<u8>);
 
 /// The metaline, metalayout and dataframe in order
 pub type Response = (Vec<u8>, Vec<u8>, Vec<u8>);
