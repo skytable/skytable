@@ -22,7 +22,7 @@
 //! # `DEL` queries
 //! This module provides functions to work with `DEL` queries
 
-use crate::coredb::{self, CoreDB};
+use crate::coredb::CoreDB;
 use crate::resputil::*;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
@@ -56,69 +56,78 @@ pub fn del(handle: &CoreDB, act: DataGroup) -> Response {
 }
 
 #[cfg(test)]
-#[test]
-fn test_kvengine_del_allfailed() {
-    let db = CoreDB::new().unwrap();
-    let action = DataGroup::new(vec!["DEL".to_owned(), "x".to_owned(), "y".to_owned()]);
-    let r = del(&db, action);
-    db.finish_db(true, true, true);
-    let resp_should_be = responses::NOT_FOUND.to_owned();
-    assert_eq!(resp_should_be, r);
-}
+mod tests {
+    use super::*;
+    use crate::coredb::{self, CoreDB};
+    use corelib::de::DataGroup;
+    use corelib::terrapipe::responses;
+    #[cfg(test)]
+    #[test]
+    fn test_kvengine_del_allfailed() {
+        let db = CoreDB::new().unwrap();
+        let action = DataGroup::new(vec!["DEL".to_owned(), "x".to_owned(), "y".to_owned()]);
+        let r = del(&db, action);
+        db.finish_db(true, true, true);
+        let resp_should_be = responses::NOT_FOUND.to_owned();
+        assert_eq!(resp_should_be, r);
+    }
 
-#[cfg(test)]
-#[test]
-fn test_kvenegine_del_allokay() {
-    let db = CoreDB::new().unwrap();
-    let mut write_handle = db.acquire_write();
-    assert!(write_handle
-        .insert(
+    #[cfg(test)]
+    #[test]
+    fn test_kvenegine_del_allokay() {
+        let db = CoreDB::new().unwrap();
+        let mut write_handle = db.acquire_write();
+        assert!(write_handle
+            .insert(
+                "foo".to_owned(),
+                coredb::Data::from_string(&"bar".to_owned()),
+            )
+            .is_none());
+        assert!(write_handle
+            .insert(
+                "foo2".to_owned(),
+                coredb::Data::from_string(&"bar2".to_owned()),
+            )
+            .is_none());
+        drop(write_handle); // Drop the write lock
+        let action = DataGroup::new(vec!["DEL".to_owned(), "foo".to_owned(), "foo2".to_owned()]);
+        let r = del(&db, action);
+        db.finish_db(true, true, true);
+        assert_eq!(r, responses::OKAY.to_owned());
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_kvenegine_del_exceptfor() {
+        let db = CoreDB::new().unwrap();
+        let mut write_handle = db.acquire_write();
+        assert!(write_handle
+            .insert(
+                "foo".to_owned(),
+                coredb::Data::from_string(&"bar2".to_owned())
+            )
+            .is_none());
+        assert!(write_handle
+            .insert(
+                "foo3".to_owned(),
+                coredb::Data::from_string(&"bar3".to_owned())
+            )
+            .is_none());
+        // For us `foo2` is the missing key, which should fail to delete
+        drop(write_handle); // Drop the write lock
+        let action = DataGroup::new(vec![
+            "DEL".to_owned(),
             "foo".to_owned(),
-            coredb::Data::from_string(&"bar".to_owned()),
-        )
-        .is_none());
-    assert!(write_handle
-        .insert(
             "foo2".to_owned(),
-            coredb::Data::from_string(&"bar2".to_owned()),
-        )
-        .is_none());
-    drop(write_handle); // Drop the write lock
-    let action = DataGroup::new(vec!["DEL".to_owned(), "foo".to_owned(), "foo2".to_owned()]);
-    let r = del(&db, action);
-    db.finish_db(true, true, true);
-    assert_eq!(r, responses::OKAY.to_owned());
-}
-
-#[cfg(test)]
-#[test]
-fn test_kvenegine_del_exceptfor() {
-    let db = CoreDB::new().unwrap();
-    let mut write_handle = db.acquire_write();
-    assert!(write_handle
-        .insert(
-            "foo".to_owned(),
-            coredb::Data::from_string(&"bar2".to_owned())
-        )
-        .is_none());
-    assert!(write_handle
-        .insert(
             "foo3".to_owned(),
-            coredb::Data::from_string(&"bar3".to_owned())
-        )
-        .is_none());
-    // For us `foo2` is the missing key, which should fail to delete
-    drop(write_handle); // Drop the write lock
-    let action = DataGroup::new(vec![
-        "DEL".to_owned(),
-        "foo".to_owned(),
-        "foo2".to_owned(),
-        "foo3".to_owned(),
-    ]);
-    let r = del(&db, action);
-    db.finish_db(true, true, true);
-    let mut except_for = ExceptFor::new();
-    except_for.add(1);
-    let resp_should_be = except_for.into_response();
-    assert_eq!(resp_should_be, r);
+        ]);
+        let r = del(&db, action);
+        assert!(!db.acquire_read().contains_key("foo"));
+        assert!(!db.acquire_read().contains_key("foo3"));
+        db.finish_db(true, true, true);
+        let mut except_for = ExceptFor::new();
+        except_for.add(1);
+        let resp_should_be = except_for.into_response();
+        assert_eq!(resp_should_be, r);
+    }
 }

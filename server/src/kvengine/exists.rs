@@ -23,38 +23,109 @@
 //! This module provides functions to work with `EXISTS` queries
 
 use crate::coredb::CoreDB;
+use crate::resputil::*;
 use corelib::builders::response::*;
 use corelib::de::DataGroup;
-use corelib::terrapipe::RespCodes;
-
+use corelib::terrapipe::responses;
 /// Run an `EXISTS` query
 pub fn exists(handle: &CoreDB, act: DataGroup) -> Response {
-    if act.len() < 2 {
-        return RespCodes::ActionError.into_response();
+    let howmany = act.len() - 1;
+    if howmany == 0 {
+        // No arguments? Come on!
+        return responses::ARG_ERR.to_owned();
     }
-    let mut resp = SResp::new();
-    let mut respgroup = RespGroup::new();
-    act.into_iter().skip(1).for_each(|key| {
-        if handle.exists(&key) {
-            respgroup.add_item(RespCodes::Okay);
-        } else {
-            respgroup.add_item(RespCodes::NotFound);
+    // Get a read lock
+    let read_lock = handle.acquire_read();
+    // Assume that half of the actions will fail
+    let mut except_for = ExceptFor::with_space_for(howmany / 2);
+    act.into_iter().skip(1).enumerate().for_each(|(idx, key)| {
+        if !read_lock.contains_key(&key) {
+            except_for.add(idx);
         }
     });
-    resp.add_group(respgroup);
-    resp.into_response()
+    if except_for.no_failures() {
+        return responses::OKAY.to_owned();
+    } else if except_for.did_all_fail(howmany) {
+        return responses::NOT_FOUND.to_owned();
+    } else {
+        return except_for.into_response();
+    }
 }
 
 #[cfg(test)]
-#[test]
-fn test_exists() {
-    let db = CoreDB::new().unwrap();
-    db.set(&"foo".to_owned(), &"foobar".to_owned()).unwrap();
-    db.set(&"superfoo".to_owned(), &"superbar".to_owned())
-        .unwrap();
-    let query = vec!["EXISTS".to_owned(), "foo".to_owned(), "superfoo".to_owned()];
-    let (r1, r2, r3) = exists(&db, DataGroup::new(query));
-    db.finish_db(true, true, true);
-    let r = [r1, r2, r3].concat();
-    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
+mod tests {
+    use super::*;
+    use crate::coredb::{self, CoreDB};
+    use corelib::de::DataGroup;
+    use corelib::terrapipe::responses;
+    #[cfg(test)]
+    #[test]
+    fn test_kvengine_exists_allfailed() {
+        let db = CoreDB::new().unwrap();
+        let action = DataGroup::new(vec!["EXISTS".to_owned(), "x".to_owned(), "y".to_owned()]);
+        let r = exists(&db, action);
+        db.finish_db(true, true, true);
+        let resp_should_be = responses::NOT_FOUND.to_owned();
+        assert_eq!(r, resp_should_be);
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_kvengine_exists_allokay() {
+        let db = CoreDB::new().unwrap();
+        let mut write_handle = db.acquire_write();
+        assert!(write_handle
+            .insert(
+                "foo".to_owned(),
+                coredb::Data::from_string(&"bar".to_owned()),
+            )
+            .is_none());
+        assert!(write_handle
+            .insert(
+                "foo2".to_owned(),
+                coredb::Data::from_string(&"bar2".to_owned()),
+            )
+            .is_none());
+        drop(write_handle); // Drop the write lock
+        let action = DataGroup::new(vec![
+            "EXISTS".to_owned(),
+            "foo".to_owned(),
+            "foo2".to_owned(),
+        ]);
+        let r = exists(&db, action);
+        db.finish_db(true, true, true);
+        assert_eq!(r, responses::OKAY.to_owned());
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_kvengine_exists_exceptfor() {
+        let db = CoreDB::new().unwrap();
+        let mut write_handle = db.acquire_write();
+        assert!(write_handle
+            .insert(
+                "foo".to_owned(),
+                coredb::Data::from_string(&"bar2".to_owned())
+            )
+            .is_none());
+        assert!(write_handle
+            .insert(
+                "foo3".to_owned(),
+                coredb::Data::from_string(&"bar3".to_owned())
+            )
+            .is_none());
+        // For us `foo2` is the missing key,
+        drop(write_handle); // Drop the write lock
+        let action = DataGroup::new(vec![
+            "EXISTS".to_owned(),
+            "foo".to_owned(),
+            "foo2".to_owned(),
+            "foo3".to_owned(),
+        ]);
+        let r = exists(&db, action);
+        db.finish_db(true, true, true);
+        let mut exceptfor = ExceptFor::new();
+        exceptfor.add(1);
+        assert_eq!(exceptfor.into_response(), r);
+    }
 }
