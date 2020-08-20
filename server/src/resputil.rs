@@ -55,6 +55,7 @@ use tokio::net::TcpStream;
 /// needed at times.
 pub struct ExceptFor {
     df_ext: Vec<u8>,
+    howmany: usize,
 }
 
 const EXFOR_CAP: usize = 2 * 10;
@@ -63,17 +64,28 @@ impl ExceptFor {
     pub fn new() -> Self {
         let mut df_ext = Vec::with_capacity(EXFOR_CAP + 2);
         df_ext.push(b'^');
-        ExceptFor { df_ext }
+        ExceptFor { df_ext, howmany: 0 }
     }
     pub fn with_space_for(howmany: usize) -> Self {
         let mut df_ext = vec![b'^'];
         df_ext.reserve(howmany);
-        ExceptFor { df_ext }
+        ExceptFor { df_ext, howmany: 0 }
     }
-    /// This will essentially add 'idx,' to the `df_ext` field as bytes
+    fn bump_up_count(&mut self) {
+        self.howmany += 1;
+    }
+    pub fn did_all_fail(&self, howmany: usize) -> bool {
+        howmany - self.howmany == 0
+    }
+    /// This will essentially add `idx`, to the `df_ext` field as bytes
     pub fn add(&mut self, idx: usize) {
         self.df_ext.extend(idx.to_string().into_bytes());
         self.df_ext.push(b',');
+        self.bump_up_count();
+    }
+    /// Check if no failures have occurred
+    pub fn no_failures(&self) -> bool {
+        self.df_ext.len() - 1 == 0
     }
 }
 

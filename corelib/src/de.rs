@@ -26,7 +26,6 @@
 use crate::terrapipe::RespCodes;
 use bytes::BytesMut;
 use std::fmt;
-use std::iter::Skip;
 use std::ops::Deref;
 use std::vec::IntoIter;
 

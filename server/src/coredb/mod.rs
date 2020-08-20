@@ -103,14 +103,6 @@ impl CoreDB {
             Entry::Vacant(_) => Err(RespCodes::NotFound),
         }
     }
-    /// DEL a `key`
-    pub fn del(&self, key: &str) -> ActionResult<()> {
-        if let Some(_) = self.acquire_write().remove(&key.to_owned()) {
-            Ok(())
-        } else {
-            Err(RespCodes::NotFound)
-        }
-    }
 
     /// Check if a `key` exists
     pub fn exists(&self, key: &str) -> bool {
@@ -155,11 +147,11 @@ impl CoreDB {
         }
     }
     /// Acquire a write lock
-    fn acquire_write(&self) -> RwLockWriteGuard<'_, HashMap<String, Data>> {
+    pub fn acquire_write(&self) -> RwLockWriteGuard<'_, HashMap<String, Data>> {
         self.shared.coremap.write()
     }
     /// Acquire a read lock
-    fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, Data>> {
+    pub fn acquire_read(&self) -> RwLockReadGuard<'_, HashMap<String, Data>> {
         self.shared.coremap.read()
     }
     /// Flush the contents of the in-memory table onto disk

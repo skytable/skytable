@@ -195,12 +195,11 @@ impl IntoRespGroup for RespGroup {
             })
             .flatten()
             .collect();
-        let metalayout = [
-            vec![b'#'],
-            (sizeline.len() - 1).to_string().into_bytes().to_vec(),
-            sizes,
-        ]
-        .concat();
+        let sizeline_bytes = (sizeline.len() - 1).to_string().into_bytes();
+        let mut metalayout = Vec::with_capacity(1 + sizeline_bytes.len() + sizes.len());
+        metalayout.push(b'#');
+        metalayout.extend(sizeline_bytes);
+        metalayout.extend(sizes);
         let dataframe = [sizeline, self.df_bytes].concat();
         (metalayout, dataframe)
     }
