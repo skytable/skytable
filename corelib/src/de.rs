@@ -428,7 +428,7 @@ mod parser_v2 {
     /// Terrapipe protocol. An `ActionGroup` contains all the elements required to
     /// execute an `Action`. The `ActionGroup` contains the "action" itself.
     /// It may look like:
-    /// ```rust
+    /// ```
     /// ["GET", "x", "y"]
     /// ```
     #[derive(Debug, PartialEq)]
