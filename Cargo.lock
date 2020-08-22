@@ -424,6 +424,7 @@ version = "0.3.2"
 dependencies = [
  "bincode",
  "bytes",
+ "lazy_static",
  "libtdb",
  "parking_lot",
  "tokio",

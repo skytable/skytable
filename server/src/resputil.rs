@@ -166,7 +166,7 @@ pub trait Writable {
     ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
 }
 
-impl Writable for (Vec<u8>, Vec<u8>, Vec<u8>) {
+impl Writable for Vec<u8> {
     fn write<'s>(
         self,
         con: &'s mut BufWriter<TcpStream>,
@@ -176,11 +176,9 @@ impl Writable for (Vec<u8>, Vec<u8>, Vec<u8>) {
     {
         async fn write_bytes(
             con: &mut BufWriter<TcpStream>,
-            (abyte, bbyte, cbyte): Response,
+            resp: Vec<u8>,
         ) -> Result<(), Box<dyn Error>> {
-            con.write_all(&abyte).await?;
-            con.write_all(&bbyte).await?;
-            con.write_all(&cbyte).await?;
+            con.write_all(&resp).await?;
             Ok(())
         }
         Box::pin(write_bytes(con, self))

@@ -20,16 +20,14 @@
 */
 
 mod deserializer;
+pub mod responses;
 use crate::resputil::Writable;
 use bytes::{Buf, BytesMut};
-use libtdb::builders::response::IntoResponse;
-use libtdb::builders::response::Response;
-use libtdb::de::*;
+pub use deserializer::ActionGroup;
+pub use deserializer::ParseResult;
+pub use deserializer::Query;
 use libtdb::TResult;
-pub use deserializer::{
-    Query,
-    QueryParseResult::{self, *},
-};
+use libtdb::BUF_CAP;
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
@@ -49,7 +47,7 @@ pub enum QueryResult {
     /// A parsed `Query` object
     Q(Query),
     /// An error response
-    E(Response),
+    E(Vec<u8>),
     /// A closed connection
     Empty,
 }
@@ -70,11 +68,13 @@ impl Connection {
         self.read_again().await?;
         loop {
             match self.try_query() {
-                Ok(Parsed((query, forward))) => {
+                Ok(ParseResult::Query(query, forward)) => {
                     self.buffer.advance(forward);
                     return Ok(QueryResult::Q(query));
                 }
-                Ok(RespCode(r)) => return Ok(QueryResult::E(r.into_response())),
+                Ok(ParseResult::BadPacket) => {
+                    return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()))
+                }
                 Err(_) => return Ok(QueryResult::Empty),
                 _ => (),
             }
@@ -82,12 +82,11 @@ impl Connection {
         }
     }
     /// Try to parse a query from the buffered data
-    fn try_query(&mut self) -> Result<QueryParseResult, ()> {
+    fn try_query(&mut self) -> Result<ParseResult, ()> {
         if self.buffer.is_empty() {
             return Err(());
         }
-        let nav = Navigator::new(&mut self.buffer);
-        Ok(Query::from_navigator(nav))
+        Ok(deserializer::parse(&self.buffer))
     }
     /// Try to fill the buffer again
     async fn read_again(&mut self) -> Result<(), String> {
@@ -126,7 +125,7 @@ impl Connection {
     }
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
-    pub async fn close_conn_with_error(&mut self, resp: Response) -> TResult<()> {
+    pub async fn close_conn_with_error(&mut self, resp: Vec<u8>) -> TResult<()> {
         self.write_response(resp).await
     }
 }

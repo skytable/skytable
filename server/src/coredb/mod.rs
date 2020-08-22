@@ -103,7 +103,6 @@ impl CoreDB {
             Entry::Vacant(_) => Err(RespCodes::NotFound),
         }
     }
-    
     #[cfg(debug_assertions)]
     /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
@@ -111,11 +110,11 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub fn execute_query(&self, df: Query) -> Response {
-        match df.actiontype {
-            ActionType::Simple => queryengine::execute_simple(&self, df.data),
+    pub fn execute_query(&self, query: Query) -> Response {
+        match query {
+            Query::Simple(q) => queryengine::execute_simple(&self, q),
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
-            ActionType::Pipeline => unimplemented!(),
+            Query::Pipelined(_) => unimplemented!(),
         }
     }
 

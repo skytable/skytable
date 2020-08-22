@@ -1,5 +1,5 @@
 /*
- * Created on Mon Jul 20 2020
+ * Created on Sat Aug 22 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,16 +19,15 @@
  *
 */
 
-//! The core library for the TerrabaseDB
-//!
-//! This contains modules which are shared by both the `cli` and the `server` modules
+//! Primitives for generating Terrapipe compatible responses
 
-pub mod builders;
-pub mod de;
-pub mod terrapipe;
-pub mod util;
-use std::error::Error;
-/// A generic result
-pub type TResult<T> = Result<T, Box<dyn Error>>;
-/// The size of the read buffer in bytes
-pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
+use lazy_static::lazy_static;
+lazy_static! {
+    pub static ref OKAY: Vec<u8> = "#2\n&1\n!1\n0\n".as_bytes().to_owned();
+    pub static ref NOT_FOUND: Vec<u8> = "#2\n&1\n!1\n1\n".as_bytes().to_owned();
+    pub static ref OVERWRITE_ERR: Vec<u8> = "#2\n&1\n!1\n2\n".as_bytes().to_owned();
+    pub static ref PACKET_ERR: Vec<u8> = "#2\n&1\n!1\n3\n".as_bytes().to_owned();
+    pub static ref ACTION_ERR: Vec<u8> = "#2\n&1\n!1\n4\n".as_bytes().to_owned();
+    pub static ref SERVER_ERR: Vec<u8> = "#2\n&1\n!1\n5\n".as_bytes().to_owned();
+    pub static ref OTHER_ERR_EMPTY: Vec<u8> = "#2\n&1\n!1\n6\n".as_bytes().to_owned();
+}
