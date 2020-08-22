@@ -21,9 +21,9 @@
 
 mod deserializer;
 use bytes::{Buf, BytesMut};
-use corelib::builders::query::*;
-use corelib::de::*;
-use corelib::TResult;
+use libtdb::builders::query::*;
+use libtdb::de::*;
+use libtdb::TResult;
 use deserializer::{ClientResult, Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;

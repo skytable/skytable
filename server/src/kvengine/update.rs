@@ -23,9 +23,9 @@
 //! This module provides functions to work with `UPDATE` queries
 
 use crate::coredb::CoreDB;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::RespCodes;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::RespCodes;
 
 /// Run an `UPDATE` query
 pub fn update(handle: &CoreDB, act: DataGroup) -> Response {

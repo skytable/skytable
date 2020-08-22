@@ -23,9 +23,9 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::coredb::CoreDB;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::RespCodes;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::RespCodes;
 
 /// Run a `SET` query
 pub fn set(handle: &CoreDB, act: DataGroup) -> Response {

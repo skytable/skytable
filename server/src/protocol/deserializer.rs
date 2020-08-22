@@ -21,8 +21,8 @@
 
 //! This module provides deserialization primitives for query packets
 
-use corelib::de::*;
-use corelib::terrapipe::{ActionType, RespCodes, DEF_QMETALINE_BUFSIZE};
+use libtdb::de::*;
+use libtdb::terrapipe::{ActionType, RespCodes, DEF_QMETALINE_BUFSIZE};
 
 /// Result of parsing a query
 /// This is **not** the same as `std`'s `Result<T, E>` but instead is an `enum`

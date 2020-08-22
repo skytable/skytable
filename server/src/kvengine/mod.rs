@@ -30,8 +30,8 @@ pub mod set;
 pub mod update;
 pub mod heya {
     //! Respond to `HEYA` queries
-    use corelib::builders::response::Response;
-    use corelib::terrapipe::responses::HEYA;
+    use libtdb::builders::response::Response;
+    use libtdb::terrapipe::responses::HEYA;
     /// Returns a `HEY!` `Response`
     pub fn heya() -> Response {
         HEYA.to_owned()

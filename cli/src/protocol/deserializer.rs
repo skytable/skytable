@@ -21,9 +21,9 @@
 
 //! This module provides methods to deserialize an incoming response packet
 
-use corelib::builders::MLINE_BUF;
-use corelib::de::*;
-use corelib::terrapipe::*;
+use libtdb::builders::MLINE_BUF;
+use libtdb::de::*;
+use libtdb::terrapipe::*;
 use std::fmt;
 
 /// Errors that may occur while parsing responses from the server

@@ -24,7 +24,7 @@
 //! the response times may be shown to be slower than they actually are
 
 mod benchtool {
-    use corelib::builders::query::*;
+    use libtdb::builders::query::*;
     use devtimer::DevTime;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};

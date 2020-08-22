@@ -23,9 +23,9 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::coredb::CoreDB;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::RespCodes;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::RespCodes;
 
 /// Run a `GET` query
 pub fn get(handle: &CoreDB, act: DataGroup) -> Response {

@@ -24,9 +24,9 @@
 
 use crate::coredb::CoreDB;
 use crate::resputil::*;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::responses;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::responses;
 /// Run an `EXISTS` query
 pub fn exists(handle: &CoreDB, act: DataGroup) -> Response {
     let howmany = act.len() - 1;
@@ -56,8 +56,8 @@ pub fn exists(handle: &CoreDB, act: DataGroup) -> Response {
 mod tests {
     use super::*;
     use crate::coredb::{self, CoreDB};
-    use corelib::de::DataGroup;
-    use corelib::terrapipe::responses;
+    use libtdb::de::DataGroup;
+    use libtdb::terrapipe::responses;
     #[cfg(test)]
     #[test]
     fn test_kvengine_exists_allfailed() {

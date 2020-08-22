@@ -21,8 +21,8 @@
 
 use crate::protocol::{Connection, QueryResult::*};
 use crate::CoreDB;
-use corelib::util::terminal;
-use corelib::TResult;
+use libtdb::util::terminal;
+use libtdb::TResult;
 use std::future::Future;
 use std::process;
 use std::sync::Arc;

@@ -22,7 +22,7 @@
 //! Utilities for generating responses, which are only used by the `server`
 //!
 
-use corelib::builders::{self, response::*};
+use libtdb::builders::{self, response::*};
 use std::error::Error;
 use std::future::Future;
 use std::mem;

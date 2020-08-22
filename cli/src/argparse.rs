@@ -20,7 +20,7 @@
 */
 
 use crate::protocol;
-use corelib::terrapipe::ADDR;
+use libtdb::terrapipe::ADDR;
 use std::env;
 use std::io::{self, prelude::*};
 use std::process;

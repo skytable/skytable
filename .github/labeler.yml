@@ -1,5 +1,5 @@
 server: server/**/*
-corelib: corelib/**/*
+libtdb: libtdb/**/*
 cli: cli/**/*
 docs: ./*.md
 build:

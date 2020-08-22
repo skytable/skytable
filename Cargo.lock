@@ -50,15 +50,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "corelib"
-version = "0.4.0"
-dependencies = [
- "bytes",
- "lazy_static",
- "termcolor",
-]
-
-[[package]]
 name = "devtimer"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -148,6 +139,15 @@ name = "libc"
 version = "0.2.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
+
+[[package]]
+name = "libtdb"
+version = "0.4.0"
+dependencies = [
+ "bytes",
+ "lazy_static",
+ "termcolor",
+]
 
 [[package]]
 name = "lock_api"
@@ -424,7 +424,7 @@ version = "0.3.2"
 dependencies = [
  "bincode",
  "bytes",
- "corelib",
+ "libtdb",
  "parking_lot",
  "tokio",
 ]
@@ -478,8 +478,8 @@ name = "tsh"
 version = "0.3.2"
 dependencies = [
  "bytes",
- "corelib",
  "devtimer",
+ "libtdb",
  "rand",
  "tokio",
 ]

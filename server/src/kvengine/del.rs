@@ -24,9 +24,9 @@
 
 use crate::coredb::CoreDB;
 use crate::resputil::*;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::responses;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::responses;
 
 /// Run a `DEL` query
 pub fn del(handle: &CoreDB, act: DataGroup) -> Response {
@@ -59,8 +59,8 @@ pub fn del(handle: &CoreDB, act: DataGroup) -> Response {
 mod tests {
     use super::*;
     use crate::coredb::{self, CoreDB};
-    use corelib::de::DataGroup;
-    use corelib::terrapipe::responses;
+    use libtdb::de::DataGroup;
+    use libtdb::terrapipe::responses;
     #[cfg(test)]
     #[test]
     fn test_kvengine_del_allfailed() {

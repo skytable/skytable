@@ -2,7 +2,7 @@
 members = [
     "cli",
     "server",
-    "corelib"
+    "libtdb"
 ]
 
 [profile.release]

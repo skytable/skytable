@@ -29,7 +29,7 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 The project root has three main directories:
 
 * `cli` : This contains code for `tsh` which is the command-line client for TDB
-* `libcore` : This contains function, structs, ... used by both the `cli` and the `server`
+* `libtdb` : This contains function, structs, ... used by both the `cli` and the `server`
 * `server` : This contains code for the main database server
 
 ### Branches

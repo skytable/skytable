@@ -22,10 +22,10 @@
 mod deserializer;
 use crate::resputil::Writable;
 use bytes::{Buf, BytesMut};
-use corelib::builders::response::IntoResponse;
-use corelib::builders::response::Response;
-use corelib::de::*;
-use corelib::TResult;
+use libtdb::builders::response::IntoResponse;
+use libtdb::builders::response::Response;
+use libtdb::de::*;
+use libtdb::TResult;
 pub use deserializer::{
     Query,
     QueryParseResult::{self, *},

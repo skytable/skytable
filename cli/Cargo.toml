@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-corelib = {path = "../corelib"}
+libtdb = {path = "../libtdb"}
 tokio = {version = "0.2.22", features = ["full"]}
 rand = "0.7.3"
 devtimer = "4.0.0"

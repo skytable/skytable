@@ -24,7 +24,7 @@
 use crate::coredb::Data;
 use bincode;
 use bytes::Bytes;
-use corelib::TResult;
+use libtdb::TResult;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{ErrorKind, Write};

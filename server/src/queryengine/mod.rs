@@ -23,9 +23,9 @@
 
 use crate::coredb::CoreDB;
 use crate::kvengine;
-use corelib::builders::response::*;
-use corelib::de::DataGroup;
-use corelib::terrapipe::responses;
+use libtdb::builders::response::*;
+use libtdb::de::DataGroup;
+use libtdb::terrapipe::responses;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
