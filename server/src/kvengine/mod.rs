@@ -31,12 +31,10 @@ pub mod update;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::protocol;
-    use crate::resputil::VecWrapper;
     use libtdb::TResult;
     use protocol::{responses, Connection};
     /// Returns a `HEY!` `Response`
     pub async fn heya(con: &mut Connection) -> TResult<()> {
-        con.write_response(VecWrapper::from(responses::HEYA.to_owned()))
-            .await
+        con.write_response(responses::HEYA.to_owned()).await
     }
 }

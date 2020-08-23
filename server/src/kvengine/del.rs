@@ -23,7 +23,7 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{ActionGroup, Connection};
+use crate::protocol::{responses, ActionGroup, Connection};
 use libtdb::TResult;
 
 /// Run a `DEL` query

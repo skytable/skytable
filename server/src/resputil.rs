@@ -42,24 +42,6 @@ HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have 
 use explicit declarations for asynchoronous functions
 */
 
-/// A `VecWrapper` wraps a complete response packet as defined by the Terrapipe
-/// protocol. It should be a **complete response**, not just some `Bytes` which have been pulled
-/// from the K/V Engine or something similar.
-///
-/// This wrapper is usually used by pre-processed
-/// responses, which are mostly _respcode-only_ responses
-#[derive(Debug, PartialEq)]
-pub struct VecWrapper(Vec<u8>);
-
-impl<T> From<T> for VecWrapper
-where
-    T: Into<Vec<u8>>,
-{
-    fn from(vec: T) -> Self {
-        VecWrapper(vec.into())
-    }
-}
-
 /// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
 /// from `CoreDB`.
 ///
@@ -84,7 +66,7 @@ pub trait Writable {
     ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
 }
 
-impl Writable for VecWrapper {
+impl Writable for Vec<u8> {
     fn write<'s>(
         self,
         con: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
@@ -107,7 +89,7 @@ impl Writable for VecWrapper {
             con.write_all(&resp).await?;
             Ok(())
         }
-        Box::pin(write_bytes(con, self.0))
+        Box::pin(write_bytes(con, self))
     }
 }
 

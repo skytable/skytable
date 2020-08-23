@@ -28,6 +28,8 @@ NOTE: I haven't used any recursion, because:
 And that's why I've done, what I've done, here.
 */
 
+use std::vec::IntoIter;
+
 /// # `ActionGroup`
 ///
 /// The `ActionGroup` is an "Action Group" in the dataframe as described by the
@@ -39,6 +41,21 @@ And that's why I've done, what I've done, here.
 /// ```
 #[derive(Debug, PartialEq)]
 pub struct ActionGroup(Vec<String>);
+
+impl ActionGroup {
+    /// Returns how many arguments are there excluding the name of the action
+    pub fn howmany(&self) -> usize {
+        self.0.len() - 1
+    }
+}
+
+impl IntoIterator for ActionGroup {
+    type Item = String;
+    type IntoIter = std::iter::Skip<IntoIter<String>>;
+    fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
+        self.0.into_iter().skip(1).into_iter()
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Query {
