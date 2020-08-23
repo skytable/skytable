@@ -21,7 +21,7 @@
 
 mod deserializer;
 pub mod responses;
-use crate::resputil::BytesWrapper;
+use crate::resputil::VecWrapper;
 use crate::resputil::Writable;
 use bytes::{Buf, BytesMut};
 pub use deserializer::ActionGroup;
@@ -127,6 +127,6 @@ impl Connection {
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
     pub async fn close_conn_with_error(&mut self, resp: Vec<u8>) -> TResult<()> {
-        self.write_response(BytesWrapper::from(resp)).await
+        self.write_response(VecWrapper::from(resp)).await
     }
 }

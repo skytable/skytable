@@ -41,6 +41,30 @@ use tokio::net::TcpStream;
 HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
 use explicit declarations for asynchoronous functions
 */
+
+/// A `VecWrapper` wraps a complete response packet as defined by the Terrapipe
+/// protocol. It should be a **complete response**, not just some `Bytes` which have been pulled
+/// from the K/V Engine or something similar.
+///
+/// This wrapper is usually used by pre-processed
+/// responses, which are mostly _respcode-only_ responses
+#[derive(Debug, PartialEq)]
+pub struct VecWrapper(Vec<u8>);
+
+impl<T> From<T> for VecWrapper
+where
+    T: Into<Vec<u8>>,
+{
+    fn from(vec: T) -> Self {
+        VecWrapper(vec.into())
+    }
+}
+
+/// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
+/// from `CoreDB`.
+///
+/// This wrapper exists to prevent trait implementation conflicts when
+/// an impl for `fmt::Display` may be implemented upstream
 #[derive(Debug, PartialEq)]
 pub struct BytesWrapper(Bytes);
 
@@ -53,15 +77,6 @@ impl BytesWrapper {
     }
 }
 
-impl<T> From<T> for BytesWrapper
-where
-    T: Into<Vec<u8>>,
-{
-    fn from(vec: T) -> Self {
-        BytesWrapper(Bytes::from(vec.into()))
-    }
-}
-
 pub trait Writable {
     fn write<'s>(
         self,
@@ -69,32 +84,10 @@ pub trait Writable {
     ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
 }
 
-impl Writable for BytesWrapper {
+impl Writable for VecWrapper {
     fn write<'s>(
         self,
-        con: &'s mut BufWriter<TcpStream>,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's)>>
-    where
-        Self: Sync,
-    {
-        async fn write_bytes(
-            con: &mut BufWriter<TcpStream>,
-            resp: Vec<u8>,
-        ) -> Result<(), Box<dyn Error>> {
-            con.write_all(&resp).await?;
-            Ok(())
-        }
-        Box::pin(write_bytes(con, self.finish_into_bytes().to_vec()))
-    }
-}
-
-impl<T> Writable for T
-where
-    T: ToString,
-{
-    fn write<'s>(
-        self,
-        _: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
+        con: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
     ) -> std::pin::Pin<
         std::boxed::Box<
             (dyn std::future::Future<
@@ -107,8 +100,54 @@ where
                  + 's),
         >,
     > {
-        // Writing a `T` which can be represented as a string is essentially like
-        // writing a positive response
-        todo!()
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            resp: Vec<u8>,
+        ) -> Result<(), Box<dyn Error>> {
+            con.write_all(&resp).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self.0))
+    }
+}
+
+impl Writable for BytesWrapper {
+    fn write<'s>(
+        self,
+        con: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
+    ) -> std::pin::Pin<
+        std::boxed::Box<
+            (dyn std::future::Future<
+                Output = std::result::Result<
+                    (),
+                    std::boxed::Box<(dyn std::error::Error + 'static)>,
+                >,
+            > + std::marker::Send
+                 + std::marker::Sync
+                 + 's),
+        >,
+    > {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            bytes: Bytes,
+        ) -> Result<(), Box<dyn Error>> {
+            // First write a `+` character to the stream since this is a
+            // string (we represent `String`s as `Byte` objects internally)
+            // and since `Bytes` are effectively `String`s we will append the
+            // type operator `+` to the stream
+            con.write(&[b'+']).await?;
+            // Now get the size of the Bytes object as bytes
+            let size = bytes.len().to_string().into_bytes();
+            // Write this to the stream
+            con.write(&size).await?;
+            // Now write a LF character
+            con.write(&[b'\n']).await?;
+            // Now write the REAL bytes (of the object)
+            con.write(&bytes).await?;
+            // Now write another LF
+            con.write(&[b'\n']).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self.finish_into_bytes()))
     }
 }
