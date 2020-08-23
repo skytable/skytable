@@ -23,11 +23,12 @@
 
 use lazy_static::lazy_static;
 lazy_static! {
-    pub static ref OKAY: Vec<u8> = "#2\n&1\n!1\n0\n".as_bytes().to_owned();
-    pub static ref NOT_FOUND: Vec<u8> = "#2\n&1\n!1\n1\n".as_bytes().to_owned();
-    pub static ref OVERWRITE_ERR: Vec<u8> = "#2\n&1\n!1\n2\n".as_bytes().to_owned();
-    pub static ref PACKET_ERR: Vec<u8> = "#2\n&1\n!1\n3\n".as_bytes().to_owned();
-    pub static ref ACTION_ERR: Vec<u8> = "#2\n&1\n!1\n4\n".as_bytes().to_owned();
-    pub static ref SERVER_ERR: Vec<u8> = "#2\n&1\n!1\n5\n".as_bytes().to_owned();
-    pub static ref OTHER_ERR_EMPTY: Vec<u8> = "#2\n&1\n!1\n6\n".as_bytes().to_owned();
+    pub static ref OKAY: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n0\n".as_bytes().to_owned();
+    pub static ref NOT_FOUND: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n1\n".as_bytes().to_owned();
+    pub static ref OVERWRITE_ERR: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n2\n".as_bytes().to_owned();
+    pub static ref PACKET_ERR: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n3\n".as_bytes().to_owned();
+    pub static ref ACTION_ERR: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n4\n".as_bytes().to_owned();
+    pub static ref SERVER_ERR: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n5\n".as_bytes().to_owned();
+    pub static ref OTHER_ERR_EMPTY: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n6\n".as_bytes().to_owned();
+    pub static ref HEYA: Vec<u8> = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
 }

@@ -84,6 +84,13 @@ pub fn parse(buf: &[u8]) -> ParseResult {
         // A packet that has less than 6 characters? Nonsense!
         return ParseResult::Incomplete;
     }
+    /*
+    We first get the metaframe, which looks something like:
+    ```
+    #<numchars_in_next_line>\n
+    !<num_of_datagroups>\n
+    ```
+    */
     let mut pos = 0;
     if buf[pos] != b'#' {
         return ParseResult::BadPacket;
@@ -212,7 +219,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
         // Either more data was sent or some data was missing
         if items.len() == action_size {
             if items.len() == 1 {
-                ParseResult::Query(Query::Simple(items[0]), pos)
+                ParseResult::Query(Query::Simple(items.remove(0)), pos)
             } else {
                 ParseResult::Query(Query::Pipelined(items), pos)
             }

@@ -23,42 +23,10 @@
 //! This module provides functions to work with `UPDATE` queries
 
 use crate::coredb::CoreDB;
-use libtdb::builders::response::*;
-use libtdb::de::DataGroup;
-use libtdb::terrapipe::RespCodes;
+use crate::protocol::{ActionGroup, Connection};
+use libtdb::TResult;
 
-/// Run an `UPDATE` query
-pub fn update(handle: &CoreDB, act: DataGroup) -> Response {
-    if (act.len() - 1) & 1 != 0 {
-        return RespCodes::ActionError.into_response();
-    }
-    let mut resp = SResp::new();
-    let mut respgroup = RespGroup::new();
-    act[1..]
-        .chunks_exact(2)
-        .for_each(|key| match handle.update(&key[0], &key[1]) {
-            Ok(_) => respgroup.add_item(RespCodes::Okay),
-            Err(e) => respgroup.add_item(e),
-        });
-    resp.add_group(respgroup);
-    resp.into_response()
-}
-
-#[test]
-fn test_update() {
-    let db = CoreDB::new().unwrap();
-    db.set("foo", &"bar".to_owned()).unwrap();
-    assert_eq!(db.get("foo").unwrap(), "bar");
-    let act = vec![
-        "UPDATE".to_owned(),
-        "foo".to_owned(),
-        "newbar".to_owned(),
-        "foo".to_owned(),
-        "latestbar".to_owned(),
-    ];
-    let (r1, r2, r3) = update(&db, DataGroup::new(act));
-    let r = [r1, r2, r3].concat();
-    assert_eq!(db.get("foo").unwrap(), "latestbar");
-    db.finish_db(true, true, true);
-    assert_eq!("*!9!7\n#2#2#2\n&2\n!0\n!0\n".as_bytes().to_owned(), r);
+/// Run a `GET` query
+pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    todo!()
 }

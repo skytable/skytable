@@ -30,10 +30,13 @@ pub mod set;
 pub mod update;
 pub mod heya {
     //! Respond to `HEYA` queries
-    use libtdb::builders::response::Response;
-    use libtdb::terrapipe::responses::HEYA;
+    use crate::protocol;
+    use crate::resputil::BytesWrapper;
+    use libtdb::TResult;
+    use protocol::{responses, Connection};
     /// Returns a `HEY!` `Response`
-    pub fn heya() -> Response {
-        HEYA.to_owned()
+    pub async fn heya(con: &mut Connection) -> TResult<()> {
+        con.write_response(BytesWrapper::from(responses::HEYA.to_owned()))
+            .await
     }
 }

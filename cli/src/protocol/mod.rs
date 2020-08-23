@@ -21,10 +21,11 @@
 
 mod deserializer;
 use bytes::{Buf, BytesMut};
+use deserializer::{ClientResult, Response};
 use libtdb::builders::query::*;
 use libtdb::de::*;
 use libtdb::TResult;
-use deserializer::{ClientResult, Response};
+use libtdb::BUF_CAP;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 pub struct Connection {

@@ -23,38 +23,10 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::coredb::CoreDB;
-use libtdb::builders::response::*;
-use libtdb::de::DataGroup;
-use libtdb::terrapipe::RespCodes;
+use crate::protocol::{ActionGroup, Connection};
+use libtdb::TResult;
 
 /// Run a `GET` query
-pub fn get(handle: &CoreDB, act: DataGroup) -> Response {
-    if act.len() < 2 {
-        return RespCodes::ActionError.into_response();
-    }
-    let mut resp = SResp::new();
-    let mut respgroup = RespGroup::new();
-    act.into_iter()
-        .skip(1)
-        .for_each(|key| match handle.get(&key) {
-            Ok(byts) => respgroup.add_item(BytesWrapper(byts)),
-            Err(e) => respgroup.add_item(e),
-        });
-    resp.add_group(respgroup);
-    resp.into_response()
-}
-
-#[cfg(test)]
-#[test]
-fn test_get() {
-    let db = CoreDB::new().unwrap();
-    let _ = db.set(&"foo1".to_owned(), &"bar".to_owned()).unwrap();
-    let _ = db.set(&"foo2".to_owned(), &"bar".to_owned()).unwrap();
-    let (r1, r2, r3) = get(
-        &db,
-        DataGroup::new(vec!["get".to_owned(), "foo1".to_owned(), "foo2".to_owned()]),
-    );
-    let r = [r1, r2, r3].concat();
-    db.finish_db(true, true, true);
-    assert_eq!("*!13!7\n#2#4#4\n&2\n+bar\n+bar\n".as_bytes().to_owned(), r);
+pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    todo!()
 }

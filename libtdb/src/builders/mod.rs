@@ -24,7 +24,6 @@
 //! - Responses (the `response` module)
 
 pub mod query;
-pub mod response;
 
 pub const MLINE_BUF: usize = 46;
 pub const ML_BUF: usize = 64;

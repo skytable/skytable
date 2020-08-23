@@ -22,18 +22,15 @@
 //! # The core database engine
 
 use crate::diskstore;
+use crate::protocol::Connection;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
-use libtdb::builders::response::Response;
-use libtdb::terrapipe::{ActionType, RespCodes};
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::{hash_map::Entry, HashMap};
 use std::sync::Arc;
-
-/// Results from actions on the Database
-pub type ActionResult<T> = Result<T, RespCodes>;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `Coretable`
@@ -75,34 +72,6 @@ impl Data {
 }
 
 impl CoreDB {
-    /// GET a `key`
-    pub fn get(&self, key: &str) -> ActionResult<Bytes> {
-        if let Some(value) = self.acquire_read().get(key) {
-            Ok(value.blob.to_owned())
-        } else {
-            Err(RespCodes::NotFound)
-        }
-    }
-    /// SET a `key` to `value`
-    pub fn set(&self, key: &str, value: &String) -> ActionResult<()> {
-        match self.acquire_write().entry(key.to_string()) {
-            Entry::Occupied(_) => return Err(RespCodes::OverwriteError),
-            Entry::Vacant(e) => {
-                let _ = e.insert(Data::from_string(&value));
-                Ok(())
-            }
-        }
-    }
-    /// UPDATE a `key` to `value`
-    pub fn update(&self, key: &str, value: &String) -> ActionResult<()> {
-        match self.acquire_write().entry(key.to_string()) {
-            Entry::Occupied(ref mut e) => {
-                e.insert(Data::from_string(&value));
-                Ok(())
-            }
-            Entry::Vacant(_) => Err(RespCodes::NotFound),
-        }
-    }
     #[cfg(debug_assertions)]
     /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
@@ -110,9 +79,9 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub fn execute_query(&self, query: Query) -> Response {
+    pub async fn execute_query(&self, query: Query, con: &mut Connection) -> TResult<()> {
         match query {
-            Query::Simple(q) => queryengine::execute_simple(&self, q),
+            Query::Simple(q) => queryengine::execute_simple(&self, con, q).await,
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }

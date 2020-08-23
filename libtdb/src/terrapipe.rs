@@ -34,24 +34,6 @@ pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
 /// Default query dataframe buffer size
 pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
 
-pub mod responses {
-    use crate::builders::response::*;
-    use crate::terrapipe::RespCodes;
-    use lazy_static::lazy_static;
-    lazy_static! {
-        pub static ref OKAY: Response = RespCodes::Okay.into_response();
-        pub static ref NOT_FOUND: Response = RespCodes::NotFound.into_response();
-        pub static ref OVERWRITE_ERROR: Response = RespCodes::OverwriteError.into_response();
-        pub static ref PACKET_ERROR: Response = RespCodes::PacketError.into_response();
-        pub static ref ARG_ERR: Response = RespCodes::ActionError.into_response();
-        pub static ref SERVER_ERR: Response = RespCodes::ServerError.into_response();
-        pub static ref OTHER_ERR: Response = RespCodes::OtherError(None).into_response();
-        pub static ref UNKNOWN_COMMAND: Response =
-            RespCodes::OtherError(Some(String::from("Unknown command"))).into_response();
-        pub static ref HEYA: Response = "HEY!".into_response();
-    }
-}
-
 /// Response codes returned by the server
 #[derive(Debug, PartialEq)]
 pub enum RespCodes {

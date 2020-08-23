@@ -23,9 +23,9 @@
 
 use crate::coredb::CoreDB;
 use crate::kvengine;
-use libtdb::builders::response::*;
-use libtdb::de::DataGroup;
-use libtdb::terrapipe::responses;
+use crate::protocol::ActionGroup;
+use crate::protocol::Connection;
+use libtdb::TResult;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
@@ -44,21 +44,6 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub fn execute_simple(db: &CoreDB, buf: Vec<DataGroup>) -> Response {
-    let mut responses: Vec<Response> = buf
-        .into_iter()
-        .map(|dg| match dg.get(0) {
-            Some(act) => match act.to_uppercase().as_str() {
-                tags::TAG_GET => kvengine::get::get(&db, dg),
-                tags::TAG_SET => kvengine::set::set(&db, dg),
-                tags::TAG_UPDATE => kvengine::update::update(&db, dg),
-                tags::TAG_DEL => kvengine::del::del(&db, dg),
-                tags::TAG_EXISTS => kvengine::exists::exists(&db, dg),
-                tags::TAG_HEYA => kvengine::heya::heya(),
-                _ => responses::UNKNOWN_COMMAND.to_owned(),
-            },
-            None => responses::PACKET_ERROR.to_owned(),
-        })
-        .collect();
-    responses.pop().unwrap()
+pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup) -> TResult<()> {
+    todo!()
 }

@@ -147,7 +147,7 @@ impl CHandler {
                 }
             };
             match try_df {
-                Ok(Q(s)) => self.con.write_response(self.db.execute_query(s)).await?,
+                Ok(Q(s)) => self.db.execute_query(s, &mut self.con).await?,
                 Ok(E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(Empty) => return Ok(()),
                 Err(e) => return Err(e.into()),
