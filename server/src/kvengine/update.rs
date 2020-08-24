@@ -22,11 +22,34 @@
 //! # `UPDATE` queries
 //! This module provides functions to work with `UPDATE` queries
 
-use crate::coredb::CoreDB;
-use crate::protocol::{ActionGroup, Connection};
+use crate::coredb::{self, CoreDB};
+use crate::protocol::{responses, ActionGroup, Connection};
+use crate::resp::GroupBegin;
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
+use std::collections::hash_map::Entry;
 
-/// Run a `GET` query
+/// Run an `UPDATE` query
 pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    todo!()
+    let howmany = act.howmany();
+    if howmany & 1 != 0 {
+        // An odd number of arguments means that the number of keys
+        // is not the same as the number of values, we won't run this
+        // action at all
+        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+    }
+    // Write #<m>\n#<n>\n&<howmany>\n to the stream
+    // It is howmany/2 since we will be writing howmany/2 number of responses
+    con.write_response(GroupBegin(howmany / 2)).await?;
+    let mut handle = handle.acquire_write(); // Get a write lock
+    let mut kviter = act.into_iter();
+    while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+        if let Entry::Occupied(mut v) = handle.entry(key) {
+            let _ = v.insert(coredb::Data::from_string(val));
+            con.write_response(RespCodes::Okay).await?;
+        } else {
+            con.write_response(RespCodes::NotFound).await?;
+        }
+    }
+    Ok(())
 }

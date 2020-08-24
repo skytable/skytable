@@ -56,9 +56,9 @@ pub struct Data {
 
 impl Data {
     /// Create a new blob from a string
-    pub fn from_string(val: &String) -> Self {
+    pub fn from_string(val: String) -> Self {
         Data {
-            blob: Bytes::copy_from_slice(&val.as_bytes()),
+            blob: Bytes::from(val.into_bytes()),
         }
     }
     /// Create a new blob from an existing `Bytes` instance
