@@ -23,6 +23,7 @@
 //!
 
 use bytes::Bytes;
+use libtdb::terrapipe::RespCodes;
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
@@ -50,6 +51,16 @@ use explicit declarations for asynchoronous functions
 #[derive(Debug, PartialEq)]
 pub struct BytesWrapper(Bytes);
 
+/// This indicates the beginning of a response group in a response.
+///
+/// It holds the number of items to be written and writes:
+/// ```text
+/// #<self.0.to_string().len().to_string().into_bytes()>\n
+/// &<self.0.to_string()>\n
+/// ```
+#[derive(Debug, PartialEq)]
+pub struct GroupBegin(pub usize);
+
 impl BytesWrapper {
     pub fn from_bytes(bytes: Bytes) -> Self {
         BytesWrapper(bytes)
@@ -69,19 +80,9 @@ pub trait Writable {
 impl Writable for Vec<u8> {
     fn write<'s>(
         self,
-        con: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
-    ) -> std::pin::Pin<
-        std::boxed::Box<
-            (dyn std::future::Future<
-                Output = std::result::Result<
-                    (),
-                    std::boxed::Box<(dyn std::error::Error + 'static)>,
-                >,
-            > + std::marker::Send
-                 + std::marker::Sync
-                 + 's),
-        >,
-    > {
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
         async fn write_bytes(
             con: &mut BufWriter<TcpStream>,
             resp: Vec<u8>,
@@ -96,19 +97,9 @@ impl Writable for Vec<u8> {
 impl Writable for BytesWrapper {
     fn write<'s>(
         self,
-        con: &'s mut tokio::io::BufWriter<tokio::net::TcpStream>,
-    ) -> std::pin::Pin<
-        std::boxed::Box<
-            (dyn std::future::Future<
-                Output = std::result::Result<
-                    (),
-                    std::boxed::Box<(dyn std::error::Error + 'static)>,
-                >,
-            > + std::marker::Send
-                 + std::marker::Sync
-                 + 's),
-        >,
-    > {
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
         async fn write_bytes(
             con: &mut BufWriter<TcpStream>,
             bytes: Bytes,
@@ -131,5 +122,61 @@ impl Writable for BytesWrapper {
             Ok(())
         }
         Box::pin(write_bytes(con, self.finish_into_bytes()))
+    }
+}
+
+impl Writable for RespCodes {
+    fn write<'s>(
+        self,
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            code: RespCodes,
+        ) -> Result<(), Box<dyn Error>> {
+            // Self's tsymbol is !
+            // The length of the response code is 1
+            // And we need a newline
+            con.write(&[b'!', b'1', b'\n']).await?;
+            // We need to get the u8 version of the response code
+            let code: u8 = code.into();
+            // We need the UTF8 equivalent of the response code
+            let code_bytes = code.to_string().into_bytes();
+            con.write(&code_bytes).await?;
+            // Now append a newline
+            con.write(&[b'\n']).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self))
+    }
+}
+
+impl Writable for GroupBegin {
+    fn write<'s>(
+        self,
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            size: usize,
+        ) -> Result<(), Box<dyn Error>> {
+            // First write a `#` which indicates that the next bytes give the
+            // prefix length
+            con.write(&[b'#']).await?;
+            let group_len_as_bytes = size.to_string().into_bytes();
+            let group_prefix_len_as_bytes = group_len_as_bytes.len().to_string().into_bytes();
+            // Now write Self's len as bytes
+            con.write(&group_prefix_len_as_bytes).await?;
+            // Now write a LF and '&' which signifies the beginning of a datagroup
+            con.write(&[b'\n', b'&']).await?;
+            // Now write the number of items in the datagroup as bytes
+            con.write(&group_len_as_bytes).await?;
+            // Now write a '\n' character
+            con.write(&[b'\n']).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self.0))
     }
 }

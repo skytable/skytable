@@ -23,9 +23,28 @@
 //! This module provides functions to work with `EXISTS` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{ActionGroup, Connection};
+use crate::protocol::{responses, ActionGroup, Connection};
+use crate::resputil::GroupBegin;
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
+
 /// Run an `EXISTS` query
-pub async fn exists(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    todo!()
+pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    let howmany = act.howmany();
+    if howmany == 0 {
+        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+    }
+    // Write #<m>\n#<n>\n&<howmany>\n to the stream
+    con.write_response(GroupBegin(howmany)).await?;
+    let mut keys = act.into_iter();
+    let handle = handle.acquire_read(); // Get a write handle
+    while let Some(key) = keys.next() {
+        if handle.contains_key(&key) {
+            con.write_response(RespCodes::Okay).await?;
+        } else {
+            con.write_response(RespCodes::NotFound).await?;
+        }
+    }
+    // We're done here
+    Ok(())
 }

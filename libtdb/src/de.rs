@@ -218,10 +218,10 @@ impl fmt::Display for DataGroup {
                                                 "ERROR: Existing values cannot be overwritten",
                                             )?;
                                         }
-                                        PacketError => {
+                                        ActionError => {
                                             write_error("ERROR: An invalid request was sent")?;
                                         }
-                                        ActionError => write_error(
+                                        PacketError => write_error(
                                             "ERROR: The action is not in the correct format",
                                         )?,
                                         ServerError => write_error(

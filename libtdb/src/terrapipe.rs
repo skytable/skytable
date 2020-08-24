@@ -44,10 +44,10 @@ pub enum RespCodes {
     NotFound,
     /// `2`: Overwrite Error
     OverwriteError,
-    /// `3`: Packet Error
-    PacketError,
-    /// `4`: ActionError
+    /// `3`: Action Error
     ActionError,
+    /// `4`: Packet Error
+    PacketError,
     /// `5`: Server Error
     ServerError,
     /// `6`: Some other error - the wrapped `String` will be returned in the response body.
@@ -62,8 +62,8 @@ impl From<RespCodes> for u8 {
             Okay => 0,
             NotFound => 1,
             OverwriteError => 2,
-            PacketError => 3,
-            ActionError => 4,
+            ActionError => 3,
+            PacketError => 4,
             ServerError => 5,
             OtherError(_) => 6,
         }
@@ -77,8 +77,8 @@ impl From<RespCodes> for char {
             Okay => '0',
             NotFound => '1',
             OverwriteError => '2',
-            PacketError => '3',
-            ActionError => '4',
+            ActionError => '3',
+            PacketError => '4',
             ServerError => '5',
             OtherError(_) => '6',
         }
@@ -93,8 +93,8 @@ impl RespCodes {
                 0 => Okay,
                 1 => NotFound,
                 2 => OverwriteError,
-                3 => PacketError,
-                4 => ActionError,
+                3 => ActionError,
+                4 => PacketError,
                 5 => ServerError,
                 6 => OtherError(extra),
                 _ => return None,
@@ -109,8 +109,8 @@ impl RespCodes {
             0 => Okay,
             1 => NotFound,
             2 => OverwriteError,
-            3 => PacketError,
-            4 => ActionError,
+            3 => ActionError,
+            4 => PacketError,
             5 => ServerError,
             6 => OtherError(extra),
             _ => return None,

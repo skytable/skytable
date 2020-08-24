@@ -24,9 +24,30 @@
 
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
+use crate::resputil::GroupBegin;
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
 /// Run a `DEL` query
+///
+/// Do note that this function is blocking since it acquires a write lock.
+/// It will write an entire datagroup, for this `del` action
 pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    todo!()
+    let howmany = act.howmany();
+    if howmany == 0 {
+        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+    }
+    // Write #<m>\n#<n>\n&<howmany>\n to the stream
+    con.write_response(GroupBegin(howmany)).await?;
+    let mut keys = act.into_iter();
+    let mut handle = handle.acquire_write(); // Get a write handle
+    while let Some(key) = keys.next() {
+        if handle.remove(&key).is_some() {
+            con.write_response(RespCodes::Okay).await?;
+        } else {
+            con.write_response(RespCodes::NotFound).await?;
+        }
+    }
+    // We're done here
+    Ok(())
 }
