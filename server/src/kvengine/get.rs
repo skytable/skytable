@@ -23,10 +23,30 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{ActionGroup, Connection};
+use crate::protocol::{responses, ActionGroup, Connection};
+use crate::resp::{BytesWrapper, GroupBegin};
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
 /// Run a `GET` query
 pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    todo!()
+    let howmany = act.howmany();
+    if howmany == 0 {
+        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+    }
+    // Write #<m>\n#<n>\n&<howmany>\n to the stream
+    con.write_response(GroupBegin(howmany)).await?;
+    let mut keys = act.into_iter();
+    let handle = handle.acquire_read(); // Get a read lock
+    while let Some(key) = keys.next() {
+        if let Some(value) = handle.get(&key) {
+            // Good, we got the value, write it off to the stream
+            con.write_response(BytesWrapper(value.get_blob().clone()))
+                .await?;
+        } else {
+            // Ah, couldn't find that key
+            con.write_response(RespCodes::NotFound).await?;
+        }
+    }
+    Ok(())
 }

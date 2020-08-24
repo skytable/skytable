@@ -21,7 +21,7 @@
 
 mod deserializer;
 pub mod responses;
-use crate::resputil::Writable;
+use crate::resp::Writable;
 use bytes::{Buf, BytesMut};
 pub use deserializer::ActionGroup;
 pub use deserializer::ParseResult;

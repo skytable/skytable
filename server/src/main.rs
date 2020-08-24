@@ -26,7 +26,7 @@ mod diskstore;
 mod kvengine;
 mod protocol;
 mod queryengine;
-mod resputil;
+mod resp;
 use coredb::CoreDB;
 use dbnet::run;
 use tokio::signal;

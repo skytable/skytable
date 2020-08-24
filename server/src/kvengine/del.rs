@@ -24,7 +24,7 @@
 
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
-use crate::resputil::GroupBegin;
+use crate::resp::GroupBegin;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
@@ -40,7 +40,7 @@ pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     con.write_response(GroupBegin(howmany)).await?;
     let mut keys = act.into_iter();
-    let mut handle = handle.acquire_write(); // Get a write handle
+    let mut handle = handle.acquire_write(); // Get a write lock
     while let Some(key) = keys.next() {
         if handle.remove(&key).is_some() {
             con.write_response(RespCodes::Okay).await?;

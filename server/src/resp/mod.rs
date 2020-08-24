@@ -52,7 +52,7 @@ pub trait Writable {
 /// This wrapper exists to prevent trait implementation conflicts when
 /// an impl for `fmt::Display` may be implemented upstream
 #[derive(Debug, PartialEq)]
-pub struct BytesWrapper(Bytes);
+pub struct BytesWrapper(pub Bytes);
 
 /// This indicates the beginning of a response group in a response.
 ///
