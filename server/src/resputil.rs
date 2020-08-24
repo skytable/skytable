@@ -35,13 +35,16 @@ use tokio::net::TcpStream;
 /// All trait implementors are given access to an asynchronous stream to which
 /// they must write a response.
 ///
-/// As we will eventually move towards a second
-/// iteration of the structure of response packets, we will need to let several
-/// items to be able to write to the stream.
-/*
-HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
-use explicit declarations for asynchoronous functions
-*/
+pub trait Writable {
+    /*
+    HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
+    use explicit declarations for asynchoronous functions
+    */
+    fn write<'s>(
+        self,
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
+}
 
 /// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
 /// from `CoreDB`.
@@ -68,13 +71,6 @@ impl BytesWrapper {
     pub fn finish_into_bytes(self) -> Bytes {
         self.0
     }
-}
-
-pub trait Writable {
-    fn write<'s>(
-        self,
-        con: &'s mut BufWriter<TcpStream>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + Send + Sync + 's>>;
 }
 
 impl Writable for Vec<u8> {
