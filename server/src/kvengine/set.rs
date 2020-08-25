@@ -41,15 +41,26 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     // It is howmany/2 since we will be writing howmany/2 number of responses
     con.write_response(GroupBegin(howmany / 2)).await?;
-    let mut handle = handle.acquire_write(); // Get a write lock
     let mut kviter = act.into_iter();
     while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-        if let Entry::Vacant(v) = handle.entry(key) {
-            let _ = v.insert(coredb::Data::from_string(val));
+        let was_done = {
+            let mut rhandle = handle.acquire_write();
+            if let Entry::Vacant(v) = rhandle.entry(key) {
+                let _ = v.insert(coredb::Data::from_string(val));
+                true
+            } else {
+                false
+            }
+        };
+        if was_done {
             con.write_response(RespCodes::Okay).await?;
         } else {
             con.write_response(RespCodes::OverwriteError).await?;
         }
+    }
+    #[cfg(debug_assertions)]
+    {
+        handle.print_debug_table();
     }
     Ok(())
 }

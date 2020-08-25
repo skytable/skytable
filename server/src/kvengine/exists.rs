@@ -29,7 +29,7 @@ use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
 /// Run an `EXISTS` query
-pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn exists(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
         return con.write_response(responses::ACTION_ERR.to_owned()).await;
@@ -37,14 +37,19 @@ pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     con.write_response(GroupBegin(howmany)).await?;
     let mut keys = act.into_iter();
-    let handle = handle.acquire_read(); // Get a read lock
+    // HACK(@ohsayan): Figure out what to do here
     while let Some(key) = keys.next() {
-        if handle.contains_key(&key) {
-            con.write_response(RespCodes::Okay).await?;
+        let has_key = {
+            let rhandle = handle.acquire_read();
+            rhandle.contains_key(&key)
+        };
+        if has_key {
+            con.write_response(RespCodes::Okay).await?
         } else {
-            con.write_response(RespCodes::NotFound).await?;
+            con.write_response(RespCodes::NotFound).await?
         }
     }
+    drop(handle);
     // We're done here
     Ok(())
 }

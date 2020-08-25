@@ -26,10 +26,9 @@ use crate::protocol::Connection;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
-use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// This is a thread-safe database handle, which on cloning simply
@@ -81,10 +80,12 @@ impl CoreDB {
     /// Execute a query that has already been validated by `Connection::read_query`
     pub async fn execute_query(&self, query: Query, con: &mut Connection) -> TResult<()> {
         match query {
-            Query::Simple(q) => queryengine::execute_simple(&self, con, q).await,
+            Query::Simple(q) => queryengine::execute_simple(&self, con, q).await?,
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }
+        // Once we're done executing, flush the stream
+        con.flush_stream().await
     }
 
     /// Create a new `CoreDB` instance

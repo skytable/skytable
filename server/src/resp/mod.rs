@@ -65,9 +65,6 @@ pub struct BytesWrapper(pub Bytes);
 pub struct GroupBegin(pub usize);
 
 impl BytesWrapper {
-    pub fn from_bytes(bytes: Bytes) -> Self {
-        BytesWrapper(bytes)
-    }
     pub fn finish_into_bytes(self) -> Bytes {
         self.0
     }

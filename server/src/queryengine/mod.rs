@@ -24,26 +24,44 @@
 use crate::coredb::CoreDB;
 use crate::kvengine;
 use crate::protocol::ActionGroup;
-use crate::protocol::Connection;
+use crate::protocol::{responses, Connection};
 use libtdb::TResult;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
-    /// `GET` command tag
+    /// `GET` action tag
     pub const TAG_GET: &'static str = "GET";
-    /// `SET` command tag
+    /// `SET` action tag
     pub const TAG_SET: &'static str = "SET";
-    /// `UPDATE` command tag
+    /// `UPDATE` action tag
     pub const TAG_UPDATE: &'static str = "UPDATE";
-    /// `DEL` command tag
+    /// `DEL` action tag
     pub const TAG_DEL: &'static str = "DEL";
-    /// `HEYA` command tag
+    /// `HEYA` action tag
     pub const TAG_HEYA: &'static str = "HEYA";
-    /// `EXISTS` command tag
+    /// `EXISTS` action tag
     pub const TAG_EXISTS: &'static str = "EXISTS";
 }
 
 /// Execute a simple(*) query
 pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup) -> TResult<()> {
-    todo!()
+    let first = match buf.get_first() {
+        None => {
+            return con.write_response(responses::PACKET_ERR.to_owned()).await;
+        }
+        Some(f) => f.to_uppercase(),
+    };
+    match first.as_str() {
+        tags::TAG_GET => kvengine::get::get(db, con, buf).await?,
+        tags::TAG_HEYA => kvengine::heya::heya(con).await?,
+        tags::TAG_DEL => kvengine::del::del(db, con, buf).await?,
+        tags::TAG_EXISTS => kvengine::exists::exists(db, con, buf).await?,
+        tags::TAG_SET => kvengine::set::set(db, con, buf).await?,
+        tags::TAG_UPDATE => kvengine::update::update(db, con, buf).await?,
+        _ => {
+            con.write_response(responses::UNKNOWN_ACTION.to_owned())
+                .await?
+        }
+    }
+    Ok(())
 }

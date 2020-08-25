@@ -119,7 +119,9 @@ impl Connection {
     /// Write a response to the stream
     pub async fn write_response(&mut self, streamer: impl Writable) -> TResult<()> {
         streamer.write(&mut self.stream).await?;
-        // Flush the stream to make sure that the data was delivered
+        Ok(())
+    }
+    pub async fn flush_stream(&mut self) -> TResult<()> {
         self.stream.flush().await?;
         Ok(())
     }

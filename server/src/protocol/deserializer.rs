@@ -47,6 +47,9 @@ impl ActionGroup {
     pub fn howmany(&self) -> usize {
         self.0.len() - 1
     }
+    pub fn get_first(&self) -> Option<&String> {
+        self.0.get(0)
+    }
 }
 
 impl IntoIterator for ActionGroup {

@@ -40,13 +40,20 @@ pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     con.write_response(GroupBegin(howmany)).await?;
     let mut keys = act.into_iter();
-    let mut handle = handle.acquire_write(); // Get a write lock
     while let Some(key) = keys.next() {
-        if handle.remove(&key).is_some() {
+        let all_cool: bool = {
+            let mut wlock = handle.acquire_write();
+            wlock.remove(&key).is_some()
+        };
+        if all_cool {
             con.write_response(RespCodes::Okay).await?;
         } else {
             con.write_response(RespCodes::NotFound).await?;
         }
+    }
+    #[cfg(debug_assertions)]
+    {
+        handle.print_debug_table();
     }
     // We're done here
     Ok(())
