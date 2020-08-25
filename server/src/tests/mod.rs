@@ -28,12 +28,20 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
 /// Start the server as a background asynchronous task
-async fn start_server() -> SocketAddr {
-    let listener = TcpListener::bind(ADDR).await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
+async fn start_server() -> Option<SocketAddr> {
+    // HACK(@ohsayan): Since we want to start the server if it is not already
+    // running, or use it if it is already running, we just return none if we failed
+    // to bind to the port, since this will _almost_ never happen on our CI
+    let listener = match TcpListener::bind(ADDR).await {
+        Ok(l) => l,
+        Err(_) => return None,
+    };
+    let addr = if let Ok(addr) = listener.local_addr() {
+        Some(addr)
+    } else {
+        None
+    };
     tokio::spawn(async move { dbnet::run(listener, tokio::signal::ctrl_c()).await });
-
     addr
 }
 
@@ -45,9 +53,39 @@ async fn test_heya() {
         .write_all(b"#2\n*1\n#2\n&1\n#4\nHEYA\n")
         .await
         .unwrap();
-    let mut response = [0; 20];
     let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
+    let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     stream.shutdown(Shutdown::Write).unwrap();
     assert_eq!(response.to_vec(), res_should_be);
+}
+
+#[tokio::test]
+async fn test_set_single_nil() {
+    let server = start_server().await;
+    let mut stream = TcpStream::connect(ADDR).await.unwrap();
+    stream
+        .write_all(b"#2\n*1\n#2\n&2\n#3\nGET\n#1\nx\n")
+        .await
+        .unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n!1\n1\n".as_bytes().to_owned();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    stream.shutdown(Shutdown::Write).unwrap();
+    assert_eq!(response, res_should_be);
+}
+
+#[tokio::test]
+async fn test_set_multiple_nil() {
+    let server = start_server().await;
+    let mut stream = TcpStream::connect(ADDR).await.unwrap();
+    stream
+        .write_all(b"#2\n*1\n#2\n&3\n#3\nGET\n#1\nx\n#2\nex\n")
+        .await
+        .unwrap();
+    let res_should_be = b"#2\n*1\n#2\n&2\n!1\n1\n!1\n1";
+    let mut response = vec![0; res_should_be.len()];
+    stream.read(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be.to_vec());
+    stream.shutdown(Shutdown::Write).unwrap();
 }

@@ -155,11 +155,12 @@ impl Writable for GroupBegin {
             con: &mut BufWriter<TcpStream>,
             size: usize,
         ) -> Result<(), Box<dyn Error>> {
+            con.write(b"#2\n*1\n").await?;
             // First write a `#` which indicates that the next bytes give the
             // prefix length
             con.write(&[b'#']).await?;
             let group_len_as_bytes = size.to_string().into_bytes();
-            let group_prefix_len_as_bytes = group_len_as_bytes.len().to_string().into_bytes();
+            let group_prefix_len_as_bytes = (group_len_as_bytes.len() + 1).to_string().into_bytes();
             // Now write Self's len as bytes
             con.write(&group_prefix_len_as_bytes).await?;
             // Now write a LF and '&' which signifies the beginning of a datagroup
