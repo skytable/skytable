@@ -21,13 +21,18 @@
 
 mod deserializer;
 use bytes::{Buf, BytesMut};
-use deserializer::{ClientResult, Response};
-use libtdb::builders::query::*;
-use libtdb::de::*;
+use deserializer::ClientResult;
+use lazy_static::lazy_static;
 use libtdb::TResult;
 use libtdb::BUF_CAP;
+use regex::Regex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+lazy_static! {
+    static ref RE: Regex = Regex::new("[^\\s\"']+|\"[^\"]*\"|'[^']*'").unwrap();
+}
+
 pub struct Connection {
     stream: TcpStream,
     buffer: BytesMut,
@@ -42,9 +47,8 @@ impl Connection {
         })
     }
     pub async fn run_query(&mut self, query: String) {
-        let mut qbuilder = QueryBuilder::new_simple();
-        qbuilder.from_cmd(query);
-        match self.stream.write_all(&qbuilder.into_query()).await {
+        let query = proc_query(query);
+        match self.stream.write_all(&query).await {
             Ok(_) => (),
             Err(_) => {
                 eprintln!("ERROR: Couldn't write data to socket");
@@ -65,8 +69,8 @@ impl Connection {
                     eprintln!("ERROR: The remote end reset the connection");
                     return;
                 }
-                ClientResult::Incomplete(f) => {
-                    self.buffer.advance(f);
+                ClientResult::Incomplete => {
+                    continue;
                 }
                 ClientResult::Response(r, f) => {
                     self.buffer.advance(f);
@@ -74,7 +78,7 @@ impl Connection {
                         return;
                     }
                     for group in r {
-                        println!("{}", group);
+                        println!("{:?}", group);
                     }
                     return;
                 }
@@ -91,7 +95,36 @@ impl Connection {
             // The connection was possibly reset
             return ClientResult::Empty(0);
         }
-        let nav = Navigator::new(&self.buffer);
-        Response::from_navigator(nav)
+        deserializer::parse(&self.buffer)
     }
+}
+
+fn proc_query(querystr: String) -> Vec<u8> {
+    // TODO(@ohsayan): Enable "" to be escaped
+    // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
+    let args: Vec<&str> = querystr.split_whitespace().collect();
+    let mut bytes = Vec::with_capacity(querystr.len());
+    bytes.extend(b"#2\n*1\n#2\n&");
+    bytes.extend(args.len().to_string().into_bytes());
+    bytes.push(b'\n');
+    args.into_iter().for_each(|arg| {
+        bytes.push(b'#');
+        let len_bytes = arg.len().to_string().into_bytes();
+        bytes.extend(len_bytes);
+        bytes.push(b'\n');
+        bytes.extend(arg.as_bytes());
+        bytes.push(b'\n');
+    });
+    bytes
+}
+
+#[test]
+fn test_queryproc() {
+    let query = "GET x y".to_owned();
+    assert_eq!(
+        "#2\n*1\n#2\n&3\n#3\nGET\n#1\nx\n#1\ny\n"
+            .as_bytes()
+            .to_owned(),
+        proc_query(query)
+    )
 }

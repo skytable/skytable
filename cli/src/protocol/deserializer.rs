@@ -21,10 +21,17 @@
 
 //! This module provides methods to deserialize an incoming response packet
 
-use libtdb::builders::MLINE_BUF;
-use libtdb::de::*;
-use libtdb::terrapipe::*;
 use std::fmt;
+
+#[derive(Debug, PartialEq)]
+pub struct DataGroup(Vec<DataType>);
+
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
+pub enum DataType {
+    Str(Option<String>),
+    RespCode(Option<String>),
+}
 
 /// Errors that may occur while parsing responses from the server
 #[derive(Debug, PartialEq)]
@@ -32,7 +39,7 @@ pub enum ClientResult {
     InvalidResponse(usize),
     Response(Vec<DataGroup>, usize),
     Empty(usize),
-    Incomplete(usize),
+    Incomplete,
 }
 
 impl fmt::Display for ClientResult {
@@ -42,76 +49,222 @@ impl fmt::Display for ClientResult {
             InvalidResponse(_) => write!(f, "ERROR: The server sent an invalid response"),
             Response(_, _) => unimplemented!(),
             Empty(_) => write!(f, ""),
-            Incomplete(_) => write!(f, "ERROR: The server sent an incomplete response"),
+            Incomplete => write!(f, "ERROR: The server sent an incomplete response"),
         }
     }
 }
 
-struct Metaline {
-    content_size: usize,
-    metalayout_size: usize,
-    resp_type: ActionType,
-}
-
-impl Metaline {
-    pub fn from_navigator(nav: &mut Navigator) -> Option<Self> {
-        if let Some(mline) = nav.get_line(Some(MLINE_BUF)) {
-            if mline.len() < 5 {
-                return None;
-            }
-            let resp_type = match unsafe { mline.get_unchecked(0) } {
-                b'$' => ActionType::Pipeline,
-                b'*' => ActionType::Simple,
-                _ => return None,
-            };
-            if resp_type == ActionType::Pipeline {
-                // TODO(@ohsayan): Enable pipelined responses to be parsed
-                unimplemented!("Pipelined responses cannot be parsed yet");
-            }
-            if let Some(sizes) = get_frame_sizes(unsafe { mline.get_unchecked(1..) }) {
-                return Some(Metaline {
-                    content_size: unsafe { *sizes.get_unchecked(0) },
-                    metalayout_size: unsafe { *sizes.get_unchecked(1) },
-                    resp_type,
-                });
-            }
-        }
-        None
+pub fn parse(buf: &[u8]) -> ClientResult {
+    if buf.len() < 6 {
+        // A packet that has less than 6 characters? Nonsense!
+        return ClientResult::Incomplete;
     }
-}
-
-#[derive(Debug)]
-struct Metalayout(Vec<usize>);
-
-impl Metalayout {
-    pub fn from_navigator(nav: &mut Navigator, mlayoutsize: usize) -> Option<Self> {
-        if let Some(layout) = nav.get_line(Some(mlayoutsize)) {
-            if let Some(skip_sequence) = get_skip_sequence(&layout) {
-                return Some(Metalayout(skip_sequence));
-            }
-        }
-        None
+    /*
+    We first get the metaframe, which looks something like:
+    ```
+    #<numchars_in_next_line>\n
+    !<num_of_datagroups>\n
+    ```
+    */
+    let mut pos = 0;
+    if buf[pos] != b'#' {
+        return ClientResult::InvalidResponse(pos);
+    } else {
+        pos += 1;
     }
-}
-
-#[derive(Debug)]
-pub struct Response {
-    pub data: Vec<String>,
-    pub resptype: ActionType,
-}
-
-impl Response {
-    pub fn from_navigator(mut nav: Navigator) -> ClientResult {
-        if let Some(metaline) = Metaline::from_navigator(&mut nav) {
-            if let Some(layout) = Metalayout::from_navigator(&mut nav, metaline.metalayout_size) {
-                if let Some(content) = nav.get_exact(metaline.content_size) {
-                    let data = parse_df(content, layout.0, 1);
-                    if let Some(data) = data {
-                        return ClientResult::Response(data, nav.get_pos_usize());
+    let next_line = match read_line_and_return_next_line(&mut pos, &buf) {
+        Some(line) => line,
+        None => {
+            // This is incomplete
+            return ClientResult::Incomplete;
+        }
+    };
+    pos += 1; // Skip LF
+              // Find out the number of actions that we have to do
+    let mut action_size = 0usize;
+    if next_line[0] == b'*' {
+        let mut line_iter = next_line.into_iter().skip(1).peekable();
+        while let Some(dig) = line_iter.next() {
+            let curdig: usize = match dig.checked_sub(48) {
+                Some(dig) => {
+                    if dig > 9 {
+                        return ClientResult::InvalidResponse(pos);
+                    } else {
+                        dig.into()
                     }
                 }
+                None => return ClientResult::InvalidResponse(pos),
+            };
+            action_size = (action_size * 10) + curdig;
+        }
+    // This line gives us the number of actions
+    } else {
+        return ClientResult::InvalidResponse(pos);
+    }
+    let mut items: Vec<DataGroup> = Vec::with_capacity(action_size);
+    while pos < buf.len() && items.len() <= action_size {
+        match buf[pos] {
+            b'#' => {
+                pos += 1; // Skip '#'
+                let next_line = match read_line_and_return_next_line(&mut pos, &buf) {
+                    Some(line) => line,
+                    None => {
+                        // This is incomplete
+                        return ClientResult::Incomplete;
+                    }
+                }; // Now we have the current line
+                pos += 1; // Skip the newline
+                          // Move the cursor ahead by the number of bytes that we just read
+                          // Let us check the current char
+                match next_line[0] {
+                    b'&' => {
+                        // This is an array
+                        // Now let us parse the array size
+                        let mut current_array_size = 0usize;
+                        let mut linepos = 1; // Skip the '&' character
+                        while linepos < next_line.len() {
+                            let curdg: usize = match next_line[linepos].checked_sub(48) {
+                                Some(dig) => {
+                                    if dig > 9 {
+                                        // If `dig` is greater than 9, then the current
+                                        // UTF-8 char isn't a number
+                                        return ClientResult::InvalidResponse(pos);
+                                    } else {
+                                        dig.into()
+                                    }
+                                }
+                                None => return ClientResult::InvalidResponse(pos),
+                            };
+                            current_array_size = (current_array_size * 10) + curdg; // Increment the size
+                            linepos += 1; // Move the position ahead, since we just read another char
+                        }
+                        // Now we know the array size, good!
+                        let mut actiongroup: Vec<DataType> = Vec::with_capacity(current_array_size);
+                        // Let's loop over to get the elements till the size of this array
+                        while pos < buf.len() && actiongroup.len() < current_array_size {
+                            let mut element_size = 0usize;
+                            let datatype = match buf[pos] {
+                                b'+' => DataType::Str(None),
+                                b'!' => DataType::RespCode(None),
+                                _ => unimplemented!(),
+                            };
+                            pos += 1; // We've got the tsymbol above, so skip it
+                            while pos < buf.len() && buf[pos] != b'\n' {
+                                let curdig: usize = match buf[pos].checked_sub(48) {
+                                    Some(dig) => {
+                                        if dig > 9 {
+                                            // If `dig` is greater than 9, then the current
+                                            // UTF-8 char isn't a number
+                                            return ClientResult::InvalidResponse(pos);
+                                        } else {
+                                            dig.into()
+                                        }
+                                    }
+                                    None => return ClientResult::InvalidResponse(pos),
+                                };
+                                element_size = (element_size * 10) + curdig; // Increment the size
+                                pos += 1; // Move the position ahead, since we just read another char
+                            }
+                            pos += 1;
+                            // We now know the item size
+                            let mut value = String::with_capacity(element_size);
+                            let extracted = match buf.get(pos..pos + element_size) {
+                                Some(s) => s,
+                                None => return ClientResult::Incomplete,
+                            };
+                            pos += element_size; // Move the position ahead
+                            value.push_str(&String::from_utf8_lossy(extracted));
+                            pos += 1; // Skip the newline
+                            actiongroup.push(match datatype {
+                                DataType::Str(_) => DataType::Str(Some(value)),
+                                DataType::RespCode(_) => DataType::RespCode(Some(value)),
+                            });
+                        }
+                        items.push(DataGroup(actiongroup));
+                    }
+                    _ => return ClientResult::InvalidResponse(pos),
+                }
+                continue;
+            }
+            _ => {
+                // Since the variant '#' would does all the array
+                // parsing business, we should never reach here unless
+                // the packet is invalid
+                return ClientResult::InvalidResponse(pos);
             }
         }
-        ClientResult::InvalidResponse(nav.get_pos_usize())
     }
+    if buf.get(pos).is_none() {
+        // Either more data was sent or some data was missing
+        if items.len() == action_size {
+            if items.len() == 1 {
+                ClientResult::Response(items, pos)
+            } else {
+                // The CLI does not support batch queries
+                unimplemented!();
+            }
+        } else {
+            ClientResult::Incomplete
+        }
+    } else {
+        ClientResult::InvalidResponse(pos)
+    }
+}
+/// Read a size line and return the following line
+///
+/// This reads a line that begins with the number, i.e make sure that
+/// the **`#` character is skipped**
+///
+fn read_line_and_return_next_line<'a>(pos: &mut usize, buf: &'a [u8]) -> Option<&'a [u8]> {
+    let mut next_line_size = 0usize;
+    while pos < &mut buf.len() && buf[*pos] != b'\n' {
+        // 48 is the UTF-8 code for '0'
+        let curdig: usize = match buf[*pos].checked_sub(48) {
+            Some(dig) => {
+                if dig > 9 {
+                    // If `dig` is greater than 9, then the current
+                    // UTF-8 char isn't a number
+                    return None;
+                } else {
+                    dig.into()
+                }
+            }
+            None => return None,
+        };
+        next_line_size = (next_line_size * 10) + curdig; // Increment the size
+        *pos += 1; // Move the position ahead, since we just read another char
+    }
+    *pos += 1; // Skip the newline
+               // We now know the size of the next line
+    let next_line = match buf.get(*pos..*pos + next_line_size) {
+        Some(line) => line,
+        None => {
+            // This is incomplete
+            return None;
+        }
+    }; // Now we have the current line
+       // Move the cursor ahead by the number of bytes that we just read
+    *pos += next_line_size;
+    Some(next_line)
+}
+
+#[cfg(test)]
+#[test]
+fn test_parser() {
+    let res = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
+    assert_eq!(
+        parse(&res),
+        ClientResult::Response(
+            vec![DataGroup(vec![DataType::Str(Some("HEY!".to_owned()))])],
+            res.len()
+        )
+    );
+    let res = "#2\n*1\n#2\n&1\n!1\n0\n".as_bytes().to_owned();
+    assert_eq!(
+        parse(&res),
+        ClientResult::Response(
+            vec![DataGroup(vec![DataType::RespCode(Some("0".to_owned()))])],
+            res.len()
+        )
+    );
 }

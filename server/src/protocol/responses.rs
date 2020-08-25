@@ -31,6 +31,7 @@ lazy_static! {
     pub static ref SERVER_ERR: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n5\n".as_bytes().to_owned();
     pub static ref OTHER_ERR_EMPTY: Vec<u8> = "#2\n*1\n#2\n&1\n!1\n6\n".as_bytes().to_owned();
     pub static ref HEYA: Vec<u8> = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
-    pub static ref UNKNOWN_ACTION: Vec<u8> =
-        "#2\n*1\n&1\n!15\nUnknown command\n".as_bytes().to_owned();
+    pub static ref UNKNOWN_ACTION: Vec<u8> = "#2\n*1\n#2\n&1\n!15\nUnknown command\n"
+        .as_bytes()
+        .to_owned();
 }
