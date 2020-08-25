@@ -25,6 +25,8 @@ use crate::dbnet;
 use crate::ADDR;
 use std::io::ErrorKind;
 use std::net::{Shutdown, SocketAddr};
+use std::thread;
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
@@ -50,13 +52,16 @@ async fn start_server() -> Option<SocketAddr> {
 }
 
 async fn try_get_stream() -> TcpStream {
+    const SLEEP_DURATION: u64 = 4;
     let mut server = start_server().await;
+    thread::sleep(Duration::from_secs(SLEEP_DURATION)); // Sleep for four seconds
     if let Ok(stream) = TcpStream::connect(ADDR).await {
         return stream;
     }
     loop {
         // try starting the server again
         server = start_server().await;
+        thread::sleep(Duration::from_secs(SLEEP_DURATION)); // Sleep for four seconds
         if let Ok(stream) = TcpStream::connect(ADDR).await {
             return stream;
         } else {
