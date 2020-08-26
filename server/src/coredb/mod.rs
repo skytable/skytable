@@ -74,7 +74,11 @@ impl CoreDB {
     #[cfg(debug_assertions)]
     /// Flush the coretable entries when in debug mode
     pub fn print_debug_table(&self) {
-        println!("{:#?}", *self.acquire_read());
+        if self.acquire_read().len() == 0 {
+            println!("In-memory table is empty");
+        } else {
+            println!("{:#?}", *self.acquire_read());
+        }
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`

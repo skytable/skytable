@@ -73,9 +73,13 @@ impl Connection {
                     return Ok(QueryResult::Q(query));
                 }
                 Ok(ParseResult::BadPacket) => {
-                    return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()))
+                    // Discard the data in the buffer
+                    self.buffer.clear();
+                    return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()));
                 }
-                Err(_) => return Ok(QueryResult::Empty),
+                Err(_) => {
+                    return Ok(QueryResult::Empty);
+                }
                 _ => (),
             }
             self.read_again().await?;
@@ -128,6 +132,8 @@ impl Connection {
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
     pub async fn close_conn_with_error(&mut self, resp: Vec<u8>) -> TResult<()> {
-        self.write_response(resp).await
+        self.write_response(resp).await?;
+        self.stream.flush().await?;
+        Ok(())
     }
 }

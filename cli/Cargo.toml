@@ -18,4 +18,3 @@ lazy_static = "1.4.0"
 [[bin]]
 path="src/bin/benchmark.rs"
 name = "tdb-bench"
-version = "0.1.0"

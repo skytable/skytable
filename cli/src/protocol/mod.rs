@@ -126,5 +126,5 @@ fn test_queryproc() {
             .as_bytes()
             .to_owned(),
         proc_query(query)
-    )
+    );
 }

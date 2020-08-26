@@ -104,6 +104,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
         // A packet that has less than 6 characters? Nonsense!
         return ParseResult::Incomplete;
     }
+
     /*
     We first get the metaframe, which looks something like:
     ```
@@ -117,6 +118,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
     } else {
         pos += 1;
     }
+
     let next_line = match read_line_and_return_next_line(&mut pos, &buf) {
         Some(line) => line,
         None => {
@@ -124,6 +126,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
             return ParseResult::Incomplete;
         }
     };
+
     pos += 1; // Skip LF
               // Find out the number of actions that we have to do
     let mut action_size = 0usize;
@@ -178,7 +181,9 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                                         dig.into()
                                     }
                                 }
-                                None => return ParseResult::BadPacket,
+                                None => {
+                                    return ParseResult::BadPacket;
+                                }
                             };
                             current_array_size = (current_array_size * 10) + curdg; // Increment the size
                             linepos += 1; // Move the position ahead, since we just read another char
@@ -188,29 +193,31 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                         // Let's loop over to get the elements till the size of this array
                         while pos < buf.len() && actiongroup.len() < current_array_size {
                             let mut element_size = 0usize;
-                            while pos < buf.len() && buf[pos] != b'\n' {
-                                if buf[pos] == b'#' {
-                                    pos += 1; // skip the '#' character
-                                    let curdig: usize = match buf[pos].checked_sub(48) {
-                                        Some(dig) => {
-                                            if dig > 9 {
-                                                // If `dig` is greater than 9, then the current
-                                                // UTF-8 char isn't a number
-                                                return ParseResult::BadPacket;
-                                            } else {
-                                                dig.into()
-                                            }
-                                        }
-                                        None => return ParseResult::BadPacket,
-                                    };
-                                    element_size = (element_size * 10) + curdig; // Increment the size
-                                    pos += 1; // Move the position ahead, since we just read another char
-                                } else {
-                                    return ParseResult::BadPacket;
-                                }
+                            if buf[pos] == b'#' {
+                                pos += 1; // skip the '#' character
+                            } else {
+                                return ParseResult::BadPacket;
                             }
-                            pos += 1;
-                            // We now know the item size
+                            while pos < buf.len() && buf[pos] != b'\n' {
+                                let curdig: usize = match buf[pos].checked_sub(48) {
+                                    Some(dig) => {
+                                        if dig > 9 {
+                                            // If `dig` is greater than 9, then the current
+                                            // UTF-8 char isn't a number
+                                            return ParseResult::BadPacket;
+                                        } else {
+                                            dig.into()
+                                        }
+                                    }
+                                    None => {
+                                        return ParseResult::BadPacket;
+                                    }
+                                };
+                                element_size = (element_size * 10) + curdig; // Increment the size
+                                pos += 1; // Move the position ahead, since we just read another char
+                            }
+                            pos += 1; // Skip the newline
+                                      // We now know the item size
                             let mut value = String::with_capacity(element_size);
                             let extracted = match buf.get(pos..pos + element_size) {
                                 Some(s) => s,
@@ -218,12 +225,16 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                             };
                             pos += element_size; // Move the position ahead
                             value.push_str(&String::from_utf8_lossy(extracted));
+
                             pos += 1; // Skip the newline
                             actiongroup.push(value);
                         }
+
                         items.push(ActionGroup(actiongroup));
                     }
-                    _ => return ParseResult::BadPacket,
+                    _ => {
+                        return ParseResult::BadPacket;
+                    }
                 }
                 continue;
             }
@@ -231,6 +242,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                 // Since the variant '#' would does all the array
                 // parsing business, we should never reach here unless
                 // the packet is invalid
+
                 return ParseResult::BadPacket;
             }
         }
@@ -314,5 +326,18 @@ fn test_parser() {
         .into_bytes();
     let res = parse(&input);
     let res_should_be = ParseResult::BadPacket;
+    assert_eq!(res, res_should_be);
+    let input = "#2\n*1\n#2\n&3\n#3\nSET\n#19\nbeinghumanisawesome\n#4\ntrue\n"
+        .as_bytes()
+        .to_owned();
+    let res = parse(&input);
+    let res_should_be = ParseResult::Query(
+        Query::Simple(ActionGroup(vec![
+            "SET".to_owned(),
+            "beinghumanisawesome".to_owned(),
+            "true".to_owned(),
+        ])),
+        input.len(),
+    );
     assert_eq!(res, res_should_be);
 }

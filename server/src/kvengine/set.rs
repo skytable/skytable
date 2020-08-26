@@ -44,13 +44,15 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     let mut kviter = act.into_iter();
     while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
         let was_done = {
-            let mut rhandle = handle.acquire_write();
-            if let Entry::Vacant(v) = rhandle.entry(key) {
+            let mut whandle = handle.acquire_write();
+            let res = if let Entry::Vacant(v) = whandle.entry(key) {
                 let _ = v.insert(coredb::Data::from_string(val));
                 true
             } else {
                 false
-            }
+            };
+            drop(whandle);
+            res
         };
         if was_done {
             con.write_response(RespCodes::Okay).await?;
