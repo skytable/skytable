@@ -21,6 +21,8 @@
 
 //! This module provides methods to deserialize an incoming response packet
 
+use libtdb::terrapipe::RespCodes;
+use libtdb::util::terminal;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
@@ -31,6 +33,40 @@ pub struct DataGroup(Vec<DataType>);
 pub enum DataType {
     Str(Option<String>),
     RespCode(Option<String>),
+}
+
+impl fmt::Display for DataGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for element in self.0.iter() {
+            match element {
+                DataType::Str(Some(val)) => write!(f, "\"{}\" ", val)?,
+                DataType::Str(None) => (),
+                DataType::RespCode(Some(rc)) => {
+                    if rc.len() == 1 {
+                        if let Some(rcode) = RespCodes::from_str(&rc, None) {
+                            match rcode {
+                                RespCodes::Okay => terminal::write_okay("(Okay) ")?,
+                                RespCodes::NotFound => terminal::write_okay("(Nil) ")?,
+                                RespCodes::OverwriteError => {
+                                    terminal::write_error("(Overwrite Error) ")?
+                                }
+                                RespCodes::ActionError => terminal::write_error("(Action Error) ")?,
+                                RespCodes::PacketError => terminal::write_error("(Packet Error) ")?,
+                                RespCodes::ServerError => terminal::write_error("(Server Error) ")?,
+                                RespCodes::OtherError(_) => {
+                                    terminal::write_error("(Other Error) ")?
+                                }
+                            }
+                        }
+                    } else {
+                        terminal::write_error(format!("(\"{}\") ", rc))?;
+                    }
+                }
+                _ => unimplemented!(),
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Errors that may occur while parsing responses from the server

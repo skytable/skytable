@@ -78,7 +78,7 @@ impl Connection {
                         return;
                     }
                     for group in r {
-                        println!("{:?}", group);
+                        println!("{}", group);
                     }
                     return;
                 }
