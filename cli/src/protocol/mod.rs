@@ -104,8 +104,12 @@ fn proc_query(querystr: String) -> Vec<u8> {
     // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
     let args: Vec<&str> = querystr.split_whitespace().collect();
     let mut bytes = Vec::with_capacity(querystr.len());
-    bytes.extend(b"#2\n*1\n#2\n&");
-    bytes.extend(args.len().to_string().into_bytes());
+    bytes.extend(b"#2\n*1\n#");
+    let arg_len_bytes = args.len().to_string().into_bytes();
+    let arg_len_bytes_len = (arg_len_bytes.len() + 1).to_string().into_bytes();
+    bytes.extend(arg_len_bytes_len);
+    bytes.extend(b"\n&");
+    bytes.extend(arg_len_bytes);
     bytes.push(b'\n');
     args.into_iter().for_each(|arg| {
         bytes.push(b'#');

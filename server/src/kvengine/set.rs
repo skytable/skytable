@@ -32,7 +32,7 @@ use std::collections::hash_map::Entry;
 /// Run a `SET` query
 pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany & 1 != 0 {
+    if howmany & 1 == 1 {
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all

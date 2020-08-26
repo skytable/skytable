@@ -340,4 +340,30 @@ fn test_parser() {
         input.len(),
     );
     assert_eq!(res, res_should_be);
+    let res = parse(&"#2\n*1\n#3\n&17\n#3\nSET\n#3\none\n#1\n1\n#3\ntwo\n#1\n2\n#5\nthree\n#1\n3\n#4\nfour\n#1\n4\n#4\nfive\n#1\n5\n#3\nsix\n#1\n6\n#5\nseven\n#1\n7\n#5\neight\n#1\n8\n"
+    .to_owned()
+    .into_bytes());
+    let res_should_be = ParseResult::Query(
+        Query::Simple(ActionGroup(vec![
+            "SET".to_string(),
+            "one".to_string(),
+            "1".to_string(),
+            "two".to_string(),
+            "2".to_string(),
+            "three".to_string(),
+            "3".to_string(),
+            "four".to_string(),
+            "4".to_string(),
+            "five".to_string(),
+            "5".to_string(),
+            "six".to_string(),
+            "6".to_string(),
+            "seven".to_string(),
+            "7".to_string(),
+            "eight".to_string(),
+            "8".to_string(),
+        ])),
+        124,
+    );
+    assert_eq!(res, res_should_be);
 }
