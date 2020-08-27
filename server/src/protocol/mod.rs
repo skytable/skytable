@@ -73,8 +73,6 @@ impl Connection {
                     return Ok(QueryResult::Q(query));
                 }
                 Ok(ParseResult::BadPacket) => {
-                    // Discard the data in the buffer
-                    self.buffer.clear();
                     return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()));
                 }
                 Err(_) => {
