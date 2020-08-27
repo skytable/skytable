@@ -21,42 +21,45 @@
 
 //! # `UPDATE` queries
 //! This module provides functions to work with `UPDATE` queries
-
+//!
 use crate::coredb::{self, CoreDB};
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
-use libtdb::terrapipe::RespCodes;
-use libtdb::TResult;
+use coredb::Data;
+use libtdb::{terrapipe::RespCodes, TResult};
 use std::collections::hash_map::Entry;
+use std::hint::unreachable_unchecked;
 
 /// Run an `UPDATE` query
 pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany & 1 != 0 {
-        // An odd number of arguments means that the number of keys
-        // is not the same as the number of values, we won't run this
-        // action at all
+    if howmany != 2 {
+        // There should be exactly 2 arguments
         return con.write_response(responses::ACTION_ERR.to_owned()).await;
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    // It is howmany/2 since we will be writing howmany/2 number of responses
-    con.write_response(GroupBegin(howmany / 2)).await?;
-    let mut kviter = act.into_iter();
-    while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-        let was_done = {
-            let mut rhandle = handle.acquire_write();
-            if let Entry::Occupied(mut e) = rhandle.entry(key) {
-                let _ = e.insert(coredb::Data::from_string(val));
-                true
-            } else {
-                false
-            }
-        };
-        if was_done {
-            con.write_response(RespCodes::Okay).await?;
+    // It is howmany/2 since we will be writing 1 response
+    con.write_response(GroupBegin(1)).await?;
+    let mut it = act.into_iter();
+    let did_we = {
+        let mut whandle = handle.acquire_write();
+        if let Entry::Occupied(mut e) = whandle.entry(
+            it.next()
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
+        ) {
+            e.insert(Data::from_string(
+                it.next()
+                    .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
+            ));
+            true
         } else {
-            con.write_response(RespCodes::NotFound).await?;
+            false
         }
+    };
+    if did_we {
+        con.write_response(RespCodes::Okay).await?;
+    } else {
+        con.write_response(RespCodes::OverwriteError).await?;
     }
     #[cfg(debug_assertions)]
     {
