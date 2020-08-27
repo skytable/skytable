@@ -254,9 +254,11 @@ pub fn parse(buf: &[u8]) -> ParseResult {
         // Either more data was sent or some data was missing
         if items.len() == action_size {
             if items.len() == 1 {
-                ParseResult::Query(Query::Simple(items.remove(0)), pos)
+                // We put pos - 1, since we incremented pos to check if there is
+                // anything ahead
+                ParseResult::Query(Query::Simple(items.remove(0)), pos - 1)
             } else {
-                ParseResult::Query(Query::Pipelined(items), pos)
+                ParseResult::Query(Query::Pipelined(items), pos - 1)
             }
         } else {
             ParseResult::Incomplete
