@@ -25,7 +25,6 @@
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
-use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
 /// Run an `EXISTS` query
@@ -34,22 +33,18 @@ pub async fn exists(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
     if howmany == 0 {
         return con.write_response(responses::ACTION_ERR.to_owned()).await;
     }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    con.write_response(GroupBegin(howmany)).await?;
-    let mut keys = act.into_iter();
-    // HACK(@ohsayan): Figure out what to do here
-    while let Some(key) = keys.next() {
-        let has_key = {
-            let rhandle = handle.acquire_read();
-            rhandle.contains_key(&key)
-        };
-        if has_key {
-            con.write_response(RespCodes::Okay).await?
-        } else {
-            con.write_response(RespCodes::NotFound).await?
-        }
+    // Write #<m>\n#<n>\n&1\n to the stream
+    con.write_response(GroupBegin(1)).await?;
+    let mut how_many_of_them_exist = 0usize;
+    {
+        let rhandle = handle.acquire_read();
+        act.into_iter().for_each(|key| {
+            if rhandle.contains_key(&key) {
+                how_many_of_them_exist += 1;
+            }
+        });
+        drop(rhandle);
     }
-    drop(handle);
-    // We're done here
+    con.write_response(how_many_of_them_exist).await?;
     Ok(())
 }
