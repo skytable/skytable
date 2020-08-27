@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Thu Aug 27 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,9 +19,6 @@
  *
 */
 
-//! # `GET` queries
-//! This module provides functions to work with `GET` queries
-
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::{BytesWrapper, GroupBegin};
@@ -29,28 +26,30 @@ use bytes::Bytes;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
-/// Run a `GET` query
-pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+/// Run an `MGET` query
+///
+/// **This is currently an experimental query**
+pub async fn mget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany != 1 {
+    if howmany == 0 {
         return con.write_response(responses::ACTION_ERR.to_owned()).await;
     }
-    // Write #<m>\n#<n>\n&1\n to the stream
-    con.write_response(GroupBegin(1)).await?;
-    let res: Option<Bytes> = {
-        let reader = handle.acquire_read();
-        unsafe {
-            reader
-                .get(act.get_ref().get_unchecked(1))
-                .map(|b| b.get_blob().clone())
+    // Write #<m>\n#<n>\n&<howmany>\n to the stream
+    con.write_response(GroupBegin(howmany)).await?;
+    let mut keys = act.into_iter();
+    while let Some(key) = keys.next() {
+        let res: Option<Bytes> = {
+            let reader = handle.acquire_read();
+            reader.get(&key).map(|b| b.get_blob().clone())
+        };
+        if let Some(value) = res {
+            // Good, we got the value, write it off to the stream
+            con.write_response(BytesWrapper(value)).await?;
+        } else {
+            // Ah, couldn't find that key
+            con.write_response(RespCodes::NotFound).await?;
         }
-    };
-    if let Some(value) = res {
-        // Good, we got the value, write it off to the stream
-        con.write_response(BytesWrapper(value)).await?;
-    } else {
-        // Ah, couldn't find that key
-        con.write_response(RespCodes::NotFound).await?;
     }
+    drop(handle);
     Ok(())
 }

@@ -50,6 +50,9 @@ impl ActionGroup {
     pub fn get_first(&self) -> Option<&String> {
         self.0.get(0)
     }
+    pub fn get_ref(&self) -> &Vec<String> {
+        &self.0
+    }
 }
 
 impl IntoIterator for ActionGroup {

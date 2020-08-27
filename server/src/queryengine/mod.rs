@@ -41,6 +41,10 @@ mod tags {
     pub const TAG_HEYA: &'static str = "HEYA";
     /// `EXISTS` action tag
     pub const TAG_EXISTS: &'static str = "EXISTS";
+    /// `MSET` action tag
+    pub const TAG_MSET: &'static str = "MSET";
+    /// `MGET` action tag
+    pub const TAG_MGET: &'static str = "MGET";
 }
 
 /// Execute a simple(*) query
@@ -52,11 +56,13 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         Some(f) => f.to_uppercase(),
     };
     match first.as_str() {
+        tags::TAG_DEL => kvengine::del::del(db, con, buf).await?,
         tags::TAG_GET => kvengine::get::get(db, con, buf).await?,
         tags::TAG_HEYA => kvengine::heya::heya(con).await?,
-        tags::TAG_DEL => kvengine::del::del(db, con, buf).await?,
         tags::TAG_EXISTS => kvengine::exists::exists(db, con, buf).await?,
         tags::TAG_SET => kvengine::set::set(db, con, buf).await?,
+        tags::TAG_MGET => kvengine::mget::mget(db, con, buf).await?,
+        tags::TAG_MSET => kvengine::mset::mset(db, con, buf).await?,
         tags::TAG_UPDATE => kvengine::update::update(db, con, buf).await?,
         _ => {
             con.write_response(responses::UNKNOWN_ACTION.to_owned())

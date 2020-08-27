@@ -23,8 +23,6 @@
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
-pub mod builders;
-pub mod de;
 pub mod terrapipe;
 pub mod util;
 use std::error::Error;

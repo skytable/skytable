@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Thu Aug 27 2020
  *
  * This file is a part of the source code for the Terrabase database
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,47 +19,45 @@
  *
 */
 
-//! # `SET` queries
-//! This module provides functions to work with `SET` queries
-
 use crate::coredb::{self, CoreDB};
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
-use coredb::Data;
-use libtdb::{terrapipe::RespCodes, TResult};
+use libtdb::terrapipe::RespCodes;
+use libtdb::TResult;
 use std::collections::hash_map::Entry;
-use std::hint::unreachable_unchecked;
 
-/// Run a `SET` query
-pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+/// Run an `MSET` query
+///
+/// **This is currently an experimental query**
+pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany != 2 {
-        // There should be exactly 2 arguments
+    if howmany & 1 == 1 {
+        // An odd number of arguments means that the number of keys
+        // is not the same as the number of values, we won't run this
+        // action at all
         return con.write_response(responses::ACTION_ERR.to_owned()).await;
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    // It is howmany/2 since we will be writing 1 response
-    con.write_response(GroupBegin(1)).await?;
-    let mut it = act.into_iter();
-    let did_we = {
-        let mut whandle = handle.acquire_write();
-        if let Entry::Vacant(e) = whandle.entry(
-            it.next()
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
-        ) {
-            e.insert(Data::from_string(
-                it.next()
-                    .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
-            ));
-            true
+    // It is howmany/2 since we will be writing howmany/2 number of responses
+    con.write_response(GroupBegin(howmany / 2)).await?;
+    let mut kviter = act.into_iter();
+    while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+        let was_done = {
+            let mut whandle = handle.acquire_write();
+            let res = if let Entry::Vacant(v) = whandle.entry(key) {
+                let _ = v.insert(coredb::Data::from_string(val));
+                true
+            } else {
+                false
+            };
+            drop(whandle);
+            res
+        };
+        if was_done {
+            con.write_response(RespCodes::Okay).await?;
         } else {
-            false
+            con.write_response(RespCodes::OverwriteError).await?;
         }
-    };
-    if did_we {
-        con.write_response(RespCodes::Okay).await?;
-    } else {
-        con.write_response(RespCodes::OverwriteError).await?;
     }
     #[cfg(debug_assertions)]
     {
