@@ -317,7 +317,7 @@ fn test_parser() {
             "x".to_owned(),
             "ex".to_owned(),
         ])),
-        input.len(),
+        input.len() - 1,
     );
     assert_eq!(res, res_should_be);
     let input = "#2\n*2\n#2\n&3\n#3\nGET\n#1\nx\n#2\nex\n"
@@ -342,12 +342,11 @@ fn test_parser() {
             "beinghumanisawesome".to_owned(),
             "true".to_owned(),
         ])),
-        input.len(),
+        input.len() - 1,
     );
     assert_eq!(res, res_should_be);
-    let res = parse(&"#2\n*1\n#3\n&17\n#3\nSET\n#3\none\n#1\n1\n#3\ntwo\n#1\n2\n#5\nthree\n#1\n3\n#4\nfour\n#1\n4\n#4\nfive\n#1\n5\n#3\nsix\n#1\n6\n#5\nseven\n#1\n7\n#5\neight\n#1\n8\n"
-    .to_owned()
-    .into_bytes());
+    let input ="#2\n*1\n#3\n&17\n#3\nSET\n#3\none\n#1\n1\n#3\ntwo\n#1\n2\n#5\nthree\n#1\n3\n#4\nfour\n#1\n4\n#4\nfive\n#1\n5\n#3\nsix\n#1\n6\n#5\nseven\n#1\n7\n#5\neight\n#1\n8\n";
+    let res = parse(&input.to_owned().into_bytes());
     let res_should_be = ParseResult::Query(
         Query::Simple(ActionGroup(vec![
             "SET".to_string(),
@@ -368,7 +367,7 @@ fn test_parser() {
             "eight".to_string(),
             "8".to_string(),
         ])),
-        124,
+        input.len() - 1,
     );
     assert_eq!(res, res_should_be);
 }
