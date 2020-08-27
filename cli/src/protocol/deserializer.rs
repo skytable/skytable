@@ -33,6 +33,7 @@ pub struct DataGroup(Vec<DataType>);
 pub enum DataType {
     Str(Option<String>),
     RespCode(Option<String>),
+    UnsignedInt(Option<Result<u64, std::num::ParseIntError>>),
 }
 
 impl fmt::Display for DataGroup {
@@ -41,6 +42,9 @@ impl fmt::Display for DataGroup {
             match element {
                 DataType::Str(Some(val)) => write!(f, "\"{}\" ", val)?,
                 DataType::Str(None) => (),
+                DataType::UnsignedInt(Some(Ok(int))) => write!(f, "{}", int)?,
+                DataType::UnsignedInt(Some(Err(_))) => terminal::write_error("[Parse Error]")?,
+                DataType::UnsignedInt(None) => (),
                 DataType::RespCode(Some(rc)) => {
                     if rc.len() == 1 {
                         if let Some(rcode) = RespCodes::from_str(&rc, None) {
@@ -182,6 +186,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                             let datatype = match buf[pos] {
                                 b'+' => DataType::Str(None),
                                 b'!' => DataType::RespCode(None),
+                                b':' => DataType::UnsignedInt(None),
                                 _ => unimplemented!(),
                             };
                             pos += 1; // We've got the tsymbol above, so skip it
@@ -214,6 +219,9 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                             actiongroup.push(match datatype {
                                 DataType::Str(_) => DataType::Str(Some(value)),
                                 DataType::RespCode(_) => DataType::RespCode(Some(value)),
+                                DataType::UnsignedInt(_) => {
+                                    DataType::UnsignedInt(Some(value.parse()))
+                                }
                             });
                         }
                         items.push(DataGroup(actiongroup));
