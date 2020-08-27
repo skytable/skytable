@@ -1,0 +1,86 @@
+/*
+ * Created on Thu Aug 27 2020
+ *
+ * This file is a part of TerrabaseDB
+ * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+*/
+[
+    {
+        "name": "GET",
+        "since": "0.1.0",
+        "complexity": "O(1)",
+        "args": "GET <key>",
+        "desc": "Get the value of a key",
+        "return": "Value if it exists or (Code: 1) if it does not"
+    },
+    {
+        "name": "MGET",
+        "since": "0.4.0",
+        "complexity": "O(n)",
+        "args": "MGET <key1> <key2> ...",
+        "desc": "Get the value of 'n' keys",
+        "return": "Value if it exists or (Code: 1) if it does not"
+    },
+    {
+        "name": "SET",
+        "since": "0.1.0",
+        "complexity": "O(1)",
+        "args": "SET <key> <value>",
+        "desc": "Set the value of a key",
+        "return": "(Code: 0) if succeeded or (Code: 2) if not"
+    },
+    {
+        "name": "MSET",
+        "since": "0.4.0",
+        "complexity": "O(n)",
+        "args": "MSET <key1> <value1> <key2> <value2> ...",
+        "desc": "Set the value of 'n' keys",
+        "return": "Number of keys that were set as an integer"
+    },
+    {
+        "name": "UPDATE",
+        "since": "0.1.0",
+        "complexity": "O(1)",
+        "args": "UPDATE <key> <value>",
+        "desc": "Update the value of an existing key",
+        "return": "(Code: 0) if succeeded or (Code: 1) if not"
+    },
+    {
+        "name": "MUPDATE",
+        "since": "0.4.0",
+        "complexity": "O(n)",
+        "args": "UPDATE <key1> <value1> <key2> <value2> ...",
+        "desc": "Update the value of 'n' keys",
+        "return": "Number of keys that were updated as an integer"
+    },
+    {
+        "name": "DEL",
+        "since": "0.4.0",
+        "complexity": "O(n)",
+        "args": "DEL <key1> <key2> ...",
+        "desc": "Delete 'n' keys",
+        "return": "Number of keys that were deleted as an integer"
+    },
+    {
+        "name": "EXISTS",
+        "since": "0.4.0",
+        "complexity": "O(n)",
+        "args": "EXISTS <key1> <key2> ...",
+        "desc": "Check if 'n' keys exist",
+        "return": "Number of keys that exist as an integer"
+    }
+]
