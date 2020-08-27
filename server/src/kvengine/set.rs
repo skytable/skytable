@@ -57,9 +57,10 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
         }
     };
     if did_we {
-        con.write_response(RespCodes::Okay).await?;
+        con.write_response(responses::OKAY.to_owned()).await?;
     } else {
-        con.write_response(RespCodes::OverwriteError).await?;
+        con.write_response(responses::OVERWRITE_ERR.to_owned())
+            .await?;
     }
     #[cfg(debug_assertions)]
     {

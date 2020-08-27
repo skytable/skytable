@@ -26,7 +26,7 @@ use crate::coredb::{self, CoreDB};
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
 use coredb::Data;
-use libtdb::{terrapipe::RespCodes, TResult};
+use libtdb::TResult;
 use std::collections::hash_map::Entry;
 use std::hint::unreachable_unchecked;
 
@@ -57,9 +57,9 @@ pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         }
     };
     if did_we {
-        con.write_response(RespCodes::Okay).await?;
+        con.write_response(responses::OKAY.to_owned()).await?;
     } else {
-        con.write_response(RespCodes::OverwriteError).await?;
+        con.write_response(responses::NIL.to_owned()).await?;
     }
     #[cfg(debug_assertions)]
     {

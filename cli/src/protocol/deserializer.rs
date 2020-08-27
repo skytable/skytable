@@ -187,7 +187,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                                 b'+' => DataType::Str(None),
                                 b'!' => DataType::RespCode(None),
                                 b':' => DataType::UnsignedInt(None),
-                                _ => unimplemented!(),
+                                x @ _ => unimplemented!("Type '{}' not implemented", char::from(x)),
                             };
                             pos += 1; // We've got the tsymbol above, so skip it
                             while pos < buf.len() && buf[pos] != b'\n' {

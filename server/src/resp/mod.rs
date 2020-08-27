@@ -80,7 +80,7 @@ impl Writable for Vec<u8> {
             con: &mut BufWriter<TcpStream>,
             resp: Vec<u8>,
         ) -> Result<(), Box<dyn Error>> {
-            con.write_all(&resp).await?;
+            con.write(&resp).await?;
             Ok(())
         }
         Box::pin(write_bytes(con, self))
