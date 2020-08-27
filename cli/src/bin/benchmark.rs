@@ -24,7 +24,6 @@
 //! the response times may be shown to be slower than they actually are
 
 mod benchtool {
-    use libtdb::builders::query::*;
     use devtimer::DevTime;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
@@ -152,35 +151,13 @@ mod benchtool {
             })
             .collect();
         let set_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| {
-                let mut g = QueryGroup::new();
-                g.add_item("SET");
-                g.add_item(&keys[idx]);
-                g.add_item(&values[idx]);
-                let mut q = SQuery::new();
-                q.add_group(g);
-                q.into_query()
-            })
+            .map(|idx| proc_query(format!("SET {} {}", keys[idx], values[idx])))
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| {
-                let mut g = QueryGroup::new();
-                g.add_item("GET");
-                g.add_item(&keys[idx]);
-                let mut q = SQuery::new();
-                q.add_group(g);
-                q.into_query()
-            })
+            .map(|idx| proc_query(format!("GET {}", keys[idx])))
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| {
-                let mut g = QueryGroup::new();
-                g.add_item("DEL");
-                g.add_item(&keys[idx]);
-                let mut q = SQuery::new();
-                q.add_group(g);
-                q.into_query()
-            })
+            .map(|idx| proc_query(format!("DEL {}", keys[idx])))
             .collect();
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
@@ -220,6 +197,28 @@ mod benchtool {
 
     fn calc(reqs: usize, time: u128) -> f64 {
         reqs as f64 / (time as f64 / 1_000_000_000 as f64)
+    }
+    fn proc_query(querystr: String) -> Vec<u8> {
+        // TODO(@ohsayan): Enable "" to be escaped
+        // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
+        let args: Vec<&str> = querystr.split_whitespace().collect();
+        let mut bytes = Vec::with_capacity(querystr.len());
+        bytes.extend(b"#2\n*1\n#");
+        let arg_len_bytes = args.len().to_string().into_bytes();
+        let arg_len_bytes_len = (arg_len_bytes.len() + 1).to_string().into_bytes();
+        bytes.extend(arg_len_bytes_len);
+        bytes.extend(b"\n&");
+        bytes.extend(arg_len_bytes);
+        bytes.push(b'\n');
+        args.into_iter().for_each(|arg| {
+            bytes.push(b'#');
+            let len_bytes = arg.len().to_string().into_bytes();
+            bytes.extend(len_bytes);
+            bytes.push(b'\n');
+            bytes.extend(arg.as_bytes());
+            bytes.push(b'\n');
+        });
+        bytes
     }
 }
 
