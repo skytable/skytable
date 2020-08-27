@@ -70,7 +70,7 @@ impl Connection {
             match self.try_query() {
                 Ok(ParseResult::Query(query, forward)) => {
                     let forward = forward + 1;
-                    if self.buffer.len() <= forward {
+                    if self.buffer.len() >= forward {
                         self.buffer.advance(forward);
                     } else {
                         self.buffer.advance(forward - 1);
