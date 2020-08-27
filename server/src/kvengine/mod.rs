@@ -28,6 +28,7 @@ pub mod exists;
 pub mod get;
 pub mod mget;
 pub mod mset;
+pub mod mupdate;
 pub mod set;
 pub mod update;
 pub mod heya {
