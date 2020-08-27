@@ -41,24 +41,18 @@ pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     // It is howmany/2 since we will be writing howmany/2 number of responses
     con.write_response(GroupBegin(howmany / 2)).await?;
     let mut kviter = act.into_iter();
-    while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-        let was_done = {
-            let mut whandle = handle.acquire_write();
-            let res = if let Entry::Vacant(v) = whandle.entry(key) {
+    let mut done_howmany = 0usize;
+    {
+        let mut whandle = handle.acquire_write();
+        while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+            if let Entry::Vacant(v) = whandle.entry(key) {
                 let _ = v.insert(coredb::Data::from_string(val));
-                true
-            } else {
-                false
-            };
-            drop(whandle);
-            res
-        };
-        if was_done {
-            con.write_response(RespCodes::Okay).await?;
-        } else {
-            con.write_response(RespCodes::OverwriteError).await?;
+                done_howmany += 1;
+            }
         }
+        drop(whandle);
     }
+    con.write_response(done_howmany).await?;
     #[cfg(debug_assertions)]
     {
         handle.print_debug_table();

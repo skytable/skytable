@@ -174,3 +174,26 @@ impl Writable for GroupBegin {
         Box::pin(write_bytes(con, self.0))
     }
 }
+
+impl Writable for usize {
+    fn write<'s>(
+        self,
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            val: usize,
+        ) -> Result<(), Box<dyn Error>> {
+            con.write(b":").await?;
+            let usize_bytes = val.to_string().into_bytes();
+            let usize_bytes_len = usize_bytes.len().to_string().into_bytes();
+            con.write(&usize_bytes_len).await?;
+            con.write(b"\n").await?;
+            con.write(&usize_bytes).await?;
+            con.write(b"\n").await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self))
+    }
+}
