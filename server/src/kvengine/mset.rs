@@ -22,7 +22,6 @@
 use crate::coredb::{self, CoreDB};
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
-use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;
 
@@ -39,7 +38,7 @@ pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     // It is howmany/2 since we will be writing howmany/2 number of responses
-    con.write_response(GroupBegin(howmany / 2)).await?;
+    con.write_response(GroupBegin(1)).await?;
     let mut kviter = act.into_iter();
     let mut done_howmany = 0usize;
     {
