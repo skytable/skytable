@@ -69,16 +69,11 @@ impl Connection {
         loop {
             match self.try_query() {
                 Ok(ParseResult::Query(query, forward)) => {
-                    let forward = forward + 1;
-                    if self.buffer.len() >= forward {
-                        self.buffer.advance(forward);
-                    } else {
-                        self.buffer.advance(forward - 1);
-                    }
+                    self.buffer.advance(forward);
                     return Ok(QueryResult::Q(query));
                 }
-                Ok(ParseResult::BadPacket) => {
-                    self.buffer.clear();
+                Ok(ParseResult::BadPacket(bp)) => {
+                    self.buffer.advance(bp);
                     return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()));
                 }
                 Err(_) => {
