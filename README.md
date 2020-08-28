@@ -4,6 +4,7 @@
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabase?include_prereleases&sort=semver&style=flat-square) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/terrabasedb/terrabase?label=commits&style=flat-square)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://git.io/JJZ8Z)
 
 </div>
 </html>
@@ -20,14 +21,14 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 4. First run `tdb` to start the database server and then run `tsh` to start the interactive shell
 5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
 
-## Supported actions
+## Actions
 
-* `HEYA` - A ping message to check if everything's fine
-* `GET` - Get a key
-* `SET` - Set a key
-* `UPDATE` - Update the value of a key which has already been created with `SET`
-* `EXISTS` - Check if a key exists
-* `DEL` - Delete a key
+* `HEYA` - It all begins with a heya! Use this to ping the server
+* `GET`/ `MGET` - Get a single/multiple key(s)
+* `SET`/ `MSET` - Set a single/multiple key(s)
+* `UPDATE`/ `MUPDATE` - Update the value of a single/multiple key(s) which has already been created with `SET`
+* `EXISTS` - Check if a single/multiple key(s) exist(s)
+* `DEL` - Delete a single/multiple key(s)
 
 And, a lot more actions are coming soon!
 
@@ -55,7 +56,7 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/easyfix-C71585>](https://github.com/terrabasedb/terrabase/labels/easyfix) label. Read the guide [here](./CONTRIBUTING.md).
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/terrabasedb/terrabase/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
 
 
 ## License

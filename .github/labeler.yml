@@ -1,11 +1,11 @@
-server: server/**/*
-libtdb: libtdb/**/*
-cli: cli/**/*
-docs: ./*.md
-build:
+D-server: server/**/*
+D-libtdb: libtdb/**/*
+D-cli: cli/**/*
+C-docs: ./*.md
+D-build:
   - ./*/*.toml
   - ./*.toml
   - ./*.lock
-workflow:
+D-workflow:
  - .github/*.yml
  - .github/**/*.yml
