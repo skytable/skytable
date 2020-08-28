@@ -24,7 +24,6 @@
 //!
 use crate::coredb::{self, CoreDB};
 use crate::protocol::{responses, ActionGroup, Connection};
-use crate::resp::GroupBegin;
 use coredb::Data;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;
@@ -35,11 +34,10 @@ pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
     let howmany = act.howmany();
     if howmany != 2 {
         // There should be exactly 2 arguments
-        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
     }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    // It is howmany/2 since we will be writing 1 response
-    con.write_response(GroupBegin(1)).await?;
     let mut it = act.into_iter();
     let did_we = {
         let mut whandle = handle.acquire_write();
@@ -57,9 +55,11 @@ pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         }
     };
     if did_we {
-        con.write_response(responses::OKAY.to_owned()).await?;
+        con.write_response(responses::fresp::R_OKAY.to_owned())
+            .await?;
     } else {
-        con.write_response(responses::NIL.to_owned()).await?;
+        con.write_response(responses::fresp::R_NIL.to_owned())
+            .await?;
     }
     #[cfg(debug_assertions)]
     {

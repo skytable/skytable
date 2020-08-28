@@ -53,7 +53,9 @@ mod tags {
 pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup) -> TResult<()> {
     let first = match buf.get_first() {
         None => {
-            return con.write_response(responses::PACKET_ERR.to_owned()).await;
+            return con
+                .write_response(responses::fresp::R_PACKET_ERR.to_owned())
+                .await;
         }
         Some(f) => f.to_uppercase(),
     };
@@ -68,7 +70,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         tags::TAG_UPDATE => kvengine::update::update(db, con, buf).await?,
         tags::TAG_MUPDATE => kvengine::mupdate::mupdate(db, con, buf).await?,
         _ => {
-            con.write_response(responses::UNKNOWN_ACTION.to_owned())
+            con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?
         }
     }

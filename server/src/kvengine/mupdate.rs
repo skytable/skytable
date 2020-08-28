@@ -32,7 +32,9 @@ pub async fn mupdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
-        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     // It is howmany/2 since we will be writing howmany/2 number of responses

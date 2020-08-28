@@ -74,7 +74,7 @@ impl Connection {
                 }
                 Ok(ParseResult::BadPacket(bp)) => {
                     self.buffer.advance(bp);
-                    return Ok(QueryResult::E(responses::PACKET_ERR.to_owned()));
+                    return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
                 }
                 Err(_) => {
                     return Ok(QueryResult::Empty);

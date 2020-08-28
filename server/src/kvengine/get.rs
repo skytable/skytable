@@ -26,14 +26,15 @@ use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
-use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 
 /// Run a `GET` query
 pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
-        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
     }
     // Write #<m>\n#<n>\n&1\n to the stream
     con.write_response(GroupBegin(1)).await?;
@@ -50,7 +51,8 @@ pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
         con.write_response(BytesWrapper(value)).await?;
     } else {
         // Ah, couldn't find that key
-        con.write_response(RespCodes::NotFound).await?;
+        con.write_response(responses::groups::NIL.to_owned())
+            .await?;
     }
     Ok(())
 }

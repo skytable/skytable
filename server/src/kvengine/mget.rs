@@ -32,7 +32,9 @@ use libtdb::TResult;
 pub async fn mget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
-        return con.write_response(responses::ACTION_ERR.to_owned()).await;
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     con.write_response(GroupBegin(howmany)).await?;
