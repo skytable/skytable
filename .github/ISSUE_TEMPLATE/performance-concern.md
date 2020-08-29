@@ -2,7 +2,7 @@
 name: Performance concerns
 about: Have a concern about performance? Use this template
 title: 'Performance: '
-labels: performance
+labels: C-performance
 assignees: ''
 
 ---

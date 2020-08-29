@@ -4,6 +4,7 @@
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabase/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabase?include_prereleases&sort=semver&style=flat-square) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/terrabasedb/terrabase?label=commits&style=flat-square)
+[![Docker Pulls](https://img.shields.io/docker/pulls/terrabasedb/tdb?style=flat-square)](https://hub.docker.com/r/terrabasedb/tdb)
 [![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://git.io/JJZ8Z)
 
 </div>

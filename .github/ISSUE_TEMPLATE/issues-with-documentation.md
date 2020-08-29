@@ -1,8 +1,8 @@
 ---
-name: Issues 🤔 with documentation 🧾
+name: Issues with documentation 🧾
 about: Found any incorrect/missing/ambiguous documentation? Use this issue type
 title: 'Docs: '
-labels: documentation
+labels: C-docs
 assignees: ''
 
 ---

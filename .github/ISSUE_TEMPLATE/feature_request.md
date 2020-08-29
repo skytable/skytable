@@ -2,7 +2,7 @@
 name: Feature request 🚀
 about: Got an idea 💡 for this project? Amazing! Tell us about it so that we can get it implemented!
 title: 'Feature: '
-labels: enhancement
+labels: C-enhancement
 assignees: ''
 
 ---

@@ -2,7 +2,7 @@
 name: Security concerns 🔐
 about: Found a security loophole or have a suggestion about security? Use this issue type
 title: 'Security: '
-labels: security
+labels: C-security
 assignees: ''
 
 ---

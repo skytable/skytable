@@ -2,7 +2,7 @@
 name: 🐞 Bug reports for the CLI client
 about: Found something wrong with tsh? Report them here
 title: 'CLI: '
-labels: bug, cli
+labels: C-bug, D-cli
 assignees: ''
 
 ---
