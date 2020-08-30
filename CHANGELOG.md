@@ -2,6 +2,24 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.0 [2020-08-30]
+
+> This release introduces breaking changes
+
+Changes:
+
+* Actions added: `MSET` , `MGET` , `MUPDATE`
+* Terrapipe 1.0
+* Improved terminal output
+
+Fixes:
+
+* Explicit handling for incomplete responses in `tsh`
+
+### Migrating existing clients
+
+The Terrapipe protocol was revised and promoted to 1.0. This will cause all existing client implementations to break, since the protocol has changed fundamentally. The clients have to implement the [latest spec](https://git.io/JJZ8Z).
+
 ## Version 0.3.2 [2020-08-07]
 
 > No breaking changes

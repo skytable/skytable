@@ -57,5 +57,7 @@ pub mod fresp {
         pub static ref R_UNKNOWN_ACTION: Vec<u8> = "#2\n*1\n#2\n&1\n!14\nUnknown action\n"
             .as_bytes()
             .to_owned();
+        pub static ref R_ONE_INT_REPLY: Vec<u8> = "#2\n*1\n#2\n&1\n:1\n1\n".as_bytes().to_owned();
+        pub static ref R_ZERO_INT_REPLY: Vec<u8> = "#2\n*1\n#2\n&1\n:1\n0\n".as_bytes().to_owned();
     }
 }
