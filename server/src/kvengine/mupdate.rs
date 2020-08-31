@@ -25,7 +25,7 @@ use crate::resp::GroupBegin;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;
 
-// Run an `MUPDATE` query
+/// Run an `MUPDATE` query
 pub async fn mupdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 {

@@ -26,6 +26,7 @@
 pub mod del;
 pub mod exists;
 pub mod get;
+pub mod jget;
 pub mod mget;
 pub mod mset;
 pub mod mupdate;

@@ -26,8 +26,6 @@ use libtdb::TResult;
 use std::collections::hash_map::Entry;
 
 /// Run an `MSET` query
-///
-/// **This is currently an experimental query**
 pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 {

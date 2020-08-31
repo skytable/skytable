@@ -1,5 +1,5 @@
 /*
- * Created on Thu Aug 27 2020
+ * Created on Mon Aug 31 2020
  *
  * This file is a part of TerrabaseDB
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,38 +19,49 @@
  *
 */
 
+//! #`JGET` queries
+//! Functions for handling `JGET` queries
+
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
-use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-/// Run an `MGET` query
+/// A key/value pair
+/// When we write JSON to the stream in `JGET`, it looks something like:
+/// ```json
+/// {
+///     "keythatexists" : "value",
+///     "nilkey": null,
+/// }
+/// ```
+#[derive(Serialize, Deserialize)]
+pub struct KVPair(HashMap<String, Option<String>>);
+
+impl KVPair {
+    pub fn with_capacity(size: usize) -> Self {
+        KVPair(HashMap::with_capacity(size))
+    }
+}
+
+/// Run a `JGET` query
+/// This returns a JSON key/value pair of keys and values
+/// We need to write something like
+/// ```json
+/// &1\n
+/// $15\n
+/// {"key":"value"}\n
+/// ```
 ///
-pub async fn mget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn jget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany == 0 {
+    if howmany != 1 {
         return con
             .write_response(responses::fresp::R_ACTION_ERR.to_owned())
             .await;
     }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    con.write_response(GroupBegin(howmany)).await?;
-    let mut keys = act.into_iter();
-    while let Some(key) = keys.next() {
-        let res: Option<Bytes> = {
-            let reader = handle.acquire_read();
-            reader.get(&key).map(|b| b.get_blob().clone())
-        };
-        if let Some(value) = res {
-            // Good, we got the value, write it off to the stream
-            con.write_response(BytesWrapper(value)).await?;
-        } else {
-            // Ah, couldn't find that key
-            con.write_response(RespCodes::NotFound).await?;
-        }
-    }
-    drop(handle);
-    Ok(())
+    todo!()
 }
