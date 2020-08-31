@@ -24,28 +24,7 @@
 
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
-use crate::resp::{BytesWrapper, GroupBegin};
-use bytes::Bytes;
 use libtdb::TResult;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-/// A key/value pair
-/// When we write JSON to the stream in `JGET`, it looks something like:
-/// ```json
-/// {
-///     "keythatexists" : "value",
-///     "nilkey": null,
-/// }
-/// ```
-#[derive(Serialize, Deserialize)]
-pub struct KVPair(HashMap<String, Option<String>>);
-
-impl KVPair {
-    pub fn with_capacity(size: usize) -> Self {
-        KVPair(HashMap::with_capacity(size))
-    }
-}
 
 /// Run a `JGET` query
 /// This returns a JSON key/value pair of keys and values
@@ -64,4 +43,49 @@ pub async fn jget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
             .await;
     }
     todo!()
+}
+
+mod json {
+    use bytes::Bytes;
+    use std::hint::unreachable_unchecked;
+
+    pub struct BuiltJSON(Vec<u8>);
+    pub struct JSONBlob(Vec<u8>);
+    impl JSONBlob {
+        pub fn new(size: usize) -> Self {
+            let mut jblob = Vec::with_capacity(1 + size);
+            jblob.push(b'{');
+            JSONBlob(jblob)
+        }
+        pub fn insert(&mut self, key: &String, value: Option<&Bytes>) {
+            self.0.push(b'"');
+            self.0.extend(key.as_bytes());
+            self.0.extend(b"\":");
+            if let Some(value) = value {
+                self.0.push(b'"');
+                self.0.extend(value);
+                self.0.push(b'"');
+            } else {
+                self.0.extend(b"null");
+            }
+            self.0.push(b',');
+        }
+        pub fn finish(mut self) -> BuiltJSON {
+            *self
+                .0
+                .last_mut()
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() }) = b'}';
+            BuiltJSON(self.0)
+        }
+    }
+    #[test]
+    fn test_buildjson() {
+        let mut jblob = JSONBlob::new(128);
+        jblob.insert(&"key".to_owned(), Some(&Bytes::from("value".as_bytes())));
+        jblob.insert(&"key2".to_owned(), None);
+        assert_eq!(
+            "{\"key\":\"value\",\"key2\":null}",
+            String::from_utf8_lossy(&jblob.finish().0)
+        );
+    }
 }
