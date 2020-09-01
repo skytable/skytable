@@ -93,3 +93,29 @@ fn test_config_file_err() {
     let cfg = Config::new(file);
     assert!(cfg.is_err());
 }
+use clap::{load_yaml, App};
+
+/// Get the command line arguments
+pub fn get_args() -> Option<String> {
+    let cfg_layout = load_yaml!("../cli.yml");
+    let matches = App::from_yaml(cfg_layout).get_matches();
+    let filename = matches.value_of("config");
+    filename.map(|fname| fname.to_owned())
+}
+
+#[test]
+#[cfg(test)]
+fn test_args() {
+    let cmdlineargs = vec!["tdb", "--withconfig", "../examples/config-files/tdb.toml"];
+    let cfg_layout = load_yaml!("../cli.yml");
+    let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
+    let filename = matches.value_of("config").unwrap();
+    assert_eq!("../examples/config-files/tdb.toml", filename);
+    let cfg = Config::new(std::fs::read_to_string(filename).unwrap()).unwrap();
+    assert_eq!(
+        cfg,
+        Config {
+            server: ServerConfig { port: 2003 }
+        }
+    );
+}
