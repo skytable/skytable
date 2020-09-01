@@ -20,6 +20,7 @@
 */
 
 use tokio::net::TcpListener;
+mod config;
 mod coredb;
 mod dbnet;
 mod diskstore;

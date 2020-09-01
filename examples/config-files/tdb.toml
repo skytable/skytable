@@ -1,0 +1,4 @@
+# This is a 'good' configuration file since it contains a valid port
+# and appropriate keys
+[server]
+port = 2003 # Set the server's port to 2003
