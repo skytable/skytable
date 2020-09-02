@@ -1,0 +1,4 @@
+[server]
+host = '127.0.0.1' # i.e localhost
+port = 2003 # The port to bind to
+noart = true # No terminal artwork

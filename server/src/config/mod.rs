@@ -32,7 +32,9 @@ struct Config {
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct ServerConfig {
+    host: String,
     port: u16,
+    noart: Option<bool>,
 }
 
 impl Config {
@@ -47,6 +49,7 @@ impl Config {
 fn test_config_toml_okayport() {
     let file = r#"
         [server]
+        host = "127.0.0.1"
         port = 2003
     "#
     .to_owned();
@@ -54,7 +57,11 @@ fn test_config_toml_okayport() {
     assert_eq!(
         cfg,
         Config {
-            server: ServerConfig { port: 2003 }
+            server: ServerConfig {
+                port: 2003,
+                host: "127.0.0.1".to_owned(),
+                noart: None,
+            }
         }
     );
 }
@@ -80,7 +87,11 @@ fn test_config_file_ok() {
     assert_eq!(
         cfg,
         Config {
-            server: ServerConfig { port: 2003 }
+            server: ServerConfig {
+                port: 2003,
+                host: "127.0.0.1".to_owned(),
+                noart: None,
+            }
         }
     );
 }
@@ -96,7 +107,7 @@ fn test_config_file_err() {
 use clap::{load_yaml, App};
 
 /// Get the command line arguments
-pub fn get_args() -> Option<String> {
+pub fn get_config_file() -> Option<String> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
     let filename = matches.value_of("config");
@@ -115,7 +126,29 @@ fn test_args() {
     assert_eq!(
         cfg,
         Config {
-            server: ServerConfig { port: 2003 }
+            server: ServerConfig {
+                port: 2003,
+                host: "127.0.0.1".to_owned(),
+                noart: None,
+            }
+        }
+    );
+}
+
+#[test]
+#[cfg(test)]
+fn test_config_file_noart() {
+    let fileloc = "../examples/config-files/secure-noart.toml";
+    let file = std::fs::read_to_string(fileloc).unwrap();
+    let cfg: Config = Config::new(file).unwrap();
+    assert_eq!(
+        cfg,
+        Config {
+            server: ServerConfig {
+                port: 2003,
+                host: "127.0.0.1".to_owned(),
+                noart: Some(true),
+            }
         }
     );
 }
