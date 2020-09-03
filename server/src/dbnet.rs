@@ -219,5 +219,5 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
     drop(signal);
     drop(terminate_tx);
     let _ = terminate_rx.recv().await;
-    terminal::write_okay("Goodbye :)\n").unwrap();
+    terminal::write_info("Goodbye :)\n").unwrap();
 }

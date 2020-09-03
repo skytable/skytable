@@ -33,8 +33,7 @@ use dbnet::run;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
-static ADDR: &'static str = "127.0.0.1:2003";
-static MSG: &'static str = "TerrabaseDB v0.4.0 | https://github.com/terrabasedb/terrabase\nServer running on terrapipe://127.0.0.1:2003";
+static MSG: &'static str = "TerrabaseDB v0.4.0 | https://github.com/terrabasedb/terrabase";
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
      |__   __|                     | |                      |  __ \\ |  _ \\ 
@@ -49,9 +48,32 @@ static TEXT: &'static str = "
 ";
 #[tokio::main]
 async fn main() {
-    let listener = TcpListener::bind(ADDR).await.unwrap();
-    println!("{}\n{}", TEXT, MSG);
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    run(listener, signal::ctrl_c()).await;
+    run(check_args_or_connect().await, signal::ctrl_c()).await;
+}
+
+use libtdb::util::terminal;
+
+async fn check_args_or_connect() -> TcpListener {
+    let cfg = config::get_config_file_or_return_cfg();
+    match cfg {
+        Ok(config::ConfigType::Custom(cfg)) => {
+            if cfg.is_artful() {
+                println!("{}\n{}", TEXT, MSG);
+            }
+            terminal::write_info("info: Using settings from config file\n").unwrap();
+            TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
+        }
+        Ok(config::ConfigType::Def(cfg)) => {
+            println!("{}\n{}", TEXT, MSG);
+            terminal::write_info("info: No configuration file supplied. Using default settings\n")
+                .unwrap();
+            TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
+        }
+        Err(e) => {
+            terminal::write_error(e).unwrap();
+            std::process::exit(0x100);
+        }
+    }
 }

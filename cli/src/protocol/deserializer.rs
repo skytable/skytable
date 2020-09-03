@@ -49,8 +49,8 @@ impl fmt::Display for DataGroup {
                     if rc.len() == 1 {
                         if let Some(rcode) = RespCodes::from_str(&rc, None) {
                             match rcode {
-                                RespCodes::Okay => terminal::write_okay("(Okay) ")?,
-                                RespCodes::NotFound => terminal::write_okay("(Nil) ")?,
+                                RespCodes::Okay => terminal::write_info("(Okay) ")?,
+                                RespCodes::NotFound => terminal::write_info("(Nil) ")?,
                                 RespCodes::OverwriteError => {
                                     terminal::write_error("(Overwrite Error) ")?
                                 }

@@ -38,7 +38,7 @@ pub mod terminal {
         }
         Ok(())
     }
-    pub fn write_okay<T: fmt::Display>(item: T) -> fmt::Result {
+    pub fn write_info<T: fmt::Display>(item: T) -> fmt::Result {
         write_with_col(item, Some(Color::Cyan))
     }
     pub fn write_warning<T: fmt::Display>(item: T) -> fmt::Result {

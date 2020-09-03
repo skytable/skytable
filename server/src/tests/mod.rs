@@ -22,13 +22,14 @@
 //! This module contains automated tests for queries
 
 use crate::dbnet;
-use crate::ADDR;
 use std::io::ErrorKind;
 use std::net::{Shutdown, SocketAddr};
 use std::thread;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
+
+static ADDR: &'static str = "127.0.0.1:2003";
 
 /// Start the server as a background asynchronous task
 async fn start_server() -> Option<SocketAddr> {
