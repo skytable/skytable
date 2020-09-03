@@ -36,6 +36,7 @@ jobs:
           key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
+          if: runner.os != 'macOS'
 
       - name: Cache Cargo index
         uses: actions/cache@v1
@@ -44,6 +45,7 @@ jobs:
           key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
+          if: runner.os != 'macOS'
 
       - name: Cache Cargo build
         uses: actions/cache@v1
@@ -52,6 +54,7 @@ jobs:
           key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
+        if: runner.os != 'macOS'
 
       - name: Install Rust
         run: |
