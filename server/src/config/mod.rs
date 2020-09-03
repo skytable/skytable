@@ -23,6 +23,7 @@
 
 use libtdb::TResult;
 use serde::Deserialize;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use toml;
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -32,7 +33,7 @@ struct Config {
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct ServerConfig {
-    host: String,
+    host: IpAddr,
     port: u16,
     noart: Option<bool>,
 }
@@ -59,7 +60,7 @@ fn test_config_toml_okayport() {
         Config {
             server: ServerConfig {
                 port: 2003,
-                host: "127.0.0.1".to_owned(),
+                host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 noart: None,
             }
         }
@@ -89,7 +90,7 @@ fn test_config_file_ok() {
         Config {
             server: ServerConfig {
                 port: 2003,
-                host: "127.0.0.1".to_owned(),
+                host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 noart: None,
             }
         }
@@ -128,7 +129,7 @@ fn test_args() {
         Config {
             server: ServerConfig {
                 port: 2003,
-                host: "127.0.0.1".to_owned(),
+                host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 noart: None,
             }
         }
@@ -146,8 +147,26 @@ fn test_config_file_noart() {
         Config {
             server: ServerConfig {
                 port: 2003,
-                host: "127.0.0.1".to_owned(),
+                host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 noart: Some(true),
+            }
+        }
+    );
+}
+
+#[test]
+#[cfg(test)]
+fn test_config_file_ipv6() {
+    let fileloc = "../examples/config-files/ipv6.toml";
+    let file = std::fs::read_to_string(fileloc).unwrap();
+    let cfg: Config = Config::new(file).unwrap();
+    assert_eq!(
+        cfg,
+        Config {
+            server: ServerConfig {
+                port: 2003,
+                host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
+                noart: None,
             }
         }
     );
