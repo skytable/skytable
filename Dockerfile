@@ -11,9 +11,7 @@ RUN \
     curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     git clone https://github.com/terrabasedb/terrabase.git && \
     cd terrabase && \
-    git fetch --tags && \
-    lr=`git describe --tags --abbrev=0 --match v*` && \
-    git checkout $lr && \
+    git checkout next && \
     $HOME/.cargo/bin/cargo build --release -p tdb && \
     apt-get remove git curl -y && \
     apt-get autoremove -y && \
