@@ -41,6 +41,7 @@ pub struct Connection {
 impl Connection {
     pub async fn new(host: &str) -> TResult<Self> {
         let stream = TcpStream::connect(host).await?;
+        println!("Connected to {}", host);
         Ok(Connection {
             stream,
             buffer: BytesMut::with_capacity(BUF_CAP),

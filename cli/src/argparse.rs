@@ -26,17 +26,24 @@ use std::io::{self, prelude::*};
 use std::process;
 pub async fn execute_query() {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.len() > 1 {
-        eprintln!("Incorrect number of arguments\n\tUSAGE tsh [host]");
+    if args.len() > 2 {
+        eprintln!("Incorrect number of arguments\n\tUSAGE tsh [host] [port]");
     }
-    let host = match args.get(0) {
-        Some(h) => {
-            let mut addr = h.clone();
-            addr.push_str(":2003");
-            addr
-        }
+    let mut host = match args.get(0) {
+        Some(h) => h.clone(),
         None => ADDR.to_owned(),
     };
+    host.push(':');
+    match args.get(1) {
+        Some(p) => match p.parse::<u16>() {
+            Ok(p) => host.push_str(&p.to_string()),
+            Err(_) => {
+                eprintln!("ERROR: Invalid port");
+                process::exit(0x100);
+            }
+        },
+        None => host.push_str("2003"),
+    }
     let mut con = match protocol::Connection::new(&host).await {
         Ok(c) => c,
         Err(e) => {

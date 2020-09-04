@@ -61,8 +61,9 @@ async fn check_args_or_connect() -> TcpListener {
         Ok(config::ConfigType::Custom(cfg)) => {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
+            } else {
+                terminal::write_info("TerrabaseDB v0.4.1 | Protocol: Terrapipe 1.0").unwrap();
             }
-            terminal::write_info("TerrabaseDB v0.4.1 | Protocol: Terrapipe 1.0").unwrap();
             terminal::write_info("info: Using settings from config file\n").unwrap();
             TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
         }

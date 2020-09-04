@@ -25,7 +25,7 @@
 //! Query and Response packet handling modules can be found in the `de`, `query`
 //! and `response` modules from the crate root.
 
-pub const ADDR: &'static str = "127.0.0.1:2003";
+pub const ADDR: &'static str = "127.0.0.1";
 
 /// Default query metaline buffer size
 pub const DEF_QMETALINE_BUFSIZE: usize = 44;
