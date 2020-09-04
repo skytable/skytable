@@ -23,6 +23,8 @@
 
 use libtdb::TResult;
 use serde::Deserialize;
+use std::error::Error;
+use std::fmt;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tokio::net::ToSocketAddrs;
@@ -62,9 +64,15 @@ pub struct ParsedConfig {
 
 impl ParsedConfig {
     /// Create a new `ParsedConfig` from a given file in `location`
-    pub fn new_from_file(location: String) -> TResult<Self> {
-        let file = fs::read_to_string(location)?;
-        Ok(ParsedConfig::from_config(toml::from_str(&file)?))
+    pub fn new_from_file(location: String) -> Result<Self, ConfigError> {
+        let file = match fs::read_to_string(location) {
+            Ok(f) => f,
+            Err(e) => return Err(ConfigError::OSError(e.into())),
+        };
+        match toml::from_str(&file) {
+            Ok(cfgfile) => Ok(ParsedConfig::from_config(cfgfile)),
+            Err(e) => return Err(ConfigError::SyntaxError(e.into())),
+        }
     }
     fn from_config(cfg: Config) -> Self {
         ParsedConfig {
@@ -109,9 +117,11 @@ impl ParsedConfig {
             noart: false,
         }
     }
+    /// Return a (host, port) tuple which can be bound to with `TcpListener`
     pub fn get_host_port_tuple(self) -> impl ToSocketAddrs {
         ((self.host), self.port)
     }
+    /// Returns true if `noart` is enabled. Otherwise it returns `true`
     pub fn is_artful(&self) -> bool {
         !self.noart
     }
@@ -166,9 +176,29 @@ fn test_config_file_err() {
 }
 use clap::{load_yaml, App};
 
+/// The type of configuration:
+/// - We either used a custom configuration file given to us by the user (`Custom`) OR
+/// - We used the default configuration (`Def`)
 pub enum ConfigType<T> {
     Def(T),
     Custom(T),
+}
+
+/// Type of configuration error:
+/// - The config file was not found (`OSError`)
+/// - THe config file was invalid (`SyntaxError`)
+pub enum ConfigError {
+    OSError(Box<dyn Error>),
+    SyntaxError(Box<dyn Error>),
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfigError::OSError(e) => write!(f, "error: {}\n", e),
+            ConfigError::SyntaxError(e) => write!(f, "syntax error in configuration file: {}\n", e),
+        }
+    }
 }
 
 /// # Return a  `ConfigType<ParsedConfig>`
@@ -176,7 +206,7 @@ pub enum ConfigType<T> {
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
 /// contains an error, then this returns it as an `Err` variant
-pub fn get_config_file_or_return_cfg() -> TResult<ConfigType<ParsedConfig>> {
+pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
     let filename = matches.value_of("config");

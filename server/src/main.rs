@@ -33,7 +33,7 @@ use dbnet::run;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
-static MSG: &'static str = "TerrabaseDB v0.4.1-alpha.2 | https://github.com/terrabasedb/terrabase";
+static MSG: &'static str = "TerrabaseDB v0.4.1 | https://github.com/terrabasedb/terrabase";
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
      |__   __|                     | |                      |  __ \\ |  _ \\ 
@@ -62,7 +62,7 @@ async fn check_args_or_connect() -> TcpListener {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
             }
-            terminal::write_info("TerrabaseDB v0.4.1-alpha.2 | Protocol: Terrapipe 1.0").unwrap();
+            terminal::write_info("TerrabaseDB v0.4.1 | Protocol: Terrapipe 1.0").unwrap();
             terminal::write_info("info: Using settings from config file\n").unwrap();
             TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
         }
