@@ -11,7 +11,7 @@ RUN \
     cd /tmp && \
     curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     git clone https://github.com/terrabasedb/terrabasedb.git && \
-    cd terrabase && \
+    cd terrabasedb && \
     git checkout next && \
     $HOME/.cargo/bin/cargo build --release -p tdb && \
     apt-get remove git curl -y && \
