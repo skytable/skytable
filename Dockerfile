@@ -10,7 +10,7 @@ RUN \
     apt-get update && apt-get install git curl build-essential -y && \
     cd /tmp && \
     curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-    git clone https://github.com/terrabasedb/terrabase.git && \
+    git clone https://github.com/terrabasedb/terrabasedb.git && \
     cd terrabase && \
     git checkout next && \
     $HOME/.cargo/bin/cargo build --release -p tdb && \
