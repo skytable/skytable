@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.1 [2020-09-06]
+
+> No breaking changes
+
+This release adds support for configuration files
+
 ## Version 0.4.0 [2020-08-30]
 
 > This release introduces breaking changes
