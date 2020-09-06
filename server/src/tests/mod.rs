@@ -72,7 +72,6 @@ async fn try_get_stream() -> TcpStream {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_heya() {
     let server = start_server().await;
     let mut stream = try_get_stream().await;
