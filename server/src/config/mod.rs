@@ -74,7 +74,7 @@ impl ParsedConfig {
             Err(e) => return Err(ConfigError::SyntaxError(e.into())),
         }
     }
-    fn from_config(cfg: Config) -> Self {
+    const fn from_config(cfg: Config) -> Self {
         ParsedConfig {
             host: cfg.server.host,
             port: cfg.server.port,
@@ -90,7 +90,7 @@ impl ParsedConfig {
     }
     /// Create a new `ParsedConfig` with the default `host` and `noart` settngs
     /// and a supplied `port`
-    pub fn default_with_port(port: u16) -> Self {
+    pub const fn default_with_port(port: u16) -> Self {
         ParsedConfig {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port,
@@ -99,18 +99,18 @@ impl ParsedConfig {
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
     /// and a supplied `host`
-    pub fn default_with_host(host: IpAddr) -> Self {
+    pub const fn default_with_host(host: IpAddr) -> Self {
         ParsedConfig::new(host, 2003, false)
     }
     /// Create a new `ParsedConfig` with all the fields
-    pub fn new(host: IpAddr, port: u16, noart: bool) -> Self {
+    pub const fn new(host: IpAddr, port: u16, noart: bool) -> Self {
         ParsedConfig { host, port, noart }
     }
     /// Create a default `ParsedConfig` with:
     /// - `host`: 127.0.0.1
     /// - `port` : 2003
     /// - `noart` : false
-    pub fn default() -> Self {
+    pub const fn default() -> Self {
         ParsedConfig {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,
@@ -122,7 +122,7 @@ impl ParsedConfig {
         ((self.host), self.port)
     }
     /// Returns true if `noart` is enabled. Otherwise it returns `true`
-    pub fn is_artful(&self) -> bool {
+    pub const fn is_artful(&self) -> bool {
         !self.noart
     }
 }

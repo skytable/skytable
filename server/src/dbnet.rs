@@ -41,7 +41,7 @@ pub struct Terminator {
 
 impl Terminator {
     /// Create a new `Terminator` instance
-    pub fn new(signal: broadcast::Receiver<()>) -> Self {
+    pub const fn new(signal: broadcast::Receiver<()>) -> Self {
         Terminator {
             // Don't terminate on creation!
             terminate: false,
@@ -49,7 +49,7 @@ impl Terminator {
         }
     }
     /// Check if the signal is a termination signal
-    pub fn is_termination_signal(&self) -> bool {
+    pub const fn is_termination_signal(&self) -> bool {
         self.terminate
     }
     /// Check if a shutdown signal was received

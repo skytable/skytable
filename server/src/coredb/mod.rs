@@ -79,7 +79,7 @@ pub struct Coretable {
 }
 
 impl Coretable {
-    pub fn get_ref<'a>(&'a self) -> &'a HashMap<String, Data> {
+    pub const fn get_ref<'a>(&'a self) -> &'a HashMap<String, Data> {
         &self.coremap
     }
     pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HashMap<String, Data> {
@@ -102,11 +102,11 @@ impl Data {
         }
     }
     /// Create a new blob from an existing `Bytes` instance
-    pub fn from_blob(blob: Bytes) -> Self {
+    pub const fn from_blob(blob: Bytes) -> Self {
         Data { blob }
     }
     /// Get the inner blob (raw `Bytes`)
-    pub fn get_blob(&self) -> &Bytes {
+    pub const fn get_blob(&self) -> &Bytes {
         &self.blob
     }
 }
