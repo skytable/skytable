@@ -39,7 +39,8 @@ pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     // Write #<m>\n#<n>\n&1\n to the stream
     con.write_response(GroupBegin(1)).await?;
     let res: Option<Bytes> = {
-        let reader = handle.acquire_read();
+        let rhandle = handle.acquire_read();
+        let reader = rhandle.get_ref();
         unsafe {
             reader
                 .get(act.get_ref().get_unchecked(1))

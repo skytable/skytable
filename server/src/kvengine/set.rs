@@ -41,7 +41,8 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     let mut it = act.into_iter();
     let did_we = {
         let mut whandle = handle.acquire_write();
-        if let Entry::Vacant(e) = whandle.entry(
+        let writer = whandle.get_mut_ref();
+        if let Entry::Vacant(e) = writer.entry(
             it.next()
                 .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
         ) {

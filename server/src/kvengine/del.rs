@@ -43,11 +43,13 @@ pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     let mut done_howmany = 0usize;
     {
         let mut whandle = handle.acquire_write();
+        let cmap = (*whandle).get_mut_ref();
         act.into_iter().for_each(|key| {
-            if whandle.remove(&key).is_some() {
+            if cmap.remove(&key).is_some() {
                 done_howmany += 1
             }
         });
+        drop(cmap);
         drop(whandle);
     }
     con.write_response(done_howmany).await?;

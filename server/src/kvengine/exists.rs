@@ -40,11 +40,13 @@ pub async fn exists(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
     let mut how_many_of_them_exist = 0usize;
     {
         let rhandle = handle.acquire_read();
+        let cmap = rhandle.get_ref();
         act.into_iter().for_each(|key| {
-            if rhandle.contains_key(&key) {
+            if cmap.contains_key(&key) {
                 how_many_of_them_exist += 1;
             }
         });
+        drop(cmap);
         drop(rhandle);
     }
     con.write_response(how_many_of_them_exist).await?;

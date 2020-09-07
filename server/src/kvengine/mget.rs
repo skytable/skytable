@@ -40,7 +40,8 @@ pub async fn mget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     let mut keys = act.into_iter();
     while let Some(key) = keys.next() {
         let res: Option<Bytes> = {
-            let reader = handle.acquire_read();
+            let rhandle = handle.acquire_read();
+            let reader = rhandle.get_ref();
             reader.get(&key).map(|b| b.get_blob().clone())
         };
         if let Some(value) = res {

@@ -43,12 +43,14 @@ pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     let mut done_howmany = 0usize;
     {
         let mut whandle = handle.acquire_write();
+        let writer = whandle.get_mut_ref();
         while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-            if let Entry::Vacant(v) = whandle.entry(key) {
+            if let Entry::Vacant(v) = writer.entry(key) {
                 let _ = v.insert(coredb::Data::from_string(val));
                 done_howmany += 1;
             }
         }
+        drop(writer);
         drop(whandle);
     }
     con.write_response(done_howmany).await?;

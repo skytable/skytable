@@ -21,7 +21,7 @@
 
 //! This module provides tools for handling persistently stored data
 
-use crate::coredb::Data;
+use crate::coredb::{self, Data};
 use bincode;
 use bytes::Bytes;
 use libtdb::TResult;
@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
+use tokio::time;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 
@@ -68,4 +69,17 @@ pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
     let mut file = fs::File::create("./data.bin")?;
     file.write_all(&encoded)?;
     Ok(())
+}
+
+pub async fn bgsave(handle: coredb::CoreDB) {
+    while !handle.shared.is_termsig() {
+        if let Some(dur) = handle.shared.get_next_bgsave_point() {
+            tokio::select! {
+                _ = time::delay_until(dur) => {}
+                _ = handle.shared.bgsave_task.notified() => {}
+            }
+        } else {
+            handle.shared.bgsave_task.notified().await
+        }
+    }
 }
