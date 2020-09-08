@@ -39,20 +39,30 @@ use tokio::sync::Notify;
 use tokio::time::Instant;
 
 /// This is a thread-safe database handle, which on cloning simply
-/// gives another atomic reference to the `Coretable`
+/// gives another atomic reference to the `shared` which is a `Shared` object
 #[derive(Debug, Clone)]
 pub struct CoreDB {
+    /// The shared object, which contains a `Shared` object wrapped in a thread-safe
+    /// RC
     pub shared: Arc<Shared>,
 }
 
+/// A shared _state_
 #[derive(Debug)]
 pub struct Shared {
+    /// This is used by the `BGSAVE` task. `Notify` is used to signal a task
+    /// to wake up
     pub bgsave_task: Notify,
+    /// A `Coretable` wrapped in a R/W lock
     pub table: RwLock<Coretable>,
 }
 
 impl Shared {
-    pub fn get_next_bgsave_point(&self) -> Option<Instant> {
+    /// This task performs a `sync`hronous background save operation and returns
+    /// the duration for which the background thread for BGSAVE must sleep for, before
+    /// it calls this function again. If the server has received a termination signal
+    /// then we just return `None`
+    pub fn run_bgsave_and_get_next_point(&self) -> Option<Instant> {
         let state = self.table.read();
         if state.terminate {
             return None;
@@ -65,23 +75,29 @@ impl Shared {
         }
         Some(Instant::now() + Duration::from_secs(120))
     }
+    /// Check if the server has received a termination signal
     pub fn is_termsig(&self) -> bool {
         self.table.read().terminate
     }
 }
 
 /// The `Coretable` holds all the key-value pairs in a `HashMap`
-/// wrapped in a Read/Write lock
+/// and the `terminate` field, which when set to true will cause all other
+/// background tasks to terminate
 #[derive(Debug)]
 pub struct Coretable {
+    /// The core table contain key-value pairs
     coremap: HashMap<String, Data>,
+    /// The termination signal flag
     pub terminate: bool,
 }
 
 impl Coretable {
+    /// Get a reference to the inner `HashMap`
     pub const fn get_ref<'a>(&'a self) -> &'a HashMap<String, Data> {
         &self.coremap
     }
+    /// Get a **mutable** reference to the inner `HashMap`
     pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HashMap<String, Data> {
         &mut self.coremap
     }
@@ -160,7 +176,8 @@ impl CoreDB {
                 }),
             }
         };
-        tokio::spawn(diskstore::bgsave(db.clone()));
+        // Spawn the background save task in a separate task
+        tokio::spawn(diskstore::bgsave_scheduler(db.clone()));
         Ok(db)
     }
     /// Acquire a write lock

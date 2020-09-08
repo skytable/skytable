@@ -33,7 +33,8 @@ use tokio::time;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 
-/// Try to get the saved data from disk
+/// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
+/// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
 pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
     let file = match fs::read("./data.bin") {
         Ok(f) => f,
@@ -71,11 +72,15 @@ pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
     Ok(())
 }
 
-pub async fn bgsave(handle: coredb::CoreDB) {
+/// The bgsave_scheduler calls the bgsave task in `CoreDB` after every `dur` which
+/// is returned by the `run_bgsave_and_get_next_point()` associated function
+pub async fn bgsave_scheduler(handle: coredb::CoreDB) {
     while !handle.shared.is_termsig() {
-        if let Some(dur) = handle.shared.get_next_bgsave_point() {
+        if let Some(dur) = handle.shared.run_bgsave_and_get_next_point() {
             tokio::select! {
+                // Sleep until `dur`
                 _ = time::delay_until(dur) => {}
+                // Otherwise wait for a notification
                 _ = handle.shared.bgsave_task.notified() => {}
             }
         } else {

@@ -55,6 +55,8 @@ async fn main() {
 
 use libtdb::util::terminal;
 
+/// This function checks the command line arguments and binds to an appropriate
+/// port and host, as per the supplied configuration options
 async fn check_args_or_connect() -> TcpListener {
     let cfg = config::get_config_file_or_return_cfg();
     match cfg {

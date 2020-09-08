@@ -43,22 +43,35 @@ fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
     Ok(fs::read_to_string(fileloc)?)
 }
 
+/// This struct is an _object representation_ used for parsing the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
+    /// The `server` key
     server: ServerConfig,
 }
 
+/// This struct represents the `server` key in the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct ServerConfig {
+    /// The host key is any valid IPv4/IPv6 address
     host: IpAddr,
+    /// The port key is any valid port
     port: u16,
+    /// The noart key is an `Option`al boolean value which is set to true
+    /// for secure environments to disable terminal artwork
     noart: Option<bool>,
 }
 
+/// A `ParsedConfig` which can be used by main::check_args_or_connect() to bind
+/// to a `TcpListener` and show the corresponding terminal output for the given
+/// configuration
 #[derive(Debug, PartialEq)]
 pub struct ParsedConfig {
+    /// A valid IPv4/IPv6 address
     host: IpAddr,
+    /// A valid port
     port: u16,
+    /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
 }
 
@@ -74,6 +87,8 @@ impl ParsedConfig {
             Err(e) => return Err(ConfigError::SyntaxError(e.into())),
         }
     }
+    /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
+    /// TOML file (represented as an object)
     const fn from_config(cfg: Config) -> Self {
         ParsedConfig {
             host: cfg.server.host,
@@ -85,6 +100,7 @@ impl ParsedConfig {
             },
         }
     }
+    /// Create a new file
     pub fn new_from_toml_str(tomlstr: String) -> TResult<Self> {
         Ok(ParsedConfig::from_config(toml::from_str(&tomlstr)?))
     }
@@ -121,7 +137,7 @@ impl ParsedConfig {
     pub fn get_host_port_tuple(self) -> impl ToSocketAddrs {
         ((self.host), self.port)
     }
-    /// Returns true if `noart` is enabled. Otherwise it returns `true`
+    /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
     pub const fn is_artful(&self) -> bool {
         !self.noart
     }
@@ -201,7 +217,7 @@ impl fmt::Display for ConfigError {
     }
 }
 
-/// # Return a  `ConfigType<ParsedConfig>`
+/// This function returns a  `ConfigType<ParsedConfig>`
 ///
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
