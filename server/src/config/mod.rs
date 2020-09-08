@@ -30,19 +30,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tokio::net::ToSocketAddrs;
 use toml;
 
-/// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
-#[cfg(test)]
-fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
-    use std::path;
-    let curdir = std::env::current_dir().unwrap();
-    let workspaceroot = curdir.ancestors().nth(1).unwrap();
-    let mut fileloc = path::PathBuf::from(workspaceroot);
-    fileloc.push("examples");
-    fileloc.push("config-files");
-    fileloc.push(filename);
-    Ok(fs::read_to_string(fileloc)?)
-}
-
 /// This struct is an _object representation_ used for parsing the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
@@ -161,6 +148,18 @@ fn test_config_toml_okayport() {
             noart: false,
         }
     );
+}
+/// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
+#[cfg(test)]
+fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
+    use std::path;
+    let curdir = std::env::current_dir().unwrap();
+    let workspaceroot = curdir.ancestors().nth(1).unwrap();
+    let mut fileloc = path::PathBuf::from(workspaceroot);
+    fileloc.push("examples");
+    fileloc.push("config-files");
+    fileloc.push(filename);
+    Ok(fs::read_to_string(fileloc)?)
 }
 
 #[test]
