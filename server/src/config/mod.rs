@@ -170,7 +170,7 @@ fn test_config_toml_badport() {
         port = 20033002
     "#
     .to_owned();
-    let cfg = ParsedConfig::new_from_file(file);
+    let cfg = ParsedConfig::new_from_toml_str(file);
     assert!(cfg.is_err());
 }
 
