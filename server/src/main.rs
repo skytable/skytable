@@ -21,15 +21,19 @@
 
 use tokio::net::TcpListener;
 mod config;
+use chrono::Local;
+use std::env;
 mod coredb;
 mod dbnet;
 mod diskstore;
 mod kvengine;
+use std::io::Write;
 mod protocol;
 mod queryengine;
 mod resp;
 use coredb::CoreDB;
 use dbnet::run;
+use env_logger::*;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
@@ -48,36 +52,38 @@ static TEXT: &'static str = "
 ";
 #[tokio::main]
 async fn main() {
+    Builder::new()
+        .parse_filters(&env::var("TDB_LOG").unwrap_or("info".to_owned()))
+        .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     run(check_args_or_connect().await, signal::ctrl_c()).await;
 }
 
-use libtdb::util::terminal;
-
 /// This function checks the command line arguments and binds to an appropriate
 /// port and host, as per the supplied configuration options
 async fn check_args_or_connect() -> TcpListener {
+    use libtdb::util::terminal;
     let cfg = config::get_config_file_or_return_cfg();
-    match cfg {
+    let binding = match cfg {
         Ok(config::ConfigType::Custom(cfg)) => {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
             } else {
                 terminal::write_info("TerrabaseDB v0.4.1 | Protocol: Terrapipe 1.0").unwrap();
             }
-            terminal::write_info("info: Using settings from config file\n").unwrap();
+            log::info!("info: Using settings from config file");
             TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
         }
         Ok(config::ConfigType::Def(cfg)) => {
             println!("{}\n{}", TEXT, MSG);
-            terminal::write_info("info: No configuration file supplied. Using default settings\n")
-                .unwrap();
+            log::info!("info: No configuration file supplied. Using default settings");
             TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
         }
         Err(e) => {
             terminal::write_error(e).unwrap();
             std::process::exit(0x100);
         }
-    }
+    };
+    binding
 }

@@ -188,7 +188,7 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
     tokio::select! {
         _ = server.run() => {}
         _ = sig => {
-            println!("Shutting down...")
+            log::info!("Signalling all workers to shut down");
         }
     }
     let Listener {
@@ -199,17 +199,17 @@ pub async fn run(listener: TcpListener, sig: impl Future) {
         ..
     } = server;
     if let Ok(_) = db.flush_db() {
-        terminal::write_success("Successfully saved data to disk\n").unwrap();
+        log::info!("Successfully saved data to disk");
         ()
     } else {
-        terminal::write_error("Failed to flush data to disk\n").unwrap();
+        log::error!("Failed to flush data to disk");
         loop {
             // Keep looping until we successfully write the in-memory table to disk
-            terminal::write_warning("Press enter to try again...").unwrap();
+            log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
             if let Ok(_) = db.flush_db() {
-                terminal::write_success("Successfully saved data to disk\n").unwrap();
+                log::info!("Successfully saved data to disk");
                 break;
             } else {
                 continue;

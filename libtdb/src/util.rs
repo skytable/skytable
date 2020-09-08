@@ -24,7 +24,7 @@ pub mod terminal {
     use std::fmt;
     use std::io::Write;
     use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-    /// Write to stdout with 
+    /// Write to stdout with
     pub fn write_with_col<T: fmt::Display>(item: T, color: Option<Color>) -> fmt::Result {
         let mut stdout = StandardStream::stdout(ColorChoice::Always);
         if let Err(_) = stdout.set_color(ColorSpec::new().set_fg(color)) {

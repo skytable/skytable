@@ -69,9 +69,8 @@ impl Shared {
         }
         // Kick in BGSAVE
         match diskstore::flush_data(&self.table.read().get_ref()) {
-            Ok(_) => terminal::write_info("info: BGSAVE completed successfully\n").unwrap(),
-            Err(e) => terminal::write_error(format!("error: BGSAVE failed with error: '{}'\n", e))
-                .unwrap(),
+            Ok(_) => log::info!("BGSAVE completed successfully"),
+            Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
         Some(Instant::now() + Duration::from_secs(120))
     }
