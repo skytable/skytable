@@ -19,7 +19,7 @@ RUN \
     $HOME/.cargo/bin/rustup self uninstall -y && \
     cp -f target/release/tdb /usr/local/bin
 
-CMD ["tdb -c $HOME/tdb.toml"]
+CMD ["tdb", "-c", "$HOME/tdb.toml"]
 
 EXPOSE 2003/tcp
 
