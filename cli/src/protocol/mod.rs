@@ -23,6 +23,7 @@ mod deserializer;
 use bytes::{Buf, BytesMut};
 use deserializer::ClientResult;
 use lazy_static::lazy_static;
+use libtdb::terrapipe;
 use libtdb::TResult;
 use libtdb::BUF_CAP;
 use regex::Regex;
@@ -33,12 +34,14 @@ lazy_static! {
     static ref RE: Regex = Regex::new("[^\\s\"']+|\"[^\"]*\"|'[^']*'").unwrap();
 }
 
+/// A `Connection` is a wrapper around a`TcpStream` and a read buffer
 pub struct Connection {
     stream: TcpStream,
     buffer: BytesMut,
 }
 
 impl Connection {
+    /// Create a new connection, creating a connection to `host`
     pub async fn new(host: &str) -> TResult<Self> {
         let stream = TcpStream::connect(host).await?;
         println!("Connected to {}", host);
@@ -47,8 +50,17 @@ impl Connection {
             buffer: BytesMut::with_capacity(BUF_CAP),
         })
     }
+    /// This function will write a query to the stream and read the response from the
+    /// server. It will then determine if the returned response is complete or incomplete
+    /// or invalid.
+    ///
+    /// - If it is complete, then the return is parsed into a `Display`able form
+    /// and written to the output stream. If any parsing errors occur, they're also handled
+    /// by this function (usually, "Invalid Response" is written to the terminal).
+    /// - If the packet is incomplete, it will wait to read the entire response from the stream
+    /// - If the packet is corrupted, it will output "Invalid Response"
     pub async fn run_query(&mut self, query: String) {
-        let query = proc_query(query);
+        let query = terrapipe::proc_query(query);
         match self.stream.write_all(&query).await {
             Ok(_) => (),
             Err(_) => {
@@ -91,6 +103,7 @@ impl Connection {
             }
         }
     }
+    /// This function is a subroutine of `run_query` used to parse the response packet
     async fn try_response(&mut self) -> ClientResult {
         if self.buffer.is_empty() {
             // The connection was possibly reset
@@ -98,38 +111,4 @@ impl Connection {
         }
         deserializer::parse(&self.buffer)
     }
-}
-
-fn proc_query(querystr: String) -> Vec<u8> {
-    // TODO(@ohsayan): Enable "" to be escaped
-    // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
-    let args: Vec<&str> = querystr.split_whitespace().collect();
-    let mut bytes = Vec::with_capacity(querystr.len());
-    bytes.extend(b"#2\n*1\n#");
-    let arg_len_bytes = args.len().to_string().into_bytes();
-    let arg_len_bytes_len = (arg_len_bytes.len() + 1).to_string().into_bytes();
-    bytes.extend(arg_len_bytes_len);
-    bytes.extend(b"\n&");
-    bytes.extend(arg_len_bytes);
-    bytes.push(b'\n');
-    args.into_iter().for_each(|arg| {
-        bytes.push(b'#');
-        let len_bytes = arg.len().to_string().into_bytes();
-        bytes.extend(len_bytes);
-        bytes.push(b'\n');
-        bytes.extend(arg.as_bytes());
-        bytes.push(b'\n');
-    });
-    bytes
-}
-
-#[test]
-fn test_queryproc() {
-    let query = "GET x y".to_owned();
-    assert_eq!(
-        "#2\n*1\n#2\n&3\n#3\nGET\n#1\nx\n#1\ny\n"
-            .as_bytes()
-            .to_owned(),
-        proc_query(query)
-    );
 }

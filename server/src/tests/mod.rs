@@ -54,8 +54,7 @@ async fn test_queries() {
     let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response.to_vec(), res_should_be);
-    println!("HEYA complete");
+    assert_eq!(response.to_vec(), res_should_be, "HEYA FAILED!");
     // Test single nil value
     stream
         .write_all(b"#2\n*1\n#2\n&2\n#3\nGET\n#1\nx\n")
@@ -64,8 +63,7 @@ async fn test_queries() {
     let res_should_be = "#2\n*1\n#2\n&1\n!1\n1\n".as_bytes().to_owned();
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response, res_should_be);
-    println!("Single NIL complete");
+    assert_eq!(response, res_should_be, "SINGLE NIL FAILED!");
 
     // Test multiple nil
     stream
@@ -75,8 +73,7 @@ async fn test_queries() {
     let res_should_be = b"#2\n*1\n#2\n&2\n!1\n1\n!1\n1";
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response, res_should_be.to_vec());
-    println!("Multiple NIL complete");
+    assert_eq!(response, res_should_be.to_vec(), "MULTIPLE NIL FAILED!");
     // Stop the server
     stream.shutdown(Shutdown::Write).unwrap();
 }

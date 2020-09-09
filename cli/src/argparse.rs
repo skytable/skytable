@@ -24,6 +24,11 @@ use libtdb::terrapipe::ADDR;
 use std::env;
 use std::io::{self, prelude::*};
 use std::process;
+
+/// This creates a REPL on the command line and also parses command-line arguments
+/// Anything that is entered following a return, is parsed into a query and is
+/// written to the socket (which is either `localhost:2003` or it is determined by
+/// command line parameters)
 pub async fn execute_query() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() > 2 {

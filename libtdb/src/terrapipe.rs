@@ -27,13 +27,6 @@
 
 pub const ADDR: &'static str = "127.0.0.1";
 
-/// Default query metaline buffer size
-pub const DEF_QMETALINE_BUFSIZE: usize = 44;
-/// Default query metalayout buffer size
-pub const DEF_QMETALAYOUT_BUFSIZE: usize = 576;
-/// Default query dataframe buffer size
-pub const DEF_QDATAFRAME_BUSIZE: usize = 4096;
-
 /// Response codes returned by the server
 #[derive(Debug, PartialEq)]
 pub enum RespCodes {
@@ -129,9 +122,36 @@ impl RespCodes {
     }
 }
 
-/// Representation of the query action type - pipelined or simple
-#[derive(Debug, PartialEq)]
-pub enum ActionType {
-    Simple,
-    Pipeline,
+pub fn proc_query(querystr: String) -> Vec<u8> {
+    // TODO(@ohsayan): Enable "" to be escaped
+    // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
+    let args: Vec<&str> = querystr.split_whitespace().collect();
+    let mut bytes = Vec::with_capacity(querystr.len());
+    bytes.extend(b"#2\n*1\n#");
+    let arg_len_bytes = args.len().to_string().into_bytes();
+    let arg_len_bytes_len = (arg_len_bytes.len() + 1).to_string().into_bytes();
+    bytes.extend(arg_len_bytes_len);
+    bytes.extend(b"\n&");
+    bytes.extend(arg_len_bytes);
+    bytes.push(b'\n');
+    args.into_iter().for_each(|arg| {
+        bytes.push(b'#');
+        let len_bytes = arg.len().to_string().into_bytes();
+        bytes.extend(len_bytes);
+        bytes.push(b'\n');
+        bytes.extend(arg.as_bytes());
+        bytes.push(b'\n');
+    });
+    bytes
+}
+
+#[test]
+fn test_queryproc() {
+    let query = "GET x y".to_owned();
+    assert_eq!(
+        "#2\n*1\n#2\n&3\n#3\nGET\n#1\nx\n#1\ny\n"
+            .as_bytes()
+            .to_owned(),
+        proc_query(query)
+    );
 }

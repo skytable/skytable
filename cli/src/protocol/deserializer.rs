@@ -26,13 +26,27 @@ use libtdb::util::terminal;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
+/// A response datagroup
+///
+/// This contains all the elements returned by a certain action. So let's say you did
+/// something like `MGET x y`, then the values of x and y will be in a single datagroup.
 pub struct DataGroup(Vec<DataType>);
 
+/// A data type as defined by the Terrapipe protocol
+///
+///
+/// Every variant stays in an `Option` for convenience while parsing. It's like we first
+/// create a `Variant(None)` variant. Then we read the data which corresponds to it, and then we
+/// replace `None` with the appropriate object. When we first detect the type, we use this as a way of matching
+/// avoiding duplication by writing another `DataType` enum
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum DataType {
+    /// A string value
     Str(Option<String>),
+    /// A response code (it is kept as `String` for "other error" types)
     RespCode(Option<String>),
+    /// An unsigned 64-bit integer, equivalent to an `u64`
     UnsignedInt(Option<Result<u64, std::num::ParseIntError>>),
 }
 
@@ -74,11 +88,18 @@ impl fmt::Display for DataGroup {
 }
 
 /// Errors that may occur while parsing responses from the server
+///
+/// Every variant, except `Incomplete` has an `usize` field, which is used to advance the
+/// buffer
 #[derive(Debug, PartialEq)]
 pub enum ClientResult {
+    /// The response was Invalid
     InvalidResponse(usize),
+    /// The response is a valid response and has been parsed into a vector of datagroups
     Response(Vec<DataGroup>, usize),
+    /// The response was empty, which means that the remote end closed the connection
     Empty(usize),
+    /// The response is incomplete
     Incomplete,
 }
 
@@ -94,6 +115,7 @@ impl fmt::Display for ClientResult {
     }
 }
 
+/// Parse a response packet
 pub fn parse(buf: &[u8]) -> ClientResult {
     if buf.len() < 6 {
         // A packet that has less than 6 characters? Nonsense!
