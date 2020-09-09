@@ -68,20 +68,26 @@ async fn check_args_or_connect() -> TcpListener {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
             } else {
-                terminal::write_info("TerrabaseDB v0.4.1 | Protocol: Terrapipe 1.0").unwrap();
+                println!("{}", MSG);
             }
-            log::info!("info: Using settings from config file");
-            TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
+            log::info!("Using settings from config file");
+            TcpListener::bind(cfg.get_host_port_tuple()).await
         }
         Ok(config::ConfigType::Def(cfg)) => {
             println!("{}\n{}", TEXT, MSG);
-            log::info!("info: No configuration file supplied. Using default settings");
-            TcpListener::bind(cfg.get_host_port_tuple()).await.unwrap()
+            log::warn!("No configuration file supplied. Using default settings");
+            TcpListener::bind(cfg.get_host_port_tuple()).await
         }
         Err(e) => {
-            terminal::write_error(e).unwrap();
+            log::error!("{}", e);
             std::process::exit(0x100);
         }
     };
-    binding
+    match binding {
+        Ok(b) => b,
+        Err(e) => {
+            log::error!("Failed to bind to socket with error: '{}'", e);
+            std::process::exit(0x100);
+        }
+    }
 }

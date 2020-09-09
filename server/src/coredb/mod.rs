@@ -193,11 +193,10 @@ impl CoreDB {
         Ok(())
     }
 
+    #[cfg(test)]
     /// **⚠⚠⚠ This deletes everything stored in the in-memory table**
-    pub fn finish_db(self, areyousure: bool, areyouverysure: bool, areyousupersure: bool) {
-        if areyousure && areyouverysure && areyousupersure {
-            self.acquire_write().coremap.clear()
-        }
+    pub fn finish_db(&self) {
+        self.acquire_write().coremap.clear()
     }
 }
 

@@ -122,9 +122,14 @@ impl RespCodes {
     }
 }
 
-pub fn proc_query(querystr: String) -> Vec<u8> {
+/// Prepare a query packet from a string of whitespace separated values
+pub fn proc_query<T>(querystr: T) -> Vec<u8>
+where
+    T: AsRef<str>,
+{
     // TODO(@ohsayan): Enable "" to be escaped
     // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
+    let querystr = querystr.as_ref().to_owned();
     let args: Vec<&str> = querystr.split_whitespace().collect();
     let mut bytes = Vec::with_capacity(querystr.len());
     bytes.extend(b"#2\n*1\n#");
