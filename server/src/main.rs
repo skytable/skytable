@@ -21,13 +21,11 @@
 
 use tokio::net::TcpListener;
 mod config;
-use chrono::Local;
 use std::env;
 mod coredb;
 mod dbnet;
 mod diskstore;
 mod kvengine;
-use std::io::Write;
 mod protocol;
 mod queryengine;
 mod resp;

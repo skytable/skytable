@@ -26,7 +26,6 @@ use crate::protocol::Connection;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
-use libtdb::util::terminal;
 use libtdb::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
@@ -169,7 +168,7 @@ impl CoreDB {
                 shared: Arc::new(Shared {
                     bgsave_task: Notify::new(),
                     table: RwLock::new(Coretable {
-                        coremap: HashMap::new(),
+                        coremap: HashMap::<String, Data>::new(),
                         terminate: false,
                     }),
                 }),
