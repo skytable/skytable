@@ -30,6 +30,18 @@ use std::net::{Shutdown, SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 
+/// The function macro retunrs the name of a function
+macro_rules! __func__ {
+    () => {{
+        fn f() {}
+        fn typename<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let fn_name = typename(f);
+        &fn_name[..fn_name.len() - 3]
+    }};
+}
+
 static ADDR: &'static str = "127.0.0.1:2003";
 
 /// Start the server as a background asynchronous task
@@ -89,10 +101,13 @@ async fn test_queries() {
     queries.add(test_heya).await;
     queries.add(test_get_single_nil).await;
     queries.add(test_get_single_okay).await;
+    queries.add(test_get_syntax_error).await;
     queries.add(test_set_single_okay).await;
     queries.add(test_set_single_overwrite_error).await;
+    queries.add(test_set_syntax_error).await;
     queries.add(test_update_single_okay).await;
     queries.add(test_update_single_nil).await;
+    queries.add(test_update_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -108,7 +123,7 @@ async fn test_heya(mut stream: TcpStream) -> TcpStream {
     let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response.to_vec(), res_should_be, "HEYA failed");
+    assert_eq!(response.to_vec(), res_should_be, "{}", __func__!());
     stream
 }
 
@@ -122,7 +137,8 @@ async fn test_get_single_nil(mut stream: TcpStream) -> TcpStream {
     assert_eq!(
         response.to_vec(),
         fresp::R_NIL.to_owned(),
-        "GET SINGLE NIL failed"
+        "{}",
+        __func__!()
     );
     stream
 }
@@ -136,7 +152,33 @@ async fn test_get_single_okay(stream: TcpStream) -> TcpStream {
     let res_should_be = "#2\n*1\n#2\n&1\n+3\n100\n".as_bytes().to_owned();
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response.to_vec(), res_should_be, "GET SINGLE NIL failed");
+    assert_eq!(response.to_vec(), res_should_be, "{}", __func__!());
+    stream
+}
+
+#[cfg(test)]
+/// Test a GET query with an incorrect number of arguments
+async fn test_get_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("GET");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With zero arg(s)",
+        __func__!()
+    );
+    let syntax_error = terrapipe::proc_query("GET one two");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With two arg(s)",
+        __func__!()
+    );
     stream
 }
 
@@ -150,7 +192,8 @@ async fn test_set_single_okay(mut stream: TcpStream) -> TcpStream {
     assert_eq!(
         response.to_vec(),
         fresp::R_OKAY.to_owned(),
-        "SET SINGLE OKAY failed"
+        "{}",
+        __func__!()
     );
     stream
 }
@@ -163,7 +206,48 @@ async fn test_set_single_overwrite_error(stream: TcpStream) -> TcpStream {
     stream.write_all(&set_single_code_2).await.unwrap();
     let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response.to_vec(), fresp::R_OVERWRITE_ERR.to_owned());
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_OVERWRITE_ERR.to_owned(),
+        "{}",
+        __func__!()
+    );
+    stream
+}
+
+#[cfg(test)]
+/// Test a SET query with incorrect number of arugments
+async fn test_set_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("SET");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With zero arg(s)",
+        __func__!()
+    );
+    let syntax_error = terrapipe::proc_query("SET one");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With one arg(s)",
+        __func__!()
+    );
+    let syntax_error = terrapipe::proc_query("SET one 1 two 2");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With four arg(s)",
+        __func__!()
+    );
     stream
 }
 
@@ -175,7 +259,12 @@ async fn test_update_single_okay(stream: TcpStream) -> TcpStream {
     stream.write_all(&update_single_okay).await.unwrap();
     let mut response = vec![0; fresp::R_OKAY.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response.to_vec(), fresp::R_OKAY.to_owned());
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_OKAY.to_owned(),
+        "{}",
+        __func__!()
+    );
     stream
 }
 
@@ -186,6 +275,40 @@ async fn test_update_single_nil(mut stream: TcpStream) -> TcpStream {
     stream.write_all(&update_single_okay).await.unwrap();
     let mut response = vec![0; fresp::R_NIL.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response, fresp::R_NIL.to_owned());
+    assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream
+}
+
+async fn test_update_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("UPDATE");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With zero arg(s)",
+        __func__!()
+    );
+    let syntax_error = terrapipe::proc_query("UPDATE one");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With one arg(s)",
+        __func__!()
+    );
+    let syntax_error = terrapipe::proc_query("UPDATE one 1 two 2");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response.to_vec(),
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With four arg(s)",
+        __func__!()
+    );
     stream
 }
