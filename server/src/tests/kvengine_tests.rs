@@ -22,6 +22,7 @@
 use super::{fresp, start_server, terrapipe, TcpStream};
 use crate::__func__;
 use crate::tests::ADDR;
+use std::net::Shutdown;
 use tokio::prelude::*;
 
 #[tokio::test]
@@ -35,6 +36,7 @@ async fn test_heya() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -48,6 +50,7 @@ async fn test_get_single_nil() {
     let mut response = vec![0; fresp::R_NIL.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -63,6 +66,7 @@ async fn test_get_single_okay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -91,6 +95,7 @@ async fn test_get_syntax_error() {
         "{}: With two arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -130,6 +135,7 @@ async fn test_set_single_okay() {
     let mut response = vec![0; fresp::R_OKAY.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -149,6 +155,7 @@ async fn test_set_single_overwrite_error() {
         "{}",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -187,6 +194,7 @@ async fn test_set_syntax_error() {
         "{}: With four arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -201,6 +209,7 @@ async fn test_update_single_okay() {
     let mut response = vec![0; fresp::R_OKAY.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -214,6 +223,7 @@ async fn test_update_single_nil() {
     let mut response = vec![0; fresp::R_NIL.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -251,6 +261,7 @@ async fn test_update_syntax_error() {
         "{}: With four arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -265,6 +276,7 @@ async fn test_del_single_zero() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -280,6 +292,7 @@ async fn test_del_single_one() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -295,6 +308,7 @@ async fn test_del_multiple() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -308,6 +322,7 @@ async fn test_del_syntax_error() {
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -334,6 +349,7 @@ async fn test_exists_multiple_mixed() {
         "{}: With three arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -347,6 +363,7 @@ async fn test_exists_syntax_error() {
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -362,6 +379,7 @@ async fn test_mget_single_okay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -379,6 +397,7 @@ async fn test_mget_multiple_allokay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -396,6 +415,7 @@ async fn test_mget_multiple_mixed() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -409,6 +429,7 @@ async fn test_mget_syntax_error() {
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -423,6 +444,7 @@ async fn test_mset_single_okay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -437,6 +459,7 @@ async fn test_mset_multiple_okay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -469,6 +492,7 @@ async fn test_mset_multiple_mixed() {
         "{}: With 3 k/v pair(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -498,6 +522,7 @@ async fn test_mset_syntax_error() {
         "{}: With three arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -513,6 +538,7 @@ async fn test_mupdate_single_okay() {
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, res_should_be, "{}", __func__!());
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -545,6 +571,7 @@ async fn test_mupdate_multiple_mixed() {
         "{}: With 2 k/v pair(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
 
@@ -574,5 +601,6 @@ async fn test_mupdate_syntax_error() {
         "{}: With three arg(s)",
         __func__!()
     );
+    stream.shutdown(Shutdown::Both).unwrap();
     drop(server);
 }
