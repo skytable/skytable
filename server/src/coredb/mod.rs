@@ -102,7 +102,7 @@ impl Coretable {
 }
 
 /// A wrapper for `Bytes`
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Data {
     /// The blob of data
     blob: Bytes,
