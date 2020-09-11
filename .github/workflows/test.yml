@@ -65,6 +65,6 @@ jobs:
           rustup default ${{ matrix.rust }}
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
