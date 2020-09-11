@@ -46,6 +46,10 @@ async fn test_queries() {
     queries.add(test_mget_multiple_allokay).await;
     queries.add(test_mget_multiple_mixed).await;
     queries.add(test_mget_syntax_error).await;
+    queries.add(test_mset_multiple_okay).await;
+    queries.add(test_mset_single_okay).await;
+    queries.add(test_mset_multiple_mixed).await;
+    queries.add(test_mset_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -334,7 +338,7 @@ async fn test_mget_multiple_mixed(stream: TcpStream) -> TcpStream {
         .into_bytes();
     let mut response = vec![0; res_should_be.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response, res_should_be);
+    assert_eq!(response, res_should_be, "{}", __func__!());
     stream
 }
 
@@ -344,6 +348,73 @@ async fn test_mget_syntax_error(mut stream: TcpStream) -> TcpStream {
     stream.write_all(&syntax_error).await.unwrap();
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
-    assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an MSET query with a single non-existing keys
+async fn test_mset_single_okay(mut stream: TcpStream) -> TcpStream {
+    let query = terrapipe::proc_query("MSET x ex");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+/// Test an MSET query with non-existing keys
+async fn test_mset_multiple_okay(mut stream: TcpStream) -> TcpStream {
+    let query = terrapipe::proc_query("MSET x ex y why z zed");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+/// Test an MSET query with a mixed set of outcomes
+async fn test_mset_multiple_mixed(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x ex", 1, stream).await;
+    let query = terrapipe::proc_query("MSET x ex y why z zed");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n2\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    // Now all the keys have been set, so we should get a 0
+    let query = terrapipe::proc_query("MSET x ex y why z zed");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+/// Test an MSET query with the wrong number of arguments
+async fn test_mset_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("MSET");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With one arg(s)",
+        __func__!()
+    );
+    // Now we'll test it with two keys and one-value
+    let syntax_error = terrapipe::proc_query("MSET x ex y");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With three arg(s)",
+        __func__!()
+    );
     stream
 }
