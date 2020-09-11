@@ -50,6 +50,8 @@ async fn test_queries() {
     queries.add(test_mset_single_okay).await;
     queries.add(test_mset_multiple_mixed).await;
     queries.add(test_mset_syntax_error).await;
+    queries.add(test_exists_multiple_mixed).await;
+    queries.add(test_exists_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -295,6 +297,39 @@ async fn test_del_multiple(stream: TcpStream) -> TcpStream {
 /// Test a DEL query with an incorrect number of arguments
 async fn test_del_syntax_error(mut stream: TcpStream) -> TcpStream {
     let syntax_error = terrapipe::proc_query("DEL");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an EXISTS query for mixed outcomes
+async fn test_exists_multiple_mixed(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x ex y why z zed", 3, stream).await;
+    let query = terrapipe::proc_query("EXISTS x");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}: With one arg(s)", __func__!());
+    let query = terrapipe::proc_query("EXISTS x y z");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        res_should_be,
+        "{}: With three arg(s)",
+        __func__!()
+    );
+    stream
+}
+
+/// Test an EXISTS query with an incorrect number of arguments
+async fn test_exists_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("EXISTS");
     stream.write_all(&syntax_error).await.unwrap();
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
