@@ -35,6 +35,14 @@ use env_logger::*;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
+
+#[cfg(not(target_env = "msvc"))]
+use jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 static MSG: &'static str = "TerrabaseDB v0.4.1 | https://github.com/terrabasedb/terrabase";
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
