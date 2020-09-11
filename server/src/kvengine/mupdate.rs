@@ -28,7 +28,7 @@ use std::collections::hash_map::Entry;
 /// Run an `MUPDATE` query
 pub async fn mupdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
-    if howmany & 1 == 1 {
+    if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
