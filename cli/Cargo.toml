@@ -9,12 +9,6 @@ edition = "2018"
 [dependencies]
 libtdb = {path = "../libtdb"}
 tokio = {version = "0.2.22", features = ["full"]}
-rand = "0.7.3"
-devtimer = "4.0.0"
 bytes = "0.5.6"
 regex = "1.3.9"
 lazy_static = "1.4.0"
-
-[[bin]]
-path="src/bin/benchmark.rs"
-name = "tdb-bench"

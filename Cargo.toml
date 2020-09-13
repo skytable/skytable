@@ -2,7 +2,8 @@
 members = [
     "cli",
     "server",
-    "libtdb"
+    "libtdb",
+    "tdb-bench"
 ]
 
 [profile.release]
