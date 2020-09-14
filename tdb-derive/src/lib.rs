@@ -19,6 +19,8 @@
  *
 */
 
+//! A library containing a collection of custom derives used by TerrabaseDB
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn;
@@ -35,7 +37,7 @@ fn parse_toks(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
         #header
         #(#attrs)*
         #vis #sig {
-            let runtime = service::BackGroundTask::new();
+            let runtime = testsuite::service::BackGroundTask::new();
             runtime.execute(|| {#body});
             drop(runtime);
         }
