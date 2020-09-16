@@ -36,16 +36,16 @@ pub struct Config {
     /// The `server` key
     server: ServerConfig,
     /// The `bgsave` key
+    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.0,
+     * we will make it compulsory (so that we don't break semver)
+     * See the link below for more details:
+     * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
+     */
     bgsave: Option<BGSave>,
 }
 
-/// This struct represents the `bgsave` key in the TOML file
+/// The BGSAVE configuration
 ///
-/* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.0,
- * we will make it compulsory (so that we don't break semver)
- * See the link below for more details:
- * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
- */
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct BGSave {
     /// Whether BGSAVE is enabled or not
@@ -55,6 +55,21 @@ pub struct BGSave {
     enabled: bool,
     /// Every 'n' seconds
     every: u64,
+}
+
+impl BGSave {
+    /// Create a new BGSAVE configuration with all the fields
+    pub const fn new(enabled: bool, every: u64) -> Self {
+        BGSave { enabled, every }
+    }
+    /// The default BGSAVE configuration
+    ///
+    /// Defaults:
+    /// - `enabled`: true
+    /// - `every`: 120
+    pub const fn default() -> Self {
+        BGSave::new(true, 120)
+    }
 }
 
 /// This struct represents the `server` key in the TOML file
@@ -80,10 +95,8 @@ pub struct ParsedConfig {
     port: u16,
     /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
-    /// Whether BGSAVE is enabled or not
-    bgsave_enabled: bool,
-    /// Run `BGSAVE` every _n_ seconds
-    bgsave_duration: u64,
+    /// The BGSAVE configuration
+    bgsave: BGSave,
 }
 
 impl ParsedConfig {
@@ -101,11 +114,6 @@ impl ParsedConfig {
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
     const fn from_config(cfg: Config) -> Self {
-        let (bgsave_enabled, bgsave_duration) = if let Some(bgsave) = cfg.bgsave {
-            (bgsave.enabled, bgsave.every)
-        } else {
-            (true, 120)
-        };
         ParsedConfig {
             host: cfg.server.host,
             port: cfg.server.port,
@@ -114,8 +122,11 @@ impl ParsedConfig {
             } else {
                 false
             },
-            bgsave_enabled,
-            bgsave_duration,
+            bgsave: if let Some(bgsave) = cfg.bgsave {
+                bgsave
+            } else {
+                BGSave::default()
+            },
         }
     }
     /// Create a new file
@@ -129,29 +140,21 @@ impl ParsedConfig {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port,
             noart: false,
-            bgsave_enabled: true,
-            bgsave_duration: 120,
+            bgsave: BGSave::default(),
         }
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
     /// and a supplied `host`
     pub const fn default_with_host(host: IpAddr) -> Self {
-        ParsedConfig::new(host, 2003, false, true, 120)
+        ParsedConfig::new(host, 2003, false, BGSave::default())
     }
     /// Create a new `ParsedConfig` with all the fields
-    pub const fn new(
-        host: IpAddr,
-        port: u16,
-        noart: bool,
-        bgsave_enabled: bool,
-        bgsave_duration: u64,
-    ) -> Self {
+    pub const fn new(host: IpAddr, port: u16, noart: bool, bgsave: BGSave) -> Self {
         ParsedConfig {
             host,
             port,
             noart,
-            bgsave_enabled,
-            bgsave_duration,
+            bgsave,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -165,8 +168,7 @@ impl ParsedConfig {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,
             noart: false,
-            bgsave_enabled: true,
-            bgsave_duration: 120,
+            bgsave: BGSave::default(),
         }
     }
     /// Return a (host, port) tuple which can be bound to with `TcpListener`
@@ -300,8 +302,7 @@ fn test_config_file_noart() {
             port: 2003,
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             noart: true,
-            bgsave_enabled: true,
-            bgsave_duration: 120,
+            bgsave: BGSave::default(),
         }
     );
 }
@@ -317,8 +318,7 @@ fn test_config_file_ipv6() {
             port: 2003,
             host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
             noart: false,
-            bgsave_enabled: true,
-            bgsave_duration: 120,
+            bgsave: BGSave::default()
         }
     );
 }
@@ -337,4 +337,20 @@ fn test_config_file_bad_bgsave_section() {
     let file = get_toml_from_examples_dir("badcfg2.toml".to_owned()).unwrap();
     let cfg = ParsedConfig::new_from_toml_str(file);
     assert!(cfg.is_err());
+}
+
+#[test]
+#[cfg(test)]
+fn test_config_file_custom_bgsave() {
+    let file = get_toml_from_examples_dir("withcustombgsave.toml".to_owned()).unwrap();
+    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    assert_eq!(
+        cfg,
+        ParsedConfig {
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 2003,
+            noart: false,
+            bgsave: BGSave::new(true, 600)
+        }
+    );
 }
