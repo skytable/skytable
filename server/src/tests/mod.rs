@@ -25,7 +25,8 @@ use crate::coredb::CoreDB;
 use crate::dbnet;
 use crate::protocol::responses::fresp;
 use libtdb::terrapipe;
-use std::net::SocketAddr;
+use std::future::Future;
+use std::net::{Shutdown, SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 mod kvengine_tests;
 
@@ -45,16 +46,12 @@ macro_rules! __func__ {
 static ADDR: &'static str = "127.0.0.1:2003";
 
 /// Start the server as a background asynchronous task
-async fn start_server(db: Option<CoreDB>) -> (Option<SocketAddr>, CoreDB) {
+async fn start_server() -> (Option<SocketAddr>, CoreDB) {
     // HACK(@ohsayan): Since we want to start the server if it is not already
     // running, or use it if it is already running, we just return none if we failed
     // to bind to the port, since this will _almost_ never happen on our CI
     let listener = TcpListener::bind(ADDR).await.unwrap();
-    let db = if let Some(db) = db {
-        db
-    } else {
-        CoreDB::new().unwrap()
-    };
+    let db = CoreDB::new().unwrap();
     let asyncdb = db.clone();
     let addr = if let Ok(addr) = listener.local_addr() {
         Some(addr)
@@ -63,4 +60,35 @@ async fn start_server(db: Option<CoreDB>) -> (Option<SocketAddr>, CoreDB) {
     };
     tokio::spawn(async move { dbnet::test_run(listener, asyncdb, tokio::signal::ctrl_c()).await });
     (addr, db)
+}
+
+struct QueryVec<'a> {
+    streams: Vec<TcpStream>,
+    db: &'a CoreDB,
+}
+impl<'a> QueryVec<'a> {
+    pub fn new<'b>(db: &'b CoreDB) -> Self
+    where
+        'b: 'a,
+    {
+        QueryVec {
+            streams: Vec::new(),
+            db,
+        }
+    }
+    pub async fn add<F, Fut>(&mut self, function: F)
+    where
+        F: FnOnce(TcpStream) -> Fut,
+        Fut: Future<Output = TcpStream>,
+    {
+        self.db.finish_db();
+        let stream = TcpStream::connect(ADDR).await.unwrap();
+        self.streams.push(function(stream).await);
+    }
+    pub fn run_queries_and_close_sockets(self) {
+        for socket in self.streams.into_iter() {
+            socket.shutdown(Shutdown::Both).unwrap();
+        }
+        self.db.finish_db();
+    }
 }
