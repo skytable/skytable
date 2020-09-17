@@ -70,9 +70,13 @@ impl BGSave {
     pub const fn default() -> Self {
         BGSave::new(true, 120)
     }
+    /// Get the duration for BGSAVE
+    ///
+    /// BGSAVE should run `every` seconds
     pub const fn get_duration(&self) -> u64 {
         self.every
     }
+    /// If `!self.enabled` then BGSAVE has been disabled by the user
     pub const fn is_disabled(&self) -> bool {
         !self.enabled
     }

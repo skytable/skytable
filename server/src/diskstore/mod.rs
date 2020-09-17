@@ -74,18 +74,26 @@ pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
     Ok(())
 }
 
-/// The bgsave_scheduler calls the bgsave task in `CoreDB` after every `dur` which
-/// is returned by the `run_bgsave_and_get_next_point()` associated function
+/// The bgsave_scheduler calls the bgsave task in `CoreDB` after `every` seconds
+///
+/// The time after which the scheduler will wake up the BGSAVE task is determined by
+/// `bgsave_cfg` which is to be passed as an argument. If BGSAVE is disabled, this function
+/// immediately returns
 pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
     if bgsave_cfg.is_disabled() {
+        // So, there's no BGSAVE! Looks like our user's pretty confident
+        // that there won't be any power failures! Never mind, we'll just
+        // shut down the BGSAVE task, and immediately return
         handle.shared.bgsave_task.notified().await;
         return;
     }
+    // If we're here - the user doesn't trust his power supply or just values
+    // his data - which is good! So we'll turn this into a `Duration`
     let duration = Duration::from_secs(bgsave_cfg.get_duration());
     while !handle.shared.is_termsig() {
         if let Some(_) = handle.shared.run_bgsave() {
             tokio::select! {
-                // Sleep until `dur`
+                // Sleep until `duration` from the current time instant
                 _ = time::delay_until(time::Instant::now() + duration) => {}
                 // Otherwise wait for a notification
                 _ = handle.shared.bgsave_task.notified() => {}

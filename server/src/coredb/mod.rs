@@ -60,7 +60,7 @@ impl Shared {
     ///
     /// It runs BGSAVE and then returns control to the caller. The caller is responsible
     /// for periodically calling BGSAVE. This returns `None`, **if** the database
-    /// is shutting down
+    /// is shutting down. Otherwise `Some(())` is returned
     pub fn run_bgsave(&self) -> Option<()> {
         let state = self.table.read();
         if state.terminate {
