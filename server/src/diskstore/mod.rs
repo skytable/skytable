@@ -21,6 +21,7 @@
 
 //! This module provides tools for handling persistently stored data
 
+use crate::config::BGSave;
 use crate::coredb::{self, Data};
 use bincode;
 use bytes::Bytes;
@@ -29,6 +30,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
+use std::time::Duration;
 use tokio::time;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
@@ -74,12 +76,17 @@ pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
 
 /// The bgsave_scheduler calls the bgsave task in `CoreDB` after every `dur` which
 /// is returned by the `run_bgsave_and_get_next_point()` associated function
-pub async fn bgsave_scheduler(handle: coredb::CoreDB) {
+pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
+    if bgsave_cfg.is_disabled() {
+        handle.shared.bgsave_task.notified().await;
+        return;
+    }
+    let duration = Duration::from_secs(bgsave_cfg.get_duration());
     while !handle.shared.is_termsig() {
-        if let Some(dur) = handle.shared.run_bgsave_and_get_next_point() {
+        if let Some(_) = handle.shared.run_bgsave() {
             tokio::select! {
                 // Sleep until `dur`
-                _ = time::delay_until(dur) => {}
+                _ = time::delay_until(time::Instant::now() + duration) => {}
                 // Otherwise wait for a notification
                 _ = handle.shared.bgsave_task.notified() => {}
             }

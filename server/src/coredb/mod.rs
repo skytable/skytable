@@ -21,6 +21,7 @@
 
 //! # The core database engine
 
+use crate::config::BGSave;
 use crate::diskstore;
 use crate::protocol::Connection;
 use crate::protocol::Query;
@@ -32,10 +33,8 @@ use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio;
 use tokio::sync::Notify;
-use tokio::time::Instant;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
@@ -57,11 +56,12 @@ pub struct Shared {
 }
 
 impl Shared {
-    /// This task performs a `sync`hronous background save operation and returns
-    /// the duration for which the background thread for BGSAVE must sleep for, before
-    /// it calls this function again. If the server has received a termination signal
-    /// then we just return `None`
-    pub fn run_bgsave_and_get_next_point(&self) -> Option<Instant> {
+    /// This task performs a `sync`hronous background save operation
+    ///
+    /// It runs BGSAVE and then returns control to the caller. The caller is responsible
+    /// for periodically calling BGSAVE. This returns `None`, **if** the database
+    /// is shutting down
+    pub fn run_bgsave(&self) -> Option<()> {
         let state = self.table.read();
         if state.terminate {
             return None;
@@ -71,7 +71,7 @@ impl Shared {
             Ok(_) => log::info!("BGSAVE completed successfully"),
             Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
-        Some(Instant::now() + Duration::from_secs(120))
+        Some(())
     }
     /// Check if the server has received a termination signal
     pub fn is_termsig(&self) -> bool {
@@ -151,7 +151,7 @@ impl CoreDB {
     ///
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
-    pub fn new() -> TResult<Self> {
+    pub fn new(bgsave: BGSave) -> TResult<Self> {
         let coretable = diskstore::get_saved()?;
         let db = if let Some(coretable) = coretable {
             CoreDB {
@@ -175,7 +175,7 @@ impl CoreDB {
             }
         };
         // Spawn the background save task in a separate task
-        tokio::spawn(diskstore::bgsave_scheduler(db.clone()));
+        tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
         Ok(db)
     }
     /// Acquire a write lock

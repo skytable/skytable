@@ -46,7 +46,7 @@ pub struct Config {
 
 /// The BGSAVE configuration
 ///
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct BGSave {
     /// Whether BGSAVE is enabled or not
     ///
@@ -69,6 +69,12 @@ impl BGSave {
     /// - `every`: 120
     pub const fn default() -> Self {
         BGSave::new(true, 120)
+    }
+    pub const fn get_duration(&self) -> u64 {
+        self.every
+    }
+    pub const fn is_disabled(&self) -> bool {
+        !self.enabled
     }
 }
 
@@ -96,7 +102,7 @@ pub struct ParsedConfig {
     /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
     /// The BGSAVE configuration
-    bgsave: BGSave,
+    pub bgsave: BGSave,
 }
 
 impl ParsedConfig {
@@ -172,7 +178,7 @@ impl ParsedConfig {
         }
     }
     /// Return a (host, port) tuple which can be bound to with `TcpListener`
-    pub fn get_host_port_tuple(self) -> impl ToSocketAddrs {
+    pub fn get_host_port_tuple(&self) -> impl ToSocketAddrs {
         ((self.host), self.port)
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -271,7 +277,13 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, Confi
     let filename = matches.value_of("config");
     if let Some(filename) = filename {
         match ParsedConfig::new_from_file(filename.to_owned()) {
-            Ok(cfg) => return Ok(ConfigType::Custom(cfg)),
+            Ok(cfg) => {
+                if cfg.bgsave.is_disabled() {
+                    log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
+                    log::warn!("Unused key 'bgsave.every' in configuration file");
+                }
+                return Ok(ConfigType::Custom(cfg));
+            }
             Err(e) => return Err(e),
         }
     } else {

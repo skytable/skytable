@@ -19,6 +19,7 @@
  *
 */
 
+use crate::config::BGSave;
 use tokio::net::TcpListener;
 mod config;
 use std::env;
@@ -63,15 +64,15 @@ async fn main() {
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    run(check_args_or_connect().await, signal::ctrl_c()).await;
+    let (tcplistener, bgsave_config) = check_args_or_connect().await;
+    run(tcplistener, bgsave_config, signal::ctrl_c()).await;
 }
 
 /// This function checks the command line arguments and binds to an appropriate
 /// port and host, as per the supplied configuration options
-async fn check_args_or_connect() -> TcpListener {
-    use libtdb::util::terminal;
+async fn check_args_or_connect() -> (TcpListener, BGSave) {
     let cfg = config::get_config_file_or_return_cfg();
-    let binding = match cfg {
+    let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg)) => {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
@@ -79,21 +80,27 @@ async fn check_args_or_connect() -> TcpListener {
                 println!("{}", MSG);
             }
             log::info!("Using settings from config file");
-            TcpListener::bind(cfg.get_host_port_tuple()).await
+            (
+                TcpListener::bind(cfg.get_host_port_tuple()).await,
+                cfg.bgsave,
+            )
         }
         Ok(config::ConfigType::Def(cfg)) => {
             println!("{}\n{}", TEXT, MSG);
             log::warn!("No configuration file supplied. Using default settings");
-            TcpListener::bind(cfg.get_host_port_tuple()).await
+            (
+                TcpListener::bind(cfg.get_host_port_tuple()).await,
+                cfg.bgsave,
+            )
         }
         Err(e) => {
             log::error!("{}", e);
             std::process::exit(0x100);
         }
     };
-    match binding {
-        Ok(b) => b,
-        Err(e) => {
+    match binding_and_cfg {
+        (Ok(b), bgsave_cfg) => (b, bgsave_cfg),
+        (Err(e), _) => {
             log::error!("Failed to bind to socket with error: '{}'", e);
             std::process::exit(0x100);
         }

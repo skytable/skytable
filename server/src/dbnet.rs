@@ -19,6 +19,7 @@
  *
 */
 
+use crate::config::BGSave;
 use crate::protocol::{Connection, QueryResult::*};
 use crate::CoreDB;
 use libtdb::util::terminal;
@@ -167,10 +168,10 @@ impl Drop for CHandler {
 use std::io::{self, prelude::*};
 
 /// Start the server waiting for incoming connections or a CTRL+C signal
-pub async fn run(listener: TcpListener, sig: impl Future) {
+pub async fn run(listener: TcpListener, bgsave_cfg: BGSave, sig: impl Future) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let db = match CoreDB::new() {
+    let db = match CoreDB::new(bgsave_cfg) {
         Ok(d) => d,
         Err(e) => {
             eprintln!("ERROR: {}", e);

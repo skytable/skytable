@@ -24,6 +24,7 @@
 use crate::coredb::CoreDB;
 use crate::dbnet;
 use crate::protocol::responses::fresp;
+use crate::BGSave;
 use libtdb::terrapipe;
 use std::future::Future;
 use std::net::{Shutdown, SocketAddr};
@@ -51,7 +52,7 @@ async fn start_server() -> (Option<SocketAddr>, CoreDB) {
     // running, or use it if it is already running, we just return none if we failed
     // to bind to the port, since this will _almost_ never happen on our CI
     let listener = TcpListener::bind(ADDR).await.unwrap();
-    let db = CoreDB::new().unwrap();
+    let db = CoreDB::new(BGSave::default()).unwrap();
     let asyncdb = db.clone();
     let addr = if let Ok(addr) = listener.local_addr() {
         Some(addr)
