@@ -2,7 +2,7 @@
 
 All changes in this project will be noted in this file.
 
-## Version 0.4.2-alpha.1 [2020-09-06]
+## Version 0.4.1 [2020-09-06]
 
 > No breaking changes
 
