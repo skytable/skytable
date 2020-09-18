@@ -34,14 +34,28 @@ use toml;
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
     /// The `server` key
-    server: ServerConfig,
+    server: ConfigKeyServer,
     /// The `bgsave` key
     /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.0,
      * we will make it compulsory (so that we don't break semver)
      * See the link below for more details:
      * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
      */
-    bgsave: Option<BGSave>,
+    bgsave: Option<ConfigKeyBGSAVE>,
+}
+
+/// The BGSAVE section in the config file
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct ConfigKeyBGSAVE {
+    /// Whether BGSAVE is enabled or not
+    ///
+    /// If this key is missing, then we can assume that BGSAVE is enabled
+    enabled: Option<bool>,
+    /// The duration after which BGSAVE should start
+    ///
+    /// If this is the only key specified, then it is clear that BGSAVE is enabled
+    /// and the duration is `every`
+    every: Option<u64>,
 }
 
 /// The BGSAVE configuration
@@ -84,7 +98,7 @@ impl BGSave {
 
 /// This struct represents the `server` key in the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
-pub struct ServerConfig {
+pub struct ConfigKeyServer {
     /// The host key is any valid IPv4/IPv6 address
     host: IpAddr,
     /// The port key is any valid port
@@ -133,7 +147,12 @@ impl ParsedConfig {
                 false
             },
             bgsave: if let Some(bgsave) = cfg.bgsave {
-                bgsave
+                match (bgsave.enabled, bgsave.every) {
+                    (Some(enabled), Some(every)) => BGSave::new(enabled, every),
+                    (Some(enabled), None) => BGSave::new(enabled, 120),
+                    (None, Some(every)) => BGSave::new(true, every),
+                    (None, None) => BGSave::default(),
+                }
             } else {
                 BGSave::default()
             },
@@ -369,4 +388,42 @@ fn test_config_file_custom_bgsave() {
             bgsave: BGSave::new(true, 600)
         }
     );
+}
+
+#[test]
+fn test_config_file_bgsave_enabled_only() {
+    /*
+     * This test demonstrates a case where the user just said that BGSAVE is enabled.
+     * In that case, we will default to the 120 second duration
+     */
+    let file = get_toml_from_examples_dir("bgsave-justenabled.toml".to_owned()).unwrap();
+    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    assert_eq!(
+        cfg,
+        ParsedConfig {
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 2003,
+            noart: false,
+            bgsave: BGSave::default(),
+        }
+    )
+}
+
+#[test]
+fn test_config_file_bgsave_every_only() {
+    /*
+     * This test demonstrates a case where the user just gave the value for every
+     * In that case, it means BGSAVE is enabled and set to `every` seconds
+     */
+    let file = get_toml_from_examples_dir("bgsave-justevery.toml".to_owned()).unwrap();
+    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    assert_eq!(
+        cfg,
+        ParsedConfig {
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 2003,
+            noart: false,
+            bgsave: BGSave::new(true, 600)
+        }
+    )
 }
