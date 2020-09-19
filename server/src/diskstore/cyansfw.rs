@@ -20,7 +20,7 @@
 */
 
 //! # `CyanSWF`
-//! `CyanSWF` short for Cyan "StreamingWriteFile" is a minimal implementation
+//! `CyanSWF` short for Cyan "Streaming File Writer" is a minimal implementation
 //! of a file to which writes are _streamed_.
 //!
 //! What this essentially means — is that,
@@ -33,22 +33,46 @@
 //! TODO: At this moment, this is specific to the core `HashMap`. However, in the future
 //! a more generic implementation is to be made.
 
+use crate::diskstore::Data;
 use crate::diskstore::TResult;
 use std::fs::File;
 
 /// The magic number that separates every piece of data from the other
 const CYANSWF_MAGIC: u8 = 0xCA;
 
-/// The streaming file writer
-pub struct CyanSWF {
+/// # Streaming file writer for `CyanSS`
+///
+/// `CyanSS` or Cyan Snapstore is a file format that will be used by TDB for persistent
+/// storage, backups, etc.
+///
+/// This is what the file looks like:
+///
+/// ```text
+///  CYANSWF$DDMMYYYY$NANOTIME
+///  __kvstore_begin
+///  ---- DATA -----
+/// ___kvstore_end
+/// ```
+///
+/// Here,
+/// - `DDMMMYYYY` - Is the date in DDMMYYYY format, which reflects when this
+/// file was created
+/// - `NANOTIME` - Is the time in nanoseconds when the file was created
+/// - `DATA` is, well, the data
+///
+/// The `__kvstore_begin` and `__kvstore_end` are _partition flags_, which separate different
+/// data types. As of now, we support k/v pairs, so it is `kvstore`. If we generalize this,
+/// it would look like: `__<datatype>_begin` or `__<datatype>_end`.
+///
+pub struct CyanSFW {
     /// The file to which data would be streamed into
     file: File,
 }
 
-impl CyanSWF {
+impl CyanSFW {
     /// Create a new `CyanSWF` instance
     pub fn new(filename_and_path: &str) -> TResult<Self> {
         let file = File::create(filename_and_path)?;
-        Ok(CyanSWF { file })
+        Ok(CyanSFW { file })
     }
 }

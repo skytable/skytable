@@ -32,7 +32,7 @@ use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
 use std::time::Duration;
 use tokio::time;
-mod cyanswf;
+mod cyansfw;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 
