@@ -44,7 +44,7 @@ use jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-static MSG: &'static str = "TerrabaseDB v0.4.2-alpha.1 | https://github.com/terrabasedb/terrabase";
+static MSG: &'static str = "TerrabaseDB v0.4.2 | https://github.com/terrabasedb/terrabase";
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
      |__   __|                     | |                      |  __ \\ |  _ \\ 

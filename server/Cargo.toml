@@ -1,6 +1,6 @@
 [package]
 name = "tdb"
-version = "0.4.2-alpha.1"
+version = "0.4.2"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
@@ -18,7 +18,7 @@ serde = {version = "1.0.115", features= ["derive"]}
 toml = "0.5.6"
 clap = {version = "2.33.3", features=["yaml"]}
 env_logger = "0.7.1"
-log = "0.4.2-alpha.11"
+log = "0.4.21"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"

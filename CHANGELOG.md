@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.2 [2020-09-19]
+
+> No breaking changes
+
+This release adds `BGSAVE` for automated background saving (see [#11](https://github.com/terrabasedb/terrabasedb/issues/21))
+
 ## Version 0.4.1 [2020-09-06]
 
 > No breaking changes
