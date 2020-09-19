@@ -25,7 +25,7 @@
 use std::path;
 use std::process;
 
-/// A `BackgroundTask` starts `tdb` in a background
+/// A `BackgroundTask` starts `tdb` in a background task
 pub struct BackGroundTask {
     child: process::Child,
 }
