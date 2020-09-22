@@ -90,3 +90,55 @@ pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
             .await
     }
 }
+
+/// Run an `SDEL` query
+///
+/// This either returns `Okay` if all the keys were `del`eted, or it returns a
+/// `Nil`, which is code `1`
+pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    let howmany = act.howmany();
+    if howmany == 0 {
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
+    }
+    let mut failed = false;
+    {
+        // We use this additional scope to tell the compiler that the write lock
+        // doesn't go beyond the scope of this function - and is never used across
+        // an await: cause, the compiler ain't as smart as we are ;)
+        let mut key_iter = act
+            .get_ref()
+            .get(1..)
+            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .iter();
+        let mut whandle = handle.acquire_write();
+        let mut_table = whandle.get_mut_ref();
+        while let Some(key) = key_iter.next() {
+            if !mut_table.contains_key(key.as_str()) {
+                // With one of the keys not existing - this action can't clearly be done
+                // So we'll set `failed` to true and ensure that we check this while
+                // writing a response back to the client
+                failed = true;
+                break;
+            }
+        }
+        if !failed {
+            // Since the failed flag is false, all of the keys exist
+            // So we can safely set the keys
+            act.into_iter().for_each(|key| {
+                // Since we've already checked that the keys don't exist
+                // We'll tell the compiler to optimize this
+                let _ = mut_table
+                    .remove(&key)
+                    .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+            });
+        }
+    }
+    if failed {
+        con.write_response(responses::fresp::R_NIL.to_owned()).await
+    } else {
+        con.write_response(responses::fresp::R_OKAY.to_owned())
+            .await
+    }
+}
