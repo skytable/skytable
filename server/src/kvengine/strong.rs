@@ -25,7 +25,9 @@
 //! what'd be the difference?
 //! In this case, if all the keys are non-existing, which is a requirement for `MSET`,
 //! only then would the keys be set. That is, only if all the keys can be set, will the action
-//! run and return code `0` - otherwise the action won't do anything and return an overwrite error.  
+//! run and return code `0` - otherwise the action won't do anything and return an overwrite error.
+//! There is no point of using _strong actions_ for a single key/value pair, since it will only
+//! slow things down due to the checks performed.  
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
 use crate::coredb::{CoreDB, Data};

@@ -18,6 +18,11 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+/* 
+ * This file is used by TerrabaseDB's documentation website for automatically
+ * generating documentation for the actions. It will also be used by the TerrabaseDB 
+ * server in the future
+*/
 [
     {
         "name": "GET",
@@ -82,5 +87,21 @@
         "args": "EXISTS <key1> <key2> ...",
         "desc": "Check if 'n' keys exist",
         "return": "Number of keys that exist as an integer"
+    },
+    {
+        "name": "SSET",
+        "since": "0.4.3",
+        "complexity": "O(n)",
+        "args": "SSET <key1> <value1> <key2> <value2> ...",
+        "desc": "Set all keys to the given values only if all of them don't exist",
+        "return": "(Code: 0) if all keys were set, otherwise (Code: 2)"
+    },
+    {
+        "name": "SDEL",
+        "since": "0.4.3",
+        "complexity": "O(n)",
+        "args": "SDEL <key1> <key2> ...",
+        "desc": "Delete all keys if all of the keys exist",
+        "return": "(Code: 0) if all keys were deleted, otherwise (Code: 1)"
     }
 ]
