@@ -47,6 +47,8 @@ mod tags {
     pub const TAG_MGET: &'static str = "MGET";
     /// `MUPDATE` action tag
     pub const TAG_MUPDATE: &'static str = "MUPDATE";
+    /// `SSET` action tag
+    pub const TAG_SSET: &'static str = "SSET";
 }
 
 /// Execute a simple(*) query
@@ -69,6 +71,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         tags::TAG_MSET => kvengine::mset::mset(db, con, buf).await?,
         tags::TAG_UPDATE => kvengine::update::update(db, con, buf).await?,
         tags::TAG_MUPDATE => kvengine::mupdate::mupdate(db, con, buf).await?,
+        tags::TAG_SSET => kvengine::strong::sset(db, con, buf).await?,
         _ => {
             con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?
