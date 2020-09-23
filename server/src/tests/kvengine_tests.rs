@@ -65,6 +65,11 @@ async fn test_queries() {
     queries.add(test_supdate_multiple_nil).await;
     queries.add(test_supdate_multiple_okay).await;
     queries.add(test_supdate_syntax_error).await;
+    queries.add(test_sdel_single_nil).await;
+    queries.add(test_sdel_single_okay).await;
+    queries.add(test_sdel_multiple_nil).await;
+    queries.add(test_sdel_multiple_okay).await;
+    queries.add(test_sdel_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -688,5 +693,58 @@ async fn test_supdate_syntax_error(mut stream: TcpStream) -> TcpStream {
         "{}: With three arg(s)",
         __func__!()
     );
+    stream
+}
+
+/// Test an SDEL query: which should return nil
+async fn test_sdel_single_nil(mut stream: TcpStream) -> TcpStream {
+    let sdel_single_nil = terrapipe::proc_query("SDEL x");
+    stream.write_all(&sdel_single_nil).await.unwrap();
+    let mut response = vec![0; fresp::R_NIL.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SDEL query: which should return okay
+async fn test_sdel_single_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x 100", 1, stream).await;
+    let sdel_single_okay = terrapipe::proc_query("SDEL x");
+    stream.write_all(&sdel_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SDEL query: which should return okay
+async fn test_sdel_multiple_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x 100 y 200 z 300", 3, stream).await;
+    let sdel_okay = terrapipe::proc_query("SDEL x y z");
+    stream.write_all(&sdel_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SDEL query: which should return okay
+async fn test_sdel_multiple_nil(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x 100 y 200", 2, stream).await;
+    let sdel_nil = terrapipe::proc_query("SDEL x y z");
+    stream.write_all(&sdel_nil).await.unwrap();
+    let mut response = vec![0; fresp::R_NIL.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SDEL query with an incorrect number of arguments
+async fn test_sdel_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("SDEL");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
     stream
 }
