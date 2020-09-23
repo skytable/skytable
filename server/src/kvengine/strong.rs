@@ -127,7 +127,7 @@ pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
         }
         if !failed {
             // Since the failed flag is false, all of the keys exist
-            // So we can safely set the keys
+            // So we can safely delete the keys
             act.into_iter().for_each(|key| {
                 // Since we've already checked that the keys don't exist
                 // We'll tell the compiler to optimize this
@@ -135,6 +135,63 @@ pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
                     .remove(&key)
                     .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             });
+        }
+    }
+    if failed {
+        con.write_response(responses::fresp::R_NIL.to_owned()).await
+    } else {
+        con.write_response(responses::fresp::R_OKAY.to_owned())
+            .await
+    }
+}
+
+/// Run an `SUPDATE` query
+///
+/// This either returns `Okay` if all the keys were updated, or it returns `Nil`
+/// or code `1`
+pub async fn supdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    let howmany = act.howmany();
+    if howmany & 1 == 1 || howmany == 0 {
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
+    }
+    let mut failed = false;
+    {
+        // We use this additional scope to tell the compiler that the write lock
+        // doesn't go beyond the scope of this function - and is never used across
+        // an await: cause, the compiler ain't as smart as we are ;)
+        let mut key_iter = act
+            .get_ref()
+            .get(1..)
+            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .iter();
+        let mut whandle = handle.acquire_write();
+        let mut_table = whandle.get_mut_ref();
+        while let Some(key) = key_iter.next() {
+            if !mut_table.contains_key(key.as_str()) {
+                // With one of the keys failing to exist - this action can't clearly be done
+                // So we'll set `failed` to true and ensure that we check this while
+                // writing a response back to the client
+                failed = true;
+                break;
+            }
+            // Skip the next value that is coming our way, as we don't need it
+            // right now
+            let _ = key_iter
+                .next()
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+        }
+        if !failed {
+            // Since the failed flag is false, none of the keys existed
+            // So we can safely update the keys
+            let mut iter = act.into_iter();
+            while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
+                if mut_table.insert(key, Data::from_string(value)).is_none() {
+                    // Tell the compiler that this will never be the case
+                    unsafe { unreachable_unchecked() }
+                }
+            }
         }
     }
     if failed {
