@@ -368,4 +368,16 @@ fn test_parser() {
         input.len(),
     );
     assert_eq!(res, res_should_be);
+    let input = "#2\n*2\n#2\n&3\n#3\nGET\n#1\nx\n#2\nex\n#2\n&3\n#3\nSET\n#1\nx\n#4\ntrue"
+        .as_bytes()
+        .to_owned();
+    let res = parse(&input);
+    let res_should_be = ParseResult::Query(
+        Query::Pipelined(vec![
+            ActionGroup(vec!["GET".to_owned(), "x".to_owned(), "ex".to_owned()]),
+            ActionGroup(vec!["SET".to_owned(), "x".to_owned(), "true".to_owned()]),
+        ]),
+        input.len(),
+    );
+    assert_eq!(res, res_should_be);
 }
