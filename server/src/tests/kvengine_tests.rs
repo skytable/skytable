@@ -55,6 +55,11 @@ async fn test_queries() {
     queries.add(test_mupdate_single_okay).await;
     queries.add(test_mupdate_multiple_mixed).await;
     queries.add(test_mupdate_syntax_error).await;
+    queries.add(test_sset_single_overwrite_error).await;
+    queries.add(test_sset_single_okay).await;
+    queries.add(test_sset_multiple_okay).await;
+    queries.add(test_sset_multiple_overwrite_error).await;
+    queries.add(test_sset_syntax_error).await;
     queries.add(test_supdate_single_nil).await;
     queries.add(test_supdate_single_okay).await;
     queries.add(test_supdate_multiple_nil).await;
@@ -527,6 +532,84 @@ async fn test_mupdate_syntax_error(mut stream: TcpStream) -> TcpStream {
     );
     // Now we'll test it with two keys and one-value
     let syntax_error = terrapipe::proc_query("MUPDATE x ex y");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With three arg(s)",
+        __func__!()
+    );
+    stream
+}
+
+/// Test an SSET query: which should return code: 0
+async fn test_sset_single_okay(mut stream: TcpStream) -> TcpStream {
+    let sset_single_okay = terrapipe::proc_query("SSET x 200");
+    stream.write_all(&sset_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SSET query: which should return code: 2
+async fn test_sset_single_overwrite_error(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x 200", 1, stream).await;
+    let sset_single_error = terrapipe::proc_query("SSET x 200");
+    stream.write_all(&sset_single_error).await.unwrap();
+    let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_OVERWRITE_ERR.to_owned(),
+        "{}",
+        __func__!()
+    );
+    stream
+}
+
+/// Test an SSET query: which should return code: 0
+async fn test_sset_multiple_okay(mut stream: TcpStream) -> TcpStream {
+    let update_single_okay = terrapipe::proc_query("SSET x 100 y 200 z 300");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SSET query: which should return code: 2
+async fn test_sset_multiple_overwrite_error(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x ex", 1, stream).await;
+    let update_single_okay = terrapipe::proc_query("SSET x 100 y 200 z 300");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_OVERWRITE_ERR.to_owned(),
+        "{}",
+        __func__!()
+    );
+    stream
+}
+
+/// Test an SSET query with the wrong number of arguments
+async fn test_sset_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("SSET");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With one arg(s)",
+        __func__!()
+    );
+    // Now we'll test it with two keys and one-value
+    let syntax_error = terrapipe::proc_query("SSET x ex y");
     stream.write_all(&syntax_error).await.unwrap();
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
