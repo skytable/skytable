@@ -103,5 +103,13 @@
         "args": "SDEL <key1> <key2> ...",
         "desc": "Delete all keys if all of the keys exist",
         "return": "(Code: 0) if all keys were deleted, otherwise (Code: 1)"
+    },
+    {
+        "name": "SUPDATE",
+        "since": "0.4.3",
+        "complexity": "O(n)",
+        "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
+        "desc": "Update all keys if all of the keys exist",
+        "return": "(Code: 0) if all keys were updated, otherwise (Code: 1)"
     }
 ]
