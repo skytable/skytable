@@ -55,6 +55,11 @@ async fn test_queries() {
     queries.add(test_mupdate_single_okay).await;
     queries.add(test_mupdate_multiple_mixed).await;
     queries.add(test_mupdate_syntax_error).await;
+    queries.add(test_supdate_single_nil).await;
+    queries.add(test_supdate_single_okay).await;
+    queries.add(test_supdate_multiple_nil).await;
+    queries.add(test_supdate_multiple_okay).await;
+    queries.add(test_supdate_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -522,6 +527,75 @@ async fn test_mupdate_syntax_error(mut stream: TcpStream) -> TcpStream {
     );
     // Now we'll test it with two keys and one-value
     let syntax_error = terrapipe::proc_query("MUPDATE x ex y");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With three arg(s)",
+        __func__!()
+    );
+    stream
+}
+
+/// Test an SUPDATE query: which should return code: 0
+async fn test_supdate_single_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = test_set_single_okay(stream).await;
+    let update_single_okay = terrapipe::proc_query("SUPDATE x 200");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SUPDATE query: which should return code: 1
+async fn test_supdate_single_nil(mut stream: TcpStream) -> TcpStream {
+    let update_single_okay = terrapipe::proc_query("SUPDATE x 200");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_NIL.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SUPDATE query: which should return code: 0
+async fn test_supdate_multiple_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x ex y why z zed", 3, stream).await;
+    let update_single_okay = terrapipe::proc_query("SUPDATE x 100 y 200 z 300");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SUPDATE query: which should return code: 0
+async fn test_supdate_multiple_nil(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x ex", 1, stream).await;
+    let update_single_okay = terrapipe::proc_query("SUPDATE x 100 y 200 z 300");
+    stream.write_all(&update_single_okay).await.unwrap();
+    let mut response = vec![0; fresp::R_NIL.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_NIL.to_owned(), "{}", __func__!());
+    stream
+}
+
+/// Test an SUPDATE query with the wrong number of arguments
+async fn test_supdate_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let syntax_error = terrapipe::proc_query("SUPDATE");
+    stream.write_all(&syntax_error).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}: With one arg(s)",
+        __func__!()
+    );
+    // Now we'll test it with two keys and one-value
+    let syntax_error = terrapipe::proc_query("SUPDATE x ex y");
     stream.write_all(&syntax_error).await.unwrap();
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
