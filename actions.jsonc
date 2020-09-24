@@ -111,5 +111,13 @@
         "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
         "desc": "Update all keys if all of the keys exist",
         "return": "(Code: 0) if all keys were updated, otherwise (Code: 1)"
+    },
+    {
+        "name": "DBSIZE",
+        "since": "0.4.3",
+        "complexity": "O(1)",
+        "args": "DBSIZE",
+        "desc": "Returns the number of key/value pairs stored in the database",
+        "return": "Number of keys that exist in the database as an unsigned int"
     }
 ]
