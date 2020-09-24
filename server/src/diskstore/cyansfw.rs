@@ -25,7 +25,7 @@
 //!
 //! What this essentially means — is that,
 //! instead of taking a whole object and then writing it to the disk, like what persistent
-//! storage did till v0.4.2, `CyanSWF` takes a part, encodes into its _kinda binary_
+//! storage did till v0.4.3-alpha.1, `CyanSWF` takes a part, encodes into its _kinda binary_
 //! equivalent, and then writes that to disk. It then takes the next part, encodes it, and then writes it to disk.
 //! The advantage of using this method is that the entire object does not need to be encoded at once
 //! which has an additional memory and CPU time overhead.
