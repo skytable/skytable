@@ -72,6 +72,8 @@ async fn test_queries() {
     queries.add(test_sdel_syntax_error).await;
     queries.add(test_dbsize_mixed).await;
     queries.add(test_dbsize_syntax_error).await;
+    queries.add(test_flushdb_okay).await;
+    queries.add(test_flushdb_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -770,6 +772,36 @@ async fn test_dbsize_mixed(stream: TcpStream) -> TcpStream {
 
 async fn test_dbsize_syntax_error(mut stream: TcpStream) -> TcpStream {
     let query = terrapipe::proc_query("DBSIZE x y z");
+    stream.write_all(&query).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream
+}
+
+async fn test_flushdb_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values(
+        "x ex y why z zed a firstalphabet b secondalphabet",
+        5,
+        stream,
+    )
+    .await;
+    let query = terrapipe::proc_query("FLUSHDB");
+    stream.write_all(&query).await.unwrap();
+    let mut response = vec![0; fresp::R_OKAY.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, fresp::R_OKAY.to_owned(), "{}", __func__!());
+    let query = terrapipe::proc_query("DBSIZE");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+async fn test_flushdb_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let query = terrapipe::proc_query("FLUSHDB x y z");
     stream.write_all(&query).await.unwrap();
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();

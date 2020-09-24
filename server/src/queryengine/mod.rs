@@ -55,6 +55,8 @@ mod tags {
     pub const TAG_SUPDATE: &'static str = "SUPDATE";
     /// `DBSIZE` action tag
     pub const TAG_DBSIZE: &'static str = "DBSIZE";
+    /// `FLUSHDB` action tag
+    pub const TAG_FLUSHDB: &'static str = "FLUSHDB";
 }
 
 /// Execute a simple(*) query
@@ -81,6 +83,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         tags::TAG_SDEL => kvengine::strong::sdel(db, con, buf).await?,
         tags::TAG_SUPDATE => kvengine::strong::supdate(db, con, buf).await?,
         tags::TAG_DBSIZE => kvengine::dbsize::dbsize(db, con, buf).await?,
+        tags::TAG_FLUSHDB => kvengine::flushdb::flushdb(db, con, buf).await?,
         _ => {
             con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?

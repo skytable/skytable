@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Thu Sep 24 2020
  *
  * This file is a part of TerrabaseDB
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
@@ -19,30 +19,21 @@
  *
 */
 
-//! # The Key/Value Engine
-//! This is TerrabaseDB's K/V engine. It contains utilities to interface with
-//! TDB's K/V store
+use crate::coredb::CoreDB;
+use crate::protocol::{responses, ActionGroup, Connection};
+use libtdb::TResult;
 
-pub mod dbsize;
-pub mod del;
-pub mod exists;
-pub mod flushdb;
-pub mod get;
-pub mod jget;
-pub mod mget;
-pub mod mset;
-pub mod mupdate;
-pub mod set;
-pub mod strong;
-pub mod update;
-pub mod heya {
-    //! Respond to `HEYA` queries
-    use crate::protocol;
-    use libtdb::TResult;
-    use protocol::{responses, Connection};
-    /// Returns a `HEY!` `Response`
-    pub async fn heya(con: &mut Connection) -> TResult<()> {
-        con.write_response(responses::fresp::R_HEYA.to_owned())
-            .await
+/// Delete all the keys in the database
+pub async fn flushdb(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+    if act.howmany() != 0 {
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
     }
+    {
+        handle.acquire_write().get_mut_ref().clear()
+    }
+    con.write_response(responses::fresp::R_OKAY.to_owned())
+        .await?;
+    Ok(())
 }

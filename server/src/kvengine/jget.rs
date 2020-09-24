@@ -36,7 +36,7 @@ use libtdb::TResult;
 /// {"key":"value"}\n
 /// ```
 ///
-pub async fn jget(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn jget(_handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
         return con
