@@ -2,6 +2,13 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.3 [2020-09-25]
+
+> No breaking changes
+
+This release adds the following actions:
+`SSET` , `SUPDATE` , `SDEL` , `DBSIZE` and `FLUSHDB`
+
 ## Version 0.4.2 [2020-09-19]
 
 > No breaking changes

@@ -119,5 +119,13 @@
         "args": "DBSIZE",
         "desc": "Returns the number of key/value pairs stored in the database",
         "return": "Number of keys that exist in the database as an unsigned int"
+    },
+    {
+        "name": "FLUSHDB",
+        "since": "0.4.3",
+        "complexity": "O(n)",
+        "args": "FLUSHDB",
+        "desc": "Removes all the key/value pairs stored in the database",
+        "return": "(Code: 0) if the operation succeeded"
     }
 ]
