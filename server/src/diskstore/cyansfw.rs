@@ -33,7 +33,8 @@
 //! TODO: At this moment, this is specific to the core `HashMap`. However, in the future
 //! a more generic implementation is to be made.
 
-use crate::diskstore::Data;
+#![allow(dead_code)]
+
 use crate::diskstore::TResult;
 use std::fs::File;
 

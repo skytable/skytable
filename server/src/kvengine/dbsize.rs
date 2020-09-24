@@ -19,7 +19,7 @@
  *
 */
 
-use crate::coredb::{self, CoreDB};
+use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
 use libtdb::TResult;

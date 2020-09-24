@@ -26,7 +26,9 @@ use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
 use std::fs;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(test)]
+use std::net::Ipv6Addr;
+use std::net::{IpAddr, Ipv4Addr};
 use tokio::net::ToSocketAddrs;
 use toml;
 
@@ -158,7 +160,8 @@ impl ParsedConfig {
             },
         }
     }
-    /// Create a new file
+    #[cfg(test)]
+    /// Create a new `ParsedConfig` from a `TOML` string
     pub fn new_from_toml_str(tomlstr: String) -> TResult<Self> {
         Ok(ParsedConfig::from_config(toml::from_str(&tomlstr)?))
     }
