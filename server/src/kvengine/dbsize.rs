@@ -18,6 +18,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+// HACK(@ohsayan): `len` needs to be set to zero, but clippy doesn't like it,so we'll do this
+#![allow(unused_assignments)]
 
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
