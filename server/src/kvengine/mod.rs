@@ -35,6 +35,7 @@ pub mod mupdate;
 pub mod set;
 pub mod strong;
 pub mod update;
+pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::protocol;
