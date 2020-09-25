@@ -22,8 +22,6 @@
 //! # The Terrapipe protocol
 //! This module implements primitives for the Terrapipe protocol
 //!
-//! Query and Response packet handling modules can be found in the `de`, `query`
-//! and `response` modules from the crate root.
 
 pub const ADDR: &'static str = "127.0.0.1";
 
