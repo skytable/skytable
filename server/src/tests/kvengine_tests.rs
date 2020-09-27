@@ -74,6 +74,8 @@ async fn test_queries() {
     queries.add(test_dbsize_syntax_error).await;
     queries.add(test_flushdb_okay).await;
     queries.add(test_flushdb_syntax_error).await;
+    queries.add(test_uset_all_okay).await;
+    queries.add(test_uset_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -806,5 +808,42 @@ async fn test_flushdb_syntax_error(mut stream: TcpStream) -> TcpStream {
     let mut response = vec![0; fresp::R_ACTION_ERR.len()];
     stream.read_exact(&mut response).await.unwrap();
     assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "{}", __func__!());
+    stream
+}
+
+async fn test_uset_all_okay(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("x 100 y 200 z 300", 3, stream).await;
+    let query = terrapipe::proc_query("USET x ex y why z zed");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".as_bytes().to_owned();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+async fn test_uset_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let query = terrapipe::proc_query("USET");
+    let query2 = terrapipe::proc_query("USET x");
+    let mut resp1 = vec![0; fresp::R_ACTION_ERR.len()];
+    let mut resp2 = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.write_all(&query).await.unwrap();
+    stream.read_exact(&mut resp1).await.unwrap();
+    stream.write_all(&query2).await.unwrap();
+    stream.read_exact(&mut resp2).await.unwrap();
+    assert_eq!(
+        resp1,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}:{}",
+        __func__!(),
+        "with one arg"
+    );
+    assert_eq!(
+        resp2,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}:{}",
+        __func__!(),
+        "with two args"
+    );
     stream
 }
