@@ -15,6 +15,6 @@ noart = false
 # This key is *OPTIONAL*, but will be required post 0.5.0
 [bgsave]
 # Run `BGSAVE` `every` seconds. For example, setting this to 60 will cause BGSAVE to run
-# every 1 minute
+# after every 2 minutes
 enabled = true
 every = 120
