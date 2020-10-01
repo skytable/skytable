@@ -20,8 +20,7 @@
 */
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
-use crate::resp::{BytesWrapper, GroupBegin};
-use bytes::Bytes;
+use crate::resp::GroupBegin;
 use libtdb::TResult;
 
 /// Run a `KEYLEN` query

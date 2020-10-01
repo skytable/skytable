@@ -135,5 +135,13 @@
         "args": "USET <key1> <value1> <key2> <value2> ...",
         "desc": "SET all keys if they don't exist, or UPDATE them if they do exist",
         "return": "Number of keys that were `USET`ed, as an integer"
+    },
+    {
+        "name": "KEYLEN",
+        "since": "0.4.4",
+        "complexity": "O(1)",
+        "args": "KEYLEN <key>",
+        "desc": "Returns the length of the UTF-8 string",
+        "return": "Length of the key as an integer",
     }
 ]

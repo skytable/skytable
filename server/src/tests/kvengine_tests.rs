@@ -76,6 +76,8 @@ async fn test_queries() {
     queries.add(test_flushdb_syntax_error).await;
     queries.add(test_uset_all_okay).await;
     queries.add(test_uset_syntax_error).await;
+    queries.add(test_keylen).await;
+    queries.add(test_keylen_syntax_error).await;
     queries.run_queries_and_close_sockets();
 
     // Clean up everything else
@@ -772,6 +774,7 @@ async fn test_dbsize_mixed(stream: TcpStream) -> TcpStream {
     stream
 }
 
+/// Test `DBSIZE` with an incorrect number of arguments
 async fn test_dbsize_syntax_error(mut stream: TcpStream) -> TcpStream {
     let query = terrapipe::proc_query("DBSIZE x y z");
     stream.write_all(&query).await.unwrap();
@@ -781,6 +784,7 @@ async fn test_dbsize_syntax_error(mut stream: TcpStream) -> TcpStream {
     stream
 }
 
+/// Test `FLUSHDB`
 async fn test_flushdb_okay(stream: TcpStream) -> TcpStream {
     let mut stream = set_values(
         "x ex y why z zed a firstalphabet b secondalphabet",
@@ -802,6 +806,7 @@ async fn test_flushdb_okay(stream: TcpStream) -> TcpStream {
     stream
 }
 
+/// Test `FLUSHDB` with an incorrect number of arguments
 async fn test_flushdb_syntax_error(mut stream: TcpStream) -> TcpStream {
     let query = terrapipe::proc_query("FLUSHDB x y z");
     stream.write_all(&query).await.unwrap();
@@ -811,6 +816,9 @@ async fn test_flushdb_syntax_error(mut stream: TcpStream) -> TcpStream {
     stream
 }
 
+/// Test `USET` which returns okay
+///
+/// `USET` almost always returns okay for the correct number of key(s)/value(s)
 async fn test_uset_all_okay(stream: TcpStream) -> TcpStream {
     let mut stream = set_values("x 100 y 200 z 300", 3, stream).await;
     let query = terrapipe::proc_query("USET x ex y why z zed");
@@ -822,6 +830,7 @@ async fn test_uset_all_okay(stream: TcpStream) -> TcpStream {
     stream
 }
 
+/// Test `USET` with an incorrect number of arguments
 async fn test_uset_syntax_error(mut stream: TcpStream) -> TcpStream {
     let query = terrapipe::proc_query("USET");
     let query2 = terrapipe::proc_query("USET x");
@@ -844,6 +853,45 @@ async fn test_uset_syntax_error(mut stream: TcpStream) -> TcpStream {
         "{}:{}",
         __func__!(),
         "with two args"
+    );
+    stream
+}
+
+/// Test `KEYLEN`
+async fn test_keylen(stream: TcpStream) -> TcpStream {
+    let mut stream = set_values("4 four", 1, stream).await;
+    let query = terrapipe::proc_query("keylen 4");
+    stream.write_all(&query).await.unwrap();
+    let res_should_be = "#2\n*1\n#2\n&1\n:1\n4\n".to_owned().into_bytes();
+    let mut response = vec![0; res_should_be.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(response, res_should_be, "{}", __func__!());
+    stream
+}
+
+/// Test `KEYLEN` with an incorrect number of arguments
+async fn test_keylen_syntax_error(mut stream: TcpStream) -> TcpStream {
+    let query = terrapipe::proc_query("KEYLEN");
+    stream.write_all(&query).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}:{}",
+        __func__!(),
+        "with 1 arg(s)"
+    );
+    let query = terrapipe::proc_query("KEYLEN x y");
+    stream.write_all(&query).await.unwrap();
+    let mut response = vec![0; fresp::R_ACTION_ERR.len()];
+    stream.read_exact(&mut response).await.unwrap();
+    assert_eq!(
+        response,
+        fresp::R_ACTION_ERR.to_owned(),
+        "{}:{}",
+        __func__!(),
+        "with 2 arg(s)"
     );
     stream
 }

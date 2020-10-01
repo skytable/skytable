@@ -76,7 +76,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
     match first.as_str() {
         tags::TAG_DEL => kvengine::del::del(db, con, buf).await?,
         tags::TAG_GET => kvengine::get::get(db, con, buf).await?,
-        tags::TAG_HEYA => kvengine::heya::heya(con).await?,
+        tags::TAG_HEYA => kvengine::heya::heya(db, con, buf).await?,
         tags::TAG_EXISTS => kvengine::exists::exists(db, con, buf).await?,
         tags::TAG_SET => kvengine::set::set(db, con, buf).await?,
         tags::TAG_MGET => kvengine::mget::mget(db, con, buf).await?,

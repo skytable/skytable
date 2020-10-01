@@ -40,10 +40,12 @@ pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::protocol;
+    use crate::protocol::ActionGroup;
+    use crate::CoreDB;
     use libtdb::TResult;
     use protocol::{responses, Connection};
     /// Returns a `HEY!` `Response`
-    pub async fn heya(con: &mut Connection) -> TResult<()> {
+    pub async fn heya(_db: &CoreDB, con: &mut Connection, _buf: ActionGroup) -> TResult<()> {
         con.write_response(responses::fresp::R_HEYA.to_owned())
             .await
     }
