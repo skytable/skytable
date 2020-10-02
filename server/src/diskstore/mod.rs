@@ -33,8 +33,10 @@ use std::iter::FromIterator;
 use std::time::Duration;
 use tokio::time;
 mod cyansfw;
+mod snapshot;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
+pub const PERSIST_FILE: &'static str = "./data.bin";
 
 /// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
 /// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
@@ -64,13 +66,13 @@ pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data.bin` file
-pub fn flush_data(data: &HashMap<String, Data>) -> TResult<()> {
+pub fn flush_data(filename: &str, data: &HashMap<String, Data>) -> TResult<()> {
     let ds: DiskStore = (
         data.keys().into_iter().map(|val| val.to_string()).collect(),
         data.values().map(|val| val.get_blob().to_vec()).collect(),
     );
     let encoded = bincode::serialize(&ds)?;
-    let mut file = fs::File::create("./data.bin")?;
+    let mut file = fs::File::create(filename)?;
     file.write_all(&encoded)?;
     Ok(())
 }

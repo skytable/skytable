@@ -27,6 +27,7 @@ use crate::protocol::Connection;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
+use diskstore::PERSIST_FILE;
 use libtdb::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
@@ -67,7 +68,7 @@ impl Shared {
             return None;
         }
         // Kick in BGSAVE
-        match diskstore::flush_data(&self.table.read().get_ref()) {
+        match diskstore::flush_data(PERSIST_FILE, &self.table.read().get_ref()) {
             Ok(_) => log::info!("BGSAVE completed successfully"),
             Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
@@ -189,7 +190,7 @@ impl CoreDB {
     /// Flush the contents of the in-memory table onto disk
     pub fn flush_db(&self) -> TResult<()> {
         let data = &self.acquire_write();
-        diskstore::flush_data(&data.coremap)?;
+        diskstore::flush_data(PERSIST_FILE, &data.coremap)?;
         Ok(())
     }
 
