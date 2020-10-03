@@ -34,8 +34,6 @@ use std::fs;
 pub struct Snapshot {
     /// File names of the snapshots (relative paths)
     snaps: queue::Queue,
-    /// The maximum number of snapshots to be kept
-    maxtop: usize,
     /// An atomic reference to the coretable
     dbref: CoreDB,
 }
@@ -45,7 +43,6 @@ impl Snapshot {
     pub fn new(maxtop: usize, dbref: CoreDB) -> Self {
         Snapshot {
             snaps: queue::Queue::new(maxtop),
-            maxtop,
             dbref,
         }
     }
@@ -60,6 +57,8 @@ impl Snapshot {
         let getread = self.dbref.acquire_read();
         let snapname = self.get_snapname();
         diskstore::flush_data(&snapname, &getread.get_ref())?;
+        // Release the read lock for the poor clients who are waiting for a write lock
+        drop(getread);
         log::info!("Snapshot created");
         if let Some(old_snapshot) = self.snaps.add(snapname) {
             fs::remove_file(old_snapshot)?;
