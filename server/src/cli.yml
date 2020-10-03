@@ -20,7 +20,7 @@
 #
 
 name: TerrabaseDB Server
-version: 0.4.3
+version: 0.4.4
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Database server
 args:

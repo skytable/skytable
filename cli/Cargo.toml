@@ -1,6 +1,6 @@
 [package]
 name = "tsh"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 

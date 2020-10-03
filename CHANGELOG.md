@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.4 [2020-10-03]
+
+> No breaking changes
+
+This release adds the following actions: `KEYLEN` and `USET`
+
 ## Version 0.4.3 [2020-09-25]
 
 > No breaking changes
@@ -37,7 +43,7 @@ Fixes:
 
 ### Migrating existing clients
 
-The Terrapipe protocol was revised and promoted to 1.0. This will cause all existing client implementations to break, since the protocol has changed fundamentally. The clients have to implement the [latest spec](https://git.io/JJZ8Z).
+The Terrapipe protocol was revised and promoted to 1.0. This will cause all existing client implementations to break, since the protocol has changed fundamentally. The clients have to implement the [latest spec](https://terrabasedb.github.io/docs/Protocols/terrapipe).
 
 ## Version 0.3.2 [2020-08-07]
 
@@ -73,7 +79,7 @@ This release implements the latest version of the Terrapipe protocol.
 
 ### Migrating existing clients
 
-All clients have to reimplement the Terrapipe protocol to match the [latest spec](https://git.io/JJZ8Z).
+All clients have to reimplement the Terrapipe protocol to match the [latest spec](https://terrabasedb.github.io/docs/Protocols/unsupported-tp).
 
 ## Version 0.1.0 [2020-07-17]
 
