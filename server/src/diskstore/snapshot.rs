@@ -94,7 +94,6 @@ impl SnapshotEngine {
 
 #[test]
 fn test_snapshot() {
-    use std::iter::FromIterator;
     let db = CoreDB::new_empty();
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
@@ -106,14 +105,7 @@ fn test_snapshot() {
     snapengine.mksnap().unwrap();
     let current = snapengine.get_snapshots().next().unwrap();
     let read_hmap = diskstore::get_saved(Some(current)).unwrap().unwrap();
-    let dbhmap = std::collections::HashMap::from_iter(db.acquire_read().get_ref().iter().map(
-        |(key, value)| {
-            (
-                key.clone(),
-                crate::coredb::Data::from_blob(value.get_blob().clone()),
-            )
-        },
-    ));
+    let dbhmap = db.get_hashmap_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
 }

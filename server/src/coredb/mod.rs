@@ -103,7 +103,7 @@ impl Coretable {
 }
 
 /// A wrapper for `Bytes`
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Data {
     /// The blob of data
     blob: Bytes,
@@ -196,6 +196,15 @@ impl CoreDB {
         let data = &self.acquire_write();
         diskstore::flush_data(PERSIST_FILE, &data.coremap)?;
         Ok(())
+    }
+
+    /// Get a deep copy of the `HashMap`
+    ///
+    /// **⚠ Do note**: This is super inefficient since it performs an actual
+    /// clone of the `HashMap` and doesn't do any `Arc`-business! This function
+    /// can be used by test functions and the server, but **use with caution!**
+    pub fn get_hashmap_deep_clone(&self) -> HashMap<String, Data> {
+        (*self.acquire_read().get_ref()).clone()
     }
 
     #[cfg(test)]
