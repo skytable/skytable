@@ -153,7 +153,7 @@ impl CoreDB {
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new(bgsave: BGSave) -> TResult<Self> {
-        let coretable = diskstore::get_saved()?;
+        let coretable = diskstore::get_saved(Some(PERSIST_FILE))?;
         let db = if let Some(coretable) = coretable {
             CoreDB {
                 shared: Arc::new(Shared {
@@ -165,19 +165,23 @@ impl CoreDB {
                 }),
             }
         } else {
-            CoreDB {
-                shared: Arc::new(Shared {
-                    bgsave_task: Notify::new(),
-                    table: RwLock::new(Coretable {
-                        coremap: HashMap::<String, Data>::new(),
-                        terminate: false,
-                    }),
-                }),
-            }
+            CoreDB::new_empty()
         };
         // Spawn the background save task in a separate task
         tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
         Ok(db)
+    }
+    /// Create an empty in-memory table
+    pub fn new_empty() -> Self {
+        CoreDB {
+            shared: Arc::new(Shared {
+                bgsave_task: Notify::new(),
+                table: RwLock::new(Coretable {
+                    coremap: HashMap::<String, Data>::new(),
+                    terminate: false,
+                }),
+            }),
+        }
     }
     /// Acquire a write lock
     pub fn acquire_write(&self) -> RwLockWriteGuard<'_, Coretable> {

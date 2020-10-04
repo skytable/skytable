@@ -1,3 +1,4 @@
 /target
 /.vscode
 data.bin
+/server/snapshots

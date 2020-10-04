@@ -26,25 +26,39 @@ use crate::diskstore;
 use chrono::prelude::*;
 use libtdb::TResult;
 use std::fs;
-/// # Snapshot
+use std::io::ErrorKind;
+
+const DIR_SNAPSHOT: &'static str = "snapshots";
+
+/// # Snapshot Engine
 ///
 /// This object provides methods to create and delete snapshots. There should be a
 /// `snapshot_scheduler` which should hold an instance of this object, on startup.
 /// Whenever the duration expires, the caller should call `mksnap()`
-pub struct Snapshot {
+pub struct SnapshotEngine {
     /// File names of the snapshots (relative paths)
     snaps: queue::Queue,
     /// An atomic reference to the coretable
     dbref: CoreDB,
 }
 
-impl Snapshot {
+impl SnapshotEngine {
     /// Create a new `Snapshot` instance
-    pub fn new(maxtop: usize, dbref: CoreDB) -> Self {
-        Snapshot {
+    ///
+    /// This also attempts to check if the snapshots directory exists;
+    /// If the directory doesn't exist, then it is created
+    pub fn new(maxtop: usize, dbref: CoreDB) -> TResult<Self> {
+        match fs::create_dir(DIR_SNAPSHOT) {
+            Ok(_) => (),
+            Err(e) => match e.kind() {
+                ErrorKind::AlreadyExists => (),
+                _ => return Err(e.into()),
+            },
+        }
+        Ok(SnapshotEngine {
             snaps: queue::Queue::new(maxtop),
             dbref,
-        }
+        })
     }
     /// Generate the snapshot name
     fn get_snapname(&self) -> String {
@@ -65,6 +79,43 @@ impl Snapshot {
         }
         Ok(())
     }
+    /// Delete all snapshots
+    pub fn clearall(&mut self) -> TResult<()> {
+        for snap in self.snaps.iter() {
+            fs::remove_file(snap)?;
+        }
+        Ok(())
+    }
+    /// Get the name of snapshots
+    pub fn get_snapshots(&self) -> std::slice::Iter<String> {
+        self.snaps.iter()
+    }
+}
+
+#[test]
+fn test_snapshot() {
+    use std::iter::FromIterator;
+    let db = CoreDB::new_empty();
+    let mut write = db.acquire_write();
+    let _ = write.get_mut_ref().insert(
+        String::from("ohhey"),
+        crate::coredb::Data::from_string(String::from("heya!")),
+    );
+    drop(write);
+    let mut snapengine = SnapshotEngine::new(4, db.clone()).unwrap();
+    snapengine.mksnap().unwrap();
+    let current = snapengine.get_snapshots().next().unwrap();
+    let read_hmap = diskstore::get_saved(Some(current)).unwrap().unwrap();
+    let dbhmap = std::collections::HashMap::from_iter(db.acquire_read().get_ref().iter().map(
+        |(key, value)| {
+            (
+                key.clone(),
+                crate::coredb::Data::from_blob(value.get_blob().clone()),
+            )
+        },
+    ));
+    assert_eq!(read_hmap, dbhmap);
+    snapengine.clearall().unwrap();
 }
 
 mod queue {
@@ -72,6 +123,8 @@ mod queue {
     //! freely and once the threshold limit is reached, it pops off the oldest element and returns it
     //!
     //! This implementation is specifically built for use with the snapshotting utility
+    use std::slice::Iter;
+    #[derive(Debug, PartialEq)]
     pub struct Queue {
         queue: Vec<String>,
         maxlen: usize,
@@ -88,6 +141,10 @@ mod queue {
             let x = if self.is_overflow() { self.pop() } else { None };
             self.queue.push(item);
             x
+        }
+        /// Returns an iterator over the slice of strings
+        pub fn iter(&self) -> Iter<String> {
+            self.queue.iter()
         }
         /// Check if we have reached the maximum queue size limit
         fn is_overflow(&self) -> bool {
