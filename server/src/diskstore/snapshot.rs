@@ -29,6 +29,9 @@ use std::fs;
 use std::io::ErrorKind;
 
 const DIR_SNAPSHOT: &'static str = "snapshots";
+/// The default snapshot count is 12, assuming that the user would take a snapshot
+/// every 2 hours (or 7200 seconds)
+const DEF_SNAPSHOT_COUNT: usize = 12;
 
 /// # Snapshot Engine
 ///
@@ -56,7 +59,11 @@ impl SnapshotEngine {
             },
         }
         Ok(SnapshotEngine {
-            snaps: queue::Queue::new(maxtop),
+            snaps: queue::Queue::new(if maxtop == 0 {
+                (DEF_SNAPSHOT_COUNT, true)
+            } else {
+                (maxtop, false)
+            }),
             dbref,
         })
     }
@@ -120,19 +127,33 @@ mod queue {
     pub struct Queue {
         queue: Vec<String>,
         maxlen: usize,
+        dontpop: bool,
     }
     impl Queue {
-        pub fn new(maxlen: usize) -> Self {
+        pub fn new((maxlen, dontpop): (usize, bool)) -> Self {
             Queue {
                 queue: Vec::with_capacity(maxlen),
                 maxlen,
+                dontpop,
             }
         }
         /// This returns a `String` only if the queue is full. Otherwise, a `None` is returned most of the time
         pub fn add(&mut self, item: String) -> Option<String> {
-            let x = if self.is_overflow() { self.pop() } else { None };
-            self.queue.push(item);
-            x
+            if self.dontpop {
+                // We don't need to pop anything since the user
+                // wants to keep all the items in the queue
+                self.queue.push(item);
+                return None;
+            } else {
+                // The user wants to keep a maximum of `maxtop` items
+                // so we will check if the current queue is full
+                // if it is full, then the `maxtop` limit has been reached
+                // so we will remove the oldest item and then push the
+                // new item onto the stack
+                let x = if self.is_overflow() { self.pop() } else { None };
+                self.queue.push(item);
+                x
+            }
         }
         /// Returns an iterator over the slice of strings
         pub fn iter(&self) -> Iter<String> {
@@ -154,12 +175,24 @@ mod queue {
 
     #[test]
     fn test_queue() {
-        let mut q = Queue::new(4);
+        let mut q = Queue::new((4, false));
         assert!(q.add(String::from("snap1")).is_none());
         assert!(q.add(String::from("snap2")).is_none());
         assert!(q.add(String::from("snap3")).is_none());
         assert!(q.add(String::from("snap4")).is_none());
         assert_eq!(q.add(String::from("snap5")), Some(String::from("snap1")));
         assert_eq!(q.add(String::from("snap6")), Some(String::from("snap2")));
+    }
+
+    #[test]
+    fn test_queue_dontpop() {
+        // This means that items can only be added or all of them can be deleted
+        let mut q = Queue::new((4, true));
+        assert!(q.add(String::from("snap1")).is_none());
+        assert!(q.add(String::from("snap2")).is_none());
+        assert!(q.add(String::from("snap3")).is_none());
+        assert!(q.add(String::from("snap4")).is_none());
+        assert!(q.add(String::from("snap5")).is_none());
+        assert!(q.add(String::from("snap6")).is_none());
     }
 }

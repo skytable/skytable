@@ -110,6 +110,19 @@ pub struct ConfigKeyServer {
     noart: Option<bool>,
 }
 
+/// The snapshot section in the TOML file
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct ConfigKeySnapshot {
+    /// Whether snapshotting is enabled or not
+    enabled: bool,
+    /// After how many seconds should the snapshot be created
+    every: u64,
+    /// The maximum number of snapshots to keep
+    ///
+    /// If atmost is set to `0`, then all the snapshots will be kept
+    atmost: usize,
+}
+
 /// A `ParsedConfig` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
