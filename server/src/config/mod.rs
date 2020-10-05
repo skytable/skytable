@@ -64,21 +64,22 @@ pub struct ConfigKeyBGSAVE {
 
 /// The BGSAVE configuration
 ///
-#[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct BGSave {
-    /// Whether BGSAVE is enabled or not
-    ///
-    /// If `enabled` is set to true, and an `every` field is also present, we will
-    /// display a warning, that the `every` key is unused
-    enabled: bool,
-    /// Every 'n' seconds
-    every: u64,
+/// If BGSAVE is enabled, then the duration (corresponding to `every`) is wrapped in the `Enabled`
+/// variant. Otherwise, the `Disabled` variant is to be used
+#[derive(PartialEq, Debug)]
+pub enum BGSave {
+    Enabled(u64),
+    Disabled,
 }
 
 impl BGSave {
     /// Create a new BGSAVE configuration with all the fields
     pub const fn new(enabled: bool, every: u64) -> Self {
-        BGSave { enabled, every }
+        if enabled {
+            BGSave::Enabled(every)
+        } else {
+            BGSave::Disabled
+        }
     }
     /// The default BGSAVE configuration
     ///
@@ -88,15 +89,13 @@ impl BGSave {
     pub const fn default() -> Self {
         BGSave::new(true, 120)
     }
-    /// Get the duration for BGSAVE
-    ///
-    /// BGSAVE should run `every` seconds
-    pub const fn get_duration(&self) -> u64 {
-        self.every
-    }
-    /// If `!self.enabled` then BGSAVE has been disabled by the user
+    /// If `self` is a `Disabled` variant, then BGSAVE has been disabled by the user
     pub const fn is_disabled(&self) -> bool {
-        !self.enabled
+        if let BGSave::Disabled = self {
+            true
+        } else {
+            false
+        }
     }
 }
 
