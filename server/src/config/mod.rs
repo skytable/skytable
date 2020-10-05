@@ -44,6 +44,8 @@ pub struct Config {
      * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
      */
     bgsave: Option<ConfigKeyBGSAVE>,
+    /// The snapshot key
+    snapshot: Option<ConfigKeySnapshot>,
 }
 
 /// The BGSAVE section in the config file
@@ -123,6 +125,33 @@ pub struct ConfigKeySnapshot {
     atmost: usize,
 }
 
+#[derive(Debug, PartialEq)]
+/// Snapshotting configuration
+///
+/// The variant `Enabled` directly carries a `ConfigKeySnapshot` object that
+/// is parsed from the configuration file, The variant `Disabled` is a ZST, and doesn't
+/// hold any data
+pub enum SnapshotConfig {
+    /// Snapshotting is enabled: this variant wraps around a `ConfigKeySnapshot`
+    /// object
+    Enabled(ConfigKeySnapshot),
+    /// Snapshotting is disabled
+    Disabled,
+}
+
+impl SnapshotConfig {
+    pub const fn default() -> Self {
+        SnapshotConfig::Disabled
+    }
+    pub const fn is_enabled(&self) -> bool {
+        if let SnapshotConfig::Enabled(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// A `ParsedConfig` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
@@ -136,6 +165,8 @@ pub struct ParsedConfig {
     noart: bool,
     /// The BGSAVE configuration
     pub bgsave: BGSave,
+    /// The snapshot configuration
+    pub snapshot: SnapshotConfig,
 }
 
 impl ParsedConfig {
@@ -171,6 +202,11 @@ impl ParsedConfig {
             } else {
                 BGSave::default()
             },
+            snapshot: if let Some(snapshot) = cfg.snapshot {
+                SnapshotConfig::Enabled(snapshot)
+            } else {
+                SnapshotConfig::default()
+            },
         }
     }
     #[cfg(test)]
@@ -186,20 +222,34 @@ impl ParsedConfig {
             port,
             noart: false,
             bgsave: BGSave::default(),
+            snapshot: SnapshotConfig::default(),
         }
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
     /// and a supplied `host`
     pub const fn default_with_host(host: IpAddr) -> Self {
-        ParsedConfig::new(host, 2003, false, BGSave::default())
+        ParsedConfig::new(
+            host,
+            2003,
+            false,
+            BGSave::default(),
+            SnapshotConfig::default(),
+        )
     }
     /// Create a new `ParsedConfig` with all the fields
-    pub const fn new(host: IpAddr, port: u16, noart: bool, bgsave: BGSave) -> Self {
+    pub const fn new(
+        host: IpAddr,
+        port: u16,
+        noart: bool,
+        bgsave: BGSave,
+        snapshot: SnapshotConfig,
+    ) -> Self {
         ParsedConfig {
             host,
             port,
             noart,
             bgsave,
+            snapshot,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -214,6 +264,7 @@ impl ParsedConfig {
             port: 2003,
             noart: false,
             bgsave: BGSave::default(),
+            snapshot: SnapshotConfig::default(),
         }
     }
     /// Return a (host, port) tuple which can be bound to with `TcpListener`
@@ -354,6 +405,7 @@ fn test_config_file_noart() {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             noart: true,
             bgsave: BGSave::default(),
+            snapshot: SnapshotConfig::default(),
         }
     );
 }
@@ -369,7 +421,8 @@ fn test_config_file_ipv6() {
             port: 2003,
             host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
             noart: false,
-            bgsave: BGSave::default()
+            bgsave: BGSave::default(),
+            snapshot: SnapshotConfig::default(),
         }
     );
 }
@@ -401,7 +454,8 @@ fn test_config_file_custom_bgsave() {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,
             noart: false,
-            bgsave: BGSave::new(true, 600)
+            bgsave: BGSave::new(true, 600),
+            snapshot: SnapshotConfig::default()
         }
     );
 }
@@ -421,6 +475,7 @@ fn test_config_file_bgsave_enabled_only() {
             port: 2003,
             noart: false,
             bgsave: BGSave::default(),
+            snapshot: SnapshotConfig::default(),
         }
     )
 }
@@ -439,7 +494,28 @@ fn test_config_file_bgsave_every_only() {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,
             noart: false,
-            bgsave: BGSave::new(true, 600)
+            bgsave: BGSave::new(true, 600),
+            snapshot: SnapshotConfig::default()
         }
     )
+}
+
+#[test]
+fn test_config_file_snapshot() {
+    let file = get_toml_from_examples_dir("snapshot.toml".to_owned()).unwrap();
+    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    assert_eq!(
+        cfg,
+        ParsedConfig {
+            snapshot: SnapshotConfig::Enabled(ConfigKeySnapshot {
+                enabled: true,
+                every: 3600,
+                atmost: 4
+            }),
+            bgsave: BGSave::default(),
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 2003,
+            noart: false,
+        }
+    );
 }
