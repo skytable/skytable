@@ -60,19 +60,19 @@ impl Shared {
     /// This task performs a `sync`hronous background save operation
     ///
     /// It runs BGSAVE and then returns control to the caller. The caller is responsible
-    /// for periodically calling BGSAVE. This returns `None`, **if** the database
-    /// is shutting down. Otherwise `Some(())` is returned
-    pub fn run_bgsave(&self) -> Option<()> {
+    /// for periodically calling BGSAVE. This returns `false`, **if** the database
+    /// is shutting down. Otherwise `true` is returned
+    pub fn run_bgsave(&self) -> bool {
         let state = self.table.read();
         if state.terminate {
-            return None;
+            return false;
         }
         // Kick in BGSAVE
         match diskstore::flush_data(PERSIST_FILE, &self.table.read().get_ref()) {
             Ok(_) => log::info!("BGSAVE completed successfully"),
             Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
-        Some(())
+        true
     }
     /// Check if the server has received a termination signal
     pub fn is_termsig(&self) -> bool {
