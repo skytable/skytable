@@ -125,12 +125,17 @@ pub struct ConfigKeySnapshot {
 }
 
 #[derive(Debug, PartialEq)]
+/// The snapshot configuration
+///
 pub struct SnapshotPref {
+    /// Capture a snapshot `every` seconds
     every: u64,
+    /// The maximum numeber of snapshots to be kept
     atmost: usize,
 }
 
 impl SnapshotPref {
+    /// Create a new a new `SnapshotPref` instance
     pub const fn new(every: u64, atmost: usize) -> Self {
         SnapshotPref { every, atmost }
     }
@@ -147,7 +152,7 @@ impl SnapshotPref {
 /// is parsed from the configuration file, The variant `Disabled` is a ZST, and doesn't
 /// hold any data
 pub enum SnapshotConfig {
-    /// Snapshotting is enabled: this variant wraps around a `ConfigKeySnapshot`
+    /// Snapshotting is enabled: this variant wraps around a `SnapshotPref`
     /// object
     Enabled(SnapshotPref),
     /// Snapshotting is disabled
@@ -155,9 +160,12 @@ pub enum SnapshotConfig {
 }
 
 impl SnapshotConfig {
+    /// Snapshots are disabled by default, so `SnapshotConfig::Disabled` is the
+    /// default configuration
     pub const fn default() -> Self {
         SnapshotConfig::Disabled
     }
+    /// Check if snapshotting is enabled
     pub const fn is_enabled(&self) -> bool {
         if let SnapshotConfig::Disabled = self {
             false

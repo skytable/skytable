@@ -45,6 +45,15 @@ pub struct CoreDB {
     /// The shared object, which contains a `Shared` object wrapped in a thread-safe
     /// RC
     pub shared: Arc<Shared>,
+    /// The number of background tasks that should be expected
+    ///
+    /// This is used by the `Drop` implementation to avoid killing the database in the event
+    /// that a background service is still working. The calculation is pretty straightforward:
+    /// ```text
+    /// 1 (for the current process) + if bgsave is running + if snapshotting is enabled
+    /// ```
+    /// This should **not be changed** during runtime, and should only be initialized when `CoreDB`
+    /// is first initialized
     background_tasks: usize,
 }
 
@@ -141,6 +150,7 @@ impl CoreDB {
         }
     }
 
+    /// Returns the expected `Arc::strong_count` for the `CoreDB` object
     pub fn expected_strong_count(&self) -> usize {
         self.background_tasks + 1
     }
@@ -236,17 +246,22 @@ impl CoreDB {
 impl Drop for CoreDB {
     // This prevents us from killing the database, in the event someone tries
     // to access it
-    // If this is indeed the last DB instance, we should tell BGSAVE to terminate
+    // If this is indeed the last DB instance, we should tell BGSAVE and the snapshot
+    // service to quit
     fn drop(&mut self) {
-        // The strong count should be
+        // If the strong count is equal to the `expected_strong_count()`
+        // then the background services are still running, so don't terminate
+        // the database
         if Arc::strong_count(&self.shared) == self.expected_strong_count() {
             // Acquire a lock to prevent anyone from writing something
             let mut coretable = self.shared.table.write();
             coretable.terminate = true;
-            drop(coretable);
             // Drop the write lock first to avoid BGSAVE ending up in failing
             // to get a read lock
+            drop(coretable);
+            // Notify the background tasks to quit
             self.shared.bgsave_task.notify();
+            self.shared.snapshot_service.notify();
         }
     }
 }

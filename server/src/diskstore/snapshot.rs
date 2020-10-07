@@ -137,6 +137,12 @@ fn test_snapshot() {
 
 use std::time::Duration;
 use tokio::time;
+/// The snapshot service
+///
+/// This service calls `SnapEngine::mksnap()` periodically to create snapshots. Whenever
+/// the interval for snapshotting expires or elapses, we create a snapshot. The snapshot service
+/// keeps creating snapshots, as long as the database keeps running, i.e `CoreDB` does return true for
+/// `is_termsig()`
 pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
     match ss_config {
         SnapshotConfig::Disabled => {
