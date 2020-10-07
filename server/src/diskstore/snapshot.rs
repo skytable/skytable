@@ -21,6 +21,7 @@
 
 //! Tools for creating snapshots
 
+use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
 use crate::diskstore;
 use chrono::prelude::*;
@@ -38,19 +39,19 @@ const DEF_SNAPSHOT_COUNT: usize = 12;
 /// This object provides methods to create and delete snapshots. There should be a
 /// `snapshot_scheduler` which should hold an instance of this object, on startup.
 /// Whenever the duration expires, the caller should call `mksnap()`
-pub struct SnapshotEngine {
+pub struct SnapshotEngine<'a> {
     /// File names of the snapshots (relative paths)
     snaps: queue::Queue,
     /// An atomic reference to the coretable
-    dbref: CoreDB,
+    dbref: &'a CoreDB,
 }
 
-impl SnapshotEngine {
+impl<'a> SnapshotEngine<'a> {
     /// Create a new `Snapshot` instance
     ///
     /// This also attempts to check if the snapshots directory exists;
     /// If the directory doesn't exist, then it is created
-    pub fn new(maxtop: usize, dbref: CoreDB) -> TResult<Self> {
+    pub fn new<'b: 'a>(maxtop: usize, dbref: &'b CoreDB) -> TResult<Self> {
         match fs::create_dir(DIR_SNAPSHOT) {
             Ok(_) => (),
             Err(e) => match e.kind() {
@@ -74,17 +75,34 @@ impl SnapshotEngine {
             .to_string()
     }
     /// Create a snapshot
-    pub fn mksnap(&mut self) -> TResult<()> {
-        let getread = self.dbref.acquire_read();
-        let snapname = self.get_snapname();
-        diskstore::flush_data(&snapname, &getread.get_ref())?;
-        // Release the read lock for the poor clients who are waiting for a write lock
-        drop(getread);
-        log::info!("Snapshot created");
-        if let Some(old_snapshot) = self.snaps.add(snapname) {
-            fs::remove_file(old_snapshot)?;
+    pub fn mksnap(&mut self) -> bool {
+        let rlock = self.dbref.acquire_read();
+        if rlock.terminate {
+            // The database is shutting down, don't create a snapshot
+            return false;
         }
-        Ok(())
+        let snapname = self.get_snapname();
+        if let Err(e) = diskstore::flush_data(&snapname, &rlock.get_ref()) {
+            log::error!("Snapshotting failed with error: '{}'", e);
+            return true;
+        } else {
+            log::info!("Successfully created snapshot");
+        }
+        // Release the read lock for the poor clients who are waiting for a write lock
+        drop(rlock);
+        log::info!("Snapshot created");
+        if let Some(old_snapshot) = self.snaps.add(snapname.clone()) {
+            if let Err(e) = fs::remove_file(old_snapshot) {
+                log::error!(
+                    "Failed to delete snapshot '{}' with error '{}'",
+                    snapname,
+                    e
+                );
+            } else {
+                log::info!("Successfully removed old snapshot");
+            }
+        }
+        true
     }
     /// Delete all snapshots
     pub fn clearall(&mut self) -> TResult<()> {
@@ -101,20 +119,53 @@ impl SnapshotEngine {
 
 #[test]
 fn test_snapshot() {
-    let db = CoreDB::new_empty();
+    let db = CoreDB::new_empty(3);
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
         crate::coredb::Data::from_string(String::from("heya!")),
     );
     drop(write);
-    let mut snapengine = SnapshotEngine::new(4, db.clone()).unwrap();
-    snapengine.mksnap().unwrap();
+    let mut snapengine = SnapshotEngine::new(4, &db).unwrap();
+    let _ = snapengine.mksnap();
     let current = snapengine.get_snapshots().next().unwrap();
     let read_hmap = diskstore::get_saved(Some(current)).unwrap().unwrap();
     let dbhmap = db.get_hashmap_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
+}
+
+use std::time::Duration;
+use tokio::time;
+pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
+    match ss_config {
+        SnapshotConfig::Disabled => {
+            // since snapshotting is disabled, we'll imediately return
+            handle.shared.bgsave_task.notified().await;
+            return;
+        }
+        SnapshotConfig::Enabled(configuration) => {
+            let (duration, atmost) = configuration.decompose();
+            let duration = Duration::from_secs(duration);
+            let mut sengine = match SnapshotEngine::new(atmost, &handle) {
+                Ok(ss) => ss,
+                Err(e) => {
+                    log::error!("Failed to initialize snapshot service with error: '{}'", e);
+                    return;
+                }
+            };
+            while !handle.shared.is_termsig() {
+                if sengine.mksnap() {
+                    tokio::select! {
+                        _ = time::delay_until(time::Instant::now() + duration) => {},
+                        _ = handle.shared.bgsave_task.notified() => {}
+                    }
+                } else {
+                    handle.shared.bgsave_task.notified().await;
+                }
+            }
+        }
+    }
 }
 
 mod queue {

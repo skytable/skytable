@@ -22,6 +22,7 @@
 //! # The core database engine
 
 use crate::config::BGSave;
+use crate::config::SnapshotConfig;
 use crate::diskstore;
 use crate::protocol::Connection;
 use crate::protocol::Query;
@@ -44,6 +45,7 @@ pub struct CoreDB {
     /// The shared object, which contains a `Shared` object wrapped in a thread-safe
     /// RC
     pub shared: Arc<Shared>,
+    background_tasks: usize,
 }
 
 /// A shared _state_
@@ -52,6 +54,8 @@ pub struct Shared {
     /// This is used by the `BGSAVE` task. `Notify` is used to signal a task
     /// to wake up
     pub bgsave_task: Notify,
+    /// The snapshot service notifier
+    pub snapshot_service: Notify,
     /// A `Coretable` wrapped in a R/W lock
     pub table: RwLock<Coretable>,
 }
@@ -63,12 +67,12 @@ impl Shared {
     /// for periodically calling BGSAVE. This returns `false`, **if** the database
     /// is shutting down. Otherwise `true` is returned
     pub fn run_bgsave(&self) -> bool {
-        let state = self.table.read();
-        if state.terminate {
+        let rlock = self.table.read();
+        if rlock.terminate {
             return false;
         }
         // Kick in BGSAVE
-        match diskstore::flush_data(PERSIST_FILE, &self.table.read().get_ref()) {
+        match diskstore::flush_data(PERSIST_FILE, rlock.get_ref()) {
             Ok(_) => log::info!("BGSAVE completed successfully"),
             Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
@@ -137,6 +141,10 @@ impl CoreDB {
         }
     }
 
+    pub fn expected_strong_count(&self) -> usize {
+        self.background_tasks + 1
+    }
+
     /// Execute a query that has already been validated by `Connection::read_query`
     pub async fn execute_query(&self, query: Query, con: &mut Connection) -> TResult<()> {
         match query {
@@ -152,8 +160,10 @@ impl CoreDB {
     ///
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
-    pub fn new(bgsave: BGSave) -> TResult<Self> {
+    pub fn new(bgsave: BGSave, snapshot_cfg: SnapshotConfig) -> TResult<Self> {
         let coretable = diskstore::get_saved(Some(PERSIST_FILE))?;
+        let background_tasks: usize =
+            snapshot_cfg.is_enabled() as usize + !bgsave.is_disabled() as usize;
         let db = if let Some(coretable) = coretable {
             CoreDB {
                 shared: Arc::new(Shared {
@@ -162,17 +172,24 @@ impl CoreDB {
                         coremap: coretable,
                         terminate: false,
                     }),
+                    snapshot_service: Notify::new(),
                 }),
+                background_tasks,
             }
         } else {
-            CoreDB::new_empty()
+            CoreDB::new_empty(background_tasks)
         };
         // Spawn the background save task in a separate task
         tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
+        // Spawn the snapshot service in a separate task
+        tokio::spawn(diskstore::snapshot::snapshot_service(
+            db.clone(),
+            snapshot_cfg,
+        ));
         Ok(db)
     }
     /// Create an empty in-memory table
-    pub fn new_empty() -> Self {
+    pub fn new_empty(background_tasks: usize) -> Self {
         CoreDB {
             shared: Arc::new(Shared {
                 bgsave_task: Notify::new(),
@@ -180,7 +197,9 @@ impl CoreDB {
                     coremap: HashMap::<String, Data>::new(),
                     terminate: false,
                 }),
+                snapshot_service: Notify::new(),
             }),
+            background_tasks,
         }
     }
     /// Acquire a write lock
@@ -220,7 +239,7 @@ impl Drop for CoreDB {
     // If this is indeed the last DB instance, we should tell BGSAVE to terminate
     fn drop(&mut self) {
         // The strong count should be
-        if Arc::strong_count(&self.shared) == 2 {
+        if Arc::strong_count(&self.shared) == self.expected_strong_count() {
             // Acquire a lock to prevent anyone from writing something
             let mut coretable = self.shared.table.write();
             coretable.terminate = true;

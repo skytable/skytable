@@ -20,6 +20,7 @@
 */
 
 use crate::config::BGSave;
+use crate::config::SnapshotConfig;
 use tokio::net::TcpListener;
 mod config;
 use std::env;
@@ -64,13 +65,19 @@ async fn main() {
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    let (tcplistener, bgsave_config) = check_args_or_connect().await;
-    run(tcplistener, bgsave_config, signal::ctrl_c()).await;
+    let (tcplistener, bgsave_config, snapshot_config) = check_args_or_connect().await;
+    run(
+        tcplistener,
+        bgsave_config,
+        snapshot_config,
+        signal::ctrl_c(),
+    )
+    .await;
 }
 
 /// This function checks the command line arguments and binds to an appropriate
 /// port and host, as per the supplied configuration options
-async fn check_args_or_connect() -> (TcpListener, BGSave) {
+async fn check_args_or_connect() -> (TcpListener, BGSave, SnapshotConfig) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg)) => {
@@ -83,6 +90,7 @@ async fn check_args_or_connect() -> (TcpListener, BGSave) {
             (
                 TcpListener::bind(cfg.get_host_port_tuple()).await,
                 cfg.bgsave,
+                cfg.snapshot,
             )
         }
         Ok(config::ConfigType::Def(cfg)) => {
@@ -91,6 +99,7 @@ async fn check_args_or_connect() -> (TcpListener, BGSave) {
             (
                 TcpListener::bind(cfg.get_host_port_tuple()).await,
                 cfg.bgsave,
+                cfg.snapshot,
             )
         }
         Err(e) => {
@@ -99,8 +108,8 @@ async fn check_args_or_connect() -> (TcpListener, BGSave) {
         }
     };
     match binding_and_cfg {
-        (Ok(b), bgsave_cfg) => (b, bgsave_cfg),
-        (Err(e), _) => {
+        (Ok(b), bgsave_cfg, snapshot_cfg) => (b, bgsave_cfg, snapshot_cfg),
+        (Err(e), _, _) => {
             log::error!("Failed to bind to socket with error: '{}'", e);
             std::process::exit(0x100);
         }

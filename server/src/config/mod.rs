@@ -125,6 +125,22 @@ pub struct ConfigKeySnapshot {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct SnapshotPref {
+    every: u64,
+    atmost: usize,
+}
+
+impl SnapshotPref {
+    pub const fn new(every: u64, atmost: usize) -> Self {
+        SnapshotPref { every, atmost }
+    }
+    /// Returns `every,almost` as a tuple for pattern matching
+    pub const fn decompose(self) -> (u64, usize) {
+        (self.every, self.atmost)
+    }
+}
+
+#[derive(Debug, PartialEq)]
 /// Snapshotting configuration
 ///
 /// The variant `Enabled` directly carries a `ConfigKeySnapshot` object that
@@ -133,7 +149,7 @@ pub struct ConfigKeySnapshot {
 pub enum SnapshotConfig {
     /// Snapshotting is enabled: this variant wraps around a `ConfigKeySnapshot`
     /// object
-    Enabled(ConfigKeySnapshot),
+    Enabled(SnapshotPref),
     /// Snapshotting is disabled
     Disabled,
 }
@@ -143,10 +159,10 @@ impl SnapshotConfig {
         SnapshotConfig::Disabled
     }
     pub const fn is_enabled(&self) -> bool {
-        if let SnapshotConfig::Enabled(_) = self {
-            true
-        } else {
+        if let SnapshotConfig::Disabled = self {
             false
+        } else {
+            true
         }
     }
 }
@@ -202,7 +218,11 @@ impl ParsedConfig {
                 BGSave::default()
             },
             snapshot: if let Some(snapshot) = cfg.snapshot {
-                SnapshotConfig::Enabled(snapshot)
+                if snapshot.enabled {
+                    SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
+                } else {
+                    SnapshotConfig::Disabled
+                }
             } else {
                 SnapshotConfig::default()
             },
@@ -369,7 +389,6 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, Confi
             Ok(cfg) => {
                 if cfg.bgsave.is_disabled() {
                     log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
-                    log::warn!("Unused key 'bgsave.every' in configuration file");
                 }
                 return Ok(ConfigType::Custom(cfg));
             }
@@ -506,11 +525,7 @@ fn test_config_file_snapshot() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            snapshot: SnapshotConfig::Enabled(ConfigKeySnapshot {
-                enabled: true,
-                every: 3600,
-                atmost: 4
-            }),
+            snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
             bgsave: BGSave::default(),
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,

@@ -21,6 +21,7 @@
 
 //! This module contains automated tests for queries
 
+use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
 use crate::dbnet;
 use crate::protocol::responses::fresp;
@@ -52,7 +53,7 @@ async fn start_server() -> (Option<SocketAddr>, CoreDB) {
     // running, or use it if it is already running, we just return none if we failed
     // to bind to the port, since this will _almost_ never happen on our CI
     let listener = TcpListener::bind(ADDR).await.unwrap();
-    let db = CoreDB::new(BGSave::default()).unwrap();
+    let db = CoreDB::new(BGSave::default(), SnapshotConfig::default()).unwrap();
     let asyncdb = db.clone();
     let addr = if let Ok(addr) = listener.local_addr() {
         Some(addr)

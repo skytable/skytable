@@ -33,7 +33,7 @@ use std::iter::FromIterator;
 use std::time::Duration;
 use tokio::time;
 mod cyansfw;
-mod snapshot;
+pub mod snapshot;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
 pub const PERSIST_FILE: &'static str = "./data.bin";
