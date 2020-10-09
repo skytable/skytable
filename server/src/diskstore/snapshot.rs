@@ -29,6 +29,7 @@ use libtdb::TResult;
 use regex::Regex;
 use std::fs;
 use std::io::ErrorKind;
+use std::path::PathBuf;
 lazy_static::lazy_static! {
     /// Matches any string which is in the following format:
     /// ```text
@@ -55,6 +56,8 @@ pub struct SnapshotEngine<'a> {
     snaps: queue::Queue,
     /// An atomic reference to the coretable
     dbref: &'a CoreDB,
+    /// The snapshot directory
+    snap_dir: String,
 }
 
 impl<'a> SnapshotEngine<'a> {
@@ -62,23 +65,28 @@ impl<'a> SnapshotEngine<'a> {
     ///
     /// This also attempts to check if the snapshots directory exists;
     /// If the directory doesn't exist, then it is created
-    pub fn new<'b: 'a>(maxtop: usize, dbref: &'b CoreDB) -> TResult<Self> {
+    pub fn new<'b: 'a>(maxtop: usize, dbref: &'b CoreDB, snap_dir: Option<&str>) -> TResult<Self> {
         let mut snaps = Vec::with_capacity(maxtop);
         let q_cfg_tuple = if maxtop == 0 {
             (DEF_SNAPSHOT_COUNT, true)
         } else {
             (maxtop, false)
         };
-        match fs::create_dir(DIR_SNAPSHOT) {
+        let snap_dir = if let Some(dir) = snap_dir {
+            dir
+        } else {
+            DIR_SNAPSHOT
+        };
+        match fs::create_dir(snap_dir) {
             Ok(_) => (),
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => {
                     // Now it's our turn to look for the existing snapshots
-                    let dir = fs::read_dir(DIR_SNAPSHOT)?;
+                    let dir = fs::read_dir(snap_dir)?;
                     for entry in dir {
                         let entry = entry?;
                         let path = entry.path();
-                        if !path.is_dir() {
+                        if path.is_dir() {
                             // If the entry is not a directory then some other
                             // file(s) is present in the directory
                             return Err(
@@ -86,7 +94,8 @@ impl<'a> SnapshotEngine<'a> {
                                     .into(),
                             );
                         }
-                        let file_name = if let Some(good_file_name) = path.to_str() {
+                        let fname = entry.file_name();
+                        let file_name = if let Some(good_file_name) = fname.to_str() {
                             good_file_name
                         } else {
                             // The filename contains invalid characters
@@ -97,7 +106,7 @@ impl<'a> SnapshotEngine<'a> {
                         if SNAP_MATCH.is_match(&file_name) {
                             // Good, the file name matched the format we were expecting
                             // This is a valid snapshot, add it to our `Vec` of snaps
-                            snaps.push(file_name.to_string());
+                            snaps.push(path);
                         } else {
                             // The filename contains invalid characters
                             return Err(
@@ -105,10 +114,19 @@ impl<'a> SnapshotEngine<'a> {
                             );
                         }
                     }
-                    return Ok(SnapshotEngine {
-                        snaps: queue::Queue::init_pre(q_cfg_tuple, snaps),
-                        dbref,
-                    });
+                    if snaps.len() != 0 {
+                        return Ok(SnapshotEngine {
+                            snaps: queue::Queue::init_pre(q_cfg_tuple, snaps),
+                            dbref,
+                            snap_dir: snap_dir.to_owned(),
+                        });
+                    } else {
+                        return Ok(SnapshotEngine {
+                            snaps: queue::Queue::new(q_cfg_tuple),
+                            dbref,
+                            snap_dir: snap_dir.to_owned(),
+                        });
+                    }
                 }
                 _ => return Err(e.into()),
             },
@@ -116,13 +134,12 @@ impl<'a> SnapshotEngine<'a> {
         Ok(SnapshotEngine {
             snaps: queue::Queue::new(q_cfg_tuple),
             dbref,
+            snap_dir: snap_dir.to_owned(),
         })
     }
     /// Generate the snapshot name
     fn get_snapname(&self) -> String {
-        Utc::now()
-            .format("./snapshots/%Y%m%d-%H%M%S.snapshot")
-            .to_string()
+        Utc::now().format("%Y%m%d-%H%M%S.snapshot").to_string()
     }
     /// Create a snapshot
     pub fn mksnap(&mut self) -> bool {
@@ -131,7 +148,9 @@ impl<'a> SnapshotEngine<'a> {
             // The database is shutting down, don't create a snapshot
             return false;
         }
-        let snapname = self.get_snapname();
+        let mut snapname = PathBuf::new();
+        snapname.push(&self.snap_dir);
+        snapname.push(self.get_snapname());
         if let Err(e) = diskstore::flush_data(&snapname, &rlock.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
             return true;
@@ -140,12 +159,11 @@ impl<'a> SnapshotEngine<'a> {
         }
         // Release the read lock for the poor clients who are waiting for a write lock
         drop(rlock);
-        log::info!("Snapshot created");
-        if let Some(old_snapshot) = self.snaps.add(snapname.clone()) {
-            if let Err(e) = fs::remove_file(old_snapshot) {
+        if let Some(old_snapshot) = self.snaps.add(snapname.to_str().unwrap().to_string()) {
+            if let Err(e) = fs::remove_file(&old_snapshot) {
                 log::error!(
                     "Failed to delete snapshot '{}' with error '{}'",
-                    snapname,
+                    old_snapshot.to_string_lossy(),
                     e
                 );
             } else {
@@ -162,13 +180,14 @@ impl<'a> SnapshotEngine<'a> {
         Ok(())
     }
     /// Get the name of snapshots
-    pub fn get_snapshots(&self) -> std::slice::Iter<String> {
+    pub fn get_snapshots(&self) -> std::slice::Iter<PathBuf> {
         self.snaps.iter()
     }
 }
 
 #[test]
 fn test_snapshot() {
+    let ourdir = "TEST_SS";
     let db = CoreDB::new_empty(3);
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
@@ -176,13 +195,38 @@ fn test_snapshot() {
         crate::coredb::Data::from_string(String::from("heya!")),
     );
     drop(write);
-    let mut snapengine = SnapshotEngine::new(4, &db).unwrap();
+    let mut snapengine = SnapshotEngine::new(4, &db, Some(&ourdir)).unwrap();
     let _ = snapengine.mksnap();
     let current = snapengine.get_snapshots().next().unwrap();
-    let read_hmap = diskstore::get_saved(Some(current)).unwrap().unwrap();
+    let read_hmap = diskstore::get_saved(Some(PathBuf::from(current)))
+        .unwrap()
+        .unwrap();
     let dbhmap = db.get_hashmap_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
+    fs::remove_dir_all(ourdir).unwrap();
+}
+
+#[test]
+fn test_pre_existing_snapshots() {
+    let ourdir = "TEST_PX_SS";
+    let db = CoreDB::new_empty(3);
+    let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
+    // Keep sleeping to ensure the time difference
+    assert!(snapengine.mksnap());
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(snapengine.mksnap());
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(snapengine.mksnap());
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(snapengine.mksnap());
+    // Now close everything down
+    drop(snapengine);
+    let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
+    let it_len = snapengine.get_snapshots().len();
+    assert_eq!(it_len, 4);
+    snapengine.clearall().unwrap();
+    fs::remove_dir_all(ourdir).unwrap();
 }
 
 use std::time::Duration;
@@ -203,7 +247,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
         SnapshotConfig::Enabled(configuration) => {
             let (duration, atmost) = configuration.decompose();
             let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle) {
+            let mut sengine = match SnapshotEngine::new(atmost, &handle, Some(DIR_SNAPSHOT)) {
                 Ok(ss) => ss,
                 Err(e) => {
                     log::error!("Failed to initialize snapshot service with error: '{}'", e);
@@ -229,10 +273,11 @@ mod queue {
     //! freely and once the threshold limit is reached, it pops off the oldest element and returns it
     //!
     //! This implementation is specifically built for use with the snapshotting utility
+    use std::path::PathBuf;
     use std::slice::Iter;
     #[derive(Debug, PartialEq)]
     pub struct Queue {
-        queue: Vec<String>,
+        queue: Vec<PathBuf>,
         maxlen: usize,
         dontpop: bool,
     }
@@ -244,7 +289,7 @@ mod queue {
                 dontpop,
             }
         }
-        pub const fn init_pre((maxlen, dontpop): (usize, bool), queue: Vec<String>) -> Self {
+        pub const fn init_pre((maxlen, dontpop): (usize, bool), queue: Vec<PathBuf>) -> Self {
             Queue {
                 queue,
                 maxlen,
@@ -252,25 +297,25 @@ mod queue {
             }
         }
         /// This returns a `String` only if the queue is full. Otherwise, a `None` is returned most of the time
-        pub fn add(&mut self, item: String) -> Option<String> {
+        pub fn add(&mut self, item: String) -> Option<PathBuf> {
             if self.dontpop {
                 // We don't need to pop anything since the user
                 // wants to keep all the items in the queue
-                self.queue.push(item);
+                self.queue.push(PathBuf::from(item));
                 return None;
             } else {
                 // The user wants to keep a maximum of `maxtop` items
                 // so we will check if the current queue is full
                 // if it is full, then the `maxtop` limit has been reached
                 // so we will remove the oldest item and then push the
-                // new item onto the stack
+                // new item onto the queue
                 let x = if self.is_overflow() { self.pop() } else { None };
-                self.queue.push(item);
+                self.queue.push(PathBuf::from(item));
                 x
             }
         }
         /// Returns an iterator over the slice of strings
-        pub fn iter(&self) -> Iter<String> {
+        pub fn iter(&self) -> Iter<PathBuf> {
             self.queue.iter()
         }
         /// Check if we have reached the maximum queue size limit
@@ -278,7 +323,7 @@ mod queue {
             self.queue.len() == self.maxlen
         }
         /// Remove the last item inserted
-        fn pop(&mut self) -> Option<String> {
+        fn pop(&mut self) -> Option<PathBuf> {
             if self.queue.len() != 0 {
                 Some(self.queue.remove(0))
             } else {
@@ -294,8 +339,8 @@ mod queue {
         assert!(q.add(String::from("snap2")).is_none());
         assert!(q.add(String::from("snap3")).is_none());
         assert!(q.add(String::from("snap4")).is_none());
-        assert_eq!(q.add(String::from("snap5")), Some(String::from("snap1")));
-        assert_eq!(q.add(String::from("snap6")), Some(String::from("snap2")));
+        assert_eq!(q.add(String::from("snap5")), Some(PathBuf::from("snap1")));
+        assert_eq!(q.add(String::from("snap6")), Some(PathBuf::from("snap2")));
     }
 
     #[test]

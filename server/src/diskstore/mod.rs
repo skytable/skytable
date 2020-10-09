@@ -30,21 +30,24 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
 mod cyansfw;
 pub mod snapshot;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
-pub const PERSIST_FILE: &'static str = "./data.bin";
+lazy_static::lazy_static! {
+    pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data.bin");
+}
 
 /// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
 /// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
-pub fn get_saved(location: Option<&str>) -> TResult<Option<HashMap<String, Data>>> {
+pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Data>>> {
     let file = match fs::read(if let Some(loc) = location {
-        loc
+        PathBuf::from(loc)
     } else {
-        PERSIST_FILE
+        PERSIST_FILE.to_path_buf()
     }) {
         Ok(f) => f,
         Err(e) => match e.kind() {
@@ -70,7 +73,7 @@ pub fn get_saved(location: Option<&str>) -> TResult<Option<HashMap<String, Data>
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data.bin` file
-pub fn flush_data(filename: &str, data: &HashMap<String, Data>) -> TResult<()> {
+pub fn flush_data(filename: &PathBuf, data: &HashMap<String, Data>) -> TResult<()> {
     let ds: DiskStore = (
         data.keys().into_iter().map(|val| val.to_string()).collect(),
         data.values().map(|val| val.get_blob().to_vec()).collect(),

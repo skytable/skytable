@@ -81,7 +81,7 @@ impl Shared {
             return false;
         }
         // Kick in BGSAVE
-        match diskstore::flush_data(PERSIST_FILE, rlock.get_ref()) {
+        match diskstore::flush_data(&PERSIST_FILE, rlock.get_ref()) {
             Ok(_) => log::info!("BGSAVE completed successfully"),
             Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
         }
@@ -171,7 +171,7 @@ impl CoreDB {
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new(bgsave: BGSave, snapshot_cfg: SnapshotConfig) -> TResult<Self> {
-        let coretable = diskstore::get_saved(Some(PERSIST_FILE))?;
+        let coretable = diskstore::get_saved(Some(PERSIST_FILE.to_path_buf()))?;
         let background_tasks: usize =
             snapshot_cfg.is_enabled() as usize + !bgsave.is_disabled() as usize;
         let db = if let Some(coretable) = coretable {
@@ -223,7 +223,7 @@ impl CoreDB {
     /// Flush the contents of the in-memory table onto disk
     pub fn flush_db(&self) -> TResult<()> {
         let data = &self.acquire_write();
-        diskstore::flush_data(PERSIST_FILE, &data.coremap)?;
+        diskstore::flush_data(&PERSIST_FILE, &data.coremap)?;
         Ok(())
     }
 
