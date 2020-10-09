@@ -225,6 +225,12 @@ fn test_pre_existing_snapshots() {
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     let it_len = snapengine.get_snapshots().len();
     assert_eq!(it_len, 4);
+    std::thread::sleep(Duration::from_secs(2));
+    snapengine.mksnap();
+    std::thread::sleep(Duration::from_secs(2));
+    snapengine.mksnap();
+    let it_len = snapengine.get_snapshots().len();
+    assert_eq!(it_len, 4);
     snapengine.clearall().unwrap();
     fs::remove_dir_all(ourdir).unwrap();
 }
