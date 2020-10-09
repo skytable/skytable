@@ -151,7 +151,7 @@ impl CoreDB {
     }
 
     /// Returns the expected `Arc::strong_count` for the `CoreDB` object
-    pub fn expected_strong_count(&self) -> usize {
+    pub const fn expected_strong_count(&self) -> usize {
         self.background_tasks + 1
     }
 
@@ -227,6 +227,7 @@ impl CoreDB {
         Ok(())
     }
 
+    #[cfg(test)]
     /// Get a deep copy of the `HashMap`
     ///
     /// **⚠ Do note**: This is super inefficient since it performs an actual

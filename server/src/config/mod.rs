@@ -21,6 +21,7 @@
 
 //! This module provides tools to handle configuration files and settings
 
+#[cfg(test)]
 use libtdb::TResult;
 use serde::Deserialize;
 use std::error::Error;
@@ -217,6 +218,7 @@ impl ParsedConfig {
             },
             bgsave: if let Some(bgsave) = cfg.bgsave {
                 match (bgsave.enabled, bgsave.every) {
+                    // TODO: Show a warning that there are unused keys
                     (Some(enabled), Some(every)) => BGSave::new(enabled, every),
                     (Some(enabled), None) => BGSave::new(enabled, 120),
                     (None, Some(every)) => BGSave::new(true, every),
@@ -229,6 +231,7 @@ impl ParsedConfig {
                 if snapshot.enabled {
                     SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
                 } else {
+                    // TODO: Show a warning that there are unused keys
                     SnapshotConfig::Disabled
                 }
             } else {

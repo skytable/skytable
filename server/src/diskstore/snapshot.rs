@@ -26,9 +26,20 @@ use crate::coredb::CoreDB;
 use crate::diskstore;
 use chrono::prelude::*;
 use libtdb::TResult;
+use regex::Regex;
 use std::fs;
 use std::io::ErrorKind;
+lazy_static::lazy_static! {
+    /// Matches any string which is in the following format:
+    /// ```text
+    /// YYYYMMDD-HHMMSS.snapshot
+    /// ```
+    static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
+}
 
+/// The default snapshot directory
+///
+/// This is currently a `snapshot` directory under the current directory
 const DIR_SNAPSHOT: &'static str = "snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
@@ -52,19 +63,58 @@ impl<'a> SnapshotEngine<'a> {
     /// This also attempts to check if the snapshots directory exists;
     /// If the directory doesn't exist, then it is created
     pub fn new<'b: 'a>(maxtop: usize, dbref: &'b CoreDB) -> TResult<Self> {
+        let mut snaps = Vec::with_capacity(maxtop);
+        let q_cfg_tuple = if maxtop == 0 {
+            (DEF_SNAPSHOT_COUNT, true)
+        } else {
+            (maxtop, false)
+        };
         match fs::create_dir(DIR_SNAPSHOT) {
             Ok(_) => (),
             Err(e) => match e.kind() {
-                ErrorKind::AlreadyExists => (),
+                ErrorKind::AlreadyExists => {
+                    // Now it's our turn to look for the existing snapshots
+                    let dir = fs::read_dir(DIR_SNAPSHOT)?;
+                    for entry in dir {
+                        let entry = entry?;
+                        let path = entry.path();
+                        if !path.is_dir() {
+                            // If the entry is not a directory then some other
+                            // file(s) is present in the directory
+                            return Err(
+                                "The snapshot directory contains unrecognized files/directories"
+                                    .into(),
+                            );
+                        }
+                        let file_name = if let Some(good_file_name) = path.to_str() {
+                            good_file_name
+                        } else {
+                            // The filename contains invalid characters
+                            return Err(
+                                "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
+                            );
+                        };
+                        if SNAP_MATCH.is_match(&file_name) {
+                            // Good, the file name matched the format we were expecting
+                            // This is a valid snapshot, add it to our `Vec` of snaps
+                            snaps.push(file_name.to_string());
+                        } else {
+                            // The filename contains invalid characters
+                            return Err(
+                                "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
+                            );
+                        }
+                    }
+                    return Ok(SnapshotEngine {
+                        snaps: queue::Queue::init_pre(q_cfg_tuple, snaps),
+                        dbref,
+                    });
+                }
                 _ => return Err(e.into()),
             },
         }
         Ok(SnapshotEngine {
-            snaps: queue::Queue::new(if maxtop == 0 {
-                (DEF_SNAPSHOT_COUNT, true)
-            } else {
-                (maxtop, false)
-            }),
+            snaps: queue::Queue::new(q_cfg_tuple),
             dbref,
         })
     }
@@ -190,6 +240,13 @@ mod queue {
         pub fn new((maxlen, dontpop): (usize, bool)) -> Self {
             Queue {
                 queue: Vec::with_capacity(maxlen),
+                maxlen,
+                dontpop,
+            }
+        }
+        pub const fn init_pre((maxlen, dontpop): (usize, bool), queue: Vec<String>) -> Self {
+            Queue {
+                queue,
                 maxlen,
                 dontpop,
             }

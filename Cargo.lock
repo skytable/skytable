@@ -614,6 +614,7 @@ dependencies = [
  "libtdb",
  "log",
  "parking_lot",
+ "regex",
  "serde",
  "serde_derive",
  "tokio",
