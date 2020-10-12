@@ -69,6 +69,10 @@ pub async fn execute_query() {
             println!("Goodbye!");
             process::exit(0x100);
         }
+        if rl.len() == 0 {
+            // The query was empty, so let it be
+            continue;
+        }
         con.run_query(rl).await;
     }
 }
