@@ -7,15 +7,11 @@ jobs:
     name: Test
     env:
       IS_ACTIONS_DOC: false
+      IS_MD_FILE: false
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build:
-          [
-            linux-stable,
-            macos-stable,
-            windows-stable,
-          ]
+        build: [linux-stable, macos-stable, windows-stable]
         include:
           - build: linux-stable
             os: ubuntu-latest
@@ -29,6 +25,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: "2"
+
+      - name: "Prepare build environment"
+        run: |
+          chmod +x ci/setvars.sh
+          ci/setvars.sh
 
       - name: Cache Cargo registry
         uses: actions/cache@v1
@@ -38,7 +41,7 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
+          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC && !env.IS_MD_FILE
 
       - name: Cache Cargo index
         uses: actions/cache@v1
@@ -48,7 +51,7 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
+          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC && !env.IS_MD_FILE
 
       - name: Cache Cargo build
         uses: actions/cache@v1
@@ -58,16 +61,16 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-target-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC && !env.IS_MD_FILE
 
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
-        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC && !env.IS_MD_FILE
 
       - name: Run Tests
         run: cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
-        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC && !env.IS_MD_FILE
