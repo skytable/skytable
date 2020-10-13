@@ -1,7 +1,7 @@
 # Contribution guidelines
 
-Firstly, thank you ❤️ for your interest in contributing to this project! This project is powered by the community
-and relies on hackers across the globe 🌐 to report bugs, send suggestions 💡 and contribute code to move this project forward ⏩.
+Firstly, thank you for your interest in contributing to this project! This project is powered by the community
+and relies on hackers across the globe to report bugs, send suggestions and contribute code to move this project forward.
 
 You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
@@ -13,12 +13,18 @@ You can see a list of contributors **[here](./CONTRIBUTORS.md)**
 
 ## Coding guidelines 👩‍💻 👨‍💻 
 
-### Conventions
+### Special comments
 
 * `FIXME(@<username>)` : Use this when you have made an implementation that can be improved in the future, such as improved efficiency
 * `HACK(@<username>)` : Use this when the code you are using a temporary workaround
 * `TODO(@<username>)` : Use this when you have kept something incomplete
 * `UNSAFE(@<username>)` : Use this to explain why the `unsafe` block used is safe
+
+### Comment style
+
+We prefer to use a 'mixed' commenting style: a cross between the C and C++ styles. 
+Generally, if a comment can be explained in one-line, then follow the C++ commenting style.
+In other cases, use the C style.
 
 ### Formatting
 
