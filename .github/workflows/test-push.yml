@@ -1,11 +1,12 @@
-name: Tests
+name: Test (push)
 
-on: [pull_request, push]
+on: [push]
 
 jobs:
   test:
     name: Test
-
+    env:
+      IS_ACTIONS_DOC: false
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -37,7 +38,7 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-          if: runner.os != 'macOS'
+          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
 
       - name: Cache Cargo index
         uses: actions/cache@v1
@@ -47,7 +48,7 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-          if: runner.os != 'macOS'
+          if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
 
       - name: Cache Cargo build
         uses: actions/cache@v1
@@ -57,14 +58,16 @@ jobs:
           restore-keys: |
             ${{ matrix.build }}-target-
           # HACK(@ohsayan): The next line skips caching until it is fixed
-        if: runner.os != 'macOS'
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
 
       - name: Install Rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
 
       - name: Run Tests
         run: cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
+        if: runner.os != 'macOS' && !env.IS_ACTIONS_DOC
