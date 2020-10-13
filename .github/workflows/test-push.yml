@@ -24,9 +24,10 @@ jobs:
             rust: stable
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout source code
+        uses: actions/checkout@v2
         with:
-          fetch-depth: "2"
+          fetch-depth: 2
 
       - name: "Prepare build environment"
         run: |
@@ -67,10 +68,10 @@ jobs:
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
-        if: runner.os != 'macOS' && !env.IS_MD_FILE
+        if: "!env.IS_MD_FILE"
 
       - name: Run Tests
         run: cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
-        if: runner.os != 'macOS' && !env.IS_MD_FILE
+        if: "!env.IS_MD_FILE"
