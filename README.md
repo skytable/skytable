@@ -35,7 +35,7 @@ And [many more](https://terrabasedb.github.io/docs/List-Of-Actions)
 
 ## Clients 🔌
 
-We're officially working on a [Python Driver](https://github.com/terrabasedb/python-driver) and we plan to support more languages along the way 🎉! You're free to write your own clients - all you need to do is implement the simple and performant [Terrapipe protocol spec](https://terrabasedb.github.io/docs/Protocols/terrapipe/).
+Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://terrabasedb.github.io/docs/Protocols/terrapipe/).
 
 ## Community 👐
 
