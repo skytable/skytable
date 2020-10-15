@@ -54,7 +54,7 @@
         "complexity": "O(n)",
         "args": "MSET <key1> <value1> <key2> <value2> ...",
         "desc": "Set the value of 'n' keys",
-        "return": "Number of keys that were set as an integer"
+        "return": "Number of keys that were set as an unsigned int"
     },
     {
         "name": "UPDATE",
@@ -70,15 +70,15 @@
         "complexity": "O(n)",
         "args": "UPDATE <key1> <value1> <key2> <value2> ...",
         "desc": "Update the value of 'n' keys",
-        "return": "Number of keys that were updated as an integer"
+        "return": "Number of keys that were updated as an unsigned int"
     },
     {
         "name": "DEL",
-        "since": "0.4.0",
+        "since": "0.1.0",
         "complexity": "O(n)",
         "args": "DEL <key1> <key2> ...",
         "desc": "Delete 'n' keys",
-        "return": "Number of keys that were deleted as an integer"
+        "return": "Number of keys that were deleted as an unsigned int"
     },
     {
         "name": "EXISTS",
@@ -86,7 +86,7 @@
         "complexity": "O(n)",
         "args": "EXISTS <key1> <key2> ...",
         "desc": "Check if 'n' keys exist",
-        "return": "Number of keys that exist as an integer"
+        "return": "Number of keys that exist as an unsigned int"
     },
     {
         "name": "SSET",
@@ -134,7 +134,7 @@
         "complexity": "O(n)",
         "args": "USET <key1> <value1> <key2> <value2> ...",
         "desc": "SET all keys if they don't exist, or UPDATE them if they do exist",
-        "return": "Number of keys that were `USET`ed, as an integer"
+        "return": "Number of keys that were `USET`ed, as an unsigned int"
     },
     {
         "name": "KEYLEN",
@@ -142,6 +142,6 @@
         "complexity": "O(1)",
         "args": "KEYLEN <key>",
         "desc": "Returns the length of the UTF-8 string",
-        "return": "Length of the key as an integer",
+        "return": "Length of the key as an unsigned int",
     }
 ]
