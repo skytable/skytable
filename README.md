@@ -22,16 +22,16 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 4. First run `tdb` to start the database server and then run `tsh` to start the interactive shell
 5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `tsh` !
 
-## Actions
+## Features
 
-* `HEYA` - It all begins with a heya! Use this to ping the server
-* `GET`/ `MGET` - Get a single/multiple key(s)
-* `SET`/ `MSET` - Set a single/multiple key(s)
-* `UPDATE`/ `MUPDATE` - Update the value of a single/multiple key(s) which has already been created with `SET`
-* `EXISTS` - Check if a single/multiple key(s) exist(s)
-* `DEL` - Delete a single/multiple key(s)
+- **Insanely fast**: Scale to millions of queries per second per node
+- **Key/value store**: `GET`, `SET`, `UPDATE` and [all that stuff](https://terrabasedb.github.io/docs/List-Of-Actions)
+- **Snapshots**: Automated (and tunable) snapshots for stress-free backups
+- **Multithreaded**: Designed to exploit all CPU cores
+- **Resource friendly**: The database server doesn't need more than 1MB to run
+- **Convenient**: Without the setup hassle and system-specific dependencies
 
-And [many more](https://terrabasedb.github.io/docs/List-Of-Actions)
+(... and more on the way)
 
 ## Clients 🔌
 
