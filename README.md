@@ -31,7 +31,7 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 - **Resource friendly**: The database server doesn't need more than 1MB to run
 - **Convenient**: Without the setup hassle and system-specific dependencies
 
-(... and more on the way)
+(... [and more on the way](https://github.com/terrabasedb/terrabasedb/labels/roadmap))
 
 ## Clients 🔌
 
