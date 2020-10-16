@@ -16,6 +16,7 @@ on:
 env:
   # TODO: Change variable to your image's name.
   IMAGE_NAME: tdb
+  BUILD: "false"
 
 jobs:
   # Run tests.
@@ -25,8 +26,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - name: Setup environment
+        run: |
+          chmod +x ci/dockervars.sh
+          ci/dockervars.sh
       - name: Build image
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
+        if: env.BUILD == 'true' || github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v')
       - name: Push to Docker Hub
         uses: docker/build-push-action@v1
         with:
@@ -35,9 +43,11 @@ jobs:
           repository: terrabasedb/tdb
           tags: latest
           tag_with_ref: true
+        if: env.BUILD == 'true' || github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v')
 
       - name: Log into GitHub Container Registry
         run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+        if: env.BUILD == 'true' || github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v')
 
       - name: Push image to GitHub Container Registry
         run: |
@@ -60,3 +70,4 @@ jobs:
 
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+        if: env.BUILD == 'true' || github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v')
