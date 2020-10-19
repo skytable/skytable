@@ -26,4 +26,4 @@ regex = "1.4.1"
 jemallocator = "0.3.2"
 
 [dev-dependencies]
-tokio = { version = "0.3.0", features = ["test-util"] }
+tokio = { version = "0.2.22", features = ["test-util"] }
