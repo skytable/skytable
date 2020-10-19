@@ -24,4 +24,4 @@
 //! This crate contains modules which are used for testing TerrabaseDB
 
 pub mod service;
-pub use tdb_derive;
+pub use tdb_macros;
