@@ -21,6 +21,7 @@ env_logger = "0.8.1"
 log = "0.4.11"
 chrono = "0.4.19"
 regex = "1.4.1"
+tdb_macros = {path="../tdb-macros"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"

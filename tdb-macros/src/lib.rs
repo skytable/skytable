@@ -42,16 +42,20 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
         let msg = "`dbtest` functions need to be async";
         return Err(syn::Error::new_spanned(sig.fn_token, msg));
     }
+    sig.asyncness = None;
     let body = quote! {
-        let mut socket = tokio::net::TcpStream::connect(#rand).await;
+        let mut socket = tokio::net::TcpStream::connect(#rand).await.unwrap();
+        let fut1 = tokio::spawn(crate::tests::start_server(db.clone(), socket));
         #body
-        socket.shutdown(std::net::Shutdown::Both).unwrap();
+        socket.shutdown(::std::net::Shutdown::Both).unwrap();
+        ::std::mem::drop(fut1);
     };
     let result = quote! {
         #header
         #(#attrs)*
         #vis #sig {
-            let runtime = Builder::new_multi_thread()
+            let db = ::std::sync::Arc::new(crate::coredb::CoreDB::new_empty(2));
+            let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(4)
                 .thread_name(#fname)
                 .thread_stack_size(3 * 1024 * 1024)
@@ -84,7 +88,14 @@ fn parse_test_sig(input: syn::ItemFn, rand: u16) -> TokenStream {
 
 fn parse_test_module(_args: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemMod);
-    let (_, content) = input.content.unwrap();
+    let content = match input.content {
+        Some((_, c)) => c,
+        None => {
+            return syn::Error::new_spanned(&input, "Couldn't get the module content")
+                .to_compile_error()
+                .into()
+        }
+    };
     let attrs = input.attrs;
     let vis = input.vis;
     let mod_token = input.mod_token;
@@ -119,11 +130,7 @@ fn parse_test_module(_args: TokenStream, item: TokenStream) -> TokenStream {
     let result = quote! {
         #result
     };
-    let header = quote! {
-        #[::core::prelude::v1::test]
-    };
     let finalres = quote! {
-        #header
         #(#attrs)*
         #mod_token #vis #modname {
             #result
