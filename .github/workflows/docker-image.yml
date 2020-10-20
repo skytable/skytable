@@ -14,7 +14,6 @@ on:
   pull_request:
 
 env:
-  # TODO: Change variable to your image's name.
   IMAGE_NAME: tdb
   BUILD: "false"
 
@@ -30,8 +29,8 @@ jobs:
           fetch-depth: 2
       - name: Setup environment
         run: |
-          chmod +x ci/dockervars.sh
-          ci/dockervars.sh
+          chmod +x ci/buildvars.sh
+          ci/buildvars.sh
       - name: Build image
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
         if: env.BUILD == 'true' || github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v')

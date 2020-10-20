@@ -147,7 +147,7 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           release_name: ${{ steps.get_version.outputs.VERSION }}
@@ -171,7 +171,7 @@ jobs:
       - name: Release Linux bundle
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./linux/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
@@ -181,7 +181,7 @@ jobs:
       - name: Release Windows bundle
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./windows/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
@@ -191,7 +191,7 @@ jobs:
       - name: Release MacOS bundle
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./macos/tdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
