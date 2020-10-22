@@ -70,6 +70,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "bytes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
+
+[[package]]
 name = "cc"
 version = "1.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -260,7 +266,7 @@ checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 name = "libtdb"
 version = "0.4.5-alpha.1"
 dependencies = [
- "bytes",
+ "bytes 0.6.0",
  "lazy_static",
  "termcolor",
 ]
@@ -596,7 +602,7 @@ name = "tdb"
 version = "0.4.5-alpha.1"
 dependencies = [
  "bincode",
- "bytes",
+ "bytes 0.6.0",
  "chrono",
  "clap",
  "env_logger",
@@ -683,7 +689,7 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d34ca54d84bf2b5b4d7d31e901a8464f7b60ac145a284fba25ceb801f2ddccd"
 dependencies = [
- "bytes",
+ "bytes 0.5.6",
  "fnv",
  "futures-core",
  "iovec",
@@ -725,7 +731,7 @@ dependencies = [
 name = "tsh"
 version = "0.4.5-alpha.1"
 dependencies = [
- "bytes",
+ "bytes 0.6.0",
  "lazy_static",
  "libtdb",
  "regex",
