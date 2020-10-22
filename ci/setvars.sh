@@ -4,7 +4,6 @@
 # Similarly, if the `actions.jsonc` file is modified, the documentation needs to be
 # be updated
 set -euo pipefail
-git checkout next
 FILES_CHANGED=$(git diff --numstat HEAD^..HEAD | wc -l)
 ACTIONS_CHANGED_COUNT=$(git diff --numstat HEAD^..HEAD -- 'actions.jsonc' | wc -l)
 MD_CHANGED_COUNT=$(git diff --numstat HEAD^..HEAD -- '*.md' | wc -l)
