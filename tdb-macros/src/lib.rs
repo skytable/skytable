@@ -28,8 +28,10 @@ use rand::*;
 use std::collections::HashSet;
 use syn::{self};
 
-// TODO(@ohsayan): Write docs and also make this use the tokio runtime
-
+/// This parses a function within a `dbtest` module
+///
+/// This accepts an `async` function and returns a non-`async` version of it - by
+/// making the body of the function use the `tokio` runtime
 fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::Error> {
     let sig = &mut input.sig;
     let fname = sig.ident.to_string();
@@ -45,9 +47,11 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        use crate::tests::{fresp, terrapipe, TcpStream};
-        use crate::__func__;
+        use libtdb::terrapipe;
+        use crate::protocol::responses::fresp;
+        use tokio::net::{TcpListener, TcpStream};
         use tokio::prelude::*;
+        use tokio::io::AsyncReadExt;
         let addr = crate::tests::start_test_server(#rand).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body
@@ -71,6 +75,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     Ok(result.into())
 }
 
+/// This function checks if the current function is eligible to be a test
 fn parse_test_sig(input: syn::ItemFn, rand: u16) -> TokenStream {
     for attr in &input.attrs {
         if attr.path.is_ident("test") {
@@ -90,6 +95,8 @@ fn parse_test_sig(input: syn::ItemFn, rand: u16) -> TokenStream {
     parse_dbtest(input, rand).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
+/// This function accepts an entire module which comprises of `dbtest` functions.
+/// It takes each function in turn, and generates `#[test]`able functions for them
 fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as syn::ItemMod);
     let content = match input.content {
@@ -214,6 +221,28 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 }
 
 #[proc_macro_attribute]
+/// The `dbtest` macro starts an async server in the background and is meant for
+/// use within the `tdb` or `WORKSPACEROOT/server/` crate. If you use this compiler
+/// macro in any other crate, you'll simply get compilation errors
+///
+/// ## Requirements
+///
+/// The `#[dbtest]` macro expects several things. The calling crate:
+/// - should have the `tokio` crate as a dependency and should have the
+/// `features` set to full
+/// - should have a function to start an async test server, available with the following path:
+/// `crate::tests::start_test_server` which accepts an `u16` as the port number
+///
+/// ## Conventions
+/// Since `proc_macro` cannot accept _file-linked_ modules and only accepts inline modules, we have made a workaround, which
+/// has led to making this a _convention_.
+/// So let's say we have a module `kvengine` in which we have our tests. So, we'll have to wrap around all these test functions
+/// in a module `__private` within `kvengine`
+///
+/// ## Limitations
+/// The current (and maybe the worst) limitation of this macro is that, at the moment, it cannot handle
+/// module-level imports. This means, you'll have to use imports in individual functions as module-level imports are not supported,
+// TODO(@ohsayan): Support module-level imports
 pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
     parse_test_module(args, item)
 }

@@ -215,7 +215,7 @@ mod __private {
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "{}: With one arg(s)", __func__!());
+        assert_eq!(response, res_should_be, "With one arg(s)");
         let query = terrapipe::proc_query("EXISTS x y z");
         stream.write_all(&query).await.unwrap();
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
