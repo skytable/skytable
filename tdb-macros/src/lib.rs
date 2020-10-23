@@ -45,7 +45,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        use crate::tests::{fresp, start_server, terrapipe, QueryVec, TcpStream};
+        use crate::tests::{fresp, terrapipe, TcpStream};
         use crate::__func__;
         use tokio::prelude::*;
         let addr = crate::tests::start_test_server(#rand).await;
@@ -148,26 +148,16 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     let modname = &input.ident;
     let mut rng = thread_rng();
     let mut in_set = HashSet::<u16>::new();
-    // We will exclude a couple of the default system ports
-    in_set.insert(80); // HTTP
-    in_set.insert(443); // SSL
-    in_set.insert(21); // FTP
-    in_set.insert(389); // LDAP
-    in_set.insert(636); // LDAP-SSL
-    in_set.insert(161); // SNMP
-    in_set.insert(22); // SSH
-    in_set.insert(23); // TELNET
-    in_set.insert(25); // SMTP
-    in_set.insert(53); // DNS
-    in_set.insert(119); // NNTP
-    in_set.insert(143); // IMAP
-    in_set.insert(993); // IMAP-SSL
 
     let mut result = quote! {};
     for item in content {
-        let mut rand: u16 = rng.gen_range(1, 65535);
+        /*
+        Since standard (non-root) users can only access ports greater than 1024
+        we will set the limit to (1024, 65535)
+        */
+        let mut rand: u16 = rng.gen_range(1025, 65535);
         while in_set.contains(&rand) {
-            rand = rng.gen_range(1, 65535);
+            rand = rng.gen_range(1025, 65535);
         }
         in_set.insert(rand);
         match item {

@@ -90,7 +90,7 @@ mod tests {
     where
         T: AsRef<str>,
     {
-        use crate::tests::{fresp, start_server, terrapipe, QueryVec, TcpStream};
+        use crate::tests::{fresp, terrapipe, TcpStream};
         use crate::__func__;
         use tokio::prelude::*;
         let mut query = String::from("MSET ");
