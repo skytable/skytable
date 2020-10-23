@@ -142,10 +142,17 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
             _ => (),
         }
     }
-    let attrs = &input.attrs;
     let vis = &input.vis;
     let mod_token = &input.mod_token;
     let modname = &input.ident;
+    if modname.to_string() != "__private" {
+        return syn::Error::new_spanned(
+            modname,
+            "By convention, all the modules using the `dbtest` macro have to be called `__private`",
+        )
+        .to_compile_error()
+        .into();
+    }
     let mut rng = thread_rng();
     let mut in_set = HashSet::<u16>::new();
 

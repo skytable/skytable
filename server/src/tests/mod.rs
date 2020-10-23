@@ -27,8 +27,7 @@ use crate::dbnet;
 use crate::protocol::responses::fresp;
 use crate::BGSave;
 use libtdb::terrapipe;
-use std::net::{Shutdown, SocketAddr};
-use std::{future::Future, sync::Arc};
+use std::net::{SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 mod kvengine;
 

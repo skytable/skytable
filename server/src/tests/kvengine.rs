@@ -20,8 +20,7 @@
 */
 
 #[tdb_macros::dbtest(skip = "set_values")]
-mod tests {
-
+mod __private {
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         let heya = terrapipe::proc_query("HEYA");
@@ -58,22 +57,12 @@ mod tests {
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With zero arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)");
         let syntax_error = terrapipe::proc_query("GET one two");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With two arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With two arg(s)");
     }
 
     /// Set a couple of values, which are to be passed as a list of whitespace separated values
@@ -86,12 +75,9 @@ mod tests {
         values_split_with_whitespace: T,
         homwany: usize,
         stream: &mut tokio::net::TcpStream,
-    )
-    where
+    ) where
         T: AsRef<str>,
     {
-        use crate::tests::{fresp, terrapipe, TcpStream};
-        use crate::__func__;
         use tokio::prelude::*;
         let mut query = String::from("MSET ");
         query.push_str(values_split_with_whitespace.as_ref());
@@ -121,12 +107,7 @@ mod tests {
         stream.write_all(&set_single_code_2).await.unwrap();
         let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_OVERWRITE_ERR.to_owned(),
-            "{}",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
     }
 
     /// Test a SET query with incorrect number of arugments
@@ -135,37 +116,22 @@ mod tests {
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With zero arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)",);
         let syntax_error = terrapipe::proc_query("SET one");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With one arg(s)",);
         let syntax_error = terrapipe::proc_query("SET one 1 two 2");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With four arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With four arg(s)",);
     }
 
     /// Test an UPDATE query: which should return code: 0
     async fn test_update_single_okay() {
-        set_values("x 100", 1, &mut stream).await;;
+        set_values("x 100", 1, &mut stream).await;
         let update_single_okay = terrapipe::proc_query("UPDATE x 200");
         stream.write_all(&update_single_okay).await.unwrap();
         let mut response = vec![0; fresp::R_OKAY.len()];
@@ -187,32 +153,17 @@ mod tests {
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With zero arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)",);
         let syntax_error = terrapipe::proc_query("UPDATE one");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With one arg(s)",);
         let syntax_error = terrapipe::proc_query("UPDATE one 1 two 2");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With four arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With four arg(s)",);
     }
 
     /// Test a DEL query: which should return int 0
@@ -270,12 +221,7 @@ mod tests {
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            res_should_be,
-            "{}: With three arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, res_should_be, "With three arg(s)",);
     }
 
     /// Test an EXISTS query with an incorrect number of arguments
@@ -361,49 +307,30 @@ mod tests {
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n2\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            res_should_be,
-            "{}: With 3 k/v pair(s)",
-            __func__!()
-        );
+        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
         // Now all the keys have been set, so we should get a 0
         let query = terrapipe::proc_query("MSET x ex y why z zed");
         stream.write_all(&query).await.unwrap();
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            res_should_be,
-            "{}: With 3 k/v pair(s)",
-            __func__!()
-        );
+        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
     }
 
     /// Test an MSET query with the wrong number of arguments
-    async fn test_mset_syntax_error() {
+    async fn test_mset_syntax_error_args_one() {
         let syntax_error = terrapipe::proc_query("MSET");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
-        // Now we'll test it with two keys and one-value
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    }
+    async fn test_mset_syntax_error_args_three() {
         let syntax_error = terrapipe::proc_query("MSET x ex y");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With three arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
 
     /// Test an MUPDATE query with a single non-existing keys
@@ -425,49 +352,31 @@ mod tests {
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            res_should_be,
-            "{}: With 3 k/v pair(s)",
-            __func__!()
-        );
+        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
         // None of these keys exist, so we should get a 0
         let query = terrapipe::proc_query("MUPDATE y why z zed");
         stream.write_all(&query).await.unwrap();
         let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            res_should_be,
-            "{}: With 2 k/v pair(s)",
-            __func__!()
-        );
+        assert_eq!(response, res_should_be, "With 2 k/v pair(s)");
     }
 
     /// Test an MUPDATE query with the wrong number of arguments
-    async fn test_mupdate_syntax_error() {
+    async fn test_mupdate_syntax_error_args_one() {
         let syntax_error = terrapipe::proc_query("MUPDATE");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
-        // Now we'll test it with two keys and one-value
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    }
+
+    async fn test_mupdate_syntax_error_args_three() {
         let syntax_error = terrapipe::proc_query("MUPDATE x ex y");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With three arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
 
     /// Test an SSET query: which should return code: 0
@@ -486,12 +395,7 @@ mod tests {
         stream.write_all(&sset_single_error).await.unwrap();
         let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_OVERWRITE_ERR.to_owned(),
-            "{}",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
     }
 
     /// Test an SSET query: which should return code: 0
@@ -510,37 +414,24 @@ mod tests {
         stream.write_all(&update_single_okay).await.unwrap();
         let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_OVERWRITE_ERR.to_owned(),
-            "{}",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
     }
 
     /// Test an SSET query with the wrong number of arguments
-    async fn test_sset_syntax_error() {
+    async fn test_sset_syntax_error_args_one() {
         let syntax_error = terrapipe::proc_query("SSET");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
-        // Now we'll test it with two keys and one-value
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    }
+
+    async fn test_sset_syntax_error_args_three() {
         let syntax_error = terrapipe::proc_query("SSET x ex y");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With three arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
 
     /// Test an SUPDATE query: which should return code: 0
@@ -583,28 +474,20 @@ mod tests {
     }
 
     /// Test an SUPDATE query with the wrong number of arguments
-    async fn test_supdate_syntax_error() {
+    async fn test_supdate_syntax_error_args_one() {
         let syntax_error = terrapipe::proc_query("SUPDATE");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With one arg(s)",
-            __func__!()
-        );
-        // Now we'll test it with two keys and one-value
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    }
+
+    async fn test_supdate_syntax_error_args_two() {
         let syntax_error = terrapipe::proc_query("SUPDATE x ex y");
         stream.write_all(&syntax_error).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}: With three arg(s)",
-            __func__!()
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
 
     /// Test an SDEL query: which should return nil
@@ -724,29 +607,20 @@ mod tests {
     }
 
     /// Test `USET` with an incorrect number of arguments
-    async fn test_uset_syntax_error() {
+    async fn test_uset_syntax_error_args_one() {
         let query = terrapipe::proc_query("USET");
-        let query2 = terrapipe::proc_query("USET x");
         let mut resp1 = vec![0; fresp::R_ACTION_ERR.len()];
-        let mut resp2 = vec![0; fresp::R_ACTION_ERR.len()];
         stream.write_all(&query).await.unwrap();
         stream.read_exact(&mut resp1).await.unwrap();
+        assert_eq!(resp1, fresp::R_ACTION_ERR.to_owned());
+    }
+
+    async fn test_uset_syntax_error_args_two() {
+        let mut resp2 = vec![0; fresp::R_ACTION_ERR.len()];
+        let query2 = terrapipe::proc_query("USET x");
         stream.write_all(&query2).await.unwrap();
         stream.read_exact(&mut resp2).await.unwrap();
-        assert_eq!(
-            resp1,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}:{}",
-            __func__!(),
-            "with one arg"
-        );
-        assert_eq!(
-            resp2,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}:{}",
-            __func__!(),
-            "with two args"
-        );
+        assert_eq!(resp2, fresp::R_ACTION_ERR.to_owned(),);
     }
 
     /// Test `KEYLEN`
@@ -761,28 +635,18 @@ mod tests {
     }
 
     /// Test `KEYLEN` with an incorrect number of arguments
-    async fn test_keylen_syntax_error() {
+    async fn test_keylen_syntax_error_args_one() {
         let query = terrapipe::proc_query("KEYLEN");
         stream.write_all(&query).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}:{}",
-            __func__!(),
-            "with 1 arg(s)"
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    }
+    async fn test_keylen_syntax_error_args_two() {
         let query = terrapipe::proc_query("KEYLEN x y");
         stream.write_all(&query).await.unwrap();
         let mut response = vec![0; fresp::R_ACTION_ERR.len()];
         stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(
-            response,
-            fresp::R_ACTION_ERR.to_owned(),
-            "{}:{}",
-            __func__!(),
-            "with 2 arg(s)"
-        );
+        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
 }

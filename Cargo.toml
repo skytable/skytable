@@ -4,8 +4,7 @@ members = [
     "server",
     "libtdb",
     "tdb-bench",
-    "tdb-macros",
-    "testsuite"
+    "tdb-macros"
 ]
 
 [profile.release]
