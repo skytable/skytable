@@ -51,9 +51,5 @@ pub async fn uset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
         drop(whandle);
     }
     con.write_response(howmany / 2).await?;
-    #[cfg(debug_assertions)]
-    {
-        handle.print_debug_table();
-    }
     Ok(())
 }

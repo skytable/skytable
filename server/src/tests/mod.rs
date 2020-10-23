@@ -27,10 +27,10 @@ use crate::dbnet;
 use crate::protocol::responses::fresp;
 use crate::BGSave;
 use libtdb::terrapipe;
-use std::future::Future;
 use std::net::{Shutdown, SocketAddr};
+use std::{future::Future, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
-mod kvengine_tests;
+mod kvengine;
 
 /// The function macro returns the name of a function
 #[macro_export]
@@ -45,13 +45,20 @@ macro_rules! __func__ {
     }};
 }
 
+async fn start_test_server(port: u16) -> SocketAddr {
+    let mut socket = String::from("127.0.0.1:");
+    socket.push_str(&port.to_string());
+    let db = CoreDB::new(BGSave::Disabled, SnapshotConfig::default()).unwrap();
+    let listener = TcpListener::bind(socket).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { dbnet::test_run(listener, db, tokio::signal::ctrl_c()).await });
+    addr
+}
+
 static ADDR: &'static str = "127.0.0.1:2003";
 
 /// Start the server as a background asynchronous task
 async fn start_server() -> (Option<SocketAddr>, CoreDB) {
-    // HACK(@ohsayan): Since we want to start the server if it is not already
-    // running, or use it if it is already running, we just return none if we failed
-    // to bind to the port, since this will _almost_ never happen on our CI
     let listener = TcpListener::bind(ADDR).await.unwrap();
     let db = CoreDB::new(BGSave::default(), SnapshotConfig::default()).unwrap();
     let asyncdb = db.clone();

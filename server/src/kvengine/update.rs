@@ -62,9 +62,5 @@ pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         con.write_response(responses::fresp::R_NIL.to_owned())
             .await?;
     }
-    #[cfg(debug_assertions)]
-    {
-        handle.print_debug_table();
-    }
     Ok(())
 }

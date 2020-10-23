@@ -54,9 +54,5 @@ pub async fn mupdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
         drop(whandle);
     }
     con.write_response(done_howmany).await?;
-    #[cfg(debug_assertions)]
-    {
-        handle.print_debug_table();
-    }
     Ok(())
 }

@@ -62,9 +62,5 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
         con.write_response(responses::fresp::R_OVERWRITE_ERR.to_owned())
             .await?;
     }
-    #[cfg(debug_assertions)]
-    {
-        handle.print_debug_table();
-    }
     Ok(())
 }

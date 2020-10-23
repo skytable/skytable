@@ -54,9 +54,5 @@ pub async fn mset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
         drop(whandle);
     }
     con.write_response(done_howmany).await?;
-    #[cfg(debug_assertions)]
-    {
-        handle.print_debug_table();
-    }
     Ok(())
 }
