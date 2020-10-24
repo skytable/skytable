@@ -47,11 +47,6 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        use libtdb::terrapipe;
-        use crate::protocol::responses::fresp;
-        use tokio::net::{TcpListener, TcpStream};
-        use tokio::prelude::*;
-        use tokio::io::AsyncReadExt;
         let addr = crate::tests::start_test_server(#rand).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body
@@ -149,8 +144,6 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
             _ => (),
         }
     }
-    let vis = &input.vis;
-    let mod_token = &input.mod_token;
     let modname = &input.ident;
     if modname.to_string() != "__private" {
         return syn::Error::new_spanned(
@@ -195,18 +188,16 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     #tok
                 };
             }
+            token => {
+                result = quote! {
+                    #result
+                    #token
+                };
+            }
             _ => continue,
         }
     }
-    let result = quote! {
-        #result
-    };
-    let finalres = quote! {
-        #mod_token #vis #modname {
-            #result
-        }
-    };
-    finalres.into()
+    result.into()
 }
 
 fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::Error> {
@@ -225,6 +216,9 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// use within the `tdb` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
+/// ## _Ghost_ values
+/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable.
+///
 /// ## Requirements
 ///
 /// The `#[dbtest]` macro expects several things. The calling crate:
@@ -239,10 +233,6 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// So let's say we have a module `kvengine` in which we have our tests. So, we'll have to wrap around all these test functions
 /// in a module `__private` within `kvengine`
 ///
-/// ## Limitations
-/// The current (and maybe the worst) limitation of this macro is that, at the moment, it cannot handle
-/// module-level imports. This means, you'll have to use imports in individual functions as module-level imports are not supported,
-// TODO(@ohsayan): Support module-level imports
 pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
     parse_test_module(args, item)
 }

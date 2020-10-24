@@ -21,6 +21,10 @@
 
 #[tdb_macros::dbtest(skip = "set_values")]
 mod __private {
+    use crate::protocol::responses::fresp;
+    use libtdb::terrapipe;
+    use tokio::io::AsyncReadExt;
+    use tokio::prelude::*;
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         let heya = terrapipe::proc_query("HEYA");

@@ -46,7 +46,9 @@ async fn start_test_server(port: u16) -> SocketAddr {
     let mut socket = String::from("127.0.0.1:");
     socket.push_str(&port.to_string());
     let db = CoreDB::new(BGSave::Disabled, SnapshotConfig::default()).unwrap();
-    let listener = TcpListener::bind(socket).await.unwrap();
+    let listener = TcpListener::bind(socket)
+        .await
+        .expect(&format!("Failed to bind to port {}", port));
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { dbnet::test_run(listener, db, tokio::signal::ctrl_c()).await });
     addr
