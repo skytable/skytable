@@ -130,9 +130,9 @@ pub struct ConfigKeySnapshot {
 ///
 pub struct SnapshotPref {
     /// Capture a snapshot `every` seconds
-    every: u64,
+    pub every: u64,
     /// The maximum numeber of snapshots to be kept
-    atmost: usize,
+    pub atmost: usize,
 }
 
 impl SnapshotPref {

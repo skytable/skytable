@@ -20,14 +20,71 @@
 */
 
 use crate::coredb::CoreDB;
+use crate::diskstore::snapshot::SnapshotEngine;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
+use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
+use std::hint::unreachable_unchecked;
 
 /// Create a snapshot
 ///
-/// If there is a second argument: a separate snapshot is created. Otherwise
-/// if the action is just `MKSNAP`, then the `maxtop` parameter is adhered to
 pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    todo!()
+    if !handle.is_snapshot_enabled() {
+        // Since snapshotting is disabled, we can't create a snapshot!
+        // We'll just return an error returning the same
+        let error = "Snapshotting is disabled";
+        con.write_response(GroupBegin(1)).await?;
+        let error = RespCodes::OtherError(Some(error.to_string()));
+        return con.write_response(error).await;
+    }
+    let howmany = act.howmany();
+    if howmany == 0 {
+        // We will just follow the standard convention of creating snapshots
+        let mut was_engine_error = false;
+        let mut outerror = None;
+        {
+            let snapengine = SnapshotEngine::new(
+                handle
+                    .snap_count
+                    .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
+                &handle,
+                None,
+            );
+            if snapengine.is_err() {
+                was_engine_error = true;
+            }
+            let mut snapengine = snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+            outerror = snapengine.mksnap();
+        }
+        if was_engine_error {
+            return con
+                .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                .await;
+        }
+        if let Some(val) = outerror {
+            if val {
+                // Snapshotting succeeded, return Okay
+                return con
+                    .write_response(responses::fresp::R_OKAY.to_owned())
+                    .await;
+            } else {
+                // Nope, something happened while creating a snapshot
+                // return a server error
+                return con
+                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .await;
+            }
+        } else {
+            // We shouldn't ever reach here if all our logic is correct
+            // but if we do, something is wrong with the runtime
+            con.write_response(GroupBegin(1)).await?;
+            let error = RespCodes::OtherError(Some("access-after-termsig".to_owned()));
+            return con.write_response(error).await;
+        }
+    } else {
+        return con
+            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+            .await;
+    }
 }

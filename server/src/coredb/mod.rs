@@ -23,6 +23,7 @@
 
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
+use crate::config::SnapshotPref;
 use crate::diskstore;
 use crate::protocol::Connection;
 use crate::protocol::Query;
@@ -55,6 +56,11 @@ pub struct CoreDB {
     /// This should **not be changed** during runtime, and should only be initialized when `CoreDB`
     /// is first initialized
     background_tasks: usize,
+    /// The number of snapshots that are to be kept at the most
+    ///
+    /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
+    /// Some(n), n ∈ Z<sup>+</sup> — then _n_ snapshots will be kept at the maximum. If set to `None`, snapshotting is disabled.
+    pub snap_count: Option<usize>,
 }
 
 /// A shared _state_
@@ -150,6 +156,11 @@ impl CoreDB {
         }
     }
 
+    /// Check if snapshotting is enabled
+    pub fn is_snapshot_enabled(&self) -> bool {
+        self.snap_count.is_some()
+    }
+
     /// Returns the expected `Arc::strong_count` for the `CoreDB` object
     pub const fn expected_strong_count(&self) -> usize {
         self.background_tasks + 1
@@ -172,8 +183,15 @@ impl CoreDB {
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new(bgsave: BGSave, snapshot_cfg: SnapshotConfig) -> TResult<Self> {
         let coretable = diskstore::get_saved(Some(PERSIST_FILE.to_path_buf()))?;
-        let background_tasks: usize =
-            snapshot_cfg.is_enabled() as usize + !bgsave.is_disabled() as usize;
+        let mut background_tasks: usize = 0;
+        if !bgsave.is_disabled() {
+            background_tasks += 1;
+        }
+        let mut snap_count = None;
+        if let SnapshotConfig::Enabled(SnapshotPref { every: _, atmost }) = snapshot_cfg {
+            background_tasks += 1;
+            snap_count = Some(atmost);
+        }
         let db = if let Some(coretable) = coretable {
             CoreDB {
                 shared: Arc::new(Shared {
@@ -185,9 +203,10 @@ impl CoreDB {
                     snapshot_service: Notify::new(),
                 }),
                 background_tasks,
+                snap_count,
             }
         } else {
-            CoreDB::new_empty(background_tasks)
+            CoreDB::new_empty(background_tasks, snap_count)
         };
         // Spawn the background save task in a separate task
         tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
@@ -199,7 +218,7 @@ impl CoreDB {
         Ok(db)
     }
     /// Create an empty in-memory table
-    pub fn new_empty(background_tasks: usize) -> Self {
+    pub fn new_empty(background_tasks: usize, snap_count: Option<usize>) -> Self {
         CoreDB {
             shared: Arc::new(Shared {
                 bgsave_task: Notify::new(),
@@ -210,6 +229,7 @@ impl CoreDB {
                 snapshot_service: Notify::new(),
             }),
             background_tasks,
+            snap_count,
         }
     }
     /// Acquire a write lock

@@ -61,6 +61,8 @@ mod tags {
     pub const TAG_USET: &'static str = "USET";
     /// `KEYLEN` action tag
     pub const TAG_KEYLEN: &'static str = "KEYLEN";
+    /// `MKSNAP` action tag
+    pub const TAG_MKSNAP: &'static str = "MKSNAP";
 }
 
 /// Execute a simple(*) query
@@ -90,6 +92,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         tags::TAG_FLUSHDB => kvengine::flushdb::flushdb(db, con, buf).await?,
         tags::TAG_USET => kvengine::uset::uset(db, con, buf).await?,
         tags::TAG_KEYLEN => kvengine::keylen::keylen(db, con, buf).await?,
+        tags::TAG_MKSNAP => kvengine::mksnap::mksnap(db, con, buf).await?,
         _ => {
             con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?

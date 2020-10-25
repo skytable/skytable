@@ -142,18 +142,21 @@ impl<'a> SnapshotEngine<'a> {
         Utc::now().format("%Y%m%d-%H%M%S.snapshot").to_string()
     }
     /// Create a snapshot
-    pub fn mksnap(&mut self) -> bool {
+    ///
+    /// This returns `Some(true)` if everything went well, otherwise it returns
+    /// `Some(false)`. If the database is about to terminate, it returns `None`
+    pub fn mksnap(&mut self) -> Option<bool> {
         let rlock = self.dbref.acquire_read();
         if rlock.terminate {
             // The database is shutting down, don't create a snapshot
-            return false;
+            return None;
         }
         let mut snapname = PathBuf::new();
         snapname.push(&self.snap_dir);
         snapname.push(self.get_snapname());
         if let Err(e) = diskstore::flush_data(&snapname, &rlock.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
-            return true;
+            return Some(false);
         } else {
             log::info!("Successfully created snapshot");
         }
@@ -166,11 +169,12 @@ impl<'a> SnapshotEngine<'a> {
                     old_snapshot.to_string_lossy(),
                     e
                 );
+                return Some(false);
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
-        true
+        Some(true)
     }
     /// Delete all snapshots
     pub fn clearall(&mut self) -> TResult<()> {
@@ -188,7 +192,7 @@ impl<'a> SnapshotEngine<'a> {
 #[test]
 fn test_snapshot() {
     let ourdir = "TEST_SS";
-    let db = CoreDB::new_empty(3);
+    let db = CoreDB::new_empty(3, None);
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
@@ -210,16 +214,16 @@ fn test_snapshot() {
 #[test]
 fn test_pre_existing_snapshots() {
     let ourdir = "TEST_PX_SS";
-    let db = CoreDB::new_empty(3);
+    let db = CoreDB::new_empty(3, None);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap().unwrap().eq(&true));
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap().unwrap().eq(&true));
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap().unwrap().eq(&true));
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap().unwrap().eq(&true));
     // Now close everything down
     drop(snapengine);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
@@ -261,7 +265,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
                 }
             };
             while !handle.shared.is_termsig() {
-                if sengine.mksnap() {
+                if sengine.mksnap().is_some() {
                     tokio::select! {
                         _ = time::delay_until(time::Instant::now() + duration) => {},
                         _ = handle.shared.bgsave_task.notified() => {}
