@@ -53,9 +53,11 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             );
             if snapengine.is_err() {
                 was_engine_error = true;
+            } else {
+                let mut snapengine =
+                    snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+                outerror = snapengine.mksnap();
             }
-            let mut snapengine = snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
-            outerror = snapengine.mksnap();
         }
         if was_engine_error {
             return con
