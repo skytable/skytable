@@ -128,6 +128,26 @@ impl Writable for RespCodes {
             con: &mut BufWriter<TcpStream>,
             code: RespCodes,
         ) -> Result<(), Box<dyn Error>> {
+            if let RespCodes::OtherError(Some(e)) = code {
+                // Since this is an other error which contains a description
+                // we'll write !<no_of_bytes> followed by the string
+                con.write(&[b'!']).await?;
+                // Convert the string into a vector of bytes
+                let e = e.to_string().into_bytes();
+                // Now get the length of the byte vector and turn it into
+                // a string and then into a byte vector
+                let len_as_bytes = e.len().to_string().into_bytes();
+                // Write the length
+                con.write(&len_as_bytes).await?;
+                // Then an LF
+                con.write(&[b'\n']).await?;
+                // Then the error string
+                con.write(&e).await?;
+                // Then another LF
+                con.write(&[b'\n']).await?;
+                // And now we're done
+                return Ok(());
+            }
             // Self's tsymbol is !
             // The length of the response code is 1
             // And we need a newline
