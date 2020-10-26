@@ -23,6 +23,7 @@
 
 use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
+use crate::coredb::SnapshotStatus;
 use crate::diskstore;
 use chrono::prelude::*;
 use libtdb::TResult;
@@ -155,7 +156,7 @@ impl<'a> SnapshotEngine<'a> {
     ///
     /// ## Panics
     /// If snapshotting is disabled in `CoreDB` then this will panic badly! It
-    /// may not even panic: but terminate abruptly with _invalid instruction_
+    /// may not even panic: but terminate abruptly with `SIGILL`
     pub fn mksnap(&mut self) -> Option<bool> {
         log::trace!("Snapshotting was initiated");
         while (*self.dbref.snapcfg)
@@ -220,7 +221,7 @@ impl<'a> SnapshotEngine<'a> {
 #[test]
 fn test_snapshot() {
     let ourdir = "TEST_SS";
-    let db = CoreDB::new_empty(3, std::sync::Arc::new(None));
+    let db = CoreDB::new_empty(3, std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
@@ -242,7 +243,7 @@ fn test_snapshot() {
 #[test]
 fn test_pre_existing_snapshots() {
     let ourdir = "TEST_PX_SS";
-    let db = CoreDB::new_empty(3, std::sync::Arc::new(None));
+    let db = CoreDB::new_empty(3, std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
     assert!(snapengine.mksnap().unwrap().eq(&true));
