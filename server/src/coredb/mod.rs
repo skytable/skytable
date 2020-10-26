@@ -60,7 +60,48 @@ pub struct CoreDB {
     ///
     /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
     /// Some(n), n ∈ Z<sup>+</sup> — then _n_ snapshots will be kept at the maximum. If set to `None`, snapshotting is disabled.
-    pub snap_count: Option<usize>,
+    pub snapcfg: Arc<Option<SnapshotStatus>>,
+}
+
+/// The status and details of the snapshotting service
+///
+/// The in_progress field is kept behind a mutex to ensure only one snapshot
+/// operation can run at a time. Although on the server side this isn't a problem
+/// because we don't have multiple snapshot tasks, but can be an issue when external
+/// snapshots are triggered, for example via `MKSNAP`
+#[derive(Debug)]
+pub struct SnapshotStatus {
+    /// The maximum number of recent snapshots to keep
+    pub max: usize,
+    /// The current state of the snapshot service
+    pub in_progress: RwLock<bool>,
+}
+
+impl SnapshotStatus {
+    /// Create a new `SnapshotStatus` instance with preset values
+    ///
+    /// **Note: ** The initial state of the snapshot service is set to false
+    pub fn new(max: usize) -> Self {
+        SnapshotStatus {
+            max,
+            in_progress: RwLock::new(false),
+        }
+    }
+
+    /// Set `in_progress` to true
+    pub fn lock_snap(&self) {
+        *self.in_progress.write() = true;
+    }
+
+    /// Set `in_progress` to false
+    pub fn unlock_snap(&self) {
+        *self.in_progress.write() = false;
+    }
+
+    /// Check if `in_progress` is set to true
+    pub fn is_busy(&self) -> bool {
+        *self.in_progress.read()
+    }
 }
 
 /// A shared _state_
@@ -158,7 +199,23 @@ impl CoreDB {
 
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
-        self.snap_count.is_some()
+        self.snapcfg.is_some()
+    }
+
+    /// Mark the snapshotting service to be busy
+    ///
+    /// ## Panics
+    /// If snapshotting is disabled, this will panic
+    pub fn lock_snap(&self) {
+        (*self.snapcfg).as_ref().unwrap().lock_snap();
+    }
+
+    /// Mark the snapshotting service to be free
+    ///
+    /// ## Panics
+    /// If snapshotting is disabled, this will panic
+    pub fn unlock_snap(&self) {
+        (*self.snapcfg).as_ref().unwrap().unlock_snap();
     }
 
     /// Returns the expected `Arc::strong_count` for the `CoreDB` object
@@ -192,6 +249,11 @@ impl CoreDB {
             background_tasks += 1;
             snap_count = Some(atmost);
         }
+        let snapcfg = if let Some(max) = snap_count {
+            Arc::new(Some(SnapshotStatus::new(max)))
+        } else {
+            Arc::new(None)
+        };
         let db = if let Some(coretable) = coretable {
             CoreDB {
                 shared: Arc::new(Shared {
@@ -203,10 +265,10 @@ impl CoreDB {
                     snapshot_service: Notify::new(),
                 }),
                 background_tasks,
-                snap_count,
+                snapcfg,
             }
         } else {
-            CoreDB::new_empty(background_tasks, snap_count)
+            CoreDB::new_empty(background_tasks, snapcfg)
         };
         // Spawn the background save task in a separate task
         tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
@@ -218,7 +280,7 @@ impl CoreDB {
         Ok(db)
     }
     /// Create an empty in-memory table
-    pub fn new_empty(background_tasks: usize, snap_count: Option<usize>) -> Self {
+    pub fn new_empty(background_tasks: usize, snapcfg: Arc<Option<SnapshotStatus>>) -> Self {
         CoreDB {
             shared: Arc::new(Shared {
                 bgsave_task: Notify::new(),
@@ -229,7 +291,7 @@ impl CoreDB {
                 snapshot_service: Notify::new(),
             }),
             background_tasks,
-            snap_count,
+            snapcfg,
         }
     }
     /// Acquire a write lock

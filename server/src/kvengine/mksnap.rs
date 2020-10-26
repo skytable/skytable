@@ -43,26 +43,35 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
         let mut outerror = None;
+        let mut engine_was_busy = false;
         {
-            let snapengine = SnapshotEngine::new(
-                handle
-                    .snap_count
-                    .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
-                &handle,
-                None,
-            );
+            let snaphandle = handle.snapcfg.clone();
+            let snapstatus = (*snaphandle)
+                .as_ref()
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+            let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
             if snapengine.is_err() {
                 was_engine_error = true;
             } else {
-                let mut snapengine =
-                    snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
-                outerror = snapengine.mksnap();
+                if snapstatus.is_busy() {
+                    engine_was_busy = true;
+                } else {
+                    let mut snapengine =
+                        snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+
+                    outerror = snapengine.mksnap();
+                }
             }
         }
         if was_engine_error {
             return con
                 .write_response(responses::fresp::R_SERVER_ERR.to_owned())
                 .await;
+        }
+        if engine_was_busy {
+            con.write_response(GroupBegin(1)).await?;
+            let error = RespCodes::OtherError(Some("Snapshotting already in progress".to_owned()));
+            return con.write_response(error).await;
         }
         if let Some(val) = outerror {
             if val {

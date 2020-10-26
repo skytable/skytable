@@ -28,6 +28,7 @@ use chrono::prelude::*;
 use libtdb::TResult;
 use regex::Regex;
 use std::fs;
+use std::hint::unreachable_unchecked;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 lazy_static::lazy_static! {
@@ -144,10 +145,31 @@ impl<'a> SnapshotEngine<'a> {
     /// Create a snapshot
     ///
     /// This returns `Some(true)` if everything went well, otherwise it returns
-    /// `Some(false)`. If the database is about to terminate, it returns `None`
+    /// `Some(false)`. If the database is about to terminate, it returns `None`.
+    ///
+    /// ## Nature
+    ///
+    /// This function is **blocking in nature** since it waits for the snapshotting service
+    /// to be free. It's best to check if the snapshotting service is busy by using the function `coredb.snapcfg.is_busy()`
+    ///
+    ///
+    /// ## Panics
+    /// If snapshotting is disabled in `CoreDB` then this will panic badly! It
+    /// may not even panic: but terminate abruptly with _invalid instruction_
     pub fn mksnap(&mut self) -> Option<bool> {
+        log::trace!("Snapshotting was initiated");
+        while (*self.dbref.snapcfg)
+            .as_ref()
+            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .is_busy()
+        {
+            // Endlessly wait for a lock to be free
+        }
+        log::trace!("Acquired a lock on the snapshot service");
+        self.dbref.lock_snap(); // Set the snapshotting service to be busy
         let rlock = self.dbref.acquire_read();
         if rlock.terminate {
+            self.dbref.unlock_snap();
             // The database is shutting down, don't create a snapshot
             return None;
         }
@@ -156,6 +178,8 @@ impl<'a> SnapshotEngine<'a> {
         snapname.push(self.get_snapname());
         if let Err(e) = diskstore::flush_data(&snapname, &rlock.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
+            self.dbref.unlock_snap();
+            log::trace!("Released lock on the snapshot service");
             return Some(false);
         } else {
             log::info!("Successfully created snapshot");
@@ -169,11 +193,15 @@ impl<'a> SnapshotEngine<'a> {
                     old_snapshot.to_string_lossy(),
                     e
                 );
+                self.dbref.unlock_snap();
+                log::trace!("Released lock on the snapshot service");
                 return Some(false);
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
+        self.dbref.unlock_snap();
+        log::trace!("Released lock on the snapshot service");
         Some(true)
     }
     /// Delete all snapshots
@@ -192,7 +220,7 @@ impl<'a> SnapshotEngine<'a> {
 #[test]
 fn test_snapshot() {
     let ourdir = "TEST_SS";
-    let db = CoreDB::new_empty(3, None);
+    let db = CoreDB::new_empty(3, std::sync::Arc::new(None));
     let mut write = db.acquire_write();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
@@ -214,7 +242,7 @@ fn test_snapshot() {
 #[test]
 fn test_pre_existing_snapshots() {
     let ourdir = "TEST_PX_SS";
-    let db = CoreDB::new_empty(3, None);
+    let db = CoreDB::new_empty(3, std::sync::Arc::new(None));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
     assert!(snapengine.mksnap().unwrap().eq(&true));
