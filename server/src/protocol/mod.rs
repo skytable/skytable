@@ -19,6 +19,12 @@
  *
 */
 
+//! # The `protocol` module
+//!
+//! This module provides low-level interfaces to read data from a socket, when control
+//! is handed over to it by `dbnet`, and high-level interfaces for parsing an incoming
+//! query into an _executable query_ via the `deserializer` module.
+
 mod deserializer;
 pub mod responses;
 use crate::resp::Writable;

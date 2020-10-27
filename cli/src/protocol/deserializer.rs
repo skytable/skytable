@@ -77,7 +77,7 @@ impl fmt::Display for DataGroup {
                             }
                         }
                     } else {
-                        terminal::write_error(format!("(\"{}\") ", rc))?;
+                        terminal::write_error(format!("[ERROR: '{}'] ", rc))?;
                     }
                 }
                 _ => unimplemented!(),

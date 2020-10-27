@@ -20,6 +20,18 @@
 */
 
 //! A library containing a collection of custom derives used by TerrabaseDB
+//!
+//! ## Ghost values
+//! We extensively use jargon like 'Ghost values'...but what exactly are they?
+//! Ghost values are variables which are provided by the compiler macros, i.e the
+//! _proc macros_. These values are just like normal variables except for the fact
+//! that they aren't explicitly declared in code, and should be used directly. Make
+//! sure that you don't overwrite a macro provided variable!
+//!
+//! ### Macros and ghost values
+//! - `#[dbtest]`:
+//!     - `stream` - `tokio::net::TcpListener`
+//!     - `asyncdb` - `tdb::coredb::CoreDB`
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -47,10 +59,16 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        let addr = crate::tests::start_test_server(#rand, None).await;
+        let asyncdb = crate::coredb::CoreDB::new(
+            crate::config::BGSave::Disabled,
+            crate::config::SnapshotConfig::default()
+        ).unwrap();
+        let addr = crate::tests::start_test_server(#rand, Some(asyncdb.clone())).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body
         stream.shutdown(::std::net::Shutdown::Write).unwrap();
+        asyncdb.finish_db();
+        drop(asyncdb);
     };
     let result = quote! {
         #header
@@ -194,7 +212,6 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     #token
                 };
             }
-            _ => continue,
         }
     }
     result.into()
@@ -217,7 +234,8 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// macro in any other crate, you'll simply get compilation errors
 ///
 /// ## _Ghost_ values
-/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable.
+/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable and a `tdb::coredb::CoreDB`
+/// accessible by the `asyncdb` variable.
 ///
 /// ## Requirements
 ///

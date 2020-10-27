@@ -19,6 +19,12 @@
  *
 */
 
+//! # TerrabaseDB
+//!
+//! The `tdb` crate (or the `server` folder) is TerrabaseDB's database server and maybe
+//! is the most important part of the project. There are several modules within this crate; see
+//! the modules for their respective documentation.
+
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use tokio::net::TcpListener;
@@ -43,9 +49,12 @@ use jemallocator::Jemalloc;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
+/// Jemallocator - this is the default memory allocator for platforms other than msvc
 static GLOBAL: Jemalloc = Jemalloc;
 
+/// The version text
 static MSG: &'static str = "TerrabaseDB v0.4.5-alpha.1 | https://github.com/terrabasedb/terrabase";
+/// The terminal art for `!noart` configurations
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
      |__   __|                     | |                      |  __ \\ |  _ \\ 

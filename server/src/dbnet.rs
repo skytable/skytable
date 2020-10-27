@@ -19,6 +19,21 @@
  *
 */
 
+//! # `DBNET` - Database Networking
+//! This module provides low-level interaction with sockets. It handles the creation of
+//! a task for an incoming connection, handling errors if required and finally processing an incoming
+//! query.
+//!
+//! ## Typical flow
+//! This is how connections are handled:
+//! 1. A remote client creates a TCP connection to the server
+//! 2. An asynchronous is spawned on the Tokio runtime
+//! 3. Data from the socket is asynchronously read into an 8KB read buffer
+//! 4. Once the data is read completely (i.e the source sends an EOF byte), the `protocol` module
+//! is used to parse the stream
+//! 5. Now errors are handled if they occur. Otherwise, the query is executed by `CoreDB::execute_query()`
+//!
+
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::protocol::{Connection, QueryResult::*};
