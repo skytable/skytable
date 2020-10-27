@@ -30,16 +30,15 @@ use std::hint::unreachable_unchecked;
 /// Create a snapshot
 ///
 pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    if !handle.is_snapshot_enabled() {
-        // Since snapshotting is disabled, we can't create a snapshot!
-        // We'll just return an error returning the same
-        let error = "Snapshotting is disabled";
-        con.write_response(GroupBegin(1)).await?;
-        let error = RespCodes::OtherError(Some(error.to_string()));
-        return con.write_response(error).await;
-    }
-    let howmany = act.howmany();
-    if howmany == 0 {
+    if act.howmany() == 0 {
+        if !handle.is_snapshot_enabled() {
+            // Since snapshotting is disabled, we can't create a snapshot!
+            // We'll just return an error returning the same
+            let error = "err-snapshot-disabled";
+            con.write_response(GroupBegin(1)).await?;
+            let error = RespCodes::OtherError(Some(error.to_string()));
+            return con.write_response(error).await;
+        }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
         let mut outerror = None;
@@ -70,7 +69,7 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         }
         if engine_was_busy {
             con.write_response(GroupBegin(1)).await?;
-            let error = RespCodes::OtherError(Some("Snapshotting already in progress".to_owned()));
+            let error = RespCodes::OtherError(Some("err-snapshot-busy".to_owned()));
             return con.write_response(error).await;
         }
         if let Some(val) = outerror {
@@ -90,7 +89,7 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             // We shouldn't ever reach here if all our logic is correct
             // but if we do, something is wrong with the runtime
             con.write_response(GroupBegin(1)).await?;
-            let error = RespCodes::OtherError(Some("access-after-termsig".to_owned()));
+            let error = RespCodes::OtherError(Some("err-access-after-termsig".to_owned()));
             return con.write_response(error).await;
         }
     } else {

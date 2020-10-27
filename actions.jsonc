@@ -143,5 +143,13 @@
         "args": "KEYLEN <key>",
         "desc": "Returns the length of the UTF-8 string",
         "return": "Length of the key as an unsigned int",
+    },
+    {
+        "name": "MKSNAP",
+        "since": "0.4.5",
+        "complexity": "O(n)",
+        "args": "MKSNAP",
+        "desc": "Create a snapshot",
+        "return": "Okay if succeeded, otherwise it returns `err-snapshot-disabled` if snapshotting is disabled or `err-snapshot-busy` if a snapshotting operation is already in progress"
     }
 ]

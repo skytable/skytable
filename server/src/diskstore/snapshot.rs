@@ -23,6 +23,7 @@
 
 use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
+#[cfg(test)]
 use crate::coredb::SnapshotStatus;
 use crate::diskstore;
 use chrono::prelude::*;

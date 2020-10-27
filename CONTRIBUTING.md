@@ -32,15 +32,23 @@ In other cases, use the C style.
 
 ### Parts of the project
 
-The project root has three main directories:
+* `ci` , `.github` : CI scripts (which, under normal circumstances, don't need to be modified)
+* `cli` : Source for `tsh` which is the command-line client for TDB
+* `examples` : Example configuration files
+* `libtdb` : This contains functions, structs, ... used by both the `cli` and the 
+* `server` : Source for the main database server `tdb`
+* `tdb-bench` : The source for the benchmarking tool resides here
+* `tdb-macros` : The source for custom compiler macros used by TerrabaseDB
 
-* `cli` : This contains code for `tsh` which is the command-line client for TDB
-* `libtdb` : This contains function, structs, ... used by both the `cli` and the `server`
-* `server` : This contains code for the main database server
+### Jargon
+
+Each project has its own jargon — and so do we!
+
+* _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the TerrabaseDB documentation website for automatically building documentation for the actions
 
 ### Branches
 
-The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download the sources from the tags. Usually, when a feature is worked on, the work will be done on a separate branch, and then it will be merged into next.
+The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download sources from the tags. Usually, when a feature is worked on, the work will be done on a separate branch, and then it will be merged into next.
 
 ## Steps
 
