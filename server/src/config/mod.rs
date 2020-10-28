@@ -371,10 +371,13 @@ pub enum ConfigType<T> {
 
 /// Type of configuration error:
 /// - The config file was not found (`OSError`)
-/// - THe config file was invalid (`SyntaxError`)
+/// - The config file was invalid (`SyntaxError`)
+/// - The config file has an invalid value, which is syntatically correct
+/// but logically incorrect (`CfgError`)
 pub enum ConfigError {
     OSError(Box<dyn Error>),
     SyntaxError(Box<dyn Error>),
+    CfgError(&'static str),
 }
 
 impl fmt::Display for ConfigError {
@@ -382,6 +385,7 @@ impl fmt::Display for ConfigError {
         match self {
             ConfigError::OSError(e) => write!(f, "error: {}\n", e),
             ConfigError::SyntaxError(e) => write!(f, "syntax error in configuration file: {}\n", e),
+            ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
         }
     }
 }
@@ -400,6 +404,20 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, Confi
             Ok(cfg) => {
                 if cfg.bgsave.is_disabled() {
                     log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
+                }
+                if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
+                    if e.every == 0 {
+                        return Err(ConfigError::CfgError(
+                            "The snapshot duration has to be greater than 0!",
+                        ));
+                    }
+                }
+                if let BGSave::Enabled(dur) = &cfg.bgsave {
+                    if *dur == 0 {
+                        return Err(ConfigError::CfgError(
+                            "The BGSAVE duration has to be greater than 0!",
+                        ));
+                    }
                 }
                 return Ok(ConfigType::Custom(cfg));
             }
