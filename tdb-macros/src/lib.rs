@@ -178,10 +178,27 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         /*
         Since standard (non-root) users can only access ports greater than 1024
         we will set the limit to (1024, 65535)
+        However, for Windows, several ports in the range [49670, 50293] and ports {5357, 7680} are taken
+        over by Hyper-V, which is why we'll prevent attempts to bind to them, if
+        the OS is Windows.
         */
         let mut rand: u16 = rng.gen_range(1025, 65535);
-        while in_set.contains(&rand) {
-            rand = rng.gen_range(1025, 65535);
+        #[cfg(not(target_os = "windows"))]
+        {
+            while in_set.contains(&rand) {
+                rand = rng.gen_range(1025, 65535);
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            in_set.insert(5357);
+            in_set.insert(7680);
+            while in_set.contains(&rand) {
+                rand = rng.gen_range(1025, 65535);
+                if rand >= 49670 && rand <= 50293 {
+                    rand = rng.gen_range(1025, 65535);
+                }
+            }
         }
         in_set.insert(rand);
         match item {
