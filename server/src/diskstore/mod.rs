@@ -108,7 +108,7 @@ pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
         if handle.shared.run_bgsave() {
             tokio::select! {
                 // Sleep until `duration` from the current time instant
-                _ = time::delay_until(time::Instant::now() + duration) => {}
+                _ = time::sleep_until(time::Instant::now() + duration) => {}
                 // Otherwise wait for a notification
                 _ = handle.shared.bgsave_task.notified() => {}
             }

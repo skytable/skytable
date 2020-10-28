@@ -74,9 +74,8 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
         #header
         #(#attrs)*
         #vis #sig {
-            tokio::runtime::Builder::new()
-            .threaded_scheduler()
-            .core_threads(4)
+            tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
             .thread_name(#fname)
             .thread_stack_size(3 * 1024 * 1024)
             .enable_all()

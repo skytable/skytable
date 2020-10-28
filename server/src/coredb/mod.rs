@@ -343,8 +343,8 @@ impl Drop for CoreDB {
             // to get a read lock
             drop(coretable);
             // Notify the background tasks to quit
-            self.shared.bgsave_task.notify();
-            self.shared.snapshot_service.notify();
+            self.shared.bgsave_task.notify_one();
+            self.shared.snapshot_service.notify_one();
         }
     }
 }

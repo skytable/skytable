@@ -297,7 +297,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
             while !handle.shared.is_termsig() {
                 if sengine.mksnap().is_some() {
                     tokio::select! {
-                        _ = time::delay_until(time::Instant::now() + duration) => {},
+                        _ = time::sleep_until(time::Instant::now() + duration) => {},
                         _ = handle.shared.bgsave_task.notified() => {}
                     }
                 } else {

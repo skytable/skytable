@@ -369,6 +369,7 @@ pub enum ConfigType<T> {
     Custom(T),
 }
 
+#[derive(Debug)]
 /// Type of configuration error:
 /// - The config file was not found (`OSError`)
 /// - The config file was invalid (`SyntaxError`)

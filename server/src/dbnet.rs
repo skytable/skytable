@@ -125,7 +125,7 @@ impl Listener {
                 }
             }
             // Wait for the `backoff` duration
-            time::delay_for(Duration::from_secs(backoff)).await;
+            time::sleep(Duration::from_secs(backoff)).await;
             // We're using exponential backoff
             backoff *= 2;
         }
