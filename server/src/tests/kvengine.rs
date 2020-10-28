@@ -653,4 +653,14 @@ mod __private {
         stream.read_exact(&mut response).await.unwrap();
         assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
     }
+    async fn test_mksnap_disabled() {
+        let query = terrapipe::proc_query("MKSNAP");
+        stream.write_all(&query).await.unwrap();
+        let res_should_be = "#2\n*1\n#2\n&1\n!21\nerr-snapshot-disabled\n"
+            .to_owned()
+            .into_bytes();
+        let mut response = vec![0; res_should_be.len()];
+        stream.read_exact(&mut response).await.unwrap();
+        assert_eq!(res_should_be, response);
+    }
 }
