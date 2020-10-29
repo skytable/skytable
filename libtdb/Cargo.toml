@@ -1,6 +1,6 @@
 [package]
 name = "libtdb"
-version = "0.4.5-alpha.2"
+version = "0.4.5"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 

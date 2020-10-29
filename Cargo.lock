@@ -229,7 +229,7 @@ checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 
 [[package]]
 name = "libtdb"
-version = "0.4.5-alpha.2"
+version = "0.4.5"
 dependencies = [
  "bytes 0.5.6",
  "lazy_static",
@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "tdb"
-version = "0.4.5-alpha.2"
+version = "0.4.5"
 dependencies = [
  "bincode",
  "bytes 0.6.0",
@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "tsh"
-version = "0.4.5-alpha.2"
+version = "0.4.5"
 dependencies = [
  "bytes 0.6.0",
  "lazy_static",

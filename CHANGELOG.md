@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.4.5 [2020-10-29]
+
+> No breaking changes
+
+This release adds support for automated snapshots, while also adding the `MKSNAP` action for doing the same remotely.
+
 ## Version 0.4.4 [2020-10-03]
 
 > No breaking changes
