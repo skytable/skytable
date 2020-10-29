@@ -33,7 +33,6 @@ use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
-mod cyansfw;
 pub mod snapshot;
 
 type DiskStore = (Vec<String>, Vec<Vec<u8>>);
