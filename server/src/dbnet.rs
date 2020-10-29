@@ -41,6 +41,7 @@ use crate::CoreDB;
 use libtdb::util::terminal;
 use libtdb::TResult;
 use std::future::Future;
+use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -189,10 +190,11 @@ pub async fn run(
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
+    restore_filepath: Option<PathBuf>,
 ) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let db = match CoreDB::new(bgsave_cfg, snapshot_cfg) {
+    let db = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
         Ok(d) => d,
         Err(e) => {
             eprintln!("ERROR: {}", e);

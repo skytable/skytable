@@ -35,6 +35,7 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::Notify;
@@ -238,8 +239,12 @@ impl CoreDB {
     ///
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
-    pub fn new(bgsave: BGSave, snapshot_cfg: SnapshotConfig) -> TResult<Self> {
-        let coretable = diskstore::get_saved(Some(PERSIST_FILE.to_path_buf()))?;
+    pub fn new(
+        bgsave: BGSave,
+        snapshot_cfg: SnapshotConfig,
+        restore_file: Option<PathBuf>,
+    ) -> TResult<Self> {
+        let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
             background_tasks += 1;

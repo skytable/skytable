@@ -13,6 +13,6 @@ every = 120
 [snapshot]
 enabled = true # set to false to disable snapshots
 # Create a snapshot every hour (1 hour = 60 minutes = 60 * 60 seconds = 3600 seconds)
-every = 3600
+every = 10
 # How many of the snapshots to keep
 atmost = 4 # keep the four most recent snapshots

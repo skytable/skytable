@@ -31,3 +31,10 @@ args:
       value_name: cfgfile
       help: Use a configuration file to start tdb
       takes_value: true
+  - restore:
+      short: r
+      required: false
+      long: restore
+      value_name: restorefile
+      help: Restore data from a previous snapshot
+      takes_value: true

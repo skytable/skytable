@@ -30,6 +30,7 @@ use std::fs;
 #[cfg(test)]
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
+use std::path::PathBuf;
 use tokio::net::ToSocketAddrs;
 use toml;
 
@@ -364,9 +365,9 @@ use clap::{load_yaml, App};
 /// The type of configuration:
 /// - We either used a custom configuration file given to us by the user (`Custom`) OR
 /// - We used the default configuration (`Def`)
-pub enum ConfigType<T> {
-    Def(T),
-    Custom(T),
+pub enum ConfigType<T, U> {
+    Def(T, Option<U>),
+    Custom(T, Option<U>),
 }
 
 #[derive(Debug)]
@@ -396,9 +397,14 @@ impl fmt::Display for ConfigError {
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
 /// contains an error, then this returns it as an `Err` variant
-pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, ConfigError> {
+pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBuf>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
+    let restorefile = matches.value_of("restore").map(|val| {
+        let mut path = PathBuf::from("snapshots/");
+        path.push(val);
+        path
+    });
     let filename = matches.value_of("config");
     if let Some(filename) = filename {
         match ParsedConfig::new_from_file(filename.to_owned()) {
@@ -420,12 +426,12 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig>, Confi
                         ));
                     }
                 }
-                return Ok(ConfigType::Custom(cfg));
+                return Ok(ConfigType::Custom(cfg, restorefile));
             }
             Err(e) => return Err(e),
         }
     } else {
-        Ok(ConfigType::Def(ParsedConfig::default()))
+        Ok(ConfigType::Def(ParsedConfig::default(), restorefile))
     }
 }
 

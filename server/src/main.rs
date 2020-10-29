@@ -74,22 +74,29 @@ async fn main() {
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    let (tcplistener, bgsave_config, snapshot_config) = check_args_or_connect().await;
+    let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
+        check_args_or_connect().await;
     run(
         tcplistener,
         bgsave_config,
         snapshot_config,
         signal::ctrl_c(),
+        restore_filepath,
     )
     .await;
 }
 
 /// This function checks the command line arguments and binds to an appropriate
 /// port and host, as per the supplied configuration options
-async fn check_args_or_connect() -> (TcpListener, BGSave, SnapshotConfig) {
+async fn check_args_or_connect() -> (
+    TcpListener,
+    BGSave,
+    SnapshotConfig,
+    Option<std::path::PathBuf>,
+) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
-        Ok(config::ConfigType::Custom(cfg)) => {
+        Ok(config::ConfigType::Custom(cfg, file)) => {
             if cfg.is_artful() {
                 println!("{}\n{}", TEXT, MSG);
             } else {
@@ -100,15 +107,17 @@ async fn check_args_or_connect() -> (TcpListener, BGSave, SnapshotConfig) {
                 TcpListener::bind(cfg.get_host_port_tuple()).await,
                 cfg.bgsave,
                 cfg.snapshot,
+                file,
             )
         }
-        Ok(config::ConfigType::Def(cfg)) => {
+        Ok(config::ConfigType::Def(cfg, file)) => {
             println!("{}\n{}", TEXT, MSG);
             log::warn!("No configuration file supplied. Using default settings");
             (
                 TcpListener::bind(cfg.get_host_port_tuple()).await,
                 cfg.bgsave,
                 cfg.snapshot,
+                file,
             )
         }
         Err(e) => {
@@ -117,8 +126,10 @@ async fn check_args_or_connect() -> (TcpListener, BGSave, SnapshotConfig) {
         }
     };
     match binding_and_cfg {
-        (Ok(b), bgsave_cfg, snapshot_cfg) => (b, bgsave_cfg, snapshot_cfg),
-        (Err(e), _, _) => {
+        (Ok(b), bgsave_cfg, snapshot_cfg, restore_file) => {
+            (b, bgsave_cfg, snapshot_cfg, restore_file)
+        }
+        (Err(e), _, _, _) => {
             log::error!("Failed to bind to socket with error: '{}'", e);
             std::process::exit(0x100);
         }

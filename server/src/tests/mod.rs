@@ -48,7 +48,7 @@ async fn start_test_server(port: u16, db: Option<CoreDB>) -> SocketAddr {
     let db = if let Some(db) = db {
         db
     } else {
-        CoreDB::new(BGSave::Disabled, SnapshotConfig::default()).unwrap()
+        CoreDB::new(BGSave::Disabled, SnapshotConfig::default(), None).unwrap()
     };
     let listener = TcpListener::bind(socket)
         .await
