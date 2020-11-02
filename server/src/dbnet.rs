@@ -201,6 +201,12 @@ pub async fn run(
             process::exit(0x100);
         }
     };
+    log::info!(
+        "Started server on terrapipe://{}",
+        listener
+            .local_addr()
+            .expect("The local address couldn't be fetched. Please file a bug report")
+    );
     let mut server = Listener {
         listener,
         db,

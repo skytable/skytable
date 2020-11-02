@@ -102,7 +102,7 @@ async fn check_args_or_connect() -> (
             } else {
                 println!("{}", MSG);
             }
-            log::info!("Using settings from config file");
+            log::info!("Using settings from supplied configuration");
             (
                 TcpListener::bind(cfg.get_host_port_tuple()).await,
                 cfg.bgsave,

@@ -24,17 +24,37 @@ version: 0.4.5
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Database server
 args:
-  - config:
-      short: c
-      required: false
-      long: withconfig
-      value_name: cfgfile
-      help: Use a configuration file to start tdb
-      takes_value: true
-  - restore:
-      short: r
-      required: false
-      long: restore
-      value_name: restorefile
-      help: Restore data from a previous snapshot
-      takes_value: true
+    - config:
+          short: c
+          required: false
+          long: withconfig
+          value_name: cfgfile
+          help: Use a configuration file to start tdb
+          takes_value: true
+    - restore:
+          short: r
+          required: false
+          long: restore
+          value_name: restorefile
+          help: Restore data from a previous snapshot
+          takes_value: true
+    - host:
+          short: h
+          required: false
+          long: host
+          value_name: host
+          help: Set the host to which the server will bind
+          takes_value: true
+    - port:
+          short: p
+          required: false
+          long: port
+          value_name: port
+          help: Set the port to which the server will bind
+          takes_value: true
+    - noart:
+          short: x
+          required: false
+          long: noart
+          help: Use this flag to disable terminal artwork
+          takes_value: false

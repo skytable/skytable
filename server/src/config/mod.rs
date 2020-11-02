@@ -380,6 +380,7 @@ pub enum ConfigError {
     OSError(Box<dyn Error>),
     SyntaxError(Box<dyn Error>),
     CfgError(&'static str),
+    CliArgErr(&'static str),
 }
 
 impl fmt::Display for ConfigError {
@@ -388,6 +389,7 @@ impl fmt::Display for ConfigError {
             ConfigError::OSError(e) => write!(f, "error: {}\n", e),
             ConfigError::SyntaxError(e) => write!(f, "syntax error in configuration file: {}\n", e),
             ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
+            ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
         }
     }
 }
@@ -406,6 +408,49 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
         path
     });
     let filename = matches.value_of("config");
+    let host = matches.value_of("host");
+    let port = matches.value_of("port");
+    let noart = matches.is_present("noart");
+    let cli_has_overrideable_args = host.is_some() || port.is_some() || noart;
+    if filename.is_some() && cli_has_overrideable_args {
+        return Err(ConfigError::CfgError(
+            "Either use command line arguments or use a configuration file",
+        ));
+    }
+    // At this point we're sure that either a configuration file or command-line arguments
+    // were supplied
+    if cli_has_overrideable_args {
+        let port: u16 = match port {
+            Some(p) => match p.parse() {
+                Ok(parsed) => parsed,
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--port`. Expected an unsigned 16-bit integer",
+                    ))
+                }
+            },
+            None => 2003,
+        };
+        let host: IpAddr = match host {
+            Some(h) => match h.parse() {
+                Ok(h) => h,
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address",
+                    ));
+                }
+            },
+            None => "127.0.0.1".parse().unwrap(),
+        };
+        let cfg = ParsedConfig::new(
+            host,
+            port,
+            noart,
+            BGSave::default(),
+            SnapshotConfig::default(),
+        );
+        return Ok(ConfigType::Custom(cfg, restorefile));
+    }
     if let Some(filename) = filename {
         match ParsedConfig::new_from_file(filename.to_owned()) {
             Ok(cfg) => {
