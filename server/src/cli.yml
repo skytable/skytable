@@ -24,37 +24,60 @@ version: 0.4.5
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Database server
 args:
-    - config:
-          short: c
-          required: false
-          long: withconfig
-          value_name: cfgfile
-          help: Use a configuration file to start tdb
-          takes_value: true
-    - restore:
-          short: r
-          required: false
-          long: restore
-          value_name: restorefile
-          help: Restore data from a previous snapshot
-          takes_value: true
-    - host:
-          short: h
-          required: false
-          long: host
-          value_name: host
-          help: Set the host to which the server will bind
-          takes_value: true
-    - port:
-          short: p
-          required: false
-          long: port
-          value_name: port
-          help: Set the port to which the server will bind
-          takes_value: true
-    - noart:
-          short: x
-          required: false
-          long: noart
-          help: Use this flag to disable terminal artwork
-          takes_value: false
+        - config:
+                  short: c
+                  required: false
+                  long: withconfig
+                  value_name: cfgfile
+                  help: Sets a configuration file to start tdb
+                  takes_value: true
+        - restore:
+                  short: r
+                  required: false
+                  long: restore
+                  value_name: snapshotfile
+                  help: Restores data from a previous snapshot
+                  takes_value: true
+        - host:
+                  short: h
+                  required: false
+                  long: host
+                  value_name: host
+                  help: Sets the host to which the server will bind
+                  takes_value: true
+        - port:
+                  short: p
+                  required: false
+                  long: port
+                  value_name: port
+                  help: Sets the port to which the server will bind
+                  takes_value: true
+        - noart:
+                  required: false
+                  long: noart
+                  help: Disables terminal artwork
+                  takes_value: false
+        - nosave:
+                  required: false
+                  long: nosave
+                  help: Disables automated background saving
+                  takes_value: false
+        - saveduration:
+                  required: false
+                  long: saveduration
+                  value_name: duration
+                  short: S
+                  takes_value: true
+                  help: Set the BGSAVE duration
+        - snapevery:
+                  required: false
+                  long: snapevery
+                  value_name: duration
+                  help: Set the periodic snapshot duration
+                  takes_value: true
+        - snapkeep:
+                  required: false
+                  long: snapkeep
+                  value_name: count
+                  help: Sets the number of most recent snapshots to keep
+                  takes_value: true

@@ -376,6 +376,7 @@ pub enum ConfigType<T, U> {
 /// - The config file was invalid (`SyntaxError`)
 /// - The config file has an invalid value, which is syntatically correct
 /// but logically incorrect (`CfgError`)
+/// - The command line arguments have an invalid value/invalid values (`CliArgError`)
 pub enum ConfigError {
     OSError(Box<dyn Error>),
     SyntaxError(Box<dyn Error>),
@@ -411,7 +412,17 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
     let host = matches.value_of("host");
     let port = matches.value_of("port");
     let noart = matches.is_present("noart");
-    let cli_has_overrideable_args = host.is_some() || port.is_some() || noart;
+    let nosave = matches.is_present("nosave");
+    let snapevery = matches.value_of("snapevery");
+    let snapkeep = matches.value_of("snapkeep");
+    let saveduration = matches.value_of("saveduration");
+    let cli_has_overrideable_args = host.is_some()
+        || port.is_some()
+        || noart
+        || nosave
+        || snapevery.is_some()
+        || snapkeep.is_some()
+        || saveduration.is_some();
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
             "Either use command line arguments or use a configuration file",
@@ -420,6 +431,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
     // At this point we're sure that either a configuration file or command-line arguments
     // were supplied
     if cli_has_overrideable_args {
+        // This means that there are some command-line args that we need to parse
         let port: u16 = match port {
             Some(p) => match p.parse() {
                 Ok(parsed) => parsed,
@@ -442,13 +454,66 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
             },
             None => "127.0.0.1".parse().unwrap(),
         };
-        let cfg = ParsedConfig::new(
-            host,
-            port,
-            noart,
-            BGSave::default(),
-            SnapshotConfig::default(),
-        );
+        let bgsave = if nosave {
+            if saveduration.is_some() {
+                // If there is both `nosave` and `saveduration` - the arguments aren't logically correct!
+                // How would we run BGSAVE in a given `saveduration` if it is disabled? Return an error
+                return Err(ConfigError::CliArgErr("Invalid options for BGSAVE. Either supply `--nosave` or `--saveduration` or nothing"));
+            }
+            // It is our responsibility to keep the user aware of bad settings, so we'll send a warning
+            log::warn!("BGSAVE is disabled. You might lose data if the host crashes");
+            BGSave::Disabled
+        } else {
+            if let Some(duration) = saveduration.map(|dur| dur.parse()) {
+                // A duration is specified for BGSAVE, so use it
+                match duration {
+                    Ok(duration) => BGSave::new(true, duration),
+                    Err(_) => return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--saveduration`. Expected an unsigned 64-bit integer",
+                    )),
+                }
+            } else {
+                // There's no `nosave` and no `saveduration` - cool; we'll use the default configuration
+                BGSave::default()
+            }
+        };
+        let snapevery: Option<u64> = match snapevery {
+            Some(dur) => match dur.parse() {
+                Ok(dur) => Some(dur),
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--snapevery`. Expected an unsigned 64-bit integer",
+                    ))
+                }
+            },
+            None => None,
+        };
+        let snapkeep: Option<usize> = match snapkeep {
+            Some(maxtop) => match maxtop.parse() {
+                Ok(maxtop) => Some(maxtop),
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--snapkeep`. Expected an unsigned 64-bit integer",
+                    ))
+                }
+            },
+            None => None,
+        };
+        let snapcfg = match (snapevery, snapkeep) {
+            (Some(every), Some(keep)) => SnapshotConfig::Enabled(SnapshotPref::new(every, keep)),
+            (Some(_), None) => {
+                return Err(ConfigError::CliArgErr(
+                    "No value supplied for `--snapkeep`. When you supply `--snapevery`, you also need to specify `--snapkeep`"
+                ));
+            }
+            (None, Some(_)) => {
+                return Err(ConfigError::CliArgErr(
+                    "No value supplied for `--snapevery`. When you supply `--snapkeep`, you also need to specify `--snapevery`"
+                ));
+            }
+            (None, None) => SnapshotConfig::Disabled,
+        };
+        let cfg = ParsedConfig::new(host, port, noart, bgsave, snapcfg);
         return Ok(ConfigType::Custom(cfg, restorefile));
     }
     if let Some(filename) = filename {
