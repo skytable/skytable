@@ -24,6 +24,7 @@
 //! the response times may be shown to be slower than they actually are
 
 mod benchtool {
+    use clap::{load_yaml, App};
     use devtimer::DevTime;
     use libtdb::terrapipe;
     use rand::distributions::Alphanumeric;
@@ -118,26 +119,12 @@ mod benchtool {
 
     /// Run the benchmark tool
     pub fn runner() {
-        let mut args: Vec<String> = std::env::args().collect();
-        args.remove(0);
-        println!(
-            "------------------------------------------------------------\
-            \nTerrabaseDB Benchmark Tool v0.1.0\
-            \nReport issues here: https://github.com/terrabasedb/terrabasedb\
-            \n------------------------------------------------------------"
-        );
-        // connections queries packetsize
-        if args.len() != 3 {
-            eprintln!(
-                "Insufficient arguments!\
-                \nUSAGE: tdb-bench <connections> <queries> <packetsize-in-bytes>"
-            );
-            std::process::exit(0x100);
-        }
+        let cfg_layout = load_yaml!("./cli.yml");
+        let matches = App::from_yaml(cfg_layout).get_matches();
         let (max_connections, max_queries, packet_size) = match (
-            args[0].parse::<usize>(),
-            args[1].parse::<usize>(),
-            args[2].parse::<usize>(),
+            matches.value_of("connections").unwrap().parse::<usize>(),
+            matches.value_of("queries").unwrap().parse::<usize>(),
+            matches.value_of("size").unwrap().parse::<usize>(),
         ) {
             (Ok(mx), Ok(mc), Ok(ps)) => (mx, mc, ps),
             _ => {

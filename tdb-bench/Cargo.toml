@@ -1,6 +1,6 @@
 [package]
 name = "tdb-bench"
-version = "0.1.0"
+version = "0.4.5"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
@@ -10,3 +10,4 @@ edition = "2018"
 rand = "0.7.3"
 devtimer = "4.0.0"
 libtdb = {path="../libtdb"}
+clap = {version = "2.33.3", features=["yaml"]}

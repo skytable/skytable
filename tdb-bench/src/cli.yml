@@ -1,0 +1,49 @@
+#
+# Created on Tue Nov 03 2020
+#
+# This file is a part of TerrabaseDB
+# Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+#
+
+name: TerrabaseDB Benchmark Tool
+version: 0.4.5
+author: Sayan N. <ohsayan@outlook.com>
+about: |
+      The TerrabaseDB benchmark tool can be used to benchmark TerrabaseDB installations. 
+      If you find any issues, then report one here: https://github.com/terrabasedb/terrabasedb
+args:
+      - connections:
+              short: c
+              required: true
+              long: connections
+              value_name: count
+              help: Sets the number of simultaneous clients
+              takes_value: true
+      - queries:
+              short: q
+              required: true
+              long: queries
+              value_name: number
+              help: Sets the number of queries to run
+              takes_value: true
+      - size:
+              short: s
+              required: true
+              long: kvsize
+              value_name: bytes
+              help: Sets the size of the key/value pairs
+              takes_value: true
