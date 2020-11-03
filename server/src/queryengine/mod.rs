@@ -22,9 +22,9 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
-use crate::kvengine;
 use crate::protocol::ActionGroup;
 use crate::protocol::{responses, Connection};
+use crate::{admin, kvengine};
 use libtdb::TResult;
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
@@ -92,7 +92,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup)
         tags::TAG_FLUSHDB => kvengine::flushdb::flushdb(db, con, buf).await?,
         tags::TAG_USET => kvengine::uset::uset(db, con, buf).await?,
         tags::TAG_KEYLEN => kvengine::keylen::keylen(db, con, buf).await?,
-        tags::TAG_MKSNAP => kvengine::mksnap::mksnap(db, con, buf).await?,
+        tags::TAG_MKSNAP => admin::mksnap::mksnap(db, con, buf).await?,
         _ => {
             con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?

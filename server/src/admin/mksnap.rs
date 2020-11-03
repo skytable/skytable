@@ -20,17 +20,23 @@
 */
 
 use crate::coredb::CoreDB;
+use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
+use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
+use std::fs;
 use std::hint::unreachable_unchecked;
+use std::io::ErrorKind;
+use std::path::PathBuf;
 
 /// Create a snapshot
 ///
 pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
-    if act.howmany() == 0 {
+    let howmany = act.howmany();
+    if howmany == 0 {
         if !handle.is_snapshot_enabled() {
             // Since snapshotting is disabled, we can't create a snapshot!
             // We'll just return an error returning the same
@@ -93,8 +99,47 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             return con.write_response(error).await;
         }
     } else {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        if howmany == 1 {
+            // This means that the user wants to create a 'named' snapshot
+            let snapname = act
+                .get_ref()
+                .get(1)
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+            let mut path = PathBuf::from(DIR_SNAPSHOT);
+            path.push("remote");
+            let mut failed;
+            {
+                failed = match fs::create_dir_all(&path) {
+                    Ok(_) => false,
+                    Err(e) => match e.kind() {
+                        ErrorKind::AlreadyExists => false,
+                        _ => true,
+                    },
+                };
+                if !failed {
+                    path.push(snapname.to_owned() + ".snapshot");
+                    match diskstore::flush_data(&path, &handle.acquire_read().get_ref()) {
+                        Ok(_) => failed = false,
+                        Err(e) => {
+                            log::error!("Error while creating snapshot: {}", e);
+                            failed = true;
+                        }
+                    }
+                }
+            }
+            if failed {
+                return con
+                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .await;
+            } else {
+                return con
+                    .write_response(responses::fresp::R_OKAY.to_owned())
+                    .await;
+            }
+        } else {
+            return con
+                .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+                .await;
+        }
     }
 }

@@ -32,6 +32,7 @@ use regex::Regex;
 use std::fs;
 use std::hint::unreachable_unchecked;
 use std::io::ErrorKind;
+use std::path::Path;
 use std::path::PathBuf;
 lazy_static::lazy_static! {
     /// Matches any string which is in the following format:
@@ -44,7 +45,7 @@ lazy_static::lazy_static! {
 /// The default snapshot directory
 ///
 /// This is currently a `snapshot` directory under the current directory
-const DIR_SNAPSHOT: &'static str = "snapshots";
+pub const DIR_SNAPSHOT: &'static str = "snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;
@@ -89,7 +90,11 @@ impl<'a> SnapshotEngine<'a> {
                     for entry in dir {
                         let entry = entry?;
                         let path = entry.path();
-                        if path.is_dir() {
+                        // We'll skip the directory that contains remotely created snapshots
+                        if path.is_dir()
+                            && (path.parent().expect("Couldn't get parent path!")
+                                != Path::new("remote"))
+                        {
                             // If the entry is not a directory then some other
                             // file(s) is present in the directory
                             return Err(

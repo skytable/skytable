@@ -31,7 +31,6 @@ pub mod get;
 pub mod jget;
 pub mod keylen;
 pub mod mget;
-pub mod mksnap;
 pub mod mset;
 pub mod mupdate;
 pub mod set;

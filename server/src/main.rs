@@ -30,6 +30,7 @@ use crate::config::SnapshotConfig;
 use tokio::net::TcpListener;
 mod config;
 use std::env;
+mod admin;
 mod coredb;
 mod dbnet;
 mod diskstore;
