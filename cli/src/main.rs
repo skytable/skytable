@@ -27,5 +27,5 @@ const MSG_WELCOME: &'static str = "TerrabaseDB v0.4.5";
 #[tokio::main]
 async fn main() {
     println!("{}", MSG_WELCOME);
-    argparse::execute_query().await;
+    argparse::start_repl().await;
 }

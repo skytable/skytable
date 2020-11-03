@@ -12,3 +12,4 @@ tokio = {version = "0.3.2", features = ["full"]}
 bytes = "0.6.0"
 regex = "1.4.1"
 lazy_static = "1.4.0"
+clap = {version = "2.33.3", features=["yaml"]}

@@ -20,26 +20,26 @@
 */
 
 use crate::protocol;
+use clap::load_yaml;
+use clap::App;
 use libtdb::terrapipe::ADDR;
-use std::env;
 use std::io::{self, prelude::*};
 use std::process;
 
 /// This creates a REPL on the command line and also parses command-line arguments
+///
 /// Anything that is entered following a return, is parsed into a query and is
 /// written to the socket (which is either `localhost:2003` or it is determined by
 /// command line parameters)
-pub async fn execute_query() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    if args.len() > 2 {
-        eprintln!("Incorrect number of arguments\n\tUSAGE tsh [host] [port]");
-    }
-    let mut host = match args.get(0) {
-        Some(h) => h.clone(),
+pub async fn start_repl() {
+    let cfg_layout = load_yaml!("./cli.yml");
+    let matches = App::from_yaml(cfg_layout).get_matches();
+    let mut host = match matches.value_of("host") {
+        Some(h) => h.to_owned(),
         None => ADDR.to_owned(),
     };
     host.push(':');
-    match args.get(1) {
+    match matches.value_of("port") {
         Some(p) => match p.parse::<u16>() {
             Ok(p) => host.push_str(&p.to_string()),
             Err(_) => {

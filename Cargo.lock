@@ -645,6 +645,7 @@ name = "tsh"
 version = "0.4.5"
 dependencies = [
  "bytes 0.6.0",
+ "clap",
  "lazy_static",
  "libtdb",
  "regex",
