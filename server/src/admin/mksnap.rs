@@ -27,9 +27,7 @@ use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
-use std::fs;
 use std::hint::unreachable_unchecked;
-use std::io::ErrorKind;
 use std::path::PathBuf;
 
 /// Create a snapshot
@@ -107,23 +105,14 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
                 .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             let mut path = PathBuf::from(DIR_SNAPSHOT);
             path.push("remote");
-            let mut failed;
+            path.push(snapname.to_owned() + ".snapshot");
+            let failed;
             {
-                failed = match fs::create_dir_all(&path) {
-                    Ok(_) => false,
-                    Err(e) => match e.kind() {
-                        ErrorKind::AlreadyExists => false,
-                        _ => true,
-                    },
-                };
-                if !failed {
-                    path.push(snapname.to_owned() + ".snapshot");
-                    match diskstore::flush_data(&path, &handle.acquire_read().get_ref()) {
-                        Ok(_) => failed = false,
-                        Err(e) => {
-                            log::error!("Error while creating snapshot: {}", e);
-                            failed = true;
-                        }
+                match diskstore::flush_data(&path, &handle.acquire_read().get_ref()) {
+                    Ok(_) => failed = false,
+                    Err(e) => {
+                        log::error!("Error while creating snapshot: {}", e);
+                        failed = true;
                     }
                 }
             }

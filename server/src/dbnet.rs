@@ -36,11 +36,14 @@
 
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
+use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 use crate::protocol::{Connection, QueryResult::*};
 use crate::CoreDB;
 use libtdb::util::terminal;
 use libtdb::TResult;
+use std::fs;
 use std::future::Future;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -201,6 +204,16 @@ pub async fn run(
             process::exit(0x100);
         }
     };
+    match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
+        Ok(_) => (),
+        Err(e) => match e.kind() {
+            ErrorKind::AlreadyExists => (),
+            _ => {
+                log::error!("Failed to create snapshot directories: '{}'", e);
+                process::exit(0x100);
+            }
+        },
+    }
     log::info!(
         "Started server on terrapipe://{}",
         listener

@@ -40,6 +40,8 @@ lazy_static::lazy_static! {
     /// YYYYMMDD-HHMMSS.snapshot
     /// ```
     static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
+    /// The directory for remote snapshots
+    pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./snapshots/remote");
 }
 
 /// The default snapshot directory
