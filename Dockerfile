@@ -4,7 +4,6 @@
 
 FROM ubuntu:20.04
 ENV TZ=america/central
-COPY tdb-dockerfile.toml $HOME/tdb.toml
 RUN \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone && \
     apt-get update && apt-get install git curl build-essential -y && \
@@ -19,7 +18,7 @@ RUN \
     $HOME/.cargo/bin/rustup self uninstall -y && \
     cp -f target/release/tdb /usr/local/bin
 
-CMD ["tdb", "-c", "$HOME/tdb.toml"]
+CMD ["tdb", "-h", "0.0.0.0", "-p", "2003"]
 
 EXPOSE 2003/tcp
 

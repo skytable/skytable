@@ -4,8 +4,9 @@
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabasedb/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabasedb?include_prereleases&sort=semver&style=flat-square) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/terrabasedb/terrabasedb?label=commits&style=flat-square)
+
 [![Docker Pulls](https://img.shields.io/docker/pulls/terrabasedb/tdb?style=flat-square)](https://hub.docker.com/r/terrabasedb/tdb)
-[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://terrabasedb.github.io/docs)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://terrabasedb.github.io/docs) [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/thanks)
 
 </div>
 </html>
@@ -24,12 +25,12 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 
 ## Features
 
-- **Insanely fast**: Scale to millions of queries per second per node
-- **Key/value store**: `GET`, `SET`, `UPDATE` and [all that stuff](https://terrabasedb.github.io/docs/List-Of-Actions)
-- **Snapshots**: Automated (and tunable) snapshots for stress-free backups
-- **Multithreaded**: Designed to exploit all CPU cores
-- **Resource friendly**: The database server doesn't need more than 1MB to run
-- **Convenient**: Without the setup hassle and system-specific dependencies
+* **Insanely fast**: Scale to millions of queries per second per node
+* **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://terrabasedb.github.io/docs/List-Of-Actions)
+* **Snapshots**: Automated (and tunable) snapshots for stress-free backups
+* **Multithreaded**: Designed to exploit all CPU cores
+* **Resource friendly**: The database server doesn't need more than 1MB to run
+* **Convenient**: Without the setup hassle and system-specific dependencies
 
 (... [and more on the way](https://github.com/terrabasedb/terrabasedb/labels/roadmap))
 
@@ -56,6 +57,8 @@ A project which is powered by the community believes in the power of community! 
 This project strictly follows semver, however, since this project is currently in the development phase (0.x.y), the API may change unpredictably
 
 ## Contributing
+
+[![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064?style=for-the-badge)](https://ohsayan.github.io/thanks)
 
 **Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to TDB! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/terrabasedb/terrabasedb/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
 
