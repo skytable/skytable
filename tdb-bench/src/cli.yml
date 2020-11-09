@@ -23,27 +23,32 @@ name: TerrabaseDB Benchmark Tool
 version: 0.4.5
 author: Sayan N. <ohsayan@outlook.com>
 about: |
-      The TerrabaseDB benchmark tool can be used to benchmark TerrabaseDB installations. 
-      If you find any issues, then report one here: https://github.com/terrabasedb/terrabasedb
+        The TerrabaseDB benchmark tool can be used to benchmark TerrabaseDB installations. 
+        If you find any issues, then report one here: https://github.com/terrabasedb/terrabasedb
 args:
-      - connections:
-              short: c
-              required: true
-              long: connections
-              value_name: count
-              help: Sets the number of simultaneous clients
-              takes_value: true
-      - queries:
-              short: q
-              required: true
-              long: queries
-              value_name: number
-              help: Sets the number of queries to run
-              takes_value: true
-      - size:
-              short: s
-              required: true
-              long: kvsize
-              value_name: bytes
-              help: Sets the size of the key/value pairs
-              takes_value: true
+        - connections:
+                  short: c
+                  required: true
+                  long: connections
+                  value_name: count
+                  help: Sets the number of simultaneous clients
+                  takes_value: true
+        - queries:
+                  short: q
+                  required: true
+                  long: queries
+                  value_name: number
+                  help: Sets the number of queries to run
+                  takes_value: true
+        - size:
+                  short: s
+                  required: true
+                  long: kvsize
+                  value_name: bytes
+                  help: Sets the size of the key/value pairs
+                  takes_value: true
+        - json:
+                  required: false
+                  long: json
+                  help: Sets output type to JSON
+                  takes_value: false

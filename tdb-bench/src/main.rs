@@ -29,6 +29,7 @@ mod benchtool {
     use libtdb::terrapipe;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
+    use serde::Serialize;
     use std::io::prelude::*;
     use std::net::{self, TcpStream};
     use std::sync::mpsc;
@@ -117,10 +118,26 @@ mod benchtool {
         }
     }
 
+    #[derive(Serialize)]
+    pub struct JSONReportBlock {
+        report: String,
+        stat: f64,
+    }
+
+    impl JSONReportBlock {
+        pub fn new(report: &'static str, stat: f64) -> Self {
+            JSONReportBlock {
+                report: report.to_owned(),
+                stat,
+            }
+        }
+    }
+
     /// Run the benchmark tool
     pub fn runner() {
         let cfg_layout = load_yaml!("./cli.yml");
         let matches = App::from_yaml(cfg_layout).get_matches();
+        let json_out = matches.is_present("json");
         let (max_connections, max_queries, packet_size) = match (
             matches.value_of("connections").unwrap().parse::<usize>(),
             matches.value_of("queries").unwrap().parse::<usize>(),
@@ -201,16 +218,21 @@ mod benchtool {
             delpool.execute(packet);
         }
         drop(delpool);
-        println!("==========RESULTS==========");
-        println!(
-            "{} GETs/sec",
-            calc(max_queries, dt.time_in_nanos("GET").unwrap())
-        );
-        println!(
-            "{} SETs/sec",
-            calc(max_queries, dt.time_in_nanos("SET").unwrap())
-        );
-        println!("===========================");
+        let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
+        let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
+        if json_out {
+            let dat = vec![
+                JSONReportBlock::new("GET", gets_per_sec),
+                JSONReportBlock::new("SET", sets_per_sec),
+            ];
+            let serialized = serde_json::to_string(&dat).unwrap();
+            println!("{}", serialized);
+        } else {
+            println!("==========RESULTS==========");
+            println!("{} GETs/sec", gets_per_sec);
+            println!("{} SETs/sec", sets_per_sec);
+            println!("===========================");
+        }
     }
 
     /// Returns the number of queries/sec
