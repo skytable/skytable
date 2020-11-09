@@ -18,3 +18,8 @@ noart = false
 # after every 2 minutes
 enabled = true
 every = 120
+
+# This key is *OPTIONAL*
+[snapshot]
+every = 3600 # Make a snapshot after every 1 hour (60min * 60sec= 3600secs)
+atmost = 4 # Keep the 4 most recent snapshots

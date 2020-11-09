@@ -116,8 +116,6 @@ pub struct ConfigKeyServer {
 /// The snapshot section in the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct ConfigKeySnapshot {
-    /// Whether snapshotting is enabled or not
-    enabled: bool,
     /// After how many seconds should the snapshot be created
     every: u64,
     /// The maximum number of snapshots to keep
@@ -229,12 +227,7 @@ impl ParsedConfig {
                 BGSave::default()
             },
             snapshot: if let Some(snapshot) = cfg.snapshot {
-                if snapshot.enabled {
-                    SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
-                } else {
-                    // TODO: Show a warning that there are unused keys
-                    SnapshotConfig::Disabled
-                }
+                SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
             } else {
                 SnapshotConfig::default()
             },
@@ -596,7 +589,16 @@ fn test_config_file_ipv6() {
 fn test_config_file_template() {
     let file = get_toml_from_examples_dir("template.toml".to_owned()).unwrap();
     let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(cfg, ParsedConfig::default());
+    assert_eq!(
+        cfg,
+        ParsedConfig::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            2003,
+            false,
+            BGSave::default(),
+            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4))
+        )
+    );
 }
 
 #[test]
