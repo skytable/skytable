@@ -119,8 +119,20 @@ mod benchtool {
     }
 
     #[derive(Serialize)]
+    /// A `JSONReportBlock` represents a JSON object which contains the type of report
+    /// (for example `GET` or `SET`) and the number of such queries per second
+    ///
+    /// This is an example of the object, when serialized into JSON:
+    /// ```json
+    /// {
+    ///     "report" : "GET",
+    ///     "stat" : 123456789.10,
+    /// }
+    /// ```
     pub struct JSONReportBlock {
+        /// The type of benchmark
         report: String,
+        /// The number of such queries per second
         stat: f64,
     }
 
@@ -139,9 +151,15 @@ mod benchtool {
         let matches = App::from_yaml(cfg_layout).get_matches();
         let json_out = matches.is_present("json");
         let (max_connections, max_queries, packet_size) = match (
-            matches.value_of("connections").unwrap().parse::<usize>(),
-            matches.value_of("queries").unwrap().parse::<usize>(),
-            matches.value_of("size").unwrap().parse::<usize>(),
+            matches
+                .value_of("connections")
+                .unwrap_or("10")
+                .parse::<usize>(),
+            matches
+                .value_of("queries")
+                .unwrap_or("100000")
+                .parse::<usize>(),
+            matches.value_of("size").unwrap_or("4").parse::<usize>(),
         ) {
             (Ok(mx), Ok(mc), Ok(ps)) => (mx, mc, ps),
             _ => {
@@ -149,7 +167,7 @@ mod benchtool {
                 std::process::exit(0x100);
             }
         };
-        println!(
+        eprintln!(
             "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
             max_connections,
             max_queries,
@@ -193,9 +211,9 @@ mod benchtool {
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
             .map(|idx| terrapipe::proc_query(format!("DEL {}", keys[idx])))
             .collect();
-        println!("Per-packet size (GET): {} bytes", get_packs[0].len());
-        println!("Per-packet size (SET): {} bytes", set_packs[0].len());
-        println!("Initialization complete! Benchmark started");
+        eprintln!("Per-packet size (GET): {} bytes", get_packs[0].len());
+        eprintln!("Per-packet size (SET): {} bytes", set_packs[0].len());
+        eprintln!("Initialization complete! Benchmark started");
         dt.create_timer("SET").unwrap();
         dt.start_timer("SET").unwrap();
         for packet in set_packs {
@@ -210,7 +228,7 @@ mod benchtool {
         }
         drop(getpool);
         dt.stop_timer("GET").unwrap();
-        println!("Benchmark completed! Removing created keys...");
+        eprintln!("Benchmark completed! Removing created keys...");
         // Create a connection pool for del operations
         let mut delpool = Netpool::new(max_connections);
         // Delete all the created keys
