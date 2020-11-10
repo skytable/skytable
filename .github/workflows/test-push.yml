@@ -1,6 +1,11 @@
 name: Test (push)
 
-on: [push]
+on:
+  push:
+    branches:
+      - "!v*"
+      - "**"
+
 env:
   IS_ACTIONS_DOC: "false"
   IS_MD_FILE: "false"
