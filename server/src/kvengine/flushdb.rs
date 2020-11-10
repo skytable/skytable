@@ -30,10 +30,20 @@ pub async fn flushdb(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
             .write_response(responses::fresp::R_ACTION_ERR.to_owned())
             .await;
     }
+    let failed;
     {
-        handle.acquire_write().get_mut_ref().clear()
+        if let Some(mut table) = handle.acquire_write() {
+            table.get_mut_ref().clear();
+            failed = false;
+        } else {
+            failed = true;
+        }
     }
-    con.write_response(responses::fresp::R_OKAY.to_owned())
-        .await?;
-    Ok(())
+    if failed {
+        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
+            .await
+    } else {
+        con.write_response(responses::fresp::R_OKAY.to_owned())
+            .await
+    }
 }

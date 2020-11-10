@@ -40,19 +40,27 @@ pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     con.write_response(GroupBegin(1)).await?;
-    let mut done_howmany = 0usize;
+    let done_howmany: Option<usize>;
     {
-        let mut whandle = handle.acquire_write();
-        let cmap = (*whandle).get_mut_ref();
-        act.into_iter().for_each(|key| {
-            if cmap.remove(&key).is_some() {
-                done_howmany += 1
-            }
-        });
-        drop(cmap);
-        drop(whandle);
+        if let Some(mut whandle) = handle.acquire_write() {
+            let mut many = 0;
+            let cmap = (*whandle).get_mut_ref();
+            act.into_iter().for_each(|key| {
+                if cmap.remove(&key).is_some() {
+                    many += 1
+                }
+            });
+            drop(cmap);
+            drop(whandle);
+            done_howmany = Some(many);
+        } else {
+            done_howmany = None;
+        }
     }
-    con.write_response(done_howmany).await?;
-    // We're done here
-    Ok(())
+    if let Some(done_howmany) = done_howmany {
+        con.write_response(done_howmany).await
+    } else {
+        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
+            .await
+    }
 }

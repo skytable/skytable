@@ -40,26 +40,34 @@ pub async fn update(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
     }
     let mut it = act.into_iter();
     let did_we = {
-        let mut whandle = handle.acquire_write();
-        let writer = whandle.get_mut_ref();
-        if let Entry::Occupied(mut e) = writer.entry(
-            it.next()
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
-        ) {
-            e.insert(Data::from_string(
+        if let Some(mut whandle) = handle.acquire_write() {
+            let writer = whandle.get_mut_ref();
+            if let Entry::Occupied(mut e) = writer.entry(
                 it.next()
                     .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
-            ));
-            true
+            ) {
+                e.insert(Data::from_string(
+                    it.next()
+                        .unwrap_or_else(|| unsafe { unreachable_unchecked() }),
+                ));
+                Some(true)
+            } else {
+                Some(false)
+            }
         } else {
-            false
+            None
         }
     };
-    if did_we {
-        con.write_response(responses::fresp::R_OKAY.to_owned())
-            .await?;
+    if let Some(did_we) = did_we {
+        if did_we {
+            con.write_response(responses::fresp::R_OKAY.to_owned())
+                .await?;
+        } else {
+            con.write_response(responses::fresp::R_NIL.to_owned())
+                .await?;
+        }
     } else {
-        con.write_response(responses::fresp::R_NIL.to_owned())
+        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
             .await?;
     }
     Ok(())

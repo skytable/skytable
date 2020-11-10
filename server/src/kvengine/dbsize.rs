@@ -18,9 +18,6 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-// HACK(@ohsayan): `len` needs to be set to zero, but clippy doesn't like it,so we'll do this
-#![allow(unused_assignments)]
-
 use crate::coredb::CoreDB;
 use crate::protocol::{responses, ActionGroup, Connection};
 use crate::resp::GroupBegin;
@@ -33,7 +30,7 @@ pub async fn dbsize(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             .write_response(responses::fresp::R_ACTION_ERR.to_owned())
             .await;
     }
-    let mut len = 0;
+    let len;
     {
         len = handle.acquire_read().get_ref().len();
     }

@@ -131,7 +131,11 @@ impl Shared {
         // Kick in BGSAVE
         match diskstore::flush_data(&PERSIST_FILE, rlock.get_ref()) {
             Ok(_) => log::info!("BGSAVE completed successfully"),
-            Err(e) => log::error!("BGSAVE failed with error: '{}'", e),
+            Err(e) => {
+                // IMPORTANT! POISON THE DATABASE, NO MORE WRITES FOR YOU!
+                self.table.write().poisoned = true;
+                log::error!("BGSAVE failed with error: '{}'", e);
+            }
         }
         true
     }
@@ -150,6 +154,11 @@ pub struct Coretable {
     coremap: HashMap<String, Data>,
     /// The termination signal flag
     pub terminate: bool,
+    /// Whether the database is poisoned or not
+    ///
+    /// If the database is poisoned -> the database can no longer accept writes
+    /// but can only accept reads
+    pub poisoned: bool,
 }
 
 impl Coretable {
@@ -266,6 +275,7 @@ impl CoreDB {
                     table: RwLock::new(Coretable {
                         coremap: coretable,
                         terminate: false,
+                        poisoned: false,
                     }),
                     snapshot_service: Notify::new(),
                 }),
@@ -292,6 +302,7 @@ impl CoreDB {
                 table: RwLock::new(Coretable {
                     coremap: HashMap::<String, Data>::new(),
                     terminate: false,
+                    poisoned: false,
                 }),
                 snapshot_service: Notify::new(),
             }),
@@ -299,9 +310,18 @@ impl CoreDB {
             snapcfg,
         }
     }
+    /// Check if the database object is poisoned, that is, data couldn't be written
+    /// to disk once, and hence, we have disabled write operations
+    pub fn is_poisoned(&self) -> bool {
+        (*self.shared).table.read().poisoned
+    }
     /// Acquire a write lock
-    pub fn acquire_write(&self) -> RwLockWriteGuard<'_, Coretable> {
-        self.shared.table.write()
+    pub fn acquire_write(&self) -> Option<RwLockWriteGuard<'_, Coretable>> {
+        if self.is_poisoned() {
+            None
+        } else {
+            Some(self.shared.table.write())
+        }
     }
     /// Acquire a read lock
     pub fn acquire_read(&self) -> RwLockReadGuard<'_, Coretable> {
@@ -309,7 +329,10 @@ impl CoreDB {
     }
     /// Flush the contents of the in-memory table onto disk
     pub fn flush_db(&self) -> TResult<()> {
-        let data = &self.acquire_write();
+        let data = match self.acquire_write() {
+            Some(wlock) => wlock,
+            None => return Err("Can no longer flush data; coretable is poisoned".into()),
+        };
         diskstore::flush_data(&PERSIST_FILE, &data.coremap)?;
         Ok(())
     }
@@ -327,7 +350,7 @@ impl CoreDB {
     #[cfg(test)]
     /// **⚠⚠⚠ This deletes everything stored in the in-memory table**
     pub fn finish_db(&self) {
-        self.acquire_write().coremap.clear()
+        self.acquire_write().unwrap().coremap.clear()
     }
 }
 

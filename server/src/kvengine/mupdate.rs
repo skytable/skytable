@@ -40,19 +40,29 @@ pub async fn mupdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
     // It is howmany/2 since we will be writing howmany/2 number of responses
     con.write_response(GroupBegin(1)).await?;
     let mut kviter = act.into_iter();
-    let mut done_howmany = 0usize;
+    let done_howmany: Option<usize>;
     {
-        let mut whandle = handle.acquire_write();
-        let writer = whandle.get_mut_ref();
-        while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-            if let Entry::Occupied(mut v) = writer.entry(key) {
-                let _ = v.insert(coredb::Data::from_string(val));
-                done_howmany += 1;
+        if let Some(mut whandle) = handle.acquire_write() {
+            let writer = whandle.get_mut_ref();
+            let mut didmany = 0;
+            while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+                if let Entry::Occupied(mut v) = writer.entry(key) {
+                    let _ = v.insert(coredb::Data::from_string(val));
+                    didmany += 1;
+                }
             }
+            drop(writer);
+            drop(whandle);
+            done_howmany = Some(didmany);
+        } else {
+            done_howmany = None;
         }
-        drop(writer);
-        drop(whandle);
     }
-    con.write_response(done_howmany).await?;
-    Ok(())
+    if let Some(done_howmany) = done_howmany {
+        return con.write_response(done_howmany as usize).await;
+    } else {
+        return con
+            .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+            .await;
+    }
 }

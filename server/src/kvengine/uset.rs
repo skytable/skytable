@@ -41,15 +41,23 @@ pub async fn uset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     // It is howmany/2 since we will be writing howmany/2 number of responses
     con.write_response(GroupBegin(1)).await?;
     let mut kviter = act.into_iter();
-    {
-        let mut whandle = handle.acquire_write();
-        let writer = whandle.get_mut_ref();
-        while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-            let _ = writer.insert(key, coredb::Data::from_string(val));
+    let failed = {
+        if let Some(mut whandle) = handle.acquire_write() {
+            let writer = whandle.get_mut_ref();
+            while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+                let _ = writer.insert(key, coredb::Data::from_string(val));
+            }
+            drop(writer);
+            drop(whandle);
+            false
+        } else {
+            true
         }
-        drop(writer);
-        drop(whandle);
+    };
+    if failed {
+        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
+            .await
+    } else {
+        con.write_response(howmany / 2).await
     }
-    con.write_response(howmany / 2).await?;
-    Ok(())
 }

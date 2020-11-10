@@ -213,6 +213,7 @@ impl<'a> SnapshotEngine<'a> {
         log::trace!("Released lock on the snapshot service");
         Some(true)
     }
+    #[cfg(test)]
     /// Delete all snapshots
     pub fn clearall(&mut self) -> TResult<()> {
         for snap in self.snaps.iter() {
@@ -220,6 +221,7 @@ impl<'a> SnapshotEngine<'a> {
         }
         Ok(())
     }
+    #[cfg(test)]
     /// Get the name of snapshots
     pub fn get_snapshots(&self) -> std::slice::Iter<PathBuf> {
         self.snaps.iter()
@@ -230,7 +232,7 @@ impl<'a> SnapshotEngine<'a> {
 fn test_snapshot() {
     let ourdir = "TEST_SS";
     let db = CoreDB::new_empty(3, std::sync::Arc::new(Some(SnapshotStatus::new(4))));
-    let mut write = db.acquire_write();
+    let mut write = db.acquire_write().unwrap();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
         crate::coredb::Data::from_string(String::from("heya!")),
