@@ -194,11 +194,8 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         {
             in_set.insert(5357);
             in_set.insert(7680);
-            while in_set.contains(&rand) {
+            while in_set.contains(&rand) || (rand >= 49670 && rand <= 50293) {
                 rand = rng.gen_range(1025, 65535);
-                if rand >= 49670 && rand <= 50293 {
-                    rand = rng.gen_range(1025, 65535);
-                }
             }
         }
         in_set.insert(rand);
