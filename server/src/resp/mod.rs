@@ -87,6 +87,23 @@ impl Writable for Vec<u8> {
     }
 }
 
+impl Writable for &'static [u8] {
+    fn write<'s>(
+        self,
+        con: &'s mut BufWriter<TcpStream>,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), Box<(dyn Error + 'static)>>> + Send + Sync + 's)>>
+    {
+        async fn write_bytes(
+            con: &mut BufWriter<TcpStream>,
+            resp: &[u8],
+        ) -> Result<(), Box<dyn Error>> {
+            con.write(&resp).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, &self))
+    }
+}
+
 impl Writable for BytesWrapper {
     fn write<'s>(
         self,

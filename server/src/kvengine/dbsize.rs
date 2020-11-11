@@ -26,9 +26,7 @@ use libtdb::TResult;
 /// Get the number of keys in the database
 pub async fn dbsize(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     if act.howmany() != 0 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let len;
     {

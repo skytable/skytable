@@ -29,9 +29,7 @@ use libtdb::TResult;
 pub async fn keylen(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     // Write #<m>\n#<n>\n&1\n to the stream
     con.write_response(GroupBegin(1)).await?;
@@ -49,8 +47,7 @@ pub async fn keylen(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         con.write_response(value).await?;
     } else {
         // Ah, couldn't find that key
-        con.write_response(responses::groups::NIL.to_owned())
-            .await?;
+        con.write_response(&**responses::groups::NIL).await?;
     }
     Ok(())
 }

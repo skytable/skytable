@@ -27,7 +27,7 @@
 //! only then would the keys be set. That is, only if all the keys can be set, will the action
 //! run and return code `0` - otherwise the action won't do anything and return an overwrite error.
 //! There is no point of using _strong actions_ for a single key/value pair, since it will only
-//! slow things down due to the checks performed.  
+//! slow things down due to the checks performed.
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
 use crate::coredb::{CoreDB, Data};
@@ -42,9 +42,7 @@ use std::hint::unreachable_unchecked;
 pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -89,15 +87,13 @@ pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(responses::fresp::R_OVERWRITE_ERR.to_owned())
+            con.write_response(&**responses::fresp::R_OVERWRITE_ERR)
                 .await
         } else {
-            con.write_response(responses::fresp::R_OKAY.to_owned())
-                .await
+            con.write_response(&**responses::fresp::R_OKAY).await
         }
     } else {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_SERVER_ERR).await
     }
 }
 
@@ -108,9 +104,7 @@ pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
 pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -150,14 +144,12 @@ pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(responses::fresp::R_NIL.to_owned()).await
+            con.write_response(&**responses::fresp::R_NIL).await
         } else {
-            con.write_response(responses::fresp::R_OKAY.to_owned())
-                .await
+            con.write_response(&**responses::fresp::R_OKAY).await
         }
     } else {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_SERVER_ERR).await
     }
 }
 
@@ -168,9 +160,7 @@ pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
 pub async fn supdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -215,13 +205,11 @@ pub async fn supdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(responses::fresp::R_NIL.to_owned()).await
+            con.write_response(&**responses::fresp::R_NIL).await
         } else {
-            con.write_response(responses::fresp::R_OKAY.to_owned())
-                .await
+            con.write_response(&**responses::fresp::R_OKAY).await
         }
     } else {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_SERVER_ERR).await
     }
 }

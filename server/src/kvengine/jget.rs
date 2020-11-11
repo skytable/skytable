@@ -39,9 +39,7 @@ use libtdb::TResult;
 pub async fn jget(_handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     todo!()
 }

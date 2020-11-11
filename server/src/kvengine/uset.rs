@@ -33,9 +33,7 @@ pub async fn uset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     // Write #<m>\n#<n>\n&<howmany>\n to the stream
     // It is howmany/2 since we will be writing howmany/2 number of responses
@@ -55,8 +53,7 @@ pub async fn uset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
         }
     };
     if failed {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_SERVER_ERR).await
     } else {
         con.write_response(howmany / 2).await
     }

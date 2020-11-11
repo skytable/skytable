@@ -26,9 +26,7 @@ use libtdb::TResult;
 /// Delete all the keys in the database
 pub async fn flushdb(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
     if act.howmany() != 0 {
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let failed;
     {
@@ -40,10 +38,8 @@ pub async fn flushdb(handle: &CoreDB, con: &mut Connection, act: ActionGroup) ->
         }
     }
     if failed {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_SERVER_ERR).await
     } else {
-        con.write_response(responses::fresp::R_OKAY.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_OKAY).await
     }
 }

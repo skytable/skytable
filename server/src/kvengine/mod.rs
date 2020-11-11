@@ -46,7 +46,6 @@ pub mod heya {
     use protocol::{responses, Connection};
     /// Returns a `HEY!` `Response`
     pub async fn heya(_db: &CoreDB, con: &mut Connection, _buf: ActionGroup) -> TResult<()> {
-        con.write_response(responses::fresp::R_HEYA.to_owned())
-            .await
+        con.write_response(&**responses::fresp::R_HEYA).await
     }
 }

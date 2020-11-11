@@ -34,9 +34,7 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     let howmany = act.howmany();
     if howmany != 2 {
         // There should be exactly 2 arguments
-        return con
-            .write_response(responses::fresp::R_ACTION_ERR.to_owned())
-            .await;
+        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }
     let mut it = act.into_iter();
     let did_we = {
@@ -60,14 +58,13 @@ pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TRe
     };
     if let Some(did_we) = did_we {
         if did_we {
-            con.write_response(responses::fresp::R_OKAY.to_owned())
-                .await?;
+            con.write_response(&**responses::fresp::R_OKAY).await?;
         } else {
-            con.write_response(responses::fresp::R_OVERWRITE_ERR.to_owned())
+            con.write_response(&**responses::fresp::R_OVERWRITE_ERR)
                 .await?;
         }
     } else {
-        con.write_response(responses::fresp::R_SERVER_ERR.to_owned())
+        con.write_response(&**responses::fresp::R_SERVER_ERR)
             .await?;
     }
     Ok(())
