@@ -45,7 +45,7 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
         }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
-        let mut outerror = None;
+        let mut snap_result = None;
         let mut engine_was_busy = false;
         {
             let snaphandle = handle.snapcfg.clone();
@@ -62,7 +62,7 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
                     let mut snapengine =
                         snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
 
-                    outerror = snapengine.mksnap();
+                    snap_result = snapengine.mksnap();
                 }
             }
         }
@@ -76,8 +76,8 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             let error = RespCodes::OtherError(Some("err-snapshot-busy".to_owned()));
             return con.write_response(error).await;
         }
-        if let Some(val) = outerror {
-            if val {
+        if let Some(succeeded) = snap_result {
+            if succeeded {
                 // Snapshotting succeeded, return Okay
                 return con
                     .write_response(responses::fresp::R_OKAY.to_owned())

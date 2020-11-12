@@ -124,20 +124,27 @@ impl Shared {
     /// for periodically calling BGSAVE. This returns `false`, **if** the database
     /// is shutting down. Otherwise `true` is returned
     pub fn run_bgsave(&self) -> bool {
+        log::trace!("BGSAVE started");
         let rlock = self.table.read();
-        if rlock.terminate {
+        if rlock.terminate || rlock.poisoned {
+            drop(rlock);
             return false;
         }
         // Kick in BGSAVE
         match diskstore::flush_data(&PERSIST_FILE, rlock.get_ref()) {
-            Ok(_) => log::info!("BGSAVE completed successfully"),
+            Ok(_) => {
+                log::info!("BGSAVE completed successfully");
+                return true;
+            }
             Err(e) => {
+                // IMPORTANT! Drop the read lock first fella!
+                drop(rlock);
                 // IMPORTANT! POISON THE DATABASE, NO MORE WRITES FOR YOU!
                 self.table.write().poisoned = true;
                 log::error!("BGSAVE failed with error: '{}'", e);
+                return false;
             }
         }
-        true
     }
     /// Check if the server has received a termination signal
     pub fn is_termsig(&self) -> bool {

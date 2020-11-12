@@ -55,7 +55,7 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
         Ok(f) => f,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => return Ok(None),
-            _ => return Err("Couldn't read flushed data from disk".into()),
+            _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
         },
     };
     let parsed: DiskStore = bincode::deserialize(&file)?;
