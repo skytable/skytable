@@ -2,6 +2,34 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.5.0
+
+> This release introduces breaking changes!
+
+* Command line configuration added to `tdb`
+* ⚠ Positional arguments in `tsh` and `tdb-bench` have been removed
+* `MKSNAP` now has an _enhanced version_ which enables snapshots to be created even if they're disabled on the server side
+* If `BGSAVE` fails, no more writes will be accepted on the server side. All commands that try to modify data will return an internal server error
+* `tdb-bench` now provides JSON output with the `--json` flag
+* The `Dockerfile` was fixed to use command line arguments instead of the configuration file which caused problems
+* The `enabled` key under the `snapshots` key in the configuration file has been removed
+
+### Upgrading
+
+* Users who ran `tsh` like `tsh 172.17.0.1 2003` will now need to run: 
+
+``` shell
+tsh -h 172.17.0.1 -p 2003
+```
+
+* Users who ran `tdb-bench` like `tdb-bench 10 100000 4` will now need to run:
+
+``` shell
+tdb-bench -c 10 -q 100000 -s 4
+```
+
+* To enable snapshots, you just have to add the key: there is no need for the `enabled` key. To disable snapshots, you just have to omit the `snapshot` key (block) from your configuration file
+
 ## Version 0.4.5 [2020-10-29]
 
 > No breaking changes
