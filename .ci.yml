@@ -1,0 +1,10 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: Run tests
+    image: rust:latest
+    commands:
+      - cargo build --verbose
+      - cargo test --verbose
