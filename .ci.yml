@@ -1,10 +1,25 @@
 kind: pipeline
-type: docker
-name: default
+name: Build and Test
 
 steps:
-  - name: Run tests
-    image: rust:latest
+  - name: run-tests
+    image: rust
     commands:
       - cargo build --verbose
       - cargo test --verbose
+
+---
+kind: pipeline
+type: docker
+name: Docker Image
+
+steps:
+  - name: Push to Docker Hub
+    image: plugins/docker
+    settings:
+      repo: terrabasedb/tdb
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      auto_tag: true
