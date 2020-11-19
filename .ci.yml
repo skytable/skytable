@@ -8,13 +8,19 @@ steps:
       - cargo build --verbose
       - cargo test --verbose
 
----
-kind: pipeline
-type: docker
-name: Docker Image
+  - name: build-docker-binary
+    image: rust
+    commands:
+      - cargo build --release
+    when:
+      ref:
+        - refs/heads/next
+        - refs/tags/*
+      event:
+        - tag
+        - push
 
-steps:
-  - name: Push to Docker Hub
+  - name: push-docker-image
     image: plugins/docker
     settings:
       repo: terrabasedb/tdb
@@ -23,3 +29,10 @@ steps:
       password:
         from_secret: docker_password
       auto_tag: true
+    when:
+      ref:
+        - refs/heads/next
+        - refs/tags/*
+      event:
+        - tag
+        - push
