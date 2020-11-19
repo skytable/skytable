@@ -8,13 +8,12 @@ steps:
       - cargo build --verbose
       - cargo test --verbose
 
----
-kind: pipeline
-type: docker
-name: Docker Image
+  - name: build-docker-binary
+    image: rust
+    commands:
+      - cargo build --release
 
-steps:
-  - name: Push to Docker Hub
+  - name: push-docker-image
     image: plugins/docker
     settings:
       repo: terrabasedb/tdb
