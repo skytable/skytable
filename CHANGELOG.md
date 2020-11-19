@@ -2,7 +2,7 @@
 
 All changes in this project will be noted in this file.
 
-## Version 0.5.0
+## Version 0.5.0 [2020-11-19]
 
 > This release introduces breaking changes!
 

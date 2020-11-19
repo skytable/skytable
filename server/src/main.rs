@@ -54,7 +54,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "TerrabaseDB v0.5.0-alpha.2 | https://github.com/terrabasedb/terrabase";
+static MSG: &'static str = "TerrabaseDB v0.5.0 | https://github.com/terrabasedb/terrabase";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
