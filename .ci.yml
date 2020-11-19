@@ -12,6 +12,11 @@ steps:
     image: rust
     commands:
       - cargo build --release
+    when:
+      branch:
+        - next
+      event:
+        - tag
 
   - name: push-docker-image
     image: plugins/docker
@@ -22,3 +27,8 @@ steps:
       password:
         from_secret: docker_password
       auto_tag: true
+    when:
+      branch:
+        - next
+      event:
+        - tag
