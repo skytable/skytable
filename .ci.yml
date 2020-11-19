@@ -13,10 +13,12 @@ steps:
     commands:
       - cargo build --release
     when:
-      branch:
-        - next
+      ref:
+        - refs/heads/next
+        - refs/tags/*
       event:
         - tag
+        - push
 
   - name: push-docker-image
     image: plugins/docker
@@ -28,7 +30,9 @@ steps:
         from_secret: docker_password
       auto_tag: true
     when:
-      branch:
-        - next
+      ref:
+        - refs/heads/next
+        - refs/tags/*
       event:
         - tag
+        - push
