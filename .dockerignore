@@ -1,9 +1,5 @@
-# Ignore deps in the target directory
-target/debug/deps/
-target/debug/incremental/
-target/debug/build/
-target/release/deps/
-target/release/incremental/
-target/release/build/
-target/doc/
-target/rls/
+# Ignore everything else
+*
+
+# Only include the tdb binary
+!target/release/tdb
