@@ -8,7 +8,8 @@ steps:
   - name: restore-cache
     image: plugins/s3-cache
     settings:
-      path: /tdbcache/linux64
+      path: /tdbcache
+      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
       pull: true
       endpoint:
         from_secret: MIO_WWW
@@ -43,6 +44,7 @@ steps:
       password:
         from_secret: docker_password
       auto_tag: true
+      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
     when:
       ref:
         - refs/heads/next
@@ -53,7 +55,7 @@ steps:
   - name: rebuild-cache
     image: plugins/s3-cache
     settings:
-      path: /tdbcache/linux64
+      path: /tdbcache
       pull: true
       endpoint:
         from_secret: MIO_WWW
@@ -62,14 +64,15 @@ steps:
       secret_key:
         from_secret: MIO_KEY
       rebuild: true
+      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
       mount:
         - target
 
   - name: flush-cache
     image: plugins/s3-cache
     settings:
-      path: /tdbcache/linux64
-      flush_path: /tdbcache/linux64
+      path: /tdbcache
+      flush_path: /tdbcache/flush/${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}
       pull: true
       endpoint:
         from_secret: MIO_WWW
@@ -79,3 +82,4 @@ steps:
         from_secret: MIO_KEY
       flush: true
       flush_age: 30
+      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
