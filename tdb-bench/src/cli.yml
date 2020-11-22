@@ -49,3 +49,17 @@ args:
                   long: json
                   help: Sets output type to JSON
                   takes_value: false
+        - host:
+                  short: h
+                  required: false
+                  long: host
+                  value_name: host
+                  help: Sets the remote host to connect to
+                  takes_value: true
+        - port:
+                  short: p
+                  required: false
+                  long: port
+                  value_name: port
+                  help: Sets the remote port to connect to
+                  takes_value: true

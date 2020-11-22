@@ -59,13 +59,13 @@ mod benchtool {
     }
     impl Netpool {
         /// Create a new `Netpool` instance with `size` number of connections (and threads)
-        pub fn new(size: usize) -> Netpool {
+        pub fn new(size: usize, host: &String) -> Netpool {
             assert!(size > 0);
             let (sender, receiver) = mpsc::channel();
             let receiver = Arc::new(Mutex::new(receiver));
             let mut workers = Vec::with_capacity(size);
             for _ in 0..size {
-                workers.push(Worker::new(Arc::clone(&receiver)));
+                workers.push(Worker::new(Arc::clone(&receiver), host.to_owned()));
             }
             Netpool { workers, sender }
         }
@@ -77,9 +77,12 @@ mod benchtool {
     impl Worker {
         /// Create a new `Worker` which also means that a connection to port 2003
         /// will be established
-        fn new(receiver: Arc<Mutex<mpsc::Receiver<WhatToDo>>>) -> Worker {
+        fn new(
+            receiver: Arc<Mutex<mpsc::Receiver<WhatToDo>>>,
+            host: std::string::String,
+        ) -> Worker {
             let thread = thread::spawn(move || {
-                let mut connection = TcpStream::connect("127.0.0.1:2003").unwrap();
+                let mut connection = TcpStream::connect(host).unwrap();
                 loop {
                     let action = receiver.lock().unwrap().recv().unwrap();
                     match action {
@@ -150,6 +153,21 @@ mod benchtool {
         let cfg_layout = load_yaml!("./cli.yml");
         let matches = App::from_yaml(cfg_layout).get_matches();
         let json_out = matches.is_present("json");
+        let mut host = match matches.value_of("host") {
+            Some(h) => h.to_owned(),
+            None => "127.0.0.1".to_owned(),
+        };
+        host.push(':');
+        match matches.value_of("port") {
+            Some(p) => match p.parse::<u16>() {
+                Ok(p) => host.push_str(&p.to_string()),
+                Err(_) => {
+                    eprintln!("ERROR: Invalid port");
+                    std::process::exit(0x100);
+                }
+            },
+            None => host.push_str("2003"),
+        }
         let (max_connections, max_queries, packet_size) = match (
             matches
                 .value_of("connections")
@@ -176,8 +194,8 @@ mod benchtool {
         let rand = thread_rng();
         let mut dt = DevTime::new_complex();
         // Create separate connection pools for get and set operations
-        let mut setpool = Netpool::new(max_connections);
-        let mut getpool = Netpool::new(max_connections);
+        let mut setpool = Netpool::new(max_connections, &host);
+        let mut getpool = Netpool::new(max_connections, &host);
         let keys: Vec<String> = (0..max_queries)
             .into_iter()
             .map(|_| {
@@ -230,7 +248,7 @@ mod benchtool {
         dt.stop_timer("GET").unwrap();
         eprintln!("Benchmark completed! Removing created keys...");
         // Create a connection pool for del operations
-        let mut delpool = Netpool::new(max_connections);
+        let mut delpool = Netpool::new(max_connections, &host);
         // Delete all the created keys
         for packet in del_packs {
             delpool.execute(packet);
