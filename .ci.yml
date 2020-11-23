@@ -21,12 +21,12 @@ steps:
   - name: run-tests
     image: rust
     commands:
-      - cargo test --verbose
+      - cargo test --verbose -j 10
 
   - name: build-docker-binary
     image: rust
     commands:
-      - cargo build --release
+      - cargo build --release -j 10
     when:
       ref:
         - refs/heads/next
