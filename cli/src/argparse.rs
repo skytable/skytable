@@ -25,6 +25,7 @@ use clap::App;
 use libtdb::terrapipe::ADDR;
 use std::io::{self, prelude::*};
 use std::process;
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.0";
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
@@ -49,6 +50,16 @@ pub async fn start_repl() {
         },
         None => host.push_str("2003"),
     }
+    if let Some(eval_expr) = matches.value_of("eval") {
+        if eval_expr.len() == 0 {
+            return;
+        }
+        if let Err(e) = protocol::Connection::oneshot(&host, eval_expr.to_string()).await {
+            eprintln!("ERROR: {}", e);
+            process::exit(0x100);
+        }
+        return;
+    }
     let mut con = match protocol::Connection::new(&host).await {
         Ok(c) => c,
         Err(e) => {
@@ -56,6 +67,7 @@ pub async fn start_repl() {
             process::exit(0x100);
         }
     };
+    println!("{}", MSG_WELCOME);
     loop {
         print!("tsh>");
         io::stdout()

@@ -22,10 +22,8 @@
 mod argparse;
 mod protocol;
 use tokio;
-const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.0";
 
 #[tokio::main]
 async fn main() {
-    println!("{}", MSG_WELCOME);
     argparse::start_repl().await;
 }

@@ -50,6 +50,15 @@ impl Connection {
             buffer: BytesMut::with_capacity(BUF_CAP),
         })
     }
+    pub async fn oneshot(host: &str, query: String) -> TResult<()> {
+        let mut con = Connection {
+            stream: TcpStream::connect(host).await?,
+            buffer: BytesMut::with_capacity(BUF_CAP),
+        };
+        con.run_query(query).await;
+        drop(con);
+        Ok(())
+    }
     /// This function will write a query to the stream and read the response from the
     /// server. It will then determine if the returned response is complete or incomplete
     /// or invalid.
