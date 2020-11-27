@@ -152,7 +152,6 @@ mod benchtool {
     pub fn runner() {
         let cfg_layout = load_yaml!("./cli.yml");
         let matches = App::from_yaml(cfg_layout).get_matches();
-        let json_out = matches.is_present("json");
         let mut host = match matches.value_of("host") {
             Some(h) => h.to_owned(),
             None => "127.0.0.1".to_owned(),
@@ -168,6 +167,40 @@ mod benchtool {
             },
             None => host.push_str("2003"),
         }
+        let rand = thread_rng();
+        if let Some(matches) = matches.subcommand_matches("testkey") {
+            let numkeys = matches.value_of("count").unwrap();
+            if let Ok(num) = numkeys.parse::<usize>() {
+                let mut np = Netpool::new(10, &host);
+                println!("Generating keys ...");
+                let keys: Vec<String> = (0..num)
+                    .into_iter()
+                    .map(|_| {
+                        let rand_string: String = rand.sample_iter(&Alphanumeric).take(8).collect();
+                        rand_string
+                    })
+                    .collect();
+                let values: Vec<String> = (0..num)
+                    .into_iter()
+                    .map(|_| {
+                        let rand_string: String = rand.sample_iter(&Alphanumeric).take(8).collect();
+                        rand_string
+                    })
+                    .collect();
+                let set_packs: Vec<Vec<u8>> = (0..num)
+                    .map(|idx| terrapipe::proc_query(format!("SET {} {}", keys[idx], values[idx])))
+                    .collect();
+                set_packs.into_iter().for_each(|packet| {
+                    np.execute(packet);
+                });
+                println!("Create mock keys!");
+                return;
+            } else {
+                eprintln!("ERROR: Invalid value for `count`");
+                std::process::exit(0x100);
+            }
+        }
+        let json_out = matches.is_present("json");
         let (max_connections, max_queries, packet_size) = match (
             matches
                 .value_of("connections")

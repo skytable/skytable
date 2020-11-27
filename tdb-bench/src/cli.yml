@@ -63,3 +63,14 @@ args:
                   value_name: port
                   help: Sets the remote port to connect to
                   takes_value: true
+subcommands:
+        - testkey:
+                  about: This can be used to create 'mock' keys
+                  args:
+                          - count:
+                                    short: c
+                                    required: true
+                                    long: count
+                                    value_name: NUMBEROFKEYS
+                                    help: Sets the number of keys to create
+                                    takes_value: true
