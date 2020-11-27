@@ -35,7 +35,11 @@ use std::time::Duration;
 use tokio::time;
 pub mod snapshot;
 
-type DiskStore = (Vec<String>, Vec<Vec<u8>>);
+/// This type alias is to be used when deserializing binary data from disk
+type DiskStoreFromDisk = (Vec<String>, Vec<Vec<u8>>);
+/// This type alias is to be used when serializing data from the in-memory table
+/// onto disk
+type DiskStoreFromMemory<'a> = (Vec<&'a String>, Vec<&'a [u8]>);
 lazy_static::lazy_static! {
     pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data.bin");
 }
@@ -58,7 +62,7 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
             _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
         },
     };
-    let parsed: DiskStore = bincode::deserialize(&file)?;
+    let parsed: DiskStoreFromDisk = bincode::deserialize(&file)?;
     let parsed: HashMap<String, Data> = HashMap::from_iter(
         parsed
             .0
@@ -77,9 +81,9 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data.bin` file
 pub fn flush_data(filename: &PathBuf, data: &HashMap<String, Data>) -> TResult<()> {
-    let ds: DiskStore = (
-        data.keys().into_iter().map(|val| val.to_string()).collect(),
-        data.values().map(|val| val.get_blob().to_vec()).collect(),
+    let ds: DiskStoreFromMemory = (
+        data.keys().into_iter().collect(),
+        data.values().map(|val| val.get_inner_ref()).collect(),
     );
     let encoded = bincode::serialize(&ds)?;
     let mut file = fs::File::create(filename)?;

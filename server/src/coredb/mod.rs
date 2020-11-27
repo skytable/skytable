@@ -201,6 +201,10 @@ impl Data {
     pub const fn get_blob(&self) -> &Bytes {
         &self.blob
     }
+    /// Get the inner blob as an `u8` slice (coerced)
+    pub fn get_inner_ref(&self) -> &[u8] {
+        &self.blob
+    }
 }
 
 impl CoreDB {
