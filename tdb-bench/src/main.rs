@@ -193,7 +193,8 @@ mod benchtool {
                 set_packs.into_iter().for_each(|packet| {
                     np.execute(packet);
                 });
-                println!("Create mock keys!");
+                drop(np);
+                println!("Created mock keys successfully");
                 return;
             } else {
                 eprintln!("ERROR: Invalid value for `count`");
