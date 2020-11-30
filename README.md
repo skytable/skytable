@@ -3,8 +3,7 @@
 <img src="https://raw.githubusercontent.com/terrabasedb/docs/master/docs/assets/img/favicon.ico" height=64 width=64 style="float:left">
 <h1>Terrabase<b>DB</b></h1><h3>The next-generation NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabasedb/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabasedb?include_prereleases&sort=semver&style=flat-square) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/terrabasedb/terrabasedb?label=commits&style=flat-square)
-
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/terrabasedb/terrabasedb/Tests?style=flat-square) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-actively%20developed-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/terrabasedb/terrabasedb?include_prereleases&sort=semver&style=flat-square)
 [![Docker Pulls](https://img.shields.io/docker/pulls/terrabasedb/tdb?style=flat-square)](https://hub.docker.com/r/terrabasedb/tdb)
 [![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://terrabasedb.github.io/docs) [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/thanks)
 
