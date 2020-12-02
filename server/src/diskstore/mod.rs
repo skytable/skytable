@@ -34,6 +34,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
 pub mod snapshot;
+mod snapstore;
 
 /// This type alias is to be used when deserializing binary data from disk
 type DiskStoreFromDisk = (Vec<String>, Vec<Vec<u8>>);

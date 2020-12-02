@@ -2,3 +2,5 @@
 /.vscode
 data.bin
 /server/snapshots
+snapstore.bin
+snapstore.partmap
