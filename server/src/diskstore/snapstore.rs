@@ -19,38 +19,75 @@
  *
 */
 
+//! # Snapstore
+//!
+//! Snapstore is an extremely fundamental but powerful disk storage format which comprises of two parts:
+//! 1. The data file (`.bin`)
+//! 2. The partition map (`.partmap`)
+//!
+//! ## The data file
+//!
+//! Well, the data file, contains data! Jokes aside, the data file contains the serialized equivalent of
+//! multiple namespaces.
+//!
+//! ## The partition map
+//!
+//! The partition map file is the serialized equivalent of the `Partition` data structure. When
+//! deserialized, this file gives us partition _markers_ or byte positions. Using these positions, we can
+//! read in multiple namespaces (virtually an infinite number of them, provided that they can reside in memory)
+//! and give their "real" equivalents. Another advent of this method is that we can use separate threads
+//! for reading in data, in the event that there is a lot of data to be read, and this data is spread
+//! over multiple namespaces.
+//!
+//! > In other words, the `snapstore.bin` file is completely useless without the `snapstore.partmap` file; so,
+//! if you happen to lose it — have a good day!
+
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::error::Error;
 use std::fs;
 use std::io::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug)]
+/// The `PartMap` is a partition map which contains metadata about multiple partitions stored in a
+/// snapstore file. The `PartMap` holds all of this data in a simple `Vec`tor to make life easier.
 pub struct PartMap {
+    /// The vector of partitions
     partitions: Vec<Partition>,
 }
 impl PartMap {
-    pub fn new(partitions: Vec<Partition>) -> Self {
+    /// Create a new partition map using existing `Partition` data
+    pub const fn new(partitions: Vec<Partition>) -> Self {
         PartMap { partitions }
     }
 }
+
 #[derive(Serialize, Deserialize, Debug)]
+/// A `Partition` contains a partition marker or `end` and `begin` values which demarcate the location
+/// of this partition in the data file
 pub struct Partition {
+    /// The name of the partition
     name: String,
-    len: usize,
+    /// The ending byte of this partition
+    end: usize,
+    /// The starting byte of this partition
+    begin: usize,
 }
+
 impl Partition {
-    pub fn new(begin: usize, end: usize, name: String) -> Self {
-        Partition {
-            name,
-            len: (end - begin),
-        }
+    /// Create a new `Partition` using existing partitioning data
+    pub const fn new(begin: usize, end: usize, name: String) -> Self {
+        Partition { name, end, begin }
     }
-    pub fn len(&self) -> usize {
-        self.len
+    /// Get the size of the partition
+    pub const fn len(&self) -> usize {
+        self.end - self.begin
     }
 }
 
+// We implement `IntoIterator` for `PartMap` so that we can use it for sequentially deserializing
+// partitions
 impl IntoIterator for PartMap {
     type Item = Partition;
     type IntoIter = std::vec::IntoIter<Partition>;
@@ -59,38 +96,72 @@ impl IntoIterator for PartMap {
         self.partitions.into_iter()
     }
 }
-pub fn multi_ns_flush(ns: HashMap<&str, &HashMap<String, Vec<u8>>>) -> PartMap {
-    let mut file = fs::File::create("snapstore.bin").unwrap();
+
+/// Flush the data of multiple namespaces
+///
+/// This function creates two files: `snapstore.bin` and `snapstore.partmap`; the former is the data file
+/// and the latter one is the partition map, or simply put, the partition metadata file. This function
+/// accepts a `HashMap` of `HashMap`s with the key being the name of the partition.
+pub fn multi_ns_flush(ns: HashMap<&str, &HashMap<String, Vec<u8>>>) -> Result<(), Box<dyn Error>> {
+    // Create the data file first
+    let mut file = fs::File::create("snapstore.bin")?;
+    // This contains the partitions for the `PartMap` object
     let mut partitions = Vec::new();
+    // Create an iterator over the namespaces and their corresponding data
     let mut ns = ns.into_iter();
+    // The offset from the starting byte we are at currently
     let mut cur_offset = 0;
     while let Some((ns, ns_data)) = ns.next() {
+        // We keep `start` to be the cur_offset, even if it is zero, since we're going to read it sequentially
+        // TODO: Enable non-sequential or "jumpy" reading
         let start = cur_offset;
-        let serialized = bincode::serialize(&ns_data).unwrap();
+        // Serialize the data
+        let serialized = bincode::serialize(&ns_data)?;
+        // We will write these many bytes to the file, so move the offset ahead
         cur_offset += serialized.len();
-        file.write_all(&serialized).unwrap();
+        // Now write the data
+        file.write_all(&serialized)?;
+        // Add this partition data to our vector of partitions
         partitions.push(Partition::new(start, cur_offset, ns.to_owned()));
         continue;
     }
     drop(file);
-    let mut file = fs::File::create("snapstore.partmap").unwrap();
+    // Now create the partition map file
+    let mut file = fs::File::create("snapstore.partmap")?;
     let map = PartMap::new(partitions);
-    file.write_all(&bincode::serialize(&map).unwrap()).unwrap();
-    map
+    // Serialize the partition map and write it to disk
+    file.write_all(&bincode::serialize(&map)?)?;
+    // We're done here
+    Ok(())
 }
 
-pub fn multi_ns_unflush() -> HashMap<String, HashMap<String, Vec<u8>>> {
-    let pmap: PartMap = bincode::deserialize(&fs::read("snapstore.partmap").unwrap()).unwrap();
-    let mut file = fs::File::open("snapstore.bin").unwrap();
+/// This function restores the 'named' namespaces from disk
+///
+/// This function expects two things:
+/// 1. You should have a data file called 'snapstore.bin'
+/// 2. You should have a partition map or partition metadata file called 'snapstore.partmap'
+///
+/// Once these requirements are met, the file will return a `HashMap` of named partitions which
+/// can be used as required
+pub fn multi_ns_unflush() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, Box<dyn Error>> {
+    // Try to read the partition map
+    let pmap: PartMap = bincode::deserialize(&fs::read("snapstore.partmap")?)?;
+    // Now read the data file
+    let mut file = fs::File::open("snapstore.bin")?;
+    // Get an iterator over the namespace data from the partition map
     let mut map = pmap.into_iter();
     let mut hmaps: HashMap<String, HashMap<String, Vec<u8>>> = HashMap::new();
     while let Some(partition) = map.next() {
+        // Create an empty buffer which will read precisely `len()` bytes from the file
         let mut exact_op = vec![0; partition.len()];
-        file.read_exact(&mut exact_op).unwrap();
-        let tmp_map = bincode::deserialize(&exact_op).unwrap();
+        // Now read this data
+        file.read_exact(&mut exact_op)?;
+        // Deserialize this chunk
+        let tmp_map = bincode::deserialize(&exact_op)?;
+        // Insert the deserialized equivalent into our `HashMap` of `HashMap`s
         hmaps.insert(partition.name, tmp_map);
     }
-    hmaps
+    Ok(hmaps)
 }
 
 #[test]
@@ -104,10 +175,10 @@ fn test_multi_ns_flush() {
     let mut hm = HashMap::new();
     hm.insert("nsa", &nsa);
     hm.insert("nsb", &nsb);
-    let _ = multi_ns_flush(hm);
+    let _ = multi_ns_flush(hm).unwrap();
     let mut hm_eq = HashMap::new();
     hm_eq.insert("nsa".to_owned(), nsa);
     hm_eq.insert("nsb".to_owned(), nsb);
-    let unflushed = multi_ns_unflush();
+    let unflushed = multi_ns_unflush().unwrap();
     assert_eq!(unflushed, hm_eq);
 }
