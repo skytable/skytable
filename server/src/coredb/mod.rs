@@ -39,6 +39,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::Notify;
+mod multins;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
