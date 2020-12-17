@@ -49,6 +49,14 @@ use std::error::Error;
 use std::fs;
 use std::io::prelude::*;
 
+pub trait IntoBinaryData: Serialize {
+    fn into_bin(&self) -> Vec<u8> {
+        bincode::serialize(&self).unwrap()
+    }
+}
+
+impl<'a> IntoBinaryData for &'a HashMap<String, Vec<u8>> {}
+
 #[derive(Serialize, Deserialize, Debug)]
 /// The `PartMap` is a partition map which contains metadata about multiple partitions stored in a
 /// snapstore file. The `PartMap` holds all of this data in a simple `Vec`tor to make life easier.
@@ -102,7 +110,10 @@ impl IntoIterator for PartMap {
 /// This function creates two files: `snapstore.bin` and `snapstore.partmap`; the former is the data file
 /// and the latter one is the partition map, or simply put, the partition metadata file. This function
 /// accepts a `HashMap` of `HashMap`s with the key being the name of the partition.
-pub fn multi_ns_flush(ns: HashMap<&str, &HashMap<String, Vec<u8>>>) -> Result<(), Box<dyn Error>> {
+pub fn flush_multi_ns<T>(ns: HashMap<&str, T>) -> Result<(), Box<dyn Error>>
+where
+    T: IntoBinaryData,
+{
     // Create the data file first
     let mut file = fs::File::create("snapstore.bin")?;
     // This contains the partitions for the `PartMap` object
@@ -116,7 +127,7 @@ pub fn multi_ns_flush(ns: HashMap<&str, &HashMap<String, Vec<u8>>>) -> Result<()
         // TODO: Enable non-sequential or "jumpy" reading
         let start = cur_offset;
         // Serialize the data
-        let serialized = bincode::serialize(&ns_data)?;
+        let serialized = ns_data.into_bin();
         // We will write these many bytes to the file, so move the offset ahead
         cur_offset += serialized.len();
         // Now write the data
@@ -143,7 +154,7 @@ pub fn multi_ns_flush(ns: HashMap<&str, &HashMap<String, Vec<u8>>>) -> Result<()
 ///
 /// Once these requirements are met, the file will return a `HashMap` of named partitions which
 /// can be used as required
-pub fn multi_ns_unflush() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, Box<dyn Error>> {
+pub fn unflush_multi_ns() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, Box<dyn Error>> {
     // Try to read the partition map
     let pmap: PartMap = bincode::deserialize(&fs::read("snapstore.partmap")?)?;
     // Now read the data file
@@ -165,7 +176,7 @@ pub fn multi_ns_unflush() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, B
 }
 
 #[test]
-fn test_multi_ns_flush() {
+fn test_flush_multi_ns() {
     let mut nsa = HashMap::new();
     nsa.insert("my".to_owned(), "ohmy".to_owned().into_bytes());
     nsa.insert("fly".to_owned(), "moondust".to_owned().into_bytes());
@@ -175,10 +186,10 @@ fn test_multi_ns_flush() {
     let mut hm = HashMap::new();
     hm.insert("nsa", &nsa);
     hm.insert("nsb", &nsb);
-    let _ = multi_ns_flush(hm).unwrap();
+    let _ = flush_multi_ns(hm).unwrap();
     let mut hm_eq = HashMap::new();
     hm_eq.insert("nsa".to_owned(), nsa);
     hm_eq.insert("nsb".to_owned(), nsb);
-    let unflushed = multi_ns_unflush().unwrap();
+    let unflushed = unflush_multi_ns().unwrap();
     assert_eq!(unflushed, hm_eq);
 }
