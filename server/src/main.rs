@@ -38,6 +38,7 @@ mod kvengine;
 mod protocol;
 mod queryengine;
 mod resp;
+mod tls;
 use coredb::CoreDB;
 use dbnet::run;
 use env_logger::*;

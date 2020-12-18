@@ -22,7 +22,9 @@ log = "0.4.11"
 chrono = "0.4.19"
 regex = "1.4.2"
 tdb_macros = {path="../tdb-macros"}
-
+tokio-openssl-vendored = {git="https://github.com/terrabasedb/tokio-openssl-vendored.git", branch="next"}
+openssl = "0.10.31"
+openssl-sys = "0.9.59"
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 

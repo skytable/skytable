@@ -52,7 +52,6 @@ use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
-
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
 pub struct Terminator {
@@ -104,7 +103,7 @@ pub struct Listener {
 }
 
 /// A per-connection handler
-struct CHandler {
+pub struct CHandler {
     db: CoreDB,
     con: Connection,
     climit: Arc<Semaphore>,
