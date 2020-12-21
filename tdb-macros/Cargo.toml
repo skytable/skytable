@@ -12,5 +12,5 @@ proc-macro = true
 [dependencies]
 syn = {version = "1.0.54", features = ["full"]}
 quote = "1.0.7"
-rand = "0.7.3"
+rand = "0.8.0"
 proc-macro2 = "1.0.24"
