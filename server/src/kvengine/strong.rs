@@ -31,7 +31,8 @@
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
 use crate::coredb::{CoreDB, Data};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 use std::hint::unreachable_unchecked;
 

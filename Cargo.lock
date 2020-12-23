@@ -621,7 +621,7 @@ dependencies = [
  "serde_derive",
  "tdb_macros",
  "tokio",
- "tokio-openssl-vendored",
+ "tokio-openssl",
  "toml",
 ]
 
@@ -719,9 +719,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-openssl-vendored"
+name = "tokio-openssl"
 version = "0.5.0"
-source = "git+https://github.com/terrabasedb/tokio-openssl-vendored.git?branch=next#048622804dd641428b51a0bcc72cd9c801d825e7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d01e5cc2d3a154fa310982d0affaec8140d6476805422265b2f648eb813f937f"
 dependencies = [
  "openssl",
  "openssl-sys",

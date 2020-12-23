@@ -23,7 +23,8 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::coredb::{self, CoreDB};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use coredb::Data;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;

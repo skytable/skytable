@@ -158,7 +158,7 @@ impl Listener {
 
 impl CHandler {
     /// Process the incoming connection
-    async fn run(&mut self) -> TResult<()> {
+    pub async fn run(&mut self) -> TResult<()> {
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,

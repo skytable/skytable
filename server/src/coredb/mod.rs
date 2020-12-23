@@ -25,8 +25,8 @@ use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::diskstore;
-use crate::protocol::Connection;
-use crate::protocol::Query;
+use crate::protocol::tls::SslConnection;
+use crate::protocol::{Connection, Query};
 use crate::queryengine;
 use bytes::Bytes;
 use diskstore::PERSIST_FILE;
@@ -245,14 +245,21 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query(&self, query: Query, con: &mut Connection) -> TResult<()> {
+    pub async fn execute_query(&self, query: Query, mut con: &mut Connection) -> TResult<()> {
         match query {
-            Query::Simple(q) => queryengine::execute_simple(&self, con, q).await?,
+            Query::Simple(q) => {
+                queryengine::execute_simple(&self, &mut con, q).await?;
+                // Once we're done executing, flush the stream
+                con.flush_stream().await
+            }
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }
-        // Once we're done executing, flush the stream
-        con.flush_stream().await
+    }
+
+    pub async fn execute_query_ssl(&self, _query: Query, _con: &mut SslConnection) -> TResult<()> {
+        // TODO(@ohsayan): Implement SSL-connection queries
+        todo!()
     }
 
     /// Create a new `CoreDB` instance

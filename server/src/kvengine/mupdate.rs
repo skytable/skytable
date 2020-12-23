@@ -20,7 +20,8 @@
 */
 
 use crate::coredb::{self, CoreDB};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use crate::resp::GroupBegin;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;

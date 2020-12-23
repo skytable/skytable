@@ -20,7 +20,8 @@
 */
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 
 /// Delete all the keys in the database

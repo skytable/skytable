@@ -24,7 +24,8 @@
 //! Functions for handling `JGET` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 
 /// Run a `JGET` query

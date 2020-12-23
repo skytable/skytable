@@ -20,7 +20,8 @@
 */
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::Connection;
+use crate::protocol::{responses, ActionGroup};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
 use libtdb::terrapipe::RespCodes;
