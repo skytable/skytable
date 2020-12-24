@@ -70,6 +70,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
 
 [[package]]
+name = "bytes"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad1f8e949d755f9d79112b5bb46938e0ef9d3804a0b16dfab13aafcaa5f0fa72"
+
+[[package]]
 name = "cc"
 version = "1.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -143,12 +149,6 @@ name = "fs_extra"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
-
-[[package]]
-name = "futures-core"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59f5fff90fd5d971f936ad674802482ba441b6f09ba5e15fd8b39145582ca399"
 
 [[package]]
 name = "getrandom"
@@ -225,7 +225,7 @@ checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 name = "libtdb"
 version = "0.5.0"
 dependencies = [
- "bytes",
+ "bytes 0.6.0",
  "lazy_static",
  "termcolor",
 ]
@@ -496,12 +496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "slab"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
-
-[[package]]
 name = "smallvec"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -541,7 +535,7 @@ name = "tdb"
 version = "0.5.0"
 dependencies = [
  "bincode",
- "bytes",
+ "bytes 0.6.0",
  "chrono",
  "clap",
  "env_logger",
@@ -620,13 +614,12 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.3.6"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "720ba21c25078711bf456d607987d95bce90f7c3bea5abe1db587862e7a1e87c"
+checksum = "9f4bfdcbd00fa893ac0549b38aa27080636a0104b0d0c38475a99439405e1df8"
 dependencies = [
  "autocfg",
- "bytes",
- "futures-core",
+ "bytes 1.0.0",
  "libc",
  "memchr",
  "mio",
@@ -635,16 +628,15 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "slab",
  "tokio-macros",
  "winapi",
 ]
 
 [[package]]
 name = "tokio-macros"
-version = "0.3.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21d30fdbb5dc2d8f91049691aa1a9d4d4ae422a21c334ce8936e5886d30c5c45"
+checksum = "42517d2975ca3114b22a16192634e8241dc5cc1f130be194645970cc1c371494"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -664,7 +656,7 @@ dependencies = [
 name = "tsh"
 version = "0.5.0"
 dependencies = [
- "bytes",
+ "bytes 0.6.0",
  "clap",
  "lazy_static",
  "libtdb",
