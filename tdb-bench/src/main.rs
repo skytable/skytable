@@ -176,14 +176,24 @@ mod benchtool {
                 let keys: Vec<String> = (0..num)
                     .into_iter()
                     .map(|_| {
-                        let rand_string: String = rand.sample_iter(&Alphanumeric).take(8).collect();
+                        let rand_string: String = unsafe {
+                            String::from_utf8_unchecked(
+                                rand.clone().sample_iter(&Alphanumeric).take(8).collect(),
+                            )
+                            .to_string()
+                        };
                         rand_string
                     })
                     .collect();
                 let values: Vec<String> = (0..num)
                     .into_iter()
                     .map(|_| {
-                        let rand_string: String = rand.sample_iter(&Alphanumeric).take(8).collect();
+                        let rand_string: String = unsafe {
+                            String::from_utf8_unchecked(
+                                rand.clone().sample_iter(&Alphanumeric).take(8).collect(),
+                            )
+                            .to_string()
+                        };
                         rand_string
                     })
                     .collect();
@@ -233,16 +243,30 @@ mod benchtool {
         let keys: Vec<String> = (0..max_queries)
             .into_iter()
             .map(|_| {
-                let rand_string: String =
-                    rand.sample_iter(&Alphanumeric).take(packet_size).collect();
+                let rand_string: String = unsafe {
+                    String::from_utf8_unchecked(
+                        rand.clone()
+                            .sample_iter(&Alphanumeric)
+                            .take(packet_size)
+                            .collect(),
+                    )
+                    .to_string()
+                };
                 rand_string
             })
             .collect();
         let values: Vec<String> = (0..max_queries)
             .into_iter()
             .map(|_| {
-                let rand_string: String =
-                    rand.sample_iter(&Alphanumeric).take(packet_size).collect();
+                let rand_string: String = unsafe {
+                    String::from_utf8_unchecked(
+                        rand.clone()
+                            .sample_iter(&Alphanumeric)
+                            .take(packet_size)
+                            .collect(),
+                    )
+                    .to_string()
+                };
                 rand_string
             })
             .collect();

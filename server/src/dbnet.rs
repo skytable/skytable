@@ -139,7 +139,7 @@ impl Listener {
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
-            self.climit.acquire().await.forget();
+            self.climit.acquire().await.unwrap().forget();
             let stream = self.accept().await?;
             let mut chandle = CHandler {
                 db: self.db.clone(),

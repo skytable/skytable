@@ -183,11 +183,11 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         over by Hyper-V, which is why we'll prevent attempts to bind to them, if
         the OS is Windows.
         */
-        let mut rand: u16 = rng.gen_range(1025, 65535);
+        let mut rand: u16 = rng.gen_range(1025..=65535);
         #[cfg(not(target_os = "windows"))]
         {
             while in_set.contains(&rand) {
-                rand = rng.gen_range(1025, 65535);
+                rand = rng.gen_range(1025..=65535);
             }
         }
         #[cfg(target_os = "windows")]
