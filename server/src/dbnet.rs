@@ -37,7 +37,9 @@
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use crate::protocol::tls::SslConnection;
 use crate::protocol::{Connection, QueryResult::*};
+use crate::resp::Writable;
 use crate::CoreDB;
 use libtdb::util::terminal;
 use libtdb::TResult;
@@ -156,6 +158,49 @@ impl Listener {
     }
 }
 
+/// # Connection Wrapper
+///
+/// A `Con` object holds a mutable reference to a standard TCP stream or to
+/// an encrypted connection (over the `SslListener` object). It provides a few
+/// methods which are provided by the underlying interface.
+pub enum Con<'a> {
+    /// A secure TLS connection
+    Secure(&'a mut SslConnection),
+    /// An insecure ('standard') TCP connection
+    Insecure(&'a mut Connection),
+}
+
+impl<'a> Con<'a> {
+    /// Create a new **unencrypted** connection instance
+    pub fn init<'b>(con: &'b mut Connection) -> Self
+    where
+        'b: 'a,
+    {
+        Con::Insecure(con)
+    }
+    /// Create a new **encrypted** connection instance
+    pub fn init_ssl<'b>(con: &'b mut SslConnection) -> Self
+    where
+        'b: 'a,
+    {
+        Con::Secure(con)
+    }
+    /// Flush the stream that is held by the underlying connection
+    pub async fn flush_stream(&mut self) -> TResult<()> {
+        match self {
+            Con::Secure(con) => con.flush_stream().await,
+            Con::Insecure(con) => con.flush_stream().await,
+        }
+    }
+    /// Write bytes to the underlying stream that implement the `Writable` trait
+    pub async fn write_response(&mut self, resp: impl Writable) -> TResult<()> {
+        match self {
+            Con::Insecure(con) => con.write_response(resp).await,
+            Con::Secure(con) => con.write_response(resp).await,
+        }
+    }
+}
+
 impl CHandler {
     /// Process the incoming connection
     pub async fn run(&mut self) -> TResult<()> {
@@ -167,7 +212,11 @@ impl CHandler {
                 }
             };
             match try_df {
-                Ok(Q(s)) => self.db.execute_query(s, &mut self.con).await?,
+                Ok(Q(s)) => {
+                    self.db
+                        .execute_query(s, &mut Con::Insecure(&mut self.con))
+                        .await?
+                }
                 Ok(E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(Empty) => return Ok(()),
                 Err(e) => return Err(e.into()),

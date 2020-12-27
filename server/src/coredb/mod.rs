@@ -21,6 +21,7 @@
 
 //! # The core database engine
 
+use crate::dbnet::Con;
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
@@ -245,7 +246,7 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query(&self, query: Query, mut con: &mut Connection) -> TResult<()> {
+    pub async fn execute_query(&self, query: Query, mut con: &mut Con<'_>) -> TResult<()> {
         match query {
             Query::Simple(q) => {
                 queryengine::execute_simple(&self, &mut con, q).await?;

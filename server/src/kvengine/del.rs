@@ -23,7 +23,7 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::Connection;
+use crate::dbnet::Con;
 use crate::protocol::{responses, ActionGroup};
 use crate::resp::GroupBegin;
 use libtdb::TResult;
@@ -32,7 +32,7 @@ use libtdb::TResult;
 ///
 /// Do note that this function is blocking since it acquires a write lock.
 /// It will write an entire datagroup, for this `del` action
-pub async fn del(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn del(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
