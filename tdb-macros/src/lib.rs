@@ -67,7 +67,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
         let addr = crate::tests::start_test_server(#rand, Some(asyncdb.clone())).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body
-        stream.shutdown(::std::net::Shutdown::Write).unwrap();
+        stream.shutdown(::std::net::Shutdown::Write);
         asyncdb.finish_db();
         drop(asyncdb);
     };

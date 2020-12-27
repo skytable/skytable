@@ -23,8 +23,7 @@
 mod __private {
     use crate::protocol::responses::fresp;
     use libtdb::terrapipe;
-    use tokio::io::AsyncReadExt;
-    use tokio::prelude::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         let heya = terrapipe::proc_query("HEYA");
@@ -82,7 +81,6 @@ mod __private {
     ) where
         T: AsRef<str>,
     {
-        use tokio::prelude::*;
         let mut query = String::from("MSET ");
         query.push_str(values_split_with_whitespace.as_ref());
         let count_bytes_len = homwany.to_string().as_bytes().len();
