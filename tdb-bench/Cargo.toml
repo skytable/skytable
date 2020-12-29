@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 rand = "0.8.0"
-devtimer = "4.0.0"
+devtimer = "4.0.1"
 libtdb = {path="../libtdb"}
 clap = {version = "2.33.3", features=["yaml"]}
 serde = {version="1.0.118", features=["derive"]}

@@ -121,9 +121,9 @@ dependencies = [
 
 [[package]]
 name = "devtimer"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6035b7b9244bf9637cd7ef80b5e1c54404bef92cccd34738c85c45f04ae8b244"
+checksum = "907339959a92f6b98846570500c0a567c9aecbb3871cef00561eb5d20d47b7c1"
 
 [[package]]
 name = "env_logger"
