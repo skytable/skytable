@@ -19,12 +19,12 @@
  *
 */
 
+#![allow(dead_code)] // TODO: Don't keep clippy quiet!
 use super::deserializer;
 use super::responses;
 use super::IoResult;
 use super::ParseResult;
 use super::QueryResult;
-#[allow(dead_code)] // TODO: Don't keep clippy quiet!
 use crate::dbnet::Terminator;
 use crate::resp::Writable;
 use crate::CoreDB;
