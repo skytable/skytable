@@ -19,7 +19,6 @@
  *
 */
 
-#![allow(dead_code)] // TODO: Don't keep clippy quiet!
 use super::deserializer;
 use super::responses;
 use super::IoResult;

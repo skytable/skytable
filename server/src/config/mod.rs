@@ -48,6 +48,8 @@ pub struct Config {
     bgsave: Option<ConfigKeyBGSAVE>,
     /// The snapshot key
     snapshot: Option<ConfigKeySnapshot>,
+    /// SSL configuration
+    ssl: Option<KeySslOpts>,
 }
 
 /// The BGSAVE section in the config file
@@ -124,6 +126,41 @@ pub struct ConfigKeySnapshot {
     atmost: usize,
 }
 
+/// The SSL configuration
+///
+/// This enumeration determines whether the SSL listener is:
+/// - `Enabled`: This means that the database server will be listening to both
+/// SSL **and** non-SSL requests
+/// - `EnabledOnly` : This means that the database server will only accept SSL requests
+/// and will not even activate the non-SSL socket
+/// - `Disabled` : This indicates that the server would only accept non-SSL connections
+/// and will not even activate the SSL socket
+#[derive(Debug, PartialEq)]
+pub enum SslConfig {
+    Enabled(SslOpts),
+    EnabledOnly(SslOpts),
+    Disabled,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct KeySslOpts {
+    key: String,
+    chain: String,
+    only: Option<bool>,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct SslOpts {
+    key: String,
+    chain: String,
+}
+
+impl SslOpts {
+    pub const fn new(key: String, chain: String) -> Self {
+        SslOpts { key, chain }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// The snapshot configuration
 ///
@@ -190,6 +227,8 @@ pub struct ParsedConfig {
     pub bgsave: BGSave,
     /// The snapshot configuration
     pub snapshot: SnapshotConfig,
+    /// The SSL configuration
+    pub ssl: SslConfig,
 }
 
 impl ParsedConfig {
@@ -206,16 +245,16 @@ impl ParsedConfig {
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
-    const fn from_config(cfg: Config) -> Self {
+    fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            host: cfg.server.host,
-            port: cfg.server.port,
-            noart: if let Some(noart) = cfg.server.noart {
+            host: cfg_info.server.host,
+            port: cfg_info.server.port,
+            noart: if let Some(noart) = cfg_info.server.noart {
                 noart
             } else {
                 false
             },
-            bgsave: if let Some(bgsave) = cfg.bgsave {
+            bgsave: if let Some(bgsave) = cfg_info.bgsave {
                 match (bgsave.enabled, bgsave.every) {
                     // TODO: Show a warning that there are unused keys
                     (Some(enabled), Some(every)) => BGSave::new(enabled, every),
@@ -226,10 +265,25 @@ impl ParsedConfig {
             } else {
                 BGSave::default()
             },
-            snapshot: if let Some(snapshot) = cfg.snapshot {
+            snapshot: if let Some(snapshot) = cfg_info.snapshot {
                 SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
             } else {
                 SnapshotConfig::default()
+            },
+            ssl: if let Some(sslopts) = cfg_info.ssl {
+                if sslopts.only.is_some() {
+                    SslConfig::EnabledOnly(SslOpts {
+                        key: sslopts.key,
+                        chain: sslopts.chain,
+                    })
+                } else {
+                    SslConfig::Enabled(SslOpts {
+                        key: sslopts.key,
+                        chain: sslopts.chain,
+                    })
+                }
+            } else {
+                SslConfig::Disabled
             },
         }
     }
@@ -247,6 +301,7 @@ impl ParsedConfig {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled,
         }
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
@@ -258,6 +313,7 @@ impl ParsedConfig {
             false,
             BGSave::default(),
             SnapshotConfig::default(),
+            SslConfig::Disabled,
         )
     }
     /// Create a new `ParsedConfig` with all the fields
@@ -267,6 +323,7 @@ impl ParsedConfig {
         noart: bool,
         bgsave: BGSave,
         snapshot: SnapshotConfig,
+        ssl: SslConfig,
     ) -> Self {
         ParsedConfig {
             host,
@@ -274,6 +331,7 @@ impl ParsedConfig {
             noart,
             bgsave,
             snapshot,
+            ssl,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -282,6 +340,7 @@ impl ParsedConfig {
     /// - `noart` : false
     /// - `bgsave_enabled` : true
     /// - `bgsave_duration` : 120
+    /// - `ssl` : disabled
     pub const fn default() -> Self {
         ParsedConfig {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -289,6 +348,7 @@ impl ParsedConfig {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled,
         }
     }
     /// Return a (host, port) tuple which can be bound to with `TcpListener`
@@ -409,13 +469,18 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
     let snapevery = matches.value_of("snapevery");
     let snapkeep = matches.value_of("snapkeep");
     let saveduration = matches.value_of("saveduration");
+    let sslkey = matches.value_of("sslkey");
+    let sslchain = matches.value_of("sslchain");
+    let sslonly = matches.is_present("sslonly");
     let cli_has_overrideable_args = host.is_some()
         || port.is_some()
         || noart
         || nosave
         || snapevery.is_some()
         || snapkeep.is_some()
-        || saveduration.is_some();
+        || saveduration.is_some()
+        || sslchain.is_some()
+        || sslkey.is_some();
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
             "Either use command line arguments or use a configuration file",
@@ -506,7 +571,27 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
             }
             (None, None) => SnapshotConfig::Disabled,
         };
-        let cfg = ParsedConfig::new(host, port, noart, bgsave, snapcfg);
+        let sslcfg = match (sslkey, sslchain) {
+            (Some(key), Some(chain)) => {
+                if sslonly {
+                    SslConfig::EnabledOnly(SslOpts::new(key.to_owned(), chain.to_owned()))
+                } else {
+                    SslConfig::Enabled(SslOpts::new(key.to_owned(), chain.to_owned()))
+                }
+            }
+            (None, None) => {
+                if sslonly {
+                    log::warn!("Ignoring --sslonly flag as SSL wasn't enabled")
+                }
+                SslConfig::Disabled
+            }
+            (_, _) => {
+                return Err(ConfigError::CliArgErr(
+                    "To use SSL, pass values for both --sslkey and --sslchain",
+                ));
+            }
+        };
+        let cfg = ParsedConfig::new(host, port, noart, bgsave, snapcfg, sslcfg);
         return Ok(ConfigType::Custom(cfg, restorefile));
     }
     if let Some(filename) = filename {
@@ -563,6 +648,7 @@ fn test_config_file_noart() {
             noart: true,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled
         }
     );
 }
@@ -580,6 +666,7 @@ fn test_config_file_ipv6() {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled
         }
     );
 }
@@ -596,7 +683,8 @@ fn test_config_file_template() {
             2003,
             false,
             BGSave::default(),
-            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4))
+            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+            SslConfig::Disabled // TODO: Update the template
         )
     );
 }
@@ -621,7 +709,8 @@ fn test_config_file_custom_bgsave() {
             port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default()
+            snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled
         }
     );
 }
@@ -642,6 +731,7 @@ fn test_config_file_bgsave_enabled_only() {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled
         }
     )
 }
@@ -661,7 +751,8 @@ fn test_config_file_bgsave_every_only() {
             port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default()
+            snapshot: SnapshotConfig::default(),
+            ssl: SslConfig::Disabled
         }
     )
 }
@@ -678,6 +769,7 @@ fn test_config_file_snapshot() {
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port: 2003,
             noart: false,
+            ssl: SslConfig::Disabled
         }
     );
 }

@@ -81,3 +81,22 @@ args:
                   value_name: count
                   help: Sets the number of most recent snapshots to keep
                   takes_value: true
+        - sslkey:
+                  required: false
+                  long: sslkey
+                  short: k
+                  value_name: key
+                  help: Sets the PEM key file to use for SSL/TLS
+                  takes_value: true
+        - sslchain:
+                  required: false
+                  long: sslchain
+                  short: z
+                  value_name: chain
+                  help: Sets the PEM chain file to use for SSL/TLS
+                  takes_value: true
+        - sslonly:
+                  required: false
+                  long: sslonly
+                  takes_value: false
+                  help: Tells the server to only accept SSL connections and disables the non-SSL port
