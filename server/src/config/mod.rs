@@ -461,17 +461,19 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
         path.push(val);
         path
     });
+    // Check flags
+    let sslonly = matches.is_present("sslonly");
+    let noart = matches.is_present("noart");
+    let nosave = matches.is_present("nosave");
+    // Check options
     let filename = matches.value_of("config");
     let host = matches.value_of("host");
     let port = matches.value_of("port");
-    let noart = matches.is_present("noart");
-    let nosave = matches.is_present("nosave");
     let snapevery = matches.value_of("snapevery");
     let snapkeep = matches.value_of("snapkeep");
     let saveduration = matches.value_of("saveduration");
     let sslkey = matches.value_of("sslkey");
     let sslchain = matches.value_of("sslchain");
-    let sslonly = matches.is_present("sslonly");
     let cli_has_overrideable_args = host.is_some()
         || port.is_some()
         || noart
@@ -480,7 +482,8 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
         || snapkeep.is_some()
         || saveduration.is_some()
         || sslchain.is_some()
-        || sslkey.is_some();
+        || sslkey.is_some()
+        || sslonly;
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
             "Either use command line arguments or use a configuration file",
@@ -571,21 +574,27 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
             }
             (None, None) => SnapshotConfig::Disabled,
         };
-        let sslcfg = match (sslkey, sslchain) {
-            (Some(key), Some(chain)) => {
-                if sslonly {
-                    SslConfig::EnabledOnly(SslOpts::new(key.to_owned(), chain.to_owned()))
-                } else {
-                    SslConfig::Enabled(SslOpts::new(key.to_owned(), chain.to_owned()))
-                }
-            }
+        let sslcfg = match (
+            sslkey.map(|val| val.to_owned()),
+            sslchain.map(|val| val.to_owned()),
+        ) {
             (None, None) => {
                 if sslonly {
-                    log::warn!("Ignoring --sslonly flag as SSL wasn't enabled")
+                    return Err(ConfigError::CliArgErr(
+                        "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
+                    ));
+                } else {
+                    SslConfig::Disabled
                 }
-                SslConfig::Disabled
             }
-            (_, _) => {
+            (Some(key), Some(chain)) => {
+                if sslonly {
+                    SslConfig::EnabledOnly(SslOpts::new(key, chain))
+                } else {
+                    SslConfig::Enabled(SslOpts::new(key, chain))
+                }
+            }
+            _ => {
                 return Err(ConfigError::CliArgErr(
                     "To use SSL, pass values for both --sslkey and --sslchain",
                 ));
