@@ -34,6 +34,10 @@ use std::path::PathBuf;
 use tokio::net::ToSocketAddrs;
 use toml;
 
+const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+const DEFAULT_PORT: u16 = 2003;
+const DEFAULT_SSL_PORT: u16 = 2004;
+
 /// This struct is an _object representation_ used for parsing the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
@@ -126,38 +130,74 @@ pub struct ConfigKeySnapshot {
     atmost: usize,
 }
 
-/// The SSL configuration
+/// Port configuration
 ///
-/// This enumeration determines whether the SSL listener is:
-/// - `Enabled`: This means that the database server will be listening to both
+/// This enumeration determines whether the ports are:
+/// - `Multi`: This means that the database server will be listening to both
 /// SSL **and** non-SSL requests
-/// - `EnabledOnly` : This means that the database server will only accept SSL requests
+/// - `SecureOnly` : This means that the database server will only accept SSL requests
 /// and will not even activate the non-SSL socket
-/// - `Disabled` : This indicates that the server would only accept non-SSL connections
+/// - `InsecureOnly` : This indicates that the server would only accept non-SSL connections
 /// and will not even activate the SSL socket
 #[derive(Debug, PartialEq)]
-pub enum SslConfig {
-    Enabled(SslOpts),
-    EnabledOnly(SslOpts),
-    Disabled,
+pub enum PortConfig {
+    SecureOnly {
+        host: IpAddr,
+        ssl: SslOpts,
+    },
+    Multi {
+        host: IpAddr,
+        port: u16,
+        ssl: SslOpts,
+    },
+    InsecureOnly {
+        host: IpAddr,
+        port: u16,
+    },
+}
+
+impl PortConfig {
+    pub const fn default() -> PortConfig {
+        PortConfig::InsecureOnly {
+            host: DEFAULT_IPV4,
+            port: DEFAULT_PORT,
+        }
+    }
+}
+
+impl PortConfig {
+    pub const fn new_secure_only(host: IpAddr, ssl: SslOpts) -> Self {
+        PortConfig::SecureOnly { host, ssl }
+    }
+    pub const fn new_insecure_only(host: IpAddr, port: u16) -> Self {
+        PortConfig::InsecureOnly { host, port }
+    }
+    pub const fn new_multi(host: IpAddr, port: u16, ssl: SslOpts) -> Self {
+        PortConfig::Multi { host, port, ssl }
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct KeySslOpts {
     key: String,
     chain: String,
+    port: u16,
     only: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct SslOpts {
-    key: String,
-    chain: String,
+    pub key: String,
+    pub chain: String,
+    pub port: u16,
 }
 
 impl SslOpts {
-    pub const fn new(key: String, chain: String) -> Self {
-        SslOpts { key, chain }
+    pub const fn new(key: String, chain: String, port: u16) -> Self {
+        SslOpts { key, chain, port }
+    }
+    pub fn get_host_port_tuple(&self, host: String) -> impl ToSocketAddrs {
+        ((host), self.port)
     }
 }
 
@@ -217,18 +257,14 @@ impl SnapshotConfig {
 /// configuration
 #[derive(Debug, PartialEq)]
 pub struct ParsedConfig {
-    /// A valid IPv4/IPv6 address
-    host: IpAddr,
-    /// A valid port
-    port: u16,
     /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
     /// The BGSAVE configuration
     pub bgsave: BGSave,
     /// The snapshot configuration
     pub snapshot: SnapshotConfig,
-    /// The SSL configuration
-    pub ssl: SslConfig,
+    /// Port configuration
+    pub ports: PortConfig,
 }
 
 impl ParsedConfig {
@@ -247,8 +283,6 @@ impl ParsedConfig {
     /// TOML file (represented as an object)
     fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            host: cfg_info.server.host,
-            port: cfg_info.server.port,
             noart: if let Some(noart) = cfg_info.server.noart {
                 noart
             } else {
@@ -270,20 +304,33 @@ impl ParsedConfig {
             } else {
                 SnapshotConfig::default()
             },
-            ssl: if let Some(sslopts) = cfg_info.ssl {
+            ports: if let Some(sslopts) = cfg_info.ssl {
                 if sslopts.only.is_some() {
-                    SslConfig::EnabledOnly(SslOpts {
-                        key: sslopts.key,
-                        chain: sslopts.chain,
-                    })
+                    PortConfig::SecureOnly {
+                        ssl: SslOpts {
+                            key: sslopts.key,
+                            chain: sslopts.chain,
+                            port: sslopts.port,
+                        },
+
+                        host: cfg_info.server.host,
+                    }
                 } else {
-                    SslConfig::Enabled(SslOpts {
-                        key: sslopts.key,
-                        chain: sslopts.chain,
-                    })
+                    PortConfig::Multi {
+                        ssl: SslOpts {
+                            key: sslopts.key,
+                            chain: sslopts.chain,
+                            port: sslopts.port,
+                        },
+                        host: cfg_info.server.host,
+                        port: cfg_info.server.port,
+                    }
                 }
             } else {
-                SslConfig::Disabled
+                PortConfig::InsecureOnly {
+                    host: cfg_info.server.host,
+                    port: cfg_info.server.port,
+                }
             },
         }
     }
@@ -296,42 +343,37 @@ impl ParsedConfig {
     /// and a supplied `port`
     pub const fn default_with_port(port: u16) -> Self {
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled,
+            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, port),
         }
+    }
+    pub const fn default_ports() -> PortConfig {
+        PortConfig::default()
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
     /// and a supplied `host`
     pub const fn default_with_host(host: IpAddr) -> Self {
         ParsedConfig::new(
-            host,
-            2003,
             false,
             BGSave::default(),
             SnapshotConfig::default(),
-            SslConfig::Disabled,
+            PortConfig::new_insecure_only(host, 2003),
         )
     }
     /// Create a new `ParsedConfig` with all the fields
     pub const fn new(
-        host: IpAddr,
-        port: u16,
         noart: bool,
         bgsave: BGSave,
         snapshot: SnapshotConfig,
-        ssl: SslConfig,
+        ports: PortConfig,
     ) -> Self {
         ParsedConfig {
-            host,
-            port,
             noart,
             bgsave,
             snapshot,
-            ssl,
+            ports,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -343,17 +385,11 @@ impl ParsedConfig {
     /// - `ssl` : disabled
     pub const fn default() -> Self {
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled,
+            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
         }
-    }
-    /// Return a (host, port) tuple which can be bound to with `TcpListener`
-    pub fn get_host_port_tuple(&self) -> impl ToSocketAddrs {
-        ((self.host), self.port)
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
     pub const fn is_artful(&self) -> bool {
@@ -574,7 +610,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
             }
             (None, None) => SnapshotConfig::Disabled,
         };
-        let sslcfg = match (
+        let portcfg = match (
             sslkey.map(|val| val.to_owned()),
             sslchain.map(|val| val.to_owned()),
         ) {
@@ -584,14 +620,14 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
                         "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
                     ));
                 } else {
-                    SslConfig::Disabled
+                    PortConfig::new_insecure_only(host, port)
                 }
             }
             (Some(key), Some(chain)) => {
                 if sslonly {
-                    SslConfig::EnabledOnly(SslOpts::new(key, chain))
+                    PortConfig::new_secure_only(host, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
                 } else {
-                    SslConfig::Enabled(SslOpts::new(key, chain))
+                    PortConfig::new_multi(host, port, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
                 }
             }
             _ => {
@@ -600,7 +636,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
                 ));
             }
         };
-        let cfg = ParsedConfig::new(host, port, noart, bgsave, snapcfg, sslcfg);
+        let cfg = ParsedConfig::new(noart, bgsave, snapcfg, portcfg);
         return Ok(ConfigType::Custom(cfg, restorefile));
     }
     if let Some(filename) = filename {
@@ -652,12 +688,10 @@ fn test_config_file_noart() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            port: 2003,
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             noart: true,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled
+            ports: PortConfig::default()
         }
     );
 }
@@ -670,12 +704,13 @@ fn test_config_file_ipv6() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            port: 2003,
-            host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled
+            ports: PortConfig::new_insecure_only(
+                IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
+                DEFAULT_PORT
+            )
         }
     );
 }
@@ -688,12 +723,10 @@ fn test_config_file_template() {
     assert_eq!(
         cfg,
         ParsedConfig::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            2003,
             false,
             BGSave::default(),
             SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
-            SslConfig::Disabled // TODO: Update the template
+            PortConfig::default() // TODO: Update the template
         )
     );
 }
@@ -714,12 +747,10 @@ fn test_config_file_custom_bgsave() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled
+            ports: PortConfig::default()
         }
     );
 }
@@ -735,12 +766,10 @@ fn test_config_file_bgsave_enabled_only() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled
+            ports: PortConfig::default()
         }
     )
 }
@@ -756,12 +785,10 @@ fn test_config_file_bgsave_every_only() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
             snapshot: SnapshotConfig::default(),
-            ssl: SslConfig::Disabled
+            ports: PortConfig::default()
         }
     )
 }
@@ -775,10 +802,8 @@ fn test_config_file_snapshot() {
         ParsedConfig {
             snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
             bgsave: BGSave::default(),
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
-            ssl: SslConfig::Disabled
+            ports: PortConfig::default()
         }
     );
 }

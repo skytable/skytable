@@ -45,17 +45,17 @@ use tokio_openssl::SslStream;
 
 pub struct SslListener {
     /// An atomic reference to the coretable
-    db: CoreDB,
+    pub db: CoreDB,
     /// The incoming connection listener (binding)
-    listener: TcpListener,
+    pub listener: TcpListener,
     /// The maximum number of connections
     climit: Arc<Semaphore>,
     /// The shutdown broadcaster
-    signal: broadcast::Sender<()>,
+    pub signal: broadcast::Sender<()>,
     // When all `Sender`s are dropped - the `Receiver` gets a `None` value
     // We send a clone of `terminate_tx` to each `CHandler`
-    terminate_tx: mpsc::Sender<()>,
-    terminate_rx: mpsc::Receiver<()>,
+    pub terminate_tx: mpsc::Sender<()>,
+    pub terminate_rx: mpsc::Receiver<()>,
     acceptor: Arc<SslAcceptor>,
 }
 

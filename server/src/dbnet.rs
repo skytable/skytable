@@ -35,9 +35,12 @@
 //!
 
 use crate::config::BGSave;
+use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use crate::config::SslOpts;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 use crate::protocol::tls::SslConnection;
+use crate::protocol::tls::SslListener;
 use crate::protocol::{Connection, QueryResult::*};
 use crate::resp::Writable;
 use crate::CoreDB;
@@ -46,6 +49,7 @@ use libtdb::TResult;
 use std::fs;
 use std::future::Future;
 use std::io::ErrorKind;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -235,9 +239,171 @@ impl Drop for CHandler {
 }
 use std::io::{self, prelude::*};
 
+enum MultiListener {
+    SecureOnly(SslListener),
+    InsecureOnly(Listener),
+    Multi(Listener, SslListener),
+}
+
+impl MultiListener {
+    pub async fn new_insecure_only(
+        host: IpAddr,
+        port: u16,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+    ) -> Self {
+        let listener = TcpListener::bind((host, port))
+            .await
+            .expect("Failed to bind to port");
+        MultiListener::InsecureOnly(Listener {
+            listener,
+            db,
+            climit,
+            signal,
+            terminate_tx,
+            terminate_rx,
+        })
+    }
+    pub async fn new_secure_only(
+        host: IpAddr,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+        ssl: SslOpts,
+    ) -> Self {
+        let listener = TcpListener::bind((host, ssl.port))
+            .await
+            .expect("Failed to bind to port");
+        MultiListener::SecureOnly(
+            SslListener::new_pem_based_ssl_connection(
+                ssl.key,
+                ssl.chain,
+                db,
+                listener,
+                climit,
+                signal,
+                terminate_tx,
+                terminate_rx,
+            )
+            .expect("Couldn't bind to secure port"),
+        )
+    }
+    pub async fn run_server(&mut self) -> TResult<()> {
+        match self {
+            MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
+            MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
+            MultiListener::Multi(insecure_listener, secure_listener) => {
+                secure_listener.run().await?;
+                insecure_listener.run().await
+            }
+        }
+    }
+    pub fn print_binding(&self) {
+        match self {
+            MultiListener::SecureOnly(secure_listener) => {
+                log::info!(
+                    "Server started on tps://{}",
+                    secure_listener.listener.local_addr().expect("Failed to g")
+                )
+            }
+            MultiListener::InsecureOnly(insecure_listener) => {
+                log::info!(
+                    "Server started on tp://{}",
+                    insecure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to g")
+                )
+            }
+            MultiListener::Multi(insecure_listener, secure_listener) => {
+                log::info!(
+                    "Listening to tp://{} and tps://{}",
+                    insecure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to g"),
+                    secure_listener.listener.local_addr().expect("Failed to g")
+                )
+            }
+        }
+    }
+    pub async fn finish_with_termsig(self) {
+        match self {
+            MultiListener::InsecureOnly(server) => {
+                let Listener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    db,
+                    ..
+                } = server;
+                if let Ok(_) = db.flush_db() {
+                    log::info!("Successfully saved data to disk");
+                    ()
+                } else {
+                    log::error!("Failed to flush data to disk");
+                    loop {
+                        // Keep looping until we successfully write the in-memory table to disk
+                        log::warn!("Press enter to try again...");
+                        io::stdout().flush().unwrap();
+                        io::stdin().read(&mut [0]).unwrap();
+                        if let Ok(_) = db.flush_db() {
+                            log::info!("Successfully saved data to disk");
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+                drop(signal);
+                drop(terminate_tx);
+                let _ = terminate_rx.recv().await;
+            }
+            MultiListener::SecureOnly(server) => {
+                let SslListener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    db,
+                    ..
+                } = server;
+                if let Ok(_) = db.flush_db() {
+                    log::info!("Successfully saved data to disk");
+                    ()
+                } else {
+                    log::error!("Failed to flush data to disk");
+                    loop {
+                        // Keep looping until we successfully write the in-memory table to disk
+                        log::warn!("Press enter to try again...");
+                        io::stdout().flush().unwrap();
+                        io::stdin().read(&mut [0]).unwrap();
+                        if let Ok(_) = db.flush_db() {
+                            log::info!("Successfully saved data to disk");
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+                drop(signal);
+                drop(terminate_tx);
+                let _ = terminate_rx.recv().await;
+            }
+            _ => {
+                todo!("Multiple listeners haven't been implemented yet!");
+            }
+        }
+    }
+}
+
 /// Start the server waiting for incoming connections or a CTRL+C signal
 pub async fn run(
-    listener: TcpListener,
+    ports: PortConfig,
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
@@ -262,54 +428,44 @@ pub async fn run(
             }
         },
     }
-    log::info!(
-        "Started server on terrapipe://{}",
-        listener
-            .local_addr()
-            .expect("The local address couldn't be fetched. Please file a bug report")
-    );
-    let mut server = Listener {
-        listener,
-        db,
-        climit: Arc::new(Semaphore::new(50000)),
-        signal,
-        terminate_tx,
-        terminate_rx,
+    let climit = Arc::new(Semaphore::new(50000));
+    let mut server = match ports {
+        PortConfig::InsecureOnly { host, port } => {
+            MultiListener::new_insecure_only(
+                host,
+                port,
+                climit.clone(),
+                db,
+                signal,
+                terminate_tx,
+                terminate_rx,
+            )
+            .await
+        }
+        PortConfig::SecureOnly { host, ssl } => {
+            MultiListener::new_secure_only(
+                host,
+                climit.clone(),
+                db,
+                signal,
+                terminate_tx,
+                terminate_rx,
+                ssl,
+            )
+            .await
+        }
+        _ => {
+            todo!("Multiple listeners haven't been implemented yet!")
+        }
     };
+    server.print_binding();
     tokio::select! {
-        _ = server.run() => {}
+        _ = server.run_server() => {}
         _ = sig => {
             log::info!("Signalling all workers to shut down");
         }
     }
-    let Listener {
-        mut terminate_rx,
-        terminate_tx,
-        signal,
-        db,
-        ..
-    } = server;
-    if let Ok(_) = db.flush_db() {
-        log::info!("Successfully saved data to disk");
-        ()
-    } else {
-        log::error!("Failed to flush data to disk");
-        loop {
-            // Keep looping until we successfully write the in-memory table to disk
-            log::warn!("Press enter to try again...");
-            io::stdout().flush().unwrap();
-            io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = db.flush_db() {
-                log::info!("Successfully saved data to disk");
-                break;
-            } else {
-                continue;
-            }
-        }
-    }
-    drop(signal);
-    drop(terminate_tx);
-    let _ = terminate_rx.recv().await;
+    server.finish_with_termsig().await;
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 
