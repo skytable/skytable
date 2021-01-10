@@ -157,6 +157,7 @@ pub enum PortConfig {
 }
 
 impl PortConfig {
+    #[cfg(test)]
     pub const fn default() -> PortConfig {
         PortConfig::InsecureOnly {
             host: DEFAULT_IPV4,
@@ -349,6 +350,7 @@ impl ParsedConfig {
             ports: PortConfig::new_insecure_only(DEFAULT_IPV4, port),
         }
     }
+    #[cfg(test)]
     pub const fn default_ports() -> PortConfig {
         PortConfig::default()
     }

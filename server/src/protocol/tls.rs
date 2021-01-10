@@ -24,6 +24,7 @@ use super::responses;
 use super::IoResult;
 use super::ParseResult;
 use super::QueryResult;
+use crate::dbnet::Con;
 use crate::dbnet::Terminator;
 use crate::resp::Writable;
 use crate::CoreDB;
@@ -149,13 +150,24 @@ impl SslConnectionHandler {
                 }
             };
             match try_df {
-                Ok(QueryResult::Q(s)) => self.db.execute_query_ssl(s, &mut self.con).await?,
+                Ok(QueryResult::Q(s)) => {
+                    self.db
+                        .execute_query(s, &mut Con::Secure(&mut self.con))
+                        .await?
+                }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Empty) => return Ok(()),
                 Err(e) => return Err(e.into()),
             }
         }
         Ok(())
+    }
+}
+impl Drop for SslConnectionHandler {
+    fn drop(&mut self) {
+        // Make sure that the permit is returned to the semaphore
+        // in the case that there is a panic inside
+        self.climit.add_permits(1);
     }
 }
 
@@ -238,36 +250,6 @@ impl SslConnection {
     pub async fn close_conn_with_error(&mut self, resp: Vec<u8>) -> TResult<()> {
         self.write_response(resp).await?;
         self.stream.flush().await?;
-        Ok(())
-    }
-}
-
-/// A per-connection handler
-pub struct SslCHandler {
-    db: CoreDB,
-    con: SslConnection,
-    climit: Arc<Semaphore>,
-    terminator: Terminator,
-    _term_sig_tx: mpsc::Sender<()>,
-}
-
-impl SslCHandler {
-    /// Process the incoming connection
-    pub async fn run(&mut self) -> TResult<()> {
-        while !self.terminator.is_termination_signal() {
-            let try_df = tokio::select! {
-                tdf = self.con.read_query() => tdf,
-                _ = self.terminator.receive_signal() => {
-                    return Ok(());
-                }
-            };
-            match try_df {
-                Ok(QueryResult::Q(s)) => self.db.execute_query_ssl(s, &mut self.con).await?,
-                Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
-                Ok(QueryResult::Empty) => return Ok(()),
-                Err(e) => return Err(e.into()),
-            }
-        }
         Ok(())
     }
 }

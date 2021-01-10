@@ -21,10 +21,10 @@
 
 //! # The core database engine
 
-use crate::dbnet::Con;
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
+use crate::dbnet::Con;
 use crate::diskstore;
 use crate::protocol::tls::SslConnection;
 use crate::protocol::{Connection, Query};
@@ -256,11 +256,6 @@ impl CoreDB {
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }
-    }
-
-    pub async fn execute_query_ssl(&self, _query: Query, _con: &mut SslConnection) -> TResult<()> {
-        // TODO(@ohsayan): Implement SSL-connection queries
-        todo!()
     }
 
     /// Create a new `CoreDB` instance
