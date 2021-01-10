@@ -293,6 +293,45 @@ impl MultiListener {
             .expect("Couldn't bind to secure port"),
         )
     }
+    pub async fn new_multi(
+        host: IpAddr,
+        port: u16,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+        ssl_terminate_tx: mpsc::Sender<()>,
+        ssl_terminate_rx: mpsc::Receiver<()>,
+        ssl: SslOpts,
+    ) -> Self {
+        let listener = TcpListener::bind((host, ssl.port))
+            .await
+            .expect("Failed to bind to port");
+        let secure_listener = SslListener::new_pem_based_ssl_connection(
+            ssl.key,
+            ssl.chain,
+            db.clone(),
+            listener,
+            climit.clone(),
+            signal.clone(),
+            ssl_terminate_tx,
+            ssl_terminate_rx,
+        )
+        .expect("Couldn't bind to secure port");
+        let listener = TcpListener::bind((host, port))
+            .await
+            .expect("Failed to bind to port");
+        let insecure_listener = Listener {
+            listener,
+            db,
+            climit,
+            signal,
+            terminate_tx,
+            terminate_rx,
+        };
+        MultiListener::Multi(insecure_listener, secure_listener)
+    }
     pub async fn run_server(&mut self) -> TResult<()> {
         match self {
             MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
@@ -339,27 +378,8 @@ impl MultiListener {
                     mut terminate_rx,
                     terminate_tx,
                     signal,
-                    db,
                     ..
                 } = server;
-                if let Ok(_) = db.flush_db() {
-                    log::info!("Successfully saved data to disk");
-                    ()
-                } else {
-                    log::error!("Failed to flush data to disk");
-                    loop {
-                        // Keep looping until we successfully write the in-memory table to disk
-                        log::warn!("Press enter to try again...");
-                        io::stdout().flush().unwrap();
-                        io::stdin().read(&mut [0]).unwrap();
-                        if let Ok(_) = db.flush_db() {
-                            log::info!("Successfully saved data to disk");
-                            break;
-                        } else {
-                            continue;
-                        }
-                    }
-                }
                 drop(signal);
                 drop(terminate_tx);
                 let _ = terminate_rx.recv().await;
@@ -369,32 +389,29 @@ impl MultiListener {
                     mut terminate_rx,
                     terminate_tx,
                     signal,
-                    db,
                     ..
                 } = server;
-                if let Ok(_) = db.flush_db() {
-                    log::info!("Successfully saved data to disk");
-                    ()
-                } else {
-                    log::error!("Failed to flush data to disk");
-                    loop {
-                        // Keep looping until we successfully write the in-memory table to disk
-                        log::warn!("Press enter to try again...");
-                        io::stdout().flush().unwrap();
-                        io::stdin().read(&mut [0]).unwrap();
-                        if let Ok(_) = db.flush_db() {
-                            log::info!("Successfully saved data to disk");
-                            break;
-                        } else {
-                            continue;
-                        }
-                    }
-                }
                 drop(signal);
                 drop(terminate_tx);
                 let _ = terminate_rx.recv().await;
             }
-            _ => {
+            MultiListener::Multi(insecure, secure) => {
+                let Listener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = insecure;
+                drop((signal, terminate_tx));
+                let _ = terminate_rx.recv().await;
+                let SslListener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = secure;
+                drop((signal, terminate_tx));
+                let _ = terminate_rx.recv().await;
                 todo!("Multiple listeners haven't been implemented yet!");
             }
         }
@@ -435,7 +452,7 @@ pub async fn run(
                 host,
                 port,
                 climit.clone(),
-                db,
+                db.clone(),
                 signal,
                 terminate_tx,
                 terminate_rx,
@@ -446,7 +463,7 @@ pub async fn run(
             MultiListener::new_secure_only(
                 host,
                 climit.clone(),
-                db,
+                db.clone(),
                 signal,
                 terminate_tx,
                 terminate_rx,
@@ -454,8 +471,22 @@ pub async fn run(
             )
             .await
         }
-        _ => {
-            todo!("Multiple listeners haven't been implemented yet!")
+        PortConfig::Multi { host, port, ssl } => {
+            let (ssl_terminate_tx, ssl_terminate_rx) = mpsc::channel::<()>(1);
+            let server = MultiListener::new_multi(
+                host,
+                port,
+                climit,
+                db.clone(),
+                signal,
+                terminate_tx,
+                terminate_rx,
+                ssl_terminate_tx,
+                ssl_terminate_rx,
+                ssl,
+            )
+            .await;
+            server
         }
     };
     server.print_binding();
@@ -466,6 +497,24 @@ pub async fn run(
         }
     }
     server.finish_with_termsig().await;
+    if let Ok(_) = db.flush_db() {
+        log::info!("Successfully saved data to disk");
+        ()
+    } else {
+        log::error!("Failed to flush data to disk");
+        loop {
+            // Keep looping until we successfully write the in-memory table to disk
+            log::warn!("Press enter to try again...");
+            io::stdout().flush().unwrap();
+            io::stdin().read(&mut [0]).unwrap();
+            if let Ok(_) = db.flush_db() {
+                log::info!("Successfully saved data to disk");
+                break;
+            } else {
+                continue;
+            }
+        }
+    }
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 
