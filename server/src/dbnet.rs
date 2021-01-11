@@ -183,7 +183,7 @@ impl<'a> Con<'a> {
         Con::Insecure(con)
     }
     /// Create a new **encrypted** connection instance
-    pub fn init_ssl<'b>(con: &'b mut SslConnection) -> Self
+    pub fn init_secure<'b>(con: &'b mut SslConnection) -> Self
     where
         'b: 'a,
     {
@@ -218,7 +218,7 @@ impl CHandler {
             match try_df {
                 Ok(Q(s)) => {
                     self.db
-                        .execute_query(s, &mut Con::Insecure(&mut self.con))
+                        .execute_query(s, &mut Con::init(&mut self.con))
                         .await?
                 }
                 Ok(E(r)) => self.con.close_conn_with_error(r).await?,
@@ -239,6 +239,16 @@ impl Drop for CHandler {
 }
 use std::io::{self, prelude::*};
 
+/// Multiple Listener Interface
+///
+/// A `MultiListener` is an abstraction over an `SslListener` or a `Listener` to facilitate
+/// easier asynchronous listening on multiple ports.
+///
+/// - The `SecureOnly` variant holds an `SslListener`
+/// - The `InsecureOnly` variant holds a `Listener`
+/// - The `Multi` variant holds both an `SslListener` and a `Listener`
+///     This variant enables listening to both secure and insecure sockets at the same time
+///     asynchronously
 enum MultiListener {
     SecureOnly(SslListener),
     InsecureOnly(Listener),
@@ -246,6 +256,7 @@ enum MultiListener {
 }
 
 impl MultiListener {
+    /// Create a new `InsecureOnly` listener
     pub async fn new_insecure_only(
         host: IpAddr,
         port: u16,
@@ -267,6 +278,7 @@ impl MultiListener {
             terminate_rx,
         })
     }
+    /// Create a new `SecureOnly` listener
     pub async fn new_secure_only(
         host: IpAddr,
         climit: Arc<Semaphore>,
@@ -293,6 +305,7 @@ impl MultiListener {
             .expect("Couldn't bind to secure port"),
         )
     }
+    /// Create a new `Multi` listener that has both a secure and an insecure listener
     pub async fn new_multi(
         host: IpAddr,
         port: u16,
@@ -332,16 +345,22 @@ impl MultiListener {
         };
         MultiListener::Multi(insecure_listener, secure_listener)
     }
+    /// Start the server
+    ///
+    /// The running of single and/or parallel listeners is handled by this function by
+    /// exploiting the working of async functions
     pub async fn run_server(&mut self) -> TResult<()> {
         match self {
             MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
             MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
             MultiListener::Multi(insecure_listener, secure_listener) => {
+                insecure_listener.run().await?;
                 secure_listener.run().await?;
-                insecure_listener.run().await
+                Ok(())
             }
         }
     }
+    /// Print the port binding status
     pub fn print_binding(&self) {
         match self {
             MultiListener::SecureOnly(secure_listener) => {
@@ -371,6 +390,10 @@ impl MultiListener {
             }
         }
     }
+    /// Signal the ports to shut down and only return after they have shut down
+    ///
+    /// **Do note:** This function doesn't flush the `CoreDB` object! The **caller has to
+    /// make sure that the data is saved!**
     pub async fn finish_with_termsig(self) {
         match self {
             MultiListener::InsecureOnly(server) => {
@@ -412,7 +435,6 @@ impl MultiListener {
                 } = secure;
                 drop((signal, terminate_tx));
                 let _ = terminate_rx.recv().await;
-                todo!("Multiple listeners haven't been implemented yet!");
             }
         }
     }

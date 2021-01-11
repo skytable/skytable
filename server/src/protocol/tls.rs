@@ -152,7 +152,7 @@ impl SslConnectionHandler {
             match try_df {
                 Ok(QueryResult::Q(s)) => {
                     self.db
-                        .execute_query(s, &mut Con::Secure(&mut self.con))
+                        .execute_query(s, &mut Con::init_secure(&mut self.con))
                         .await?
                 }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,

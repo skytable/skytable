@@ -24,7 +24,7 @@
 use crate::coredb::CoreDB;
 use crate::dbnet::Con;
 use crate::protocol::ActionGroup;
-use crate::protocol::{responses, Connection};
+use crate::protocol::{responses};
 use crate::{admin, kvengine};
 use libtdb::TResult;
 mod tags {
