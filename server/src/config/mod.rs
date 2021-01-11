@@ -197,9 +197,6 @@ impl SslOpts {
     pub const fn new(key: String, chain: String, port: u16) -> Self {
         SslOpts { key, chain, port }
     }
-    pub fn get_host_port_tuple(&self, host: String) -> impl ToSocketAddrs {
-        ((host), self.port)
-    }
 }
 
 #[derive(Debug, PartialEq)]

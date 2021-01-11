@@ -8,8 +8,10 @@ edition = "2018"
 
 [dependencies]
 libtdb = {path = "../libtdb"}
-tokio = {version = "0.3.6", features = ["full"]}
-bytes = "0.6.0"
-regex = "1.4.2"
+tokio = {version = "1.0.1", features = ["full"]}
+bytes = "1.0.0"
+regex = "1.4.3"
 lazy_static = "1.4.0"
 clap = {version = "2.33.3", features=["yaml"]}
+openssl = { version = "0.10.32", features = ["vendored"] }
+tokio-openssl = "0.6.1"

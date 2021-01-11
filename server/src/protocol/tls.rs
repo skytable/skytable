@@ -86,6 +86,7 @@ impl SslListener {
         })
     }
     async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
+        println!("Received connection");
         let mut backoff = 1;
         loop {
             match self.listener.accept().await {
@@ -151,6 +152,7 @@ impl SslConnectionHandler {
             };
             match try_df {
                 Ok(QueryResult::Q(s)) => {
+                    println!("Query: {:?}", s);
                     self.db
                         .execute_query(s, &mut Con::init_secure(&mut self.con))
                         .await?

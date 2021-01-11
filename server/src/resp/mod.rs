@@ -21,8 +21,6 @@
 
 //! Utilities for generating responses, which are only used by the `server`
 //!
-use crate::protocol::tls::SslConnection;
-use crate::protocol::Connection;
 use bytes::Bytes;
 use libtdb::terrapipe::RespCodes;
 use std::error::Error;
