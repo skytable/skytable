@@ -10,6 +10,6 @@ edition = "2018"
 libtdb = {path = "../libtdb"}
 tokio = {version = "1.0.1", features = ["full"]}
 bytes = "1.0.0"
-regex = "1.4.2"
+regex = "1.4.3"
 lazy_static = "1.4.0"
 clap = {version = "2.33.3", features=["yaml"]}
