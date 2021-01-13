@@ -165,7 +165,6 @@ impl SslConnection {
     /// - If the packet is corrupted, it will output "Invalid Response"
     pub async fn run_query(&mut self, query: String) {
         let query = terrapipe::proc_query(query);
-        println!("Processed query and now connected!");
         match self.stream.write_all(&query).await {
             Ok(_) => (),
             Err(e) => {
@@ -177,7 +176,7 @@ impl SslConnection {
             match self.stream.read_buf(&mut self.buffer).await {
                 Ok(_) => (),
                 Err(e) => {
-                    eprintln!("ERROR: {}", e);
+                    eprintln!("ERROR: Couldn't read data from socket with '{}'", e);
                     return;
                 }
             }

@@ -68,7 +68,7 @@ impl IsConnection for SslStream<TcpStream> {
         &'s mut self,
         bytes: &'s [u8],
     ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>> {
-        Box::pin(self.get_mut().write(bytes))
+        Box::pin(self.write(bytes))
     }
 }
 

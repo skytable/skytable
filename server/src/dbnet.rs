@@ -155,7 +155,7 @@ impl Listener {
             };
             tokio::spawn(async move {
                 if let Err(e) = chandle.run().await {
-                    eprintln!("Error: {}", e);
+                    log::error!("Error: {}", e);
                 }
             });
         }
@@ -460,7 +460,7 @@ pub async fn run(
     let db = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            log::error!("ERROR: {}", e);
             process::exit(0x100);
         }
     };
