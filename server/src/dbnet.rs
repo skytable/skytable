@@ -354,8 +354,15 @@ impl MultiListener {
             MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
             MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
             MultiListener::Multi(insecure_listener, secure_listener) => {
-                insecure_listener.run().await?;
-                secure_listener.run().await?;
+                let insec = insecure_listener.run();
+                let sec = secure_listener.run();
+                let (e1, e2) = futures::join!(insec, sec);
+                if let Err(e) = e1 {
+                    log::error!("Insecure listener failed with: {}", e);
+                }
+                if let Err(e) = e2 {
+                    log::error!("Secure listener failed with: {}", e);
+                }
                 Ok(())
             }
         }
