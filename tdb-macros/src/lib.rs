@@ -67,7 +67,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
         let addr = crate::tests::start_test_server(#rand, Some(asyncdb.clone())).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body
-        stream.shutdown(::std::net::Shutdown::Write).unwrap();
+        stream.shutdown().await.unwrap();
         asyncdb.finish_db();
         drop(asyncdb);
     };
@@ -183,11 +183,11 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         over by Hyper-V, which is why we'll prevent attempts to bind to them, if
         the OS is Windows.
         */
-        let mut rand: u16 = rng.gen_range(1025, 65535);
+        let mut rand: u16 = rng.gen_range(1025..=65535);
         #[cfg(not(target_os = "windows"))]
         {
             while in_set.contains(&rand) {
-                rand = rng.gen_range(1025, 65535);
+                rand = rng.gen_range(1025..=65535);
             }
         }
         #[cfg(target_os = "windows")]
@@ -195,7 +195,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
             in_set.insert(5357);
             in_set.insert(7680);
             while in_set.contains(&rand) || (rand >= 49670 && rand <= 50293) {
-                rand = rng.gen_range(1025, 65535);
+                rand = rng.gen_range(1025..=65535);
             }
         }
         in_set.insert(rand);

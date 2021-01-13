@@ -40,7 +40,6 @@ pub async fn start_repl() {
         Some(h) => h.to_owned(),
         None => ADDR.to_owned(),
     };
-    let domain = host.clone();
     host.push(':');
     match matches.value_of("port") {
         Some(p) => match p.parse::<u16>() {
@@ -52,8 +51,9 @@ pub async fn start_repl() {
         },
         None => host.push_str("2003"),
     }
-    let mut con = if let Some(sslcert) = matches.value_of("cert") {
-        let con = match SslConnection::new(&domain, &host, sslcert).await {
+    let ssl = matches.value_of("cert");
+    let mut con = if let Some(sslcert) = ssl {
+        let con = match SslConnection::new(&host, sslcert).await {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("ERROR: {}", e);

@@ -63,12 +63,12 @@ impl IsConnection for BufWriter<TcpStream> {
     }
 }
 
-impl IsConnection for BufWriter<SslStream<TcpStream>> {
+impl IsConnection for SslStream<TcpStream> {
     fn write_lowlevel<'s>(
         &'s mut self,
         bytes: &'s [u8],
     ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>> {
-        Box::pin(self.write(bytes))
+        Box::pin(self.get_mut().write(bytes))
     }
 }
 

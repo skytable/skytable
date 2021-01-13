@@ -26,7 +26,8 @@ use lazy_static::lazy_static;
 use libtdb::terrapipe;
 use libtdb::TResult;
 use libtdb::BUF_CAP;
-use openssl::ssl::SslConnector;
+use openssl::ssl::Ssl;
+use openssl::ssl::SslContext;
 use openssl::ssl::SslMethod;
 use regex::Regex;
 use std::pin::Pin;
@@ -94,10 +95,6 @@ impl Connection {
                     return;
                 }
             }
-            println!(
-                "The server returned: {}",
-                String::from_utf8_lossy(&self.buffer)
-            );
             match self.try_response().await {
                 ClientResult::Empty(f) => {
                     self.buffer.advance(f);
@@ -144,10 +141,10 @@ pub struct SslConnection {
 
 impl SslConnection {
     /// Create a new connection, creating a connection to `host`
-    pub async fn new(domain: &str, host: &str, sslcert: &str) -> TResult<Self> {
-        let mut connector = SslConnector::builder(SslMethod::tls())?;
-        connector.set_ca_file(sslcert)?;
-        let ssl = connector.build().configure()?.into_ssl(&domain)?;
+    pub async fn new(host: &str, sslcert: &str) -> TResult<Self> {
+        let mut ctx = SslContext::builder(SslMethod::tls_client())?;
+        ctx.set_ca_file(sslcert)?;
+        let ssl = Ssl::new(&ctx.build())?;
         let stream = TcpStream::connect(host).await?;
         let mut stream = SslStream::new(ssl, stream)?;
         Pin::new(&mut stream).connect().await.unwrap();
@@ -184,10 +181,6 @@ impl SslConnection {
                     return;
                 }
             }
-            println!(
-                "The server returned: {}",
-                String::from_utf8_lossy(&self.buffer)
-            );
             match self.try_response().await {
                 ClientResult::Empty(f) => {
                     self.buffer.advance(f);
