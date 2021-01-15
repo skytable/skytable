@@ -36,6 +36,7 @@ use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::io::BufWriter;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
@@ -183,14 +184,14 @@ impl Drop for SslConnectionHandler {
 }
 
 pub struct SslConnection {
-    stream: SslStream<TcpStream>,
+    stream: BufWriter<SslStream<TcpStream>>,
     buffer: BytesMut,
 }
 
 impl SslConnection {
     pub fn new(stream: SslStream<TcpStream>) -> Self {
         SslConnection {
-            stream: stream,
+            stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(BUF_CAP),
         }
     }
@@ -218,7 +219,7 @@ impl SslConnection {
         }
     }
     fn get_peer(&self) -> IoResult<SocketAddr> {
-        self.stream.get_ref().peer_addr()
+        self.stream.get_ref().get_ref().peer_addr()
     }
     /// Try to parse a query from the buffered data
     fn try_query(&mut self) -> Result<ParseResult, ()> {

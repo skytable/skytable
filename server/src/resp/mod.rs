@@ -72,6 +72,15 @@ impl IsConnection for SslStream<TcpStream> {
     }
 }
 
+impl IsConnection for BufWriter<SslStream<TcpStream>> {
+    fn write_lowlevel<'s>(
+        &'s mut self,
+        bytes: &'s [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>> {
+        Box::pin(self.write(bytes))
+    }
+}
+
 /// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
 /// from `CoreDB`.
 ///
