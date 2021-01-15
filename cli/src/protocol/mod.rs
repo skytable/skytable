@@ -30,6 +30,8 @@ use openssl::ssl::Ssl;
 use openssl::ssl::SslContext;
 use openssl::ssl::SslMethod;
 use regex::Regex;
+use std::io::Result as IoResult;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -173,12 +175,9 @@ impl SslConnection {
             }
         };
         loop {
-            match self.stream.read_buf(&mut self.buffer).await {
-                Ok(_) => (),
-                Err(e) => {
-                    eprintln!("ERROR: Couldn't read data from socket with '{}'", e);
-                    return;
-                }
+            if let Err(e) = self.read_again().await {
+                eprintln!("ERROR: Reading from stream failed with: '{}'", e);
+                return;
             }
             match self.try_response().await {
                 ClientResult::Empty(f) => {
@@ -199,8 +198,8 @@ impl SslConnection {
                     }
                     return;
                 }
-                ClientResult::InvalidResponse(_) => {
-                    self.buffer.clear();
+                ClientResult::InvalidResponse(r) => {
+                    self.buffer.advance(r);
                     eprintln!("{}", ClientResult::InvalidResponse(0));
                     return;
                 }
@@ -214,5 +213,29 @@ impl SslConnection {
             return ClientResult::Empty(0);
         }
         deserializer::parse(&self.buffer)
+    }
+    async fn read_again(&mut self) -> Result<(), String> {
+        match self.stream.read_buf(&mut self.buffer).await {
+            Ok(0) => {
+                if self.buffer.is_empty() {
+                    return Ok(());
+                } else {
+                    return Err(format!(
+                        "Connection reset while reading from {}",
+                        if let Ok(p) = self.get_peer() {
+                            p.to_string()
+                        } else {
+                            "peer".to_owned()
+                        }
+                    )
+                    .into());
+                }
+            }
+            Ok(_) => Ok(()),
+            Err(e) => return Err(format!("{}", e)),
+        }
+    }
+    fn get_peer(&self) -> IoResult<SocketAddr> {
+        self.stream.get_ref().peer_addr()
     }
 }

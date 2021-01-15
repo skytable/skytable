@@ -159,7 +159,6 @@ impl SslConnectionHandler {
             };
             match try_df {
                 Ok(QueryResult::Q(s)) => {
-                    println!("Query: {:?}", s);
                     self.db
                         .execute_query(s, &mut Con::init_secure(&mut self.con))
                         .await?
