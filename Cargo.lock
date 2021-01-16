@@ -726,7 +726,6 @@ dependencies = [
  "libtdb",
  "log",
  "openssl",
- "openssl-sys",
  "parking_lot",
  "regex",
  "serde",
