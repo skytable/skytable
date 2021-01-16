@@ -24,7 +24,8 @@
 //! Functions for handling `JGET` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 
 /// Run a `JGET` query
@@ -36,7 +37,7 @@ use libtdb::TResult;
 /// {"key":"value"}\n
 /// ```
 ///
-pub async fn jget(_handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn jget(_handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

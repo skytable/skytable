@@ -22,8 +22,9 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
+use crate::dbnet::Con;
 use crate::protocol::ActionGroup;
-use crate::protocol::{responses, Connection};
+use crate::protocol::{responses};
 use crate::{admin, kvengine};
 use libtdb::TResult;
 mod tags {
@@ -66,7 +67,7 @@ mod tags {
 }
 
 /// Execute a simple(*) query
-pub async fn execute_simple(db: &CoreDB, con: &mut Connection, buf: ActionGroup) -> TResult<()> {
+pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) -> TResult<()> {
     let first = match buf.get_first() {
         None => {
             return con

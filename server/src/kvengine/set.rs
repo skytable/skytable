@@ -23,14 +23,15 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::coredb::{self, CoreDB};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use coredb::Data;
 use libtdb::TResult;
 use std::collections::hash_map::Entry;
 use std::hint::unreachable_unchecked;
 
 /// Run a `SET` query
-pub async fn set(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn set(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 2 {
         // There should be exactly 2 arguments

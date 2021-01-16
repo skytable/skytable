@@ -16,7 +16,7 @@ TerrabaseDB (or TDB for short) is an effort to provide the best of key/value sto
 
 ## Getting started 🚀
 
-1. Download a bundle for your platform from [here ⬇️ ](https://github.com/terrabasedb/terrabase/releases)
+1. Download a bundle for your platform from [here ⬇️ ](https://github.com/terrabasedb/terrabasedb/releases)
 2. Unzip the bundle
 3. Make the files executable (run `chmod +x tdb tsh` on *nix systems)
 4. First run `tdb` to start the database server and then run `tsh` to start the interactive shell

@@ -81,6 +81,7 @@ mod __private {
     ) where
         T: AsRef<str>,
     {
+        use tokio::io::AsyncWriteExt;
         let mut query = String::from("MSET ");
         query.push_str(values_split_with_whitespace.as_ref());
         let count_bytes_len = homwany.to_string().as_bytes().len();

@@ -23,9 +23,10 @@ use crate::protocol;
 use clap::load_yaml;
 use clap::App;
 use libtdb::terrapipe::ADDR;
+use protocol::{Con, Connection, SslConnection};
 use std::io::{self, prelude::*};
 use std::process;
-const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.0";
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
@@ -50,23 +51,33 @@ pub async fn start_repl() {
         },
         None => host.push_str("2003"),
     }
+    let ssl = matches.value_of("cert");
+    let mut con = if let Some(sslcert) = ssl {
+        let con = match SslConnection::new(&host, sslcert).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("ERROR: {}", e);
+                process::exit(0x100);
+            }
+        };
+        Con::Secure(con)
+    } else {
+        let con = match Connection::new(&host).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("ERROR: {}", e);
+                process::exit(0x100);
+            }
+        };
+        Con::Insecure(con)
+    };
     if let Some(eval_expr) = matches.value_of("eval") {
         if eval_expr.len() == 0 {
             return;
         }
-        if let Err(e) = protocol::Connection::oneshot(&host, eval_expr.to_string()).await {
-            eprintln!("ERROR: {}", e);
-            process::exit(0x100);
-        }
+        con.execute_query(eval_expr.to_string()).await;
         return;
     }
-    let mut con = match protocol::Connection::new(&host).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("ERROR: {}", e);
-            process::exit(0x100);
-        }
-    };
     println!("{}", MSG_WELCOME);
     loop {
         print!("tsh>");
@@ -85,6 +96,6 @@ pub async fn start_repl() {
             // The query was empty, so let it be
             continue;
         }
-        con.run_query(rl).await;
+        con.execute_query(rl).await;
     }
 }

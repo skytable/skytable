@@ -26,8 +26,8 @@
 //! the modules for their respective documentation.
 
 use crate::config::BGSave;
+use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
-use tokio::net::TcpListener;
 mod config;
 use std::env;
 mod admin;
@@ -54,7 +54,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "TerrabaseDB v0.5.0 | https://github.com/terrabasedb/terrabase";
+static MSG: &'static str = "TerrabaseDB v0.5.1 | https://github.com/terrabasedb/terrabasedb";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
@@ -76,7 +76,7 @@ async fn main() {
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
-        check_args_or_connect().await;
+        check_args_and_get_cfg().await;
     run(
         tcplistener,
         bgsave_config,
@@ -87,10 +87,10 @@ async fn main() {
     .await;
 }
 
-/// This function checks the command line arguments and binds to an appropriate
-/// port and host, as per the supplied configuration options
-async fn check_args_or_connect() -> (
-    TcpListener,
+/// This function checks the command line arguments and either returns a config object
+/// or prints an error to `stderr` and terminates the server
+async fn check_args_and_get_cfg() -> (
+    PortConfig,
     BGSave,
     SnapshotConfig,
     Option<std::path::PathBuf>,
@@ -104,35 +104,17 @@ async fn check_args_or_connect() -> (
                 println!("{}", MSG);
             }
             log::info!("Using settings from supplied configuration");
-            (
-                TcpListener::bind(cfg.get_host_port_tuple()).await,
-                cfg.bgsave,
-                cfg.snapshot,
-                file,
-            )
+            (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }
         Ok(config::ConfigType::Def(cfg, file)) => {
             println!("{}\n{}", TEXT, MSG);
             log::warn!("No configuration file supplied. Using default settings");
-            (
-                TcpListener::bind(cfg.get_host_port_tuple()).await,
-                cfg.bgsave,
-                cfg.snapshot,
-                file,
-            )
+            (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }
         Err(e) => {
             log::error!("{}", e);
             std::process::exit(0x100);
         }
     };
-    match binding_and_cfg {
-        (Ok(b), bgsave_cfg, snapshot_cfg, restore_file) => {
-            (b, bgsave_cfg, snapshot_cfg, restore_file)
-        }
-        (Err(e), _, _, _) => {
-            log::error!("Failed to bind to socket with error: '{}'", e);
-            std::process::exit(0x100);
-        }
-    }
+    binding_and_cfg
 }

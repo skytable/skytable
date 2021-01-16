@@ -35,15 +35,21 @@
 //!
 
 use crate::config::BGSave;
+use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use crate::config::SslOpts;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use crate::protocol::tls::SslConnection;
+use crate::protocol::tls::SslListener;
 use crate::protocol::{Connection, QueryResult::*};
+use crate::resp::Writable;
 use crate::CoreDB;
 use libtdb::util::terminal;
 use libtdb::TResult;
 use std::fs;
 use std::future::Future;
 use std::io::ErrorKind;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
@@ -52,7 +58,6 @@ use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
-
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
 pub struct Terminator {
@@ -104,7 +109,7 @@ pub struct Listener {
 }
 
 /// A per-connection handler
-struct CHandler {
+pub struct CHandler {
     db: CoreDB,
     con: Connection,
     climit: Arc<Semaphore>,
@@ -150,16 +155,59 @@ impl Listener {
             };
             tokio::spawn(async move {
                 if let Err(e) = chandle.run().await {
-                    eprintln!("Error: {}", e);
+                    log::error!("Error: {}", e);
                 }
             });
         }
     }
 }
 
+/// # Connection Wrapper
+///
+/// A `Con` object holds a mutable reference to a standard TCP stream or to
+/// an encrypted connection (over the `SslListener` object). It provides a few
+/// methods which are provided by the underlying interface.
+pub enum Con<'a> {
+    /// A secure TLS connection
+    Secure(&'a mut SslConnection),
+    /// An insecure ('standard') TCP connection
+    Insecure(&'a mut Connection),
+}
+
+impl<'a> Con<'a> {
+    /// Create a new **unencrypted** connection instance
+    pub fn init<'b>(con: &'b mut Connection) -> Self
+    where
+        'b: 'a,
+    {
+        Con::Insecure(con)
+    }
+    /// Create a new **encrypted** connection instance
+    pub fn init_secure<'b>(con: &'b mut SslConnection) -> Self
+    where
+        'b: 'a,
+    {
+        Con::Secure(con)
+    }
+    /// Flush the stream that is held by the underlying connection
+    pub async fn flush_stream(&mut self) -> TResult<()> {
+        match self {
+            Con::Secure(con) => con.flush_stream().await,
+            Con::Insecure(con) => con.flush_stream().await,
+        }
+    }
+    /// Write bytes to the underlying stream that implement the `Writable` trait
+    pub async fn write_response(&mut self, resp: impl Writable) -> TResult<()> {
+        match self {
+            Con::Insecure(con) => con.write_response(resp).await,
+            Con::Secure(con) => con.write_response(resp).await,
+        }
+    }
+}
+
 impl CHandler {
     /// Process the incoming connection
-    async fn run(&mut self) -> TResult<()> {
+    pub async fn run(&mut self) -> TResult<()> {
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,
@@ -168,7 +216,11 @@ impl CHandler {
                 }
             };
             match try_df {
-                Ok(Q(s)) => self.db.execute_query(s, &mut self.con).await?,
+                Ok(Q(s)) => {
+                    self.db
+                        .execute_query(s, &mut Con::init(&mut self.con))
+                        .await?
+                }
                 Ok(E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(Empty) => return Ok(()),
                 Err(e) => return Err(e.into()),
@@ -187,9 +239,217 @@ impl Drop for CHandler {
 }
 use std::io::{self, prelude::*};
 
+/// Multiple Listener Interface
+///
+/// A `MultiListener` is an abstraction over an `SslListener` or a `Listener` to facilitate
+/// easier asynchronous listening on multiple ports.
+///
+/// - The `SecureOnly` variant holds an `SslListener`
+/// - The `InsecureOnly` variant holds a `Listener`
+/// - The `Multi` variant holds both an `SslListener` and a `Listener`
+///     This variant enables listening to both secure and insecure sockets at the same time
+///     asynchronously
+enum MultiListener {
+    SecureOnly(SslListener),
+    InsecureOnly(Listener),
+    Multi(Listener, SslListener),
+}
+
+impl MultiListener {
+    /// Create a new `InsecureOnly` listener
+    pub async fn new_insecure_only(
+        host: IpAddr,
+        port: u16,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+    ) -> Self {
+        let listener = TcpListener::bind((host, port))
+            .await
+            .expect("Failed to bind to port");
+        MultiListener::InsecureOnly(Listener {
+            listener,
+            db,
+            climit,
+            signal,
+            terminate_tx,
+            terminate_rx,
+        })
+    }
+    /// Create a new `SecureOnly` listener
+    pub async fn new_secure_only(
+        host: IpAddr,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+        ssl: SslOpts,
+    ) -> Self {
+        let listener = TcpListener::bind((host, ssl.port))
+            .await
+            .expect("Failed to bind to port");
+        MultiListener::SecureOnly(
+            SslListener::new_pem_based_ssl_connection(
+                ssl.key,
+                ssl.chain,
+                db,
+                listener,
+                climit,
+                signal,
+                terminate_tx,
+                terminate_rx,
+            )
+            .expect("Couldn't bind to secure port"),
+        )
+    }
+    /// Create a new `Multi` listener that has both a secure and an insecure listener
+    pub async fn new_multi(
+        host: IpAddr,
+        port: u16,
+        climit: Arc<Semaphore>,
+        db: CoreDB,
+        signal: broadcast::Sender<()>,
+        terminate_tx: mpsc::Sender<()>,
+        terminate_rx: mpsc::Receiver<()>,
+        ssl_terminate_tx: mpsc::Sender<()>,
+        ssl_terminate_rx: mpsc::Receiver<()>,
+        ssl: SslOpts,
+    ) -> Self {
+        let listener = TcpListener::bind((host, ssl.port))
+            .await
+            .expect("Failed to bind to port");
+        let secure_listener = SslListener::new_pem_based_ssl_connection(
+            ssl.key,
+            ssl.chain,
+            db.clone(),
+            listener,
+            climit.clone(),
+            signal.clone(),
+            ssl_terminate_tx,
+            ssl_terminate_rx,
+        )
+        .expect("Couldn't bind to secure port");
+        let listener = TcpListener::bind((host, port))
+            .await
+            .expect("Failed to bind to port");
+        let insecure_listener = Listener {
+            listener,
+            db,
+            climit,
+            signal,
+            terminate_tx,
+            terminate_rx,
+        };
+        MultiListener::Multi(insecure_listener, secure_listener)
+    }
+    /// Start the server
+    ///
+    /// The running of single and/or parallel listeners is handled by this function by
+    /// exploiting the working of async functions
+    pub async fn run_server(&mut self) -> TResult<()> {
+        match self {
+            MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
+            MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
+            MultiListener::Multi(insecure_listener, secure_listener) => {
+                let insec = insecure_listener.run();
+                let sec = secure_listener.run();
+                let (e1, e2) = futures::join!(insec, sec);
+                if let Err(e) = e1 {
+                    log::error!("Insecure listener failed with: {}", e);
+                }
+                if let Err(e) = e2 {
+                    log::error!("Secure listener failed with: {}", e);
+                }
+                Ok(())
+            }
+        }
+    }
+    /// Print the port binding status
+    pub fn print_binding(&self) {
+        match self {
+            MultiListener::SecureOnly(secure_listener) => {
+                log::info!(
+                    "Server started on tps://{}",
+                    secure_listener.listener.local_addr().expect("Failed to g")
+                )
+            }
+            MultiListener::InsecureOnly(insecure_listener) => {
+                log::info!(
+                    "Server started on tp://{}",
+                    insecure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to g")
+                )
+            }
+            MultiListener::Multi(insecure_listener, secure_listener) => {
+                log::info!(
+                    "Listening to tp://{} and tps://{}",
+                    insecure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to g"),
+                    secure_listener.listener.local_addr().expect("Failed to g")
+                )
+            }
+        }
+    }
+    /// Signal the ports to shut down and only return after they have shut down
+    ///
+    /// **Do note:** This function doesn't flush the `CoreDB` object! The **caller has to
+    /// make sure that the data is saved!**
+    pub async fn finish_with_termsig(self) {
+        match self {
+            MultiListener::InsecureOnly(server) => {
+                let Listener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = server;
+                drop(signal);
+                drop(terminate_tx);
+                let _ = terminate_rx.recv().await;
+            }
+            MultiListener::SecureOnly(server) => {
+                let SslListener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = server;
+                drop(signal);
+                drop(terminate_tx);
+                let _ = terminate_rx.recv().await;
+            }
+            MultiListener::Multi(insecure, secure) => {
+                let Listener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = insecure;
+                drop((signal, terminate_tx));
+                let _ = terminate_rx.recv().await;
+                let SslListener {
+                    mut terminate_rx,
+                    terminate_tx,
+                    signal,
+                    ..
+                } = secure;
+                drop((signal, terminate_tx));
+                let _ = terminate_rx.recv().await;
+            }
+        }
+    }
+}
+
 /// Start the server waiting for incoming connections or a CTRL+C signal
 pub async fn run(
-    listener: TcpListener,
+    ports: PortConfig,
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
@@ -200,7 +460,7 @@ pub async fn run(
     let db = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            log::error!("ERROR: {}", e);
             process::exit(0x100);
         }
     };
@@ -214,33 +474,58 @@ pub async fn run(
             }
         },
     }
-    log::info!(
-        "Started server on terrapipe://{}",
-        listener
-            .local_addr()
-            .expect("The local address couldn't be fetched. Please file a bug report")
-    );
-    let mut server = Listener {
-        listener,
-        db,
-        climit: Arc::new(Semaphore::new(50000)),
-        signal,
-        terminate_tx,
-        terminate_rx,
+    let climit = Arc::new(Semaphore::new(50000));
+    let mut server = match ports {
+        PortConfig::InsecureOnly { host, port } => {
+            MultiListener::new_insecure_only(
+                host,
+                port,
+                climit.clone(),
+                db.clone(),
+                signal,
+                terminate_tx,
+                terminate_rx,
+            )
+            .await
+        }
+        PortConfig::SecureOnly { host, ssl } => {
+            MultiListener::new_secure_only(
+                host,
+                climit.clone(),
+                db.clone(),
+                signal,
+                terminate_tx,
+                terminate_rx,
+                ssl,
+            )
+            .await
+        }
+        PortConfig::Multi { host, port, ssl } => {
+            let (ssl_terminate_tx, ssl_terminate_rx) = mpsc::channel::<()>(1);
+            let server = MultiListener::new_multi(
+                host,
+                port,
+                climit,
+                db.clone(),
+                signal,
+                terminate_tx,
+                terminate_rx,
+                ssl_terminate_tx,
+                ssl_terminate_rx,
+                ssl,
+            )
+            .await;
+            server
+        }
     };
+    server.print_binding();
     tokio::select! {
-        _ = server.run() => {}
+        _ = server.run_server() => {}
         _ = sig => {
             log::info!("Signalling all workers to shut down");
         }
     }
-    let Listener {
-        mut terminate_rx,
-        terminate_tx,
-        signal,
-        db,
-        ..
-    } = server;
+    server.finish_with_termsig().await;
     if let Ok(_) = db.flush_db() {
         log::info!("Successfully saved data to disk");
         ()
@@ -259,9 +544,6 @@ pub async fn run(
             }
         }
     }
-    drop(signal);
-    drop(terminate_tx);
-    let _ = terminate_rx.recv().await;
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 

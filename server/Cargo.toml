@@ -13,7 +13,8 @@ libtdb = {path ="../libtdb"}
 bincode = "1.3.1"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
-serde_derive = "1.0.118"
+serde_derive = "1.0.119"
+futures = "0.3.12"
 serde = {version = "1.0.119", features= ["derive"]}
 toml = "0.5.8"
 clap = {version = "2.33.3", features=["yaml"]}
@@ -22,7 +23,9 @@ log = "0.4.13"
 chrono = "0.4.19"
 regex = "1.4.3"
 tdb_macros = {path="../tdb-macros"}
-
+tokio-openssl = "0.6.1"
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = "0.9.60"
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 

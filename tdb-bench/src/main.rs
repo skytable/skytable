@@ -28,7 +28,7 @@ mod benchtool {
     use devtimer::DevTime;
     use libtdb::terrapipe;
     use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
+    use rand::thread_rng;
     use serde::Serialize;
     use std::io::prelude::*;
     use std::net::{self, TcpStream};
@@ -167,7 +167,7 @@ mod benchtool {
             },
             None => host.push_str("2003"),
         }
-        let rand = thread_rng();
+        let mut rand = thread_rng();
         if let Some(matches) = matches.subcommand_matches("testkey") {
             let numkeys = matches.value_of("count").unwrap();
             if let Ok(num) = numkeys.parse::<usize>() {
@@ -175,27 +175,11 @@ mod benchtool {
                 println!("Generating keys ...");
                 let keys: Vec<String> = (0..num)
                     .into_iter()
-                    .map(|_| {
-                        let rand_string: String = unsafe {
-                            String::from_utf8_unchecked(
-                                rand.clone().sample_iter(&Alphanumeric).take(8).collect(),
-                            )
-                            .to_string()
-                        };
-                        rand_string
-                    })
+                    .map(|_| ran_string(8, &mut rand))
                     .collect();
                 let values: Vec<String> = (0..num)
                     .into_iter()
-                    .map(|_| {
-                        let rand_string: String = unsafe {
-                            String::from_utf8_unchecked(
-                                rand.clone().sample_iter(&Alphanumeric).take(8).collect(),
-                            )
-                            .to_string()
-                        };
-                        rand_string
-                    })
+                    .map(|_| ran_string(8, &mut rand))
                     .collect();
                 let set_packs: Vec<Vec<u8>> = (0..num)
                     .map(|idx| terrapipe::proc_query(format!("SET {} {}", keys[idx], values[idx])))
@@ -235,40 +219,18 @@ mod benchtool {
             max_queries,
             (packet_size * 2), // key size + value size
         );
-        let rand = thread_rng();
+        let mut rand = thread_rng();
         let mut dt = DevTime::new_complex();
         // Create separate connection pools for get and set operations
         let mut setpool = Netpool::new(max_connections, &host);
         let mut getpool = Netpool::new(max_connections, &host);
         let keys: Vec<String> = (0..max_queries)
             .into_iter()
-            .map(|_| {
-                let rand_string: String = unsafe {
-                    String::from_utf8_unchecked(
-                        rand.clone()
-                            .sample_iter(&Alphanumeric)
-                            .take(packet_size)
-                            .collect(),
-                    )
-                    .to_string()
-                };
-                rand_string
-            })
+            .map(|_| ran_string(packet_size, &mut rand))
             .collect();
         let values: Vec<String> = (0..max_queries)
             .into_iter()
-            .map(|_| {
-                let rand_string: String = unsafe {
-                    String::from_utf8_unchecked(
-                        rand.clone()
-                            .sample_iter(&Alphanumeric)
-                            .take(packet_size)
-                            .collect(),
-                    )
-                    .to_string()
-                };
-                rand_string
-            })
+            .map(|_| ran_string(packet_size, &mut rand))
             .collect();
         /*
         We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`
@@ -332,6 +294,15 @@ mod benchtool {
     /// Returns the number of queries/sec
     fn calc(reqs: usize, time: u128) -> f64 {
         reqs as f64 / (time as f64 / 1_000_000_000 as f64)
+    }
+
+    fn ran_string(len: usize, rand: impl rand::Rng) -> String {
+        let rand_string: String = rand
+            .sample_iter(&Alphanumeric)
+            .take(len)
+            .map(char::from)
+            .collect();
+        rand_string
     }
 }
 

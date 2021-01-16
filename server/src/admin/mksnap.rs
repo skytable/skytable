@@ -20,10 +20,11 @@
 */
 
 use crate::coredb::CoreDB;
+use crate::dbnet::Con;
 use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::protocol::{responses, ActionGroup};
 use crate::resp::GroupBegin;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
@@ -32,7 +33,7 @@ use std::path::PathBuf;
 
 /// Create a snapshot
 ///
-pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
         if !handle.is_snapshot_enabled() {

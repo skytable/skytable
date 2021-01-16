@@ -34,13 +34,17 @@ use std::path::PathBuf;
 use tokio::net::ToSocketAddrs;
 use toml;
 
+const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+const DEFAULT_PORT: u16 = 2003;
+const DEFAULT_SSL_PORT: u16 = 2004;
+
 /// This struct is an _object representation_ used for parsing the TOML file
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
     /// The `server` key
     server: ConfigKeyServer,
     /// The `bgsave` key
-    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.0,
+    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.1,
      * we will make it compulsory (so that we don't break semver)
      * See the link below for more details:
      * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
@@ -48,6 +52,8 @@ pub struct Config {
     bgsave: Option<ConfigKeyBGSAVE>,
     /// The snapshot key
     snapshot: Option<ConfigKeySnapshot>,
+    /// SSL configuration
+    ssl: Option<KeySslOpts>,
 }
 
 /// The BGSAVE section in the config file
@@ -124,6 +130,75 @@ pub struct ConfigKeySnapshot {
     atmost: usize,
 }
 
+/// Port configuration
+///
+/// This enumeration determines whether the ports are:
+/// - `Multi`: This means that the database server will be listening to both
+/// SSL **and** non-SSL requests
+/// - `SecureOnly` : This means that the database server will only accept SSL requests
+/// and will not even activate the non-SSL socket
+/// - `InsecureOnly` : This indicates that the server would only accept non-SSL connections
+/// and will not even activate the SSL socket
+#[derive(Debug, PartialEq)]
+pub enum PortConfig {
+    SecureOnly {
+        host: IpAddr,
+        ssl: SslOpts,
+    },
+    Multi {
+        host: IpAddr,
+        port: u16,
+        ssl: SslOpts,
+    },
+    InsecureOnly {
+        host: IpAddr,
+        port: u16,
+    },
+}
+
+impl PortConfig {
+    #[cfg(test)]
+    pub const fn default() -> PortConfig {
+        PortConfig::InsecureOnly {
+            host: DEFAULT_IPV4,
+            port: DEFAULT_PORT,
+        }
+    }
+}
+
+impl PortConfig {
+    pub const fn new_secure_only(host: IpAddr, ssl: SslOpts) -> Self {
+        PortConfig::SecureOnly { host, ssl }
+    }
+    pub const fn new_insecure_only(host: IpAddr, port: u16) -> Self {
+        PortConfig::InsecureOnly { host, port }
+    }
+    pub const fn new_multi(host: IpAddr, port: u16, ssl: SslOpts) -> Self {
+        PortConfig::Multi { host, port, ssl }
+    }
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct KeySslOpts {
+    key: String,
+    chain: String,
+    port: u16,
+    only: Option<bool>,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct SslOpts {
+    pub key: String,
+    pub chain: String,
+    pub port: u16,
+}
+
+impl SslOpts {
+    pub const fn new(key: String, chain: String, port: u16) -> Self {
+        SslOpts { key, chain, port }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// The snapshot configuration
 ///
@@ -180,16 +255,14 @@ impl SnapshotConfig {
 /// configuration
 #[derive(Debug, PartialEq)]
 pub struct ParsedConfig {
-    /// A valid IPv4/IPv6 address
-    host: IpAddr,
-    /// A valid port
-    port: u16,
     /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
     /// The BGSAVE configuration
     pub bgsave: BGSave,
     /// The snapshot configuration
     pub snapshot: SnapshotConfig,
+    /// Port configuration
+    pub ports: PortConfig,
 }
 
 impl ParsedConfig {
@@ -206,16 +279,14 @@ impl ParsedConfig {
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
-    const fn from_config(cfg: Config) -> Self {
+    fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            host: cfg.server.host,
-            port: cfg.server.port,
-            noart: if let Some(noart) = cfg.server.noart {
+            noart: if let Some(noart) = cfg_info.server.noart {
                 noart
             } else {
                 false
             },
-            bgsave: if let Some(bgsave) = cfg.bgsave {
+            bgsave: if let Some(bgsave) = cfg_info.bgsave {
                 match (bgsave.enabled, bgsave.every) {
                     // TODO: Show a warning that there are unused keys
                     (Some(enabled), Some(every)) => BGSave::new(enabled, every),
@@ -226,10 +297,38 @@ impl ParsedConfig {
             } else {
                 BGSave::default()
             },
-            snapshot: if let Some(snapshot) = cfg.snapshot {
+            snapshot: if let Some(snapshot) = cfg_info.snapshot {
                 SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
             } else {
                 SnapshotConfig::default()
+            },
+            ports: if let Some(sslopts) = cfg_info.ssl {
+                if sslopts.only.is_some() {
+                    PortConfig::SecureOnly {
+                        ssl: SslOpts {
+                            key: sslopts.key,
+                            chain: sslopts.chain,
+                            port: sslopts.port,
+                        },
+
+                        host: cfg_info.server.host,
+                    }
+                } else {
+                    PortConfig::Multi {
+                        ssl: SslOpts {
+                            key: sslopts.key,
+                            chain: sslopts.chain,
+                            port: sslopts.port,
+                        },
+                        host: cfg_info.server.host,
+                        port: cfg_info.server.port,
+                    }
+                }
+            } else {
+                PortConfig::InsecureOnly {
+                    host: cfg_info.server.host,
+                    port: cfg_info.server.port,
+                }
             },
         }
     }
@@ -242,38 +341,38 @@ impl ParsedConfig {
     /// and a supplied `port`
     pub const fn default_with_port(port: u16) -> Self {
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, port),
         }
+    }
+    #[cfg(test)]
+    pub const fn default_ports() -> PortConfig {
+        PortConfig::default()
     }
     /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
     /// and a supplied `host`
     pub const fn default_with_host(host: IpAddr) -> Self {
         ParsedConfig::new(
-            host,
-            2003,
             false,
             BGSave::default(),
             SnapshotConfig::default(),
+            PortConfig::new_insecure_only(host, 2003),
         )
     }
     /// Create a new `ParsedConfig` with all the fields
     pub const fn new(
-        host: IpAddr,
-        port: u16,
         noart: bool,
         bgsave: BGSave,
         snapshot: SnapshotConfig,
+        ports: PortConfig,
     ) -> Self {
         ParsedConfig {
-            host,
-            port,
             noart,
             bgsave,
             snapshot,
+            ports,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -282,18 +381,14 @@ impl ParsedConfig {
     /// - `noart` : false
     /// - `bgsave_enabled` : true
     /// - `bgsave_duration` : 120
+    /// - `ssl` : disabled
     pub const fn default() -> Self {
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
         }
-    }
-    /// Return a (host, port) tuple which can be bound to with `TcpListener`
-    pub fn get_host_port_tuple(&self) -> impl ToSocketAddrs {
-        ((self.host), self.port)
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
     pub const fn is_artful(&self) -> bool {
@@ -401,21 +496,29 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
         path.push(val);
         path
     });
+    // Check flags
+    let sslonly = matches.is_present("sslonly");
+    let noart = matches.is_present("noart");
+    let nosave = matches.is_present("nosave");
+    // Check options
     let filename = matches.value_of("config");
     let host = matches.value_of("host");
     let port = matches.value_of("port");
-    let noart = matches.is_present("noart");
-    let nosave = matches.is_present("nosave");
     let snapevery = matches.value_of("snapevery");
     let snapkeep = matches.value_of("snapkeep");
     let saveduration = matches.value_of("saveduration");
+    let sslkey = matches.value_of("sslkey");
+    let sslchain = matches.value_of("sslchain");
     let cli_has_overrideable_args = host.is_some()
         || port.is_some()
         || noart
         || nosave
         || snapevery.is_some()
         || snapkeep.is_some()
-        || saveduration.is_some();
+        || saveduration.is_some()
+        || sslchain.is_some()
+        || sslkey.is_some()
+        || sslonly;
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
             "Either use command line arguments or use a configuration file",
@@ -506,7 +609,33 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
             }
             (None, None) => SnapshotConfig::Disabled,
         };
-        let cfg = ParsedConfig::new(host, port, noart, bgsave, snapcfg);
+        let portcfg = match (
+            sslkey.map(|val| val.to_owned()),
+            sslchain.map(|val| val.to_owned()),
+        ) {
+            (None, None) => {
+                if sslonly {
+                    return Err(ConfigError::CliArgErr(
+                        "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
+                    ));
+                } else {
+                    PortConfig::new_insecure_only(host, port)
+                }
+            }
+            (Some(key), Some(chain)) => {
+                if sslonly {
+                    PortConfig::new_secure_only(host, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
+                } else {
+                    PortConfig::new_multi(host, port, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
+                }
+            }
+            _ => {
+                return Err(ConfigError::CliArgErr(
+                    "To use SSL, pass values for both --sslkey and --sslchain",
+                ));
+            }
+        };
+        let cfg = ParsedConfig::new(noart, bgsave, snapcfg, portcfg);
         return Ok(ConfigType::Custom(cfg, restorefile));
     }
     if let Some(filename) = filename {
@@ -558,11 +687,10 @@ fn test_config_file_noart() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            port: 2003,
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             noart: true,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ports: PortConfig::default()
         }
     );
 }
@@ -575,11 +703,13 @@ fn test_config_file_ipv6() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            port: 2003,
-            host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ports: PortConfig::new_insecure_only(
+                IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
+                DEFAULT_PORT
+            )
         }
     );
 }
@@ -592,11 +722,10 @@ fn test_config_file_template() {
     assert_eq!(
         cfg,
         ParsedConfig::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            2003,
             false,
             BGSave::default(),
-            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4))
+            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+            PortConfig::default() // TODO: Update the template
         )
     );
 }
@@ -617,11 +746,10 @@ fn test_config_file_custom_bgsave() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default()
+            snapshot: SnapshotConfig::default(),
+            ports: PortConfig::default()
         }
     );
 }
@@ -637,11 +765,10 @@ fn test_config_file_bgsave_enabled_only() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
+            ports: PortConfig::default()
         }
     )
 }
@@ -657,11 +784,10 @@ fn test_config_file_bgsave_every_only() {
     assert_eq!(
         cfg,
         ParsedConfig {
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
             bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default()
+            snapshot: SnapshotConfig::default(),
+            ports: PortConfig::default()
         }
     )
 }
@@ -675,9 +801,8 @@ fn test_config_file_snapshot() {
         ParsedConfig {
             snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
             bgsave: BGSave::default(),
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port: 2003,
             noart: false,
+            ports: PortConfig::default()
         }
     );
 }

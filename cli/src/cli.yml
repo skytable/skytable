@@ -20,28 +20,35 @@
 #
 
 name: TerrabaseDB Shell
-version: 0.5.0
+version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Shell (tsh)
 args:
-    - host:
-          short: h
-          required: false
-          long: host
-          value_name: host
-          help: Sets the remote host to connect to
-          takes_value: true
-    - port:
-          short: p
-          required: false
-          long: port
-          value_name: port
-          help: Sets the remote port to connect to
-          takes_value: true
-    - eval:
-          short: e
-          required: false
-          long: eval
-          value_name: expression
-          help: Run an expression without REPL
-          takes_value: true
+        - host:
+                  short: h
+                  required: false
+                  long: host
+                  value_name: host
+                  help: Sets the remote host to connect to
+                  takes_value: true
+        - port:
+                  short: p
+                  required: false
+                  long: port
+                  value_name: port
+                  help: Sets the remote port to connect to
+                  takes_value: true
+        - eval:
+                  short: e
+                  required: false
+                  long: eval
+                  value_name: expression
+                  help: Run an expression without REPL
+                  takes_value: true
+        - cert:
+                  short: C
+                  required: false
+                  long: sslcert
+                  value_name: cert
+                  help: Sets the PEM certificate to use for SSL connections
+                  takes_value: true

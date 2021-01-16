@@ -20,14 +20,15 @@
 */
 
 use crate::coredb::{self, CoreDB};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use crate::resp::GroupBegin;
 use libtdb::TResult;
 
 /// Run an `USET` query
 ///
 /// This is like "INSERT or UPDATE"
-pub async fn uset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn uset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys

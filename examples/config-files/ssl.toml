@@ -1,0 +1,17 @@
+[server]
+host = "127.0.0.1"
+port = 2003
+noart = false
+
+[ssl]
+key = "/path/to/keyfile.pem"
+chain = "/path/to/chain.pem"
+port = 2004
+
+[bgsave]
+enabled = true
+every = 120
+
+[snapshot]
+every = 3600
+atmost = 4

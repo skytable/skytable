@@ -20,11 +20,12 @@
 */
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 
 /// Delete all the keys in the database
-pub async fn flushdb(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn flushdb(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     if act.howmany() != 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }

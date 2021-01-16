@@ -23,13 +23,14 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::coredb::CoreDB;
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
 use libtdb::TResult;
 
 /// Run a `GET` query
-pub async fn get(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn get(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany != 1 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

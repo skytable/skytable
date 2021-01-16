@@ -31,7 +31,8 @@
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
 use crate::coredb::{CoreDB, Data};
-use crate::protocol::{responses, ActionGroup, Connection};
+use crate::dbnet::Con;
+use crate::protocol::{responses, ActionGroup};
 use libtdb::TResult;
 use std::hint::unreachable_unchecked;
 
@@ -39,7 +40,7 @@ use std::hint::unreachable_unchecked;
 ///
 /// This either returns `Okay` if all the keys were set, or it returns an
 /// `Overwrite Error` or code `2`
-pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
@@ -101,7 +102,7 @@ pub async fn sset(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
 ///
 /// This either returns `Okay` if all the keys were `del`eted, or it returns a
 /// `Nil`, which is code `1`
-pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn sdel(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
@@ -157,7 +158,7 @@ pub async fn sdel(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TR
 ///
 /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
 /// or code `1`
-pub async fn supdate(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> TResult<()> {
+pub async fn supdate(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

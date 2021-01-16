@@ -1,83 +1,83 @@
-#
-# Created on Tue Sep 01 2020
-#
-# This file is a part of TerrabaseDB
-# Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
-#
-#
-
 name: TerrabaseDB Server
-version: 0.5.0
+version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Database server
 args:
-        - config:
-                  short: c
-                  required: false
-                  long: withconfig
-                  value_name: cfgfile
-                  help: Sets a configuration file to start tdb
-                  takes_value: true
-        - restore:
-                  short: r
-                  required: false
-                  long: restore
-                  value_name: snapshotfile
-                  help: Restores data from a previous snapshot
-                  takes_value: true
-        - host:
-                  short: h
-                  required: false
-                  long: host
-                  value_name: host
-                  help: Sets the host to which the server will bind
-                  takes_value: true
-        - port:
-                  short: p
-                  required: false
-                  long: port
-                  value_name: port
-                  help: Sets the port to which the server will bind
-                  takes_value: true
-        - noart:
-                  required: false
-                  long: noart
-                  help: Disables terminal artwork
-                  takes_value: false
-        - nosave:
-                  required: false
-                  long: nosave
-                  help: Disables automated background saving
-                  takes_value: false
-        - saveduration:
-                  required: false
-                  long: saveduration
-                  value_name: duration
-                  short: S
-                  takes_value: true
-                  help: Set the BGSAVE duration
-        - snapevery:
-                  required: false
-                  long: snapevery
-                  value_name: duration
-                  help: Set the periodic snapshot duration
-                  takes_value: true
-        - snapkeep:
-                  required: false
-                  long: snapkeep
-                  value_name: count
-                  help: Sets the number of most recent snapshots to keep
-                  takes_value: true
+  - config:
+      short: c
+      required: false
+      long: withconfig
+      value_name: cfgfile
+      help: Sets a configuration file to start tdb
+      takes_value: true
+  - restore:
+      short: r
+      required: false
+      long: restore
+      value_name: snapshotfile
+      help: Restores data from a previous snapshot
+      takes_value: true
+  - host:
+      short: h
+      required: false
+      long: host
+      value_name: host
+      help: Sets the host to which the server will bind
+      takes_value: true
+  - port:
+      short: p
+      required: false
+      long: port
+      value_name: port
+      help: Sets the port to which the server will bind
+      takes_value: true
+  - noart:
+      required: false
+      long: noart
+      help: Disables terminal artwork
+      takes_value: false
+  - nosave:
+      required: false
+      long: nosave
+      help: Disables automated background saving
+      takes_value: false
+  - saveduration:
+      required: false
+      long: saveduration
+      value_name: duration
+      short: S
+      takes_value: true
+      help: Set the BGSAVE duration
+  - snapevery:
+      required: false
+      long: snapevery
+      value_name: duration
+      help: Set the periodic snapshot duration
+      takes_value: true
+  - snapkeep:
+      required: false
+      long: snapkeep
+      value_name: count
+      help: Sets the number of most recent snapshots to keep
+      takes_value: true
+  - sslkey:
+      required: false
+      long: sslkey
+      short: k
+      value_name: key
+      help: Sets the PEM key file to use for SSL/TLS
+      takes_value: true
+  - sslchain:
+      required: false
+      long: sslchain
+      short: z
+      value_name: chain
+      help: Sets the PEM chain file to use for SSL/TLS
+      takes_value: true
+  - sslonly:
+      required: false
+      long: sslonly
+      takes_value: false
+      help: >-
+        Tells the server to only accept SSL connections and disables the non-SSL
+        port
