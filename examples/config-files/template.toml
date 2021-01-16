@@ -12,7 +12,7 @@ port = 2003 # The port to which you want TDB to bind to
 # Set `noart` to true if you want to disable terminal artwork
 noart = false
 
-# This key is *OPTIONAL*, but will be required post 0.5.0
+# This key is *OPTIONAL*, but will be required post 0.5.1
 [bgsave]
 # Run `BGSAVE` `every` seconds. For example, setting this to 60 will cause BGSAVE to run
 # after every 2 minutes

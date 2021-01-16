@@ -26,7 +26,7 @@ use libtdb::terrapipe::ADDR;
 use protocol::{Con, Connection, SslConnection};
 use std::io::{self, prelude::*};
 use std::process;
-const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.0";
+const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///

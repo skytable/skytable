@@ -20,7 +20,7 @@
 #
 
 name: TerrabaseDB Shell
-version: 0.5.0
+version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
 about: The TerrabaseDB Shell (tsh)
 args:

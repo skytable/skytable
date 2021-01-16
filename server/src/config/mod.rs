@@ -44,7 +44,7 @@ pub struct Config {
     /// The `server` key
     server: ConfigKeyServer,
     /// The `bgsave` key
-    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.0,
+    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.1,
      * we will make it compulsory (so that we don't break semver)
      * See the link below for more details:
      * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
