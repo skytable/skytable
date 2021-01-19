@@ -1,0 +1,16 @@
+name: Sync with mirrors
+on: push
+jobs:
+  sync-mirror-1:
+    name: Sync with repo mirror
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0 # Get all tags and branches
+      - name: Run sync
+        env:
+          SYNC_EP: ${{ secrets.MIRROR_GL_API }}
+        run: |
+          eval '${SYNC_EP}'

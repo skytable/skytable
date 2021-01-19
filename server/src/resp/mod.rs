@@ -36,6 +36,12 @@ use tokio_openssl::SslStream;
 /// All trait implementors are given access to an asynchronous stream to which
 /// they must write a response.
 ///
+/// Every `write()` call makes a call to the [`IsConnection`](./IsConnection)'s
+/// `write_lowlevel` function, which in turn writes something to the underlying stream.
+///
+/// Do note that this write **doesn't gurantee immediate completion** as the underlying
+/// stream might use buffering. So, the best idea would be to use to use the `flush()`
+/// call on the stream.
 pub trait Writable {
     /*
     HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
