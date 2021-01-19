@@ -31,11 +31,11 @@ use std::fs;
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
-use tokio::net::ToSocketAddrs;
 use toml;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-const DEFAULT_PORT: u16 = 2003;
+#[allow(dead_code)]
+const DEFAULT_PORT: u16 = 2003; // We'll suppress this lint as we've kept this for future use
 const DEFAULT_SSL_PORT: u16 = 2004;
 
 /// This struct is an _object representation_ used for parsing the TOML file
@@ -239,14 +239,6 @@ impl SnapshotConfig {
     /// default configuration
     pub const fn default() -> Self {
         SnapshotConfig::Disabled
-    }
-    /// Check if snapshotting is enabled
-    pub const fn is_enabled(&self) -> bool {
-        if let SnapshotConfig::Disabled = self {
-            false
-        } else {
-            true
-        }
     }
 }
 
