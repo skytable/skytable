@@ -19,7 +19,7 @@ serde = {version = "1.0.123", features= ["derive"]}
 toml = "0.5.8"
 clap = {version = "2.33.3", features=["yaml"]}
 env_logger = "0.8.2"
-log = "0.4.13"
+log = "0.4.14"
 chrono = "0.4.19"
 regex = "1.4.3"
 tdb_macros = {path="../tdb-macros"}
