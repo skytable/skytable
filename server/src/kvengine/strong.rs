@@ -53,7 +53,10 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
         let mut key_iter = act
             .get_ref()
             .get(1..)
-            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
+                unreachable_unchecked()
+            })
             .iter();
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
@@ -71,7 +74,10 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
                     .next()
                     .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             }
-            if !failed.unwrap_or_else(|| unsafe { unreachable_unchecked() }) {
+            if !failed.unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): Completely safe because we've already set a value for `failed` earlier
+                unreachable_unchecked()
+            }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely set the keys
                 let mut iter = act.into_iter();

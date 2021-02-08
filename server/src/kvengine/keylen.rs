@@ -38,6 +38,8 @@ pub async fn keylen(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
         let rhandle = handle.acquire_read();
         let reader = rhandle.get_ref();
         unsafe {
+            // UNSAFE(@ohsayan): get_unchecked() is completely safe as we've already checked
+            // the number of arguments is one
             reader
                 .get(act.get_ref().get_unchecked(1))
                 .map(|b| b.get_blob().len())

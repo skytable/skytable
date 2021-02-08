@@ -169,7 +169,11 @@ impl<'a> SnapshotEngine<'a> {
         log::trace!("Snapshotting was initiated");
         while (*self.dbref.snapcfg)
             .as_ref()
-            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
+                // the developer to be sane enough to only call mksnap if snapshotting is enabled 
+                unreachable_unchecked() 
+            })
             .is_busy()
         {
             // Endlessly wait for a lock to be free

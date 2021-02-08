@@ -50,9 +50,11 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
         let mut engine_was_busy = false;
         {
             let snaphandle = handle.snapcfg.clone();
-            let snapstatus = (*snaphandle)
-                .as_ref()
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+            let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan) This is safe as we've already checked
+                // if snapshots are enabled or not with `is_snapshot_enabled`
+                unreachable_unchecked()
+            });
             let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
             if snapengine.is_err() {
                 was_engine_error = true;
@@ -60,8 +62,11 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
                 if snapstatus.is_busy() {
                     engine_was_busy = true;
                 } else {
-                    let mut snapengine =
-                        snapengine.unwrap_or_else(|_| unsafe { unreachable_unchecked() });
+                    let mut snapengine = snapengine.unwrap_or_else(|_| unsafe {
+                        // UNSAFE(@ohsayan) This is safe as we've already checked
+                        // if snapshots are enabled or not with `is_snapshot_enabled`
+                        unreachable_unchecked()
+                    });
 
                     snap_result = snapengine.mksnap();
                 }
@@ -103,7 +108,11 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
             let snapname = act
                 .get_ref()
                 .get(1)
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+                .unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): We've already checked that the action
+                    // contains a second argument, so this can't be reached  
+                    unreachable_unchecked()
+                });
             let mut path = PathBuf::from(DIR_SNAPSHOT);
             path.push("remote");
             path.push(snapname.to_owned() + ".snapshot");

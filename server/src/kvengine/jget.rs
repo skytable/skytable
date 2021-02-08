@@ -74,7 +74,10 @@ mod json {
             *self
                 .0
                 .last_mut()
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() }) = b'}';
+                .unwrap_or_else(|| unsafe { 
+                    // UNSAFE(@ohsayan): There will always be a value corresponding to last_mut
+                    unreachable_unchecked() 
+                }) = b'}';
             BuiltJSON(self.0)
         }
     }

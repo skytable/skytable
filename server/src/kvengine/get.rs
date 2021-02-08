@@ -41,6 +41,8 @@ pub async fn get(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResul
         let rhandle = handle.acquire_read();
         let reader = rhandle.get_ref();
         unsafe {
+            // UNSAFE(@ohsayan): act.get_ref().get_unchecked() is safe because we've already if the action
+            // group contains one argument (excluding the action itself)
             reader
                 .get(act.get_ref().get_unchecked(1))
                 .map(|b| b.get_blob().clone())
