@@ -388,58 +388,6 @@ impl ParsedConfig {
     }
 }
 
-#[test]
-#[cfg(test)]
-fn test_config_toml_okayport() {
-    let file = r#"
-        [server]
-        host = "127.0.0.1"
-        port = 2003
-    "#
-    .to_owned();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(cfg, ParsedConfig::default(),);
-}
-/// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
-#[cfg(test)]
-fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
-    use std::path;
-    let curdir = std::env::current_dir().unwrap();
-    let workspaceroot = curdir.ancestors().nth(1).unwrap();
-    let mut fileloc = path::PathBuf::from(workspaceroot);
-    fileloc.push("examples");
-    fileloc.push("config-files");
-    fileloc.push(filename);
-    Ok(fs::read_to_string(fileloc)?)
-}
-
-#[test]
-#[cfg(test)]
-fn test_config_toml_badport() {
-    let file = r#"
-        [server]
-        port = 20033002
-    "#
-    .to_owned();
-    let cfg = ParsedConfig::new_from_toml_str(file);
-    assert!(cfg.is_err());
-}
-
-#[test]
-#[cfg(test)]
-fn test_config_file_ok() {
-    let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(cfg, ParsedConfig::default());
-}
-
-#[test]
-#[cfg(test)]
-fn test_config_file_err() {
-    let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_file(file);
-    assert!(cfg.is_err());
-}
 use clap::{load_yaml, App};
 
 /// The type of configuration:
@@ -659,142 +607,188 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
     }
 }
 
-#[test]
 #[cfg(test)]
-fn test_args() {
-    let cmdlineargs = vec!["tdb", "--withconfig", "../examples/config-files/tdb.toml"];
-    let cfg_layout = load_yaml!("../cli.yml");
-    let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
-    let filename = matches.value_of("config").unwrap();
-    assert_eq!("../examples/config-files/tdb.toml", filename);
-    let cfg = ParsedConfig::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
-    assert_eq!(cfg, ParsedConfig::default());
-}
+mod tests {
+    use super::*;
+    #[test]
+    fn test_config_toml_okayport() {
+        let file = r#"
+        [server]
+        host = "127.0.0.1"
+        port = 2003
+    "#
+        .to_owned();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(cfg, ParsedConfig::default(),);
+    }
+    /// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
+    fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
+        use std::path;
+        let curdir = std::env::current_dir().unwrap();
+        let workspaceroot = curdir.ancestors().nth(1).unwrap();
+        let mut fileloc = path::PathBuf::from(workspaceroot);
+        fileloc.push("examples");
+        fileloc.push("config-files");
+        fileloc.push(filename);
+        Ok(fs::read_to_string(fileloc)?)
+    }
 
-#[test]
-#[cfg(test)]
-fn test_config_file_noart() {
-    let file = get_toml_from_examples_dir("secure-noart.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            noart: true,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::default()
-        }
-    );
-}
+    #[test]
+    fn test_config_toml_badport() {
+        let file = r#"
+        [server]
+        port = 20033002
+    "#
+        .to_owned();
+        let cfg = ParsedConfig::new_from_toml_str(file);
+        assert!(cfg.is_err());
+    }
 
-#[test]
-#[cfg(test)]
-fn test_config_file_ipv6() {
-    let file = get_toml_from_examples_dir("ipv6.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            noart: false,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::new_insecure_only(
-                IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
-                DEFAULT_PORT
+    #[test]
+    fn test_config_file_ok() {
+        let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(cfg, ParsedConfig::default());
+    }
+
+    #[test]
+    fn test_config_file_err() {
+        let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_file(file);
+        assert!(cfg.is_err());
+    }
+    #[test]
+    fn test_args() {
+        let cmdlineargs = vec!["tdb", "--withconfig", "../examples/config-files/tdb.toml"];
+        let cfg_layout = load_yaml!("../cli.yml");
+        let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
+        let filename = matches.value_of("config").unwrap();
+        assert_eq!("../examples/config-files/tdb.toml", filename);
+        let cfg =
+            ParsedConfig::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
+        assert_eq!(cfg, ParsedConfig::default());
+    }
+
+    #[test]
+    fn test_config_file_noart() {
+        let file = get_toml_from_examples_dir("secure-noart.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                noart: true,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_ipv6() {
+        let file = get_toml_from_examples_dir("ipv6.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                noart: false,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::new_insecure_only(
+                    IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
+                    DEFAULT_PORT
+                )
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_template() {
+        let file = get_toml_from_examples_dir("template.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig::new(
+                false,
+                BGSave::default(),
+                SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+                PortConfig::default() // TODO: Update the template
             )
-        }
-    );
-}
+        );
+    }
 
-#[test]
-#[cfg(test)]
-fn test_config_file_template() {
-    let file = get_toml_from_examples_dir("template.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig::new(
-            false,
-            BGSave::default(),
-            SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
-            PortConfig::default() // TODO: Update the template
+    #[test]
+    fn test_config_file_bad_bgsave_section() {
+        let file = get_toml_from_examples_dir("badcfg2.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file);
+        assert!(cfg.is_err());
+    }
+
+    #[test]
+    fn test_config_file_custom_bgsave() {
+        let file = get_toml_from_examples_dir("withcustombgsave.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                noart: false,
+                bgsave: BGSave::new(true, 600),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_bgsave_enabled_only() {
+        /*
+         * This test demonstrates a case where the user just said that BGSAVE is enabled.
+         * In that case, we will default to the 120 second duration
+         */
+        let file = get_toml_from_examples_dir("bgsave-justenabled.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                noart: false,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default()
+            }
         )
-    );
-}
+    }
 
-#[test]
-#[cfg(test)]
-fn test_config_file_bad_bgsave_section() {
-    let file = get_toml_from_examples_dir("badcfg2.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file);
-    assert!(cfg.is_err());
-}
+    #[test]
+    fn test_config_file_bgsave_every_only() {
+        /*
+         * This test demonstrates a case where the user just gave the value for every
+         * In that case, it means BGSAVE is enabled and set to `every` seconds
+         */
+        let file = get_toml_from_examples_dir("bgsave-justevery.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                noart: false,
+                bgsave: BGSave::new(true, 600),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default()
+            }
+        )
+    }
 
-#[test]
-#[cfg(test)]
-fn test_config_file_custom_bgsave() {
-    let file = get_toml_from_examples_dir("withcustombgsave.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            noart: false,
-            bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::default()
-        }
-    );
-}
-
-#[test]
-fn test_config_file_bgsave_enabled_only() {
-    /*
-     * This test demonstrates a case where the user just said that BGSAVE is enabled.
-     * In that case, we will default to the 120 second duration
-     */
-    let file = get_toml_from_examples_dir("bgsave-justenabled.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            noart: false,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::default()
-        }
-    )
-}
-
-#[test]
-fn test_config_file_bgsave_every_only() {
-    /*
-     * This test demonstrates a case where the user just gave the value for every
-     * In that case, it means BGSAVE is enabled and set to `every` seconds
-     */
-    let file = get_toml_from_examples_dir("bgsave-justevery.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            noart: false,
-            bgsave: BGSave::new(true, 600),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::default()
-        }
-    )
-}
-
-#[test]
-fn test_config_file_snapshot() {
-    let file = get_toml_from_examples_dir("snapshot.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(
-        cfg,
-        ParsedConfig {
-            snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
-            bgsave: BGSave::default(),
-            noart: false,
-            ports: PortConfig::default()
-        }
-    );
+    #[test]
+    fn test_config_file_snapshot() {
+        let file = get_toml_from_examples_dir("snapshot.toml".to_owned()).unwrap();
+        let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ParsedConfig {
+                snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+                bgsave: BGSave::default(),
+                noart: false,
+                ports: PortConfig::default()
+            }
+        );
+    }
 }
