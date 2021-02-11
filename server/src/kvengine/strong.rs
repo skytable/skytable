@@ -50,6 +50,9 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
         // We use this additional scope to tell the compiler that the write lock
         // doesn't go beyond the scope of this function - and is never used across
         // an await: cause, the compiler ain't as smart as we are ;)
+
+        // This iterator gives us the keys and values, skipping the first argument which
+        // is the action name
         let mut key_iter = act
             .get_ref()
             .get(1..)
@@ -68,11 +71,6 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
                     failed = Some(true);
                     break;
                 }
-                // Skip the next value that is coming our way, as we don't need it
-                // right now
-                let _ = key_iter
-                    .next()
-                    .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             }
             if !failed.unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): Completely safe because we've already set a value for `failed` earlier
