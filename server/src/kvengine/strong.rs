@@ -206,6 +206,11 @@ pub async fn supdate(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TR
                     failed = Some(true);
                     break;
                 }
+                // Skip the next value that is coming our way, as we don't need it
+                // right now
+                let _ = key_iter
+                    .next()
+                    .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             }
             if !failed.unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is completely safe as a value is assigned to `failed`

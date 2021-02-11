@@ -101,7 +101,7 @@
         "since": "0.4.3",
         "complexity": "O(n)",
         "args": "SDEL <key1> <key2> ...",
-        "desc": "Delete all keys if all of the keys exist",
+        "desc": "Delete all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
         "return": "(Code: 0) if all keys were deleted, otherwise (Code: 1)"
     },
     {
@@ -109,7 +109,7 @@
         "since": "0.4.3",
         "complexity": "O(n)",
         "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
-        "desc": "Update all keys if all of the keys exist",
+        "desc": "Update all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
         "return": "(Code: 0) if all keys were updated, otherwise (Code: 1)"
     },
     {
