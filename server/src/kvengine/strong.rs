@@ -82,7 +82,12 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
                     if mut_table.insert(key, Data::from_string(value)).is_some() {
                         // Tell the compiler that this will never be the case
-                        unsafe { unreachable_unchecked() }
+                        unsafe {
+                            // UNSAFE(@ohsayan): As none of the keys exist in the table, no
+                            // value will ever be returned by the `insert`. Hence, this is a
+                            // completely safe operation
+                            unreachable_unchecked()
+                        }
                     }
                 }
             }
@@ -119,7 +124,11 @@ pub async fn sdel(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
         let mut key_iter = act
             .get_ref()
             .get(1..)
-            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): This is safe as we've already checked that there are arguments
+                // in the action group other than the action
+                unreachable_unchecked()
+            })
             .iter();
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
@@ -132,15 +141,21 @@ pub async fn sdel(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
                     break;
                 }
             }
-            if !failed.unwrap_or_else(|| unsafe { unreachable_unchecked() }) {
+            if !failed.unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): Again, completely safe as we always assign a value to
+                // `failed`
+                unreachable_unchecked()
+            }) {
                 // Since the failed flag is false, all of the keys exist
                 // So we can safely delete the keys
                 act.into_iter().for_each(|key| {
                     // Since we've already checked that the keys don't exist
                     // We'll tell the compiler to optimize this
-                    let _ = mut_table
-                        .remove(&key)
-                        .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+                    let _ = mut_table.remove(&key).unwrap_or_else(|| unsafe {
+                        // UNSAFE(@ohsayan): Since all the values exist, all of them will return
+                        // some value. Hence, this branch won't ever be reached. Hence, this is safe.
+                        unreachable_unchecked()
+                    });
                 });
             }
         } else {
@@ -175,7 +190,11 @@ pub async fn supdate(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TR
         let mut key_iter = act
             .get_ref()
             .get(1..)
-            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+            .unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): We've already checked that the action group contains more
+                // than one argument. So, this is a safe optimization
+                unreachable_unchecked()
+            })
             .iter();
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
@@ -187,13 +206,12 @@ pub async fn supdate(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TR
                     failed = Some(true);
                     break;
                 }
-                // Skip the next value that is coming our way, as we don't need it
-                // right now
-                let _ = key_iter
-                    .next()
-                    .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             }
-            if !failed.unwrap_or_else(|| unsafe { unreachable_unchecked() }) {
+            if !failed.unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): This is completely safe as a value is assigned to `failed`
+                // right in the beginning
+                unreachable_unchecked()
+            }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely update the keys
                 let mut iter = act.into_iter();
