@@ -1,14 +1,14 @@
-name: TerrabaseDB Server
+name: Skybase Server
 version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
-about: The TerrabaseDB Database server
+about: The Skybase Database server
 args:
   - config:
       short: c
       required: false
       long: withconfig
       value_name: cfgfile
-      help: Sets a configuration file to start tdb
+      help: Sets a configuration file to start sdb
       takes_value: true
   - restore:
       short: r

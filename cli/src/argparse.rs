@@ -1,7 +1,7 @@
 /*
  * Created on Wed Jul 01 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,11 @@
 use crate::protocol;
 use clap::load_yaml;
 use clap::App;
-use libtdb::terrapipe::ADDR;
+use libsky::terrapipe::ADDR;
 use protocol::{Con, Connection, SslConnection};
 use std::io::{self, prelude::*};
 use std::process;
-const MSG_WELCOME: &'static str = "TerrabaseDB v0.5.1";
+const MSG_WELCOME: &'static str = "Skybase v0.5.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
@@ -80,7 +80,7 @@ pub async fn start_repl() {
     }
     println!("{}", MSG_WELCOME);
     loop {
-        print!("tsh>");
+        print!("skysh>");
         io::stdout()
             .flush()
             .expect("Couldn't flush buffer, this is a serious error!");

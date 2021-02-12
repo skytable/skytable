@@ -1,7 +1,7 @@
 /*
  * Created on Thu Jul 30 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,8 +32,8 @@ use bytes::{Buf, BytesMut};
 pub use deserializer::ActionGroup;
 pub use deserializer::ParseResult;
 pub use deserializer::Query;
-use libtdb::TResult;
-use libtdb::BUF_CAP;
+use libsky::TResult;
+use libsky::BUF_CAP;
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};

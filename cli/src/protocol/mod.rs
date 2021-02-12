@@ -1,7 +1,7 @@
 /*
  * Created on Tue Aug 04 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -23,9 +23,9 @@ mod deserializer;
 use bytes::{Buf, BytesMut};
 use deserializer::ClientResult;
 use lazy_static::lazy_static;
-use libtdb::terrapipe;
-use libtdb::TResult;
-use libtdb::BUF_CAP;
+use libsky::terrapipe;
+use libsky::TResult;
+use libsky::BUF_CAP;
 use openssl::ssl::Ssl;
 use openssl::ssl::SslContext;
 use openssl::ssl::SslMethod;

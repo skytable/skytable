@@ -1,7 +1,7 @@
 /*
  * Created on Mon Aug 31 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 use crate::coredb::CoreDB;
 use crate::dbnet::Con;
 use crate::protocol::{responses, ActionGroup};
-use libtdb::TResult;
+use libsky::TResult;
 
 /// Run a `JGET` query
 /// This returns a JSON key/value pair of keys and values

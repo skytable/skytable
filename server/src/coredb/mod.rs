@@ -1,7 +1,7 @@
 /*
  * Created on Mon Jul 13 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
 use diskstore::PERSIST_FILE;
-use libtdb::TResult;
+use libsky::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;

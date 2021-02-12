@@ -1,5 +1,5 @@
 D-server: server/**/*
-D-libtdb: libtdb/**/*
+D-libsky: libsky/**/*
 D-cli: cli/**/*
 C-docs: ./*.md
 D-build:

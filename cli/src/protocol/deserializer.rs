@@ -1,7 +1,7 @@
 /*
  * Created on Tue Aug 04 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,8 @@
 
 //! This module provides methods to deserialize an incoming response packet
 
-use libtdb::terrapipe::RespCodes;
-use libtdb::util::terminal;
+use libsky::terrapipe::RespCodes;
+use libsky::util::terminal;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]

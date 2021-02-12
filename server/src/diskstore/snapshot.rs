@@ -1,7 +1,7 @@
 /*
  * Created on Thu Oct 01 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ use crate::coredb::CoreDB;
 use crate::coredb::SnapshotStatus;
 use crate::diskstore;
 use chrono::prelude::*;
-use libtdb::TResult;
+use libsky::TResult;
 use regex::Regex;
 use std::fs;
 use std::hint::unreachable_unchecked;

@@ -1,7 +1,7 @@
 /*
  * Created on Tue Oct 13 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,8 +26,8 @@ use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use crate::protocol::{responses, ActionGroup};
 use crate::resp::GroupBegin;
-use libtdb::terrapipe::RespCodes;
-use libtdb::TResult;
+use libsky::terrapipe::RespCodes;
+use libsky::TResult;
 use std::hint::unreachable_unchecked;
 use std::path::PathBuf;
 

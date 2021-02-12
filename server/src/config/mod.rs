@@ -1,7 +1,7 @@
 /*
  * Created on Tue Sep 01 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 //! This module provides tools to handle configuration files and settings
 
 #[cfg(test)]
-use libtdb::TResult;
+use libsky::TResult;
 use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
@@ -47,7 +47,7 @@ pub struct Config {
     /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.1,
      * we will make it compulsory (so that we don't break semver)
      * See the link below for more details:
-     * https://github.com/terrabasedb/terrabasedb/issues/21#issuecomment-693217709
+     * https://github.com/Skybase/Skybase/issues/21#issuecomment-693217709
      */
     bgsave: Option<ConfigKeyBGSAVE>,
     /// The snapshot key
@@ -646,24 +646,24 @@ mod tests {
 
     #[test]
     fn test_config_file_ok() {
-        let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
+        let file = get_toml_from_examples_dir("sdb.toml".to_owned()).unwrap();
         let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
         assert_eq!(cfg, ParsedConfig::default());
     }
 
     #[test]
     fn test_config_file_err() {
-        let file = get_toml_from_examples_dir("tdb.toml".to_owned()).unwrap();
+        let file = get_toml_from_examples_dir("sdb.toml".to_owned()).unwrap();
         let cfg = ParsedConfig::new_from_file(file);
         assert!(cfg.is_err());
     }
     #[test]
     fn test_args() {
-        let cmdlineargs = vec!["tdb", "--withconfig", "../examples/config-files/tdb.toml"];
+        let cmdlineargs = vec!["sdb", "--withconfig", "../examples/config-files/sdb.toml"];
         let cfg_layout = load_yaml!("../cli.yml");
         let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
         let filename = matches.value_of("config").unwrap();
-        assert_eq!("../examples/config-files/tdb.toml", filename);
+        assert_eq!("../examples/config-files/sdb.toml", filename);
         let cfg =
             ParsedConfig::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
         assert_eq!(cfg, ParsedConfig::default());

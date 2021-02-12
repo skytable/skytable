@@ -1,7 +1,7 @@
 #
 # Created on Tue Nov 03 2020
 #
-# This file is a part of TerrabaseDB
+# This file is a part of Skybase
 # Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@
 #
 #
 
-name: TerrabaseDB Shell
+name: Skybase Shell
 version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
-about: The TerrabaseDB Shell (tsh)
+about: The Skybase Shell (skysh)
 args:
         - host:
                   short: h

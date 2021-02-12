@@ -1,7 +1,7 @@
 /*
  * Created on Sun Sep 13 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@
 mod benchtool {
     use clap::{load_yaml, App};
     use devtimer::DevTime;
-    use libtdb::terrapipe;
+    use libsky::terrapipe;
     use rand::distributions::Alphanumeric;
     use rand::thread_rng;
     use serde::Serialize;

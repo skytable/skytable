@@ -1,7 +1,7 @@
 /*
  * Created on Wed Aug 19 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,8 @@
 */
 
 //! # The Key/Value Engine
-//! This is TerrabaseDB's K/V engine. It contains utilities to interface with
-//! TDB's K/V store
+//! This is Skybase's K/V engine. It contains utilities to interface with
+//! sdb's K/V store
 
 pub mod dbsize;
 pub mod del;
@@ -43,7 +43,7 @@ pub mod heya {
     use crate::protocol;
     use crate::protocol::ActionGroup;
     use crate::CoreDB;
-    use libtdb::TResult;
+    use libsky::TResult;
     use protocol::responses;
     /// Returns a `HEY!` `Response`
     pub async fn heya(_db: &CoreDB, con: &mut Con<'_>, _buf: ActionGroup) -> TResult<()> {

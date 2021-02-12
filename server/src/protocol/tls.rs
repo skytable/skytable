@@ -1,7 +1,7 @@
 /*
  * Created on Fri Dec 18 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -30,8 +30,8 @@ use crate::resp::Writable;
 use crate::CoreDB;
 use bytes::Buf;
 use bytes::BytesMut;
-use libtdb::TResult;
-use libtdb::BUF_CAP;
+use libsky::TResult;
+use libsky::BUF_CAP;
 use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
 use std::net::SocketAddr;
 use std::pin::Pin;

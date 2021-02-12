@@ -2,9 +2,9 @@
 members = [
     "cli",
     "server",
-    "libtdb",
-    "tdb-bench",
-    "tdb-macros"
+    "libsky",
+    "sky-bench",
+    "sky-macros"
 ]
 
 [profile.release]

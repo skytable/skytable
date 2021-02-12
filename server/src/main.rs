@@ -1,7 +1,7 @@
 /*
  * Created on Thu Jul 02 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@
  *
 */
 
-//! # TerrabaseDB
+//! # Skybase
 //!
-//! The `tdb` crate (or the `server` folder) is TerrabaseDB's database server and maybe
+//! The `sdb` crate (or the `server` folder) is Skybase's database server and maybe
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
@@ -54,7 +54,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "TerrabaseDB v0.5.1 | https://github.com/terrabasedb/terrabasedb";
+static MSG: &'static str = "Skybase v0.5.1 | https://github.com/skybasedb/skybase";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = " 
       _______                       _                        _____   ____  
@@ -71,7 +71,7 @@ static TEXT: &'static str = "
 #[tokio::main]
 async fn main() {
     Builder::new()
-        .parse_filters(&env::var("TDB_LOG").unwrap_or("info".to_owned()))
+        .parse_filters(&env::var("SKY_LOG").unwrap_or("info".to_owned()))
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server

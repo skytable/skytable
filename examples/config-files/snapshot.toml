@@ -1,6 +1,6 @@
 [server]
-host = "127.0.0.1" # The IP address to which you want TDB to bind to
-port = 2003 # The port to which you want TDB to bind to
+host = "127.0.0.1" # The IP address to which you want sdb to bind to
+port = 2003 # The port to which you want sdb to bind to
 # Set `noart` to true if you want to disable terminal artwork
 noart = false
 

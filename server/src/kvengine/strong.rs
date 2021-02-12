@@ -1,7 +1,7 @@
 /*
  * Created on Mon Sep 21 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@
 use crate::coredb::{CoreDB, Data};
 use crate::dbnet::Con;
 use crate::protocol::{responses, ActionGroup};
-use libtdb::TResult;
+use libsky::TResult;
 use std::hint::unreachable_unchecked;
 
 /// Run an `SSET` query

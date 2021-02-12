@@ -1,7 +1,7 @@
 /*
  * Created on Fri Aug 14 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ use crate::dbnet::Con;
 use crate::protocol::{responses, ActionGroup};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
-use libtdb::TResult;
+use libsky::TResult;
 
 /// Run a `GET` query
 pub async fn get(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {

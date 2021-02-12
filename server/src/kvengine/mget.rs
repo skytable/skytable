@@ -1,7 +1,7 @@
 /*
  * Created on Thu Aug 27 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,8 +24,8 @@ use crate::dbnet::Con;
 use crate::protocol::{responses, ActionGroup};
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
-use libtdb::terrapipe::RespCodes;
-use libtdb::TResult;
+use libsky::terrapipe::RespCodes;
+use libsky::TResult;
 
 /// Run an `MGET` query
 ///
