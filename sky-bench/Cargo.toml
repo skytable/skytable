@@ -1,5 +1,5 @@
 [package]
-name = "tdb-bench"
+name = "sky-bench"
 version = "0.5.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 rand = "0.8.3"
 devtimer = "4.0.1"
-libtdb = {path="../libtdb"}
+libsky = {path="../libsky"}
 clap = {version = "2.33.3", features=["yaml"]}
 serde = {version="1.0.123", features=["derive"]}
 serde_json = "1.0.62"

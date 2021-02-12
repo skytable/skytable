@@ -1,16 +1,12 @@
 [package]
-name = "tdb_macros"
+name = "libsky"
 version = "0.5.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-proc-macro = true
-
 [dependencies]
-syn = {version = "1.0.60", features = ["full"]}
-quote = "1.0.8"
-rand = "0.8.3"
-proc-macro2 = "1.0.24"
+lazy_static = "1.4.0"
+bytes = "1.0.1"
+termcolor = "1.1.2"

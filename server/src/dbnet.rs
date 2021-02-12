@@ -1,7 +1,7 @@
 /*
  * Created on Tue Jul 21 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -44,8 +44,8 @@ use crate::protocol::tls::SslListener;
 use crate::protocol::{Connection, QueryResult::*};
 use crate::resp::Writable;
 use crate::CoreDB;
-use libtdb::util::terminal;
-use libtdb::TResult;
+use libsky::util::terminal;
+use libsky::TResult;
 use std::fs;
 use std::future::Future;
 use std::io::ErrorKind;

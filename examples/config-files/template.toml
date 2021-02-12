@@ -1,4 +1,4 @@
-# This is a complete TDB configuration template which is always kept updated
+# This is a complete sdb configuration template which is always kept updated
 # to include all the configuration options. I encourage you to always use this
 # when you use a configuration file
 # Instead of deleting entire sections from this file, comment them out, so that you
@@ -7,8 +7,8 @@
 
 # This is a *REQUIRED* key
 [server]
-host = "127.0.0.1" # The IP address to which you want TDB to bind to
-port = 2003 # The port to which you want TDB to bind to
+host = "127.0.0.1" # The IP address to which you want sdb to bind to
+port = 2003 # The port to which you want sdb to bind to
 # Set `noart` to true if you want to disable terminal artwork
 noart = false
 

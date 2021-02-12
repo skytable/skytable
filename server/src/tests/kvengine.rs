@@ -1,7 +1,7 @@
 /*
  * Created on Thu Sep 10 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@
  *
 */
 
-#[tdb_macros::dbtest(skip = "set_values")]
+#[sky_macros::dbtest(skip = "set_values")]
 mod __private {
     use crate::protocol::responses::fresp;
-    use libtdb::terrapipe;
+    use libsky::terrapipe;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
@@ -85,7 +85,7 @@ mod __private {
         let mut query = String::from("MSET ");
         query.push_str(values_split_with_whitespace.as_ref());
         let count_bytes_len = homwany.to_string().as_bytes().len();
-        let q = libtdb::terrapipe::proc_query(query);
+        let q = libsky::terrapipe::proc_query(query);
         stream.write_all(&q).await.unwrap();
         let res_should_be =
             format!("#2\n*1\n#2\n&1\n:{}\n{}\n", count_bytes_len, homwany).into_bytes();

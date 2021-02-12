@@ -1,7 +1,7 @@
 /*
  * Created on Tue Nov 03 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,6 @@
  *
 */
 
-//! Modules for administration of TerrabaseDB
+//! Modules for administration of Skybase
 
 pub mod mksnap;

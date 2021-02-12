@@ -1,7 +1,7 @@
 /*
  * Created on Mon Jul 20 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  *
 */
 
-//! The core library for the TerrabaseDB
+//! The core library for the Skybase
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 

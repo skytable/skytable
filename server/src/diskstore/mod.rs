@@ -1,7 +1,7 @@
 /*
  * Created on Wed Aug 05 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use crate::config::BGSave;
 use crate::coredb::{self, Data};
 use bincode;
 use bytes::Bytes;
-use libtdb::TResult;
+use libsky::TResult;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{ErrorKind, Write};

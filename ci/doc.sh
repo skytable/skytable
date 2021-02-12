@@ -4,7 +4,7 @@
     C_USER=$(git show -s --format='%an' HEAD)
     C_MAIL=$(git show -s --format='%ae' HEAD)
     cd ..
-    git clone https://github.com/terrabasedb/docs.git
+    git clone https://github.com/Skybase/docs.git
     cd docs
     chmod +x builddoc.sh
     sh ./builddoc.sh

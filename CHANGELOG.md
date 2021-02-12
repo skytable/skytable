@@ -53,7 +53,7 @@ This release adds the following actions:
 
 > No breaking changes
 
-This release adds `BGSAVE` for automated background saving (see [#11](https://github.com/terrabasedb/terrabasedb/issues/21))
+This release adds `BGSAVE` for automated background saving (see [#11](https://github.com/skybasedb/skybase/issues/21))
 
 ## Version 0.4.1 [2020-09-06]
 

@@ -33,18 +33,18 @@ In other cases, use the C style.
 ### Parts of the project
 
 * `ci` , `.github` : CI scripts (which, under normal circumstances, don't need to be modified)
-* `cli` : Source for `tsh` which is the command-line client for TDB
+* `cli` : Source for `skysh` which is the command-line client for Skybase
 * `examples` : Example configuration files
-* `libtdb` : This contains functions, structs, ... used by both the `cli` and the 
-* `server` : Source for the main database server `tdb`
-* `tdb-bench` : The source for the benchmarking tool resides here
-* `tdb-macros` : The source for custom compiler macros used by TerrabaseDB
+* `libsky` : This contains functions, structs, ... used by both the `cli` and the 
+* `server` : Source for the main database server ``
+* `sky-bench` : The source for the benchmarking tool resides here
+* `sky-macros` : The source for custom compiler macros used by Skybase
 
 ### Jargon
 
 Each project has its own jargon — and so do we!
 
-* _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the TerrabaseDB documentation website for automatically building documentation for the actions
+* _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the Skybase documentation website for automatically building documentation for the actions
 
 ### Branches
 

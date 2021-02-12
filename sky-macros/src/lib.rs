@@ -1,7 +1,7 @@
 /*
  * Created on Sun Sep 13 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  *
 */
 
-//! A library containing a collection of custom derives used by TerrabaseDB
+//! A library containing a collection of custom derives used by Skybase
 //!
 //! ## Ghost values
 //! We extensively use jargon like 'Ghost values'...but what exactly are they?
@@ -31,7 +31,7 @@
 //! ### Macros and ghost values
 //! - `#[dbtest]`:
 //!     - `stream` - `tokio::net::TcpListener`
-//!     - `asyncdb` - `tdb::coredb::CoreDB`
+//!     - `asyncdb` - `sdb::coredb::CoreDB`
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -244,11 +244,11 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 
 #[proc_macro_attribute]
 /// The `dbtest` macro starts an async server in the background and is meant for
-/// use within the `tdb` or `WORKSPACEROOT/server/` crate. If you use this compiler
+/// use within the `sdb` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
 /// ## _Ghost_ values
-/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable and a `tdb::coredb::CoreDB`
+/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable and a `sdb::coredb::CoreDB`
 /// accessible by the `asyncdb` variable.
 ///
 /// ## Requirements

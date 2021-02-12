@@ -1,7 +1,7 @@
 /*
  * Created on Thu Aug 27 2020
  *
- * This file is a part of TerrabaseDB
+ * This file is a part of Skybase
  * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@
  *
 */
 /* 
- * This file is used by TerrabaseDB's documentation website for automatically
- * generating documentation for the actions. It will also be used by the TerrabaseDB 
+ * This file is used by Skybase's documentation website for automatically
+ * generating documentation for the actions. It will also be used by the Skybase 
  * server in the future
 */
 [
