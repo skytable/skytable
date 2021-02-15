@@ -23,8 +23,7 @@
 mod __private {
     use crate::protocol::responses::fresp;
     use libtdb::terrapipe;
-    use tokio::io::AsyncReadExt;
-    use tokio::prelude::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         let heya = terrapipe::proc_query("HEYA");
@@ -82,7 +81,6 @@ mod __private {
     ) where
         T: AsRef<str>,
     {
-        use tokio::prelude::*;
         let mut query = String::from("MSET ");
         query.push_str(values_split_with_whitespace.as_ref());
         let count_bytes_len = homwany.to_string().as_bytes().len();
@@ -659,6 +657,23 @@ mod __private {
         let res_should_be = "#2\n*1\n#2\n&1\n!21\nerr-snapshot-disabled\n"
             .to_owned()
             .into_bytes();
+        let mut response = vec![0; res_should_be.len()];
+        stream.read_exact(&mut response).await.unwrap();
+        assert_eq!(res_should_be, response);
+    }
+    async fn test_mksnap_sanitization() {
+        let res_should_be = "#2\n*1\n#2\n&1\n!25\nerr-invalid-snapshot-name\n"
+            .to_owned()
+            .into_bytes();
+        // First check parent directory syntax
+        let query = terrapipe::proc_query("MKSNAP ../../badsnappy");
+        stream.write_all(&query).await.unwrap();
+        let mut response = vec![0; res_should_be.len()];
+        stream.read_exact(&mut response).await.unwrap();
+        assert_eq!(res_should_be, response);
+        // Now check root directory syntax
+        let query = terrapipe::proc_query("MKSNAP /var/omgcrazysnappy");
+        stream.write_all(&query).await.unwrap();
         let mut response = vec![0; res_should_be.len()];
         stream.read_exact(&mut response).await.unwrap();
         assert_eq!(res_should_be, response);

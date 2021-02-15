@@ -28,7 +28,7 @@ use crate::resp::GroupBegin;
 use libtdb::terrapipe::RespCodes;
 use libtdb::TResult;
 use std::hint::unreachable_unchecked;
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 
 /// Create a snapshot
 ///
@@ -106,6 +106,25 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Connection, act: ActionGroup) -> 
             let mut path = PathBuf::from(DIR_SNAPSHOT);
             path.push("remote");
             path.push(snapname.to_owned() + ".snapshot");
+            let illegal_snapshot = path
+                .components()
+                .filter(|dir| {
+                    // Sanitize snapshot name, to avoid directory traversal attacks
+                    // If the snapshot name has any root directory or parent directory, then
+                    // we'll allow it to pass through this adaptor.
+                    // As a result, this iterator will give us a count of the 'bad' components
+                    dir == &Component::RootDir || dir == &Component::ParentDir
+                })
+                .count()
+                != 0;
+            if illegal_snapshot {
+                con.write_response(GroupBegin(1)).await?;
+                return con
+                    .write_response(RespCodes::OtherError(Some(
+                        "err-invalid-snapshot-name".to_owned(),
+                    )))
+                    .await;
+            }
             let failed;
             {
                 match diskstore::flush_data(&path, &handle.acquire_read().get_ref()) {

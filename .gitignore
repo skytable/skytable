@@ -4,3 +4,4 @@ data.bin
 /server/snapshots
 snapstore.bin
 snapstore.partmap
+/snapshots 

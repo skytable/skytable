@@ -19,12 +19,12 @@
 #
 #
 
-name: TerrabaseDB Benchmark Tool
-version: 0.5.0
+name: Skybase Benchmark Tool
+version: 0.5-hotfix.1
 author: Sayan N. <ohsayan@outlook.com>
 about: |
-        The TerrabaseDB benchmark tool can be used to benchmark TerrabaseDB installations. 
-        If you find any issues, then report one here: https://github.com/terrabasedb/terrabasedb
+        The Skybase benchmark tool can be used to benchmark Skybase installations. 
+        If you find any issues, then report one here: https://github.com/skybasedb/skybase
 args:
         - connections:
                   short: c

@@ -19,10 +19,10 @@
 #
 #
 
-name: TerrabaseDB Server
+name: Skybase Server
 version: 0.5.0
 author: Sayan N. <ohsayan@outlook.com>
-about: The TerrabaseDB Database server
+about: The Skybase Database server
 args:
         - config:
                   short: c
