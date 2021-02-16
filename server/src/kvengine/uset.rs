@@ -2,7 +2,12 @@
  * Created on Fri Sep 25 2020
  *
  * This file is a part of Skybase
- * Copyright (c) 2020, Sayan Nandan <ohsayan at outlook dot com>
+ * Skybase (formerly known as TerrabaseDB) is a free and open-source
+ * NoSQL database written by Sayan Nandan ("the Author") with the
+ * vision to provide flexibility in data modelling without compromising
+ * on performance, queryability or scalability.
+ *
+ * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
