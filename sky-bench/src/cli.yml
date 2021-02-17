@@ -24,7 +24,7 @@ version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
 about: |
         The Skybase benchmark tool can be used to benchmark Skybase installations. 
-        If you find any issues, then report one here: https://github.com/Skybase/Skybase
+        If you find any issues, then report one here: https://github.com/skybasedb/skybase
 args:
         - connections:
                   short: c

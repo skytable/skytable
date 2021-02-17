@@ -667,4 +667,21 @@ mod __private {
         stream.read_exact(&mut response).await.unwrap();
         assert_eq!(res_should_be, response);
     }
+    async fn test_mksnap_sanitization() {
+        let res_should_be = "#2\n*1\n#2\n&1\n!25\nerr-invalid-snapshot-name\n"
+            .to_owned()
+            .into_bytes();
+        // First check parent directory syntax
+        let query = terrapipe::proc_query("MKSNAP ../../badsnappy");
+        stream.write_all(&query).await.unwrap();
+        let mut response = vec![0; res_should_be.len()];
+        stream.read_exact(&mut response).await.unwrap();
+        assert_eq!(res_should_be, response);
+        // Now check root directory syntax
+        let query = terrapipe::proc_query("MKSNAP /var/omgcrazysnappy");
+        stream.write_all(&query).await.unwrap();
+        let mut response = vec![0; res_should_be.len()];
+        stream.read_exact(&mut response).await.unwrap();
+        assert_eq!(res_should_be, response);
+    }
 }
