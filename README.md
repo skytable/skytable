@@ -39,7 +39,7 @@ You can learn more about installation [here](https://terrabasedb.github.io/docs/
 
 ## Clients 🔌
 
-Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://terrabasedb.github.io/docs/Protocols/terrapipe/).
+Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://docs.skybasedb.com/Protocols/terrapipe/).
 
 ## Community 👐
 
