@@ -1,7 +1,7 @@
 #
 # Created on Tue Nov 03 2020
 #
-# This file is a part of Skybase
+# This file is a part of Skytable
 # Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -19,12 +19,12 @@
 #
 #
 
-name: Skybase Benchmark Tool
+name: Skytable Benchmark Tool
 version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
 about: |
-        The Skybase benchmark tool can be used to benchmark Skybase installations. 
-        If you find any issues, then report one here: https://github.com/skybasedb/skybase
+        The Skytable benchmark tool can be used to benchmark Skytable installations. 
+        If you find any issues, then report one here: https://github.com/skytable/skytable
 args:
         - connections:
                   short: c

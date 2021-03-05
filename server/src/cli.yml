@@ -1,7 +1,7 @@
-name: Skybase Server
+name: Skytable Server
 version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
-about: The Skybase Database server
+about: The Skytable Database server
 args:
     - config:
           short: c

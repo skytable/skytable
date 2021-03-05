@@ -1,7 +1,7 @@
 # Individual Contributor License Agreement
 Adapted from http://www.apache.org/licenses/icla.txt © The Apache Software Foundation
 
-Thank you for your interest in contributing to Skybase. In order to clarify the intellectual property license granted with Contributions from any person or entity, the Author (Sayan Nandan) must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the license terms below. This license is for your protection as a Contributor as well as the protection of the Author and its users; it does not change your rights to use your own Contributions for any other purpose.
+Thank you for your interest in contributing to Skytable. In order to clarify the intellectual property license granted with Contributions from any person or entity, the Author (Sayan Nandan) must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the license terms below. This license is for your protection as a Contributor as well as the protection of the Author and its users; it does not change your rights to use your own Contributions for any other purpose.
 
 You accept and agree to the following terms and conditions for Your present and future Contributions submitted to the Author. In return, the Author shall not use Your Contributions in a way that is contrary to the public benefit or inconsistent with its bylaws in effect at the time of the Contribution. Except for the license granted herein to the Author and recipients of software distributed by the Author, You reserve all right, title, and interest in and to Your Contributions.
 

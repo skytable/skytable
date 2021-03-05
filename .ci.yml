@@ -38,7 +38,7 @@ steps:
   - name: push-docker-image
     image: plugins/docker
     settings:
-      repo: Skybase/sdb
+      repo: Skytable/sdb
       username:
         from_secret: docker_username
       password:

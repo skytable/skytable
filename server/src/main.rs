@@ -1,8 +1,8 @@
 /*
  * Created on Thu Jul 02 2020
  *
- * This file is a part of Skybase
- * Skybase (formerly known as TerrabaseDB) is a free and open-source
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
  * NoSQL database written by Sayan Nandan ("the Author") with the
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
@@ -24,9 +24,9 @@
  *
 */
 
-//! # Skybase
+//! # Skytable
 //!
-//! The `sdb` crate (or the `server` folder) is Skybase's database server and maybe
+//! The `sdb` crate (or the `server` folder) is Skytable's database server and maybe
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
@@ -59,20 +59,9 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "Skybase v0.5.1 | https://github.com/skybasedb/skybase";
+static MSG: &'static str = "Skytable v0.5.1 | https://github.com/skytable/skytable\n";
 /// The terminal art for `!noart` configurations
-static TEXT: &'static str = " 
-      _______                       _                        _____   ____  
-     |__   __|                     | |                      |  __ \\ |  _ \\ 
-        | |  ___  _ __  _ __  __ _ | |__    __ _  ___   ___ | |  | || |_) |
-        | | / _ \\| '__|| '__|/ _` || '_ \\  / _` |/ __| / _ \\| |  | ||  _ < 
-        | ||  __/| |   | |  | (_| || |_) || (_| |\\__ \\|  __/| |__| || |_) |
-        |_| \\___||_|   |_|   \\__,_||_.__/  \\__,_||___/ \\___||_____/ |____/
-        
-        +-++-++-+ +-++-++-++-+ +-++-++-++-++-+ +-++-++-++-++-++-++-++-+
-        |T||h||e| |n||e||x||t| |N||o||S||Q||L| |d||a||t||a||b||a||s||e|
-        +-++-++-+ +-++-++-++-+ +-++-++-++-++-+ +-++-++-++-++-++-++-++-+    
-";
+static TEXT: &'static str = "███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  \n                                                                  ";
 #[tokio::main]
 async fn main() {
     Builder::new()
@@ -104,7 +93,7 @@ async fn check_args_and_get_cfg() -> (
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {
             if cfg.is_artful() {
-                println!("{}\n{}", TEXT, MSG);
+                println!("{}\n{}", MSG, TEXT);
             } else {
                 println!("{}", MSG);
             }
@@ -112,7 +101,7 @@ async fn check_args_and_get_cfg() -> (
             (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }
         Ok(config::ConfigType::Def(cfg, file)) => {
-            println!("{}\n{}", TEXT, MSG);
+            println!("{}\n{}", MSG, TEXT);
             log::warn!("No configuration file supplied. Using default settings");
             (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }

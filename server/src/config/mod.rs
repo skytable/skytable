@@ -1,8 +1,8 @@
 /*
  * Created on Tue Sep 01 2020
  *
- * This file is a part of Skybase
- * Skybase (formerly known as TerrabaseDB) is a free and open-source
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
  * NoSQL database written by Sayan Nandan ("the Author") with the
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
@@ -52,7 +52,7 @@ pub struct Config {
     /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.5.1,
      * we will make it compulsory (so that we don't break semver)
      * See the link below for more details:
-     * https://github.com/Skybase/Skybase/issues/21#issuecomment-693217709
+     * https://github.com/Skytable/Skytable/issues/21#issuecomment-693217709
      */
     bgsave: Option<ConfigKeyBGSAVE>,
     /// The snapshot key

@@ -1,23 +1,23 @@
 <html>
 <div align="center">
 <img src="assets/logo.jpg" height=64 width=64>
-<h1>Skybase</h1><h3>The next-generation NoSQL database</h3>
+<h1>Skytable</h1><h3>The next-generation NoSQL database</h3>
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)) ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Sync%20with%20mirrors?label=mirror%20sync) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
-[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://terrabasedb.github.io/docs)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/thanks)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://skytable.github.io/docs)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks)
 
 </div>
 </html>
 
-## What is Skybase?
+## What is Skytable?
 
-Skybase (or SkybaseDB/SDB) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skybase' exemplifies our vision to create a database that has limitless possibilities. Skybase was previously known as TerrabaseDB.
+Skytable (or SkybaseDB/SDB) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skytable' exemplifies our vision to create a database that has limitless possibilities. Skytable was previously known as TerrabaseDB (and then Skybase).
 
-Skybase is curently in an alpha stage, but can be used as a **performant**, **secure** and **persistent key-value store**.
+Skytable is curently in an alpha stage, but can be used as a **performant**, **secure** and **persistent key-value store**.
 
 ## Getting started 🚀
 
-1. Download a bundle for your platform from [here ⬇️ ](https://github.com/skybasedb/skybase/releases)
+1. Download a bundle for your platform from [here ⬇️ ](https://github.com/skytable/skytable/releases)
 2. Unzip the bundle
 3. Make the files executable (run `chmod +x sdb skysh` on *nix systems)
 4. First run `sdb` to start the database server and then run `skysh` to start the interactive shell
@@ -30,12 +30,12 @@ You can learn more about installation [here](https://terrabasedb.github.io/docs/
 * **Insanely fast**: Scale to millions of queries per second per node
 * **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://terrabasedb.github.io/docs/List-Of-Actions)
 * **Snapshots**: Automated (and tunable) snapshots for stress-free backups
-* **Secure**: Secure connections are built into Skybase with SSL/TLS
+* **Secure**: Secure connections are built into Skytable with SSL/TLS
 * **Multithreaded**: Designed to exploit all CPU cores
 * **Resource friendly**: The database server doesn't need more than 1MB to run
 * **Convenient**: Without the setup hassle and system-specific dependencies
 
-(... [and more on the way](https://github.com/skybasedb/skybase/labels/roadmap))
+(... [and more on the way](https://github.com/skytable/skytable/labels/roadmap))
 
 ## Clients 🔌
 
@@ -59,13 +59,13 @@ This project strictly follows semver, however, since this project is currently i
 
 ## Contributing
 
-[![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064?style=for-the-badge)](https://ohsayan.github.io/thanks)
+[![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064?style=for-the-badge)](https://ohsayan.github.io/skythanks)
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to Skybase! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/skybasedb/skybase/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
+**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to Skytable! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/skytable/skytable/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
 
 ## Contributors
 
-You can see a full list of contributors [here](https://ohsayan.github.io/thanks)
+You can see a full list of contributors [here](https://ohsayan.github.io/skythanks)
 
 ## License
 

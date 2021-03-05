@@ -33,18 +33,18 @@ In other cases, use the C style.
 ### Parts of the project
 
 * `ci` , `.github` : CI scripts (which, under normal circumstances, don't need to be modified)
-* `cli` : Source for `skysh` which is the command-line client for Skybase
+* `cli` : Source for `skysh` which is the command-line client for Skytable
 * `examples` : Example configuration files
 * `libsky` : This contains functions, structs, ... used by both the `cli` and the 
 * `server` : Source for the main database server ``
 * `sky-bench` : The source for the benchmarking tool resides here
-* `sky-macros` : The source for custom compiler macros used by Skybase
+* `sky-macros` : The source for custom compiler macros used by Skytable
 
 ### Jargon
 
 Each project has its own jargon — and so do we!
 
-* _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the Skybase documentation website for automatically building documentation for the actions
+* _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the Skytable documentation website for automatically building documentation for the actions
 
 ### Branches
 

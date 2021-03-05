@@ -1,7 +1,7 @@
 #
 # Created on Tue Nov 03 2020
 #
-# This file is a part of Skybase
+# This file is a part of Skytable
 # Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@
 #
 #
 
-name: Skybase Shell
+name: Skytable Shell
 version: 0.5.1
 author: Sayan N. <ohsayan@outlook.com>
-about: The Skybase Shell (skysh)
+about: The Skytable Shell (skysh)
 args:
         - host:
                   short: h

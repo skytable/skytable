@@ -1,8 +1,8 @@
 /*
  * Created on Wed Jul 01 2020
  *
- * This file is a part of Skybase
- * Skybase (formerly known as TerrabaseDB) is a free and open-source
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
  * NoSQL database written by Sayan Nandan ("the Author") with the
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
@@ -31,7 +31,7 @@ use libsky::terrapipe::ADDR;
 use protocol::{Con, Connection, SslConnection};
 use std::io::{self, prelude::*};
 use std::process;
-const MSG_WELCOME: &'static str = "Skybase v0.5.1";
+const MSG_WELCOME: &'static str = "Skytable v0.5.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///

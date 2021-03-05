@@ -1,8 +1,8 @@
 /*
  * Created on Mon Jul 20 2020
  *
- * This file is a part of Skybase
- * Skybase (formerly known as TerrabaseDB) is a free and open-source
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
  * NoSQL database written by Sayan Nandan ("the Author") with the
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
@@ -24,7 +24,7 @@
  *
 */
 
-//! The core library for the Skybase
+//! The core library for the Skytable
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 

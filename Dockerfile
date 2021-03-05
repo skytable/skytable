@@ -1,5 +1,5 @@
 #
-# The Dockerfile for the Skybase server sdb
+# The Dockerfile for the Skytable server sdb
 #
 
 FROM debian:stable
