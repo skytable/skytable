@@ -110,12 +110,18 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) ->
 }
 
 #[macro_export]
+/// A match generator macro built specifically for the `crate::queryengine::execute_simple` function
+/// 
+/// **NOTE:** This macro needs _paths_ for both sides of the $x => $y, to produce something sensible
 macro_rules! gen_match {
-    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x1:ident::$x2:ident => $y1:ident::$y2:ident::$y3:ident),*) => {
+    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:path => $y:path),*) => {
         match $pre.as_str() {
+            // First repeat over all the $x => $y patterns, passing in the variables
+            // and adding .await calls and adding the `?`
             $(
-                $x1::$x2 => $y1::$y2::$y3($db, $con, $buf).await?,
+                $x => $y($db, $con, $buf).await?,
             )*
+            // Now add the final case where no action is matched
             _ => {
                 $con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
                 .await?;
