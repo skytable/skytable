@@ -28,10 +28,12 @@
 
 use crate::coredb::CoreDB;
 use crate::dbnet::Con;
+use crate::gen_match;
+use crate::protocol::responses;
 use crate::protocol::ActionGroup;
-use crate::protocol::{responses};
 use crate::{admin, kvengine};
 use libsky::TResult;
+
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
     //! and responses
@@ -81,28 +83,43 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) ->
         }
         Some(f) => f.to_uppercase(),
     };
-    match first.as_str() {
-        tags::TAG_DEL => kvengine::del::del(db, con, buf).await?,
-        tags::TAG_GET => kvengine::get::get(db, con, buf).await?,
-        tags::TAG_HEYA => kvengine::heya::heya(db, con, buf).await?,
-        tags::TAG_EXISTS => kvengine::exists::exists(db, con, buf).await?,
-        tags::TAG_SET => kvengine::set::set(db, con, buf).await?,
-        tags::TAG_MGET => kvengine::mget::mget(db, con, buf).await?,
-        tags::TAG_MSET => kvengine::mset::mset(db, con, buf).await?,
-        tags::TAG_UPDATE => kvengine::update::update(db, con, buf).await?,
-        tags::TAG_MUPDATE => kvengine::mupdate::mupdate(db, con, buf).await?,
-        tags::TAG_SSET => kvengine::strong::sset(db, con, buf).await?,
-        tags::TAG_SDEL => kvengine::strong::sdel(db, con, buf).await?,
-        tags::TAG_SUPDATE => kvengine::strong::supdate(db, con, buf).await?,
-        tags::TAG_DBSIZE => kvengine::dbsize::dbsize(db, con, buf).await?,
-        tags::TAG_FLUSHDB => kvengine::flushdb::flushdb(db, con, buf).await?,
-        tags::TAG_USET => kvengine::uset::uset(db, con, buf).await?,
-        tags::TAG_KEYLEN => kvengine::keylen::keylen(db, con, buf).await?,
-        tags::TAG_MKSNAP => admin::mksnap::mksnap(db, con, buf).await?,
-        _ => {
-            con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
-                .await?
-        }
-    }
+    gen_match!(
+        first,
+        db,
+        con,
+        buf,
+        tags::TAG_DEL => kvengine::del::del,
+        tags::TAG_GET => kvengine::get::get,
+        tags::TAG_HEYA => kvengine::heya::heya,
+        tags::TAG_EXISTS => kvengine::exists::exists,
+        tags::TAG_SET => kvengine::set::set,
+        tags::TAG_MGET => kvengine::mget::mget,
+        tags::TAG_MSET => kvengine::mset::mset,
+        tags::TAG_UPDATE => kvengine::update::update,
+        tags::TAG_MUPDATE => kvengine::mupdate::mupdate,
+        tags::TAG_SSET => kvengine::strong::sset,
+        tags::TAG_SDEL => kvengine::strong::sdel,
+        tags::TAG_SUPDATE => kvengine::strong::supdate,
+        tags::TAG_DBSIZE => kvengine::dbsize::dbsize,
+        tags::TAG_FLUSHDB => kvengine::flushdb::flushdb,
+        tags::TAG_USET => kvengine::uset::uset,
+        tags::TAG_KEYLEN => kvengine::keylen::keylen,
+        tags::TAG_MKSNAP => admin::mksnap::mksnap
+    );
     Ok(())
+}
+
+#[macro_export]
+macro_rules! gen_match {
+    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x1:ident::$x2:ident => $y1:ident::$y2:ident::$y3:ident),*) => {
+        match $pre.as_str() {
+            $(
+                $x1::$x2 => $y1::$y2::$y3($db, $con, $buf).await?,
+            )*
+            _ => {
+                $con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
+                .await?;
+            },
+        }
+    };
 }

@@ -11,7 +11,7 @@
 
 ## What is Skytable?
 
-Skytable (or SkybaseDB/SDB) is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skytable' exemplifies our vision to create a database that has limitless possibilities. Skytable was previously known as TerrabaseDB (and then Skybase).
+Skytable is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skytable' exemplifies our vision to create a database that has limitless possibilities. Skytable was previously known as TerrabaseDB (and then Skybase) and is also nicknamed "STable", "Sky" and "SDB" by the community.
 
 Skytable is curently in an alpha stage, but can be used as a **performant**, **secure** and **persistent key-value store**.
 
@@ -23,12 +23,12 @@ Skytable is curently in an alpha stage, but can be used as a **performant**, **s
 4. First run `sdb` to start the database server and then run `skysh` to start the interactive shell
 5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `skysh` !
 
-You can learn more about installation [here](https://terrabasedb.github.io/docs/Getting-Started/)
+You can learn more about installation [here](https://skytable.github.io/docs/getting-started/)
 
 ## Features
 
 * **Insanely fast**: Scale to millions of queries per second per node
-* **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://terrabasedb.github.io/docs/List-Of-Actions)
+* **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://skytable.github.io/docs/actions/overview)
 * **Snapshots**: Automated (and tunable) snapshots for stress-free backups
 * **Secure**: Secure connections are built into Skytable with SSL/TLS
 * **Multithreaded**: Designed to exploit all CPU cores
@@ -39,7 +39,7 @@ You can learn more about installation [here](https://terrabasedb.github.io/docs/
 
 ## Clients 🔌
 
-Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://terrabasedb.github.io/docs/Protocols/terrapipe/).
+Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/next/protocol/terrapipe).
 
 ## Community 👐
 
