@@ -319,6 +319,7 @@ version = "0.5.0"
 dependencies = [
  "bytes",
  "lazy_static",
+ "regex",
  "termcolor",
 ]
 

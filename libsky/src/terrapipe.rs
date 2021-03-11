@@ -29,6 +29,11 @@
 //!
 
 pub const ADDR: &'static str = "127.0.0.1";
+use std::str::FromStr;
+
+lazy_static::lazy_static! {
+    static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
+}
 
 /// Response codes returned by the server
 #[derive(Debug, PartialEq)]
@@ -130,11 +135,11 @@ pub fn proc_query<T>(querystr: T) -> Vec<u8>
 where
     T: AsRef<str>,
 {
-    // TODO(@ohsayan): Enable "" to be escaped
-    // let args: Vec<&str> = RE.find_iter(&querystr).map(|val| val.as_str()).collect();
-    let querystr = querystr.as_ref().to_owned();
-    let args: Vec<&str> = querystr.split_whitespace().collect();
-    let mut bytes = Vec::with_capacity(querystr.len());
+    let mut bytes = Vec::with_capacity(querystr.as_ref().len());
+    let args: Vec<String> = RE
+        .find_iter(&querystr.as_ref())
+        .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
+        .collect();
     bytes.extend(b"#2\n*1\n#");
     let arg_len_bytes = args.len().to_string().into_bytes();
     let arg_len_bytes_len = (arg_len_bytes.len() + 1).to_string().into_bytes();
@@ -161,5 +166,12 @@ fn test_queryproc() {
             .as_bytes()
             .to_owned(),
         proc_query(query)
+    );
+    let q_escaped = proc_query(r#"SET X 'sayan with spaces'"#);
+    assert_eq!(
+        "#2\n*1\n#2\n&3\n#3\nSET\n#1\nX\n#17\nsayan with spaces\n"
+            .as_bytes()
+            .to_owned(),
+        q_escaped
     );
 }

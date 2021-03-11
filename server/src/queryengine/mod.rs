@@ -72,7 +72,6 @@ mod tags {
     /// `MKSNAP` action tag
     pub const TAG_MKSNAP: &'static str = "MKSNAP";
 }
-
 /// Execute a simple(*) query
 pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) -> TResult<()> {
     let first = match buf.get_first() {
