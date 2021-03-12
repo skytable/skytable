@@ -3,11 +3,6 @@
 
 set -euo pipefail
 
-if [ $PR == "true" ]; then
-    # This is a pull request, so compare using the $PR_BRANCH
-    git checkout $PR_BRANCH
-fi
-
 SRC_CHANGED_COUNT=$(git diff --numstat HEAD^..HEAD -- '*.rs' '*.yml' '*.toml' 'Dockerfile' | wc -l)
 
 if [ $SRC_CHANGED_COUNT != "0" ]; then

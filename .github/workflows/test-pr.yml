@@ -3,7 +3,6 @@ name: Test (PR)
 on: [pull_request]
 env:
   BUILD: false
-  PR: true
 jobs:
   test:
     name: Test
@@ -29,8 +28,6 @@ jobs:
         with:
           fetch-depth: 2
       - name: Setup environment
-        env:
-            PR_BRANCH: ${{github.event.pull_request.head.ref}}
         run: |
           chmod +x ci/buildvars.sh
           ci/buildvars.sh
