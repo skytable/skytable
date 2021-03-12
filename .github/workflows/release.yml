@@ -89,13 +89,6 @@ jobs:
         if: matrix.build == 'macos'
         run: cargo build --release
 
-      - name: Install Perl (Windows)
-        uses: shogo82148/actions-setup-perl@v1
-        with:
-          perl-version: "5.30"
-          distribution: strawberry
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
-
       - name: Build (Windows)
         shell: cmd # Use cmd as the default shell to avoid perl path errors
         if: matrix.build == 'windows'
