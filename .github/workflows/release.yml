@@ -8,7 +8,7 @@ name: Release
 env:
   RELEASE_SDB: sdb
   RELEASE_SKYSH: skysh
-  RELEASE_BENCH: sdb-bench
+  RELEASE_BENCH: sky-bench
   RELEASE_DIR: artifacts
   GITHUB_REF: "${{ github.ref }}"
   WINDOWS_TARGET: x86_64-pc-windows-msvc
@@ -114,7 +114,7 @@ jobs:
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SDB }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SKYSH }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR}}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sdb-bench -j
+          zip ./${{ env.RELEASE_DIR}}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sky-bench -j
 
       - name: Create Build (Windows)
         if: matrix.build == 'windows'
@@ -131,7 +131,7 @@ jobs:
           mv ./target/release/${{ env.RELEASE_SDB }} ./dist
           mv ./target/release/${{ env.RELEASE_SKYSH }} ./dist
           mv ./target/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR }}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sdb-bench -j
+          zip ./${{ env.RELEASE_DIR }}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sky-bench -j
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
