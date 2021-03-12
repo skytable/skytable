@@ -2,7 +2,7 @@ name: Test (PR)
 
 on: [pull_request]
 env:
-  BUILD: "false"
+  BUILD: false
 jobs:
   test:
     name: Test
@@ -69,7 +69,21 @@ jobs:
         if: env.BUILD == 'true'
 
       - name: Run Tests
-        run: cargo test --verbose -- --test-threads=1
+        run: cargo test --verbose
         env:
           RUST_BACKTRACE: 1
-        if: env.BUILD == 'true'
+        if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
+
+      - name: Install Perl (Windows)
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "5.30"
+          distribution: strawberry
+        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+
+      - name: Run Tests (Windows)
+        run: cargo test --verbose
+        env:
+          RUST_BACKTRACE: 1
+        shell: cmd
+        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
