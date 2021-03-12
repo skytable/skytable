@@ -90,6 +90,11 @@ jobs:
         run: cargo build --release
 
       - name: Build (Windows)
+        uses: shogo82148/actions-setup-perl@v1 # Setup Perl
+        with:
+          perl-version: "5.30"
+          distribution: strawberry
+        shell: cmd # Use cmd as the default shell to avoid perl path errors
         if: matrix.build == 'windows'
         run: cargo build --release
         env:
