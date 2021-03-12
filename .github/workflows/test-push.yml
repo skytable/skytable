@@ -9,9 +9,6 @@ on:
 env:
   IS_ACTIONS_DOC: "false"
   IS_MD_FILE: "false"
-defaults:
-  run:
-    shell: bash
 jobs:
   test:
     name: Test
@@ -92,4 +89,18 @@ jobs:
         run: cargo test --verbose
         env:
           RUST_BACKTRACE: 1
-        if: env.IS_MD_FILE == 'false'
+        if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
+
+      - name: Install Perl (Windows)
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "5.30"
+          distribution: strawberry
+        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+
+      - name: Run Tests (Windows)
+        run: cargo test --verbose
+        env:
+          RUST_BACKTRACE: 1
+        shell: cmd
+        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
