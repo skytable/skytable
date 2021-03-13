@@ -50,11 +50,7 @@ macro_rules! __func__ {
 async fn start_test_server(port: u16, db: Option<CoreDB>) -> SocketAddr {
     let mut socket = String::from("127.0.0.1:");
     socket.push_str(&port.to_string());
-    let db = if let Some(db) = db {
-        db
-    } else {
-        CoreDB::new(BGSave::Disabled, SnapshotConfig::default(), None).unwrap()
-    };
+    let db = db.unwrap_or(CoreDB::new(BGSave::Disabled, SnapshotConfig::default(), None).unwrap());
     let listener = TcpListener::bind(socket)
         .await
         .expect(&format!("Failed to bind to port {}", port));

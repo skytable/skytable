@@ -282,11 +282,9 @@ impl CoreDB {
             background_tasks += 1;
             snap_count = Some(atmost);
         }
-        let snapcfg = if let Some(max) = snap_count {
-            Arc::new(Some(SnapshotStatus::new(max)))
-        } else {
-            Arc::new(None)
-        };
+        let snapcfg = snap_count
+            .map(|max| Arc::new(Some(SnapshotStatus::new(max))))
+            .unwrap_or(Arc::new(None));
         let db = if let Some(coretable) = coretable {
             CoreDB {
                 shared: Arc::new(Shared {

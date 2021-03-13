@@ -278,11 +278,7 @@ impl ParsedConfig {
     /// TOML file (represented as an object)
     fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            noart: if let Some(noart) = cfg_info.server.noart {
-                noart
-            } else {
-                false
-            },
+            noart: cfg_info.server.noart.unwrap_or(false),
             bgsave: if let Some(bgsave) = cfg_info.bgsave {
                 match (bgsave.enabled, bgsave.every) {
                     // TODO: Show a warning that there are unused keys
@@ -294,11 +290,12 @@ impl ParsedConfig {
             } else {
                 BGSave::default()
             },
-            snapshot: if let Some(snapshot) = cfg_info.snapshot {
-                SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
-            } else {
-                SnapshotConfig::default()
-            },
+            snapshot: cfg_info
+                .snapshot
+                .map(|snapshot| {
+                    SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
+                })
+                .unwrap_or(SnapshotConfig::default()),
             ports: if let Some(sslopts) = cfg_info.ssl {
                 if sslopts.only.is_some() {
                     PortConfig::SecureOnly {

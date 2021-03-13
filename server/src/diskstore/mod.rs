@@ -53,15 +53,11 @@ lazy_static::lazy_static! {
 /// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
 /// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
 pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Data>>> {
-    let file = match fs::read(if let Some(loc) = location {
-        log::info!(
-            "Attempting to restore data from file: '{}'",
-            loc.to_string_lossy()
-        );
-        loc
-    } else {
-        PERSIST_FILE.to_path_buf()
-    }) {
+    let file = match fs::read(
+        location
+            .map(|loc| loc.to_path_buf())
+            .unwrap_or(PERSIST_FILE.to_path_buf()),
+    ) {
         Ok(f) => f,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => return Ok(None),

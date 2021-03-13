@@ -83,11 +83,7 @@ impl<'a> SnapshotEngine<'a> {
         } else {
             (maxtop, false)
         };
-        let snap_dir = if let Some(dir) = snap_dir {
-            dir
-        } else {
-            DIR_SNAPSHOT
-        };
+        let snap_dir = snap_dir.unwrap_or(DIR_SNAPSHOT);
         match fs::create_dir(snap_dir) {
             Ok(_) => (),
             Err(e) => match e.kind() {
@@ -176,8 +172,8 @@ impl<'a> SnapshotEngine<'a> {
             .as_ref()
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
-                // the developer to be sane enough to only call mksnap if snapshotting is enabled 
-                unreachable_unchecked() 
+                // the developer to be sane enough to only call mksnap if snapshotting is enabled
+                unreachable_unchecked()
             })
             .is_busy()
         {
