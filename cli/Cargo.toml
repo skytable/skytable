@@ -13,5 +13,5 @@ bytes = "1.0.1"
 regex = "1.4.3"
 lazy_static = "1.4.0"
 clap = {version = "2.33.3", features=["yaml"]}
-openssl = { version = "0.10.32", features = ["vendored"] }
+openssl = { version = "0.10.33", features = ["vendored"] }
 tokio-openssl = "0.6.1"
