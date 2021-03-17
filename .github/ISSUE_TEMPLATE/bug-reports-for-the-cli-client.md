@@ -1,6 +1,6 @@
 ---
 name: 🐞 Bug reports for the CLI client
-about: Found something wrong with tsh? Report them here
+about: Found something wrong with skysh? Report them here
 title: 'CLI: '
 labels: C-bug, D-cli
 assignees: ''
@@ -14,8 +14,8 @@ assignees: ''
 Steps to reproduce the behavior:
 <!--
 For example:
-1. Run `tdb`
-2. Run `tsh` and close it suddenly
+1. Run `skyd`
+2. Run `skysh` and close it suddenly
 -->
 
 **Expected behavior**

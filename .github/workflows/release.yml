@@ -6,7 +6,7 @@ on:
 name: Release
 
 env:
-  RELEASE_SDB: sdb
+  RELEASE_SDB: skyd
   RELEASE_SKYSH: skysh
   RELEASE_BENCH: sky-bench
   RELEASE_DIR: artifacts
@@ -107,7 +107,7 @@ jobs:
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SDB }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SKYSH }} ./dist
           mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR}}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sky-bench -j
+          zip ./${{ env.RELEASE_DIR}}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/skysh ./dist/skyd ./dist/sky-bench -j
 
       - name: Create Build (Windows)
         if: matrix.build == 'windows'
@@ -116,7 +116,7 @@ jobs:
           mv ./target/release/${{ env.RELEASE_SDB }}.exe ./dist
           mv ./target/release/${{ env.RELEASE_SKYSH }}.exe ./dist
           mv ./target/release/${{ env.RELEASE_BENCH }}.exe ./dist
-          7z a -tzip ./${{ env.RELEASE_DIR }}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip ./dist/*
+          7z a -tzip ./${{ env.RELEASE_DIR }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip ./dist/*
 
       - name: Create Build (MacOS)
         if: matrix.build == 'macos'
@@ -124,7 +124,7 @@ jobs:
           mv ./target/release/${{ env.RELEASE_SDB }} ./dist
           mv ./target/release/${{ env.RELEASE_SKYSH }} ./dist
           mv ./target/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR }}/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/skysh ./dist/sdb ./dist/sky-bench -j
+          zip ./${{ env.RELEASE_DIR }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/skysh ./dist/skyd ./dist/sky-bench -j
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
@@ -175,9 +175,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
+          asset_path: ./linux/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
+          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
 
       - name: Release Windows bundle
         uses: actions/upload-release-asset@v1
@@ -185,9 +185,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./windows/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
+          asset_path: ./windows/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
+          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
 
       - name: Release MacOS bundle
         uses: actions/upload-release-asset@v1
@@ -195,6 +195,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./macos/sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
+          asset_path: ./macos/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
           asset_content_type: application/octet-stream
-          asset_name: sdb-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
+          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip

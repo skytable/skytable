@@ -12,7 +12,7 @@ port = 2003 # The port to which you want sdb to bind to
 # Set `noart` to true if you want to disable terminal artwork
 noart = false
 
-# This key is *OPTIONAL*, but will be required post 0.5.1
+# This key is *OPTIONAL*
 [bgsave]
 # Run `BGSAVE` `every` seconds. For example, setting this to 60 will cause BGSAVE to run
 # after every 2 minutes
@@ -23,3 +23,10 @@ every = 120
 [snapshot]
 every = 3600 # Make a snapshot after every 1 hour (60min * 60sec= 3600secs)
 atmost = 4 # Keep the 4 most recent snapshots
+
+# This key is *OPTIONAL*, used for TLS/SSL config
+[ssl]
+key = "/path/to/keyfile.pem"
+chain = "/path/to/chain.pem"
+port = 2004
+only = true # optional to enable SSL-only requests

@@ -714,7 +714,14 @@ mod tests {
                 false,
                 BGSave::default(),
                 SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
-                PortConfig::default() // TODO: Update the template
+                PortConfig::new_secure_only(
+                    DEFAULT_IPV4,
+                    SslOpts::new(
+                        "/path/to/keyfile.pem".into(),
+                        "/path/to/chain.pem".into(),
+                        2004
+                    )
+                )
             )
         );
     }

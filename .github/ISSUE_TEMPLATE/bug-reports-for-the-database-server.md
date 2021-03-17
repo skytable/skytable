@@ -14,8 +14,8 @@ assignees: ''
 Steps to reproduce the behavior:
 <!--
 For example:
-1. Run `tdb`
-2. Run `tsh` and close it suddenly
+1. Run `skyd`
+2. Run `skysh` and close it suddenly
 -->
 
 **Expected behavior**

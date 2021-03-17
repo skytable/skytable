@@ -2,6 +2,17 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.5.1 [2021-03-17]
+
+> No breaking changes
+
+* Built-in TLS/SSL support
+* Custom host/port settings in `sky-bench`
+* Mock keys can be created with `sky-bench`
+* Security patch for VE/S/00001
+* Escaping for spaces in `skysh`
+* `tdb` is now called `skyd` (short for 'Skytable Daemon')
+
 ## Version 0.5.0 [2020-11-19]
 
 > This release introduces breaking changes!
