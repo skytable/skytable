@@ -1,5 +1,5 @@
 # Ignore everything else
 *
 
-# Only include the sdb binary
-!target/release/sdb
+# Only include the skyd binary
+!target/release/skyd
