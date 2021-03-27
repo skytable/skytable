@@ -26,7 +26,7 @@
 
 //! # The Key/Value Engine
 //! This is Skytable's K/V engine. It contains utilities to interface with
-//! sdb's K/V store
+//! Skytable's K/V store
 
 pub mod dbsize;
 pub mod del;

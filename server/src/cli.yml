@@ -8,7 +8,7 @@ args:
           required: false
           long: withconfig
           value_name: cfgfile
-          help: Sets a configuration file to start sdb
+          help: Sets a configuration file to start skyd
           takes_value: true
     - restore:
           short: r

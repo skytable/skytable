@@ -26,7 +26,7 @@
 
 //! # Skytable
 //!
-//! The `sdb` crate (or the `server` folder) is Skytable's database server and maybe
+//! The `skyd` crate (or the `server` folder) is Skytable's database server and maybe
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
