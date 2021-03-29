@@ -80,7 +80,7 @@ pub enum ParseResult {
     /// The packet is incomplete, i.e more data needs to be read
     Incomplete,
     /// The packet is corrupted, in the sense that it contains invalid data
-    BadPacket(usize),
+    BadPacket,
     /// A successfully parsed query
     ///
     /// The second field is the number of bytes that should be discarded from the buffer as it has already
@@ -122,7 +122,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
     */
     let mut pos = 0;
     if buf[pos] != b'#' {
-        return ParseResult::BadPacket(buf.len());
+        return ParseResult::BadPacket;
     } else {
         pos += 1;
     }
@@ -139,23 +139,23 @@ pub fn parse(buf: &[u8]) -> ParseResult {
               // Find out the number of actions that we have to do
     let mut action_size = 0usize;
     if next_line[0] == b'*' {
-        let mut line_iter = next_line.into_iter().skip(1).peekable();
+        let mut line_iter = next_line.into_iter().skip(1);
         while let Some(dig) = line_iter.next() {
             let curdig: usize = match dig.checked_sub(48) {
                 Some(dig) => {
                     if dig > 9 {
-                        return ParseResult::BadPacket(buf.len());
+                        return ParseResult::BadPacket;
                     } else {
                         dig.into()
                     }
                 }
-                None => return ParseResult::BadPacket(buf.len()),
+                None => return ParseResult::BadPacket,
             };
             action_size = (action_size * 10) + curdig;
         }
     // This line gives us the number of actions
     } else {
-        return ParseResult::BadPacket(buf.len());
+        return ParseResult::BadPacket;
     }
     let mut items: Vec<ActionGroup> = Vec::with_capacity(action_size);
     while pos < buf.len() && items.len() <= action_size {
@@ -184,13 +184,13 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                                     if dig > 9 {
                                         // If `dig` is greater than 9, then the current
                                         // UTF-8 char isn't a number
-                                        return ParseResult::BadPacket(buf.len());
+                                        return ParseResult::BadPacket;
                                     } else {
                                         dig.into()
                                     }
                                 }
                                 None => {
-                                    return ParseResult::BadPacket(buf.len());
+                                    return ParseResult::BadPacket;
                                 }
                             };
                             current_array_size = (current_array_size * 10) + curdg; // Increment the size
@@ -204,7 +204,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                             if buf[pos] == b'#' {
                                 pos += 1; // skip the '#' character
                             } else {
-                                return ParseResult::BadPacket(buf.len());
+                                return ParseResult::BadPacket;
                             }
                             while pos < buf.len() && buf[pos] != b'\n' {
                                 let curdig: usize = match buf[pos].checked_sub(48) {
@@ -212,13 +212,13 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                                         if dig > 9 {
                                             // If `dig` is greater than 9, then the current
                                             // UTF-8 char isn't a number
-                                            return ParseResult::BadPacket(buf.len());
+                                            return ParseResult::BadPacket;
                                         } else {
                                             dig.into()
                                         }
                                     }
                                     None => {
-                                        return ParseResult::BadPacket(buf.len());
+                                        return ParseResult::BadPacket;
                                     }
                                 };
                                 element_size = (element_size * 10) + curdig; // Increment the size
@@ -241,7 +241,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                         items.push(ActionGroup(actiongroup));
                     }
                     _ => {
-                        return ParseResult::BadPacket(buf.len());
+                        return ParseResult::BadPacket;
                     }
                 }
                 continue;
@@ -251,7 +251,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
                 // parsing business, we should never reach here unless
                 // the packet is invalid
 
-                return ParseResult::BadPacket(buf.len());
+                return ParseResult::BadPacket;
             }
         }
     }
@@ -267,7 +267,7 @@ pub fn parse(buf: &[u8]) -> ParseResult {
             ParseResult::Incomplete
         }
     } else {
-        ParseResult::BadPacket(buf.len())
+        ParseResult::BadPacket
     }
 }
 /// Read a size line and return the following line
@@ -333,7 +333,7 @@ fn test_parser() {
         .to_owned()
         .into_bytes();
     let res = parse(&input);
-    let res_should_be = ParseResult::BadPacket(input.len());
+    let res_should_be = ParseResult::BadPacket;
     assert_eq!(res, res_should_be);
     let input = "#2\n*1\n#2\n&3\n#3\nSET\n#19\nbeinghumanisawesome\n#4\ntrue\n"
         .as_bytes()

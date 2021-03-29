@@ -84,8 +84,8 @@ impl Connection {
                     self.buffer.advance(forward);
                     return Ok(QueryResult::Q(query));
                 }
-                Ok(ParseResult::BadPacket(bp)) => {
-                    self.buffer.advance(bp);
+                Ok(ParseResult::BadPacket) => {
+                    self.buffer.clear();
                     return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
                 }
                 Err(_) => {

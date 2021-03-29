@@ -99,7 +99,7 @@ impl fmt::Display for DataGroup {
 #[derive(Debug, PartialEq)]
 pub enum ClientResult {
     /// The response was Invalid
-    InvalidResponse(usize),
+    InvalidResponse,
     /// The response is a valid response and has been parsed into a vector of datagroups
     Response(Vec<DataGroup>, usize),
     /// The response was empty, which means that the remote end closed the connection
@@ -112,7 +112,7 @@ impl fmt::Display for ClientResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ClientResult::*;
         match self {
-            InvalidResponse(_) => write!(f, "ERROR: The server sent an invalid response"),
+            InvalidResponse => write!(f, "ERROR: The server sent an invalid response"),
             Response(_, _) => unimplemented!(),
             Empty(_) => write!(f, ""),
             Incomplete => write!(f, "ERROR: The server sent an incomplete response"),
@@ -135,7 +135,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
     */
     let mut pos = 0;
     if buf[pos] != b'#' {
-        return ClientResult::InvalidResponse(pos);
+        return ClientResult::InvalidResponse;
     } else {
         pos += 1;
     }
@@ -155,18 +155,18 @@ pub fn parse(buf: &[u8]) -> ClientResult {
             let curdig: usize = match dig.checked_sub(48) {
                 Some(dig) => {
                     if dig > 9 {
-                        return ClientResult::InvalidResponse(pos);
+                        return ClientResult::InvalidResponse;
                     } else {
                         dig.into()
                     }
                 }
-                None => return ClientResult::InvalidResponse(pos),
+                None => return ClientResult::InvalidResponse,
             };
             action_size = (action_size * 10) + curdig;
         }
     // This line gives us the number of actions
     } else {
-        return ClientResult::InvalidResponse(pos);
+        return ClientResult::InvalidResponse;
     }
     let mut items: Vec<DataGroup> = Vec::with_capacity(action_size);
     while pos < buf.len() && items.len() <= action_size {
@@ -195,12 +195,12 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                                     if dig > 9 {
                                         // If `dig` is greater than 9, then the current
                                         // UTF-8 char isn't a number
-                                        return ClientResult::InvalidResponse(pos);
+                                        return ClientResult::InvalidResponse;
                                     } else {
                                         dig.into()
                                     }
                                 }
-                                None => return ClientResult::InvalidResponse(pos),
+                                None => return ClientResult::InvalidResponse,
                             };
                             current_array_size = (current_array_size * 10) + curdg; // Increment the size
                             linepos += 1; // Move the position ahead, since we just read another char
@@ -223,12 +223,12 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                                         if dig > 9 {
                                             // If `dig` is greater than 9, then the current
                                             // UTF-8 char isn't a number
-                                            return ClientResult::InvalidResponse(pos);
+                                            return ClientResult::InvalidResponse;
                                         } else {
                                             dig.into()
                                         }
                                     }
-                                    None => return ClientResult::InvalidResponse(pos),
+                                    None => return ClientResult::InvalidResponse,
                                 };
                                 element_size = (element_size * 10) + curdig; // Increment the size
                                 pos += 1; // Move the position ahead, since we just read another char
@@ -253,7 +253,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                         }
                         items.push(DataGroup(actiongroup));
                     }
-                    _ => return ClientResult::InvalidResponse(pos),
+                    _ => return ClientResult::InvalidResponse,
                 }
                 continue;
             }
@@ -261,7 +261,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
                 // Since the variant '#' would does all the array
                 // parsing business, we should never reach here unless
                 // the packet is invalid
-                return ClientResult::InvalidResponse(pos);
+                return ClientResult::InvalidResponse;
             }
         }
     }
@@ -278,7 +278,7 @@ pub fn parse(buf: &[u8]) -> ClientResult {
             ClientResult::Incomplete
         }
     } else {
-        ClientResult::InvalidResponse(pos)
+        ClientResult::InvalidResponse
     }
 }
 /// Read a size line and return the following line

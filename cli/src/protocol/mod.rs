@@ -121,9 +121,9 @@ impl Connection {
                     }
                     return;
                 }
-                ClientResult::InvalidResponse(_) => {
+                ClientResult::InvalidResponse => {
                     self.buffer.clear();
-                    eprintln!("{}", ClientResult::InvalidResponse(0));
+                    eprintln!("{}", ClientResult::InvalidResponse);
                     return;
                 }
             }
@@ -203,9 +203,9 @@ impl SslConnection {
                     }
                     return;
                 }
-                ClientResult::InvalidResponse(r) => {
-                    self.buffer.advance(r);
-                    eprintln!("{}", ClientResult::InvalidResponse(0));
+                ClientResult::InvalidResponse => {
+                    self.buffer.clear();
+                    eprintln!("{}", ClientResult::InvalidResponse);
                     return;
                 }
             }
