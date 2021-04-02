@@ -45,7 +45,8 @@ jobs:
           key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
-        if: env.IS_MD_FILE == 'false'
+          # HACK(@ohsayan): The next line skips caching until it is fixed
+        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo index
         uses: actions/cache@v1
@@ -54,7 +55,8 @@ jobs:
           key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
-        if: env.IS_MD_FILE == 'false'
+          # HACK(@ohsayan): The next line skips caching until it is fixed
+        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo build
         uses: actions/cache@v1
@@ -63,7 +65,8 @@ jobs:
           key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
-        if: env.IS_MD_FILE == 'false'
+          # HACK(@ohsayan): The next line skips caching until it is fixed
+        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
