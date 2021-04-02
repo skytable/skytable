@@ -32,6 +32,12 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
+      
+      - name: Install GNU tar
+        run: |
+          brew install gnu-tar
+          echo "::add-path::/usr/local/opt/gnu-tar/libexec/gnubin"
+        if: runner.os == 'macOS'
 
       - name: "Prepare build environment"
         run: |
@@ -45,8 +51,7 @@ jobs:
           key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
-          # HACK(@ohsayan): The next line skips caching until it is fixed
-        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
+        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo index
         uses: actions/cache@v1
@@ -55,8 +60,7 @@ jobs:
           key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
-          # HACK(@ohsayan): The next line skips caching until it is fixed
-        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
+        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo build
         uses: actions/cache@v1
@@ -65,8 +69,7 @@ jobs:
           key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
-          # HACK(@ohsayan): The next line skips caching until it is fixed
-        if: runner.os != 'macOS' && env.IS_MD_FILE == 'false'
+        if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
