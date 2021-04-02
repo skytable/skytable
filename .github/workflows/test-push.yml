@@ -36,7 +36,7 @@ jobs:
       - name: Install GNU tar
         run: |
           brew install gnu-tar
-          echo "::add-path::/usr/local/opt/gnu-tar/libexec/gnubin"
+          echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
         if: runner.os == 'macOS'
 
       - name: "Prepare build environment"
