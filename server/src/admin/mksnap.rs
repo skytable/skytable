@@ -30,8 +30,6 @@ use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use crate::protocol::{responses, ActionGroup};
-use crate::resp::GroupBegin;
-use libsky::terrapipe::RespCodes;
 use libsky::TResult;
 use std::hint::unreachable_unchecked;
 use std::path::{Component, PathBuf};
@@ -44,10 +42,9 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
         if !handle.is_snapshot_enabled() {
             // Since snapshotting is disabled, we can't create a snapshot!
             // We'll just return an error returning the same
-            let error = "err-snapshot-disabled";
-            con.write_response(GroupBegin(1)).await?;
-            let error = RespCodes::OtherError(Some(error.to_string()));
-            return con.write_response(error).await;
+            return con
+                .write_response(&**responses::fresp::R_SNAPSHOT_DISABLED)
+                .await;
         }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
@@ -83,9 +80,9 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
                 .await;
         }
         if engine_was_busy {
-            con.write_response(GroupBegin(1)).await?;
-            let error = RespCodes::OtherError(Some("err-snapshot-busy".to_owned()));
-            return con.write_response(error).await;
+            return con
+                .write_response(&**responses::fresp::R_SNAPSHOT_BUSY)
+                .await;
         }
         if let Some(succeeded) = snap_result {
             if succeeded {
@@ -103,21 +100,18 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
         } else {
             // We shouldn't ever reach here if all our logic is correct
             // but if we do, something is wrong with the runtime
-            con.write_response(GroupBegin(1)).await?;
-            let error = RespCodes::OtherError(Some("err-access-after-termsig".to_owned()));
-            return con.write_response(error).await;
+            return con
+                .write_response(&**responses::fresp::R_ERR_ACCESS_AFTER_TERMSIG)
+                .await;
         }
     } else {
         if howmany == 1 {
             // This means that the user wants to create a 'named' snapshot
-            let snapname = act
-                .get_ref()
-                .get(1)
-                .unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We've already checked that the action
-                    // contains a second argument, so this can't be reached  
-                    unreachable_unchecked()
-                });
+            let snapname = act.get_ref().get(1).unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): We've already checked that the action
+                // contains a second argument, so this can't be reached
+                unreachable_unchecked()
+            });
             let mut path = PathBuf::from(DIR_SNAPSHOT);
             path.push("remote");
             path.push(snapname.to_owned() + ".snapshot");
@@ -133,11 +127,8 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
                 .count()
                 != 0;
             if illegal_snapshot {
-                con.write_response(GroupBegin(1)).await?;
                 return con
-                    .write_response(RespCodes::OtherError(Some(
-                        "err-invalid-snapshot-name".to_owned(),
-                    )))
+                    .write_response(&**responses::fresp::R_SNAPSHOT_ILLEGAL_NAME)
                     .await;
             }
             let failed;

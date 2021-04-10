@@ -84,5 +84,13 @@ pub mod fresp {
         pub static ref R_ONE_INT_REPLY: Vec<u8> = "#2\n*1\n#2\n&1\n:1\n1\n".as_bytes().to_owned();
         /// A 1 uint64 reply
         pub static ref R_ZERO_INT_REPLY: Vec<u8> = "#2\n*1\n#2\n&1\n:1\n0\n".as_bytes().to_owned();
+        /// Snapshot busy (other error)
+        pub static ref R_SNAPSHOT_BUSY: Vec<u8> = "#2\n*1\n#2\n&1\n!17\nerr-snapshot-busy\n".as_bytes().to_owned();
+        /// Snapshot disabled (other error)
+        pub static ref R_SNAPSHOT_DISABLED: Vec<u8> = "#2\n*1\n#2\n&1\n!22\nerr-snapshot-disabled\n".as_bytes().to_owned();
+        /// Snapshot has illegal name (other error)
+        pub static ref R_SNAPSHOT_ILLEGAL_NAME: Vec<u8> = "#2\n*1\n#2\n&1\n!25\nerr-invalid-snapshot-name\n".as_bytes().to_owned();
+        /// Access after termination signal (other error)
+        pub static ref R_ERR_ACCESS_AFTER_TERMSIG: Vec<u8> = "#2\n*1\n#2\n&1\n!24\nerr-access-after-termsig\n".as_bytes().to_owned();
     }
 }
