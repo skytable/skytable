@@ -172,6 +172,35 @@ mod benchtool {
             },
             None => host.push_str("2003"),
         }
+        println!("Running a ping test...");
+        // Run a ping test
+        let sock = TcpStream::connect(&host);
+        let query = terrapipe::proc_query("HEYA");
+        match sock {
+            Ok(mut sock) => {
+                // We connected to the socket, so now let's run a HEYA ping
+                if let Err(e) = sock.write_all(&query) {
+                    eprintln!("ERROR: Couldn't write data to socket with error: {}\nBenchmark terminated", e);
+                    return;
+                }
+                let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
+                let mut response = vec![0; res_should_be.len()];
+                if let Err(e) = sock.read_exact(&mut response) {
+                    eprintln!("ERROR: Couldn't read data from socket with error: {}\nBenchmark terminated", e);
+                    return;
+                } else {
+                    if response != res_should_be {
+                        eprintln!("ERROR: Ping test (HEYA) failed. Benchmark terminated");
+                        return;
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("ERROR: Failed to connect to socket with error: {}\nBenchmark terminated", e);
+                return;
+            }
+        }
+        println!("Ping test succeeded!");
         let mut rand = thread_rng();
         if let Some(matches) = matches.subcommand_matches("testkey") {
             let numkeys = matches.value_of("count").unwrap();
