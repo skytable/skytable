@@ -39,7 +39,7 @@ You can learn more about installation [here](https://skytable.github.io/docs/get
 
 ## Clients 🔌
 
-Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/next/protocol/terrapipe).
+Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/protocol/terrapipe).
 
 ## Community 👐
 

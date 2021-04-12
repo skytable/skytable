@@ -87,7 +87,7 @@ pub mod fresp {
         /// Snapshot busy (other error)
         pub static ref R_SNAPSHOT_BUSY: Vec<u8> = "#2\n*1\n#2\n&1\n!17\nerr-snapshot-busy\n".as_bytes().to_owned();
         /// Snapshot disabled (other error)
-        pub static ref R_SNAPSHOT_DISABLED: Vec<u8> = "#2\n*1\n#2\n&1\n!22\nerr-snapshot-disabled\n".as_bytes().to_owned();
+        pub static ref R_SNAPSHOT_DISABLED: Vec<u8> = "#2\n*1\n#2\n&1\n!21\nerr-snapshot-disabled\n".as_bytes().to_owned();
         /// Snapshot has illegal name (other error)
         pub static ref R_SNAPSHOT_ILLEGAL_NAME: Vec<u8> = "#2\n*1\n#2\n&1\n!25\nerr-invalid-snapshot-name\n".as_bytes().to_owned();
         /// Access after termination signal (other error)
