@@ -110,7 +110,7 @@ pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) ->
 
 #[macro_export]
 /// A match generator macro built specifically for the `crate::queryengine::execute_simple` function
-/// 
+///
 /// **NOTE:** This macro needs _paths_ for both sides of the $x => $y, to produce something sensible
 macro_rules! gen_match {
     ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:path => $y:path),*) => {

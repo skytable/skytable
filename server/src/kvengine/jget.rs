@@ -76,13 +76,10 @@ mod json {
             self.0.push(b',');
         }
         pub fn finish(mut self) -> BuiltJSON {
-            *self
-                .0
-                .last_mut()
-                .unwrap_or_else(|| unsafe { 
-                    // UNSAFE(@ohsayan): There will always be a value corresponding to last_mut
-                    unreachable_unchecked() 
-                }) = b'}';
+            *self.0.last_mut().unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): There will always be a value corresponding to last_mut
+                unreachable_unchecked()
+            }) = b'}';
             BuiltJSON(self.0)
         }
     }

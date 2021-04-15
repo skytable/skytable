@@ -35,6 +35,7 @@ mod benchtool {
     use rand::distributions::Alphanumeric;
     use rand::thread_rng;
     use serde::Serialize;
+    use std::error::Error;
     use std::io::prelude::*;
     use std::net::{self, TcpStream};
     use std::sync::mpsc;
@@ -172,35 +173,13 @@ mod benchtool {
             },
             None => host.push_str("2003"),
         }
-        println!("Running a ping test...");
+        println!("Running a sanity test...");
         // Run a ping test
-        let sock = TcpStream::connect(&host);
-        let query = terrapipe::proc_query("HEYA");
-        match sock {
-            Ok(mut sock) => {
-                // We connected to the socket, so now let's run a HEYA ping
-                if let Err(e) = sock.write_all(&query) {
-                    eprintln!("ERROR: Couldn't write data to socket with error: {}\nBenchmark terminated", e);
-                    return;
-                }
-                let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
-                let mut response = vec![0; res_should_be.len()];
-                if let Err(e) = sock.read_exact(&mut response) {
-                    eprintln!("ERROR: Couldn't read data from socket with error: {}\nBenchmark terminated", e);
-                    return;
-                } else {
-                    if response != res_should_be {
-                        eprintln!("ERROR: Ping test (HEYA) failed. Benchmark terminated");
-                        return;
-                    }
-                }
-            },
-            Err(e) => {
-                eprintln!("ERROR: Failed to connect to socket with error: {}\nBenchmark terminated", e);
-                return;
-            }
+        if let Err(e) = sanity_test(&host) {
+            eprintln!("ERROR: Sanity test failed: {}\nBenchmark terminated", e);
+            return;
         }
-        println!("Ping test succeeded!");
+        println!("Sanity test succeeded");
         let mut rand = thread_rng();
         if let Some(matches) = matches.subcommand_matches("testkey") {
             let numkeys = matches.value_of("count").unwrap();
@@ -323,6 +302,65 @@ mod benchtool {
             println!("{} SETs/sec", sets_per_sec);
             println!("===========================");
         }
+    }
+
+    /// # Sanity Test
+    ///
+    /// This function performs a 'sanity test' to determine if the benchmarks should be run; this test ensures
+    /// that the server is functioning as expected and we'll run the benchmarks assuming that the server will
+    /// act similarly in the future. This test currently runs a HEYA, SET, GET and DEL test, the latter three of which
+    /// are the ones that are benchmarked
+    ///
+    /// ## Limitations
+    /// A 65535 character long key/value pair is created and fetched. This random string has extremely low
+    /// chances of colliding with any existing key
+    fn sanity_test(host: &String) -> Result<(), Box<dyn Error>> {
+        let mut sock = TcpStream::connect(host)
+            .map_err(|e| format!("connection to host failed with error '{}'", e))?;
+        let query = terrapipe::proc_query("HEYA");
+        sock.write_all(&query)
+            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
+        let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
+        let mut response = vec![0; res_should_be.len()];
+        sock.read_exact(&mut response)
+            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
+        if response != res_should_be {
+            return Err("HEYA test failed".into());
+        }
+        let mut ran = thread_rng();
+        let key = ran_string(65535, &mut ran);
+        let value = ran_string(65535, &mut ran);
+        let query = terrapipe::proc_query(format!("SET {} {}", key, value));
+        sock.write_all(&query)
+            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
+        let res_should_be = "#2\n*1\n#2\n&1\n!1\n0\n".as_bytes().to_owned();
+        let mut response = vec![0; res_should_be.len()];
+        sock.read_exact(&mut response)
+            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
+        if response != res_should_be {
+            return Err("SET test failed".into());
+        }
+        let query = terrapipe::proc_query(format!("GET {}", key));
+        sock.write_all(&query)
+            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
+        let res_should_be = format!("#2\n*1\n#2\n&1\n+65535\n{}\n", value).into_bytes();
+        let mut response = vec![0; res_should_be.len()];
+        sock.read_exact(&mut response)
+            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
+        if response != res_should_be {
+            return Err("GET test failed".into());
+        }
+        let query = terrapipe::proc_query(format!("DEL {}", key));
+        sock.write_all(&query)
+            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
+        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".as_bytes().to_owned();
+        let mut response = vec![0; res_should_be.len()];
+        sock.read_exact(&mut response)
+            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
+        if response != res_should_be {
+            return Err("DEL test failed".into());
+        }
+        Ok(())
     }
 
     /// Returns the number of queries/sec
