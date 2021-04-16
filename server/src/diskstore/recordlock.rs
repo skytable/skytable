@@ -24,6 +24,11 @@
  *
 */
 
+//! # POSIX Advisory locking
+//!
+//! This module provides the `FileLock` struct that can be used for locking and/or unlocking files on
+//! POSIX-compliant systems
+
 use libc::c_int;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -36,11 +41,28 @@ extern "C" {
 }
 
 #[derive(Debug)]
+/// # File Lock
+/// A file lock object holds a `std::fs::File` that is used to `lock()` and `unlock()` a file with a given
+/// `filename` passed into the `lock()` method. The file lock is configured to drop the file lock when the
+/// object is dropped. The `file` field is essentially used to get the raw file descriptor for passing to
+/// the C function `lock_file` or `unlock_file` provided by the `native/fscposix.c` file (or `libflock-posix.a`)
+///
+/// **Note:** You need to lock a file first using this object before unlocking it!
+/// 
+/// ## Suggestions
+/// 
+/// It is always a good idea to attempt a lock release (unlock) explicitly than letting the `Drop` implementation
+/// run it for you as that may cause some Wild West panic if the lock release fails (haha!)
+/// 
 pub struct FileLock {
     file: File,
 }
 
 impl FileLock {
+    /// Lock a file with `filename`
+    /// 
+    /// If C's `fcntl` returns any error, then it is converted into the _Rust equivalent_ and returned
+    /// by this function
     pub fn lock(filename: &str) -> Result<Self, Error> {
         let file = OpenOptions::new()
             .read(false)
@@ -53,6 +75,10 @@ impl FileLock {
             x @ _ => Err(Error::from_raw_os_error(x)),
         }
     }
+    /// Unlock a file with `filename`
+    /// 
+    /// If C's `fctnl` returns any error, then it is converted into the _Rust equivalent_ and returned
+    /// by this function
     pub fn unlock(&self) -> Result<(), Error> {
         let raw_err = unsafe { unlock_file(self.file.as_raw_fd()) };
         match raw_err {
@@ -64,6 +90,9 @@ impl FileLock {
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        assert!(self.unlock().is_ok());
+        if self.unlock().is_err() {
+            // This is wild; uh oh
+            panic!("Failed to release file lock!");
+        }
     }
 }
