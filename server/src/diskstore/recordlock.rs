@@ -29,16 +29,7 @@
 //! This module provides the `FileLock` struct that can be used for locking and/or unlocking files on
 //! POSIX-compliant systems
 
-use libc::c_int;
 use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::Error;
-use std::os::unix::io::AsRawFd;
-
-extern "C" {
-    fn lock_file(fd: i32) -> c_int;
-    fn unlock_file(fd: i32) -> c_int;
-}
 
 #[derive(Debug)]
 /// # File Lock
@@ -48,65 +39,39 @@ extern "C" {
 /// the C function `lock_file` or `unlock_file` provided by the `native/fscposix.c` file (or `libflock-posix.a`)
 ///
 /// **Note:** You need to lock a file first using this object before unlocking it!
-/// 
+///
 /// ## Suggestions
-/// 
+///
 /// It is always a good idea to attempt a lock release (unlock) explicitly than letting the `Drop` implementation
 /// run it for you as that may cause some Wild West panic if the lock release fails (haha!)
-/// 
+///
 pub struct FileLock {
     file: File,
 }
 
-impl FileLock {
-    /// Lock a file with `filename`
-    /// 
-    /// If C's `fcntl` returns any error, then it is converted into the _Rust equivalent_ and returned
-    /// by this function
-    pub fn lock(filename: &str) -> Result<Self, Error> {
-        let file = OpenOptions::new()
-            .read(false)
-            .write(true)
-            .create(true)
-            .open(&filename)?;
-        let raw_err = unsafe { lock_file(file.as_raw_fd()) };
-        match raw_err {
-            0 => Ok(FileLock { file }),
-            x @ _ => Err(Error::from_raw_os_error(x)),
+#[cfg(unix)]
+mod __sys {
+    use libc;
+    use std::fs::File;
+    use std::io::Error;
+    use std::io::Result;
+    use std::os::unix::io::AsRawFd;
+    // TODO(@ohsayan): Support SOLARIS
+    #[cfg(not(target_os = "solaris"))]
+    fn flock(file: &File, flag: libc::c_int) -> Result<()> {
+        let ret = unsafe { libc::flock(file.as_raw_fd(), flag) };
+        if ret < 0 {
+            Err(Error::last_os_error())
+        } else {
+            Ok(())
         }
     }
-    /// Unlock a file with `filename`
-    /// 
-    /// If C's `fctnl` returns any error, then it is converted into the _Rust equivalent_ and returned
-    /// by this function
-    pub fn unlock(&self) -> Result<(), Error> {
-        let raw_err = unsafe { unlock_file(self.file.as_raw_fd()) };
-        match raw_err {
-            0 => Ok(()),
-            x @ _ => Err(Error::from_raw_os_error(x)),
-        }
-    }
-}
 
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        if self.unlock().is_err() {
-            // This is wild; uh oh
-            panic!("Failed to release file lock!");
-        }
+    fn lock_exclusive(file: &File) -> Result<()> {
+        flock(file, libc::LOCK_EX)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    #[test]
-    fn test_basic_file_locking() {
-        let _ = fs::File::create("blahblah.bin").unwrap();
-        let lock = FileLock::lock("blahblah.bin").unwrap();
-        lock.unlock().unwrap();
-        // delete the file
-        fs::remove_file("blahblah.bin").unwrap();
+    fn try_lock_exclusive(file: &File) -> Result<()> {
+        flock(file, libc::LOCK_EX | libc::LOCK_NB)
     }
 }

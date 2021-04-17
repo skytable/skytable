@@ -686,7 +686,6 @@ version = "0.5.1"
 dependencies = [
  "bincode",
  "bytes",
- "cc",
  "chrono",
  "clap",
  "env_logger",

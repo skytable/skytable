@@ -39,7 +39,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time;
 pub mod snapshot;
-#[cfg(unix)]
 pub mod recordlock;
 mod snapstore;
 

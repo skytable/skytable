@@ -63,8 +63,6 @@ use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
-#[cfg(unix)]
-use crate::diskstore::recordlock;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -472,15 +470,6 @@ pub async fn run(
             process::exit(0x100);
         }
     };
-    
-    #[cfg(unix)]
-    let lock = match recordlock::FileLock::lock("data.bin") {
-        Ok(lock) => lock,
-        Err(e) => {
-            log::error!("Failed to acquire lock on data file with error: '{}'", e);
-            process::exit(0x100);
-        }
-    };
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
         Ok(_) => (),
         Err(e) => match e.kind() {
@@ -560,11 +549,6 @@ pub async fn run(
                 continue;
             }
         }
-    }
-    #[cfg(unix)]
-    if let Err(e) = lock.unlock() {
-            log::error!("Failed to release lock on data file with error: '{}'", e);
-            process::exit(0x100);
     }
     terminal::write_info("Goodbye :)\n").unwrap();
 }
