@@ -96,3 +96,17 @@ impl Drop for FileLock {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    #[test]
+    fn test_basic_file_locking() {
+        let _ = fs::File::create("blahblah.bin").unwrap();
+        let lock = FileLock::lock("blahblah.bin").unwrap();
+        lock.unlock().unwrap();
+        // delete the file
+        fs::remove_file("blahblah.bin").unwrap();
+    }
+}
