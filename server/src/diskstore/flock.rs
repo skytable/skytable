@@ -124,6 +124,15 @@ mod tests {
         let _file2 = FileLock::lock("data2.bin").unwrap();
         std::fs::remove_file("data2.bin").unwrap();
     }
+    #[cfg(windows)]
+    #[test]
+    #[should_panic]
+    fn test_windows_with_two_unlock_attempts() {
+        // This is a windows specific test to ensure that our logic with the `unlocked` field is correct
+        let mut file = FileLock::lock("data3.bin").unwrap();
+        file.unlock().unwrap();
+        file.unlock().unwrap();
+    }
 }
 
 #[cfg(windows)]
