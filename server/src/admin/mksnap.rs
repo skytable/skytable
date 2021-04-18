@@ -133,7 +133,7 @@ pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TRe
             }
             let failed;
             {
-                match diskstore::flush_data(&path, &handle.acquire_read().get_ref()) {
+                match diskstore::write_to_disk(&path, &handle.acquire_read().get_ref()) {
                     Ok(_) => failed = false,
                     Err(e) => {
                         log::error!("Error while creating snapshot: {}", e);

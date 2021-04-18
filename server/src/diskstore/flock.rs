@@ -41,7 +41,7 @@ use std::io::Write;
 /// A file lock object holds a `std::fs::File` that is used to `lock()` and `unlock()` a file with a given
 /// `filename` passed into the `lock()` method. The file lock is configured to drop the file lock when the
 /// object is dropped. The `file` field is essentially used to get the raw file descriptor for passing to
-/// the C function `lock_file` or `unlock_file` provided by the `native/fscposix.c` file (or `libflock-posix.a`)
+/// the platform-specific lock/unlock methods.
 ///
 /// **Note:** You need to lock a file first using this object before unlocking it!
 ///

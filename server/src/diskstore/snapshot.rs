@@ -190,7 +190,7 @@ impl<'a> SnapshotEngine<'a> {
         let mut snapname = PathBuf::new();
         snapname.push(&self.snap_dir);
         snapname.push(self.get_snapname());
-        if let Err(e) = diskstore::flush_data(&snapname, &rlock.get_ref()) {
+        if let Err(e) = diskstore::write_to_disk(&snapname, &rlock.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
             self.dbref.unlock_snap();
             log::trace!("Released lock on the snapshot service");

@@ -463,8 +463,8 @@ pub async fn run(
 ) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let db = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
-        Ok(d) => d,
+    let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
+        Ok((db, lock)) => (db, lock),
         Err(e) => {
             log::error!("ERROR: {}", e);
             process::exit(0x100);
@@ -548,6 +548,12 @@ pub async fn run(
             } else {
                 continue;
             }
+        }
+    }
+    if let Some(mut lock) = lock {
+        if let Err(e) = lock.unlock() {
+            log::error!("Failed to release lock on data file with '{}'", e);
+            process::exit(0x100);
         }
     }
     terminal::write_info("Goodbye :)\n").unwrap();
