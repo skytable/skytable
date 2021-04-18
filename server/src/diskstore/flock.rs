@@ -48,7 +48,10 @@ use std::io::Write;
 /// ## Suggestions
 ///
 /// It is always a good idea to attempt a lock release (unlock) explicitly than letting the `Drop` implementation
-/// run it for you as that may cause some Wild West panic if the lock release fails (haha!)
+/// run it for you as that may cause some Wild West panic if the lock release fails (haha!).
+/// If you manually run unlock, then `Drop`'s implementation won't call another unlock to avoid an extra
+/// syscall; this is achieved with the `unlocked` flag (field) which is set to true when the `unlock()` function
+/// is called.
 ///
 pub struct FileLock {
     file: File,
@@ -56,6 +59,10 @@ pub struct FileLock {
 }
 
 impl FileLock {
+    /// Initialize a new `FileLock` by locking a file
+    ///
+    /// This function will create and lock a file if it doesn't exist or it
+    /// will create and lock a new file
     pub fn lock(filename: &str) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
@@ -68,14 +75,22 @@ impl FileLock {
             unlocked: false,
         })
     }
+    /// The internal lock function
+    ///
+    /// This is the function that actually locks the file and is kept separate only for purposes
+    /// of maintainability
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
+    /// Unlock the file
+    ///
+    /// This sets the `unlocked` flag to true
     pub fn unlock(&mut self) -> Result<()> {
         __sys::unlock_file(&self.file)?;
         self.unlocked = true;
         Ok(())
     }
+    /// Write something to this file
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
         self.file.write_all(bytes)
     }
@@ -83,6 +98,7 @@ impl FileLock {
 
 impl Drop for FileLock {
     fn drop(&mut self) {
+        // If the file isn't unlocked already, attempt to unlock it
         if !self.unlocked {
             if self.unlock().is_err() {
                 // This is wild; uh, oh
@@ -112,6 +128,9 @@ mod tests {
 
 #[cfg(windows)]
 mod __sys {
+    //! # Windows platform-specific file locking
+    //! This module contains methods used by the `FileLock` object in this module to lock and/or
+    //! unlock files.
     use std::fs::File;
     use std::io::{Error, Result};
     use std::mem;
@@ -119,12 +138,18 @@ mod __sys {
     use winapi::shared::minwindef::{BOOL, DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
+    /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
     }
+    /// Try to obtain an exclusive lock and **immediately return an error if this is blocking**
     pub fn try_lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY)
     }
+    /// Use the LockFileEx method from Windows fileapi.h to set flags on a file
+    ///
+    /// This is the internal function that is used by `lock_ex` and `try_lock_ex` to lock and/or
+    /// unlock files on Windows platforms.
     fn lock_file(file: &File, flags: DWORD) -> Result<()> {
         unsafe {
             let mut overlapped = mem::zeroed();
@@ -136,6 +161,7 @@ mod __sys {
             }
         }
     }
+    /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
         let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
         if ret == 0 {
@@ -148,6 +174,9 @@ mod __sys {
 
 #[cfg(unix)]
 mod __sys {
+    //! # Unix platform-specific file locking
+    //! This module contains methods used by the `FileLock` object in this module to lock and/or
+    //! unlock files.
     use libc::c_int;
     use std::fs::File;
     use std::io::Error;
@@ -155,10 +184,14 @@ mod __sys {
     use std::os::unix::io::AsRawFd;
 
     extern "C" {
+        /// Block and acquire an exclusive lock with `libc`'s `flock`
         fn lock_exclusive(fd: i32) -> c_int;
+        /// Attempt to acquire an exclusive lock in a non-blocking manner with `libc`'s `flock`
         fn try_lock_exclusive(fd: i32) -> c_int;
+        /// Attempt to unlock a file with `libc`'s flock
         fn unlock(fd: i32) -> c_int;
     }
+    /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         let errno = unsafe {
             // UNSAFE(@ohsayan): This is completely fine to do as we've already written the function
@@ -170,6 +203,7 @@ mod __sys {
             x @ _ => Err(Error::from_raw_os_error(x)),
         }
     }
+    /// Try to obtain an exclusive lock and **immediately return an error if this is blocking**
     pub fn try_lock_ex(file: &File) -> Result<()> {
         let errno = unsafe {
             // UNSAFE(@ohsayan): Again, we've written the function ourselves and know what is going on!
@@ -180,6 +214,7 @@ mod __sys {
             x @ _ => Err(Error::from_raw_os_error(x)),
         }
     }
+    /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
         let errno = unsafe { unlock(file.as_raw_fd()) };
         match errno {
