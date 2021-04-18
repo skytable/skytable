@@ -686,6 +686,7 @@ version = "0.5.1"
 dependencies = [
  "bincode",
  "bytes",
+ "cc",
  "chrono",
  "clap",
  "env_logger",
@@ -704,6 +705,7 @@ dependencies = [
  "tokio",
  "tokio-openssl",
  "toml",
+ "winapi",
 ]
 
 [[package]]

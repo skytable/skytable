@@ -25,46 +25,36 @@
  */
 
 #include <errno.h>
-#include <fcntl.h>
+#include <sys/file.h>
 
-/* Lock a file */
-int lock_file(int descriptor) {
+/* Acquire an exclusive lock for a file with the given descriptor */
+int lock_exclusive(int descriptor) {
   if (descriptor < 0) {
     return EBADF;
   }
-
-  struct flock fl;
-
-  /* Lock the whole file - not just a part of it! */
-  fl.l_type = F_WRLCK;
-  fl.l_whence = SEEK_SET;
-  fl.l_start = 0;
-  fl.l_len = 0;
-
-  if (fcntl(descriptor, F_SETLKW, &fl) == -1) {
+  if (flock(descriptor, LOCK_EX) == -1) {
     return errno;
   }
-
   return 0;
 }
 
-/* Unlock a file */
-int unlock_file(int descriptor) {
-  struct flock fl;
-
+int try_lock_exclusive(int descriptor) {
   if (descriptor < 0) {
     return EBADF;
   }
-
-  /* Unlock the whole file - not just a part of it! */
-  fl.l_type = F_UNLCK;
-  fl.l_whence = SEEK_SET;
-  fl.l_start = 0;
-  fl.l_len = 0;
-
-  if (fcntl(descriptor, F_SETLKW, &fl) == -1) {
+  if (flock(descriptor, LOCK_EX | LOCK_NB) == -1) {
     return errno;
   }
+  return 0;
+}
 
+/* Unlock a file with the given descriptor */
+int unlock(int descriptor) {
+  if (descriptor < 0) {
+    return EBADF;
+  }
+  if (flock(descriptor, LOCK_UN) == -1) {
+    return errno;
+  }
   return 0;
 }
