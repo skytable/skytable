@@ -36,8 +36,10 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
 use std::path::PathBuf;
+use std::process;
 use std::time::Duration;
 use tokio::time;
+pub mod flock;
 pub mod snapshot;
 mod snapstore;
 
@@ -82,15 +84,26 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data.bin` file
-pub fn flush_data(filename: &PathBuf, data: &HashMap<String, Data>) -> TResult<()> {
+pub fn flush_data(file: &mut flock::FileLock, data: &HashMap<String, Data>) -> TResult<()> {
+    let encoded = serialize(&data)?;
+    file.write(&encoded)?;
+    Ok(())
+}
+
+pub fn write_to_disk(file: &PathBuf, data: &HashMap<String, Data>) -> TResult<()> {
+    let mut file = fs::File::create(&file)?;
+    let encoded = serialize(&data)?;
+    file.write_all(&encoded)?;
+    Ok(())
+}
+
+fn serialize(data: &HashMap<String, Data>) -> TResult<Vec<u8>> {
     let ds: DiskStoreFromMemory = (
         data.keys().into_iter().collect(),
         data.values().map(|val| val.get_inner_ref()).collect(),
     );
     let encoded = bincode::serialize(&ds)?;
-    let mut file = fs::File::create(filename)?;
-    file.write_all(&encoded)?;
-    Ok(())
+    Ok(encoded)
 }
 
 /// The bgsave_scheduler calls the bgsave task in `CoreDB` after `every` seconds
@@ -98,7 +111,11 @@ pub fn flush_data(filename: &PathBuf, data: &HashMap<String, Data>) -> TResult<(
 /// The time after which the scheduler will wake up the BGSAVE task is determined by
 /// `bgsave_cfg` which is to be passed as an argument. If BGSAVE is disabled, this function
 /// immediately returns
-pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
+pub async fn bgsave_scheduler(
+    handle: coredb::CoreDB,
+    bgsave_cfg: BGSave,
+    mut file: flock::FileLock,
+) {
     let duration = match bgsave_cfg {
         BGSave::Disabled => {
             // So, there's no BGSAVE! Looks like our user's pretty confident
@@ -114,7 +131,7 @@ pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
         }
     };
     while !handle.shared.is_termsig() {
-        if handle.shared.run_bgsave() {
+        if handle.shared.run_bgsave(&mut file) {
             tokio::select! {
                 // Sleep until `duration` from the current time instant
                 _ = time::sleep_until(time::Instant::now() + duration) => {}
@@ -124,5 +141,9 @@ pub async fn bgsave_scheduler(handle: coredb::CoreDB, bgsave_cfg: BGSave) {
         } else {
             handle.shared.bgsave_task.notified().await
         }
+    }
+    if let Err(e) = file.unlock() {
+        log::error!("Failed to release lock on data file with error '{}'", e);
+        process::exit(0x100);
     }
 }

@@ -58,9 +58,9 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
 name = "cc"
-version = "1.0.66"
+version = "1.0.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c0496836a84f8d0495758516b8621a622beb77c0fed418570e50764093ced48"
+checksum = "e3c69b077ad434294d3ce9f1f6143a2a4b89a8a2d54ef813d85003a4fd1137fd"
 
 [[package]]
 name = "cfg-if"
@@ -299,9 +299,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.86"
+version = "0.2.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7282d924be3275cec7f6756ff4121987bc6481325397dde6ba3e7802b1a8b1c"
+checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
 
 [[package]]
 name = "libsky"
@@ -686,12 +686,14 @@ version = "0.5.1"
 dependencies = [
  "bincode",
  "bytes",
+ "cc",
  "chrono",
  "clap",
  "env_logger",
  "futures",
  "jemallocator",
  "lazy_static",
+ "libc",
  "libsky",
  "log",
  "openssl",
@@ -703,6 +705,7 @@ dependencies = [
  "tokio",
  "tokio-openssl",
  "toml",
+ "winapi",
 ]
 
 [[package]]

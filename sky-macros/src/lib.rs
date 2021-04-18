@@ -64,11 +64,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        let asyncdb = crate::coredb::CoreDB::new(
-            crate::config::BGSave::Disabled,
-            crate::config::SnapshotConfig::default(),
-            None
-        ).unwrap();
+        let asyncdb = crate::coredb::CoreDB::new_empty(0, std::sync::Arc::new(None));
         let addr = crate::tests::start_test_server(#rand, Some(asyncdb.clone())).await;
         let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
         #body

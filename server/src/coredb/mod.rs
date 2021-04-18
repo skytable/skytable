@@ -34,6 +34,7 @@ use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
+use diskstore::flock;
 use diskstore::PERSIST_FILE;
 use libsky::TResult;
 use parking_lot::RwLock;
@@ -128,7 +129,7 @@ impl Shared {
     /// It runs BGSAVE and then returns control to the caller. The caller is responsible
     /// for periodically calling BGSAVE. This returns `false`, **if** the database
     /// is shutting down. Otherwise `true` is returned
-    pub fn run_bgsave(&self) -> bool {
+    pub fn run_bgsave(&self, file: &mut flock::FileLock) -> bool {
         log::trace!("BGSAVE started");
         let rlock = self.table.read();
         if rlock.terminate || rlock.poisoned {
@@ -136,7 +137,7 @@ impl Shared {
             return false;
         }
         // Kick in BGSAVE
-        match diskstore::flush_data(&PERSIST_FILE, rlock.get_ref()) {
+        match diskstore::flush_data(file, rlock.get_ref()) {
             Ok(_) => {
                 log::info!("BGSAVE completed successfully");
                 return true;
@@ -271,7 +272,7 @@ impl CoreDB {
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
         restore_file: Option<PathBuf>,
-    ) -> TResult<Self> {
+    ) -> TResult<(Self, Option<flock::FileLock>)> {
         let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
@@ -302,14 +303,20 @@ impl CoreDB {
         } else {
             CoreDB::new_empty(background_tasks, snapcfg)
         };
-        // Spawn the background save task in a separate task
-        tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave));
         // Spawn the snapshot service in a separate task
         tokio::spawn(diskstore::snapshot::snapshot_service(
             db.clone(),
             snapshot_cfg,
         ));
-        Ok(db)
+        let lock = flock::FileLock::lock("data.bin")
+            .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
+        if bgsave.is_disabled() {
+            Ok((db, Some(lock)))
+        } else {
+            // Spawn the BGSAVE service in a separate task
+            tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave, lock));
+            Ok((db, None))
+        }
     }
     /// Create an empty in-memory table
     pub fn new_empty(background_tasks: usize, snapcfg: Arc<Option<SnapshotStatus>>) -> Self {
@@ -350,7 +357,7 @@ impl CoreDB {
             Some(wlock) => wlock,
             None => return Err("Can no longer flush data; coretable is poisoned".into()),
         };
-        diskstore::flush_data(&PERSIST_FILE, &data.coremap)?;
+        diskstore::write_to_disk(&PERSIST_FILE, &data.coremap)?;
         Ok(())
     }
 
