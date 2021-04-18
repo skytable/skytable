@@ -93,6 +93,13 @@ mod tests {
         file.write(&[1, 2, 3]).unwrap();
         file.unlock().unwrap();
     }
+    #[test]
+    #[should_panic]
+    fn test_fail_with_two_flocks() {
+        let _file = FileLock::lock("data2.bin").unwrap();
+        let _file2 = FileLock::lock("data2.bin").unwrap();
+        std::fs::remove_file("data2.bin").unwrap();
+    }
 }
 
 #[cfg(windows)]
