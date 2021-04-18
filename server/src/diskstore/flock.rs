@@ -99,6 +99,7 @@ mod tests {
 mod __sys {
     use std::io::{Error, Result};
     use std::mem;
+    use std::fs::File;
     use std::os::windows::io::AsRawHandle;
     use winapi::shared::minwindef::{BOOL, DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
