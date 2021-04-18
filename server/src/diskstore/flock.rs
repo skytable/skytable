@@ -52,6 +52,8 @@ use std::io::Write;
 ///
 pub struct FileLock {
     file: File,
+    #[cfg(windows)]
+    unlocked: bool,
 }
 
 impl FileLock {
@@ -62,13 +64,24 @@ impl FileLock {
             .write(true)
             .open(filename)?;
         Self::_lock(&file)?;
-        Ok(Self { file })
+        Ok(Self {
+            file,
+            #[cfg(windows)]
+            unlocked: false,
+        })
     }
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
-    pub fn unlock(&self) -> Result<()> {
+    #[cfg(not(windows))]
+    pub fn unlock(&mut self) -> Result<()> {
         __sys::unlock_file(&self.file)
+    }
+    #[cfg(windows)]
+    pub fn unlock(&mut self) -> Result<()> {
+        __sys::unlock_file(&self.file)?;
+        self.unlocked = true;
+        Ok(())
     }
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
         self.file.write_all(bytes)
@@ -76,10 +89,20 @@ impl FileLock {
 }
 
 impl Drop for FileLock {
+    #[cfg(not(windows))]
     fn drop(&mut self) {
         if self.unlock().is_err() {
             // This is wild; uh, oh
             panic!("Failed to unlock file when dropping value");
+        }
+    }
+    #[cfg(windows)]
+    fn drop(&mut self) {
+        if !self.unlocked {
+            if self.unlock().is_err() {
+                // This is wild; uh, oh
+                panic!("Failed to unlock file when dropping value");
+            }
         }
     }
 }
