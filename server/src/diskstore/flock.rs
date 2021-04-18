@@ -104,9 +104,9 @@ mod tests {
 
 #[cfg(windows)]
 mod __sys {
+    use std::fs::File;
     use std::io::{Error, Result};
     use std::mem;
-    use std::fs::File;
     use std::os::windows::io::AsRawHandle;
     use winapi::shared::minwindef::{BOOL, DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
@@ -129,7 +129,7 @@ mod __sys {
         }
     }
     pub fn unlock_file(file: &File) -> Result<()> {
-        let ret = UnlockFile(file.as_raw_handle(), 0, 0, !0, !0);
+        let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
         if ret == 0 {
             Err(Error::last_os_error())
         } else {
