@@ -111,10 +111,12 @@ jobs:
       - name: Archive artifacts
         shell: cmd
         run: |
-          cargo build --release
+          cargo build
           rm -rf dist
           mkdir dist
-          move target\debug\*.exe dist 
+          move target\debug\*.exe dist
+        env:
+          RUSTFLAGS: -Ctarget-feature=+crt-static 
         if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
 
       - name: Save artifacts
