@@ -174,7 +174,46 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     }
     let mut rng = thread_rng();
     let mut in_set = HashSet::<u16>::new();
-
+    /*
+     * As per [this post](https://stackoverflow.com/questions/63257991/port-not-shown-to-be-used-in-netstat-but-trying-to-use-the-port-is-denied-by-wi)
+     * on SO, Hyper-V blocks several ports on Windows. As our runners are currently hosted on GHA which use Hyper-V VMs
+     * these ports will be blocked too and thse blocks are the reasons behind spurious test failures on Windows.
+     * As a consequence to this, we will exclude these port ranges from the random port allocation set
+     * (by setting them to 'already used' or 'already in in_set').
+     */
+    #[cfg(windows)]
+    {
+        macro_rules! insert {
+            ($hmap:ident, $($x:literal - $y:literal),*) => {
+                $(
+                    ($x..=$y).into_iter().for_each(|val| {$hmap.insert(val);});
+                )*
+            };
+        }
+        insert!(
+            in_set,
+            49805 - 49904,
+            50060 - 50159,
+            50160 - 50259,
+            50360 - 50459,
+            50870 - 50969,
+            50970 - 51069,
+            51070 - 51169,
+            51270 - 51369,
+            52353 - 52452,
+            52453 - 52552,
+            52553 - 52652,
+            52653 - 52752,
+            52853 - 52952,
+            52953 - 53052,
+            53053 - 53152,
+            53324 - 53423,
+            56247 - 56346,
+            56347 - 56446,
+            56547 - 56646,
+            56647 - 56746
+        );
+    }
     let mut result = quote! {};
     for item in content {
         // We set the port range to the 'dynamic port range' as per IANA's allocation guidelines
