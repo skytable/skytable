@@ -24,6 +24,14 @@
  *
 */
 
+//! Tests for the key/value engine and its operations
+//!
+//! The test functions here might seem slightly _mysterious_ -- but they aren't! The `dbtest` macro from the
+//! `sky_macros` crate is what does the magic. It provides each function with an async `stream` to write to.
+//! This stream is connected over TCP to a database instance. Once the test completes, the database instance
+//! and its data is destroyed; but the spawned database instances are started up in a way to not store any
+//! data at all, so this is just a precautionary step.
+
 #[sky_macros::dbtest(skip = "set_values")]
 mod __private {
     use crate::protocol::responses::fresp;
