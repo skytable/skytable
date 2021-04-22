@@ -1,85 +1,26 @@
+# The current drawback of this workflow is that it cannot auto update the current rust version
+# This should be fixed in the future
+# We don't run rustup install(s) from this script to avoid excess disk writes lowering the life of our Mac's
+# NVMe
+
 kind: pipeline
-name: Build and Test
-environment:
-  CARGO_TARGET_DIR: /drone/src/target
-  CARGO_BUILD_TARGET_DIR: /drone/src/target
+type: ssh
+name: Run tests on M1
+
+server:
+  host:
+    from_secret: host
+  user:
+    from_secret: user
+  password:
+    from_secret: password
 
 steps:
-  - name: restore-cache
-    image: plugins/s3-cache
-    settings:
-      path: /tdbcache
-      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
-      pull: true
-      endpoint:
-        from_secret: MIO_WWW
-      access_key:
-        from_secret: MIO_ACCESS
-      secret_key:
-        from_secret: MIO_KEY
-      restore: true
-  - name: run-tests
-    image: rust
-    commands:
-      - cargo test --verbose -j 10
-
-  - name: build-docker-binary
-    image: rust
-    commands:
-      - cargo build --release -j 10
-    when:
-      ref:
-        - refs/heads/next
-        - refs/tags/*
-      event:
-        - tag
-        - push
-
-  - name: push-docker-image
-    image: plugins/docker
-    settings:
-      repo: Skytable/sdb
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      auto_tag: true
-      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
-    when:
-      ref:
-        - refs/heads/next
-        - refs/tags/*
-      event:
-        - tag
-        - push
-  - name: rebuild-cache
-    image: plugins/s3-cache
-    settings:
-      path: /tdbcache
-      pull: true
-      endpoint:
-        from_secret: MIO_WWW
-      access_key:
-        from_secret: MIO_ACCESS
-      secret_key:
-        from_secret: MIO_KEY
-      rebuild: true
-      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
-      mount:
-        - target
-
-  - name: flush-cache
-    image: plugins/s3-cache
-    settings:
-      path: /tdbcache
-      flush_path: /tdbcache/flush/${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}
-      pull: true
-      endpoint:
-        from_secret: MIO_WWW
-      access_key:
-        from_secret: MIO_ACCESS
-      secret_key:
-        from_secret: MIO_KEY
-      flush: true
-      flush_age: 30
-      filename: ${DRONE_STAGE_OS}-${DRONE_STAGE_ARCH}.tar
+- name: Setup rust and test
+  environment:
+    SRCENV:
+      from_secret: srcenv
+  commands:
+    - source $SRCENV/.cargo/env
+    - export RUSTUP_HOME=$SRCENV/.rustup
+    - cargo test --verbose
