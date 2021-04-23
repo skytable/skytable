@@ -24,3 +24,5 @@ steps:
     - source $SRCENV/.cargo/env
     - export RUSTUP_HOME=$SRCENV/.rustup
     - cargo test --verbose
+
+# This is a dangerous random comment
