@@ -1,7 +1,4 @@
-# The current drawback of this workflow is that it cannot auto update the current rust version
-# This should be fixed in the future
-# We don't run rustup install(s) from this script to avoid excess disk writes lowering the life of our Mac's
-# NVMe
+# The current drawback of this workflow is that it doesn't cache artifacts
 
 kind: pipeline
 type: ssh
@@ -16,7 +13,10 @@ server:
     from_secret: password
 
 steps:
-- name: Setup rust and test
+- name: Update rust
+  commands:
+    - /usr/local/bin/rustup-update
+- name: Run tests
   environment:
     SRCENV:
       from_secret: srcenv
