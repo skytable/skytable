@@ -1,4 +1,4 @@
-# The current drawback of this workflow is that it doesn't cache artifacts
+# This workflow doesn't support cache invalidation for unused dependencies at the moment
 
 kind: pipeline
 type: ssh
@@ -20,6 +20,10 @@ steps:
   environment:
     SRCENV:
       from_secret: srcenv
+    CARGO_HOME:
+      from_secret: cargohome
+    CARGO_TARGET_DIR:
+      from_secret: cargotarget
   commands:
     - source $SRCENV/.cargo/env
     - export RUSTUP_HOME=$SRCENV/.rustup
