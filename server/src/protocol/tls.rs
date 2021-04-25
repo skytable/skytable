@@ -189,8 +189,8 @@ impl Drop for SslConnectionHandler {
 }
 
 pub struct SslConnection {
-    stream: BufWriter<SslStream<TcpStream>>,
-    buffer: BytesMut,
+    pub stream: BufWriter<SslStream<TcpStream>>,
+    pub buffer: BytesMut,
 }
 
 impl SslConnection {
@@ -227,7 +227,7 @@ impl SslConnection {
         self.stream.get_ref().get_ref().peer_addr()
     }
     /// Try to parse a query from the buffered data
-    fn try_query(&mut self) -> Result<ParseResult, ()> {
+    fn try_query(&self) -> Result<ParseResult, ()> {
         if self.buffer.is_empty() {
             return Err(());
         }

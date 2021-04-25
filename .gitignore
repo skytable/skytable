@@ -6,3 +6,4 @@ snapstore.bin
 snapstore.partmap
 /snapshots 
 /.idea
+.DS_Store

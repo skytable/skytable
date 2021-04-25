@@ -44,6 +44,7 @@ use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 pub mod tls;
+mod con;
 
 /// A TCP connection wrapper
 pub struct Connection {

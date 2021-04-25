@@ -24,7 +24,6 @@ regex = "1.4.5"
 sky_macros = {path="../sky-macros"}
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.33", features = ["vendored"] }
-
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 
