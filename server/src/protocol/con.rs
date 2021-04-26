@@ -296,7 +296,7 @@ where
             };
             match try_df {
                 Ok(QueryResult::Q(s)) => {
-                    todo!()
+                    self.db.execute_query(s, &mut self.con).await?;
                 }
                 Ok(QueryResult::E(r)) => {
                     log::debug!("Failed to read query!");

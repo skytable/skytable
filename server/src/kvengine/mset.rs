@@ -24,15 +24,23 @@
  *
 */
 
-use crate::coredb::{self, CoreDB};
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
+use crate::coredb::{self};
+use crate::protocol::con::prelude::*;
+use crate::protocol::responses;
 use crate::resp::GroupBegin;
-use libsky::TResult;
+
 use std::collections::hash_map::Entry;
 
 /// Run an `MSET` query
-pub async fn mset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn mset<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys

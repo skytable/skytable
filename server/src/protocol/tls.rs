@@ -24,25 +24,16 @@
  *
 */
 
-use super::deserializer;
-use super::responses;
-use super::IoResult;
-use super::ParseResult;
-use super::QueryResult;
-use crate::dbnet::Con;
 use crate::dbnet::Terminator;
-use crate::resp::Writable;
+use crate::protocol::ConnectionHandler;
 use crate::CoreDB;
-use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;
 use libsky::BUF_CAP;
 use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
-use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::BufWriter;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
@@ -128,13 +119,13 @@ impl SslListener {
             // that's why we will forget it
             self.climit.acquire().await.unwrap().forget();
             let stream = self.accept().await?;
-            let mut sslhandle = SslConnectionHandler {
-                db: self.db.clone(),
-                con: SslConnection::new(stream),
-                climit: self.climit.clone(),
-                terminator: Terminator::new(self.signal.subscribe()),
-                _term_sig_tx: self.terminate_tx.clone(),
-            };
+            let mut sslhandle = ConnectionHandler::new(
+                self.db.clone(),
+                SslConnection::new(stream),
+                self.climit.clone(),
+                Terminator::new(self.signal.subscribe()),
+                self.terminate_tx.clone(),
+            );
             tokio::spawn(async move {
                 log::debug!("Spawned listener task");
                 if let Err(e) = sslhandle.run().await {
@@ -142,49 +133,6 @@ impl SslListener {
                 }
             });
         }
-    }
-}
-
-pub struct SslConnectionHandler {
-    db: CoreDB,
-    con: SslConnection,
-    climit: Arc<Semaphore>,
-    terminator: Terminator,
-    _term_sig_tx: mpsc::Sender<()>,
-}
-
-impl SslConnectionHandler {
-    pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("SslConnectionHanler initialized to handle a remote client");
-        while !self.terminator.is_termination_signal() {
-            let try_df = tokio::select! {
-                tdf = self.con.read_query() => tdf,
-                _ = self.terminator.receive_signal() => {
-                    return Ok(());
-                }
-            };
-            match try_df {
-                Ok(QueryResult::Q(s)) => {
-                    self.db
-                        .execute_query(s, &mut Con::init_secure(&mut self.con))
-                        .await?
-                }
-                Ok(QueryResult::E(r)) => {
-                    log::debug!("Failed to read query!");
-                    self.con.close_conn_with_error(r).await?
-                }
-                Ok(QueryResult::Empty) => return Ok(()),
-                Err(e) => return Err(e.into()),
-            }
-        }
-        Ok(())
-    }
-}
-impl Drop for SslConnectionHandler {
-    fn drop(&mut self) {
-        // Make sure that the permit is returned to the semaphore
-        // in the case that there is a panic inside
-        self.climit.add_permits(1);
     }
 }
 
@@ -199,74 +147,5 @@ impl SslConnection {
             stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(BUF_CAP),
         }
-    }
-    async fn read_again(&mut self) -> Result<(), String> {
-        match self.stream.read_buf(&mut self.buffer).await {
-            Ok(0) => {
-                // If 0 bytes were received, then the remote end closed
-                // the connection
-                if self.buffer.is_empty() {
-                    return Ok(());
-                } else {
-                    return Err(format!(
-                        "Connection reset while reading from {}",
-                        if let Ok(p) = self.get_peer() {
-                            p.to_string()
-                        } else {
-                            "peer".to_owned()
-                        }
-                    )
-                    .into());
-                }
-            }
-            Ok(_) => Ok(()),
-            Err(e) => return Err(format!("{}", e)),
-        }
-    }
-    fn get_peer(&self) -> IoResult<SocketAddr> {
-        self.stream.get_ref().get_ref().peer_addr()
-    }
-    /// Try to parse a query from the buffered data
-    fn try_query(&self) -> Result<ParseResult, ()> {
-        if self.buffer.is_empty() {
-            return Err(());
-        }
-        Ok(deserializer::parse(&self.buffer))
-    }
-    pub async fn read_query(&mut self) -> Result<QueryResult, String> {
-        self.read_again().await?;
-        loop {
-            match self.try_query() {
-                Ok(ParseResult::Query(query, forward)) => {
-                    self.buffer.advance(forward);
-                    return Ok(QueryResult::Q(query));
-                }
-                Ok(ParseResult::BadPacket) => {
-                    self.buffer.clear();
-                    return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
-                }
-                Err(_) => {
-                    return Ok(QueryResult::Empty);
-                }
-                _ => (),
-            }
-            self.read_again().await?;
-        }
-    }
-    /// Write a response to the stream
-    pub async fn write_response(&mut self, streamer: impl Writable) -> TResult<()> {
-        streamer.write(&mut self.stream).await?;
-        Ok(())
-    }
-    pub async fn flush_stream(&mut self) -> TResult<()> {
-        self.stream.flush().await?;
-        Ok(())
-    }
-    /// Wraps around the `write_response` used to differentiate between a
-    /// success response and an error response
-    pub async fn close_conn_with_error(&mut self, resp: Vec<u8>) -> TResult<()> {
-        self.write_response(resp).await?;
-        self.stream.flush().await?;
-        Ok(())
     }
 }

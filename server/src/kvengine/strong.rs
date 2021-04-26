@@ -35,17 +35,25 @@
 //! slow things down due to the checks performed.
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
-use crate::coredb::{CoreDB, Data};
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
-use libsky::TResult;
+use crate::coredb::Data;
+use crate::protocol::con::prelude::*;
+use crate::protocol::responses;
+
 use std::hint::unreachable_unchecked;
 
 /// Run an `SSET` query
 ///
 /// This either returns `Okay` if all the keys were set, or it returns an
 /// `Overwrite Error` or code `2`
-pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn sset<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
@@ -116,7 +124,15 @@ pub async fn sset(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
 ///
 /// This either returns `Okay` if all the keys were `del`eted, or it returns a
 /// `Nil`, which is code `1`
-pub async fn sdel(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn sdel<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
@@ -182,7 +198,15 @@ pub async fn sdel(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResu
 ///
 /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
 /// or code `1`
-pub async fn supdate(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn supdate<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

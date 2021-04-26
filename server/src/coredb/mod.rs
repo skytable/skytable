@@ -29,7 +29,6 @@
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
-use crate::dbnet::Con;
 use crate::diskstore;
 use crate::protocol::con::prelude::*;
 use crate::protocol::Query;
@@ -253,28 +252,17 @@ impl CoreDB {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query(&self, query: Query, mut con: &mut Con<'_>) -> TResult<()> {
-        match query {
-            Query::Simple(q) => {
-                queryengine::execute_simple(&self, &mut con, q).await?;
-                // Once we're done executing, flush the stream
-                con.flush_stream().await
-            }
-            // TODO(@ohsayan): Pipeline commands haven't been implemented yet
-            Query::Pipelined(_) => unimplemented!(),
-        }
-    }
-
-    pub async fn execute<T, Strm>(&self, query: Query, mut con: &mut T) -> TResult<()>
+    pub async fn execute_query<T, Strm>(&self, query: Query, con: &mut T) -> TResult<()>
     where
         T: ProtocolConnectionExt<Strm>,
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
     {
         match query {
             Query::Simple(q) => {
-                queryengine::execute(&self, con, q).await?;
+                queryengine::execute_simple(&self, con, q).await?;
                 con.flush_stream().await?;
             }
+            // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }
         Ok(())

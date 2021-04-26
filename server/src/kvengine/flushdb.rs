@@ -24,13 +24,21 @@
  *
 */
 
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
-use libsky::TResult;
+
+use crate::protocol::con::prelude::*;
+use crate::protocol::responses;
+
 
 /// Delete all the keys in the database
-pub async fn flushdb(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn flushdb<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     if act.howmany() != 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }

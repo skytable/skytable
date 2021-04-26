@@ -44,11 +44,8 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
-use crate::protocol::tls::SslConnection;
 use crate::protocol::tls::SslListener;
-use crate::protocol::Connection;
 use crate::protocol::Listener;
-use crate::resp::Writable;
 use crate::CoreDB;
 use libsky::util::terminal;
 use libsky::TResult;
@@ -95,48 +92,6 @@ impl Terminator {
     }
 }
 
-/// # Connection Wrapper
-///
-/// A `Con` object holds a mutable reference to a standard TCP stream or to
-/// an encrypted connection (over the `SslListener` object). It provides a few
-/// methods which are provided by the underlying interface.
-pub enum Con<'a> {
-    /// A secure TLS connection
-    Secure(&'a mut SslConnection),
-    /// An insecure ('standard') TCP connection
-    Insecure(&'a mut Connection),
-}
-
-impl<'a> Con<'a> {
-    /// Create a new **unencrypted** connection instance
-    pub fn init<'b>(con: &'b mut Connection) -> Self
-    where
-        'b: 'a,
-    {
-        Con::Insecure(con)
-    }
-    /// Create a new **encrypted** connection instance
-    pub fn init_secure<'b>(con: &'b mut SslConnection) -> Self
-    where
-        'b: 'a,
-    {
-        Con::Secure(con)
-    }
-    /// Flush the stream that is held by the underlying connection
-    pub async fn flush_stream(&mut self) -> TResult<()> {
-        match self {
-            Con::Secure(con) => con.flush_stream().await,
-            Con::Insecure(con) => con.flush_stream().await,
-        }
-    }
-    /// Write bytes to the underlying stream that implement the `Writable` trait
-    pub async fn write_response(&mut self, resp: impl Writable) -> TResult<()> {
-        match self {
-            Con::Insecure(con) => con.write_response(resp).await,
-            Con::Secure(con) => con.write_response(resp).await,
-        }
-    }
-}
 use std::io::{self, prelude::*};
 
 /// Multiple Listener Interface
