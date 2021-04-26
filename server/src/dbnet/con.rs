@@ -24,18 +24,18 @@
  *
 */
 
-use super::deserializer;
-use super::responses;
+use super::tcp::Connection;
+use crate::dbnet::tls::SslConnection;
 use crate::dbnet::Terminator;
-use crate::protocol::tls::SslConnection;
-use crate::protocol::Connection;
-use crate::protocol::ParseResult;
-use crate::protocol::QueryResult;
+use crate::protocol;
+use crate::protocol::responses;
 use crate::resp::Writable;
 use crate::CoreDB;
 use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;
+use protocol::ParseResult;
+use protocol::QueryResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -90,7 +90,7 @@ where
         if self.get_buffer().is_empty() {
             return Err(());
         }
-        Ok(deserializer::parse(&self.get_buffer()))
+        Ok(protocol::parse(&self.get_buffer()))
     }
     /// Read a query from the remote end
     ///

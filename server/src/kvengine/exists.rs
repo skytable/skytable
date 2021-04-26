@@ -28,7 +28,7 @@
 //! This module provides functions to work with `EXISTS` queries
 
 
-use crate::protocol::con::prelude::*;
+use crate::dbnet::con::prelude::*;
 use crate::protocol::responses;
 use crate::resp::GroupBegin;
 

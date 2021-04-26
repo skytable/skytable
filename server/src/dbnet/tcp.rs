@@ -1,5 +1,5 @@
 /*
- * Created on Fri Dec 18 2020
+ * Created on Mon Apr 26 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,82 +24,71 @@
  *
 */
 
+use crate::dbnet::con::ConnectionHandler;
 use crate::dbnet::Terminator;
-use crate::protocol::ConnectionHandler;
+use crate::protocol;
 use crate::CoreDB;
 use bytes::BytesMut;
 use libsky::TResult;
 use libsky::BUF_CAP;
-use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
-use std::pin::Pin;
+pub use protocol::ParseResult;
+pub use protocol::Query;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::BufWriter;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::{self, Duration};
-use tokio_openssl::SslStream;
+use tokio::time;
 
-pub struct SslListener {
+/// A TCP connection wrapper
+pub struct Connection {
+    /// The connection to the remote socket, wrapped in a buffer to speed
+    /// up writing
+    pub stream: BufWriter<TcpStream>,
+    /// The in-memory read buffer. The size is given by `BUF_CAP`
+    pub buffer: BytesMut,
+}
+
+impl Connection {
+    /// Initiailize a new `Connection` instance
+    pub fn new(stream: TcpStream) -> Self {
+        Connection {
+            stream: BufWriter::new(stream),
+            buffer: BytesMut::with_capacity(BUF_CAP),
+        }
+    }
+}
+
+// We'll use the idea of gracefully shutting down from tokio
+
+/// A listener
+pub struct Listener {
     /// An atomic reference to the coretable
     pub db: CoreDB,
     /// The incoming connection listener (binding)
     pub listener: TcpListener,
     /// The maximum number of connections
-    climit: Arc<Semaphore>,
+    pub climit: Arc<Semaphore>,
     /// The shutdown broadcaster
     pub signal: broadcast::Sender<()>,
     // When all `Sender`s are dropped - the `Receiver` gets a `None` value
     // We send a clone of `terminate_tx` to each `CHandler`
     pub terminate_tx: mpsc::Sender<()>,
     pub terminate_rx: mpsc::Receiver<()>,
-    acceptor: SslAcceptor,
 }
 
-impl SslListener {
-    pub fn new_pem_based_ssl_connection(
-        key_file: String,
-        chain_file: String,
-        db: CoreDB,
-        listener: TcpListener,
-        climit: Arc<Semaphore>,
-        signal: broadcast::Sender<()>,
-        terminate_tx: mpsc::Sender<()>,
-        terminate_rx: mpsc::Receiver<()>,
-    ) -> TResult<Self> {
-        log::debug!("New SSL/TLS connection registered");
-        let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
-        acceptor.set_private_key_file(key_file, SslFiletype::PEM)?;
-        acceptor.set_certificate_chain_file(chain_file)?;
-        let acceptor = acceptor.build();
-        Ok(SslListener {
-            db,
-            listener,
-            climit,
-            signal,
-            terminate_tx,
-            terminate_rx,
-            acceptor,
-        })
-    }
-    async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
-        log::debug!("Trying to accept a SSL connection");
+impl Listener {
+    /// Accept an incoming connection
+    async fn accept(&mut self) -> TResult<TcpStream> {
+        // We will steal the idea of Ethernet's backoff for connection errors
         let mut backoff = 1;
         loop {
             match self.listener.accept().await {
                 // We don't need the bindaddr
-                // We get the encrypted stream which we need to decrypt
-                // by using the acceptor
-                Ok((stream, _)) => {
-                    log::debug!("Accepted an SSL/TLS connection");
-                    let ssl = Ssl::new(self.acceptor.context())?;
-                    let mut stream = SslStream::new(ssl, stream)?;
-                    Pin::new(&mut stream).accept().await?;
-                    log::debug!("Connected to secure socket over TCP");
-                    return Ok(stream);
-                }
+                Ok((stream, _)) => return Ok(stream),
                 Err(e) => {
-                    log::debug!("Failed to establish a secure connection");
                     if backoff > 64 {
                         // Too many retries, goodbye user
                         return Err(e.into());
@@ -112,40 +101,25 @@ impl SslListener {
             backoff *= 2;
         }
     }
+    /// Run the server
     pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("Started secure server");
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
             self.climit.acquire().await.unwrap().forget();
             let stream = self.accept().await?;
-            let mut sslhandle = ConnectionHandler::new(
+            let mut chandle = ConnectionHandler::new(
                 self.db.clone(),
-                SslConnection::new(stream),
+                Connection::new(stream),
                 self.climit.clone(),
                 Terminator::new(self.signal.subscribe()),
                 self.terminate_tx.clone(),
             );
             tokio::spawn(async move {
-                log::debug!("Spawned listener task");
-                if let Err(e) = sslhandle.run().await {
+                if let Err(e) = chandle.run().await {
                     log::error!("Error: {}", e);
                 }
             });
-        }
-    }
-}
-
-pub struct SslConnection {
-    pub stream: BufWriter<SslStream<TcpStream>>,
-    pub buffer: BytesMut,
-}
-
-impl SslConnection {
-    pub fn new(stream: SslStream<TcpStream>) -> Self {
-        SslConnection {
-            stream: BufWriter::new(stream),
-            buffer: BytesMut::with_capacity(BUF_CAP),
         }
     }
 }

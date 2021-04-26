@@ -36,7 +36,7 @@
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
 use crate::coredb::Data;
-use crate::protocol::con::prelude::*;
+use crate::dbnet::con::prelude::*;
 use crate::protocol::responses;
 
 use std::hint::unreachable_unchecked;

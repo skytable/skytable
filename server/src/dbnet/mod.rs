@@ -43,9 +43,9 @@ use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
+use crate::dbnet::tcp::Listener;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
-use crate::protocol::tls::SslListener;
-use crate::protocol::Listener;
+mod tcp;
 use crate::CoreDB;
 use libsky::util::terminal;
 use libsky::TResult;
@@ -56,9 +56,12 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
+use tls::SslListener;
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
+pub mod con;
+mod tls;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)

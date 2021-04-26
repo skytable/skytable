@@ -45,7 +45,7 @@ pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::protocol;
-    use crate::protocol::con::prelude::*;
+    use crate::dbnet::con::prelude::*;
     use protocol::responses;
     /// Returns a `HEY!` `Response`
     pub async fn heya<T, Strm>(

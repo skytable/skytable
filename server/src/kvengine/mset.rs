@@ -25,7 +25,7 @@
 */
 
 use crate::coredb::{self};
-use crate::protocol::con::prelude::*;
+use crate::dbnet::con::prelude::*;
 use crate::protocol::responses;
 use crate::resp::GroupBegin;
 
