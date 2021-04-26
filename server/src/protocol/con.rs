@@ -35,6 +35,7 @@ use crate::resp::Writable;
 use crate::CoreDB;
 use bytes::Buf;
 use bytes::BytesMut;
+use libsky::TResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -50,7 +51,12 @@ use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
 use tokio_openssl::SslStream;
 
-pub trait Con<Strm>: ConOps<Strm>
+pub mod prelude {
+    pub use super::ProtocolConnectionExt;
+    pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
+}
+
+pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
 where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
@@ -176,7 +182,7 @@ where
     }
 }
 
-pub trait ConOps<Strm> {
+pub trait ProtocolConnection<Strm> {
     /// Returns an **immutable** reference to the underlying read buffer
     fn get_buffer(&self) -> &BytesMut;
     /// Returns an **immutable** reference to the underlying stream
@@ -199,16 +205,16 @@ pub trait ConOps<Strm> {
     }
 }
 
-// Give ConOps implementors a free Con impl
+// Give ProtocolConnection implementors a free ProtocolConnectionExt impl
 
-impl<Strm, T> Con<Strm> for T
+impl<Strm, T> ProtocolConnectionExt<Strm> for T
 where
-    T: ConOps<Strm>,
+    T: ProtocolConnection<Strm> + Send,
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
 {
 }
 
-impl ConOps<SslStream<TcpStream>> for SslConnection {
+impl ProtocolConnection<SslStream<TcpStream>> for SslConnection {
     fn get_buffer(&self) -> &BytesMut {
         &self.buffer
     }
@@ -226,7 +232,7 @@ impl ConOps<SslStream<TcpStream>> for SslConnection {
     }
 }
 
-impl ConOps<TcpStream> for Connection {
+impl ProtocolConnection<TcpStream> for Connection {
     fn get_buffer(&self) -> &BytesMut {
         &self.buffer
     }
@@ -246,8 +252,9 @@ impl ConOps<TcpStream> for Connection {
 
 pub struct ConnectionHandler<T, Strm>
 where
-    T: Con<Strm>,
+    T: ProtocolConnectionExt<Strm>,
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
+    Self: Send,
 {
     db: CoreDB,
     con: T,
@@ -255,4 +262,62 @@ where
     terminator: Terminator,
     _term_sig_tx: mpsc::Sender<()>,
     _marker: PhantomData<Strm>,
+}
+
+impl<T, Strm> ConnectionHandler<T, Strm>
+where
+    T: ProtocolConnectionExt<Strm> + Send,
+    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
+{
+    pub fn new(
+        db: CoreDB,
+        con: T,
+        climit: Arc<Semaphore>,
+        terminator: Terminator,
+        _term_sig_tx: mpsc::Sender<()>,
+    ) -> Self {
+        Self {
+            db,
+            con,
+            climit,
+            terminator,
+            _term_sig_tx,
+            _marker: PhantomData,
+        }
+    }
+    pub async fn run(&mut self) -> TResult<()> {
+        log::debug!("SslConnectionHanler initialized to handle a remote client");
+        while !self.terminator.is_termination_signal() {
+            let try_df = tokio::select! {
+                tdf = self.con.read_query() => tdf,
+                _ = self.terminator.receive_signal() => {
+                    return Ok(());
+                }
+            };
+            match try_df {
+                Ok(QueryResult::Q(s)) => {
+                    todo!()
+                }
+                Ok(QueryResult::E(r)) => {
+                    log::debug!("Failed to read query!");
+                    self.con.close_conn_with_error(r).await?
+                }
+                Ok(QueryResult::Empty) => return Ok(()),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<T, Strm> Drop for ConnectionHandler<T, Strm>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
+{
+    fn drop(&mut self) {
+        // Make sure that the permit is returned to the semaphore
+        // in the case that there is a panic inside
+        self.climit.add_permits(1);
+    }
 }

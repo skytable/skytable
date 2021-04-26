@@ -31,6 +31,7 @@ use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::dbnet::Con;
 use crate::diskstore;
+use crate::protocol::con::prelude::*;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
@@ -262,6 +263,21 @@ impl CoreDB {
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
             Query::Pipelined(_) => unimplemented!(),
         }
+    }
+
+    pub async fn execute<T, Strm>(&self, query: Query, mut con: &mut T) -> TResult<()>
+    where
+        T: ProtocolConnectionExt<Strm>,
+        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+    {
+        match query {
+            Query::Simple(q) => {
+                queryengine::execute(&self, con, q).await?;
+                con.flush_stream().await?;
+            }
+            Query::Pipelined(_) => unimplemented!(),
+        }
+        Ok(())
     }
 
     /// Create a new `CoreDB` instance

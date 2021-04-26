@@ -29,6 +29,7 @@
 use crate::coredb::CoreDB;
 use crate::dbnet::Con;
 use crate::gen_match;
+use crate::protocol::con::prelude::*;
 use crate::protocol::responses;
 use crate::protocol::ActionGroup;
 use crate::{admin, kvengine};
@@ -127,4 +128,12 @@ macro_rules! gen_match {
             },
         }
     };
+}
+
+pub async fn execute<T, Strm>(db: &CoreDB, con: &mut T, buf: ActionGroup) -> TResult<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
+    todo!()
 }

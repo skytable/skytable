@@ -46,7 +46,8 @@ use crate::config::SslOpts;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 use crate::protocol::tls::SslConnection;
 use crate::protocol::tls::SslListener;
-use crate::protocol::{Connection, QueryResult::*};
+use crate::protocol::Connection;
+use crate::protocol::Listener;
 use crate::resp::Writable;
 use crate::CoreDB;
 use libsky::util::terminal;
@@ -59,10 +60,8 @@ use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::{self, Duration};
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -93,78 +92,6 @@ impl Terminator {
         }
         let _ = self.signal.recv().await;
         self.terminate = true;
-    }
-}
-
-// We'll use the idea of gracefully shutting down from tokio
-
-/// A listener
-pub struct Listener {
-    /// An atomic reference to the coretable
-    db: CoreDB,
-    /// The incoming connection listener (binding)
-    listener: TcpListener,
-    /// The maximum number of connections
-    climit: Arc<Semaphore>,
-    /// The shutdown broadcaster
-    signal: broadcast::Sender<()>,
-    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
-    // We send a clone of `terminate_tx` to each `CHandler`
-    terminate_tx: mpsc::Sender<()>,
-    terminate_rx: mpsc::Receiver<()>,
-}
-
-/// A per-connection handler
-pub struct CHandler {
-    db: CoreDB,
-    con: Connection,
-    climit: Arc<Semaphore>,
-    terminator: Terminator,
-    _term_sig_tx: mpsc::Sender<()>,
-}
-
-impl Listener {
-    /// Accept an incoming connection
-    async fn accept(&mut self) -> TResult<TcpStream> {
-        // We will steal the idea of Ethernet's backoff for connection errors
-        let mut backoff = 1;
-        loop {
-            match self.listener.accept().await {
-                // We don't need the bindaddr
-                Ok((stream, _)) => return Ok(stream),
-                Err(e) => {
-                    if backoff > 64 {
-                        // Too many retries, goodbye user
-                        return Err(e.into());
-                    }
-                }
-            }
-            // Wait for the `backoff` duration
-            time::sleep(Duration::from_secs(backoff)).await;
-            // We're using exponential backoff
-            backoff *= 2;
-        }
-    }
-    /// Run the server
-    pub async fn run(&mut self) -> TResult<()> {
-        loop {
-            // Take the permit first, but we won't use it right now
-            // that's why we will forget it
-            self.climit.acquire().await.unwrap().forget();
-            let stream = self.accept().await?;
-            let mut chandle = CHandler {
-                db: self.db.clone(),
-                con: Connection::new(stream),
-                climit: self.climit.clone(),
-                terminator: Terminator::new(self.signal.subscribe()),
-                _term_sig_tx: self.terminate_tx.clone(),
-            };
-            tokio::spawn(async move {
-                if let Err(e) = chandle.run().await {
-                    log::error!("Error: {}", e);
-                }
-            });
-        }
     }
 }
 
@@ -208,39 +135,6 @@ impl<'a> Con<'a> {
             Con::Insecure(con) => con.write_response(resp).await,
             Con::Secure(con) => con.write_response(resp).await,
         }
-    }
-}
-
-impl CHandler {
-    /// Process the incoming connection
-    pub async fn run(&mut self) -> TResult<()> {
-        while !self.terminator.is_termination_signal() {
-            let try_df = tokio::select! {
-                tdf = self.con.read_query() => tdf,
-                _ = self.terminator.receive_signal() => {
-                    return Ok(());
-                }
-            };
-            match try_df {
-                Ok(Q(s)) => {
-                    self.db
-                        .execute_query(s, &mut Con::init(&mut self.con))
-                        .await?
-                }
-                Ok(E(r)) => self.con.close_conn_with_error(r).await?,
-                Ok(Empty) => return Ok(()),
-                Err(e) => return Err(e.into()),
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Drop for CHandler {
-    fn drop(&mut self) {
-        // Make sure that the permit is returned to the semaphore
-        // in the case that there is a panic inside
-        self.climit.add_permits(1);
     }
 }
 use std::io::{self, prelude::*};

@@ -32,7 +32,11 @@
 
 mod deserializer;
 pub mod responses;
+use crate::dbnet::Con;
+use crate::dbnet::Terminator;
+use crate::protocol::QueryResult::*;
 use crate::resp::Writable;
+use crate::CoreDB;
 use bytes::{Buf, BytesMut};
 pub use deserializer::ActionGroup;
 pub use deserializer::ParseResult;
@@ -41,10 +45,16 @@ use libsky::TResult;
 use libsky::BUF_CAP;
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
+use tokio::net::TcpListener;
 use tokio::net::TcpStream;
+use tokio::sync::Semaphore;
+use tokio::sync::{broadcast, mpsc};
+use tokio::time;
+pub mod con;
 pub mod tls;
-mod con;
 
 /// A TCP connection wrapper
 pub struct Connection {
@@ -147,5 +157,110 @@ impl Connection {
         self.write_response(resp).await?;
         self.stream.flush().await?;
         Ok(())
+    }
+}
+
+// We'll use the idea of gracefully shutting down from tokio
+
+/// A listener
+pub struct Listener {
+    /// An atomic reference to the coretable
+    pub db: CoreDB,
+    /// The incoming connection listener (binding)
+    pub listener: TcpListener,
+    /// The maximum number of connections
+    pub climit: Arc<Semaphore>,
+    /// The shutdown broadcaster
+    pub signal: broadcast::Sender<()>,
+    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
+    // We send a clone of `terminate_tx` to each `CHandler`
+    pub terminate_tx: mpsc::Sender<()>,
+    pub terminate_rx: mpsc::Receiver<()>,
+}
+
+/// A per-connection handler
+pub struct CHandler {
+    db: CoreDB,
+    con: Connection,
+    climit: Arc<Semaphore>,
+    terminator: Terminator,
+    _term_sig_tx: mpsc::Sender<()>,
+}
+
+impl Listener {
+    /// Accept an incoming connection
+    async fn accept(&mut self) -> TResult<TcpStream> {
+        // We will steal the idea of Ethernet's backoff for connection errors
+        let mut backoff = 1;
+        loop {
+            match self.listener.accept().await {
+                // We don't need the bindaddr
+                Ok((stream, _)) => return Ok(stream),
+                Err(e) => {
+                    if backoff > 64 {
+                        // Too many retries, goodbye user
+                        return Err(e.into());
+                    }
+                }
+            }
+            // Wait for the `backoff` duration
+            time::sleep(Duration::from_secs(backoff)).await;
+            // We're using exponential backoff
+            backoff *= 2;
+        }
+    }
+    /// Run the server
+    pub async fn run(&mut self) -> TResult<()> {
+        loop {
+            // Take the permit first, but we won't use it right now
+            // that's why we will forget it
+            self.climit.acquire().await.unwrap().forget();
+            let stream = self.accept().await?;
+            let mut chandle = CHandler {
+                db: self.db.clone(),
+                con: Connection::new(stream),
+                climit: self.climit.clone(),
+                terminator: Terminator::new(self.signal.subscribe()),
+                _term_sig_tx: self.terminate_tx.clone(),
+            };
+            tokio::spawn(async move {
+                if let Err(e) = chandle.run().await {
+                    log::error!("Error: {}", e);
+                }
+            });
+        }
+    }
+}
+
+impl CHandler {
+    /// Process the incoming connection
+    pub async fn run(&mut self) -> TResult<()> {
+        while !self.terminator.is_termination_signal() {
+            let try_df = tokio::select! {
+                tdf = self.con.read_query() => tdf,
+                _ = self.terminator.receive_signal() => {
+                    return Ok(());
+                }
+            };
+            match try_df {
+                Ok(Q(s)) => {
+                    self.db
+                        .execute_query(s, &mut Con::init(&mut self.con))
+                        .await?
+                }
+                Ok(E(r)) => self.con.close_conn_with_error(r).await?,
+                Ok(Empty) => return Ok(()),
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CHandler {
+    fn drop(&mut self) {
+        // Make sure that the permit is returned to the semaphore
+        // in the case that there is a panic inside
+        self.climit.add_permits(1);
     }
 }
