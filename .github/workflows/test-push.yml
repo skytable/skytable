@@ -87,6 +87,12 @@ jobs:
           target: ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
+      - name: Install musl-tools (Linux)
+        if: runner.os == 'linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install musl-tools -y
+
       - name: Publish docs
         env:
           BOT_USER: ${{ secrets.BOT_INIT_USER }}
