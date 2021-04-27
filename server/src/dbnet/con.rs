@@ -24,6 +24,17 @@
  *
 */
 
+//! # Generic connection traits
+//! The `con` module defines the generic connection traits `ProtocolConnection` and `ProtocolConnectionExt`.
+//! These two traits can be used to interface with sockets that are used for communication through the Terrapipe
+//! protocol.
+//!
+//! The `ProtocolConnection` trait provides a basic set of methods that are required by prospective connection
+//! objects to be eligible for higher level protocol interactions (such as interactions with high-level query objects).
+//! Once a type implements this trait, it automatically gets a free `ProtocolConnectionExt` implementation. This immediately
+//! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
+//! respones in compliance with the Terrapipe protocol.
+
 use super::tcp::Connection;
 use crate::dbnet::tls::SslConnection;
 use crate::dbnet::Terminator;
@@ -52,10 +63,23 @@ use tokio::sync::Semaphore;
 use tokio_openssl::SslStream;
 
 pub mod prelude {
+    //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
+    //!
+    //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
+/// # The `ProtocolConnectionExt` trait
+///
+/// The `ProtocolConnectionExt` trait has default implementations and doesn't ever require explicit definitions, unless
+/// there's some black magic that you want to do. All [`ProtocolConnection`] objects will get a free implementation for this trait.
+/// Hence implementing [`ProtocolConnection`] alone is enough for you to get high-level methods to interface with the protocol.
+///
+/// ## DO NOT
+/// The fact that this is a trait enables great flexibility in terms of visibility, but **DO NOT EVER CALL any function other than
+/// `read_query`, `close_conn_with_error` or `write_response`**. If you mess with functions like `read_again`, you're likely to pull yourself into some
+/// good trouble.
 pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
 where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
@@ -182,6 +206,23 @@ where
     }
 }
 
+/// # The `ProtocolConnection` trait
+///
+/// The `ProtocolConnection` trait has low-level methods that can be used to interface with raw sockets. Any type
+/// that successfully implements this trait will get an implementation for `ProtocolConnectionExt` which augments and
+/// builds on these fundamental methods to provide high-level interfacing with queries.
+///
+/// ## Example of a `ProtocolConnection` object
+/// Ideally a `ProtocolConnection` object should look like (the generic parameter just exists for doc-tests, just think that
+/// there is a type `Strm`):
+/// ```no_run
+/// struct Connection<Strm> {
+///     pub buffer: bytes::BytesMut,
+///     pub stream: Strm,
+/// }
+/// ```
+///
+/// `Strm` should be a stream, i.e something like an SSL connection/TCP connection.
 pub trait ProtocolConnection<Strm> {
     /// Returns an **immutable** reference to the underlying read buffer
     fn get_buffer(&self) -> &BytesMut;
@@ -250,6 +291,11 @@ impl ProtocolConnection<TcpStream> for Connection {
     }
 }
 
+/// # A generic connection handler
+///
+/// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
+/// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
+/// a query, parse it and return an appropriate response through [`coredb::CoreDB::execute_query`]
 pub struct ConnectionHandler<T, Strm>
 where
     T: ProtocolConnectionExt<Strm>,
