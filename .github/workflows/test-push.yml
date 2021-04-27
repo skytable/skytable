@@ -185,6 +185,11 @@ jobs:
           rustup target add ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
+      - name: Install 32-bit tools (Linux)
+        run: |
+          sudo apt update && sudo apt install gcc-multilib -y
+        if: runner.os == 'Linux'
+
       - name: Run Tests
         run: cargo test --verbose --target ${{ matrix.rust }}
         env:
