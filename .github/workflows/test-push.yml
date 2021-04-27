@@ -15,37 +15,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [linux-stable, macos-stable, windows-stable]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - build: linux-stable
-            os: ubuntu-latest
-            rust: stable
-          - build: macos-stable
-            os: macos-latest
-            rust: stable
-          - build: windows-stable
-            os: windows-latest
-            rust: stable
+          - os: ubuntu-latest
+            rust: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            rust: x86_64-unknown-linux-musl # Tier 2
+          - os: ubuntu-latest
+            rust: i686-unknown-linux-gnu
+          - os: macos-latest
+            rust: x86_64-apple-darwin
+          - os: windows-latest
+            rust: x86_64-pc-windows-msvc
+          - os: windows-latest
+            rust: i686-pc-windows-msvc
 
     steps:
-      - name: Remove Hyper-V blocked ports (Windows)
-        run: |
-          rem Modify Dynamic Port Range for Development Users
-          dism /online /get-features | find /i "Microsoft-Hyper-V" && (
-          rem Modify Dynamic Port Range
-          start /wait "" netsh int ipv4 set dynamicport tcp start=20000 num=16384
-          start /wait "" netsh int ipv4 set dynamicport udp start=20000 num=16384
-          rem Add Registry Key
-          start /wait "" reg add HKLM\SYSTEM\CurrentControlSet\Services\hns\State /v EnableExcludedPortRange /d 0 /f
-          goto :eof
-          )
-          rem Set range to default
-          start /wait "" netsh int ipv4 set dynamicport tcp start=49152 num=16384
-          start /wait "" netsh int ipv4 set dynamicport udp start=49152 num=16384
-          rem Remove Registry Key
-          start /wait "" reg delete HKLM\SYSTEM\CurrentControlSet\Services\hns\State /v EnableExcludedPortRange /f
-        shell: cmd
-        if: runner.os == 'Windows'
       - name: Checkout source code
         uses: actions/checkout@v2
         with:
@@ -66,33 +51,32 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-registry-
+            ${{ matrix.rust }}-cargo-registry-
         if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo index
         uses: actions/cache@v2
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-index-
+            ${{ matrix.rust }}-cargo-index-
         if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo build
         uses: actions/cache@v2
         with:
           path: target
-          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-target-
+            ${{ matrix.rust }}-target-
         if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
-          rustup update ${{ matrix.rust }} --no-self-update
-          rustup default ${{ matrix.rust }}
+          rustup toolchain install ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
       - name: Publish docs
@@ -134,12 +118,12 @@ jobs:
           mkdir dist
           move target\debug\*.exe dist
         env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static 
+          RUSTFLAGS: -Ctarget-feature=+crt-static
         if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
 
       - name: Save artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ github.sha }}-${{ matrix.build }}-builds.zip
+          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
         if: env.IS_MD_FILE == 'false'
