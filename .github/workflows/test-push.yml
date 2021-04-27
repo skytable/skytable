@@ -15,26 +15,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - os: ubuntu-latest
-            rust: x86_64-unknown-linux-gnu
-            channel: stable
-          - os: ubuntu-latest
-            rust: x86_64-unknown-linux-musl # Tier 2
-            channel: stable
-          - os: ubuntu-latest
-            rust: i686-unknown-linux-gnu
-            channel: stable
-          - os: macos-latest
-            rust: x86_64-apple-darwin
-            channel: stable
-          - os: windows-latest
-            rust: x86_64-pc-windows-msvc
-            channel: stable
-          - os: windows-latest
-            rust: i686-pc-windows-msvc
-            channel: stable
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-latest,
+            ubuntu-latest,
+            macos-latest,
+            windows-latest,
+            windows-latest,
+          ]
+        rust:
+          [
+            x86_64-unknown-linux-gnu,
+            x86_64-unknown-linux-musl,
+            i686-unknown-linux-gnu,
+            x86_64-apple-darwin,
+            x86_64-pc-windows-msvc,
+            i686-pc-windows-msvc,
+          ]
 
     steps:
       - name: Checkout source code
