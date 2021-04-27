@@ -77,11 +77,9 @@ jobs:
         if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.rust }}
-          default: true
+        run: |
+          rustup default stable
+          rustup target add ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
       - name: Publish docs
@@ -181,18 +179,10 @@ jobs:
             ${{ matrix.rust }}-target-
         if: env.IS_MD_FILE == 'false'
 
-      - name: Install musl-tools (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install musl-tools -y
-
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.rust }}
-          default: true
+        run: |
+          rustup default stable
+          rustup target add ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
