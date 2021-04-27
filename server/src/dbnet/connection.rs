@@ -332,6 +332,11 @@ where
                     self.con.close_conn_with_error(r).await?
                 }
                 Ok(QueryResult::Empty) => return Ok(()),
+                #[cfg(windows)]
+                Err(e) => match e.kind() {
+                    ErrorKind::ConnectionReset => return Ok(()),
+                    _ => return Err(e.into())
+                },
                 Err(e) => return Err(e.into()),
             }
         }
