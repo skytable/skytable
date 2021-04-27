@@ -24,7 +24,7 @@
  *
 */
 
-use crate::dbnet::con::prelude::*;
+use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::resp::GroupBegin;
 

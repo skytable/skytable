@@ -28,7 +28,7 @@
 //! This module provides functions to work with `DEL` queries
 
 
-use crate::dbnet::con::prelude::*;
+use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::resp::GroupBegin;
 

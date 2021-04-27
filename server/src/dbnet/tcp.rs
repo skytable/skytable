@@ -24,7 +24,7 @@
  *
 */
 
-use crate::dbnet::con::ConnectionHandler;
+use crate::dbnet::connection::ConnectionHandler;
 use crate::dbnet::Terminator;
 use crate::protocol;
 use crate::CoreDB;

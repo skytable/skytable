@@ -24,7 +24,7 @@
  *
 */
 
-use crate::dbnet::con::prelude::*;
+use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;

@@ -24,7 +24,7 @@
  *
 */
 
-use super::con::ConnectionHandler;
+use super::connection::ConnectionHandler;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::tcp::Connection;
 use crate::dbnet::Terminator;

@@ -29,7 +29,7 @@
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
-use crate::dbnet::con::prelude::*;
+use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;

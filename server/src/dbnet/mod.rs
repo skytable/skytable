@@ -60,7 +60,7 @@ use tls::SslListener;
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
-pub mod con;
+pub mod connection;
 mod tls;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly

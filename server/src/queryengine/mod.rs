@@ -27,7 +27,7 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
-use crate::dbnet::con::prelude::*;
+use crate::dbnet::connection::prelude::*;
 use crate::gen_match;
 use crate::protocol::responses;
 use crate::protocol::ActionGroup;
