@@ -102,7 +102,7 @@ jobs:
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Run Tests (Windows)
-        run: cargo test --verbose
+        run: cargo test --verbose --target ${{ matrix.rust }}
         env:
           RUST_BACKTRACE: 1
         shell: cmd
@@ -196,13 +196,13 @@ jobs:
         if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: cargo test --verbose --target ${{ matrix.rust }}
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
 
       - name: Run Tests (Windows)
-        run: cargo test --verbose
+        run: cargo test --verbose --target ${{ matrix.rust }}
         env:
           RUST_BACKTRACE: 1
         shell: cmd
