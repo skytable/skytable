@@ -24,19 +24,25 @@
  *
 */
 
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
+use crate::dbnet::con::prelude::*;
 use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
-use crate::protocol::{responses, ActionGroup};
-use libsky::TResult;
+use crate::protocol::responses;
 use std::hint::unreachable_unchecked;
 use std::path::{Component, PathBuf};
 
 /// Create a snapshot
 ///
-pub async fn mksnap(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn mksnap<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany == 0 {
         if !handle.is_snapshot_enabled() {

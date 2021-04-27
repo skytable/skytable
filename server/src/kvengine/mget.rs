@@ -24,17 +24,25 @@
  *
 */
 
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
+
+use crate::dbnet::con::prelude::*;
+use crate::protocol::responses;
 use crate::resp::{BytesWrapper, GroupBegin};
 use bytes::Bytes;
 use libsky::terrapipe::RespCodes;
-use libsky::TResult;
+
 
 /// Run an `MGET` query
 ///
-pub async fn mget(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn mget<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany == 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

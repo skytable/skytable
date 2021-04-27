@@ -23,16 +23,24 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
+
+use crate::dbnet::con::prelude::*;
+use crate::protocol::responses;
 use crate::resp::GroupBegin;
-use libsky::TResult;
+
 
 /// Run a `KEYLEN` query
 ///
 /// At this moment, `keylen` only supports a single key
-pub async fn keylen(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn keylen<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany != 1 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

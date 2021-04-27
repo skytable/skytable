@@ -27,16 +27,24 @@
 //! # `UPDATE` queries
 //! This module provides functions to work with `UPDATE` queries
 //!
-use crate::coredb::{self, CoreDB};
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
+use crate::coredb::{self};
+use crate::dbnet::con::prelude::*;
+use crate::protocol::responses;
 use coredb::Data;
-use libsky::TResult;
+
 use std::collections::hash_map::Entry;
 use std::hint::unreachable_unchecked;
 
 /// Run an `UPDATE` query
-pub async fn update(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn update<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany != 2 {
         // There should be exactly 2 arguments

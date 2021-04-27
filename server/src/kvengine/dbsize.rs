@@ -23,14 +23,22 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
+
+use crate::dbnet::con::prelude::*;
+use crate::protocol::responses;
 use crate::resp::GroupBegin;
-use libsky::TResult;
+
 
 /// Get the number of keys in the database
-pub async fn dbsize(handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn dbsize<T, Strm>(
+    handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     if act.howmany() != 0 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
     }

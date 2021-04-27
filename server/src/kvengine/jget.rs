@@ -28,10 +28,10 @@
 //! #`JGET` queries
 //! Functions for handling `JGET` queries
 
-use crate::coredb::CoreDB;
-use crate::dbnet::Con;
-use crate::protocol::{responses, ActionGroup};
-use libsky::TResult;
+
+use crate::dbnet::con::prelude::*;
+use crate::protocol::responses;
+
 
 /// Run a `JGET` query
 /// This returns a JSON key/value pair of keys and values
@@ -42,7 +42,15 @@ use libsky::TResult;
 /// {"key":"value"}\n
 /// ```
 ///
-pub async fn jget(_handle: &CoreDB, con: &mut Con<'_>, act: ActionGroup) -> TResult<()> {
+pub async fn jget<T, Strm>(
+    _handle: &crate::coredb::CoreDB,
+    con: &mut T,
+    act: crate::protocol::ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let howmany = act.howmany();
     if howmany != 1 {
         return con.write_response(&**responses::fresp::R_ACTION_ERR).await;

@@ -27,12 +27,11 @@
 //! # The Query Engine
 
 use crate::coredb::CoreDB;
-use crate::dbnet::Con;
+use crate::dbnet::con::prelude::*;
 use crate::gen_match;
 use crate::protocol::responses;
 use crate::protocol::ActionGroup;
 use crate::{admin, kvengine};
-use libsky::TResult;
 
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
@@ -72,13 +71,23 @@ mod tags {
     /// `MKSNAP` action tag
     pub const TAG_MKSNAP: &'static str = "MKSNAP";
 }
+
 /// Execute a simple(*) query
-pub async fn execute_simple(db: &CoreDB, con: &mut Con<'_>, buf: ActionGroup) -> TResult<()> {
+pub async fn execute_simple<T, Strm>(
+    db: &CoreDB,
+    con: &mut T,
+    buf: ActionGroup,
+) -> std::io::Result<()>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
     let first = match buf.get_first() {
         None => {
             return con
                 .write_response(responses::fresp::R_PACKET_ERR.to_owned())
-                .await;
+                .await
+                .map_err(|e| e.into());
         }
         Some(f) => f.to_uppercase(),
     };
