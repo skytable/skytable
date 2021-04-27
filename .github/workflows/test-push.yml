@@ -81,9 +81,10 @@ jobs:
         if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
-        run: |
-          rustup target add ${{ matrix.channel }}-${{ matrix.rust }}
-          rustup update
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.channel }}
+          target: ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
       - name: Publish docs
