@@ -19,16 +19,22 @@ jobs:
         include:
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-gnu
+            channel: stable
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-musl # Tier 2
+            channel: stable
           - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
+            channel: stable
           - os: macos-latest
             rust: x86_64-apple-darwin
+            channel: stable
           - os: windows-latest
             rust: x86_64-pc-windows-msvc
+            channel: stable
           - os: windows-latest
             rust: i686-pc-windows-msvc
+            channel: stable
 
     steps:
       - name: Checkout source code
@@ -76,7 +82,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install ${{ matrix.rust }}
+          rustup toolchain install ${{ matrix.channel }}-${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
       - name: Publish docs
@@ -91,7 +97,7 @@ jobs:
         if: runner.os == 'Linux' && env.IS_ACTIONS_DOC == 'true'
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: cargo test --verbose --target ${{ matrix.rust }}
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
