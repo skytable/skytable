@@ -20,7 +20,7 @@ clap = {version = "2.33.3", features=["yaml"]}
 env_logger = "0.8.3"
 log = "0.4.14"
 chrono = "0.4.19"
-regex = "1.4.5"
+regex = "1.4.6"
 sky_macros = {path="../sky-macros"}
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.33", features = ["vendored"] }
