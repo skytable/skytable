@@ -20,7 +20,7 @@ clap = {version = "2.33.3", features=["yaml"]}
 env_logger = "0.8.3"
 log = "0.4.14"
 chrono = "0.4.19"
-regex = "1.4.5"
+regex = "1.4.6"
 sky_macros = {path="../sky-macros"}
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.33", features = ["vendored"] }
@@ -37,4 +37,4 @@ cc = "1.0.67"
 tokio = { version = "1.5.0", features = ["test-util"] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.93"
+libc = "0.2.94"

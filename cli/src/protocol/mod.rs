@@ -27,24 +27,18 @@
 mod deserializer;
 use bytes::{Buf, BytesMut};
 use deserializer::ClientResult;
-use lazy_static::lazy_static;
 use libsky::terrapipe;
 use libsky::TResult;
 use libsky::BUF_CAP;
 use openssl::ssl::Ssl;
 use openssl::ssl::SslContext;
 use openssl::ssl::SslMethod;
-use regex::Regex;
 use std::io::Result as IoResult;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
-
-lazy_static! {
-    static ref RE: Regex = Regex::new("[^\\s\"']+|\"[^\"]*\"|'[^']*'").unwrap();
-}
 
 pub enum Con {
     Secure(SslConnection),
