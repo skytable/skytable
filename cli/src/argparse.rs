@@ -33,6 +33,20 @@ use std::io::{self, prelude::*};
 use std::process;
 const MSG_WELCOME: &'static str = "Skytable v0.5.1";
 
+#[macro_use]
+macro_rules! end_con_with_loop {
+    ($con:ident) => {
+        if let Err(e) = $con.shutdown().await {
+            eprintln!(
+                "Failed to gracefully terminate connection with error '{}'",
+                e
+            );
+            std::process::exit(0x100);
+        }
+        break;
+    };
+}
+
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
 /// Anything that is entered following a return, is parsed into a query and is
@@ -95,7 +109,7 @@ pub async fn start_repl() {
             .expect("Couldn't read line, this is a serious error!");
         if rl.trim().to_uppercase() == "EXIT" {
             println!("Goodbye!");
-            process::exit(0x100);
+            end_con_with_loop!(con);
         }
         if rl.len() == 0 {
             // The query was empty, so let it be
@@ -104,9 +118,7 @@ pub async fn start_repl() {
         tokio::select! {
             _ = con.execute_query(rl) => {},
             _ = tokio::signal::ctrl_c() => {
-                if let Err(e) = con.shutdown().await {
-                    eprintln!("Failed to gracefully terminate connection with error '{}'", e);
-                }
+                end_con_with_loop!(con);
             },
         }
     }
