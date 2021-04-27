@@ -101,6 +101,13 @@ pub async fn start_repl() {
             // The query was empty, so let it be
             continue;
         }
-        con.execute_query(rl).await;
+        tokio::select! {
+            _ = con.execute_query(rl) => {},
+            _ = tokio::signal::ctrl_c() => {
+                if let Err(e) = con.shutdown().await {
+                    eprintln!("Failed to gracefully terminate connection with error '{}'", e);
+                }
+            },
+        }
     }
 }

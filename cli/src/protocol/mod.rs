@@ -58,6 +58,12 @@ impl Con {
             Con::Secure(con) => con.run_query(query).await,
         }
     }
+    pub async fn shutdown(&mut self) -> TResult<()> {
+        match self {
+            Con::Insecure(con) => con.shutdown().await,
+            Con::Secure(con) => con.shutdown().await,
+        }
+    }
 }
 
 /// A `Connection` is a wrapper around a`TcpStream` and a read buffer
@@ -136,6 +142,9 @@ impl Connection {
             return ClientResult::Empty(0);
         }
         deserializer::parse(&self.buffer)
+    }
+    pub async fn shutdown(&mut self) -> TResult<()> {
+        self.stream.shutdown().await.map_err(|e| e.into())
     }
 }
 
@@ -242,5 +251,8 @@ impl SslConnection {
     }
     fn get_peer(&self) -> IoResult<SocketAddr> {
         self.stream.get_ref().peer_addr()
+    }
+    pub async fn shutdown(&mut self) -> TResult<()> {
+        self.stream.shutdown().await.map_err(|e| e.into())
     }
 }
