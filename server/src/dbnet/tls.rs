@@ -25,20 +25,21 @@
 */
 
 use super::con::ConnectionHandler;
+use crate::dbnet::tcp::BufferedSocketStream;
+use crate::dbnet::tcp::Connection;
 use crate::dbnet::Terminator;
 use crate::CoreDB;
-use bytes::BytesMut;
 use libsky::TResult;
-use libsky::BUF_CAP;
 use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::BufWriter;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
 use tokio_openssl::SslStream;
+
+impl BufferedSocketStream for SslStream<TcpStream> {}
 
 pub struct SslListener {
     /// An atomic reference to the coretable
@@ -121,7 +122,7 @@ impl SslListener {
             let stream = self.accept().await?;
             let mut sslhandle = ConnectionHandler::new(
                 self.db.clone(),
-                SslConnection::new(stream),
+                Connection::new(stream),
                 self.climit.clone(),
                 Terminator::new(self.signal.subscribe()),
                 self.terminate_tx.clone(),
@@ -132,20 +133,6 @@ impl SslListener {
                     log::error!("Error: {}", e);
                 }
             });
-        }
-    }
-}
-
-pub struct SslConnection {
-    pub stream: BufWriter<SslStream<TcpStream>>,
-    pub buffer: BytesMut,
-}
-
-impl SslConnection {
-    pub fn new(stream: SslStream<TcpStream>) -> Self {
-        SslConnection {
-            stream: BufWriter::new(stream),
-            buffer: BytesMut::with_capacity(BUF_CAP),
         }
     }
 }

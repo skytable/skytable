@@ -35,6 +35,7 @@ pub use protocol::ParseResult;
 pub use protocol::Query;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::AsyncWrite;
 use tokio::io::BufWriter;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
@@ -42,18 +43,28 @@ use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time;
 
-/// A TCP connection wrapper
-pub struct Connection {
+pub trait BufferedSocketStream: AsyncWrite {}
+
+impl BufferedSocketStream for TcpStream {}
+
+/// A TCP/SSL connection wrapper
+pub struct Connection<T>
+where
+    T: BufferedSocketStream,
+{
     /// The connection to the remote socket, wrapped in a buffer to speed
     /// up writing
-    pub stream: BufWriter<TcpStream>,
+    pub stream: BufWriter<T>,
     /// The in-memory read buffer. The size is given by `BUF_CAP`
     pub buffer: BytesMut,
 }
 
-impl Connection {
+impl<T> Connection<T>
+where
+    T: BufferedSocketStream,
+{
     /// Initiailize a new `Connection` instance
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: T) -> Self {
         Connection {
             stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(BUF_CAP),

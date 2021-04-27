@@ -36,7 +36,7 @@
 //! respones in compliance with the Terrapipe protocol.
 
 use super::tcp::Connection;
-use crate::dbnet::tls::SslConnection;
+use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
 use crate::protocol::responses;
@@ -57,10 +57,8 @@ use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
-use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
-use tokio_openssl::SslStream;
 
 pub mod prelude {
     //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
@@ -255,38 +253,23 @@ where
 {
 }
 
-impl ProtocolConnection<SslStream<TcpStream>> for SslConnection {
+impl<T> ProtocolConnection<T> for Connection<T>
+where
+    T: BufferedSocketStream,
+{
     fn get_buffer(&self) -> &BytesMut {
         &self.buffer
     }
-    fn get_stream(&self) -> &BufWriter<SslStream<TcpStream>> {
+    fn get_stream(&self) -> &BufWriter<T> {
         &self.stream
     }
     fn get_mut_buffer(&mut self) -> &mut BytesMut {
         &mut self.buffer
     }
-    fn get_mut_stream(&mut self) -> &mut BufWriter<SslStream<TcpStream>> {
+    fn get_mut_stream(&mut self) -> &mut BufWriter<T> {
         &mut self.stream
     }
-    fn get_mut_both(&mut self) -> (&mut BytesMut, &mut BufWriter<SslStream<TcpStream>>) {
-        (&mut self.buffer, &mut self.stream)
-    }
-}
-
-impl ProtocolConnection<TcpStream> for Connection {
-    fn get_buffer(&self) -> &BytesMut {
-        &self.buffer
-    }
-    fn get_stream(&self) -> &BufWriter<TcpStream> {
-        &self.stream
-    }
-    fn get_mut_buffer(&mut self) -> &mut BytesMut {
-        &mut self.buffer
-    }
-    fn get_mut_stream(&mut self) -> &mut BufWriter<TcpStream> {
-        &mut self.stream
-    }
-    fn get_mut_both(&mut self) -> (&mut BytesMut, &mut BufWriter<TcpStream>) {
+    fn get_mut_both(&mut self) -> (&mut BytesMut, &mut BufWriter<T>) {
         (&mut self.buffer, &mut self.stream)
     }
 }

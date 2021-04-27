@@ -231,7 +231,10 @@ impl MultiListener {
             MultiListener::SecureOnly(secure_listener) => {
                 log::info!(
                     "Server started on tps://{}",
-                    secure_listener.listener.local_addr().expect("Failed to g")
+                    secure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to get bind address")
                 )
             }
             MultiListener::InsecureOnly(insecure_listener) => {
@@ -240,7 +243,7 @@ impl MultiListener {
                     insecure_listener
                         .listener
                         .local_addr()
-                        .expect("Failed to g")
+                        .expect("Failed to get bind address")
                 )
             }
             MultiListener::Multi(insecure_listener, secure_listener) => {
@@ -249,8 +252,11 @@ impl MultiListener {
                     insecure_listener
                         .listener
                         .local_addr()
-                        .expect("Failed to g"),
-                    secure_listener.listener.local_addr().expect("Failed to g")
+                        .expect("Failed to get bind address"),
+                    secure_listener
+                        .listener
+                        .local_addr()
+                        .expect("Failed to get bind address")
                 )
             }
         }
