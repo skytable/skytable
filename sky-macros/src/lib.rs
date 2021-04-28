@@ -181,39 +181,11 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
      * As a consequence to this, we will exclude these port ranges from the random port allocation set
      * (by setting them to 'already used' or 'already in in_set').
      */
+    // Just ignore the entire range of ports from 49000 to 50000 on Windows
     #[cfg(windows)]
-    {
-        macro_rules! insert {
-            ($hmap:ident, $($x:literal - $y:literal),*) => {
-                $(
-                    ($x..=$y).into_iter().for_each(|val| {$hmap.insert(val);});
-                )*
-            };
-        }
-        insert!(
-            in_set,
-            49805 - 49904,
-            50060 - 50159,
-            50160 - 50259,
-            50360 - 50459,
-            50870 - 50969,
-            50970 - 51069,
-            51070 - 51169,
-            51270 - 51369,
-            52353 - 52452,
-            52453 - 52552,
-            52553 - 52652,
-            52653 - 52752,
-            52853 - 52952,
-            52953 - 53052,
-            53053 - 53152,
-            53324 - 53423,
-            56247 - 56346,
-            56347 - 56446,
-            56547 - 56646,
-            56647 - 56746
-        );
-    }
+    (49000..=50000).into_iter().for_each(|port| {
+        let _ = in_set.insert(port);
+    });
     let mut result = quote! {};
     for item in content {
         // We set the port range to the 'dynamic port range' as per IANA's allocation guidelines
