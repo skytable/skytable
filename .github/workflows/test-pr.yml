@@ -36,7 +36,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
         if: env.BUILD == 'true'
@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
         if: env.BUILD == 'true'
@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: target
-          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
         if: env.BUILD == 'true'
