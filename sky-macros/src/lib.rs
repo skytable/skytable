@@ -175,17 +175,14 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut rng = thread_rng();
     let mut in_set = HashSet::<u16>::new();
     /*
-     * As per [this post](https://stackoverflow.com/questions/63257991/port-not-shown-to-be-used-in-netstat-but-trying-to-use-the-port-is-denied-by-wi)
-     * on SO, Hyper-V blocks several ports on Windows. As our runners are currently hosted on GHA which use Hyper-V VMs
+     * As per [this comment](https://stackoverflow.com/questions/63257991/port-not-shown-to-be-used-in-netstat-but-trying-to-use-the-port-is-denied-by-wi)
+     * from the GitHub Actions team, Windows reserves several ports. As our runners are currently hosted on GHA which use Hyper-V VMs
      * these ports will be blocked too and thse blocks are the reasons behind spurious test failures on Windows.
      * As a consequence to this, we will exclude these port ranges from the random port allocation set
      * (by setting them to 'already used' or 'already in in_set').
      */
-    // Just ignore the entire range of ports from 49000 to 50000 on Windows
     #[cfg(windows)]
-    (49000..=50000).into_iter().for_each(|port| {
-        let _ = in_set.insert(port);
-    });
+    add_reserved_ports(&mut in_set);
     let mut result = quote! {};
     for item in content {
         // We set the port range to the 'dynamic port range' as per IANA's allocation guidelines
@@ -262,4 +259,79 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 ///
 pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
     parse_test_module(args, item)
+}
+
+#[cfg(windows)]
+/// We will parse the output from `netsh interface ipv4 show excludedportrange protocol=tcp` on Windows
+/// We will then use this to add the port ranges to our `in_set` to not use them
+///
+/// This is what a typical output of the above command looks like:
+/// ```text
+///
+/// Protocol tcp Port Exclusion Ranges
+///
+/// Start Port    End Port
+/// ----------    --------
+///       8501        8501
+///      47001       47001
+///
+/// * - Administered port exclusions.
+///
+/// ```
+/// So, we first ignore all empty lines and then validate the headers (i.e "start port", "end port", "protocol tcp", etc)
+/// and then once that's all good -- we parse the start and end ports and then turn it into a range, and run an iterator
+/// over every element in this range, pushing elements into our `set` (or `in_set`)
+fn add_reserved_ports(set: &mut HashSet<u16>) {
+    use std::process::Command;
+    let mut netsh = Command::new("netsh");
+    netsh
+        .arg("interface")
+        .arg("ipv4")
+        .arg("show")
+        .arg("excludedportrange")
+        .arg("protocol=tcp");
+    let output = netsh.output().unwrap();
+    if output.stderr.len() != 0 {
+        panic!("Errored while trying to get port exclusion ranges on Windows");
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout
+        .lines()
+        .filter(|line| line.len() != 0)
+        .map(|line| line.trim())
+        .collect();
+    let mut line_iter = lines.into_iter();
+    if let Some("Protocol tcp Port Exclusion Ranges") = line_iter.next() {
+    } else {
+        panic!("netsh returned bad output on Windows");
+    }
+    match (line_iter.next(), line_iter.next()) {
+        (Some(line2), Some(line3))
+            if (line2.contains("Start Port") && line2.contains("End Port"))
+                && (line3.contains("---")) => {}
+        _ => panic!("netsh returned bad stdout for parsing port exclusion ranges on Windows"),
+    }
+    // Great, so now we the stdout is as we expected it to be
+    // Now we will trim each line, get the port range and parse it into u16s
+    for line in line_iter {
+        if line.starts_with("*") {
+            // The last line should look like `* - Administered port exclusions.`
+            break;
+        }
+        let port_high_low: Vec<u16> = line
+            .split_whitespace()
+            .map(|port_string| {
+                port_string
+                    .parse::<u16>()
+                    .expect("Returned port by netsh was not a valid u16")
+            })
+            .collect();
+        if port_high_low.len() != 2 {
+            panic!("netsh returned more than three columns instead of the expected two for parsing port exclusion ranges");
+        }
+        let (range_low, range_high) = (port_high_low[0], port_high_low[1]);
+        (range_low..=range_high).into_iter().for_each(|port| {
+            set.insert(port);
+        })
+    }
 }
