@@ -175,7 +175,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut rng = thread_rng();
     let mut in_set = HashSet::<u16>::new();
     /*
-     * As per [this comment](https://stackoverflow.com/questions/63257991/port-not-shown-to-be-used-in-netstat-but-trying-to-use-the-port-is-denied-by-wi)
+     * As per [this comment](https://github.com/actions/virtual-environments/issues/3275#issuecomment-828214572)
      * from the GitHub Actions team, Windows reserves several ports. As our runners are currently hosted on GHA which use Hyper-V VMs
      * these ports will be blocked too and thse blocks are the reasons behind spurious test failures on Windows.
      * As a consequence to this, we will exclude these port ranges from the random port allocation set
