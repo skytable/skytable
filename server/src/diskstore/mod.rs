@@ -142,8 +142,17 @@ pub async fn bgsave_scheduler(
             handle.shared.bgsave_task.notified().await
         }
     }
-    if let Err(e) = file.unlock() {
-        log::error!("Failed to release lock on data file with error '{}'", e);
-        process::exit(0x100);
+    if let Err(e) = tokio::task::spawn_blocking(move || {
+        if let Err(e) = file.unlock() {
+            log::error!("Failed to release lock on data file with error '{}'", e);
+            process::exit(0x100);
+        }
+    })
+    .await
+    {
+        log::error!(
+            "Blocking operation to unlock data file failed with error '{}'",
+            e
+        );
     }
 }

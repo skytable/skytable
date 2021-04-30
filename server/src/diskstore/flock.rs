@@ -144,7 +144,7 @@ mod __sys {
     use std::io::{Error, Result};
     use std::mem;
     use std::os::windows::io::AsRawHandle;
-    use winapi::shared::minwindef::{BOOL, DWORD};
+    use winapi::shared::minwindef::{DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
     /// Obtain an exclusive lock and **block** until we acquire it
@@ -172,7 +172,9 @@ mod __sys {
     }
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
-        let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
+        let ret = unsafe {
+            UnlockFile(file.as_raw_handle(), 0, 0, !0, !0)
+        };
         if ret == 0 {
             Err(Error::last_os_error())
         } else {
