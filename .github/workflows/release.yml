@@ -83,7 +83,7 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}.zip
+          name: ${{ matrix.artifact }}
           path: |
             target/release/skyd
             target/release/skysh
@@ -93,7 +93,7 @@ jobs:
       - name: Upload binaries (Windows)
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}.zip
+          name: ${{ matrix.artifact }}
           path: |
             target/release/skyd.exe
             target/release/skysh.exe
@@ -172,7 +172,7 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}.zip
+          name: ${{ matrix.artifact }}
           path: |
             target/release/skyd
             target/release/skysh
@@ -182,7 +182,7 @@ jobs:
       - name: Upload binaries (Windows)
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}.zip
+          name: ${{ matrix.artifact }}
           path: |
             target/release/skyd.exe
             target/release/skysh.exe
@@ -217,6 +217,11 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           path: artifacts
+      
+      - name: Archive artifacts
+        run: |
+          chmod +x ci/artifact.sh
+          bash ci/artifact.sh
 
       - name: Release Linux bundle (x86_64)
         uses: actions/upload-release-asset@v1
