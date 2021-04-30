@@ -138,8 +138,10 @@ mod tests {
     fn test_windows_lock_and_then_unlock() {
         let mut file  = FileLock::lock("data4.bin").unwrap();
         file.unlock().unwrap();
+        drop(file);
         let mut file2 = FileLock::lock("data4.bin").unwrap();
-        file.unlock().unwrap();
+        file2.unlock().unwrap();
+        drop(file2);
     }
 }
 
