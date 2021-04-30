@@ -62,6 +62,7 @@ use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
 mod tls;
+use crate::flush_db;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -390,29 +391,28 @@ pub async fn run(
         }
     }
     server.finish_with_termsig().await;
-    if let Ok(_) = db.flush_db() {
-        log::info!("Successfully saved data to disk");
-        ()
-    } else {
-        log::error!("Failed to flush data to disk");
+    if let Some(mut lock) = lock {
+        if let Err(e) = lock.unlock() {
+            log::error!("Failed to release lock on data file with '{}'", e);
+            process::exit(0x100);
+        }
+    }
+    if let Err(e) = flush_db!(db) {
+        log::error!("Failed to flush data to disk with '{}'", e);
         loop {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = db.flush_db() {
+            if let Ok(_) = flush_db!(db) {
                 log::info!("Successfully saved data to disk");
                 break;
             } else {
                 continue;
             }
         }
-    }
-    if let Some(mut lock) = lock {
-        if let Err(e) = lock.unlock() {
-            log::error!("Failed to release lock on data file with '{}'", e);
-            process::exit(0x100);
-        }
+    } else {
+        log::info!("Successfully saved data to disk");
     }
     terminal::write_info("Goodbye :)\n").unwrap();
 }

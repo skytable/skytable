@@ -46,6 +46,16 @@ use std::sync::Arc;
 use tokio;
 use tokio::sync::Notify;
 
+#[macro_export]
+macro_rules! flush_db {
+    ($db:expr) => {
+        crate::coredb::CoreDB::flush_db(&$db, None)
+    };
+    ($db:expr, $file:expr) => {
+        crate::coredb::CoreDB::flush_db(&$db, Some($file))
+    };
+}
+
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
 #[derive(Debug, Clone)]
@@ -356,12 +366,16 @@ impl CoreDB {
         self.shared.table.read()
     }
     /// Flush the contents of the in-memory table onto disk
-    pub fn flush_db(&self) -> TResult<()> {
+    pub fn flush_db(&self, file: Option<flock::FileLock>) -> TResult<()> {
         let data = match self.acquire_write() {
             Some(wlock) => wlock,
             None => return Err("Can no longer flush data; coretable is poisoned".into()),
         };
-        diskstore::write_to_disk(&PERSIST_FILE, &data.coremap)?;
+        if let Some(mut file) = file {
+            diskstore::flush_data(&mut file, &data.coremap)?;
+        } else {
+            diskstore::write_to_disk(&PERSIST_FILE, &data.coremap)?;
+        }
         Ok(())
     }
 
