@@ -11,16 +11,15 @@ env:
   RELEASE_BENCH: sky-bench
   RELEASE_DIR: artifacts
   GITHUB_REF: "${{ github.ref }}"
-  WINDOWS_TARGET: x86_64-pc-windows-msvc
   WINDOWS64_NAME: x86_64-windows
-  MACOS_TARGET: x86_64-apple-darwin
+  WINDOWS32_NAME: i686-windows
   MACOS64_NAME: x86_64-macos
-  LINUX_TARGET: x86_64-unknown-linux-gnu
   LINUX64_NAME: x86_64-linux-gnu
+  LINUX32_NAME: i686-linux-gnu
 
 jobs:
-  build:
-    name: Build artifacts
+  build_64bit:
+    name: Build artifacts (64-bit)
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -28,41 +27,38 @@ jobs:
         include:
           - build: linux
             os: ubuntu-latest
-            rust: stable
+            artifact: ${{ env.LINUX64_NAME }}
           - build: macos
             os: macos-latest
-            rust: stable
+            artifact: ${{ env.MACOS64_NAME }}
           - build: windows
             os: windows-latest
-            rust: stable
+            artifact: ${{ env.WINDOWS64_NAME }}
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Cache Cargo registry
         uses: actions/cache@v2
-        if: matrix.rust
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-registry-
 
       - name: Cache Cargo index
         uses: actions/cache@v2
-        if: matrix.rust
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-cargo-index-
 
       - name: Cache Cargo build
         uses: actions/cache@v2
-        if: matrix.rust
         with:
           path: target
-          key: ${{ matrix.build }}-target-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.build }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.build }}-target-
 
@@ -74,67 +70,135 @@ jobs:
           echo ::set-output name=version::"${GITHUB_REF:10}"
 
       - name: Install Rust
-        if: matrix.rust
         run: |
           rustup update ${{ matrix.rust }} --no-self-update
           rustup default ${{ matrix.rust }}
 
       - name: Build (Linux)
-        if: matrix.build == 'linux'
-        run: |
-          rustup target add ${{ env.LINUX_TARGET }}
-          cargo build --release --target ${{ env.LINUX_TARGET }}
-
-      - name: Build (MacOS)
-        if: matrix.build == 'macos'
+        if: runner.os != 'Windows'
         run: cargo build --release
 
       - name: Build (Windows)
         shell: cmd # Use cmd as the default shell to avoid perl path errors
-        if: matrix.build == 'windows'
+        if: runner.os == 'Windows'
         run: cargo build --release
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
 
-      - name: Create artifact directory
-        run: |
-          mkdir ${{ env.RELEASE_DIR }}
-          mkdir dist
+      - name: Upload binaries
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/skyd
+            target/release/skysh
+            target/release/sky-bench
+        if: runner.os != "Windows"
 
-      - name: Create Build (Linux)
-        if: matrix.build == 'linux'
-        run: |
-          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SDB }} ./dist
-          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_SKYSH }} ./dist
-          mv ./target/${{ env.LINUX_TARGET }}/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR}}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip ./dist/skysh ./dist/skyd ./dist/sky-bench -j
+      - name: Upload binaries (Windows)
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/skyd.exe
+            target/release/skysh.exe
+            target/release/sky-bench.exe
+        if: runner.os == "Windows"
+  build_32bit:
+    name: Build artifacts (32-bit)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [linux, windows]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            rust: i686-unknown-linux-gnu
+            artifact: ${{ env.LINUX32_NAME }}
+          - build: windows
+            os: windows-latest
+            artifact: ${{ env.WINDOWS32_NAME }}
+            rust: i686-pc-windows-msvc
 
-      - name: Create Build (Windows)
-        if: matrix.build == 'windows'
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/registry
+          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/git
+          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-target-
+
+      - name: Query version number
+        id: get_version
         shell: bash
         run: |
-          mv ./target/release/${{ env.RELEASE_SDB }}.exe ./dist
-          mv ./target/release/${{ env.RELEASE_SKYSH }}.exe ./dist
-          mv ./target/release/${{ env.RELEASE_BENCH }}.exe ./dist
-          7z a -tzip ./${{ env.RELEASE_DIR }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip ./dist/*
+          echo "using version tag ${GITHUB_REF:10}"
+          echo ::set-output name=version::"${GITHUB_REF:10}"
 
-      - name: Create Build (MacOS)
-        if: matrix.build == 'macos'
+      - name: Install 32-bit tools (Linux)
         run: |
-          mv ./target/release/${{ env.RELEASE_SDB }} ./dist
-          mv ./target/release/${{ env.RELEASE_SKYSH }} ./dist
-          mv ./target/release/${{ env.RELEASE_BENCH }} ./dist
-          zip ./${{ env.RELEASE_DIR }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip ./dist/skysh ./dist/skyd ./dist/sky-bench -j
+          sudo apt update && sudo apt install gcc-multilib -y
+        if: runner.os == 'Linux'
+
+      - name: Install Rust
+        run: |
+          rustup target add ${{ matrix.rust }}
+
+      - name: Build (Linux)
+        if: runner.os != 'Windows'
+        run: cargo build --release
+
+      - name: Build (Windows)
+        shell: cmd # Use cmd as the default shell to avoid perl path errors
+        if: runner.os == 'Windows'
+        run: cargo build --release
+        env:
+          RUSTFLAGS: -Ctarget-feature=+crt-static
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.build }}
-          path: ./${{ env.RELEASE_DIR }}
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/skyd
+            target/release/skysh
+            target/release/sky-bench
+        if: runner.os != "Windows"
+
+      - name: Upload binaries (Windows)
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/skyd.exe
+            target/release/skysh.exe
+            target/release/sky-bench.exe
+        if: runner.os == "Windows"
 
   release:
-    name: GitHub Release
-    needs: build
+    name: Release Tier 1
+    needs:
+      - build_64bit
+      - build_32bit
     runs-on: ubuntu-latest
     steps:
       - name: Query version number
@@ -154,47 +218,57 @@ jobs:
           release_name: ${{ steps.get_version.outputs.VERSION }}
           prerelease: true
 
-      - name: Download Linux bundle
-        uses: actions/download-artifact@v1
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
         with:
-          name: linux
+          path: artifacts
 
-      - name: Download Windows bundle
-        uses: actions/download-artifact@v1
-        with:
-          name: windows
-
-      - name: Download MacOS bundle
-        uses: actions/download-artifact@v1
-        with:
-          name: macos
-
-      - name: Release Linux bundle
+      - name: Release Linux bundle (x86_64)
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
+          asset_path: ./${{ env.LINUX64_NAME }}
           asset_content_type: application/octet-stream
           asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX64_NAME }}.zip
 
-      - name: Release Windows bundle
+      - name: Release Windows bundle (x86_64)
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./windows/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
+          asset_path: ./${{ env.WINDOWS64_NAME }}
           asset_content_type: application/octet-stream
           asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS64_NAME }}.zip
 
-      - name: Release MacOS bundle
+      - name: Release MacOS bundle (x86_64)
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.TDBB }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./macos/sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
+          asset_path: ${{ env.MACOS64_NAME }}
           asset_content_type: application/octet-stream
           asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.MACOS64_NAME }}.zip
+
+      - name: Release Linux bundle (i686)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ env.LINUX64_NAME }}
+          asset_content_type: application/octet-stream
+          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.LINUX32_NAME }}.zip
+
+      - name: Release Windows bundle (i686)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.TDBB }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ env.WINDOWS64_NAME }}
+          asset_content_type: application/octet-stream
+          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS32_NAME }}.zip
