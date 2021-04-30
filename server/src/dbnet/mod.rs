@@ -394,26 +394,25 @@ pub async fn run(
     if let Err(e) = lock.unlock().await {
         log::error!("Failed to release lock on data file with '{}'", e);
         process::exit(0x100);
-    } else {
-        if let Err(e) = flush_db!(db) {
-            log::error!("Failed to flush data to disk with '{}'", e);
-            loop {
-                // Keep looping until we successfully write the in-memory table to disk
-                log::warn!("Press enter to try again...");
-                io::stdout().flush().unwrap();
-                io::stdin().read(&mut [0]).unwrap();
-                if let Ok(_) = flush_db!(db) {
-                    log::info!("Successfully saved data to disk");
-                    break;
-                } else {
-                    continue;
-                }
-            }
-        } else {
-            log::info!("Successfully saved data to disk");
-        }
-        terminal::write_info("Goodbye :)\n").unwrap();
     }
+    if let Err(e) = flush_db!(db) {
+        log::error!("Failed to flush data to disk with '{}'", e);
+        loop {
+            // Keep looping until we successfully write the in-memory table to disk
+            log::warn!("Press enter to try again...");
+            io::stdout().flush().unwrap();
+            io::stdin().read(&mut [0]).unwrap();
+            if let Ok(_) = flush_db!(db) {
+                log::info!("Successfully saved data to disk");
+                break;
+            } else {
+                continue;
+            }
+        }
+    } else {
+        log::info!("Successfully saved data to disk");
+    }
+    terminal::write_info("Goodbye :)\n").unwrap();
 }
 
 /// This is a **test only** function
