@@ -133,6 +133,14 @@ mod tests {
         file.unlock().unwrap();
         file.unlock().unwrap();
     }
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_lock_and_then_unlock() {
+        let mut file  = FileLock::lock("data4.bin").unwrap();
+        file.unlock().unwrap();
+        let mut file2 = FileLock::lock("data4.bin").unwrap();
+        file.unlock().unwrap();
+    }
 }
 
 #[cfg(windows)]

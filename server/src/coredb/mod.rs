@@ -223,6 +223,22 @@ impl Data {
     }
 }
 
+pub enum SyncFileLock {
+    FileLock(flock::FileLock),
+    FileLockTaskHandle(tokio::task::JoinHandle<diskstore::flock::FileLock>),
+}
+
+impl SyncFileLock {
+    pub async fn unlock(self) -> std::io::Result<()> {
+        match self {
+            SyncFileLock::FileLock(mut lock) => lock.unlock(),
+            SyncFileLock::FileLockTaskHandle(lock) => {
+                lock.await?.unlock()
+            }
+        }
+    }
+}
+
 impl CoreDB {
     #[cfg(debug_assertions)]
     #[allow(dead_code)] // This has been kept for debugging purposes, so we'll suppress this lint
@@ -286,7 +302,7 @@ impl CoreDB {
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
         restore_file: Option<PathBuf>,
-    ) -> TResult<(Self, Option<flock::FileLock>)> {
+    ) -> TResult<(Self, SyncFileLock)> {
         let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
@@ -325,11 +341,11 @@ impl CoreDB {
         let lock = flock::FileLock::lock("data.bin")
             .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
         if bgsave.is_disabled() {
-            Ok((db, Some(lock)))
+            Ok((db, SyncFileLock::FileLock(lock)))
         } else {
             // Spawn the BGSAVE service in a separate task
-            tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave, lock));
-            Ok((db, None))
+            let data = tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave, lock));
+            Ok((db, SyncFileLock::FileLockTaskHandle(data)))
         }
     }
     /// Create an empty in-memory table

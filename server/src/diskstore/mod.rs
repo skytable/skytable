@@ -36,7 +36,6 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
 use std::path::PathBuf;
-use std::process;
 use std::time::Duration;
 use tokio::time;
 pub mod flock;
@@ -115,14 +114,14 @@ pub async fn bgsave_scheduler(
     handle: coredb::CoreDB,
     bgsave_cfg: BGSave,
     mut file: flock::FileLock,
-) {
+) -> flock::FileLock {
     let duration = match bgsave_cfg {
         BGSave::Disabled => {
             // So, there's no BGSAVE! Looks like our user's pretty confident
             // that there won't be any power failures! Never mind, we'll just
             // shut down the BGSAVE task, and immediately return
             handle.shared.bgsave_task.notified().await;
-            return;
+            return file;
         }
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
@@ -142,17 +141,5 @@ pub async fn bgsave_scheduler(
             handle.shared.bgsave_task.notified().await
         }
     }
-    if let Err(e) = tokio::task::spawn_blocking(move || {
-        if let Err(e) = file.unlock() {
-            log::error!("Failed to release lock on data file with error '{}'", e);
-            process::exit(0x100);
-        }
-    })
-    .await
-    {
-        log::error!(
-            "Blocking operation to unlock data file failed with error '{}'",
-            e
-        );
-    }
+    file
 }
