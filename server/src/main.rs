@@ -48,6 +48,7 @@ use coredb::CoreDB;
 use dbnet::run;
 use env_logger::*;
 use libsky::util::terminal;
+use std::sync::Arc;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
@@ -79,7 +80,7 @@ fn main() {
     let db = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
-        let mut db = run(
+        let db = run(
             tcplistener,
             bgsave_config,
             snapshot_config,
@@ -87,11 +88,15 @@ fn main() {
             restore_filepath,
         )
         .await;
-        db.block_on_process_exit();
         db
     });
     // Make sure all background workers terminate
     drop(runtime);
+    assert_eq!(
+        Arc::strong_count(&db.shared),
+        1,
+        "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
+    );
     if let Err(e) = flush_db!(db) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {

@@ -348,19 +348,6 @@ impl CoreDB {
             snapcfg,
         }
     }
-    pub fn block_on_process_exit(&mut self) {
-        while Arc::strong_count(&self.shared) == self.expected_strong_count() {
-            // Acquire a lock to prevent anyone from writing something
-            let mut coretable = self.shared.table.write();
-            coretable.terminate = true;
-            // Drop the write lock first to avoid BGSAVE ending up in failing
-            // to get a read lock
-            drop(coretable);
-            // Notify the background tasks to quit
-            self.shared.bgsave_task.notify_one();
-            self.shared.snapshot_service.notify_one();
-        }
-    }
     /// Check if the database object is poisoned, that is, data couldn't be written
     /// to disk once, and hence, we have disabled write operations
     pub fn is_poisoned(&self) -> bool {
