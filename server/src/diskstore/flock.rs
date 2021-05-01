@@ -97,6 +97,18 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(Self {
+            file: self.file.try_clone()?,
+            unlocked: false,
+        })
+    }
+    /// Reacquire a lock
+    pub fn reacquire(&mut self) -> Result<()> {
+        Self::_lock(&self.file)?;
+        self.unlocked = false;
+        Ok(())
+    }
 }
 
 impl Drop for FileLock {
@@ -145,6 +157,17 @@ mod tests {
         let mut file2 = FileLock::lock("data4.bin").unwrap();
         file2.unlock().unwrap();
         drop(file2);
+    }
+    #[cfg(windows)]
+    #[test]
+    fn test_release_one_acquire_second() {
+        let mut file = FileLock::lock("data5.bin").unwrap();
+        let mut cloned = file.try_clone().unwrap();
+        file.write(&[1, 2, 3]).unwrap();
+        drop(file);
+        cloned.reacquire().unwrap();
+        cloned.write(&[4, 5, 6]).unwrap();
+        cloned.unlock().unwrap();
     }
 }
 

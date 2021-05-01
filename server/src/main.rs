@@ -77,10 +77,10 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let db = runtime.block_on(async {
+    let (db, mut descriptor) = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
-        let db = run(
+        let (db, descriptor) = run(
             tcplistener,
             bgsave_config,
             snapshot_config,
@@ -88,7 +88,7 @@ fn main() {
             restore_filepath,
         )
         .await;
-        db
+        (db, descriptor)
     });
     // Make sure all background workers terminate
     drop(runtime);
@@ -97,14 +97,19 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    if let Err(e) = flush_db!(db) {
+    // Try to acquire lock almost immediately
+    if let Err(e) = descriptor.reacquire() {
+        log::error!("Failed to reacquire lock on data file with error: '{}'", e);
+        panic!("FATAL: data file relocking failure");
+    }
+    if let Err(e) = flush_db!(db, descriptor) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db) {
+            if let Ok(_) = flush_db!(db, descriptor) {
                 log::info!("Successfully saved data to disk");
                 break;
             } else {

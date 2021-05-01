@@ -52,7 +52,7 @@ macro_rules! flush_db {
         crate::coredb::CoreDB::flush_db(&$db, None)
     };
     ($db:expr, $file:expr) => {
-        crate::coredb::CoreDB::flush_db(&$db, Some($file))
+        crate::coredb::CoreDB::flush_db(&$db, Some(&mut $file))
     };
 }
 
@@ -286,7 +286,7 @@ impl CoreDB {
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
         restore_file: Option<PathBuf>,
-    ) -> TResult<(Self, Option<flock::FileLock>)> {
+    ) -> TResult<(Self, Option<flock::FileLock>, flock::FileLock)> {
         let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
@@ -324,12 +324,13 @@ impl CoreDB {
         ));
         let lock = flock::FileLock::lock("data.bin")
             .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
+        let cloned_descriptor = lock.try_clone()?;
         if bgsave.is_disabled() {
-            Ok((db, Some(lock)))
+            Ok((db, Some(lock), cloned_descriptor))
         } else {
             // Spawn the BGSAVE service in a separate task
             tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave, lock));
-            Ok((db, None))
+            Ok((db, None, cloned_descriptor))
         }
     }
     /// Create an empty in-memory table
@@ -366,7 +367,7 @@ impl CoreDB {
         self.shared.table.read()
     }
     /// Flush the contents of the in-memory table onto disk
-    pub fn flush_db(&self, file: Option<flock::FileLock>) -> TResult<()> {
+    pub fn flush_db(&self, file: Option<&mut flock::FileLock>) -> TResult<()> {
         let data = match self.acquire_write() {
             Some(wlock) => wlock,
             None => return Err("Can no longer flush data; coretable is poisoned".into()),

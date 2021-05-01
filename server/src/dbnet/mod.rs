@@ -44,7 +44,8 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::dbnet::tcp::Listener;
-use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use crate::diskstore::{self, snapshot::DIR_REMOTE_SNAPSHOT};
+use diskstore::flock;
 mod tcp;
 use crate::CoreDB;
 use libsky::TResult;
@@ -315,16 +316,17 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<PathBuf>,
-) -> CoreDB {
+) -> (CoreDB, flock::FileLock) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
-        Ok((db, lock)) => (db, lock),
-        Err(e) => {
-            log::error!("ERROR: {}", e);
-            process::exit(0x100);
-        }
-    };
+    let (db, lock, cloned_descriptor) =
+        match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
+            Ok((db, lock, cloned_descriptor)) => (db, lock, cloned_descriptor),
+            Err(e) => {
+                log::error!("ERROR: {}", e);
+                process::exit(0x100);
+            }
+        };
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
         Ok(_) => (),
         Err(e) => match e.kind() {
@@ -391,7 +393,7 @@ pub async fn run(
         log::error!("Failed to release lock on data file with '{}'", e);
         process::exit(0x100);
     }
-    db
+    (db, cloned_descriptor)
 }
 
 /// This is a **test only** function
