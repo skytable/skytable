@@ -61,7 +61,6 @@ use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
 mod tls;
-use crate::flush_db;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -94,8 +93,6 @@ impl Terminator {
         self.terminate = true;
     }
 }
-
-use std::io::{self, prelude::*};
 
 /// Multiple Listener Interface
 ///
@@ -318,7 +315,7 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<PathBuf>,
-) {
+) -> CoreDB {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
     let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
@@ -394,23 +391,7 @@ pub async fn run(
         log::error!("Failed to release lock on data file with '{}'", e);
         process::exit(0x100);
     }
-    if let Err(e) = flush_db!(db) {
-        log::error!("Failed to flush data to disk with '{}'", e);
-        loop {
-            // Keep looping until we successfully write the in-memory table to disk
-            log::warn!("Press enter to try again...");
-            io::stdout().flush().unwrap();
-            io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db) {
-                log::info!("Successfully saved data to disk");
-                break;
-            } else {
-                continue;
-            }
-        }
-    } else {
-        log::info!("Successfully saved data to disk");
-    }
+    db
 }
 
 /// This is a **test only** function

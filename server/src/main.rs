@@ -33,6 +33,7 @@
 use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use std::io::{self, prelude::*};
 mod config;
 use std::env;
 mod admin;
@@ -70,23 +71,44 @@ fn main() {
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("server")
         .enable_all()
         .build()
-        .unwrap()
-        .block_on(async {
-            let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
-                check_args_and_get_cfg().await;
-            run(
-                tcplistener,
-                bgsave_config,
-                snapshot_config,
-                signal::ctrl_c(),
-                restore_filepath,
-            )
-            .await
-        });
+        .unwrap();
+    let db = runtime.block_on(async {
+        let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
+            check_args_and_get_cfg().await;
+        let mut db = run(
+            tcplistener,
+            bgsave_config,
+            snapshot_config,
+            signal::ctrl_c(),
+            restore_filepath,
+        )
+        .await;
+        db.block_on_process_exit();
+        db
+    });
+    // Make sure all background workers terminate
+    drop(runtime);
+    if let Err(e) = flush_db!(db) {
+        log::error!("Failed to flush data to disk with '{}'", e);
+        loop {
+            // Keep looping until we successfully write the in-memory table to disk
+            log::warn!("Press enter to try again...");
+            io::stdout().flush().unwrap();
+            io::stdin().read(&mut [0]).unwrap();
+            if let Ok(_) = flush_db!(db) {
+                log::info!("Successfully saved data to disk");
+                break;
+            } else {
+                continue;
+            }
+        }
+    } else {
+        log::info!("Successfully saved data to disk");
+    }
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 
