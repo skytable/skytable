@@ -47,7 +47,6 @@ use crate::dbnet::tcp::Listener;
 use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 mod tcp;
 use crate::CoreDB;
-use libsky::util::terminal;
 use libsky::TResult;
 use std::fs;
 use std::future::Future;
@@ -391,7 +390,7 @@ pub async fn run(
         }
     }
     server.finish_with_termsig().await;
-    if let Err(e) = lock.unlock().await {
+    if let Some(Err(e)) = lock.map(|mut val| val.unlock()) {
         log::error!("Failed to release lock on data file with '{}'", e);
         process::exit(0x100);
     }
@@ -412,7 +411,6 @@ pub async fn run(
     } else {
         log::info!("Successfully saved data to disk");
     }
-    terminal::write_info("Goodbye :)\n").unwrap();
 }
 
 /// This is a **test only** function

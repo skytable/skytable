@@ -46,6 +46,7 @@ mod resp;
 use coredb::CoreDB;
 use dbnet::run;
 use env_logger::*;
+use libsky::util::terminal;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
@@ -62,23 +63,31 @@ static GLOBAL: Jemalloc = Jemalloc;
 static MSG: &'static str = "Skytable v0.5.1 | https://github.com/skytable/skytable\n";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = "███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  \n                                                                  ";
-#[tokio::main]
-async fn main() {
+
+fn main() {
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or("info".to_owned()))
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
-    let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
-        check_args_and_get_cfg().await;
-    run(
-        tcplistener,
-        bgsave_config,
-        snapshot_config,
-        signal::ctrl_c(),
-        restore_filepath,
-    )
-    .await;
+    tokio::runtime::Builder::new_multi_thread()
+        .thread_name("server")
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
+                check_args_and_get_cfg().await;
+            run(
+                tcplistener,
+                bgsave_config,
+                snapshot_config,
+                signal::ctrl_c(),
+                restore_filepath,
+            )
+            .await
+        });
+    terminal::write_info("Goodbye :)\n").unwrap();
 }
 
 /// This function checks the command line arguments and either returns a config object

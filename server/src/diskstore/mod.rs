@@ -40,6 +40,7 @@ use std::time::Duration;
 use tokio::time;
 pub mod flock;
 pub mod snapshot;
+use std::process;
 mod snapstore;
 
 /// This type alias is to be used when deserializing binary data from disk
@@ -114,14 +115,14 @@ pub async fn bgsave_scheduler(
     handle: coredb::CoreDB,
     bgsave_cfg: BGSave,
     mut file: flock::FileLock,
-) -> flock::FileLock {
+) {
     let duration = match bgsave_cfg {
         BGSave::Disabled => {
             // So, there's no BGSAVE! Looks like our user's pretty confident
             // that there won't be any power failures! Never mind, we'll just
             // shut down the BGSAVE task, and immediately return
             handle.shared.bgsave_task.notified().await;
-            return file;
+            return;
         }
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
@@ -141,5 +142,8 @@ pub async fn bgsave_scheduler(
             handle.shared.bgsave_task.notified().await
         }
     }
-    file
+    if let Err(e) = file.unlock() {
+        log::error!("BGSAVE task failed to unlock file with '{}'", e);
+        process::exit(0x100);
+    }
 }
