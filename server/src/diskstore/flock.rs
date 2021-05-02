@@ -92,7 +92,22 @@ impl FileLock {
     }
     /// Write something to this file
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        // Truncate the file
+        self.file.set_len(0)?;
+        // Now write to the file
         self.file.write_all(bytes)
+    }
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(Self {
+            file: self.file.try_clone()?,
+            unlocked: false,
+        })
+    }
+    /// Reacquire a lock
+    pub fn reacquire(&mut self) -> Result<()> {
+        Self::_lock(&self.file)?;
+        self.unlocked = false;
+        Ok(())
     }
 }
 
@@ -133,6 +148,27 @@ mod tests {
         file.unlock().unwrap();
         file.unlock().unwrap();
     }
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_lock_and_then_unlock() {
+        let mut file = FileLock::lock("data4.bin").unwrap();
+        file.unlock().unwrap();
+        drop(file);
+        let mut file2 = FileLock::lock("data4.bin").unwrap();
+        file2.unlock().unwrap();
+        drop(file2);
+    }
+    #[cfg(windows)]
+    #[test]
+    fn test_release_one_acquire_second() {
+        let mut file = FileLock::lock("data5.bin").unwrap();
+        let mut cloned = file.try_clone().unwrap();
+        file.write(&[1, 2, 3]).unwrap();
+        drop(file);
+        cloned.reacquire().unwrap();
+        cloned.write(&[4, 5, 6]).unwrap();
+        cloned.unlock().unwrap();
+    }
 }
 
 #[cfg(windows)]
@@ -144,7 +180,7 @@ mod __sys {
     use std::io::{Error, Result};
     use std::mem;
     use std::os::windows::io::AsRawHandle;
-    use winapi::shared::minwindef::{DWORD};
+    use winapi::shared::minwindef::DWORD;
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
     /// Obtain an exclusive lock and **block** until we acquire it
@@ -172,9 +208,7 @@ mod __sys {
     }
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
-        let ret = unsafe {
-            UnlockFile(file.as_raw_handle(), 0, 0, !0, !0)
-        };
+        let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
         if ret == 0 {
             Err(Error::last_os_error())
         } else {

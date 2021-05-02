@@ -335,8 +335,9 @@ where
                 #[cfg(windows)]
                 Err(e) => match e.kind() {
                     ErrorKind::ConnectionReset => return Ok(()),
-                    _ => return Err(e.into())
+                    _ => return Err(e.into()),
                 },
+                #[cfg(not(windows))]
                 Err(e) => return Err(e.into()),
             }
         }

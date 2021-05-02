@@ -36,11 +36,11 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
 use std::path::PathBuf;
-use std::process;
 use std::time::Duration;
 use tokio::time;
 pub mod flock;
 pub mod snapshot;
+use std::process;
 mod snapstore;
 
 /// This type alias is to be used when deserializing binary data from disk
@@ -142,17 +142,8 @@ pub async fn bgsave_scheduler(
             handle.shared.bgsave_task.notified().await
         }
     }
-    if let Err(e) = tokio::task::spawn_blocking(move || {
-        if let Err(e) = file.unlock() {
-            log::error!("Failed to release lock on data file with error '{}'", e);
-            process::exit(0x100);
-        }
-    })
-    .await
-    {
-        log::error!(
-            "Blocking operation to unlock data file failed with error '{}'",
-            e
-        );
+    if let Err(e) = file.unlock() {
+        log::error!("BGSAVE task failed to unlock file with '{}'", e);
+        process::exit(0x100);
     }
 }

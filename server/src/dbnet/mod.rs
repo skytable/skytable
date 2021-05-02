@@ -44,10 +44,10 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::dbnet::tcp::Listener;
-use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use crate::diskstore::{self, snapshot::DIR_REMOTE_SNAPSHOT};
+use diskstore::flock;
 mod tcp;
 use crate::CoreDB;
-use libsky::util::terminal;
 use libsky::TResult;
 use std::fs;
 use std::future::Future;
@@ -62,7 +62,6 @@ use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
 mod tls;
-use crate::flush_db;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -95,8 +94,6 @@ impl Terminator {
         self.terminate = true;
     }
 }
-
-use std::io::{self, prelude::*};
 
 /// Multiple Listener Interface
 ///
@@ -319,16 +316,17 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<PathBuf>,
-) {
+) -> (CoreDB, flock::FileLock) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
-        Ok((db, lock)) => (db, lock),
-        Err(e) => {
-            log::error!("ERROR: {}", e);
-            process::exit(0x100);
-        }
-    };
+    let (db, lock, cloned_descriptor) =
+        match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
+            Ok((db, lock, cloned_descriptor)) => (db, lock, cloned_descriptor),
+            Err(e) => {
+                log::error!("ERROR: {}", e);
+                process::exit(0x100);
+            }
+        };
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
         Ok(_) => (),
         Err(e) => match e.kind() {
@@ -391,30 +389,11 @@ pub async fn run(
         }
     }
     server.finish_with_termsig().await;
-    if let Some(mut lock) = lock {
-        if let Err(e) = lock.unlock() {
-            log::error!("Failed to release lock on data file with '{}'", e);
-            process::exit(0x100);
-        }
+    if let Some(Err(e)) = lock.map(|mut val| val.unlock()) {
+        log::error!("Failed to release lock on data file with '{}'", e);
+        process::exit(0x100);
     }
-    if let Err(e) = flush_db!(db) {
-        log::error!("Failed to flush data to disk with '{}'", e);
-        loop {
-            // Keep looping until we successfully write the in-memory table to disk
-            log::warn!("Press enter to try again...");
-            io::stdout().flush().unwrap();
-            io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db) {
-                log::info!("Successfully saved data to disk");
-                break;
-            } else {
-                continue;
-            }
-        }
-    } else {
-        log::info!("Successfully saved data to disk");
-    }
-    terminal::write_info("Goodbye :)\n").unwrap();
+    (db, cloned_descriptor)
 }
 
 /// This is a **test only** function
