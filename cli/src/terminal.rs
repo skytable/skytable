@@ -13,21 +13,21 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
 
-use crossterm::cursor;
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Print;
 use crossterm::terminal;
+use crossterm::{cursor, style::Styler};
 use crossterm::{Command, ExecutableCommand};
 use std::error::Error;
 use std::fmt::Display;
@@ -51,7 +51,6 @@ pub struct Terminal {
     current_index: Option<usize>,
     bytes_from_history: usize,
     init_len: usize,
-    cursor_position: (u16, u16),
 }
 
 impl Terminal {
@@ -63,8 +62,7 @@ impl Terminal {
                     .collect::<Vec<String>>()
             })
             .unwrap_or(Vec::new());
-        enable_raw_mode()?;
-        Ok(Terminal {
+        let mut terminal = Terminal {
             stdout,
             internal_buffer: String::with_capacity(TERMINAL_BUFFER_SIZE),
             bytes_left_to_go_ahead_on_screen: 0,
@@ -73,12 +71,31 @@ impl Terminal {
             current_index: None,
             init_len: history.len(),
             history,
-            cursor_position: cursor::position()?,
-        })
-    }
-    fn update_internal_cursor(&mut self) -> EmptyRetError {
-        self.cursor_position = cursor::position()?;
-        Ok(())
+        };
+        enable_raw_mode()?;
+        terminal.writeln("Skytable Shell v0.5.2 ALPHA")?;
+        terminal.writeln("Copyright (c) 2021 Sayan Nandan <nandansayan@outlook.com>")?;
+        terminal.writeln(
+            "THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD"
+        )?;
+        terminal.writeln(
+            "TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN",
+        )?;
+        terminal.writeln(
+            "NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL"
+        )?;
+        terminal.writeln(
+            "DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR OR PROFITS,",
+        )?;
+        terminal.writeln(
+            "WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT",
+        )?;
+        terminal.writeln("OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n")?;
+        terminal.writeln(format!("{}", "NOTE: ".bold()))?;
+        terminal
+            .writeln("CMD+C, LEFT, RIGHT, BACKSPACE, CMD+LEFT and CMD+RIGHT art the only valid")?;
+        terminal.writeln("keystrokes. Any other unknown keystroke(s) will simply be ignored!\n")?;
+        Ok(terminal)
     }
     pub fn run_repl(mut self) {
         fn run(terminal: &mut Terminal) -> Result<(), DynError> {
@@ -167,7 +184,7 @@ impl Terminal {
         self.run(Print(dat))
     }
     fn terminal_scroll_down_if_required(&mut self) -> EmptyRetError {
-        let (current_column, current_height) = self.cursor_position;
+        let (current_column, current_height) = cursor::position()?;
         let (_terminal_width, terminal_height) = terminal::size()?;
         if current_height + 1 >= terminal_height {
             self.run(terminal::ScrollUp(1))?;
@@ -175,12 +192,27 @@ impl Terminal {
         }
         Ok(())
     }
+    fn is_at_first_col(&self) -> Result<bool, DynError> {
+        let (current_column, _) = cursor::position()?;
+        if current_column == 0 {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+    fn is_at_last_col(&self) -> Result<bool, DynError> {
+        let (current_column, _) = cursor::position()?;
+        if current_column == terminal::size()?.0 {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
     fn write(&mut self, dat: impl Display) -> EmptyRetError {
         self.run(Print(dat))
     }
     fn run(&mut self, cmd: impl Command) -> EmptyRetError {
         self.stdout.execute(cmd)?;
-        self.update_internal_cursor()?;
         Ok(())
     }
     fn cursor_has_moved(&self) -> bool {
@@ -402,7 +434,13 @@ impl Terminal {
             // As we moved a byte ahead, we can go back by one more byte
             self.bytes_left_to_go_ahead_on_screen -= n as usize;
             self.bytes_left_to_go_back_on_screen += n as usize;
-            self.cursor_move_right(n)?;
+            if self.is_at_last_col()? {
+                // We're at the last col and yet there are some bytes to go ahead; likely the next line
+                self.run(cursor::MoveToNextLine(1))?;
+                self.run(cursor::MoveToColumn(0))?;
+            } else {
+                self.cursor_move_right(n)?;
+            }
         }
         Ok(())
     }
@@ -412,8 +450,16 @@ impl Terminal {
             // Since we're going back by one byte, we can go ahead by one more byte
             self.bytes_left_to_go_back_on_screen -= n as usize;
             self.bytes_left_to_go_ahead_on_screen += n as usize;
-            // Now move the cursor back
-            self.cursor_move_left(n)?;
+            if self.is_at_first_col()? {
+                // Uh oh; we're at the last col, but still can scroll
+                // It is likely that the last write to the terminal spanned across multiple lines
+                // in that case, move up one line and then move to the extreme left
+                self.run(cursor::MoveToPreviousLine(1))?;
+                self.run(cursor::MoveToColumn(terminal::size()?.0))?;
+            } else {
+                // Now move the cursor back
+                self.cursor_move_left(n)?;
+            }
         }
         Ok(())
     }
