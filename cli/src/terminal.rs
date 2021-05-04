@@ -54,6 +54,11 @@ pub struct Terminal {
 }
 
 impl Terminal {
+    /// Initialize a new `Terminal` instance
+    ///
+    /// This function will attempt to read from a `.sky_history` file to check for any previous command
+    /// history or if it fails to read any such file, it will let it be. This function also prints
+    /// a notice and enables raw mode by itself
     pub fn new(stdout: Stdout) -> Result<Self, DynError> {
         let history = fs::read_to_string(".sky_history")
             .map(|vals| {
@@ -62,6 +67,7 @@ impl Terminal {
                     .collect::<Vec<String>>()
             })
             .unwrap_or(Vec::new());
+        enable_raw_mode()?;
         let mut terminal = Terminal {
             stdout,
             internal_buffer: String::with_capacity(TERMINAL_BUFFER_SIZE),
@@ -72,7 +78,6 @@ impl Terminal {
             init_len: history.len(),
             history,
         };
-        enable_raw_mode()?;
         terminal.writeln("Skytable Shell v0.5.2 ALPHA")?;
         terminal.writeln("Copyright (c) 2021 Sayan Nandan <nandansayan@outlook.com>")?;
         terminal.writeln(
@@ -97,6 +102,9 @@ impl Terminal {
         terminal.writeln("keystrokes. Any other unknown keystroke(s) will simply be ignored!\n")?;
         Ok(terminal)
     }
+    /// Starts a repl, responding to known keystrokes and ignoring unknown keystrokes
+    ///
+    /// This will save_history once this terminal session ends
     pub fn run_repl(mut self) {
         fn run(terminal: &mut Terminal) -> Result<(), DynError> {
             terminal.print_skysh()?;
@@ -167,15 +175,25 @@ impl Terminal {
             process::exit(0x100);
         }
     }
+    /// Prints `skysh >` in a **new line**
     fn print_skysh(&mut self) -> EmptyRetError {
         self.writeln("skysh> ")
     }
+    /// Pushes a char `ch` into the internal buffer
     fn push_to_buf(&mut self, ch: char) {
         self.internal_buffer.push(ch);
     }
+    /// Inserts a char `ch` into index `idx` of the internal buffer
     fn insert_into_buf(&mut self, idx: usize, ch: char) {
         self.internal_buffer.insert(idx, ch)
     }
+    /// Writes a single value to the terminal **without** any **newline**
+    fn write(&mut self, dat: impl Display) -> EmptyRetError {
+        self.run(Print(dat))
+    }
+    /// Writes a single value to the terminal **with** a **newline**
+    ///
+    /// This function will occasionally scroll down if the cursor reaches the bottom line
     fn writeln(&mut self, dat: impl Display) -> EmptyRetError {
         // First set cursor to (col: 0, row: next line)
         self.run(cursor::MoveToColumn(0))?;
@@ -183,6 +201,10 @@ impl Terminal {
         self.run(cursor::MoveToNextLine(1))?;
         self.run(Print(dat))
     }
+    /// Scroll down the terminal if required
+    ///
+    /// This condition depends on whether the cursor is currently at the last row of the current terminal
+    /// size - 1; if so, then the terminal is scrolled up by one row
     fn terminal_scroll_down_if_required(&mut self) -> EmptyRetError {
         let (current_column, current_height) = cursor::position()?;
         let (_terminal_width, terminal_height) = terminal::size()?;
@@ -192,6 +214,7 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Returns `Ok(true)` if the cursor is currently at (0, n)
     fn is_at_first_col(&self) -> Result<bool, DynError> {
         let (current_column, _) = cursor::position()?;
         if current_column == 0 {
@@ -200,6 +223,7 @@ impl Terminal {
             Ok(false)
         }
     }
+    /// Returns `Ok(true)` if the cursor is currently at (o, terminal_size.horizontal)
     fn is_at_last_col(&self) -> Result<bool, DynError> {
         let (current_column, _) = cursor::position()?;
         if current_column == terminal::size()?.0 {
@@ -208,17 +232,22 @@ impl Terminal {
             Ok(false)
         }
     }
-    fn write(&mut self, dat: impl Display) -> EmptyRetError {
-        self.run(Print(dat))
-    }
+    /// Runs a raw `Command` on `stdout`
     fn run(&mut self, cmd: impl Command) -> EmptyRetError {
         self.stdout.execute(cmd)?;
         Ok(())
     }
+    /// Checks if the cursor has moved
+    ///
+    /// Normally, if the cursor hasn't moved, `self.bytes_left_to_go_back` will be equal to the length of
+    /// the `internal_buffer` field and the `self.bytes_left_to_go_ahead` will be 0 as we're already at the
+    /// end of the input; if it isn't that means the user has moved the cursor
     fn cursor_has_moved(&self) -> bool {
         self.bytes_left_to_go_ahead_on_screen != 0
             || self.bytes_left_to_go_back_on_screen != self.internal_buffer.len()
     }
+    /// Reads a character from the terminal, appending it to the `internal_buffer` and adjusting position
+    /// if the cursor has moved
     fn read_char(&mut self, ch: char) -> EmptyRetError {
         if self.cursor_has_moved() {
             // Say we have 'ABCDEF'
@@ -249,6 +278,10 @@ impl Terminal {
         self.bytes_left_to_go_back_on_screen += 1;
         Ok(())
     }
+    /// Run a command on hitting enter
+    ///
+    /// This will reset all counters as and when required and also print a new `skysh >` line for the user
+    /// to start executing a new command
     fn run_on_enter(&mut self) -> Result<bool, DynError> {
         // Since we're executing, we can clean anything that previously existed
         self.current_index = None;
@@ -286,6 +319,11 @@ impl Terminal {
         self.print_skysh()?;
         Ok(false)
     }
+    /// Scroll up through history
+    ///
+    /// If there are no entries, we just ignore the call to the function. If there is some history, this
+    /// function maintains an internal position for the `history` field. If any bytes are appended from
+    /// history, then that is also updated. This command will clear any existing input.
     fn history_scroll_up(&mut self) -> EmptyRetError {
         if self.history.len() != 0 {
             self.cursor_move_left(self.bytes_left_to_go_back_on_screen as u16)?;
@@ -316,6 +354,11 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Scroll down through history
+    ///
+    /// If there are no entries, we just ignore the call to the function. If there is some history, this
+    /// function maintains an internal position for the `history` field. If any bytes are appended from
+    /// history, then that is also updated. This command will clear any existing input.
     fn history_scroll_down(&mut self) -> EmptyRetError {
         if self.history.len() != 0 {
             self.cursor_move_left(self.bytes_left_to_go_back_on_screen as u16)?;
@@ -355,6 +398,10 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Handle a backspace keypress event
+    ///
+    /// This command will clear and update the bytes on the current line and will also make adjustments
+    /// if the cursor has moved.
     fn run_backspace(&mut self) -> EmptyRetError {
         if self.internal_buffer.len() != 0 && self.bytes_left_to_go_back_on_screen != 0 {
             if self.cursor_has_moved() && self.bytes_left_to_go_back_on_screen != 0 {
@@ -413,9 +460,14 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Push an item into history
     fn append_to_history(&mut self, item: String) {
         self.history.push(item);
     }
+    /// Write something from the internal buffer to the terminal
+    ///
+    /// This is done to avoid mutable/immutable reference borrow errors. Almost any _sane_ argument
+    /// is a valid index
     fn write_idx(&mut self, idx: impl SliceIndex<[u8], Output = [u8]>) -> EmptyRetError {
         // We do this to avoid borrowed as mutable/immutable errors
         let s = unsafe {
@@ -429,6 +481,9 @@ impl Terminal {
         self.write(s)?;
         Ok(())
     }
+    /// Internal function for handling movement of the cursor to the right
+    ///
+    /// If the cursor is at the last column, then it will automatically move to the next line
     fn _terminal_scroll_right(&mut self, n: u16) -> EmptyRetError {
         if self.bytes_left_to_go_ahead_on_screen != 0 {
             // As we moved a byte ahead, we can go back by one more byte
@@ -444,6 +499,9 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Internal function for handling movement of the cursor to the left
+    ///
+    /// If the cursor is at the first column, then it will automatically move to the previous line
     fn _terminal_scroll_left(&mut self, n: u16) -> EmptyRetError {
         if self.bytes_left_to_go_back_on_screen != 0 {
             // So we do have some bytes on screen
@@ -463,45 +521,61 @@ impl Terminal {
         }
         Ok(())
     }
+    /// Resize the terminal to (x, y)
     fn resize_terminal(&mut self, x: u16, y: u16) -> EmptyRetError {
         self.run(terminal::SetSize(x, y))
     }
+    /// Move the **cursor to the left by one unit**
     fn terminal_scroll_left(&mut self) -> EmptyRetError {
         self._terminal_scroll_left(1)
     }
+    /// Move the **cursor to the right by one unit**
     fn terminal_scroll_right(&mut self) -> EmptyRetError {
         self._terminal_scroll_right(1)
     }
+    /// Move the **cursor to the extreme left**
     fn terminal_scroll_left_end(&mut self) -> EmptyRetError {
         self._terminal_scroll_left(self.bytes_left_to_go_back_on_screen as u16)
     }
+    /// Move the **cursor to the extreme right**
     fn terminal_scroll_right_end(&mut self) -> EmptyRetError {
         self._terminal_scroll_right(self.bytes_left_to_go_ahead_on_screen as u16)
     }
+    /// Clear everything on the screen from the current position
     fn clear_from_cursor_down(&mut self) -> EmptyRetError {
         self.run(Clear(ClearType::FromCursorDown))
     }
+    /// Save the cursor positon
     fn save_cursor_position(&mut self) -> EmptyRetError {
         self.run(cursor::SavePosition)
     }
+    /// Restore the cursor position
     fn restore_cursor_position(&mut self) -> EmptyRetError {
         self.run(cursor::RestorePosition)
     }
+    /// Move the **cursor to the right by `n` units**
     fn cursor_move_right(&mut self, n: u16) -> EmptyRetError {
         self.run(cursor::MoveRight(n))
     }
+    /// Move the **cursor to the left by `n` units**
     fn cursor_move_left(&mut self, n: u16) -> EmptyRetError {
         self.run(cursor::MoveLeft(n))
     }
+    /// Clear the terminal and move to the first terminal cell (0, 0)
     fn clear_terminal(&mut self) -> EmptyRetError {
         // Clean the screen
         self.run(Clear(ClearType::All))?;
         // Move the cursor to the first position
         self.run(cursor::MoveTo(0, 0))
     }
+    /// Writes a `\nGoodbye` text to the terminal; preferably called **after disabling raw mode**
     fn write_goodbye() {
         println!("\nGoodbye!");
     }
+    /// Write the history to the history file and drop self
+    ///
+    /// This command will append to/create and existing/new `.sky_history` file and will only append
+    /// any history if new commands are executed in this session
     fn save_history_and_terminate(self) -> EmptyRetError {
         let Terminal {
             history, init_len, ..
