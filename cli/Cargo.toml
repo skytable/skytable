@@ -13,3 +13,4 @@ bytes = "1.0.1"
 clap = {version = "2.33.3", features=["yaml"]}
 openssl = { version = "0.10.33", features = ["vendored"] }
 tokio-openssl = "0.6.1"
+crossterm = "0.19.0"

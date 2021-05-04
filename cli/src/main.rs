@@ -26,6 +26,7 @@
 
 mod argparse;
 mod protocol;
+mod terminal;
 use tokio;
 
 #[tokio::main]
