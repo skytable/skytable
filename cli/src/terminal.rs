@@ -408,6 +408,13 @@ impl Terminal {
     /// if the cursor has moved.
     fn run_backspace(&mut self) -> EmptyRetError {
         if self.internal_buffer.len() != 0 && self.bytes_left_to_go_back_on_screen != 0 {
+            if self.is_at_first_col()? {
+                // So we still have something to write, but we've hit the terminal
+                // boundary. Hence we'll need to move back to the last line, and place
+                // the cursor at the extreme right position
+                self.run(cursor::MoveUp(1))?;
+                self.run(cursor::MoveToColumn(terminal::size()?.0))?;
+            }
             if self.cursor_has_moved() && self.bytes_left_to_go_back_on_screen != 0 {
                 /*
                 So the cursor has moved and just popping off from the extreme right won't work
