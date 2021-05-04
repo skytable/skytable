@@ -226,7 +226,7 @@ impl Terminal {
     /// Returns `Ok(true)` if the cursor is currently at (o, terminal_size.horizontal)
     fn is_at_last_col(&self) -> Result<bool, DynError> {
         let (current_column, _) = cursor::position()?;
-        if current_column == terminal::size()?.0 {
+        if current_column == terminal::size()?.0 - 1 {
             Ok(true)
         } else {
             Ok(false)
