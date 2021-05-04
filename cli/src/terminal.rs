@@ -189,7 +189,11 @@ impl Terminal {
     }
     /// Writes a single value to the terminal **without** any **newline**
     fn write(&mut self, dat: impl Display) -> EmptyRetError {
-        self.run(Print(dat))
+        if self.is_at_last_col()? {
+            self.writeln(dat)
+        } else {
+            self.run(Print(dat))
+        }
     }
     /// Writes a single value to the terminal **with** a **newline**
     ///
