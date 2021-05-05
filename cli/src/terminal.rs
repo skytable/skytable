@@ -49,7 +49,6 @@ pub struct Terminal {
     bytes_left_to_go_ahead_on_screen: usize,
     bytes_left_to_go_back_on_screen: usize,
     current_index: Option<usize>,
-    bytes_from_history: usize,
     init_len: usize,
 }
 
@@ -73,7 +72,6 @@ impl Terminal {
             internal_buffer: String::with_capacity(TERMINAL_BUFFER_SIZE),
             bytes_left_to_go_ahead_on_screen: 0,
             bytes_left_to_go_back_on_screen: 0,
-            bytes_from_history: 0,
             current_index: None,
             init_len: history.len(),
             history,
@@ -318,7 +316,6 @@ impl Terminal {
                 self.append_to_history(self.internal_buffer.clone());
             }
             self.internal_buffer.clear();
-            self.bytes_from_history = 0;
         }
         self.print_skysh()?;
         Ok(false)
@@ -350,7 +347,6 @@ impl Terminal {
             self.current_index = Some(new_index);
             let ret = &self.history[new_index];
             self.internal_buffer = ret.clone();
-            self.bytes_from_history = ret.len();
             self.bytes_left_to_go_back_on_screen = ret.len();
             self.bytes_left_to_go_ahead_on_screen = 0;
             // Write the command
@@ -394,7 +390,6 @@ impl Terminal {
                 .unwrap_or(&"".to_owned())
                 .to_string();
             self.internal_buffer = ret.clone();
-            self.bytes_from_history = ret.len();
             self.bytes_left_to_go_back_on_screen = ret.len();
             self.bytes_left_to_go_ahead_on_screen = 0;
             // Write the command
@@ -462,12 +457,6 @@ impl Terminal {
             if self.bytes_left_to_go_back_on_screen != 0 {
                 self.bytes_left_to_go_back_on_screen -= 1;
             };
-            if self.bytes_from_history != 0 {
-                // So we've printed some line that has history and we're trying to edit that
-                // make sure that we reduce this counter so that when we scroll UP/DOWN through
-                // history, we don't end up clearing out the `skysh> ` prompt
-                self.bytes_from_history -= 1;
-            }
         }
         Ok(())
     }
