@@ -27,8 +27,12 @@
 use crate::protocol;
 use clap::load_yaml;
 use clap::App;
+use std::io::stdout;
 use libsky::terrapipe::ADDR;
+use crossterm::{execute, cursor};
+use crossterm::terminal::{Clear, ClearType};
 use protocol::{Con, Connection, SslConnection};
+use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
 use std::process;
@@ -102,6 +106,8 @@ pub async fn start_repl() {
         return;
     }
     let mut editor = Editor::<()>::new();
+    editor.set_auto_add_history(true);
+    editor.set_history_ignore_dups(true);
     let _ = editor.load_history(".sky_history");
     println!("{}", MSG_WELCOME);
     loop {
@@ -109,10 +115,10 @@ pub async fn start_repl() {
             Ok(line) => match line.to_lowercase().as_str() {
                 "exit" => break,
                 "clear" => {
-                    #[cfg(target_os = "macos")]
-                    println!("Press CMD+L to clear screen");
-                    #[cfg(not(target_os = "macos"))]
-                    println!("Press CTRL+L to clear screen");
+                    let mut stdout = stdout();
+                    execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
+                    execute!(stdout, cursor::MoveTo(0, 0)).expect("Failed to move cursor to origin");
+                    drop(stdout); // aggressively drop stdout
                     continue;
                 }
                 _ => con.execute_query(line).await,
@@ -126,5 +132,6 @@ pub async fn start_repl() {
     if let Err(e) = editor.save_history(".sky_history") {
         eprintln!("Failed to save history with error: '{}'", e);
     }
-    close_con!(con)
+    close_con!(con);
+    println!("Goodbye!");
 }
