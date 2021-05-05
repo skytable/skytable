@@ -66,7 +66,11 @@ impl Terminal {
                     .collect::<Vec<String>>()
             })
             .unwrap_or(Vec::new());
-        enable_raw_mode()?;
+        if Self::is_a_tty_writer(&stdout) {
+            enable_raw_mode()?;
+        } else {
+            return Err("Terminal is not a TTY".into());
+        }
         let mut terminal = Terminal {
             stdout,
             internal_buffer: String::with_capacity(TERMINAL_BUFFER_SIZE),
@@ -459,6 +463,10 @@ impl Terminal {
             };
         }
         Ok(())
+    }
+    fn is_a_tty_writer(stdout: &Stdout) -> bool {
+        use crossterm::tty::IsTty;
+        stdout.is_tty()
     }
     /// Push an item into history
     fn append_to_history(&mut self, item: String) {
