@@ -594,9 +594,7 @@ impl Terminal {
                     &history
                         .into_iter()
                         .skip(init_len) // skip the previous entries
-                        .map(|string| string + "\n")
-                        .map(|string| string.into_bytes())
-                        .flatten()
+                        .flat_map(|string| (string + "\n").into_bytes())
                         .collect::<Vec<u8>>(),
                 )
                 .map_err(|e| format!("Failed to write history with error: '{}'", e))?;
