@@ -7,3 +7,4 @@ snapstore.partmap
 /snapshots 
 /.idea
 .DS_Store
+.sky_history

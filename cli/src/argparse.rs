@@ -29,13 +29,14 @@ use clap::load_yaml;
 use clap::App;
 use libsky::terrapipe::ADDR;
 use protocol::{Con, Connection, SslConnection};
-use std::io::{self, prelude::*};
+use readline::{error::ReadlineError, Editor};
+use rustyline as readline;
 use std::process;
 const MSG_WELCOME: &'static str = "Skytable v0.5.1";
 
 #[macro_use]
-macro_rules! end_con_with_loop {
-    ($con:ident) => {
+macro_rules! close_con {
+    ($con:expr) => {
         if let Err(e) = $con.shutdown().await {
             eprintln!(
                 "Failed to gracefully terminate connection with error '{}'",
@@ -43,7 +44,10 @@ macro_rules! end_con_with_loop {
             );
             std::process::exit(0x100);
         }
-        break;
+    };
+    ($con:expr, $err:expr) => {
+        eprintln!("An error occurred while reading your input: '{}'", $err);
+        close_con!($con)
     };
 }
 
@@ -97,29 +101,30 @@ pub async fn start_repl() {
         con.execute_query(eval_expr.to_string()).await;
         return;
     }
+    let mut editor = Editor::<()>::new();
+    let _ = editor.load_history(".sky_history");
     println!("{}", MSG_WELCOME);
     loop {
-        print!("skysh>");
-        io::stdout()
-            .flush()
-            .expect("Couldn't flush buffer, this is a serious error!");
-        let mut rl = String::new();
-        io::stdin()
-            .read_line(&mut rl)
-            .expect("Couldn't read line, this is a serious error!");
-        if rl.trim().to_uppercase() == "EXIT" {
-            println!("Goodbye!");
-            end_con_with_loop!(con);
-        }
-        if rl.len() == 0 {
-            // The query was empty, so let it be
-            continue;
-        }
-        tokio::select! {
-            _ = con.execute_query(rl) => {},
-            _ = tokio::signal::ctrl_c() => {
-                end_con_with_loop!(con);
+        match editor.readline("skysh> ") {
+            Ok(line) => match line.to_lowercase().as_str() {
+                "exit" => break,
+                "clear" => {
+                    #[cfg(target_os = "macos")]
+                    println!("Press CMD+L to clear screen");
+                    #[cfg(not(target_os = "macos"))]
+                    println!("Press CTRL+L to clear screen");
+                    continue;
+                }
+                _ => con.execute_query(line).await,
             },
+            Err(ReadlineError::Interrupted) => break,
+            Err(err) => {
+                close_con!(con, err);
+            }
         }
     }
+    if let Err(e) = editor.save_history(".sky_history") {
+        eprintln!("Failed to save history with error: '{}'", e);
+    }
+    close_con!(con)
 }
