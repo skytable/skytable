@@ -322,7 +322,7 @@ impl CoreDB {
             db.clone(),
             snapshot_cfg,
         ));
-        let lock = flock::FileLock::lock("data.bin")
+        let lock = flock::FileLock::lock(&*PERSIST_FILE)
             .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
         let cloned_descriptor = lock.try_clone()?;
         if bgsave.is_disabled() {

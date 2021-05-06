@@ -35,6 +35,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 /// # File Lock
@@ -63,12 +64,12 @@ impl FileLock {
     ///
     /// This function will create and lock a file if it doesn't exist or it
     /// will create and lock a new file
-    pub fn lock(filename: &str) -> Result<Self> {
+    pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
             .read(false)
             .write(true)
-            .open(filename)?;
+            .open(filename.into())?;
         Self::_lock(&file)?;
         Ok(Self {
             file,
@@ -128,7 +129,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_basic_file_lock() {
-        let mut file = FileLock::lock("data.bin").unwrap();
+        let mut file = FileLock::lock("datalock.bin").unwrap();
         file.write(&[1, 2, 3]).unwrap();
         file.unlock().unwrap();
     }

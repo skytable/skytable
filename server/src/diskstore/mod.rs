@@ -49,11 +49,12 @@ type DiskStoreFromDisk = (Vec<String>, Vec<Vec<u8>>);
 /// onto disk
 type DiskStoreFromMemory<'a> = (Vec<&'a String>, Vec<&'a [u8]>);
 lazy_static::lazy_static! {
-    pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data.bin");
+    pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data/data.bin");
+    pub static ref OLD_PATH: PathBuf = PathBuf::from("./data.bin");
 }
 
-/// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
-/// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
+/// Try to get the saved data from disk. This returns `None`, if the `data/data.bin` wasn't found
+/// otherwise the `data/data.bin` file is deserialized and parsed into a `HashMap`
 pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Data>>> {
     let file = match fs::read(
         location
@@ -62,7 +63,34 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
     ) {
         Ok(f) => f,
         Err(e) => match e.kind() {
-            ErrorKind::NotFound => return Ok(None),
+            ErrorKind::NotFound => {
+                // This might be an old installation still not using the data/data.bin path
+                match fs::read(OLD_PATH.to_path_buf()) {
+                    Ok(f) => {
+                        log::warn!("Your data file was found to be in the current directory and not in data/data.bin");
+                        if let Err(e) = fs::rename("data.bin", "data/data.bin") {
+                            log::error!("Failed to move data.bin into data/data.bin directory. Consider moving it manually");
+                            return Err(format!(
+                                "Failed to move data.bin into data/data.bin: {}",
+                                e
+                            )
+                            .into());
+                        } else {
+                            log::info!("The data file has been moved into the new directory");
+                            log::warn!("This backwards compat directory support will be removed in the future");
+                        }
+                        f
+                    }
+                    Err(e) => match e.kind() {
+                        ErrorKind::NotFound => return Ok(None),
+                        _ => {
+                            return Err(
+                                format!("Coudln't read flushed data from disk: {}", e).into()
+                            )
+                        }
+                    },
+                }
+            }
             _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
         },
     };
@@ -83,7 +111,7 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
 /// Flush the in-memory table onto disk
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
-/// more specifically, the `data.bin` file
+/// more specifically, the `data/data.bin` file
 pub fn flush_data(file: &mut flock::FileLock, data: &HashMap<String, Data>) -> TResult<()> {
     let encoded = serialize(&data)?;
     file.write(&encoded)?;
