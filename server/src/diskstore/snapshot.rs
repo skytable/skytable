@@ -53,6 +53,7 @@ lazy_static::lazy_static! {
 ///
 /// This is currently a `snapshot` directory under the current directory
 pub const DIR_SNAPSHOT: &'static str = "data/snapshots";
+pub const DIR_OLD_SNAPSHOT: &'static str = "snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;
@@ -246,9 +247,7 @@ fn test_snapshot() {
     let mut snapengine = SnapshotEngine::new(4, &db, Some(&ourdir)).unwrap();
     let _ = snapengine.mksnap();
     let current = snapengine.get_snapshots().next().unwrap();
-    let read_hmap = diskstore::get_saved(Some(PathBuf::from(current)))
-        .unwrap()
-        .unwrap();
+    let read_hmap = fs::read(PathBuf::from(current)).unwrap();
     let dbhmap = db.get_hashmap_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
@@ -328,6 +327,7 @@ mod queue {
     //!
     //! This implementation is specifically built for use with the snapshotting utility
     use std::path::PathBuf;
+    #[cfg(test)]
     use std::slice::Iter;
     #[derive(Debug, PartialEq)]
     pub struct Queue {
@@ -368,6 +368,7 @@ mod queue {
                 x
             }
         }
+        #[cfg(test)]
         /// Returns an iterator over the slice of strings
         pub fn iter(&self) -> Iter<PathBuf> {
             self.queue.iter()

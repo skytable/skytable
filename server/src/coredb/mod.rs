@@ -41,7 +41,6 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::Notify;
@@ -285,9 +284,9 @@ impl CoreDB {
     pub fn new(
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
-        restore_file: Option<PathBuf>,
+        restore_file: Option<String>,
     ) -> TResult<(Self, Option<flock::FileLock>, flock::FileLock)> {
-        let coretable = diskstore::get_saved(restore_file)?;
+        let coretable = diskstore::get_snapshot(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
             background_tasks += 1;

@@ -28,6 +28,7 @@
 
 use crate::config::BGSave;
 use crate::coredb::{self, Data};
+use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
 use libsky::TResult;
@@ -53,17 +54,39 @@ lazy_static::lazy_static! {
     pub static ref OLD_PATH: PathBuf = PathBuf::from("./data.bin");
 }
 
+pub fn get_snapshot(path: Option<String>) -> TResult<Option<HashMap<String, Data>>> {
+    if let Some(path) = path {
+        // the path just has the snapshot name, let's improve that
+        let mut snap_location = PathBuf::from(DIR_SNAPSHOT);
+        snap_location.push(path);
+        let file = match fs::read(snap_location) {
+            Ok(f) => f,
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => {
+                    // Probably the old snapshot directory?
+                    match fs::read(DIR_OLD_SNAPSHOT) {
+                        Ok(f) => f,
+                        _ => return Err(e.into()),
+                    }
+                }
+                _ => return Err(e.into()),
+            },
+        };
+        let parsed = deserialize(file)?;
+        Ok(Some(parsed))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Try to get the saved data from disk. This returns `None`, if the `data/data.bin` wasn't found
 /// otherwise the `data/data.bin` file is deserialized and parsed into a `HashMap`
-pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Data>>> {
-    let file = match fs::read(
-        location
-            .map(|loc| loc.to_path_buf())
-            .unwrap_or(PERSIST_FILE.to_path_buf()),
-    ) {
+pub fn get_saved() -> TResult<Option<HashMap<String, Data>>> {
+    let file = match fs::read(&*PERSIST_FILE) {
         Ok(f) => f,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => {
+                // TODO(@ohsayan): Drop support for this in the future
                 // This might be an old installation still not using the data/data.bin path
                 match fs::read(OLD_PATH.to_path_buf()) {
                     Ok(f) => {
@@ -94,6 +117,11 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
             _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
         },
     };
+    let parsed = deserialize(file)?;
+    Ok(Some(parsed))
+}
+
+fn deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
     let parsed: DiskStoreFromDisk = bincode::deserialize(&file)?;
     let parsed: HashMap<String, Data> = HashMap::from_iter(
         parsed
@@ -105,7 +133,7 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
                 (key, data)
             }),
     );
-    Ok(Some(parsed))
+    Ok(parsed)
 }
 
 /// Flush the in-memory table onto disk

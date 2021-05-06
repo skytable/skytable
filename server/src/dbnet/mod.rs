@@ -53,7 +53,6 @@ use std::fs;
 use std::future::Future;
 use std::io::ErrorKind;
 use std::net::IpAddr;
-use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use tls::SslListener;
@@ -315,7 +314,7 @@ pub async fn run(
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
-    restore_filepath: Option<PathBuf>,
+    restore_filepath: Option<String>,
 ) -> (CoreDB, flock::FileLock) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
