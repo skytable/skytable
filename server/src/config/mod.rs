@@ -331,30 +331,6 @@ impl ParsedConfig {
     pub fn new_from_toml_str(tomlstr: String) -> TResult<Self> {
         Ok(ParsedConfig::from_config(toml::from_str(&tomlstr)?))
     }
-    /// Create a new `ParsedConfig` with the default `host` and `noart` settngs
-    /// and a supplied `port`
-    pub const fn default_with_port(port: u16) -> Self {
-        ParsedConfig {
-            noart: false,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, port),
-        }
-    }
-    #[cfg(test)]
-    pub const fn default_ports() -> PortConfig {
-        PortConfig::default()
-    }
-    /// Create a new `ParsedConfig` with the default `port` and `noart` settngs
-    /// and a supplied `host`
-    pub const fn default_with_host(host: IpAddr) -> Self {
-        ParsedConfig::new(
-            false,
-            BGSave::default(),
-            SnapshotConfig::default(),
-            PortConfig::new_insecure_only(host, 2003),
-        )
-    }
     /// Create a new `ParsedConfig` with all the fields
     pub const fn new(
         noart: bool,
