@@ -37,7 +37,6 @@ use regex::Regex;
 use std::fs;
 use std::hint::unreachable_unchecked;
 use std::io::ErrorKind;
-use std::path::Path;
 use std::path::PathBuf;
 lazy_static::lazy_static! {
     /// Matches any string which is in the following format:
@@ -95,10 +94,7 @@ impl<'a> SnapshotEngine<'a> {
                         let entry = entry?;
                         let path = entry.path();
                         // We'll skip the directory that contains remotely created snapshots
-                        if path.is_dir()
-                            && (path.parent().expect("Couldn't get parent path!")
-                                != Path::new("remote"))
-                        {
+                        if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
                             // If the entry is not a directory then some other
                             // file(s) is present in the directory
                             return Err(
@@ -106,24 +102,26 @@ impl<'a> SnapshotEngine<'a> {
                                     .into(),
                             );
                         }
-                        let fname = entry.file_name();
-                        let file_name = if let Some(good_file_name) = fname.to_str() {
-                            good_file_name
-                        } else {
-                            // The filename contains invalid characters
-                            return Err(
+                        if !path.is_dir() {
+                            let fname = entry.file_name();
+                            let file_name = if let Some(good_file_name) = fname.to_str() {
+                                good_file_name
+                            } else {
+                                // The filename contains invalid characters
+                                return Err(
                                 "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
                             );
-                        };
-                        if SNAP_MATCH.is_match(&file_name) {
-                            // Good, the file name matched the format we were expecting
-                            // This is a valid snapshot, add it to our `Vec` of snaps
-                            snaps.push(path);
-                        } else {
-                            // The filename contains invalid characters
-                            return Err(
+                            };
+                            if SNAP_MATCH.is_match(&file_name) {
+                                // Good, the file name matched the format we were expecting
+                                // This is a valid snapshot, add it to our `Vec` of snaps
+                                snaps.push(path);
+                            } else {
+                                // The filename contains invalid characters
+                                return Err(
                                 "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
                             );
+                            }
                         }
                     }
                     if snaps.len() != 0 {
@@ -300,7 +298,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
         SnapshotConfig::Enabled(configuration) => {
             let (duration, atmost) = configuration.decompose();
             let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle, Some(DIR_SNAPSHOT)) {
+            let mut sengine = match SnapshotEngine::new(atmost, &handle, None) {
                 Ok(ss) => ss,
                 Err(e) => {
                     log::error!("Failed to initialize snapshot service with error: '{}'", e);
