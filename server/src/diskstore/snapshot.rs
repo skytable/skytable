@@ -46,13 +46,13 @@ lazy_static::lazy_static! {
     /// ```
     static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
     /// The directory for remote snapshots
-    pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./snapshots/remote");
+    pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./data/snapshots/remote");
 }
 
 /// The default snapshot directory
 ///
 /// This is currently a `snapshot` directory under the current directory
-pub const DIR_SNAPSHOT: &'static str = "snapshots";
+pub const DIR_SNAPSHOT: &'static str = "data/snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;

@@ -26,6 +26,7 @@
 
 //! This module provides tools to handle configuration files and settings
 
+use crate::diskstore::snapshot::DIR_SNAPSHOT;
 #[cfg(test)]
 use libsky::TResult;
 use serde::Deserialize;
@@ -410,7 +411,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBu
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
     let restorefile = matches.value_of("restore").map(|val| {
-        let mut path = PathBuf::from("snapshots/");
+        let mut path = PathBuf::from(DIR_SNAPSHOT);
         path.push(val);
         path
     });

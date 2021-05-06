@@ -324,17 +324,7 @@ pub async fn run(
         Err(e) => match e.kind() {
             ErrorKind::AlreadyExists => (),
             _ => {
-                log::error!("Failed to create snapshot directories: '{}'", e);
-                process::exit(0x100);
-            }
-        },
-    }
-    match fs::create_dir("./data") {
-        Ok(_) => (),
-        Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => (),
-            _ => {
-                log::error!("Failed to create snapshot directories: '{}'", e);
+                log::error!("Failed to create data directories: '{}'", e);
                 process::exit(0x100);
             }
         },
