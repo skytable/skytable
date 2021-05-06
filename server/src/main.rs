@@ -128,7 +128,7 @@ async fn check_args_and_get_cfg() -> (
     PortConfig,
     BGSave,
     SnapshotConfig,
-    Option<std::path::PathBuf>,
+    Option<String>,
 ) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {

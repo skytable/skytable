@@ -286,7 +286,7 @@ impl CoreDB {
         snapshot_cfg: SnapshotConfig,
         restore_file: Option<String>,
     ) -> TResult<(Self, Option<flock::FileLock>, flock::FileLock)> {
-        let coretable = diskstore::get_snapshot(restore_file)?;
+        let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
             background_tasks += 1;
