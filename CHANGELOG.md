@@ -2,6 +2,20 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.5.2 [2021-05-07]
+
+> No breaking changes
+
+* `sky-bench` is less agressive and runs sanity test before benchmarking
+* `skyd` now locks the data file (the `data.bin` file)
+* The data directory structure has been changed (see #144) (all files are now stored in ./data/*)
+* Fixed 'Connection Forcibly Closed' errors on Windows (see #110)
+* Add support for line-editing and keyboard shortcuts on `skysh` (see #142)
+* Fixed problems while parsing snapshots in the snapshot directory (see #144)
+* The old data directory structure has been deprecated (see #144)
+* Official support for 32-bit platforms (see #139)
+
+
 ## Version 0.5.1 [2021-03-17]
 
 > No breaking changes
