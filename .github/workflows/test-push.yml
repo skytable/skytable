@@ -110,17 +110,17 @@ jobs:
       - name: Archive artifacts
         run: |
           mkdir dist
-          cargo build
-          mv target/debug/skyd target/debug/skysh target/debug/sky-bench dist
+          cargo build --target ${{ matrix.rust }}
+          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Archive artifacts
         shell: cmd
         run: |
-          cargo build
+          cargo build --target ${{ matrix.rust }}
           rm -rf dist
           mkdir dist
-          move target\debug\*.exe dist
+          move target\${{ matrix.rust }}\debug\*.exe dist
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
         if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
@@ -207,17 +207,17 @@ jobs:
       - name: Archive artifacts
         run: |
           mkdir dist
-          cargo build
-          mv target/debug/skyd target/debug/skysh target/debug/sky-bench dist
+          cargo build --target ${{ matrix.rust }}
+          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
 
       - name: Archive artifacts
         shell: cmd
         run: |
-          cargo build
+          cargo build --target ${{ matrix.rust }}
           rm -rf dist
           mkdir dist
-          move target\debug\*.exe dist
+          move target\${{ matrix.rust }}\debug\*.exe dist
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
         if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
@@ -294,8 +294,8 @@ jobs:
       - name: Archive artifacts
         run: |
           mkdir dist
-          cargo build
-          mv target/debug/skyd target/debug/skysh target/debug/sky-bench dist
+          cargo build --target ${{ matrix.rust }}
+          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
         if: env.IS_MD_FILE == 'false'
 
       - name: Save artifacts
