@@ -57,14 +57,31 @@ lazy_static::lazy_static! {
 fn get_snapshot(path: String) -> TResult<Option<HashMap<String, Data>>> {
     // the path just has the snapshot name, let's improve that
     let mut snap_location = PathBuf::from(DIR_SNAPSHOT);
-    snap_location.push(path);
+    snap_location.push(&path);
     let file = match fs::read(snap_location) {
         Ok(f) => f,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => {
                 // Probably the old snapshot directory?
-                match fs::read(DIR_OLD_SNAPSHOT) {
-                    Ok(f) => f,
+                let mut old_snaploc = PathBuf::from(DIR_OLD_SNAPSHOT);
+                old_snaploc.push(path);
+                match fs::read(old_snaploc) {
+                    Ok(f) => {
+                        log::warn!("The new snapshot directory is under the data directory");
+                        if let Err(e) = fs::rename(DIR_OLD_SNAPSHOT, DIR_SNAPSHOT) {
+                            log::error!(
+                                "Failed to migrate snapshot directory into new structure: {}",
+                                e
+                            );
+                            return Err(e.into());
+                        } else {
+                            log::info!(
+                                "Migrated old snapshot directory structure to newer structure"
+                            );
+                            log::warn!("This backwards compat will be removed in the future");
+                        }
+                        f
+                    }
                     _ => return Err(e.into()),
                 }
             }
