@@ -24,11 +24,6 @@ jobs:
             os: ubuntu-latest
             artifact: x86_64-linux-gnu
             rust: x86_64-unknown-linux-gnu
-          # MUSL is a Tier 2 target
-          - build: linux
-            os: ubuntu-latest
-            artifact: x86_64-linux-musl
-            rust: x86_64-unknown-linux-musl
           - build: macos
             os: macos-latest
             artifact: x86_64-macos
@@ -37,7 +32,6 @@ jobs:
             os: windows-latest
             artifact: x86_64-windows
             rust: x86_64-pc-windows-msvc
-
     steps:
       - uses: actions/checkout@v2
 
@@ -72,10 +66,6 @@ jobs:
           echo "using version tag ${GITHUB_REF:10}"
           echo ::set-output name=version::"${GITHUB_REF:10}"
 
-      - name: Install MUSL tools
-        run: sudo apt-get update && sudo apt-get install musl-tools -y
-        if: runner.os == 'Linux'
-
       - name: Install Rust
         run: |
           rustup default stable
@@ -83,12 +73,12 @@ jobs:
 
       - name: Build
         if: runner.os != 'Windows'
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.rust }}
 
       - name: Build (Windows)
         shell: cmd # Use cmd as the default shell to avoid perl path errors
         if: runner.os == 'Windows'
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.rust }}
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
 
@@ -97,9 +87,9 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            target/release/skyd
-            target/release/skysh
-            target/release/sky-bench
+            target/${{ matrix.rust }}/release/skyd
+            target/${{ matrix.rust }}/release/skysh
+            target/${{ matrix.rust }}/release/sky-bench
         if: runner.os != 'Windows'
 
       - name: Upload binaries (Windows)
@@ -107,9 +97,9 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            target/release/skyd.exe
-            target/release/skysh.exe
-            target/release/sky-bench.exe
+            target/${{ matrix.rust }}/release/skyd.exe
+            target/${{ matrix.rust }}/release/skysh.exe
+            target/${{ matrix.rust }}/release/sky-bench.exe
         if: runner.os == 'Windows'
   build_32bit:
     name: Build artifacts (32-bit)
@@ -172,12 +162,12 @@ jobs:
 
       - name: Build
         if: runner.os != 'Windows'
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.rust }}
 
       - name: Build (Windows)
         shell: cmd # Use cmd as the default shell to avoid perl path errors
         if: runner.os == 'Windows'
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.rust }}
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
 
@@ -186,9 +176,9 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            target/release/skyd
-            target/release/skysh
-            target/release/sky-bench
+            target/${{ matrix.rust }}/release/skyd
+            target/${{ matrix.rust }}/release/skysh
+            target/${{ matrix.rust }}/release/sky-bench
         if: runner.os != 'Windows'
 
       - name: Upload binaries (Windows)
@@ -196,16 +186,82 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: |
-            target/release/skyd.exe
-            target/release/skysh.exe
-            target/release/sky-bench.exe
+            target/${{ matrix.rust }}/release/skyd.exe
+            target/${{ matrix.rust }}/release/skysh.exe
+            target/${{ matrix.rust }}/release/sky-bench.exe
         if: runner.os == 'Windows'
+  build_musl:
+    name: Build Linux x86_64-musl (Tier 2)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [linux]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            artifact: x86_64-linux-musl
+            rust: x86_64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/registry
+          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/git
+          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-target-
+
+      - name: Query version number
+        id: get_version
+        shell: bash
+        run: |
+          echo "using version tag ${GITHUB_REF:10}"
+          echo ::set-output name=version::"${GITHUB_REF:10}"
+
+      - name: Install MUSL tools
+        run: |
+          sudo apt update && sudo apt install musl-tools -y
+
+      - name: Install Rust
+        run: |
+          rustup target add ${{ matrix.rust }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.rust }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            target/${{ matrix.rust }}/release/skyd
+            target/${{ matrix.rust }}/release/skysh
+            target/${{ matrix.rust }}/release/sky-bench
 
   release:
     name: Release
     needs:
       - build_64bit
       - build_32bit
+      - build_musl
     runs-on: ubuntu-latest
     steps:
       - name: Query version number
