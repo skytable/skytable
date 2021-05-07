@@ -82,18 +82,31 @@ const MAX_LOAD_FACTOR_DENOM: usize = 100;
 /// cause too many rehashes. Again, _keep it balanced_
 const DEF_INIT_CAPACITY: usize = 128;
 
-// Make sure you understand what exactly is the difference between Empty and Removed
-// Removed ones can have potential entries beyond them while removed buckets are unused
-// This distinction ensures that linear probing for the same hash doesn't return incorrect
-// results;
-
+/// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
+/// of the bucket
 enum HashBucket<K, V> {
+    /// This bucket currently holds a K/V pair
     Contains(K, V),
+    /// This bucket is empty and has never been used
+    ///
+    /// As linear probing resolves hash collisions by moving to the next bucket, it can cause
+    /// clustering across the underlying structure. An `Empty` state indicates that it is the
+    /// end of such a cluster
     Empty,
+    /// This bucket is **not empty** but **is free for new data** and was removed
+    ///
+    /// It is very important for us to distinguish between `Empty` and `Removed` buckets; here's why:
+    /// - An `Empty` bucket indicates that it has never been used; so while running a linear probe as
+    /// part of a search, if we encounter an `Empty` field for a hash, we can safely consider that
+    /// there won't be any buckets beyond that point for this hash.
+    /// - However, if it is in a `Removed` state, it indicates that some data was stored in it initially
+    /// and is now removed, but it **doesn't mean that there won't be any data beyond this bucket** for this
+    /// hash
     Removed,
 }
 
 impl<K, V> HashBucket<K, V> {
+    /// Check if this bucket has an `Empty` state
     const fn is_empty(&self) -> bool {
         if let Self::Empty = self {
             true
@@ -101,6 +114,7 @@ impl<K, V> HashBucket<K, V> {
             false
         }
     }
+    /// Check if this bucket has a `Removed` state
     const fn is_removed(&self) -> bool {
         if let Self::Removed = self {
             true
@@ -108,6 +122,7 @@ impl<K, V> HashBucket<K, V> {
             false
         }
     }
+    /// Check if the bucket is available (or free) for insertions
     const fn is_available(&self) -> bool {
         if let Self::Removed | Self::Empty = self {
             true
@@ -115,6 +130,9 @@ impl<K, V> HashBucket<K, V> {
             false
         }
     }
+    /// Get a reference to the value if `Self` has a `Contains` state
+    ///
+    /// This will return `Some(value)` if the value exists or `None` if the bucket has no value
     const fn get_value_ref(&self) -> Option<&V> {
         if let Self::Contains(_, ref val) = self {
             Some(val)
@@ -123,6 +141,7 @@ impl<K, V> HashBucket<K, V> {
         }
     }
     // don't try to const this; destructors aren't known at compile time!
+    /// Same return as [`BucketState::get_value_ref()`] except for this function dropping the bucket
     fn get_value(self) -> Option<V> {
         if let Self::Contains(_, val) = self {
             Some(val)
