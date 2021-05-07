@@ -11,7 +11,7 @@ libsky = {path = "../libsky"}
 tokio = {version = "1.5.0", features = ["full"]}
 bytes = "1.0.1"
 clap = {version = "2.33.3", features=["yaml"]}
-openssl = { version = "0.10.33", features = ["vendored"] }
+openssl = { version = "0.10.34", features = ["vendored"] }
 tokio-openssl = "0.6.1"
 rustyline = "8.0.0"
 crossterm = "0.19.0"
