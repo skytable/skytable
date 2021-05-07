@@ -28,6 +28,7 @@
 
 use crate::config::BGSave;
 use crate::coredb::{self, Data};
+use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
 use libsky::TResult;
@@ -49,23 +50,99 @@ type DiskStoreFromDisk = (Vec<String>, Vec<Vec<u8>>);
 /// onto disk
 type DiskStoreFromMemory<'a> = (Vec<&'a String>, Vec<&'a [u8]>);
 lazy_static::lazy_static! {
-    pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data.bin");
+    pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data/data.bin");
+    pub static ref OLD_PATH: PathBuf = PathBuf::from("./data.bin");
 }
 
-/// Try to get the saved data from disk. This returns `None`, if the `data.bin` wasn't found
-/// otherwise the `data.bin` file is deserialized and parsed into a `HashMap`
-pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Data>>> {
-    let file = match fs::read(
-        location
-            .map(|loc| loc.to_path_buf())
-            .unwrap_or(PERSIST_FILE.to_path_buf()),
-    ) {
+fn get_snapshot(path: String) -> TResult<Option<HashMap<String, Data>>> {
+    // the path just has the snapshot name, let's improve that
+    let mut snap_location = PathBuf::from(DIR_SNAPSHOT);
+    snap_location.push(&path);
+    let file = match fs::read(snap_location) {
         Ok(f) => f,
         Err(e) => match e.kind() {
-            ErrorKind::NotFound => return Ok(None),
-            _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
+            ErrorKind::NotFound => {
+                // Probably the old snapshot directory?
+                let mut old_snaploc = PathBuf::from(DIR_OLD_SNAPSHOT);
+                old_snaploc.push(path);
+                match fs::read(old_snaploc) {
+                    Ok(f) => {
+                        log::warn!("The new snapshot directory is under the data directory");
+                        if let Err(e) = fs::rename(DIR_OLD_SNAPSHOT, DIR_SNAPSHOT) {
+                            log::error!(
+                                "Failed to migrate snapshot directory into new structure: {}",
+                                e
+                            );
+                            return Err(e.into());
+                        } else {
+                            log::info!(
+                                "Migrated old snapshot directory structure to newer structure"
+                            );
+                            log::warn!("This backwards compat will be removed in the future");
+                        }
+                        f
+                    }
+                    _ => return Err(e.into()),
+                }
+            }
+            _ => return Err(e.into()),
         },
     };
+    let parsed = deserialize(file)?;
+    Ok(Some(parsed))
+}
+
+/// Try to get the saved data from disk. This returns `None`, if the `data/data.bin` wasn't found
+/// otherwise the `data/data.bin` file is deserialized and parsed into a `HashMap`
+pub fn get_saved(path: Option<String>) -> TResult<Option<HashMap<String, Data>>> {
+    if let Some(path) = path {
+        get_snapshot(path)
+    } else {
+        let file = match fs::read(&*PERSIST_FILE) {
+            Ok(f) => f,
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => {
+                    // TODO(@ohsayan): Drop support for this in the future
+                    // This might be an old installation still not using the data/data.bin path
+                    match fs::read(OLD_PATH.to_path_buf()) {
+                        Ok(f) => {
+                            log::warn!("Your data file was found to be in the current directory and not in data/data.bin");
+                            if let Err(e) = fs::rename("data.bin", "data/data.bin") {
+                                log::error!("Failed to move data.bin into data/data.bin directory. Consider moving it manually");
+                                return Err(format!(
+                                    "Failed to move data.bin into data/data.bin: {}",
+                                    e
+                                )
+                                .into());
+                            } else {
+                                log::info!("The data file has been moved into the new directory");
+                                log::warn!("This backwards compat directory support will be removed in the future");
+                            }
+                            f
+                        }
+                        Err(e) => match e.kind() {
+                            ErrorKind::NotFound => return Ok(None),
+                            _ => {
+                                return Err(
+                                    format!("Coudln't read flushed data from disk: {}", e).into()
+                                )
+                            }
+                        },
+                    }
+                }
+                _ => return Err(format!("Couldn't read flushed data from disk: {}", e).into()),
+            },
+        };
+        let parsed = deserialize(file)?;
+        Ok(Some(parsed))
+    }
+}
+
+#[cfg(test)]
+pub fn test_deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
+    deserialize(file)
+}
+fn deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
     let parsed: DiskStoreFromDisk = bincode::deserialize(&file)?;
     let parsed: HashMap<String, Data> = HashMap::from_iter(
         parsed
@@ -77,13 +154,13 @@ pub fn get_saved(location: Option<PathBuf>) -> TResult<Option<HashMap<String, Da
                 (key, data)
             }),
     );
-    Ok(Some(parsed))
+    Ok(parsed)
 }
 
 /// Flush the in-memory table onto disk
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
-/// more specifically, the `data.bin` file
+/// more specifically, the `data/data.bin` file
 pub fn flush_data(file: &mut flock::FileLock, data: &HashMap<String, Data>) -> TResult<()> {
     let encoded = serialize(&data)?;
     file.write(&encoded)?;

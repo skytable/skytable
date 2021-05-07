@@ -53,7 +53,6 @@ use std::fs;
 use std::future::Future;
 use std::io::ErrorKind;
 use std::net::IpAddr;
-use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 use tls::SslListener;
@@ -315,10 +314,20 @@ pub async fn run(
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
-    restore_filepath: Option<PathBuf>,
+    restore_filepath: Option<String>,
 ) -> (CoreDB, flock::FileLock) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
+    match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
+        Ok(_) => (),
+        Err(e) => match e.kind() {
+            ErrorKind::AlreadyExists => (),
+            _ => {
+                log::error!("Failed to create data directories: '{}'", e);
+                process::exit(0x100);
+            }
+        },
+    }
     let (db, lock, cloned_descriptor) =
         match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
             Ok((db, lock, cloned_descriptor)) => (db, lock, cloned_descriptor),
@@ -327,16 +336,6 @@ pub async fn run(
                 process::exit(0x100);
             }
         };
-    match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
-        Ok(_) => (),
-        Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => (),
-            _ => {
-                log::error!("Failed to create snapshot directories: '{}'", e);
-                process::exit(0x100);
-            }
-        },
-    }
     let climit = Arc::new(Semaphore::new(50000));
     let mut server = match ports {
         PortConfig::InsecureOnly { host, port } => {

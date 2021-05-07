@@ -37,7 +37,6 @@ use regex::Regex;
 use std::fs;
 use std::hint::unreachable_unchecked;
 use std::io::ErrorKind;
-use std::path::Path;
 use std::path::PathBuf;
 lazy_static::lazy_static! {
     /// Matches any string which is in the following format:
@@ -46,13 +45,14 @@ lazy_static::lazy_static! {
     /// ```
     static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
     /// The directory for remote snapshots
-    pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./snapshots/remote");
+    pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./data/snapshots/remote");
 }
 
 /// The default snapshot directory
 ///
 /// This is currently a `snapshot` directory under the current directory
-pub const DIR_SNAPSHOT: &'static str = "snapshots";
+pub const DIR_SNAPSHOT: &'static str = "data/snapshots";
+pub const DIR_OLD_SNAPSHOT: &'static str = "snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;
@@ -94,10 +94,7 @@ impl<'a> SnapshotEngine<'a> {
                         let entry = entry?;
                         let path = entry.path();
                         // We'll skip the directory that contains remotely created snapshots
-                        if path.is_dir()
-                            && (path.parent().expect("Couldn't get parent path!")
-                                != Path::new("remote"))
-                        {
+                        if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
                             // If the entry is not a directory then some other
                             // file(s) is present in the directory
                             return Err(
@@ -105,24 +102,26 @@ impl<'a> SnapshotEngine<'a> {
                                     .into(),
                             );
                         }
-                        let fname = entry.file_name();
-                        let file_name = if let Some(good_file_name) = fname.to_str() {
-                            good_file_name
-                        } else {
-                            // The filename contains invalid characters
-                            return Err(
+                        if !path.is_dir() {
+                            let fname = entry.file_name();
+                            let file_name = if let Some(good_file_name) = fname.to_str() {
+                                good_file_name
+                            } else {
+                                // The filename contains invalid characters
+                                return Err(
                                 "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
                             );
-                        };
-                        if SNAP_MATCH.is_match(&file_name) {
-                            // Good, the file name matched the format we were expecting
-                            // This is a valid snapshot, add it to our `Vec` of snaps
-                            snaps.push(path);
-                        } else {
-                            // The filename contains invalid characters
-                            return Err(
+                            };
+                            if SNAP_MATCH.is_match(&file_name) {
+                                // Good, the file name matched the format we were expecting
+                                // This is a valid snapshot, add it to our `Vec` of snaps
+                                snaps.push(path);
+                            } else {
+                                // The filename contains invalid characters
+                                return Err(
                                 "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
                             );
+                            }
                         }
                     }
                     if snaps.len() != 0 {
@@ -246,9 +245,7 @@ fn test_snapshot() {
     let mut snapengine = SnapshotEngine::new(4, &db, Some(&ourdir)).unwrap();
     let _ = snapengine.mksnap();
     let current = snapengine.get_snapshots().next().unwrap();
-    let read_hmap = diskstore::get_saved(Some(PathBuf::from(current)))
-        .unwrap()
-        .unwrap();
+    let read_hmap = diskstore::test_deserialize(fs::read(PathBuf::from(current)).unwrap()).unwrap();
     let dbhmap = db.get_hashmap_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
@@ -301,7 +298,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
         SnapshotConfig::Enabled(configuration) => {
             let (duration, atmost) = configuration.decompose();
             let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle, Some(DIR_SNAPSHOT)) {
+            let mut sengine = match SnapshotEngine::new(atmost, &handle, None) {
                 Ok(ss) => ss,
                 Err(e) => {
                     log::error!("Failed to initialize snapshot service with error: '{}'", e);
@@ -328,6 +325,7 @@ mod queue {
     //!
     //! This implementation is specifically built for use with the snapshotting utility
     use std::path::PathBuf;
+    #[cfg(test)]
     use std::slice::Iter;
     #[derive(Debug, PartialEq)]
     pub struct Queue {
@@ -368,6 +366,7 @@ mod queue {
                 x
             }
         }
+        #[cfg(test)]
         /// Returns an iterator over the slice of strings
         pub fn iter(&self) -> Iter<PathBuf> {
             self.queue.iter()

@@ -35,7 +35,6 @@ use std::fs;
 #[cfg(test)]
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
-use std::path::PathBuf;
 use toml;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
@@ -406,14 +405,10 @@ impl fmt::Display for ConfigError {
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
 /// contains an error, then this returns it as an `Err` variant
-pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, PathBuf>, ConfigError> {
+pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
-    let restorefile = matches.value_of("restore").map(|val| {
-        let mut path = PathBuf::from("snapshots/");
-        path.push(val);
-        path
-    });
+    let restorefile = matches.value_of("restore").map(|v| v.to_string());
     // Check flags
     let sslonly = matches.is_present("sslonly");
     let noart = matches.is_present("noart");
