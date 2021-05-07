@@ -14,6 +14,7 @@ All changes in this project will be noted in this file.
 * Fixed problems while parsing snapshots in the snapshot directory (see #144)
 * The old data directory structure has been deprecated (see #144)
 * Official support for 32-bit platforms (see #139)
+* Tier-2 Support for Linux musl (x86_64) (see #136, #135)
 
 
 ## Version 0.5.1 [2021-03-17]
