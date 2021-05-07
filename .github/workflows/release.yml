@@ -20,16 +20,13 @@ jobs:
       matrix:
         build: [linux, macos, windows]
         include:
-          - build: linux
-            os: ubuntu-latest
+          - os: ubuntu-latest
             artifact: x86_64-linux-gnu
             rust: x86_64-unknown-linux-gnu
-          - build: macos
-            os: macos-latest
+          - os: macos-latest
             artifact: x86_64-macos
             rust: x86_64-apple-darwin
-          - build: windows
-            os: windows-latest
+          - os: windows-latest
             artifact: x86_64-windows
             rust: x86_64-pc-windows-msvc
     steps:
@@ -39,25 +36,25 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.build }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-registry-
+            ${{ matrix.rust }}-cargo-registry-
 
       - name: Cache Cargo index
         uses: actions/cache@v2
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.build }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-cargo-index-
+            ${{ matrix.rust }}-cargo-index-
 
       - name: Cache Cargo build
         uses: actions/cache@v2
         with:
           path: target
-          key: ${{ matrix.build }}-target-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.build }}-target-
+            ${{ matrix.rust }}-target-
 
       - name: Query version number
         id: get_version
