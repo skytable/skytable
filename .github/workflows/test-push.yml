@@ -17,7 +17,8 @@ jobs:
       - test_64bit
       - test_32bit
     steps:
-      - run: exit 0
+      - name: Finish Tier 1 Tests
+        run: exit 0
   test_64bit:
     name: Test (64-bit)
     runs-on: ${{ matrix.os }}
@@ -220,6 +221,82 @@ jobs:
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
         if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+
+      - name: Save artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
+          path: dist
+        if: env.IS_MD_FILE == 'false'
+  test_musl64:
+    name: Test MUSL x86_64 (Tier 2)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            rust: x86_64-unknown-linux-musl
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
+      - name: Setup environment
+        run: |
+          chmod +x ci/setvars.sh
+          ci/setvars.sh
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/registry
+          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-registry-
+        if: env.IS_MD_FILE == 'false'
+
+      - name: Cache Cargo index
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo/git
+          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-cargo-index-
+        if: env.IS_MD_FILE == 'false'
+
+      - name: Cache Cargo build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.rust }}-target-
+        if: env.IS_MD_FILE == 'false'
+      
+      - name: Install MUSL tools
+        run: sudo apt-get update && sudo apt-get install musl-tools -y
+        if: runner.os == 'Linux'
+
+      - name: Install Rust
+        run: |
+          rustup default stable
+          rustup target add ${{ matrix.rust }}
+        if: env.IS_MD_FILE == 'false'
+
+      - name: Run Tests
+        run: cargo test --verbose --target ${{ matrix.rust }}
+        env:
+          RUST_BACKTRACE: 1
+        if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
+
+      - name: Archive artifacts
+        run: |
+          mkdir dist
+          cargo build
+          mv target/debug/skyd target/debug/skysh target/debug/sky-bench dist
+        if: env.IS_MD_FILE == 'false'
 
       - name: Save artifacts
         uses: actions/upload-artifact@v2
