@@ -298,3 +298,64 @@ impl<K: Clone, V: Clone> Clone for Table<K, V> {
         }
     }
 }
+
+// into_innner will consume the r/w lock
+
+/// An iterator over the keys in the table (Skymap)
+pub struct KeyIterator<K, V> {
+    table: Table<K, V>,
+}
+
+impl<K, V> Iterator for KeyIterator<K, V> {
+    type Item = K;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(bucket) = self.table.buckets.pop() {
+            if let HashBucket::Contains(key, _) = bucket.into_inner() {
+                return Some(key);
+            }
+        }
+        None
+    }
+}
+
+/// An iterator over the values in the table (Skymap)
+pub struct ValueIterator<K, V> {
+    table: Table<K, V>,
+}
+
+impl<K, V> Iterator for ValueIterator<K, V> {
+    type Item = V;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(bucket) = self.table.buckets.pop() {
+            if let HashBucket::Contains(_, value) = bucket.into_inner() {
+                return Some(value);
+            }
+        }
+        None
+    }
+}
+
+/// An iterator over the key/value pairs in the Skymap
+pub struct TableIterator<K, V> {
+    table: Table<K, V>,
+}
+
+impl<K, V> Iterator for TableIterator<K, V> {
+    type Item = (K, V);
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(bucket) = self.table.buckets.pop() {
+            if let HashBucket::Contains(key, value) = bucket.into_inner() {
+                return Some((key, value));
+            }
+        }
+        None
+    }
+}
+
+impl<K, V> IntoIterator for Table<K, V> {
+    type Item = (K, V);
+    type IntoIter = TableIterator<K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        TableIterator { table: self }
+    }
+}
