@@ -24,7 +24,7 @@
  *
 */
 
-//! # A concurrent hashmap
+//! # Skymap &mdash; A concurrent hashmap
 //!
 //! This module implements [`Skymap`] an extremely fast concurrent Hashmap (or Hashtable). The primary goal
 //! of this Hashmap is to reduce lock contentions when in a concurrent environment. This is achieved by using
@@ -90,6 +90,7 @@ const DEF_MIN_CAPACITY: usize = 16;
 
 /// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
 /// of the bucket
+#[derive(Clone)]
 enum HashBucket<K, V> {
     /// This bucket currently holds a K/V pair
     Contains(K, V),
@@ -157,8 +158,11 @@ impl<K, V> HashBucket<K, V> {
     }
 }
 
+/// The low-level _inner_ hashtable
 struct Table<K, V> {
+    /// The buckets
     buckets: Vec<RwLock<HashBucket<K, V>>>,
+    /// The hasher
     hasher: RandomState,
 }
 
@@ -198,6 +202,10 @@ where
         key.hash(&mut hasher);
         hasher.finish() as usize
     }
+    /// Look for a `key` that matches a `predicate` `F` and return an immutable guard to it
+    ///
+    /// This is a low-level operation for matching keys and shouldn't be used until you know what
+    /// you're doing!
     fn scan<F, Q>(&self, key: &Q, predicate: F) -> RwLockReadGuard<HashBucket<K, V>>
     where
         F: Fn(&HashBucket<K, V>) -> bool,
@@ -220,6 +228,7 @@ where
         }
         panic!("The given predicate doesn't match any bucket in our hash range");
     }
+    /// Same as [`Self::scan`] except for this returning a mutable guard
     fn scan_mut<F, Q>(&self, key: &Q, predicate: F) -> RwLockWriteGuard<HashBucket<K, V>>
     where
         F: Fn(&HashBucket<K, V>) -> bool,
@@ -235,6 +244,10 @@ where
         }
         panic!("The given predicate doesn't match any bucket in our hash range");
     }
+    /// Look up a `key`
+    ///
+    /// This will either return an immutable reference to a [`HashBucket`] containing the k/v pair
+    /// or it will return an empty bucket
     fn lookup<Q>(&self, key: &Q) -> RwLockReadGuard<HashBucket<K, V>>
     where
         Q: ?Sized + PartialEq + Hash,
@@ -252,6 +265,7 @@ where
             _ => false,
         })
     }
+    /// Same as [`Self::lookup`] except that it returns a mutable guard to the bucket
     fn lookup_mut<Q>(&self, key: &Q) -> RwLockWriteGuard<HashBucket<K, V>>
     where
         Q: ?Sized + PartialEq + Hash,
@@ -265,5 +279,22 @@ where
             // Nah, that doesn't work
             _ => false,
         })
+    }
+    /// Returns a free bucket available to store a key
+    fn find_free_mut(&self, key: &K) -> RwLockWriteGuard<HashBucket<K, V>> {
+        self.scan_mut(key, |bucket| bucket.is_available())
+    }
+}
+
+impl<K: Clone, V: Clone> Clone for Table<K, V> {
+    fn clone(&self) -> Self {
+        Table {
+            hasher: self.hasher.clone(),
+            buckets: self
+                .buckets
+                .iter()
+                .map(|bucket| RwLock::new(bucket.read().clone()))
+                .collect(),
+        }
     }
 }
