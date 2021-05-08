@@ -359,3 +359,41 @@ impl<K, V> IntoIterator for Table<K, V> {
         TableIterator { table: self }
     }
 }
+
+/// A [`Skymap`] is a concurrent hashtable
+pub struct Skymap<K, V> {
+    table: RwLock<Table<K, V>>,
+    len: AtomicUsize,
+}
+
+impl<K, V> Skymap<K, V> {
+    pub fn new() -> Self {
+        Self::with_capacity(DEF_INIT_CAPACITY)
+    }
+    pub fn with_capacity(cap: usize) -> Self {
+        Skymap {
+            table: RwLock::new(Table::with_capacity(cap)),
+            len: AtomicUsize::new(0),
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.len.load(MEMORY_ORDERING)
+    }
+    pub fn buckets_count(&self) -> usize {
+        self.table.read().buckets.len()
+    }
+    pub fn capacity(&self) -> usize {
+        cmp::max(DEF_MIN_CAPACITY, Self::buckets_count(&self)) * MAX_LOAD_FACTOR_TOP
+            / MAX_LOAD_FACTOR_DENOM
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn clear(&self) -> Self {
+        let mut lock = self.table.write();
+        Skymap {
+            table: RwLock::new(mem::replace(&mut *lock, Table::new(DEF_INIT_CAPACITY))),
+            len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
+        }
+    }
+}
