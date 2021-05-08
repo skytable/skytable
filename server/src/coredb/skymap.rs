@@ -51,6 +51,9 @@
 //! from then on until we find an empty bucket. The same happens while searching through the buckets
 //!
 
+use parking_lot::RwLock;
+use parking_lot::RwLockReadGuard;
+use parking_lot::RwLockWriteGuard;
 use std::borrow::Borrow;
 use std::cmp;
 use std::collections::hash_map::RandomState;
@@ -81,6 +84,9 @@ const MAX_LOAD_FACTOR_DENOM: usize = 100;
 /// For this case, a very high initial capacity attracts faster OOMs while a very low initial capacity would
 /// cause too many rehashes. Again, _keep it balanced_
 const DEF_INIT_CAPACITY: usize = 128;
+
+/// The smallest hashtable that we can have
+const DEF_MIN_CAPACITY: usize = 16;
 
 /// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
 /// of the bucket
@@ -148,5 +154,116 @@ impl<K, V> HashBucket<K, V> {
         } else {
             None
         }
+    }
+}
+
+struct Table<K, V> {
+    buckets: Vec<RwLock<HashBucket<K, V>>>,
+    hasher: RandomState,
+}
+
+impl<K, V> Table<K, V> {
+    /// Initialize a new low-level table with a number of given buckets
+    fn new(count: usize) -> Self {
+        // First create and allocate the buckets with the HashBucket state to empty
+        let mut buckets = Vec::with_capacity(count);
+        (0..count)
+            .into_iter()
+            .for_each(|_| buckets.push(RwLock::new(HashBucket::Empty)));
+        Table {
+            buckets,
+            hasher: RandomState::new(),
+        }
+    }
+    /// Initialize a new low-level table with space for atleast `cap` keys
+    fn with_capacity(cap: usize) -> Self {
+        // This table will hold at least `cap` keys
+        Table::new(cmp::max(
+            DEF_MIN_CAPACITY,
+            cap * MAX_LOAD_FACTOR_DENOM / MAX_LOAD_FACTOR_TOP + 1,
+        ))
+    }
+}
+
+impl<K, V> Table<K, V>
+where
+    K: PartialEq + Hash,
+{
+    /// Hash a key using `HashMap`'s `DefaultHasher`
+    fn hash<T>(&self, key: &T) -> usize
+    where
+        T: Hash + ?Sized,
+    {
+        let mut hasher = self.hasher.build_hasher();
+        key.hash(&mut hasher);
+        hasher.finish() as usize
+    }
+    fn scan<F, Q>(&self, key: &Q, predicate: F) -> RwLockReadGuard<HashBucket<K, V>>
+    where
+        F: Fn(&HashBucket<K, V>) -> bool,
+        Q: ?Sized + Hash,
+    {
+        let hash = self.hash(key);
+        for i in 0..self.buckets.len() {
+            /*
+              The hashes are distributed across the buckets. We start scanning from the bottom of the table
+              and start going up. Our hash index = (hash + bucket_we_are_at) % number of buckets
+              Why the modulus (%) and all that -- well, hashes can get SUPER LARGE and like 2^64 large, so
+              you possibly won't have that many buckets; that's why we shard them across the limited space we
+              have. Why +i? Well, we just checked one bucket, it didn't match the predicate, so we'll obviously
+              have to move away ... that's what linear probing does, doesn't it?
+            */
+            let lock = self.buckets[(hash + i) % self.buckets.len()].read();
+            if predicate(&lock) {
+                return lock;
+            }
+        }
+        panic!("The given predicate doesn't match any bucket in our hash range");
+    }
+    fn scan_mut<F, Q>(&self, key: &Q, predicate: F) -> RwLockWriteGuard<HashBucket<K, V>>
+    where
+        F: Fn(&HashBucket<K, V>) -> bool,
+        Q: ?Sized + Hash,
+    {
+        let hash = self.hash(key);
+        for i in 0..self.buckets.len() {
+            // To understand what's going on here, see my comment for `Self::scan`
+            let lock = self.buckets[(hash + i) % self.buckets.len()].write();
+            if predicate(&lock) {
+                return lock;
+            }
+        }
+        panic!("The given predicate doesn't match any bucket in our hash range");
+    }
+    fn lookup<Q>(&self, key: &Q) -> RwLockReadGuard<HashBucket<K, V>>
+    where
+        Q: ?Sized + PartialEq + Hash,
+        K: Borrow<Q>,
+        // The `Borrow<Q>` just tells the compiler that Q can be used to search for K; this is because you
+        // always don't have a `K` to lookup some given key; to state it 'properly', K can be borrowed as Q
+    {
+        self.scan(key, |val| match *val {
+            // Check if the keys DO match; remember fella -- same hash doesn't mean the keys have to
+            // be the same -- we're linear probing
+            HashBucket::Contains(ref target_key, _) if key == target_key.borrow() => true,
+            // Good, so there's nothing ahead; this predicate rets true, so we'll get an empty bucket
+            HashBucket::Empty => true,
+            // Nah, that doesn't work
+            _ => false,
+        })
+    }
+    fn lookup_mut<Q>(&self, key: &Q) -> RwLockWriteGuard<HashBucket<K, V>>
+    where
+        Q: ?Sized + PartialEq + Hash,
+        K: Borrow<Q>,
+    {
+        self.scan_mut(key, |val| match *val {
+            // Check if the keys DO match
+            HashBucket::Contains(ref target_key, _) if key == target_key.borrow() => true,
+            // we'll get an empty bucket mutable bucket
+            HashBucket::Empty => true,
+            // Nah, that doesn't work
+            _ => false,
+        })
     }
 }
