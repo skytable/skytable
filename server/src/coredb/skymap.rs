@@ -161,7 +161,7 @@ impl<K, V> HashBucket<K, V> {
 }
 
 /// The low-level _inner_ hashtable
-pub struct Table<K, V> {
+struct Table<K, V> {
     /// The buckets
     buckets: Vec<RwLock<HashBucket<K, V>>>,
     /// The hasher
@@ -401,6 +401,47 @@ where
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
         }
     }
+    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<guards::ReadGuard<K, V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + PartialEq,
+    {
+        if let Ok(inner) = OwningRef::new(OwningHandle::new_with_fn(self.table.read(), |table| {
+            unsafe { &*table }.lookup(key)
+        }))
+        .try_map(|x| x.get_value_ref())
+        {
+            // The bucket contains data.
+            Some(guards::ReadGuard::from_inner(inner))
+        } else {
+            // The bucket is empty/removed.
+            None
+        }
+    }
+    pub fn get_mut<Q: ?Sized>(&self, key: &Q) -> Option<guards::WriteGuard<K, V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + PartialEq,
+    {
+        if let Ok(inner) = OwningHandle::try_new(
+            OwningHandle::new_with_fn(self.table.read(), |x| unsafe { &*x }.lookup_mut(key)),
+            |x| {
+                if let &mut HashBucket::Contains(_, ref mut val) =
+                    unsafe { &mut *(x as *mut HashBucket<K, V>) }
+                {
+                    // The bucket contains data.
+                    Ok(val)
+                } else {
+                    // The bucket is empty/removed.
+                    Err(())
+                }
+            },
+        ) {
+            Some(guards::WriteGuard::from_inner(inner))
+        } else {
+            None
+        }
+    }
 }
 
 mod guards {
@@ -426,13 +467,27 @@ mod guards {
     //! lifetimes (like we did above) -- it isn't going to work! So what do we do? Of course, implement RAII
     //! guards! This module implements two guards: an immutable [`ReadGuard`] and a mutable [`WriteGuard`]
     use super::*;
-    use owning_ref::{OwningHandle, OwningRef, OwningRefMut};
+    use owning_ref::{OwningHandle, OwningRef};
     /// A RAII Guard for reading an entry in a [`Skymap`]
     pub struct ReadGuard<'a, K: 'a, V: 'a> {
-        pub inner: OwningRef<
+        inner: OwningRef<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
             V,
         >,
+    }
+
+    impl<'a, K: 'a, V: 'a> ReadGuard<'a, K, V> {
+        pub(super) fn from_inner(
+            inner: OwningRef<
+                OwningHandle<
+                    RwLockReadGuard<'a, Table<K, V>>,
+                    RwLockReadGuard<'a, HashBucket<K, V>>,
+                >,
+                V,
+            >,
+        ) -> Self {
+            Self { inner }
+        }
     }
 
     impl<'a, K, V> ops::Deref for ReadGuard<'a, K, V> {
@@ -460,10 +515,24 @@ mod guards {
 
     /// A RAII Guard for reading an entry in a [`Skymap`]
     pub struct WriteGuard<'a, K: 'a, V: 'a> {
-        inner: OwningRefMut<
-            OwningHandle<RwLockWriteGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
-            V,
+        inner: OwningHandle<
+            OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockWriteGuard<'a, HashBucket<K, V>>>,
+            &'a mut V,
         >,
+    }
+
+    impl<'a, K: 'a, V: 'a> WriteGuard<'a, K, V> {
+        pub(super) fn from_inner(
+            inner: OwningHandle<
+                OwningHandle<
+                    RwLockReadGuard<'a, Table<K, V>>,
+                    RwLockWriteGuard<'a, HashBucket<K, V>>,
+                >,
+                &'a mut V,
+            >,
+        ) -> Self {
+            Self { inner }
+        }
     }
 
     impl<'a, K, V> ops::Deref for WriteGuard<'a, K, V> {
@@ -494,4 +563,10 @@ mod guards {
     }
 
     impl<'a, K, V: Eq> Eq for WriteGuard<'a, K, V> {}
+}
+
+#[test]
+fn test_basic_get_get_mut() {
+    let skymap: Skymap<&str, ()> = Skymap::new();
+    assert!(skymap.get("sayan").is_none());
 }
