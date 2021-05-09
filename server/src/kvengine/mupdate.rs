@@ -28,8 +28,7 @@ use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::resp::GroupBegin;
-
-use std::collections::hash_map::Entry;
+use crate::coredb::htable::Entry;
 
 /// Run an `MUPDATE` query
 pub async fn mupdate<T, Strm>(

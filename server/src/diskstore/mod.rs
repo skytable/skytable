@@ -32,7 +32,7 @@ use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
 use libsky::TResult;
-use std::collections::HashMap;
+use crate::coredb::htable::HTable;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
@@ -54,7 +54,7 @@ lazy_static::lazy_static! {
     pub static ref OLD_PATH: PathBuf = PathBuf::from("./data.bin");
 }
 
-fn get_snapshot(path: String) -> TResult<Option<HashMap<String, Data>>> {
+fn get_snapshot(path: String) -> TResult<Option<HTable<String, Data>>> {
     // the path just has the snapshot name, let's improve that
     let mut snap_location = PathBuf::from(DIR_SNAPSHOT);
     snap_location.push(&path);
@@ -93,8 +93,8 @@ fn get_snapshot(path: String) -> TResult<Option<HashMap<String, Data>>> {
 }
 
 /// Try to get the saved data from disk. This returns `None`, if the `data/data.bin` wasn't found
-/// otherwise the `data/data.bin` file is deserialized and parsed into a `HashMap`
-pub fn get_saved(path: Option<String>) -> TResult<Option<HashMap<String, Data>>> {
+/// otherwise the `data/data.bin` file is deserialized and parsed into a `HTable`
+pub fn get_saved(path: Option<String>) -> TResult<Option<HTable<String, Data>>> {
     if let Some(path) = path {
         get_snapshot(path)
     } else {
@@ -139,12 +139,12 @@ pub fn get_saved(path: Option<String>) -> TResult<Option<HashMap<String, Data>>>
 }
 
 #[cfg(test)]
-pub fn test_deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
+pub fn test_deserialize(file: Vec<u8>) -> TResult<HTable<String, Data>> {
     deserialize(file)
 }
-fn deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
+fn deserialize(file: Vec<u8>) -> TResult<HTable<String, Data>> {
     let parsed: DiskStoreFromDisk = bincode::deserialize(&file)?;
-    let parsed: HashMap<String, Data> = HashMap::from_iter(
+    let parsed: HTable<String, Data> = HTable::from_iter(
         parsed
             .0
             .into_iter()
@@ -161,20 +161,20 @@ fn deserialize(file: Vec<u8>) -> TResult<HashMap<String, Data>> {
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data/data.bin` file
-pub fn flush_data(file: &mut flock::FileLock, data: &HashMap<String, Data>) -> TResult<()> {
+pub fn flush_data(file: &mut flock::FileLock, data: &HTable<String, Data>) -> TResult<()> {
     let encoded = serialize(&data)?;
     file.write(&encoded)?;
     Ok(())
 }
 
-pub fn write_to_disk(file: &PathBuf, data: &HashMap<String, Data>) -> TResult<()> {
+pub fn write_to_disk(file: &PathBuf, data: &HTable<String, Data>) -> TResult<()> {
     let mut file = fs::File::create(&file)?;
     let encoded = serialize(&data)?;
     file.write_all(&encoded)?;
     Ok(())
 }
 
-fn serialize(data: &HashMap<String, Data>) -> TResult<Vec<u8>> {
+fn serialize(data: &HTable<String, Data>) -> TResult<Vec<u8>> {
     let ds: DiskStoreFromMemory = (
         data.keys().into_iter().collect(),
         data.values().map(|val| val.get_inner_ref()).collect(),

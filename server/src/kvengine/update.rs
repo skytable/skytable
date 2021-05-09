@@ -27,12 +27,11 @@
 //! # `UPDATE` queries
 //! This module provides functions to work with `UPDATE` queries
 //!
+use crate::coredb::htable::Entry;
 use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use coredb::Data;
-
-use std::collections::hash_map::Entry;
 use std::hint::unreachable_unchecked;
 
 /// Run an `UPDATE` query

@@ -31,8 +31,7 @@ use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use coredb::Data;
-
-use std::collections::hash_map::Entry;
+use crate::coredb::htable::Entry;
 use std::hint::unreachable_unchecked;
 
 /// Run a `SET` query
