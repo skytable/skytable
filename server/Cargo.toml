@@ -10,7 +10,7 @@ tokio = { version = "1.5.0", features = ["full"] }
 bytes = "1.0.1"
 libsky = {path ="../libsky"}
 bincode = "1.3.3"
-parking_lot = "0.11.1"
+parking_lot = {version = "0.11.1", features=["owning_ref"]}
 lazy_static = "1.4.0"
 serde_derive = "1.0.125"
 futures = "0.3.14"
@@ -24,6 +24,7 @@ regex = "1.5.4"
 sky_macros = {path="../sky-macros"}
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.34", features = ["vendored"] }
+owning_ref = "0.4.1"
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 

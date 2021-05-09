@@ -51,6 +51,8 @@
 //! from then on until we find an empty bucket. The same happens while searching through the buckets
 //!
 
+use owning_ref::OwningHandle;
+use owning_ref::OwningRef;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
@@ -91,7 +93,7 @@ const DEF_MIN_CAPACITY: usize = 16;
 /// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
 /// of the bucket
 #[derive(Clone)]
-enum HashBucket<K, V> {
+pub enum HashBucket<K, V> {
     /// This bucket currently holds a K/V pair
     Contains(K, V),
     /// This bucket is empty and has never been used
@@ -140,11 +142,11 @@ impl<K, V> HashBucket<K, V> {
     /// Get a reference to the value if `Self` has a `Contains` state
     ///
     /// This will return `Some(value)` if the value exists or `None` if the bucket has no value
-    const fn get_value_ref(&self) -> Option<&V> {
+    const fn get_value_ref(&self) -> Result<&V, ()> {
         if let Self::Contains(_, ref val) = self {
-            Some(val)
+            Ok(val)
         } else {
-            None
+            Err(())
         }
     }
     // don't try to const this; destructors aren't known at compile time!
@@ -159,7 +161,7 @@ impl<K, V> HashBucket<K, V> {
 }
 
 /// The low-level _inner_ hashtable
-struct Table<K, V> {
+pub struct Table<K, V> {
     /// The buckets
     buckets: Vec<RwLock<HashBucket<K, V>>>,
     /// The hasher
@@ -366,7 +368,10 @@ pub struct Skymap<K, V> {
     len: AtomicUsize,
 }
 
-impl<K, V> Skymap<K, V> {
+impl<K, V> Skymap<K, V>
+where
+    K: Hash + PartialEq,
+{
     pub fn new() -> Self {
         Self::with_capacity(DEF_INIT_CAPACITY)
     }
@@ -396,4 +401,97 @@ impl<K, V> Skymap<K, V> {
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
         }
     }
+}
+
+mod guards {
+    //! # RAII Guards for [`Skymap`]
+    //!
+    //! If we implemented Skymap and tried to get a reference to the original value like the following:
+    //! ```rust
+    //! impl<K, V> Skymap<K, V>
+    //! where
+    //!     K: Hash + PartialEq,
+    //! {
+    //!     pub fn get<'b, 'a: 'b, Q>(&'a self, key: &Q) -> Option<&'b V>
+    //!     where
+    //!         Q: Hash + PartialEq,
+    //!         K: Borrow<Q>,
+    //!     {
+    //!         (self.table.read()).lookup(key).get_value_ref()
+    //!     }
+    //! }
+    //! ```
+    //! Then the compiler would complain stating that we're returning a reference to a temporary value created
+    //! in the function. That's absolutely correct because that's what we're doing! Even if we explicitly specify
+    //! lifetimes (like we did above) -- it isn't going to work! So what do we do? Of course, implement RAII
+    //! guards! This module implements two guards: an immutable [`ReadGuard`] and a mutable [`WriteGuard`]
+    use super::*;
+    use owning_ref::{OwningHandle, OwningRef, OwningRefMut};
+    /// A RAII Guard for reading an entry in a [`Skymap`]
+    pub struct ReadGuard<'a, K: 'a, V: 'a> {
+        pub inner: OwningRef<
+            OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
+            V,
+        >,
+    }
+
+    impl<'a, K, V> ops::Deref for ReadGuard<'a, K, V> {
+        type Target = V;
+        fn deref(&self) -> &Self::Target {
+            &self.inner
+        }
+    }
+
+    impl<'a, K, V: PartialEq> PartialEq for ReadGuard<'a, K, V> {
+        fn eq(&self, rhs: &ReadGuard<'a, K, V>) -> bool {
+            // this implictly derefs self
+            self == rhs
+        }
+    }
+
+    impl<'a, K, V> Drop for ReadGuard<'a, K, V> {
+        fn drop(&mut self) {
+            let Self { inner } = self;
+            drop(inner);
+        }
+    }
+
+    impl<'a, K, V: Eq> Eq for ReadGuard<'a, K, V> {}
+
+    /// A RAII Guard for reading an entry in a [`Skymap`]
+    pub struct WriteGuard<'a, K: 'a, V: 'a> {
+        inner: OwningRefMut<
+            OwningHandle<RwLockWriteGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
+            V,
+        >,
+    }
+
+    impl<'a, K, V> ops::Deref for WriteGuard<'a, K, V> {
+        type Target = V;
+        fn deref(&self) -> &Self::Target {
+            &self.inner
+        }
+    }
+
+    impl<'a, K, V> ops::DerefMut for WriteGuard<'a, K, V> {
+        fn deref_mut(&mut self) -> &mut <Self>::Target {
+            &mut self.inner
+        }
+    }
+
+    impl<'a, K, V: PartialEq> PartialEq for WriteGuard<'a, K, V> {
+        fn eq(&self, rhs: &WriteGuard<'a, K, V>) -> bool {
+            // this implictly derefs self
+            self == rhs
+        }
+    }
+
+    impl<'a, K, V> Drop for WriteGuard<'a, K, V> {
+        fn drop(&mut self) {
+            let Self { inner } = self;
+            drop(inner);
+        }
+    }
+
+    impl<'a, K, V: Eq> Eq for WriteGuard<'a, K, V> {}
 }
