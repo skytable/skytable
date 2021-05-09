@@ -50,6 +50,11 @@
 //! In this _strategy_ we move to the next bucket following the bucket where the hash collided and keep on moving
 //! from then on until we find an empty bucket. The same happens while searching through the buckets
 //!
+//! ## Acknowledgements
+//! Built with ideas from:
+//! - `CHashMap` that is released under the MIT License (https://lib.rs/crates/chashmap)
+//! - `Hashbrown` that is released under the Apache-2.0 or MIT License (http://github.com/rust-lang/hashbrown)
+//!
 
 use owning_ref::OwningHandle;
 use owning_ref::OwningRef;
@@ -60,6 +65,7 @@ use std::borrow::Borrow;
 use std::cmp;
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hash, Hasher};
+use std::hint::unreachable_unchecked;
 use std::iter;
 use std::mem;
 use std::ops;
@@ -418,7 +424,7 @@ where
             None
         }
     }
-    pub fn get_mut<Q: ?Sized>(&self, key: &Q) -> Option<guards::WriteGuard<K, V>>
+    pub fn get_mut<Q: ?Sized>(&self, key: &Q) -> Option<guards::WriteGuard<K, V, V>>
     where
         K: Borrow<Q>,
         Q: Hash + PartialEq,
@@ -441,6 +447,40 @@ where
         } else {
             None
         }
+    }
+    // I'm not going to have this implemented right now
+    // pub fn entry_mut<Q: ?Sized>(&self, key: &Q) -> guards::WriteGuard<K, V, HashBucket<K, V>>
+    // where
+    //     K: Borrow<Q>,
+    //     Q: Hash + PartialEq,
+    // {
+    //     let mutref: Result<
+    //         OwningHandle<
+    //             OwningHandle<
+    //                 RwLockReadGuard<'_, Table<K, V>>,
+    //                 RwLockWriteGuard<'_, HashBucket<K, V>>,
+    //             >,
+    //             &'_ mut HashBucket<K, V>,
+    //         >,
+    //         (),
+    //     > = OwningHandle::try_new(
+    //         OwningHandle::new_with_fn(self.table.read(), |x| unsafe { &*x }.lookup_mut(key)),
+    //         |x| Ok(unsafe { &mut *(x as *mut HashBucket<K, V>) }),
+    //     );
+    //     return guards::WriteGuard::from_inner(
+    //         mutref.unwrap_or_else(|_| unsafe { unreachable_unchecked() }),
+    //     );
+    //     todo!()
+    // }
+    pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + PartialEq,
+    {
+        let lock = self.table.read();
+        let bucket = lock.lookup(key);
+        // Since it isn't available, it has to be occupied
+        !bucket.is_available()
     }
 }
 
@@ -514,55 +554,55 @@ mod guards {
     impl<'a, K, V: Eq> Eq for ReadGuard<'a, K, V> {}
 
     /// A RAII Guard for reading an entry in a [`Skymap`]
-    pub struct WriteGuard<'a, K: 'a, V: 'a> {
+    pub struct WriteGuard<'a, K, V, T> {
         inner: OwningHandle<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockWriteGuard<'a, HashBucket<K, V>>>,
-            &'a mut V,
+            &'a mut T,
         >,
     }
 
-    impl<'a, K: 'a, V: 'a> WriteGuard<'a, K, V> {
+    impl<'a, K: 'a, V: 'a, T: 'a> WriteGuard<'a, K, V, T> {
         pub(super) fn from_inner(
             inner: OwningHandle<
                 OwningHandle<
                     RwLockReadGuard<'a, Table<K, V>>,
                     RwLockWriteGuard<'a, HashBucket<K, V>>,
                 >,
-                &'a mut V,
+                &'a mut T,
             >,
         ) -> Self {
             Self { inner }
         }
     }
 
-    impl<'a, K, V> ops::Deref for WriteGuard<'a, K, V> {
-        type Target = V;
+    impl<'a, K: 'a, V: 'a, T: 'a> ops::Deref for WriteGuard<'a, K, V, T> {
+        type Target = T;
         fn deref(&self) -> &Self::Target {
             &self.inner
         }
     }
 
-    impl<'a, K, V> ops::DerefMut for WriteGuard<'a, K, V> {
+    impl<'a, K: 'a, V: 'a, T: 'a> ops::DerefMut for WriteGuard<'a, K, V, T> {
         fn deref_mut(&mut self) -> &mut <Self>::Target {
             &mut self.inner
         }
     }
 
-    impl<'a, K, V: PartialEq> PartialEq for WriteGuard<'a, K, V> {
-        fn eq(&self, rhs: &WriteGuard<'a, K, V>) -> bool {
+    impl<'a, K, V: PartialEq, T: PartialEq> PartialEq for WriteGuard<'a, K, V, T> {
+        fn eq(&self, rhs: &WriteGuard<'a, K, V, T>) -> bool {
             // this implictly derefs self
             self == rhs
         }
     }
 
-    impl<'a, K, V> Drop for WriteGuard<'a, K, V> {
+    impl<'a, K: 'a, V: 'a, T: 'a> Drop for WriteGuard<'a, K, V, T> {
         fn drop(&mut self) {
             let Self { inner } = self;
             drop(inner);
         }
     }
 
-    impl<'a, K, V: Eq> Eq for WriteGuard<'a, K, V> {}
+    impl<'a, K, V: Eq, T: Eq> Eq for WriteGuard<'a, K, V, T> {}
 }
 
 #[test]
