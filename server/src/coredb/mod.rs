@@ -40,9 +40,10 @@ use libsky::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
-use std::collections::HashMap;
+use crate::coredb::htable::HTable;
 use std::sync::Arc;
 use tokio;
+pub mod htable;
 use tokio::sync::Notify;
 
 #[macro_export]
@@ -167,13 +168,13 @@ impl Shared {
     }
 }
 
-/// The `Coretable` holds all the key-value pairs in a `HashMap`
+/// The `Coretable` holds all the key-value pairs in a `HTable`
 /// and the `terminate` field, which when set to true will cause all other
 /// background tasks to terminate
 #[derive(Debug)]
 pub struct Coretable {
     /// The core table contain key-value pairs
-    coremap: HashMap<String, Data>,
+    coremap: HTable<String, Data>,
     /// The termination signal flag
     pub terminate: bool,
     /// Whether the database is poisoned or not
@@ -184,12 +185,12 @@ pub struct Coretable {
 }
 
 impl Coretable {
-    /// Get a reference to the inner `HashMap`
-    pub const fn get_ref<'a>(&'a self) -> &'a HashMap<String, Data> {
+    /// Get a reference to the inner `HTable`
+    pub const fn get_ref<'a>(&'a self) -> &'a HTable<String, Data> {
         &self.coremap
     }
-    /// Get a **mutable** reference to the inner `HashMap`
-    pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HashMap<String, Data> {
+    /// Get a **mutable** reference to the inner `HTable`
+    pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HTable<String, Data> {
         &mut self.coremap
     }
 }
@@ -338,7 +339,7 @@ impl CoreDB {
             shared: Arc::new(Shared {
                 bgsave_task: Notify::new(),
                 table: RwLock::new(Coretable {
-                    coremap: HashMap::<String, Data>::new(),
+                    coremap: HTable::<String, Data>::new(),
                     terminate: false,
                     poisoned: false,
                 }),
@@ -380,12 +381,12 @@ impl CoreDB {
     }
 
     #[cfg(test)]
-    /// Get a deep copy of the `HashMap`
+    /// Get a deep copy of the `HTable`
     ///
     /// **⚠ Do note**: This is super inefficient since it performs an actual
-    /// clone of the `HashMap` and doesn't do any `Arc`-business! This function
+    /// clone of the `HTable` and doesn't do any `Arc`-business! This function
     /// can be used by test functions and the server, but **use with caution!**
-    pub fn get_hashmap_deep_clone(&self) -> HashMap<String, Data> {
+    pub fn get_HTable_deep_clone(&self) -> HTable<String, Data> {
         (*self.acquire_read().get_ref()).clone()
     }
 
