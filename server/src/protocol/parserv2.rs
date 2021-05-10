@@ -162,6 +162,14 @@ impl<'a> Parser<'a> {
         // We'll just return this since that's all we have to do!
         Ok(ret)
     }
+    fn parse_next_actiongroup(&mut self) -> ParseResult<Vec<Vec<u8>>> {
+        let len = self.parse_dataframe_layout_get_group_size()?;
+        let mut elements = Vec::with_capacity(len);
+        for _ in 0..len {
+            elements.push(self.parse_next_datagroup_element()?);
+        }
+        Ok(elements)
+    }
 }
 
 #[test]
@@ -200,4 +208,18 @@ fn test_read_datagroup_element() {
         parser.parse_next_datagroup_element().unwrap()
     );
     assert_eq!(parser.cursor, element_with_block.len());
+}
+
+#[test]
+fn test_parse_actiongroup_single() {
+    let actiongroup = "#2\n&2\n#3\nGET\n#5\nsayan\n".as_bytes();
+    let mut parser = Parser::new(&actiongroup);
+    assert_eq!(
+        vec![
+            String::from("GET").into_bytes(),
+            String::from("sayan").into_bytes()
+        ],
+        parser.parse_next_actiongroup().unwrap()
+    );
+    assert_eq!(parser.cursor, actiongroup.len());
 }
