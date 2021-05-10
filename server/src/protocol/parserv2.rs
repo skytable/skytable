@@ -62,6 +62,7 @@ pub enum Query {
     PipelinedQuery(Vec<ActionGroup>),
 }
 
+#[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum DataType {
     /// Arrays can be nested! Their `<tsymbol>` is `&`
@@ -259,7 +260,7 @@ impl<'a> Parser<'a> {
     /// Get the next element **without** the tsymbol
     ///
     /// This function **does not forward the newline**
-    fn __parse_next_element(&mut self) -> ParseResult<&[u8]> {
+    fn __get_next_element(&mut self) -> ParseResult<&[u8]> {
         let string_sizeline = self.read_line();
         let string_size =
             Self::parse_into_usize(&self.buffer[string_sizeline.0..string_sizeline.1])?;
@@ -268,7 +269,7 @@ impl<'a> Parser<'a> {
     }
     /// The cursor should have passed the `+` tsymbol
     fn parse_next_string(&mut self) -> ParseResult<String> {
-        let our_string_chunk = self.__parse_next_element()?;
+        let our_string_chunk = self.__get_next_element()?;
         let our_string = String::from_utf8_lossy(&our_string_chunk).to_string();
         if self.will_cursor_give_linefeed()? {
             // there is a lf after the end of the string; great!
@@ -282,15 +283,44 @@ impl<'a> Parser<'a> {
     }
     /// The cursor should have passed the `:` tsymbol
     fn parse_next_u64(&mut self) -> ParseResult<u64> {
-        let our_u64_chunk = self.__parse_next_element()?;
+        let our_u64_chunk = self.__get_next_element()?;
         let our_u64 = Self::parse_into_u64(our_u64_chunk)?;
         if self.will_cursor_give_linefeed()? {
             // line feed after u64; heck yeah!
             self.incr_cursor();
+            // return it
             Ok(our_u64)
         } else {
             Err(ParseError::UnexpectedByte)
         }
+    }
+    /// The cursor should be **at the tsymbol**
+    fn parse_next_element(&mut self) -> ParseResult<DataType> {
+        if let Some(tsymbol) = self.buffer.get(self.cursor) {
+            // so we have a tsymbol; nice, let's match it
+            // but advance the cursor before doing that
+            self.incr_cursor();
+            let ret = match *tsymbol {
+                b'+' => DataType::String(self.parse_next_string()?),
+                b':' => DataType::UnsignedInt(self.parse_next_u64()?),
+                b'&' => DataType::Array(self.parse_next_array()?),
+                _ => return Err(ParseError::UnknownDatatype),
+            };
+            Ok(ret)
+        } else {
+            // Not enough bytes to read an element
+            Err(ParseError::NotEnough)
+        }
+    }
+    /// The tsymbol `&` should have been passed!
+    fn parse_next_array(&mut self) -> ParseResult<Vec<DataType>> {
+        let (start, stop) = self.read_line();
+        let array_size = Self::parse_into_usize(&self.buffer[start..stop])?;
+        let mut array = Vec::with_capacity(array_size);
+        for _ in 0..array_size {
+            array.push(self.parse_next_element()?);
+        }
+        Ok(array)
     }
     /// This will read a datagroup element and return an **owned vector** containing the bytes
     /// for the next datagroup element
@@ -576,4 +606,87 @@ fn test_parse_next_u64() {
     let bytes = "21\n184467440737095516156\n".as_bytes();
     let our_u64 = Parser::new(&bytes).parse_next_u64().unwrap_err();
     assert_eq!(our_u64, ParseError::DataTypeParseError);
+}
+
+#[test]
+fn test_parse_next_element_string() {
+    let bytes = "+5\nsayan\n".as_bytes();
+    let next_element = Parser::new(&bytes).parse_next_element().unwrap();
+    assert_eq!(next_element, DataType::String("sayan".to_owned()));
+}
+
+#[test]
+fn test_parse_next_element_u64() {
+    let bytes = ":20\n18446744073709551615\n".as_bytes();
+    let our_u64 = Parser::new(&bytes).parse_next_element().unwrap();
+    assert_eq!(our_u64, DataType::UnsignedInt(u64::MAX));
+}
+
+#[test]
+fn test_parse_next_element_array() {
+    let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\nbar\n".as_bytes();
+    let mut parser = Parser::new(&bytes);
+    let array = parser.parse_next_element().unwrap();
+    assert_eq!(
+        array,
+        DataType::Array(vec![
+            DataType::String("MGET".to_owned()),
+            DataType::String("foo".to_owned()),
+            DataType::String("bar".to_owned())
+        ])
+    );
+    assert_eq!(parser.cursor, bytes.len());
+}
+
+#[test]
+fn test_parse_nested_array() {
+    // let's test a nested array
+    let bytes =
+        "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n+6\nreally\n+4\nhard\n"
+            .as_bytes();
+    let mut parser = Parser::new(&bytes);
+    let array = parser.parse_next_element().unwrap();
+    assert_eq!(
+        array,
+        DataType::Array(vec![
+            DataType::String("ACT".to_owned()),
+            DataType::String("foo".to_owned()),
+            DataType::Array(vec![
+                DataType::String("sayan".to_owned()),
+                DataType::String("is".to_owned()),
+                DataType::String("working".to_owned()),
+                DataType::Array(vec![
+                    DataType::String("really".to_owned()),
+                    DataType::String("hard".to_owned())
+                ])
+            ])
+        ])
+    );
+    assert_eq!(parser.cursor, bytes.len());
+}
+
+#[test]
+fn test_parse_multitype_array() {
+    // let's test a nested array
+    let bytes = "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
+        .as_bytes();
+    let mut parser = Parser::new(&bytes);
+    let array = parser.parse_next_element().unwrap();
+    assert_eq!(
+        array,
+        DataType::Array(vec![
+            DataType::String("ACT".to_owned()),
+            DataType::String("foo".to_owned()),
+            DataType::Array(vec![
+                DataType::String("sayan".to_owned()),
+                DataType::String("is".to_owned()),
+                DataType::String("working".to_owned()),
+                DataType::Array(vec![
+                    DataType::UnsignedInt(23),
+                    DataType::String("april".to_owned())
+                ])
+            ])
+        ])
+    );
+    assert_eq!(parser.cursor, bytes.len());
 }
