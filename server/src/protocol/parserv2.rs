@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// This will return the number of items in a datagroup
-    fn parse_dataframe_layout_get_group_size(&mut self) -> ParseResult<usize> {
+    fn parse_datagroup_get_group_size(&mut self) -> ParseResult<usize> {
         // This will give us `#<p>\n`
         let dataframe_sizeline = self.read_sizeline()?;
         // Now we want to read `&<q>\n`
@@ -163,8 +163,9 @@ impl<'a> Parser<'a> {
         Ok(ret)
     }
     fn parse_next_actiongroup(&mut self) -> ParseResult<Vec<Vec<u8>>> {
-        let len = self.parse_dataframe_layout_get_group_size()?;
+        let len = self.parse_datagroup_get_group_size()?;
         let mut elements = Vec::with_capacity(len);
+        // so we expect `len` count of elements; let's iterate and get each element in turn
         for _ in 0..len {
             elements.push(self.parse_next_datagroup_element()?);
         }
@@ -194,7 +195,7 @@ fn test_actiongroup_size_parse() {
     let mut parser = Parser::new(&dataframe_layout);
     assert_eq!(
         12345,
-        parser.parse_dataframe_layout_get_group_size().unwrap()
+        parser.parse_datagroup_get_group_size().unwrap()
     );
     assert_eq!(parser.cursor, dataframe_layout.len());
 }
