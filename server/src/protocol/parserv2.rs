@@ -105,6 +105,14 @@ impl<'a> Parser<'a> {
     fn incr_cursor(&mut self) {
         self.cursor += 1;
     }
+    fn will_cursor_give_char(&self, ch: u8, true_if_nothing_ahead: bool) -> bool {
+        self.buffer
+            .get(self.cursor)
+            .map_or(true_if_nothing_ahead, |v| *v == ch)
+    }
+    fn will_cursor_give_linefeed(&self) -> bool {
+        self.will_cursor_give_char(b'\n', false)
+    }
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
         let mut byte_iter = bytes.into_iter();
         let mut item_usize = 0usize;
@@ -141,8 +149,14 @@ impl<'a> Parser<'a> {
             // also push the cursor ahead because we want to ignore the LF char
             // as read_until won't skip the newline
             let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            self.incr_cursor();
-            Ok(ret)
+            if self.will_cursor_give_linefeed() {
+                // check if the cursor points at the terminal character LF
+                // as it does, we can freely move past
+                self.incr_cursor();
+                Ok(ret)
+            } else {
+                Err(ParseError::UnexpectedByte)
+            }
         } else {
             Err(ParseError::UnexpectedByte)
         }
@@ -159,8 +173,14 @@ impl<'a> Parser<'a> {
             // excluding the '&' char (so 1..)
             // also push the cursor ahead
             let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            self.incr_cursor();
-            Ok(ret)
+            if self.will_cursor_give_linefeed() {
+                // check if the cursor points at the terminal character LF
+                // since it does, we'll move past
+                self.incr_cursor();
+                Ok(ret)
+            } else {
+                Err(ParseError::UnexpectedByte)
+            }
         } else {
             Err(ParseError::UnexpectedByte)
         }
@@ -173,10 +193,15 @@ impl<'a> Parser<'a> {
         // Now we want to read the element itself
         let mut ret = Vec::with_capacity(element_size);
         ret.extend_from_slice(self.read_until(element_size)?);
-        // Now move the cursor ahead as read_until doesn't do anything with the newline
-        self.incr_cursor();
-        // We'll just return this since that's all we have to do!
-        Ok(ret)
+        if self.will_cursor_give_linefeed() {
+            // check if the cursor points at the terminal character LF
+            // We'll just return this since that's all we have to do!
+            // we just checked that the cursor points at the LF, so let's also move ahead before returning
+            self.incr_cursor();
+            Ok(ret)
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
     }
     fn parse_next_actiongroup(&mut self) -> ParseResult<Vec<Vec<u8>>> {
         let len = self.parse_datagroup_get_group_size()?;
@@ -199,12 +224,12 @@ impl<'a> Parser<'a> {
             // The below line defaults to false if no item is there in the buffer
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
-            if self.buffer.get(self.cursor).map_or(false, |v| *v != b'\r') {
+            if self.will_cursor_give_char(b'\r', true) {
+                Ok((Query::SimpleQuery(single_group), self.cursor))
+            } else {
                 // the next item isn't the beginning of a query but something else?
                 // that doesn't look right!
                 Err(ParseError::UnexpectedByte)
-            } else {
-                Ok((Query::SimpleQuery(single_group), self.cursor))
             }
         } else {
             // This is a pipelined query
@@ -213,7 +238,11 @@ impl<'a> Parser<'a> {
             for _ in 0..number_of_queries {
                 queries.push(self.parse_next_actiongroup()?);
             }
-            Ok((Query::PipelinedQuery(queries), self.cursor))
+            if self.will_cursor_give_char(b'\r', true) {
+                Ok((Query::PipelinedQuery(queries), self.cursor))
+            } else {
+                Err(ParseError::UnexpectedByte)
+            }
         }
     }
 }
@@ -243,17 +272,32 @@ fn test_metaframe_parse() {
 }
 
 #[test]
-#[should_panic]
+fn test_cursor_next_char() {
+    let bytes = &[b'\n'];
+    assert!(Parser::new(&bytes[..]).will_cursor_give_char(b'\n', false));
+    let bytes = &[];
+    assert!(Parser::new(&bytes[..]).will_cursor_give_char(b'\r', true));
+    let bytes = &[];
+    assert!(!Parser::new(&bytes[..]).will_cursor_give_char(b'\n', false));
+}
+
+#[test]
 fn test_metaframe_parse_fail() {
     // First byte should be CR and not $
     let metaframe = "$2\n*2\n".as_bytes();
     let mut parser = Parser::new(&metaframe);
-    parser.parse_metaframe_get_datagroup_count().unwrap();
+    assert_eq!(
+        parser.parse_metaframe_get_datagroup_count().unwrap_err(),
+        ParseError::UnexpectedByte
+    );
     // Give a wrong length approximation
     let metaframe = "\r1\n*2\n".as_bytes();
-    Parser::new(&metaframe)
-        .parse_metaframe_get_datagroup_count()
-        .unwrap();
+    assert_eq!(
+        Parser::new(&metaframe)
+            .parse_metaframe_get_datagroup_count()
+            .unwrap_err(),
+        ParseError::UnexpectedByte
+    );
 }
 
 #[test]
@@ -332,6 +376,18 @@ fn test_query_fail_not_enough() {
     let query_packet = "\r2".as_bytes();
     assert_eq!(
         Parser::new(&query_packet).parse().err().unwrap(),
+        ParseError::NotEnough
+    );
+    let query_packet = "\r2\n*".as_bytes();
+    assert_eq!(
+        Parser::new(&query_packet).parse().err().unwrap(),
+        ParseError::NotEnough
+    );
+    let metaframe = "\r2\n*".as_bytes();
+    assert_eq!(
+        Parser::new(&metaframe)
+            .parse_metaframe_get_datagroup_count()
+            .unwrap_err(),
         ParseError::NotEnough
     );
 }
