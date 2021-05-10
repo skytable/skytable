@@ -131,6 +131,24 @@ impl<'a> Parser<'a> {
             Err(ParseError::UnexpectedByte)
         }
     }
+    /// This will return the number of items in a datagroup
+    fn parse_actiongroup_size(&mut self) -> ParseResult<usize> {
+        // This will give us `#<p>\n`
+        let dataframe_sizeline = self.read_sizeline()?;
+        // Now we want to read `&<q>\n`
+        let our_chunk = self.read_until(dataframe_sizeline)?;
+        if our_chunk[0] == b'&' {
+            // Good, so this is indeed a datagroup!
+            // Let us attempt to read the usize from this point onwards
+            // excluding the '&' char (so 1..)
+            // also push the cursor ahead
+            let ret = Self::parse_into_usize(&our_chunk[1..])?;
+            self.incr_cursor();
+            Ok(ret)
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
+    }
 }
 
 #[test]
@@ -147,4 +165,12 @@ fn test_metaframe_parse() {
     let mut parser = Parser::new(&metaframe);
     assert_eq!(2, parser.parse_metaframe().unwrap());
     assert_eq!(parser.cursor, metaframe.len());
+}
+
+#[test]
+fn test_actiongroup_size_parse() {
+    let dataframe_layout = "#6\n&12345\n".as_bytes();
+    let mut parser = Parser::new(&dataframe_layout);
+    assert_eq!(12345, parser.parse_actiongroup_size().unwrap());
+    assert_eq!(parser.cursor, dataframe_layout.len());
 }
