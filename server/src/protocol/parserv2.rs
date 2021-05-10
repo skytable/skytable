@@ -97,10 +97,13 @@ impl<'a> Parser<'a> {
                 // Now read the remaining line
                 let (started_at, stopped_at) = self.read_line();
                 return Self::parse_into_usize(&self.buffer[started_at..stopped_at]);
+            } else {
+                // A sizeline should begin with a opt_char; this one doesn't so it's a bad packet; ugh
+                Err(ParseError::UnexpectedByte)
             }
+        } else {
+            Err(ParseError::NotEnough)
         }
-        // A sizeline should begin with a opt_char; this one doesn't so it's a bad packet; ugh
-        Err(ParseError::UnexpectedByte)
     }
     fn incr_cursor(&mut self) {
         self.cursor += 1;
@@ -387,6 +390,20 @@ fn test_query_fail_not_enough() {
     assert_eq!(
         Parser::new(&metaframe)
             .parse_metaframe_get_datagroup_count()
+            .unwrap_err(),
+        ParseError::NotEnough
+    );
+    let metaframe = "\r2\n*1\n".as_bytes();
+    // we just got the metaframe, but there are more bytes, so this is incomplete!
+    assert_eq!(
+        Parser::new(&metaframe).parse().unwrap_err(),
+        ParseError::NotEnough
+    );
+    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n".as_bytes();
+    // we got the number of queries and the size of the data group, but no data; this is incomplete
+    assert_eq!(
+        Parser::new(&metaframe_and_dataframe_layout)
+            .parse()
             .unwrap_err(),
         ParseError::NotEnough
     );
