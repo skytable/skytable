@@ -112,7 +112,7 @@ where
         if self.get_buffer().is_empty() {
             return Err(());
         }
-        Ok(protocol::parse(&self.get_buffer()))
+        Ok(protocol::parse(&self.get_buffer()[..]))
     }
     /// Read a query from the remote end
     ///
@@ -128,15 +128,15 @@ where
         Box::pin(async move {
             let mv_self = self;
             let _: Result<QueryResult, IoError> = {
-                mv_self.read_again().await?;
                 loop {
+                    mv_self.read_again().await?;
                     match mv_self.try_query() {
                         Ok(ParseResult::Query(query, forward)) => {
                             mv_self.advance_buffer(forward);
                             return Ok(QueryResult::Q(query));
                         }
-                        Ok(ParseResult::BadPacket) => {
-                            mv_self.clear_buffer();
+                        Ok(ParseResult::BadPacket(discard_len)) => {
+                            mv_self.advance_buffer(discard_len);
                             return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
                         }
                         Err(_) => {
@@ -144,7 +144,6 @@ where
                         }
                         _ => (),
                     }
-                    mv_self.read_again().await?;
                 }
             };
         })
@@ -315,7 +314,7 @@ where
         }
     }
     pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("SslConnectionHanler initialized to handle a remote client");
+        log::debug!("ConnectionHandler initialized to handle a remote client");
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,
