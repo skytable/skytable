@@ -268,19 +268,14 @@ pub fn parse(buf: &[u8]) -> ParseResult {
             }
         }
     }
-    if buf.get(pos).is_none() {
-        // Either more data was sent or some data was missing
-        if items.len() == action_size {
-            if items.len() == 1 {
-                ParseResult::Query(Query::Simple(items.remove(0)), buf.len())
-            } else {
-                ParseResult::Query(Query::Pipelined(items), buf.len())
-            }
+    if items.len() == action_size {
+        if items.len() == 1 {
+            ParseResult::Query(Query::Simple(items.remove(0)), pos)
         } else {
-            ParseResult::Incomplete
+            ParseResult::Query(Query::Pipelined(items), pos)
         }
     } else {
-        ParseResult::BadPacket(buf.len())
+        ParseResult::Incomplete
     }
 }
 /// Read a size line and return the following line
@@ -386,7 +381,7 @@ fn test_parser() {
         input.len(),
     );
     assert_eq!(res, res_should_be);
-    let input = "#2\n*2\n#2\n&3\n#3\nGET\n#1\nx\n#2\nex\n#2\n&3\n#3\nSET\n#1\nx\n#4\ntrue"
+    let input = "#2\n*2\n#2\n&3\n#3\nGET\n#1\nx\n#2\nex\n#2\n&3\n#3\nSET\n#1\nx\n#4\ntrue\n"
         .as_bytes()
         .to_owned();
     let res = parse(&input);
