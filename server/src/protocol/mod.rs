@@ -346,7 +346,7 @@ fn test_parser() {
         .to_owned()
         .into_bytes();
     let res = parse(&input);
-    let res_should_be = ParseResult::BadPacket;
+    let res_should_be = ParseResult::BadPacket(input.len());
     assert_eq!(res, res_should_be);
     let input = "#2\n*1\n#2\n&3\n#3\nSET\n#19\nbeinghumanisawesome\n#4\ntrue\n"
         .as_bytes()
