@@ -48,6 +48,13 @@ pub enum Query {
     PipelinedQuery(Vec<ActionGroup>),
 }
 
+#[derive(Debug)]
+enum NextCharError {
+    True,
+    False,
+    Missing,
+}
+
 type ParseResult<T> = Result<T, ParseError>;
 
 impl<'a> Parser<'a> {
@@ -108,12 +115,17 @@ impl<'a> Parser<'a> {
     fn incr_cursor(&mut self) {
         self.cursor += 1;
     }
-    fn will_cursor_give_char(&self, ch: u8, true_if_nothing_ahead: bool) -> bool {
-        self.buffer
-            .get(self.cursor)
-            .map_or(true_if_nothing_ahead, |v| *v == ch)
+    fn will_cursor_give_char(&self, ch: u8, this_if_nothing_ahead: bool) -> ParseResult<bool> {
+        self.buffer.get(self.cursor).map_or(
+            if this_if_nothing_ahead {
+                Ok(true)
+            } else {
+                Err(ParseError::NotEnough)
+            },
+            |v| Ok(*v == ch),
+        )
     }
-    fn will_cursor_give_linefeed(&self) -> bool {
+    fn will_cursor_give_linefeed(&self) -> ParseResult<bool> {
         self.will_cursor_give_char(b'\n', false)
     }
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
@@ -152,7 +164,7 @@ impl<'a> Parser<'a> {
             // also push the cursor ahead because we want to ignore the LF char
             // as read_until won't skip the newline
             let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            if self.will_cursor_give_linefeed() {
+            if self.will_cursor_give_linefeed()? {
                 // check if the cursor points at the terminal character LF
                 // as it does, we can freely move past
                 self.incr_cursor();
@@ -176,7 +188,7 @@ impl<'a> Parser<'a> {
             // excluding the '&' char (so 1..)
             // also push the cursor ahead
             let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            if self.will_cursor_give_linefeed() {
+            if self.will_cursor_give_linefeed()? {
                 // check if the cursor points at the terminal character LF
                 // since it does, we'll move past
                 self.incr_cursor();
@@ -196,7 +208,7 @@ impl<'a> Parser<'a> {
         // Now we want to read the element itself
         let mut ret = Vec::with_capacity(element_size);
         ret.extend_from_slice(self.read_until(element_size)?);
-        if self.will_cursor_give_linefeed() {
+        if self.will_cursor_give_linefeed()? {
             // check if the cursor points at the terminal character LF
             // We'll just return this since that's all we have to do!
             // we just checked that the cursor points at the LF, so let's also move ahead before returning
@@ -227,7 +239,7 @@ impl<'a> Parser<'a> {
             // The below line defaults to false if no item is there in the buffer
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
-            if self.will_cursor_give_char(b'\r', true) {
+            if self.will_cursor_give_char(b'\r', true)? {
                 Ok((Query::SimpleQuery(single_group), self.cursor))
             } else {
                 // the next item isn't the beginning of a query but something else?
@@ -241,7 +253,7 @@ impl<'a> Parser<'a> {
             for _ in 0..number_of_queries {
                 queries.push(self.parse_next_actiongroup()?);
             }
-            if self.will_cursor_give_char(b'\r', true) {
+            if self.will_cursor_give_char(b'\r', true)? {
                 Ok((Query::PipelinedQuery(queries), self.cursor))
             } else {
                 Err(ParseError::UnexpectedByte)
@@ -277,11 +289,20 @@ fn test_metaframe_parse() {
 #[test]
 fn test_cursor_next_char() {
     let bytes = &[b'\n'];
-    assert!(Parser::new(&bytes[..]).will_cursor_give_char(b'\n', false));
+    assert!(Parser::new(&bytes[..])
+        .will_cursor_give_char(b'\n', false)
+        .unwrap());
     let bytes = &[];
-    assert!(Parser::new(&bytes[..]).will_cursor_give_char(b'\r', true));
+    assert!(Parser::new(&bytes[..])
+        .will_cursor_give_char(b'\r', true)
+        .unwrap());
     let bytes = &[];
-    assert!(!Parser::new(&bytes[..]).will_cursor_give_char(b'\n', false));
+    assert!(
+        Parser::new(&bytes[..])
+            .will_cursor_give_char(b'\n', false)
+            .unwrap_err()
+            == ParseError::NotEnough
+    );
 }
 
 #[test]
@@ -399,8 +420,37 @@ fn test_query_fail_not_enough() {
         Parser::new(&metaframe).parse().unwrap_err(),
         ParseError::NotEnough
     );
+}
+
+#[test]
+fn test_query_incomplete_dataframes() {
     let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n".as_bytes();
     // we got the number of queries and the size of the data group, but no data; this is incomplete
+    assert_eq!(
+        Parser::new(&metaframe_and_dataframe_layout)
+            .parse()
+            .unwrap_err(),
+        ParseError::NotEnough
+    );
+    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n".as_bytes();
+    // we got the number of queries and the size of the data group, but a part of the data; this is incomplete
+    assert_eq!(
+        Parser::new(&metaframe_and_dataframe_layout)
+            .parse()
+            .unwrap_err(),
+        ParseError::NotEnough
+    );
+    // incomplete sayan? that shouldn't work anyway heh ;)
+    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n#5\nsaya".as_bytes();
+    // we got the number of queries and the size of the data group, but a part of the data; this is incomplete
+    assert_eq!(
+        Parser::new(&metaframe_and_dataframe_layout)
+            .parse()
+            .unwrap_err(),
+        ParseError::NotEnough
+    );
+    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n#5\nsayan".as_bytes();
+    // we got the entire thing but not a newline; technically this is incomplete
     assert_eq!(
         Parser::new(&metaframe_and_dataframe_layout)
             .parse()
