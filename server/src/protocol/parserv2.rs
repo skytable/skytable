@@ -31,7 +31,7 @@ pub(super) struct Parser<'a> {
 }
 
 #[derive(Debug)]
-enum ParseError {
+pub enum ParseError {
     NotEnough,
     UnexpectedByte,
 }
@@ -39,7 +39,7 @@ enum ParseError {
 type ActionGroup = Vec<Vec<u8>>;
 
 #[derive(Debug, PartialEq)]
-enum Query {
+pub enum Query {
     SimpleQuery(ActionGroup),
     PipelinedQuery(Vec<ActionGroup>),
 }
@@ -184,7 +184,7 @@ impl<'a> Parser<'a> {
             Ok(elements)
         }
     }
-    fn parse(mut self) -> Result<(Query, usize), ParseError> {
+    pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
         if number_of_queries == 1 {
             // This is a simple query
