@@ -39,9 +39,19 @@ pub(super) struct Parser<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
+    /// Didn't get the number of expected bytes
     NotEnough,
+    /// The query contains an unexpected byte
     UnexpectedByte,
+    /// The packet simply contains invalid data
     BadPacket,
+    /// A data type was given but the parser failed to serialize it into this type
+    DataTypeParseError,
+    /// A data type that the server doesn't know was passed into the query
+    ///
+    /// This is a frequent problem that can arise between different server editions as more data types
+    /// can be added with changing server versions
+    UnknownDatatype,
 }
 
 type ActionGroup = Vec<Vec<u8>>;
@@ -52,11 +62,14 @@ pub enum Query {
     PipelinedQuery(Vec<ActionGroup>),
 }
 
-#[derive(Debug)]
-enum NextCharError {
-    True,
-    False,
-    Missing,
+#[non_exhaustive]
+pub enum DataType {
+    /// Arrays can be nested! Their `<tsymbol>` is `&`
+    Array(Vec<DataType>),
+    /// A String value; `<tsymbol>` is `+`
+    String(String),
+    /// An unsigned integer value; `<tsymbol>` is `:`
+    UnsignedInt(u64),
 }
 
 type ParseResult<T> = Result<T, ParseError>;
@@ -200,6 +213,23 @@ impl<'a> Parser<'a> {
             } else {
                 Err(ParseError::UnexpectedByte)
             }
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
+    }
+    /// The cursor should have passed the `+` tsymbol
+    fn parse_next_string(&mut self) -> ParseResult<String> {
+        let string_sizeline = self.read_line();
+        let string_size =
+            Self::parse_into_usize(&self.buffer[string_sizeline.0..string_sizeline.1])?;
+        let our_string_chunk = self.read_until(string_size)?;
+        let our_string = String::from_utf8_lossy(&our_string_chunk).to_string();
+        if self.will_cursor_give_linefeed()? {
+            // there is a lf after the end of the string; great!
+            // let's skip that now
+            self.incr_cursor();
+            // let's return our string
+            Ok(our_string)
         } else {
             Err(ParseError::UnexpectedByte)
         }
@@ -468,4 +498,11 @@ fn test_query_incomplete_dataframes() {
             .unwrap_err(),
         ParseError::NotEnough
     );
+}
+
+#[test]
+fn test_parse_next_string() {
+    let bytes = "5\nsayan\n".as_bytes();
+    let st = Parser::new(&bytes).parse_next_string().unwrap();
+    assert_eq!(st, "sayan".to_owned());
 }
