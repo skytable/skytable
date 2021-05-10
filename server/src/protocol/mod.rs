@@ -27,6 +27,7 @@
 //! This module provides deserialization primitives for query packets
 
 pub mod responses;
+mod parserv2;
 
 /// The outcome of running `Connection`'s `try_query` function
 pub enum QueryResult {
