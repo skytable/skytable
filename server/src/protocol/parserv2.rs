@@ -153,10 +153,10 @@ impl<'a> Parser<'a> {
     /// for the next datagroup element
     fn parse_next_datagroup_element(&mut self) -> ParseResult<Vec<u8>> {
         // So we need to read the sizeline for this element first!
-        let element_sizeline = self.read_sizeline()?;
-        println!("We're expecting: {} bytes", element_sizeline);
+        let element_size = self.read_sizeline()?;
         // Now we want to read the element itself
-        let ret = self.read_until(element_sizeline)?.to_owned();
+        let mut ret = Vec::with_capacity(element_size);
+        ret.extend_from_slice(self.read_until(element_size)?);
         // Now move the cursor ahead as read_until doesn't do anything with the newline
         self.incr_cursor();
         // We'll just return this since that's all we have to do!
