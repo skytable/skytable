@@ -45,30 +45,44 @@ impl<'a> Parser<'a> {
             buffer,
         }
     }
-    fn read_until(&self, until: usize) -> ParseResult<&[u8]> {
-        if let Some(b) = self.buffer.get(self.cursor + 1..until) {
+    /// Read from the current cursor position to `until` number of positions ahead
+    /// This **will forward the cursor itself** if the bytes exist or it will just return a `NotEnough` error
+    fn read_until(&mut self, until: usize) -> ParseResult<&[u8]> {
+        if let Some(b) = self.buffer.get(self.cursor..self.cursor + until) {
+            self.cursor += until;
             Ok(b)
         } else {
             Err(ParseError::NotEnough)
         }
     }
+    /// This returns the position at which the line parsing began and the position at which the line parsing
+    /// stopped, in other words, you should be able to do self.buffer[started_at..stopped_at] to get a line
+    /// and do it unchecked. This **will move the internal cursor ahead**
+    fn read_line(&mut self) -> (usize, usize) {
+        let started_at = self.cursor;
+        let mut stopped_at = self.cursor;
+        while self.cursor < self.buffer.len() {
+            if self.buffer[self.cursor] == b'\n' {
+                // Oh no! Newline reached, time to break the loop
+                // But before that ... we read the newline, so let's advance the cursor
+                self.incr_cursor();
+                break;
+            }
+            // So this isn't an LF, great! Let's forward the stopped_at position
+            stopped_at += 1;
+            self.incr_cursor();
+        }
+        (started_at, stopped_at)
+    }
+    /// This function will return the number of bytes this sizeline has (this is usually the number of items in
+    /// the following line)
+    /// This **will forward the cursor itself**
     fn read_sizeline(&mut self) -> ParseResult<usize> {
         if let Some(b'#') = self.buffer.get(self.cursor) {
             // Good, we found a #; time to move ahead
             self.incr_cursor();
-            let started_at = self.cursor;
-            let mut stopped_at = self.cursor;
-            while self.cursor < self.buffer.len() {
-                if self.buffer[self.cursor] == b'\n' {
-                    // Oh no! Newline reached, time to break the loop
-                    // But before that ... we read the newline, so let's advance the cursor
-                    self.incr_cursor();
-                    break;
-                }
-                // So this isn't an LF, great! Let's forward the stopped_at position
-                stopped_at += 1;
-                self.incr_cursor();
-            }
+            // Now read the remaining line
+            let (started_at, stopped_at) = self.read_line();
             Self::parse_into_usize(&self.buffer[started_at..stopped_at])
         } else {
             // A sizeline should begin with a '#'; this one doesn't so it's a bad packet; ugh
@@ -96,6 +110,27 @@ impl<'a> Parser<'a> {
         }
         Ok(item_usize)
     }
+    /// This will return the number of datagroups present in this query packet
+    ///
+    /// This **will forward the cursor itself**
+    fn parse_metaframe(&mut self) -> ParseResult<usize> {
+        // This will give us the `#<m>\n`
+        let metaframe_sizeline = self.read_sizeline()?;
+        // Now we want to read `*<n>\n`
+        let our_chunk = self.read_until(metaframe_sizeline)?;
+        if our_chunk[0] == b'!' {
+            // Good, this will tell us the number of actions
+            // Let us attempt to read the usize from this point onwards
+            // that is excluding the '!' (so 1..)
+            // also push the cursor ahead because we want to ignore the LF char
+            // as read_until won't skip the newline
+            let ret = Self::parse_into_usize(&our_chunk[1..])?;
+            self.incr_cursor();
+            Ok(ret)
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
+    }
 }
 
 #[test]
@@ -103,4 +138,13 @@ fn test_sizeline_parse() {
     let sizeline = "#125\n".as_bytes();
     let mut parser = Parser::new(&sizeline);
     assert_eq!(125, parser.read_sizeline().unwrap());
+    assert_eq!(parser.cursor, sizeline.len());
+}
+
+#[test]
+fn test_metaframe_parse() {
+    let metaframe = "#2\n!2\n".as_bytes();
+    let mut parser = Parser::new(&metaframe);
+    assert_eq!(2, parser.parse_metaframe().unwrap());
+    assert_eq!(parser.cursor, metaframe.len());
 }
