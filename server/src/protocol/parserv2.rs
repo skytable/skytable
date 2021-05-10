@@ -58,8 +58,8 @@ type ActionGroup = Vec<Vec<u8>>;
 
 #[derive(Debug, PartialEq)]
 pub enum Query {
-    SimpleQuery(ActionGroup),
-    PipelinedQuery(Vec<ActionGroup>),
+    SimpleQuery(DataType),
+    PipelinedQuery(Vec<DataType>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -233,30 +233,6 @@ impl<'a> Parser<'a> {
             Err(ParseError::UnexpectedByte)
         }
     }
-    /// This will return the number of items in a datagroup
-    fn parse_datagroup_get_group_size(&mut self) -> ParseResult<usize> {
-        // This will give us `#<p>\n`
-        let dataframe_sizeline = self.read_sizeline(None)?;
-        // Now we want to read `&<q>\n`
-        let our_chunk = self.read_until(dataframe_sizeline)?;
-        if our_chunk[0] == b'&' {
-            // Good, so this is indeed a datagroup!
-            // Let us attempt to read the usize from this point onwards
-            // excluding the '&' char (so 1..)
-            // also push the cursor ahead
-            let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            if self.will_cursor_give_linefeed()? {
-                // check if the cursor points at the terminal character LF
-                // since it does, we'll move past
-                self.incr_cursor();
-                Ok(ret)
-            } else {
-                Err(ParseError::UnexpectedByte)
-            }
-        } else {
-            Err(ParseError::UnexpectedByte)
-        }
-    }
     /// Get the next element **without** the tsymbol
     ///
     /// This function **does not forward the newline**
@@ -322,33 +298,6 @@ impl<'a> Parser<'a> {
         }
         Ok(array)
     }
-    /// This will read a datagroup element and return an **owned vector** containing the bytes
-    /// for the next datagroup element
-    fn parse_next_datagroup_element(&mut self) -> ParseResult<Vec<u8>> {
-        // So we need to read the sizeline for this element first!
-        let element_size = self.read_sizeline(None)?;
-        // Now we want to read the element itself
-        let mut ret = Vec::with_capacity(element_size);
-        ret.extend_from_slice(self.read_until(element_size)?);
-        if self.will_cursor_give_linefeed()? {
-            // check if the cursor points at the terminal character LF
-            // We'll just return this since that's all we have to do!
-            // we just checked that the cursor points at the LF, so let's also move ahead before returning
-            self.incr_cursor();
-            Ok(ret)
-        } else {
-            Err(ParseError::UnexpectedByte)
-        }
-    }
-    fn parse_next_actiongroup(&mut self) -> ParseResult<Vec<Vec<u8>>> {
-        let len = self.parse_datagroup_get_group_size()?;
-        let mut elements = Vec::with_capacity(len);
-        // so we expect `len` count of elements; let's iterate and get each element in turn
-        for _ in 0..len {
-            elements.push(self.parse_next_datagroup_element()?);
-        }
-        Ok(elements)
-    }
     pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
         if number_of_queries == 0 {
@@ -357,7 +306,7 @@ impl<'a> Parser<'a> {
         }
         if number_of_queries == 1 {
             // This is a simple query
-            let single_group = self.parse_next_actiongroup()?;
+            let single_group = self.parse_next_element()?;
             // The below line defaults to false if no item is there in the buffer
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
@@ -380,7 +329,7 @@ impl<'a> Parser<'a> {
             // We'll first make space for all the actiongroups
             let mut queries = Vec::with_capacity(number_of_queries);
             for _ in 0..number_of_queries {
-                queries.push(self.parse_next_actiongroup()?);
+                queries.push(self.parse_next_element()?);
             }
             if self.will_cursor_give_char(b'\r', true)? {
                 Ok((Query::PipelinedQuery(queries), self.cursor))
@@ -454,77 +403,6 @@ fn test_metaframe_parse_fail() {
 }
 
 #[test]
-fn test_actiongroup_size_parse() {
-    let dataframe_layout = "#6\n&12345\n".as_bytes();
-    let mut parser = Parser::new(&dataframe_layout);
-    assert_eq!(12345, parser.parse_datagroup_get_group_size().unwrap());
-    assert_eq!(parser.cursor, dataframe_layout.len());
-}
-
-#[test]
-fn test_read_datagroup_element() {
-    let element_with_block = "#5\nsayan\n".as_bytes();
-    let mut parser = Parser::new(&element_with_block);
-    assert_eq!(
-        String::from("sayan").into_bytes(),
-        parser.parse_next_datagroup_element().unwrap()
-    );
-    assert_eq!(parser.cursor, element_with_block.len());
-}
-
-#[test]
-fn test_parse_actiongroup_single() {
-    let actiongroup = "#2\n&2\n#3\nGET\n#5\nsayan\n".as_bytes();
-    let mut parser = Parser::new(&actiongroup);
-    assert_eq!(
-        vec![
-            String::from("GET").into_bytes(),
-            String::from("sayan").into_bytes()
-        ],
-        parser.parse_next_actiongroup().unwrap()
-    );
-    assert_eq!(parser.cursor, actiongroup.len());
-}
-
-#[test]
-fn test_complete_query_packet_parse() {
-    let query_packet = "\r2\n*1\n#2\n&2\n#3\nGET\n#3\nfoo\n".as_bytes();
-    let (res, forward_by) = Parser::new(&query_packet).parse().unwrap();
-    assert_eq!(
-        res,
-        Query::SimpleQuery(vec![
-            "GET".as_bytes().to_owned(),
-            "foo".as_bytes().to_owned()
-        ])
-    );
-    assert_eq!(forward_by, query_packet.len());
-}
-
-#[test]
-#[should_panic]
-fn test_query_parse_fail() {
-    // this packet has an extra \n, where it should have been nothing or a \r
-    let query_packet = "\r2\n*1\n#2\n&2\n#3\nGET\n#3\nfoo\n\n".as_bytes();
-    Parser::new(&query_packet).parse().unwrap();
-}
-
-#[test]
-fn test_query_parse_pass_part_of_next_query() {
-    // we read a part of the next query, we should happily ignore it (`\r2\n*1\n`)
-    let query_packet = "\r2\n*1\n#2\n&2\n#3\nGET\n#3\nfoo\n\r2\n*1\n".as_bytes();
-    let (ret, forward_by) = Parser::new(&query_packet).parse().unwrap();
-    assert_eq!(
-        ret,
-        Query::SimpleQuery(vec![
-            "GET".to_owned().into_bytes(),
-            "foo".to_owned().into_bytes()
-        ])
-    );
-    // the cursor should be at the '\n' byte
-    assert!(forward_by == query_packet.len() - "\r2\n*1\n".len());
-}
-
-#[test]
 fn test_query_fail_not_enough() {
     let query_packet = "\r2".as_bytes();
     assert_eq!(
@@ -547,43 +425,6 @@ fn test_query_fail_not_enough() {
     // we just got the metaframe, but there are more bytes, so this is incomplete!
     assert_eq!(
         Parser::new(&metaframe).parse().unwrap_err(),
-        ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_query_incomplete_dataframes() {
-    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n".as_bytes();
-    // we got the number of queries and the size of the data group, but no data; this is incomplete
-    assert_eq!(
-        Parser::new(&metaframe_and_dataframe_layout)
-            .parse()
-            .unwrap_err(),
-        ParseError::NotEnough
-    );
-    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n".as_bytes();
-    // we got the number of queries and the size of the data group, but a part of the data; this is incomplete
-    assert_eq!(
-        Parser::new(&metaframe_and_dataframe_layout)
-            .parse()
-            .unwrap_err(),
-        ParseError::NotEnough
-    );
-    // incomplete sayan? that shouldn't work anyway heh ;)
-    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n#5\nsaya".as_bytes();
-    // we got the number of queries and the size of the data group, but a part of the data; this is incomplete
-    assert_eq!(
-        Parser::new(&metaframe_and_dataframe_layout)
-            .parse()
-            .unwrap_err(),
-        ParseError::NotEnough
-    );
-    let metaframe_and_dataframe_layout = "\r2\n*1\n#2\n&2\n#3\nGET\n#5\nsayan".as_bytes();
-    // we got the entire thing but not a newline; technically this is incomplete
-    assert_eq!(
-        Parser::new(&metaframe_and_dataframe_layout)
-            .parse()
-            .unwrap_err(),
         ParseError::NotEnough
     );
 }
@@ -689,4 +530,73 @@ fn test_parse_multitype_array() {
         ])
     );
     assert_eq!(parser.cursor, bytes.len());
+}
+
+#[test]
+fn test_parse_a_query() {
+    let bytes = "\r2\n*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
+        .as_bytes();
+    let parser = Parser::new(&bytes);
+    let (resp, forward_by) = parser.parse().unwrap();
+    assert_eq!(
+        resp,
+        Query::SimpleQuery(DataType::Array(vec![
+            DataType::String("ACT".to_owned()),
+            DataType::String("foo".to_owned()),
+            DataType::Array(vec![
+                DataType::String("sayan".to_owned()),
+                DataType::String("is".to_owned()),
+                DataType::String("working".to_owned()),
+                DataType::Array(vec![
+                    DataType::UnsignedInt(23),
+                    DataType::String("april".to_owned())
+                ])
+            ])
+        ]))
+    );
+    assert_eq!(forward_by, bytes.len());
+}
+
+#[test]
+fn test_parse_a_query_fail_moredata() {
+    let bytes = "\r2\n*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&1\n:2\n23\n+5\napril\n"
+        .as_bytes();
+    let parser = Parser::new(&bytes);
+    assert_eq!(parser.parse().unwrap_err(), ParseError::UnexpectedByte);
+}
+
+#[test]
+fn test_pipelined_query_incomplete() {
+    // this was a pipelined query: we expected two queries but got one!
+    let bytes = "\r2\n*2\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
+        .as_bytes();
+    assert_eq!(
+        Parser::new(&bytes).parse().unwrap_err(),
+        ParseError::NotEnough
+    )
+}
+
+#[test]
+fn test_pipelined_query() {
+    let bytes =
+        "\r2\n*2\n&3\n+3\nACT\n+3\nfoo\n&3\n+5\nsayan\n+2\nis\n+7\nworking\n+4\nHEYA\n".as_bytes();
+    /*
+    (\r2\n*2\n)(&3\n)({+3\nACT\n}{+3\nfoo\n}{[&3\n][+5\nsayan\n][+2\nis\n][+7\nworking\n]})(+4\nHEYA\n)
+    */
+    let (res, forward_by) = Parser::new(&bytes).parse().unwrap();
+    assert_eq!(
+        res,
+        Query::PipelinedQuery(vec![
+            DataType::Array(vec![
+                DataType::String("ACT".to_owned()),
+                DataType::String("foo".to_owned()),
+                DataType::Array(vec![
+                    DataType::String("sayan".to_owned()),
+                    DataType::String("is".to_owned()),
+                    DataType::String("working".to_owned())
+                ])
+            ]),
+            DataType::String("HEYA".to_owned())
+        ])
+    )
 }
