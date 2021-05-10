@@ -113,7 +113,7 @@ impl<'a> Parser<'a> {
     /// This will return the number of datagroups present in this query packet
     ///
     /// This **will forward the cursor itself**
-    fn parse_metaframe(&mut self) -> ParseResult<usize> {
+    fn parse_metaframe_get_datagroup_count(&mut self) -> ParseResult<usize> {
         // This will give us the `#<m>\n`
         let metaframe_sizeline = self.read_sizeline()?;
         // Now we want to read `*<n>\n`
@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// This will return the number of items in a datagroup
-    fn parse_actiongroup_size(&mut self) -> ParseResult<usize> {
+    fn parse_dataframe_layout_get_group_size(&mut self) -> ParseResult<usize> {
         // This will give us `#<p>\n`
         let dataframe_sizeline = self.read_sizeline()?;
         // Now we want to read `&<q>\n`
@@ -163,7 +163,7 @@ fn test_sizeline_parse() {
 fn test_metaframe_parse() {
     let metaframe = "#2\n!2\n".as_bytes();
     let mut parser = Parser::new(&metaframe);
-    assert_eq!(2, parser.parse_metaframe().unwrap());
+    assert_eq!(2, parser.parse_metaframe_get_datagroup_count().unwrap());
     assert_eq!(parser.cursor, metaframe.len());
 }
 
@@ -171,6 +171,9 @@ fn test_metaframe_parse() {
 fn test_actiongroup_size_parse() {
     let dataframe_layout = "#6\n&12345\n".as_bytes();
     let mut parser = Parser::new(&dataframe_layout);
-    assert_eq!(12345, parser.parse_actiongroup_size().unwrap());
+    assert_eq!(
+        12345,
+        parser.parse_dataframe_layout_get_group_size().unwrap()
+    );
     assert_eq!(parser.cursor, dataframe_layout.len());
 }
