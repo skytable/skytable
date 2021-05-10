@@ -162,9 +162,48 @@ impl<'a> Parser<'a> {
                 }
                 None => return Err(ParseError::UnexpectedByte),
             };
-            item_usize = (item_usize * 10) + curdig;
+            // The usize can overflow; check that case
+            let product = match item_usize.checked_mul(10) {
+                Some(not_overflowed) => not_overflowed,
+                None => return Err(ParseError::DataTypeParseError),
+            };
+            let sum = match product.checked_add(curdig) {
+                Some(not_overflowed) => not_overflowed,
+                None => return Err(ParseError::DataTypeParseError),
+            };
+            item_usize = sum;
         }
         Ok(item_usize)
+    }
+    fn parse_into_u64(bytes: &[u8]) -> ParseResult<u64> {
+        let mut byte_iter = bytes.into_iter();
+        let mut item_u64 = 0u64;
+        while let Some(dig) = byte_iter.next() {
+            // 48 is the ASCII code for 0, and 57 is the ascii code for 9
+            // so if 0 is given, the subtraction should give 0; similarly
+            // if 9 is given, the subtraction should give us 9!
+            let curdig: u64 = match dig.checked_sub(48) {
+                Some(dig) => {
+                    if dig > 9 {
+                        return Err(ParseError::UnexpectedByte);
+                    } else {
+                        dig.into()
+                    }
+                }
+                None => return Err(ParseError::UnexpectedByte),
+            };
+            // Now the entire u64 can overflow, so let's attempt to check it
+            let product = match item_u64.checked_mul(10) {
+                Some(not_overflowed) => not_overflowed,
+                None => return Err(ParseError::DataTypeParseError),
+            };
+            let sum = match product.checked_add(curdig) {
+                Some(not_overflowed) => not_overflowed,
+                None => return Err(ParseError::DataTypeParseError),
+            };
+            item_u64 = sum;
+        }
+        Ok(item_u64)
     }
     /// This will return the number of datagroups present in this query packet
     ///
@@ -217,12 +256,19 @@ impl<'a> Parser<'a> {
             Err(ParseError::UnexpectedByte)
         }
     }
-    /// The cursor should have passed the `+` tsymbol
-    fn parse_next_string(&mut self) -> ParseResult<String> {
+    /// Get the next element **without** the tsymbol
+    ///
+    /// This function **does not forward the newline**
+    fn __parse_next_element(&mut self) -> ParseResult<&[u8]> {
         let string_sizeline = self.read_line();
         let string_size =
             Self::parse_into_usize(&self.buffer[string_sizeline.0..string_sizeline.1])?;
-        let our_string_chunk = self.read_until(string_size)?;
+        let our_chunk = self.read_until(string_size)?;
+        Ok(our_chunk)
+    }
+    /// The cursor should have passed the `+` tsymbol
+    fn parse_next_string(&mut self) -> ParseResult<String> {
+        let our_string_chunk = self.__parse_next_element()?;
         let our_string = String::from_utf8_lossy(&our_string_chunk).to_string();
         if self.will_cursor_give_linefeed()? {
             // there is a lf after the end of the string; great!
@@ -230,6 +276,18 @@ impl<'a> Parser<'a> {
             self.incr_cursor();
             // let's return our string
             Ok(our_string)
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
+    }
+    /// The cursor should have passed the `:` tsymbol
+    fn parse_next_u64(&mut self) -> ParseResult<u64> {
+        let our_u64_chunk = self.__parse_next_element()?;
+        let our_u64 = Self::parse_into_u64(our_u64_chunk)?;
+        if self.will_cursor_give_linefeed()? {
+            // line feed after u64; heck yeah!
+            self.incr_cursor();
+            Ok(our_u64)
         } else {
             Err(ParseError::UnexpectedByte)
         }
@@ -505,4 +563,17 @@ fn test_parse_next_string() {
     let bytes = "5\nsayan\n".as_bytes();
     let st = Parser::new(&bytes).parse_next_string().unwrap();
     assert_eq!(st, "sayan".to_owned());
+}
+
+#[test]
+fn test_parse_next_u64() {
+    let max = 18446744073709551615;
+    assert!(u64::MAX == max);
+    let bytes = "20\n18446744073709551615\n".as_bytes();
+    let our_u64 = Parser::new(&bytes).parse_next_u64().unwrap();
+    assert_eq!(our_u64, max);
+    // now overflow the u64
+    let bytes = "21\n184467440737095516156\n".as_bytes();
+    let our_u64 = Parser::new(&bytes).parse_next_u64().unwrap_err();
+    assert_eq!(our_u64, ParseError::DataTypeParseError);
 }
