@@ -149,6 +149,19 @@ impl<'a> Parser<'a> {
             Err(ParseError::UnexpectedByte)
         }
     }
+    /// This will read a datagroup element and return an **owned vector** containing the bytes
+    /// for the next datagroup element
+    fn parse_next_datagroup_element(&mut self) -> ParseResult<Vec<u8>> {
+        // So we need to read the sizeline for this element first!
+        let element_sizeline = self.read_sizeline()?;
+        println!("We're expecting: {} bytes", element_sizeline);
+        // Now we want to read the element itself
+        let ret = self.read_until(element_sizeline)?.to_owned();
+        // Now move the cursor ahead as read_until doesn't do anything with the newline
+        self.incr_cursor();
+        // We'll just return this since that's all we have to do!
+        Ok(ret)
+    }
 }
 
 #[test]
@@ -176,4 +189,15 @@ fn test_actiongroup_size_parse() {
         parser.parse_dataframe_layout_get_group_size().unwrap()
     );
     assert_eq!(parser.cursor, dataframe_layout.len());
+}
+
+#[test]
+fn test_read_datagroup_element() {
+    let element_with_block = "#5\nsayan\n".as_bytes();
+    let mut parser = Parser::new(&element_with_block);
+    assert_eq!(
+        String::from("sayan").into_bytes(),
+        parser.parse_next_datagroup_element().unwrap()
+    );
+    assert_eq!(parser.cursor, element_with_block.len());
 }
