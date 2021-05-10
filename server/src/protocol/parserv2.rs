@@ -24,7 +24,11 @@
  *
 */
 
+use std::hint::unreachable_unchecked;
+
 /// The header magic (a '\r' or CR)
+///
+/// This demarcates distinct query packets; all queries begin with this byte
 const START_HEADER_MAGIC: u8 = 0x0D;
 
 #[derive(Debug)]
@@ -239,7 +243,14 @@ impl<'a> Parser<'a> {
             // The below line defaults to false if no item is there in the buffer
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
-            if self.will_cursor_give_char(b'\r', true)? {
+            if self
+                .will_cursor_give_char(b'\r', true)
+                .unwrap_or_else(|_| unsafe {
+                    // This will never be the case because we'll always get a result and no error value
+                    // as we've passed true which will yield Ok(true) even if there is no byte ahead
+                    unreachable_unchecked()
+                })
+            {
                 Ok((Query::SimpleQuery(single_group), self.cursor))
             } else {
                 // the next item isn't the beginning of a query but something else?
