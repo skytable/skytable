@@ -127,7 +127,7 @@ macro_rules! gen_match {
             )*
             // Now add the final case where no action is matched
             _ => {
-                $con.write_response(&**responses::groups::UNKNOWN_ACTION)
+                return $con.write_response(&**responses::groups::UNKNOWN_ACTION)
                 .await;
             },
         }
