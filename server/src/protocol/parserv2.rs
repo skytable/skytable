@@ -127,19 +127,17 @@ impl<'a> Parser<'a> {
         let mut byte_iter = bytes.into_iter();
         let mut item_usize = 0usize;
         while let Some(dig) = byte_iter.next() {
+            if !dig.is_ascii_digit() {
+                // dig has to be an ASCII digit
+                return Err(ParseError::DataTypeParseError);
+            }
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
             // if 9 is given, the subtraction should give us 9!
-            let curdig: usize = match dig.checked_sub(48) {
-                Some(dig) => {
-                    if dig > 9 {
-                        return Err(ParseError::UnexpectedByte);
-                    } else {
-                        dig.into()
-                    }
-                }
-                None => return Err(ParseError::UnexpectedByte),
-            };
+            let curdig: usize = dig
+                .checked_sub(48)
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+                .into();
             // The usize can overflow; check that case
             let product = match item_usize.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
@@ -160,19 +158,17 @@ impl<'a> Parser<'a> {
         let mut byte_iter = bytes.into_iter();
         let mut item_u64 = 0u64;
         while let Some(dig) = byte_iter.next() {
+            if !dig.is_ascii_digit() {
+                // dig has to be an ASCII digit
+                return Err(ParseError::DataTypeParseError);
+            }
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
             // if 9 is given, the subtraction should give us 9!
-            let curdig: u64 = match dig.checked_sub(48) {
-                Some(dig) => {
-                    if dig > 9 {
-                        return Err(ParseError::UnexpectedByte);
-                    } else {
-                        dig.into()
-                    }
-                }
-                None => return Err(ParseError::UnexpectedByte),
-            };
+            let curdig: u64 = dig
+                .checked_sub(48)
+                .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+                .into();
             // Now the entire u64 can overflow, so let's attempt to check it
             let product = match item_u64.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
