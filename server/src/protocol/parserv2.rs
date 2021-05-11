@@ -26,11 +26,6 @@
 
 use std::hint::unreachable_unchecked;
 
-/// The header magic (a '\r' or CR)
-///
-/// This demarcates distinct query packets; all queries begin with this byte
-const START_HEADER_MAGIC: u8 = 0x0D;
-
 #[derive(Debug)]
 pub(super) struct Parser<'a> {
     cursor: usize,
@@ -53,8 +48,6 @@ pub enum ParseError {
     /// can be added with changing server versions
     UnknownDatatype,
 }
-
-type ActionGroup = Vec<Vec<u8>>;
 
 #[derive(Debug, PartialEq)]
 pub enum Query {
@@ -94,7 +87,7 @@ impl<'a> Parser<'a> {
     }
     /// This returns the position at which the line parsing began and the position at which the line parsing
     /// stopped, in other words, you should be able to do self.buffer[started_at..stopped_at] to get a line
-    /// and do it unchecked. This **will move the internal cursor ahead**
+    /// and do it unchecked. This **will move the internal cursor ahead** and place it **at the `\n` byte**
     fn read_line(&mut self) -> (usize, usize) {
         let started_at = self.cursor;
         let mut stopped_at = self.cursor;
@@ -110,25 +103,6 @@ impl<'a> Parser<'a> {
             self.incr_cursor();
         }
         (started_at, stopped_at)
-    }
-    /// This function will return the number of bytes this sizeline has (this is usually the number of items in
-    /// the following line)
-    /// This **will forward the cursor itself**
-    fn read_sizeline(&mut self, opt_char: Option<u8>) -> ParseResult<usize> {
-        if let Some(b) = self.buffer.get(self.cursor) {
-            if *b == opt_char.unwrap_or(b'#') {
-                // Good, we found a opt_char; time to move ahead
-                self.incr_cursor();
-                // Now read the remaining line
-                let (started_at, stopped_at) = self.read_line();
-                return Self::parse_into_usize(&self.buffer[started_at..stopped_at]);
-            } else {
-                // A sizeline should begin with a opt_char; this one doesn't so it's a bad packet; ugh
-                Err(ParseError::UnexpectedByte)
-            }
-        } else {
-            Err(ParseError::NotEnough)
-        }
     }
     fn incr_cursor(&mut self) {
         self.cursor += 1;
@@ -210,27 +184,24 @@ impl<'a> Parser<'a> {
     ///
     /// This **will forward the cursor itself**
     fn parse_metaframe_get_datagroup_count(&mut self) -> ParseResult<usize> {
-        // This will give us the `\r<m>\n`
-        let metaframe_sizeline = self.read_sizeline(Some(START_HEADER_MAGIC))?;
         // Now we want to read `*<n>\n`
-        let our_chunk = self.read_until(metaframe_sizeline)?;
-        if our_chunk[0] == b'*' {
-            // Good, this will tell us the number of actions
-            // Let us attempt to read the usize from this point onwards
-            // that is excluding the '!' (so 1..)
-            // also push the cursor ahead because we want to ignore the LF char
-            // as read_until won't skip the newline
-            let ret = Self::parse_into_usize(&our_chunk[1..])?;
-            if self.will_cursor_give_linefeed()? {
-                // check if the cursor points at the terminal character LF
-                // as it does, we can freely move past
-                self.incr_cursor();
-                Ok(ret)
+        let (start, stop) = self.read_line();
+        if let Some(our_chunk) = &self.buffer.get(start..stop) {
+            if our_chunk[0] == b'*' {
+                // Good, this will tell us the number of actions
+                // Let us attempt to read the usize from this point onwards
+                // that is excluding the '*' (so 1..)
+                if self.will_cursor_give_linefeed()? {
+                    let ret = Self::parse_into_usize(&our_chunk[1..])?;
+                    Ok(ret)
+                } else {
+                    Err(ParseError::NotEnough)
+                }
             } else {
                 Err(ParseError::UnexpectedByte)
             }
         } else {
-            Err(ParseError::UnexpectedByte)
+            Err(ParseError::NotEnough)
         }
     }
     /// Get the next element **without** the tsymbol
@@ -300,6 +271,7 @@ impl<'a> Parser<'a> {
     }
     pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
+        println!("Got count: {}", number_of_queries);
         if number_of_queries == 0 {
             // how on earth do you expect us to execute 0 queries? waste of bandwidth
             return Err(ParseError::BadPacket);
@@ -341,24 +313,8 @@ impl<'a> Parser<'a> {
 }
 
 #[test]
-fn test_sizeline_parse() {
-    let sizeline = "#125\n".as_bytes();
-    let mut parser = Parser::new(&sizeline);
-    assert_eq!(125, parser.read_sizeline(None).unwrap());
-    assert_eq!(parser.cursor, sizeline.len());
-}
-
-#[test]
-#[should_panic]
-fn test_fail_sizeline_parse_wrong_firstbyte() {
-    let sizeline = "125\n".as_bytes();
-    let mut parser = Parser::new(&sizeline);
-    parser.read_sizeline(None).unwrap();
-}
-
-#[test]
 fn test_metaframe_parse() {
-    let metaframe = "\r2\n*2\n".as_bytes();
+    let metaframe = "*2\n".as_bytes();
     let mut parser = Parser::new(&metaframe);
     assert_eq!(2, parser.parse_metaframe_get_datagroup_count().unwrap());
     assert_eq!(parser.cursor, metaframe.len());
@@ -404,27 +360,16 @@ fn test_metaframe_parse_fail() {
 
 #[test]
 fn test_query_fail_not_enough() {
-    let query_packet = "\r2".as_bytes();
+    let query_packet = "*".as_bytes();
     assert_eq!(
         Parser::new(&query_packet).parse().err().unwrap(),
         ParseError::NotEnough
     );
-    let query_packet = "\r2\n*".as_bytes();
-    assert_eq!(
-        Parser::new(&query_packet).parse().err().unwrap(),
-        ParseError::NotEnough
-    );
-    let metaframe = "\r2\n*".as_bytes();
+    let metaframe = "*2".as_bytes();
     assert_eq!(
         Parser::new(&metaframe)
             .parse_metaframe_get_datagroup_count()
             .unwrap_err(),
-        ParseError::NotEnough
-    );
-    let metaframe = "\r2\n*1\n".as_bytes();
-    // we just got the metaframe, but there are more bytes, so this is incomplete!
-    assert_eq!(
-        Parser::new(&metaframe).parse().unwrap_err(),
         ParseError::NotEnough
     );
 }
@@ -534,8 +479,9 @@ fn test_parse_multitype_array() {
 
 #[test]
 fn test_parse_a_query() {
-    let bytes = "\r2\n*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
-        .as_bytes();
+    let bytes =
+        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
+            .as_bytes();
     let parser = Parser::new(&bytes);
     let (resp, forward_by) = parser.parse().unwrap();
     assert_eq!(
@@ -559,8 +505,9 @@ fn test_parse_a_query() {
 
 #[test]
 fn test_parse_a_query_fail_moredata() {
-    let bytes = "\r2\n*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&1\n:2\n23\n+5\napril\n"
-        .as_bytes();
+    let bytes =
+        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&1\n:2\n23\n+5\napril\n"
+            .as_bytes();
     let parser = Parser::new(&bytes);
     assert_eq!(parser.parse().unwrap_err(), ParseError::UnexpectedByte);
 }
@@ -568,8 +515,9 @@ fn test_parse_a_query_fail_moredata() {
 #[test]
 fn test_pipelined_query_incomplete() {
     // this was a pipelined query: we expected two queries but got one!
-    let bytes = "\r2\n*2\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
-        .as_bytes();
+    let bytes =
+        "*2\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
+            .as_bytes();
     assert_eq!(
         Parser::new(&bytes).parse().unwrap_err(),
         ParseError::NotEnough
@@ -579,7 +527,7 @@ fn test_pipelined_query_incomplete() {
 #[test]
 fn test_pipelined_query() {
     let bytes =
-        "\r2\n*2\n&3\n+3\nACT\n+3\nfoo\n&3\n+5\nsayan\n+2\nis\n+7\nworking\n+4\nHEYA\n".as_bytes();
+        "*2\n&3\n+3\nACT\n+3\nfoo\n&3\n+5\nsayan\n+2\nis\n+7\nworking\n+4\nHEYA\n".as_bytes();
     /*
     (\r2\n*2\n)(&3\n)({+3\nACT\n}{+3\nfoo\n}{[&3\n][+5\nsayan\n][+2\nis\n][+7\nworking\n]})(+4\nHEYA\n)
     */
@@ -598,5 +546,6 @@ fn test_pipelined_query() {
             ]),
             DataType::String("HEYA".to_owned())
         ])
-    )
+    );
+    assert_eq!(forward_by, bytes.len());
 }
