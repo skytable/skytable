@@ -59,7 +59,7 @@ pub trait IsConnection: std::marker::Sync + std::marker::Send {
     fn write_lowlevel<'s>(
         &'s mut self,
         bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>>;
 }
 
 impl<T> IsConnection for T
@@ -69,8 +69,8 @@ where
     fn write_lowlevel<'s>(
         &'s mut self,
         bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>> {
-        Box::pin(self.write(bytes))
+    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>> {
+        Box::pin(self.write_all(bytes))
     }
 }
 
