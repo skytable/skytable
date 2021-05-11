@@ -64,25 +64,4 @@ impl Element {
             _ => None,
         }
     }
-    pub fn is_flat_array(&self) -> bool {
-        if let Self::FlatArray(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-    pub fn get_flat_array_size(&self) -> Option<usize> {
-        if let Self::FlatArray(a) = self {
-            Some(a.len())
-        } else {
-            None
-        }
-    }
-    pub fn is_flat_array_len_eq(&self, size: usize) -> Option<bool> {
-        if let Self::FlatArray(a) = self {
-            Some(a.len() == size)
-        } else {
-            None
-        }
-    }
 }
