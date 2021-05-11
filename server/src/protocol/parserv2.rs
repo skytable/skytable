@@ -121,6 +121,9 @@ impl<'a> Parser<'a> {
         self.will_cursor_give_char(b'\n', false)
     }
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
+        if bytes.len() == 0 {
+            return Err(ParseError::NotEnough);
+        }
         let mut byte_iter = bytes.into_iter();
         let mut item_usize = 0usize;
         while let Some(dig) = byte_iter.next() {
@@ -151,6 +154,9 @@ impl<'a> Parser<'a> {
         Ok(item_usize)
     }
     fn parse_into_u64(bytes: &[u8]) -> ParseResult<u64> {
+        if bytes.len() == 0 {
+            return Err(ParseError::NotEnough);
+        }
         let mut byte_iter = bytes.into_iter();
         let mut item_u64 = 0u64;
         while let Some(dig) = byte_iter.next() {
@@ -184,19 +190,19 @@ impl<'a> Parser<'a> {
     ///
     /// This **will forward the cursor itself**
     fn parse_metaframe_get_datagroup_count(&mut self) -> ParseResult<usize> {
+        // the smallest query we can have is: *1\n or 3 chars
+        if self.buffer.len() < 3 {
+            return Err(ParseError::NotEnough);
+        }
         // Now we want to read `*<n>\n`
         let (start, stop) = self.read_line();
-        if let Some(our_chunk) = &self.buffer.get(start..stop) {
+        if let Some(our_chunk) = self.buffer.get(start..stop) {
             if our_chunk[0] == b'*' {
                 // Good, this will tell us the number of actions
                 // Let us attempt to read the usize from this point onwards
                 // that is excluding the '*' (so 1..)
-                if self.will_cursor_give_linefeed()? {
-                    let ret = Self::parse_into_usize(&our_chunk[1..])?;
-                    Ok(ret)
-                } else {
-                    Err(ParseError::NotEnough)
-                }
+                let ret = Self::parse_into_usize(&our_chunk[1..])?;
+                Ok(ret)
             } else {
                 Err(ParseError::UnexpectedByte)
             }
@@ -209,10 +215,13 @@ impl<'a> Parser<'a> {
     /// This function **does not forward the newline**
     fn __get_next_element(&mut self) -> ParseResult<&[u8]> {
         let string_sizeline = self.read_line();
-        let string_size =
-            Self::parse_into_usize(&self.buffer[string_sizeline.0..string_sizeline.1])?;
-        let our_chunk = self.read_until(string_size)?;
-        Ok(our_chunk)
+        if let Some(line) = self.buffer.get(string_sizeline.0..string_sizeline.1) {
+            let string_size = Self::parse_into_usize(line)?;
+            let our_chunk = self.read_until(string_size)?;
+            Ok(our_chunk)
+        } else {
+            Err(ParseError::NotEnough)
+        }
     }
     /// The cursor should have passed the `+` tsymbol
     fn parse_next_string(&mut self) -> ParseResult<String> {
@@ -262,12 +271,16 @@ impl<'a> Parser<'a> {
     /// The tsymbol `&` should have been passed!
     fn parse_next_array(&mut self) -> ParseResult<Vec<DataType>> {
         let (start, stop) = self.read_line();
-        let array_size = Self::parse_into_usize(&self.buffer[start..stop])?;
-        let mut array = Vec::with_capacity(array_size);
-        for _ in 0..array_size {
-            array.push(self.parse_next_element()?);
+        if let Some(our_size_chunk) = self.buffer.get(start..stop) {
+            let array_size = Self::parse_into_usize(our_size_chunk)?;
+            let mut array = Vec::with_capacity(array_size);
+            for _ in 0..array_size {
+                array.push(self.parse_next_element()?);
+            }
+            Ok(array)
+        } else {
+            Err(ParseError::NotEnough)
         }
-        Ok(array)
     }
     pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
