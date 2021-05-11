@@ -38,18 +38,18 @@ use std::hint::unreachable_unchecked;
 pub async fn update<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany != 2 {
         // There should be exactly 2 arguments
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut it = act.into_iter();
+    let mut it = act.into_iter().skip(1);
     let did_we = {
         if let Some(mut whandle) = handle.acquire_write() {
             let writer = whandle.get_mut_ref();
@@ -73,13 +73,12 @@ where
     };
     if let Some(did_we) = did_we {
         if did_we {
-            con.write_response(&**responses::fresp::R_OKAY).await?;
+            con.write_response(&**responses::groups::OKAY).await?;
         } else {
-            con.write_response(&**responses::fresp::R_NIL).await?;
+            con.write_response(&**responses::groups::NIL).await?;
         }
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR)
-            .await?;
+        con.write_response(&**responses::groups::SERVER_ERR).await?;
     }
     Ok(())
 }

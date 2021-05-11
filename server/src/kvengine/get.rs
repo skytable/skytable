@@ -27,29 +27,22 @@
 //! # `GET` queries
 //! This module provides functions to work with `GET` queries
 
-
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use crate::resp::{BytesWrapper, GroupBegin};
+use crate::resp::BytesWrapper;
 use bytes::Bytes;
-
 
 /// Run a `GET` query
 pub async fn get<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany != 1 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
-    // Write #<m>\n#<n>\n&1\n to the stream
-    con.write_response(GroupBegin(1)).await?;
+    crate::err_if_len_is!(act, con, != 1);
     let res: Option<Bytes> = {
         let rhandle = handle.acquire_read();
         let reader = rhandle.get_ref();
@@ -57,7 +50,7 @@ where
             // UNSAFE(@ohsayan): act.get_ref().get_unchecked() is safe because we've already if the action
             // group contains one argument (excluding the action itself)
             reader
-                .get(act.get_ref().get_unchecked(1))
+                .get(act.get_unchecked(1))
                 .map(|b| b.get_blob().clone())
         }
     };

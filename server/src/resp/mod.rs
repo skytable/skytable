@@ -82,16 +82,6 @@ where
 #[derive(Debug, PartialEq)]
 pub struct BytesWrapper(pub Bytes);
 
-/// This indicates the beginning of a response group in a response.
-///
-/// It holds the number of items to be written and writes:
-/// ```text
-/// #<self.0.to_string().len().to_string().into_bytes()>\n
-/// &<self.0.to_string()>\n
-/// ```
-#[derive(Debug, PartialEq)]
-pub struct GroupBegin(pub usize);
-
 impl BytesWrapper {
     pub fn finish_into_bytes(self) -> Bytes {
         self.0
@@ -191,32 +181,6 @@ impl Writable for RespCodes {
             Ok(())
         }
         Box::pin(write_bytes(con, self))
-    }
-}
-
-impl Writable for GroupBegin {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
-        async fn write_bytes(con: &mut impl IsConnection, size: usize) -> Result<(), IoError> {
-            con.write_lowlevel(b"#2\n*1\n").await?;
-            // First write a `#` which indicates that the next bytes give the
-            // prefix length
-            con.write_lowlevel(&[b'#']).await?;
-            let group_len_as_bytes = size.to_string().into_bytes();
-            let group_prefix_len_as_bytes = (group_len_as_bytes.len() + 1).to_string().into_bytes();
-            // Now write Self's len as bytes
-            con.write_lowlevel(&group_prefix_len_as_bytes).await?;
-            // Now write a LF and '&' which signifies the beginning of a datagroup
-            con.write_lowlevel(&[b'\n', b'&']).await?;
-            // Now write the number of items in the datagroup as bytes
-            con.write_lowlevel(&group_len_as_bytes).await?;
-            // Now write a '\n' character
-            con.write_lowlevel(&[b'\n']).await?;
-            Ok(())
-        }
-        Box::pin(write_bytes(con, self.0))
     }
 }
 

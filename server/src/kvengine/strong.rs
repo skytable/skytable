@@ -48,15 +48,15 @@ use std::hint::unreachable_unchecked;
 pub async fn sset<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany & 1 == 1 || howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -67,7 +67,6 @@ where
         // This iterator gives us the keys and values, skipping the first argument which
         // is the action name
         let mut key_iter = act
-            .get_ref()
             .get(1..)
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
@@ -110,13 +109,13 @@ where
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(&**responses::fresp::R_OVERWRITE_ERR)
+            con.write_response(&**responses::groups::OVERWRITE_ERR)
                 .await
         } else {
-            con.write_response(&**responses::fresp::R_OKAY).await
+            con.write_response(&**responses::groups::OKAY).await
         }
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
 }
 
@@ -127,15 +126,15 @@ where
 pub async fn sdel<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -143,7 +142,6 @@ where
         // doesn't go beyond the scope of this function - and is never used across
         // an await: cause, the compiler ain't as smart as we are ;)
         let mut key_iter = act
-            .get_ref()
             .get(1..)
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is safe as we've already checked that there are arguments
@@ -185,12 +183,12 @@ where
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(&**responses::fresp::R_NIL).await
+            con.write_response(&**responses::groups::NIL).await
         } else {
-            con.write_response(&**responses::fresp::R_OKAY).await
+            con.write_response(&**responses::groups::OKAY).await
         }
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
 }
 
@@ -201,15 +199,15 @@ where
 pub async fn supdate<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany & 1 == 1 || howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
     let mut failed = Some(false);
     {
@@ -217,7 +215,6 @@ where
         // doesn't go beyond the scope of this function - and is never used across
         // an await: cause, the compiler ain't as smart as we are ;)
         let mut key_iter = act
-            .get_ref()
             .get(1..)
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): We've already checked that the action group contains more
@@ -262,11 +259,11 @@ where
     }
     if let Some(failed) = failed {
         if failed {
-            con.write_response(&**responses::fresp::R_NIL).await
+            con.write_response(&**responses::groups::NIL).await
         } else {
-            con.write_response(&**responses::fresp::R_OKAY).await
+            con.write_response(&**responses::groups::OKAY).await
         }
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
 }

@@ -24,32 +24,24 @@
  *
 */
 
-
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::resp::{BytesWrapper, GroupBegin};
+use crate::resp::BytesWrapper;
 use bytes::Bytes;
 use libsky::terrapipe::RespCodes;
-
 
 /// Run an `MGET` query
 ///
 pub async fn mget<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    con.write_response(GroupBegin(howmany)).await?;
-    let mut keys = act.into_iter();
+    crate::err_if_len_is!(act, con, == 0);
+    let mut keys = act.into_iter().skip(1);
     while let Some(key) = keys.next() {
         let res: Option<Bytes> = {
             let rhandle = handle.acquire_read();
