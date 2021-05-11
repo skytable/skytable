@@ -24,23 +24,64 @@
  *
 */
 
+//! # The Skyhash Protocol
+//!
+//! ## Introduction
+//! The Skyhash Protocol is a serialization protocol that is used by Skytable for client/server communication.
+//! It works in a query/response action similar to HTTP's request/response action. Skyhash supersedes the Terrapipe
+//! protocol as a more simple, reliable, robust and scalable protocol.
+//!
+//! This module contains the [`Parser`] for the Skyhash protocol and it's enough to just pass a query packet as
+//! a slice of unsigned 8-bit integers and the parser will do everything else. The Skyhash protocol was designed
+//! and implemented by the Author (Sayan Nandan)
+//!
+
 use std::hint::unreachable_unchecked;
 
 #[derive(Debug)]
+/// # Skyhash Deserializer (Parser)
+///
+/// The [`Parser`] object can be used to deserialized a packet serialized by Skyhash which in turn serializes
+/// it into data structures native to the Rust Language (and some Compound Types built on top of them).
+///
+/// ## Evaluation
+///
+/// The parser is pessimistic in most cases and will readily throw out any errors. On non-recusrive types
+/// there is no recursion, but the parser will use implicit recursion for nested arrays. The parser will
+/// happily not report any errors if some part of the next query was passed. This is very much a possibility
+/// and so has been accounted for
+///
+/// ## Important note
+///
+/// All developers willing to modify the deserializer must keep this in mind: the cursor is always Ahead-Of-Position
+/// that is the cursor should always point at the next character that can be read.
+///
 pub(super) struct Parser<'a> {
+    /// The internal cursor position
+    ///
+    /// Do not even think of touching this externally
     cursor: usize,
+    /// The buffer slice
     buffer: &'a [u8],
 }
 
 #[derive(Debug, PartialEq)]
+/// # Parser Errors
+///
+/// Several errors can arise during parsing and this enum accounts for them
 pub enum ParseError {
     /// Didn't get the number of expected bytes
     NotEnough,
     /// The query contains an unexpected byte
     UnexpectedByte,
     /// The packet simply contains invalid data
+    ///
+    /// This is rarely returned and only in the special cases where a bad client sends `0` as
+    /// the query count
     BadPacket,
     /// A data type was given but the parser failed to serialize it into this type
+    ///
+    /// This can happen not just for elements but can also happen for their sizes ([`Self::parse_into_u64`])
     DataTypeParseError,
     /// A data type that the server doesn't know was passed into the query
     ///
@@ -50,13 +91,21 @@ pub enum ParseError {
 }
 
 #[derive(Debug, PartialEq)]
+/// # Types of Queries
+///
+/// A simple query carries out one action while a complex query executes multiple actions
 pub enum Query {
+    /// A simple query will just hold one element
     SimpleQuery(DataType),
+    /// A pipelined/batch query will hold multiple elements
     PipelinedQuery(Vec<DataType>),
 }
 
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
+/// # Data Types
+///
+/// This enum represents the data types supported by the Skyhash Protocol
 pub enum DataType {
     /// Arrays can be nested! Their `<tsymbol>` is `&`
     Array(Vec<DataType>),
@@ -66,9 +115,11 @@ pub enum DataType {
     UnsignedInt(u64),
 }
 
+/// A generic result to indicate parsing errors thorugh the [`ParseError`] enum
 type ParseResult<T> = Result<T, ParseError>;
 
 impl<'a> Parser<'a> {
+    /// Initialize a new parser instance
     pub const fn new(buffer: &'a [u8]) -> Self {
         Parser {
             cursor: 0usize,
@@ -104,9 +155,13 @@ impl<'a> Parser<'a> {
         }
         (started_at, stopped_at)
     }
+    /// Push the internal cursor ahead by one
     fn incr_cursor(&mut self) {
         self.cursor += 1;
     }
+    /// This function will evaluate if the byte at the current cursor position equals the `ch` argument, i.e
+    /// the expression `*v == ch` is evaluated. However, if no element is present ahead, then the function
+    /// will return `Ok(_this_if_nothing_ahead_)`
     fn will_cursor_give_char(&self, ch: u8, this_if_nothing_ahead: bool) -> ParseResult<bool> {
         self.buffer.get(self.cursor).map_or(
             if this_if_nothing_ahead {
@@ -117,9 +172,12 @@ impl<'a> Parser<'a> {
             |v| Ok(*v == ch),
         )
     }
+    /// Will the current cursor position give a linefeed? This will return `ParseError::NotEnough` if
+    /// the current cursor points at a non-existent index in `self.buffer`
     fn will_cursor_give_linefeed(&self) -> ParseResult<bool> {
         self.will_cursor_give_char(b'\n', false)
     }
+    /// Parse a stream of bytes into [`usize`]
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
         if bytes.len() == 0 {
             return Err(ParseError::NotEnough);
@@ -151,6 +209,7 @@ impl<'a> Parser<'a> {
         }
         Ok(item_usize)
     }
+    /// Pasre a stream of bytes into an [`u64`]
     fn parse_into_u64(bytes: &[u8]) -> ParseResult<u64> {
         if bytes.len() == 0 {
             return Err(ParseError::NotEnough);
@@ -278,6 +337,10 @@ impl<'a> Parser<'a> {
             Err(ParseError::NotEnough)
         }
     }
+    /// Parse a query and return the [`Query`] and an `usize` indicating the number of bytes that
+    /// can be safely discarded from the buffer. It will otherwise return errors if they are found.
+    ///
+    /// This object will drop `Self`
     pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
         println!("Got count: {}", number_of_queries);
