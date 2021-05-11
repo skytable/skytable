@@ -361,7 +361,6 @@ impl<'a> Parser<'a> {
     /// This object will drop `Self`
     pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
-        println!("Got count: {}", number_of_queries);
         if number_of_queries == 0 {
             // how on earth do you expect us to execute 0 queries? waste of bandwidth
             return Err(ParseError::BadPacket);
