@@ -292,7 +292,7 @@ impl<'a> Parser<'a> {
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
             if self
-                .will_cursor_give_char(b'\r', true)
+                .will_cursor_give_char(b'*', true)
                 .unwrap_or_else(|_| unsafe {
                     // This will never be the case because we'll always get a result and no error value
                     // as we've passed true which will yield Ok(true) even if there is no byte ahead
@@ -312,7 +312,7 @@ impl<'a> Parser<'a> {
             for _ in 0..number_of_queries {
                 queries.push(self.parse_next_element()?);
             }
-            if self.will_cursor_give_char(b'\r', true)? {
+            if self.will_cursor_give_char(b'*', true)? {
                 Ok((Query::PipelinedQuery(queries), self.cursor))
             } else {
                 Err(ParseError::UnexpectedByte)
@@ -411,10 +411,28 @@ fn test_parse_next_element_string() {
 }
 
 #[test]
+fn test_parse_next_element_string_fail() {
+    let bytes = "+5\nsayan".as_bytes();
+    assert_eq!(
+        Parser::new(&bytes).parse_next_element().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
 fn test_parse_next_element_u64() {
     let bytes = ":20\n18446744073709551615\n".as_bytes();
     let our_u64 = Parser::new(&bytes).parse_next_element().unwrap();
     assert_eq!(our_u64, DataType::UnsignedInt(u64::MAX));
+}
+
+#[test]
+fn test_parse_next_element_u64_fail() {
+    let bytes = ":20\n18446744073709551615".as_bytes();
+    assert_eq!(
+        Parser::new(&bytes).parse_next_element().unwrap_err(),
+        ParseError::NotEnough
+    );
 }
 
 #[test]
@@ -431,6 +449,17 @@ fn test_parse_next_element_array() {
         ])
     );
     assert_eq!(parser.cursor, bytes.len());
+}
+
+#[test]
+fn test_parse_next_element_array_fail() {
+    // should've been three elements, but there are two!
+    let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\n".as_bytes();
+    let mut parser = Parser::new(&bytes);
+    assert_eq!(
+        parser.parse_next_element().unwrap_err(),
+        ParseError::NotEnough
+    );
 }
 
 #[test]
@@ -557,4 +586,31 @@ fn test_pipelined_query() {
         ])
     );
     assert_eq!(forward_by, bytes.len());
+}
+
+#[test]
+fn test_query_with_part_of_next_query() {
+    let bytes =
+        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n*1\n"
+            .as_bytes();
+    let (res, forward_by) = Parser::new(&bytes).parse().unwrap();
+    assert_eq!(
+        res,
+        Query::SimpleQuery(DataType::Array(vec![
+            DataType::String("ACT".to_owned()),
+            DataType::String("foo".to_owned()),
+            DataType::Array(vec![
+                DataType::String("sayan".to_owned()),
+                DataType::String("is".to_owned()),
+                DataType::String("working".to_owned()),
+                DataType::Array(vec![
+                    DataType::UnsignedInt(23),
+                    DataType::String("april".to_owned())
+                ])
+            ])
+        ]))
+    );
+    // there are some ingenious folks on this planet who might just go bombing one query after the other
+    // we happily ignore those excess queries and leave it to the next round of parsing
+    assert_eq!(forward_by, bytes.len() - "*1\n".len());
 }
