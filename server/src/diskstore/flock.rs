@@ -220,6 +220,7 @@ mod __sys {
 
 #[cfg(unix)]
 mod __sys {
+    #![allow(dead_code)] // TODO: Enable this lint or remove the offending methods
     //! # Unix platform-specific file locking
     //! This module contains methods used by the `FileLock` object in this module to lock and/or
     //! unlock files.
