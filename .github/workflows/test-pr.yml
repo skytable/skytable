@@ -67,15 +67,17 @@ jobs:
 
       - name: Run Tests
         run: |
-          cargo run -p skyd &
+          cargo run -p skyd -- --nosave --noart &
           cargo test --verbose -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Run Tests (Windows)
         run: |
-          cargo run -p skyd -- --nosave &
+          cargo build -p skyd
+          START /B target\debug\skyd.exe --nosave --noart
           cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1

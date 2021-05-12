@@ -96,16 +96,18 @@ jobs:
 
       - name: Run Tests
         run: |
-          cargo run -p skyd -- --nosave &
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Run Tests (Windows)
         run: |
-          cargo run -p skyd -- --nosave &
-          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          cargo build -p skyd --target ${{ matrix.rust }}
+          START /B target\debug\skyd.exe --nosave --noart
+          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
         shell: cmd
@@ -197,16 +199,18 @@ jobs:
 
       - name: Run Tests
         run: |
-          cargo run -p skyd -- --nosave &
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
 
       - name: Run Tests (Windows)
         run: |
-          cargo run -p skyd -- --nosave &
-          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          cargo build -p skyd --target ${{ matrix.rust }}
+          START /B target\debug\skyd.exe --nosave --noart
+          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
         shell: cmd
@@ -282,7 +286,7 @@ jobs:
           restore-keys: |
             ${{ matrix.rust }}-target-
         if: env.IS_MD_FILE == 'false'
-      
+
       - name: Install MUSL tools
         run: sudo apt-get update && sudo apt-get install musl-tools -y
         if: runner.os == 'Linux'
@@ -295,8 +299,9 @@ jobs:
 
       - name: Run Tests
         run: |
-          cargo run -p skyd -- --nosave &
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
