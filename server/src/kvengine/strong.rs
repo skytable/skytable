@@ -167,7 +167,7 @@ where
             }) {
                 // Since the failed flag is false, all of the keys exist
                 // So we can safely delete the keys
-                act.into_iter().for_each(|key| {
+                act.into_iter().skip(1).for_each(|key| {
                     // Since we've already checked that the keys don't exist
                     // We'll tell the compiler to optimize this
                     let _ = mut_table.remove(&key).unwrap_or_else(|| unsafe {
@@ -245,7 +245,7 @@ where
             }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely update the keys
-                let mut iter = act.into_iter();
+                let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
                     if mut_table.insert(key, Data::from_string(value)).is_none() {
                         // Tell the compiler that this will never be the case
