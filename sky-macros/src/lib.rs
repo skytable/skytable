@@ -66,11 +66,13 @@ fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
         let mut con = skytable::AsyncConnection::new("127.0.0.1", 2003).await.unwrap();
         let mut query = skytable::Query::new();
         #body
-        let mut __flush__ = skytable::Query::new(); __flush__.arg("flushdb");
-        std::assert_eq!(
-            con.run_simple_query(__flush__).await.unwrap(),
-            skytable::Response::Item(skytable::Element::RespCode(skytable::RespCode::Okay))
-        );
+        {
+            let mut __flush__ = skytable::Query::new(); __flush__.arg("flushdb");
+            std::assert_eq!(
+                con.run_simple_query(__flush__).await.unwrap(),
+                skytable::Response::Item(skytable::Element::RespCode(skytable::RespCode::Okay))
+            );
+        }
     };
     let result = quote! {
         #header

@@ -361,6 +361,7 @@ mod __private {
         // first set the keys
         query.arg("mset");
         query.arg("x");
+        query.arg("100");
         assert_eq!(
             con.run_simple_query(query).await.unwrap(),
             Response::Item(Element::UnsignedInt(1))
@@ -865,7 +866,7 @@ mod __private {
         query.arg("300");
         assert_eq!(
             con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Response::Item(Element::UnsignedInt(3))
         );
         // now that the keys already exist, do it all over again
         let mut query = Query::new();
@@ -878,7 +879,7 @@ mod __private {
         query.arg("300");
         assert_eq!(
             con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Response::Item(Element::UnsignedInt(3))
         );
     }
 
