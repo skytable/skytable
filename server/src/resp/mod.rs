@@ -27,7 +27,7 @@
 //! Utilities for generating responses, which are only used by the `server`
 //!
 use bytes::Bytes;
-use libsky::terrapipe::RespCodes;
+use skytable::RespCode;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::pin::Pin;
@@ -141,13 +141,13 @@ impl Writable for BytesWrapper {
     }
 }
 
-impl Writable for RespCodes {
+impl Writable for RespCode {
     fn write<'s>(
         self,
         con: &'s mut impl IsConnection,
     ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
-        async fn write_bytes(con: &mut impl IsConnection, code: RespCodes) -> Result<(), IoError> {
-            if let RespCodes::OtherError(Some(e)) = code {
+        async fn write_bytes(con: &mut impl IsConnection, code: RespCode) -> Result<(), IoError> {
+            if let RespCode::ErrorString(e) = code {
                 // Since this is an other error which contains a description
                 // we'll write !<no_of_bytes> followed by the string
                 con.write_lowlevel(&[b'!']).await?;

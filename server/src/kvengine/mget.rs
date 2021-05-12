@@ -27,7 +27,7 @@
 use crate::dbnet::connection::prelude::*;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
-use libsky::terrapipe::RespCodes;
+use skytable::RespCode;
 
 /// Run an `MGET` query
 ///
@@ -54,7 +54,7 @@ where
             con.write_response(BytesWrapper(value)).await?;
         } else {
             // Ah, couldn't find that key
-            con.write_response(RespCodes::NotFound).await?;
+            con.write_response(RespCode::NotFound).await?;
         }
     }
     drop(handle);

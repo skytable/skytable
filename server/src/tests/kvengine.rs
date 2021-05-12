@@ -34,6 +34,7 @@
 
 #[sky_macros::dbtest]
 mod __private {
+    #[cfg(test)]
     use skytable::{Element, Query, RespCode, Response};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
