@@ -41,7 +41,6 @@ where
     {
         len = handle.acquire_read().get_ref().len();
     }
-    con.write_simple_query_header().await?;
     con.write_response(len).await?;
     Ok(())
 }
