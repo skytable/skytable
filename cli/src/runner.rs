@@ -1,0 +1,179 @@
+/*
+ * Created on Wed May 12 2021
+ *
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
+ * NoSQL database written by Sayan Nandan ("the Author") with the
+ * vision to provide flexibility in data modelling without compromising
+ * on performance, queryability or scalability.
+ *
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+*/
+use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
+use skytable::{AsyncConnection, Element, Query, RespCode, Response};
+use std::str::FromStr;
+
+lazy_static::lazy_static! {
+    static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
+}
+
+pub struct Runner {
+    con: AsyncConnection,
+}
+
+macro_rules! write_string {
+    ($st:ident) => {
+        println!("\"{}\"", $st);
+    };
+    ($idx:ident, $st:ident) => {
+        println!("({}) \"{}\"", $idx, $st);
+    };
+}
+
+macro_rules! write_int {
+    ($int:ident) => {
+        println!("{}", $int);
+    };
+    ($idx:ident, $st:ident) => {
+        println!("({}) \"{}\"", $idx, $st);
+    };
+}
+
+macro_rules! write_err {
+    ($idx:expr, $err:ident) => {
+        crossterm::execute!(
+            std::io::stdout(),
+            SetForegroundColor(Color::Red),
+            Print(if let Some(idx) = $idx {
+                format!("({}) ({})\n", idx, $err)
+            } else {
+                format!("({})\n", $err)
+            }),
+            ResetColor
+        )
+        .expect("Failed to write to stdout");
+    };
+    ($idx:ident, $err:literal) => {
+        crossterm::execute!(
+            std::io::stdout(),
+            SetForegroundColor(Color::Red),
+            Print(
+                (if let Some(idx) = $idx {
+                    format!("({}) ({})\n", idx, $err)
+                } else {
+                    format!("({})\n", $err)
+                })
+            ),
+            ResetColor
+        )
+        .expect("Failed to write to stdout");
+    };
+}
+
+macro_rules! write_okay {
+    () => {
+        crossterm::execute!(
+            std::io::stdout(),
+            SetForegroundColor(Color::Cyan),
+            Print("(Okay)\n".to_string()),
+            ResetColor
+        )
+        .expect("Failed to write to stdout");
+    };
+    ($idx:ident) => {
+        crossterm::execute!(
+            std::io::stdout(),
+            SetForegroundColor(Color::Cyan),
+            Print(format!("({}) (Okay)\n", $idx)),
+            ResetColor
+        )
+        .expect("Failed to write to stdout");
+    };
+}
+
+impl Runner {
+    pub const fn new(con: AsyncConnection) -> Self {
+        Runner { con }
+    }
+    pub async fn run_query(&mut self, unescaped_items: &str) {
+        let args: Vec<String> = RE
+            .find_iter(unescaped_items)
+            .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
+            .collect();
+        let mut query = Query::new();
+        args.into_iter().for_each(|arg| {
+            query.arg(arg);
+        });
+        match self.con.run_simple_query(query).await {
+            Ok(resp) => match resp {
+                Response::InvalidResponse => {
+                    println!("ERROR: The server sent an invalid response");
+                }
+                Response::Item(element) => match element {
+                    Element::String(st) => write_string!(st),
+                    Element::FlatArray(arr) => print_flat_array(arr),
+                    Element::RespCode(r) => print_rcode(r, None),
+                    Element::UnsignedInt(int) => write_int!(int),
+                    Element::Array(a) => print_array(a),
+                    _ => unimplemented!(),
+                },
+                Response::ParseError => {
+                    println!("ERROR: The client failed to deserialize data sent by the server")
+                }
+                x @ _ => {
+                    println!(
+                        "The server possibly sent a newer data type that we can't parse: {:?}",
+                        x
+                    )
+                }
+            },
+            Err(e) => {
+                eprintln!("An I/O error occurred while querying: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn print_rcode(rcode: RespCode, idx: Option<usize>) {
+    match rcode {
+        RespCode::Okay => write_okay!(),
+        RespCode::ActionError => write_err!(idx, "Action Error"),
+        RespCode::ErrorString(st) => write_err!(idx, st),
+        RespCode::OtherError => write_err!(idx, "Other Error"),
+        RespCode::NotFound => write_err!(idx, "Not Found"),
+        RespCode::OverwriteError => write_err!(idx, "Overwrite Error"),
+        RespCode::PacketError => write_err!(idx, "Packet Error"),
+        RespCode::ServerError => write_err!(idx, "Server Error"),
+    }
+}
+
+fn print_flat_array(flat_array: Vec<String>) {
+    flat_array.into_iter().for_each(|item| write_string!(item))
+}
+fn print_array(array: Vec<Element>) {
+    for (idx, item) in array.into_iter().enumerate() {
+        let idx = idx + 1;
+        match item {
+            Element::String(st) => write_string!(idx, st),
+            Element::RespCode(rc) => print_rcode(rc, Some(idx)),
+            Element::UnsignedInt(int) => write_int!(idx, int),
+            Element::FlatArray(a) => print_flat_array(a),
+            _ => unimplemented!("Nested arrays cannot be printed just yet"),
+        }
+    }
+}

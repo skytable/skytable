@@ -852,9 +852,12 @@ dependencies = [
  "bytes",
  "clap",
  "crossterm",
+ "lazy_static",
  "libsky",
  "openssl",
+ "regex",
  "rustyline",
+ "skytable",
  "tokio",
  "tokio-openssl",
 ]
