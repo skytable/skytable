@@ -196,7 +196,7 @@ mod benchtool {
                     .map(|_| ran_string(8, &mut rand))
                     .collect();
                 let set_packs: Vec<Vec<u8>> = (0..num)
-                    .map(|idx| libsky::into_raw_query(format!("SET {} {}", keys[idx], values[idx])))
+                    .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
                     .collect();
                 set_packs.into_iter().for_each(|packet| {
                     np.execute(packet);
@@ -255,13 +255,13 @@ mod benchtool {
         one of `set_packs`
         */
         let set_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| libsky::into_raw_query(format!("SET {} {}", keys[idx], values[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| libsky::into_raw_query(format!("GET {}", keys[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| libsky::into_raw_query(format!("DEL {}", keys[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("DEL {}", keys[idx])))
             .collect();
         eprintln!("Per-packet size (GET): {} bytes", get_packs[0].len());
         eprintln!("Per-packet size (SET): {} bytes", set_packs[0].len());
