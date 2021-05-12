@@ -90,7 +90,7 @@ where
             }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely set the keys
-                let mut iter = act.into_iter();
+                let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
                     if mut_table.insert(key, Data::from_string(value)).is_some() {
                         // Tell the compiler that this will never be the case
@@ -144,8 +144,7 @@ where
         let mut key_iter = act
             .get(1..)
             .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is safe as we've already checked that there are arguments
-                // in the action group other than the action
+                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
                 unreachable_unchecked()
             })
             .iter();
@@ -217,8 +216,7 @@ where
         let mut key_iter = act
             .get(1..)
             .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked that the action group contains more
-                // than one argument. So, this is a safe optimization
+                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
                 unreachable_unchecked()
             })
             .iter();
