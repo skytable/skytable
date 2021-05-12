@@ -45,7 +45,7 @@ where
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
     let mut kviter = act.into_iter().skip(1);
     let failed = {
@@ -62,7 +62,7 @@ where
         }
     };
     if failed {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     } else {
         con.write_response(howmany / 2).await
     }

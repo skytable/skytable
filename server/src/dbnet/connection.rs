@@ -148,7 +148,9 @@ where
                         Err(ParseError::NotEnough) => (),
                         Err(ParseError::DataTypeParseError) => return Ok(QueryResult::Wrongtype),
                         Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                            return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
+                            return Ok(QueryResult::E(
+                                responses::full_responses::R_PACKET_ERR.to_owned(),
+                            ));
                         }
                         Err(ParseError::UnknownDatatype) => {
                             unimplemented!()

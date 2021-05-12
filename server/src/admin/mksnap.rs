@@ -82,7 +82,7 @@ where
         }
         if was_engine_error {
             return con
-                .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                .write_response(responses::groups::SERVER_ERR.to_owned())
                 .await;
         }
         if engine_was_busy {
@@ -93,14 +93,12 @@ where
         if let Some(succeeded) = snap_result {
             if succeeded {
                 // Snapshotting succeeded, return Okay
-                return con
-                    .write_response(responses::fresp::R_OKAY.to_owned())
-                    .await;
+                return con.write_response(responses::groups::OKAY.to_owned()).await;
             } else {
                 // Nope, something happened while creating a snapshot
                 // return a server error
                 return con
-                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .write_response(responses::groups::SERVER_ERR.to_owned())
                     .await;
             }
         } else {
@@ -149,16 +147,14 @@ where
             }
             if failed {
                 return con
-                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .write_response(responses::groups::SERVER_ERR.to_owned())
                     .await;
             } else {
-                return con
-                    .write_response(responses::fresp::R_OKAY.to_owned())
-                    .await;
+                return con.write_response(responses::groups::OKAY.to_owned()).await;
             }
         } else {
             return con
-                .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+                .write_response(responses::groups::ACTION_ERR.to_owned())
                 .await;
         }
     }

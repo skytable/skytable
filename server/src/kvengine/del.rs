@@ -64,6 +64,6 @@ where
     if let Some(done_howmany) = done_howmany {
         con.write_response(done_howmany).await
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
 }

@@ -61,7 +61,7 @@ pub mod groups {
     }
 }
 
-pub mod fresp {
+pub mod full_responses {
     //! # Pre-compiled **responses**
     //! These are pre-compiled **complete** responses. This means that they should
     //! be written off directly to the stream and should **not be preceded by any response metaframe**
