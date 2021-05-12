@@ -41,7 +41,7 @@ where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     crate::err_if_len_is!(act, con, == 0);
-    con.write_flat_array_length(act.len() - 1).await?;
+    con.write_array_length(act.len() - 1).await?;
     let mut keys = act.into_iter().skip(1);
     while let Some(key) = keys.next() {
         let res: Option<Bytes> = {

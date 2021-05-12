@@ -194,7 +194,7 @@ where
             ret
         })
     }
-    /// Write the simple query header `*1\n` to the stream
+    /// Write the flat array length (`_<size>\n`)
     fn write_flat_array_length<'r, 's>(
         &'r mut self,
         len: usize,
@@ -207,6 +207,26 @@ where
             let mv_self = self;
             let ret: IoResult<()> = {
                 mv_self.write_response(&[b'_'][..]).await?;
+                mv_self.write_response(len.to_string().into_bytes()).await?;
+                mv_self.write_response(&[b'\n'][..]).await?;
+                Ok(())
+            };
+            ret
+        })
+    }
+    /// Write the array length (`&<size>\n`)
+    fn write_array_length<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + 's,
+    {
+        Box::pin(async move {
+            let mv_self = self;
+            let ret: IoResult<()> = {
+                mv_self.write_response(&[b'&'][..]).await?;
                 mv_self.write_response(len.to_string().into_bytes()).await?;
                 mv_self.write_response(&[b'\n'][..]).await?;
                 Ok(())
