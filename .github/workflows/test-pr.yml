@@ -68,7 +68,7 @@ jobs:
       - name: Run Tests
         run: |
           cargo run -p skyd &
-          cargo test --verbose
+          cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
@@ -76,7 +76,7 @@ jobs:
       - name: Run Tests (Windows)
         run: |
           cargo run -p skyd -- --nosave &
-          cargo test --verbose
+          cargo test --verbose -- --test-threads=1
         env:
           RUST_BACKTRACE: 1
         shell: cmd
