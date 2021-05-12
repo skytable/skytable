@@ -79,6 +79,7 @@ jobs:
           cargo build -p skyd
           START /B target\debug\skyd.exe --nosave --noart
           cargo test --verbose -- --test-threads=1
+          taskkill /IM skyd.exe /F
         env:
           RUST_BACKTRACE: 1
         shell: cmd
