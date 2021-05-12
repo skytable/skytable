@@ -194,6 +194,26 @@ where
             ret
         })
     }
+    /// Write the simple query header `*1\n` to the stream
+    fn write_flat_array_length<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + 's,
+    {
+        Box::pin(async move {
+            let mv_self = self;
+            let ret: IoResult<()> = {
+                mv_self.write_response(&[b'_'][..]).await?;
+                mv_self.write_response(len.to_string().into_bytes()).await?;
+                mv_self.write_response(&[b'\n'][..]).await?;
+                Ok(())
+            };
+            ret
+        })
+    }
     /// Wraps around the `write_response` used to differentiate between a
     /// success response and an error response
     fn close_conn_with_error<'r, 's>(
