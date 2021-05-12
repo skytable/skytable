@@ -374,6 +374,7 @@ dependencies = [
  "bytes",
  "lazy_static",
  "regex",
+ "skytable",
  "termcolor",
 ]
 
@@ -802,10 +803,13 @@ version = "0.5.2"
 dependencies = [
  "clap",
  "devtimer",
+ "lazy_static",
  "libsky",
  "rand",
+ "regex",
  "serde",
  "serde_json",
+ "skytable",
 ]
 
 [[package]]
@@ -866,7 +870,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.2.3"
-source = "git+https://github.com/skytable/client-rust?branch=next#9268e8d9e40e9c9599142734108ec7f2bcc07101"
+source = "git+https://github.com/skytable/client-rust?branch=next#48eeaad07dc21d070fa3f3fca3ff2979841bbb65"
 dependencies = [
  "bytes",
  "tokio",

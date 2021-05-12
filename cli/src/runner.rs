@@ -24,12 +24,7 @@
  *
 */
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
-use skytable::{AsyncConnection, Element, Query, RespCode, Response};
-use std::str::FromStr;
-
-lazy_static::lazy_static! {
-    static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
-}
+use skytable::{AsyncConnection, Element, RespCode, Response};
 
 pub struct Runner {
     con: AsyncConnection,
@@ -110,14 +105,7 @@ impl Runner {
         Runner { con }
     }
     pub async fn run_query(&mut self, unescaped_items: &str) {
-        let args: Vec<String> = RE
-            .find_iter(unescaped_items)
-            .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
-            .collect();
-        let mut query = Query::new();
-        args.into_iter().for_each(|arg| {
-            query.arg(arg);
-        });
+        let query = libsky::turn_into_query(unescaped_items);
         match self.con.run_simple_query(query).await {
             Ok(resp) => match resp {
                 Response::InvalidResponse => {
