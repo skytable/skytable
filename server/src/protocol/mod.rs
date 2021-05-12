@@ -333,7 +333,7 @@ impl<'a> Parser<'a> {
                     };
                     array.push(ret);
                 } else {
-                    return Err(ParseError::DataTypeParseError);
+                    return Err(ParseError::NotEnough);
                 }
             }
             Ok(array)
@@ -707,4 +707,56 @@ fn test_parse_flat_array() {
             "World".to_owned()
         ])
     );
+}
+
+#[test]
+fn test_flat_array_incomplete() {
+    let bytes = "*1\n_1\n".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n_1".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n_".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+}
+
+#[test]
+fn test_array_incomplete() {
+    let bytes = "*1\n&1\n".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n&1".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n&".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+}
+
+#[test]
+fn test_string_incomplete() {
+    let bytes = "*1\n+1\n".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n+1".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n+".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+}
+
+#[test]
+fn test_u64_incomplete() {
+    let bytes = "*1\n:1\n".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n:1".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
+    let bytes = "*1\n:".as_bytes();
+    let res = Parser::new(&bytes).parse().unwrap_err();
+    assert_eq!(res, ParseError::NotEnough);
 }
