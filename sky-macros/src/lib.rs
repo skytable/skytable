@@ -35,21 +35,20 @@
 //!
 //! ### Macros and ghost values
 //! - `#[dbtest]`:
-//!     - `stream` - `tokio::net::TcpListener`
-//!     - `asyncdb` - `sdb::coredb::CoreDB`
+//!     - `con` - `skytable::AsyncConnection`
+//!     - `query` - `skytable::Query`
+//!
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use rand::*;
-use std::collections::HashSet;
 use syn::{self};
 
 /// This parses a function within a `dbtest` module
 ///
 /// This accepts an `async` function and returns a non-`async` version of it - by
 /// making the body of the function use the `tokio` runtime
-fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::Error> {
+fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
     let sig = &mut input.sig;
     let fname = sig.ident.to_string();
     let body = &input.block;
@@ -64,13 +63,16 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
     }
     sig.asyncness = None;
     let body = quote! {
-        let asyncdb = crate::coredb::CoreDB::new_empty(0, std::sync::Arc::new(None));
-        let addr = crate::tests::start_test_server(#rand, Some(asyncdb.clone())).await;
-        let mut stream = tokio::net::TcpStream::connect(&addr).await.unwrap();
+        let mut con = skytable::AsyncConnection::new("127.0.0.1", 2003).await.unwrap();
+        let mut query = skytable::Query::new();
         #body
-        stream.shutdown().await.unwrap();
-        asyncdb.finish_db();
-        drop(asyncdb);
+        {
+            let mut __flush__ = skytable::Query::new(); __flush__.arg("flushdb");
+            std::assert_eq!(
+                con.run_simple_query(__flush__).await.unwrap(),
+                skytable::Response::Item(skytable::Element::RespCode(skytable::RespCode::Okay))
+            );
+        }
     };
     let result = quote! {
         #header
@@ -90,7 +92,7 @@ fn parse_dbtest(mut input: syn::ItemFn, rand: u16) -> Result<TokenStream, syn::E
 }
 
 /// This function checks if the current function is eligible to be a test
-fn parse_test_sig(input: syn::ItemFn, rand: u16) -> TokenStream {
+fn parse_test_sig(input: syn::ItemFn) -> TokenStream {
     for attr in &input.attrs {
         if attr.path.is_ident("test") {
             let msg = "second test attribute is supplied";
@@ -106,7 +108,7 @@ fn parse_test_sig(input: syn::ItemFn, rand: u16) -> TokenStream {
             .to_compile_error()
             .into();
     }
-    parse_dbtest(input, rand).unwrap_or_else(|e| e.to_compile_error().into())
+    parse_dbtest(input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// This function accepts an entire module which comprises of `dbtest` functions.
@@ -172,25 +174,8 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         .to_compile_error()
         .into();
     }
-    let mut rng = thread_rng();
-    let mut in_set = HashSet::<u16>::new();
-    /*
-     * As per [this comment](https://github.com/actions/virtual-environments/issues/3275#issuecomment-828214572)
-     * from the GitHub Actions team, Windows reserves several ports. As our runners are currently hosted on GHA which use Hyper-V VMs
-     * these ports will be blocked too and thse blocks are the reasons behind spurious test failures on Windows.
-     * As a consequence to this, we will exclude these port ranges from the random port allocation set
-     * (by setting them to 'already used' or 'already in in_set').
-     */
-    #[cfg(windows)]
-    add_reserved_ports(&mut in_set);
     let mut result = quote! {};
     for item in content {
-        // We set the port range to the 'dynamic port range' as per IANA's allocation guidelines
-        let mut rand: u16 = rng.gen_range(49152..=65535);
-        while in_set.contains(&rand) {
-            rand = rng.gen_range(49152..=65535);
-        }
-        in_set.insert(rand);
         match item {
             // We just care about functions, so parse functions and ignore everything
             // else
@@ -202,7 +187,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     };
                     continue;
                 }
-                let inp = parse_test_sig(function, rand);
+                let inp = parse_test_sig(function);
                 let __tok: syn::ItemFn = syn::parse_macro_input!(inp as syn::ItemFn);
                 let tok = quote! {
                     #__tok
@@ -236,20 +221,22 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 
 #[proc_macro_attribute]
 /// The `dbtest` macro starts an async server in the background and is meant for
-/// use within the `sdb` or `WORKSPACEROOT/server/` crate. If you use this compiler
+/// use within the `skyd` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
+/// All tests will clean up all values once a single test is over. **These tests should not
+/// be run in multi-threaded environments because they often use the same keys**
 /// ## _Ghost_ values
-/// This macro gives a `tokio::net::TcpStream` accessible by the `stream` variable and a `sdb::coredb::CoreDB`
-/// accessible by the `asyncdb` variable.
+/// This macro gives a `skytable::AsyncConnection` accessible by the `con` variable and a mutable
+/// `skytable::Query` accessible by the `query` variable
 ///
 /// ## Requirements
 ///
 /// The `#[dbtest]` macro expects several things. The calling crate:
 /// - should have the `tokio` crate as a dependency and should have the
 /// `features` set to full
-/// - should have a function to start an async test server, available with the following path:
-/// `crate::tests::start_test_server` which accepts an `u16` as the port number
+/// - should have the `skytable` crate as a dependency and should have the `features` set to `async` and version
+/// upstreamed to `next` on skytable/client-rust
 ///
 /// ## Conventions
 /// Since `proc_macro` cannot accept _file-linked_ modules and only accepts inline modules, we have made a workaround, which
@@ -259,79 +246,4 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 ///
 pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
     parse_test_module(args, item)
-}
-
-#[cfg(windows)]
-/// We will parse the output from `netsh interface ipv4 show excludedportrange protocol=tcp` on Windows
-/// We will then use this to add the port ranges to our `in_set` to not use them
-///
-/// This is what a typical output of the above command looks like:
-/// ```text
-///
-/// Protocol tcp Port Exclusion Ranges
-///
-/// Start Port    End Port
-/// ----------    --------
-///       8501        8501
-///      47001       47001
-///
-/// * - Administered port exclusions.
-///
-/// ```
-/// So, we first ignore all empty lines and then validate the headers (i.e "start port", "end port", "protocol tcp", etc)
-/// and then once that's all good -- we parse the start and end ports and then turn it into a range, and run an iterator
-/// over every element in this range, pushing elements into our `set` (or `in_set`)
-fn add_reserved_ports(set: &mut HashSet<u16>) {
-    use std::process::Command;
-    let mut netsh = Command::new("netsh");
-    netsh
-        .arg("interface")
-        .arg("ipv4")
-        .arg("show")
-        .arg("excludedportrange")
-        .arg("protocol=tcp");
-    let output = netsh.output().unwrap();
-    if output.stderr.len() != 0 {
-        panic!("Errored while trying to get port exclusion ranges on Windows");
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let lines: Vec<&str> = stdout
-        .lines()
-        .filter(|line| line.len() != 0)
-        .map(|line| line.trim())
-        .collect();
-    let mut line_iter = lines.into_iter();
-    if let Some("Protocol tcp Port Exclusion Ranges") = line_iter.next() {
-    } else {
-        panic!("netsh returned bad output on Windows");
-    }
-    match (line_iter.next(), line_iter.next()) {
-        (Some(line2), Some(line3))
-            if (line2.contains("Start Port") && line2.contains("End Port"))
-                && (line3.contains("---")) => {}
-        _ => panic!("netsh returned bad stdout for parsing port exclusion ranges on Windows"),
-    }
-    // Great, so now we the stdout is as we expected it to be
-    // Now we will trim each line, get the port range and parse it into u16s
-    for line in line_iter {
-        if line.starts_with("*") {
-            // The last line should look like `* - Administered port exclusions.`
-            break;
-        }
-        let port_high_low: Vec<u16> = line
-            .split_whitespace()
-            .map(|port_string| {
-                port_string
-                    .parse::<u16>()
-                    .expect("Returned port by netsh was not a valid u16")
-            })
-            .collect();
-        if port_high_low.len() != 2 {
-            panic!("netsh returned more than three columns instead of the expected two for parsing port exclusion ranges");
-        }
-        let (range_low, range_high) = (port_high_low[0], port_high_low[1]);
-        (range_low..=range_high).into_iter().for_each(|port| {
-            set.insert(port);
-        })
-    }
 }

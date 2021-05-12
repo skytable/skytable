@@ -27,11 +27,8 @@
 //! # `DEL` queries
 //! This module provides functions to work with `DEL` queries
 
-
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use crate::resp::GroupBegin;
-
 
 /// Run a `DEL` query
 ///
@@ -40,24 +37,19 @@ use crate::resp::GroupBegin;
 pub async fn del<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    con.write_response(GroupBegin(1)).await?;
+    crate::err_if_len_is!(act, con, == 0);
     let done_howmany: Option<usize>;
     {
         if let Some(mut whandle) = handle.acquire_write() {
             let mut many = 0;
             let cmap = (*whandle).get_mut_ref();
-            act.into_iter().for_each(|key| {
+            act.into_iter().skip(1).for_each(|key| {
                 if cmap.remove(&key).is_some() {
                     many += 1
                 }
@@ -72,6 +64,6 @@ where
     if let Some(done_howmany) = done_howmany {
         con.write_response(done_howmany).await
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
 }

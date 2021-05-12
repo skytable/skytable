@@ -394,34 +394,3 @@ pub async fn run(
     }
     (db, cloned_descriptor)
 }
-
-/// This is a **test only** function
-/// This takes a `CoreDB` object so that keys can be modified externally by
-/// the testing suite. This will **not save any data to disk**!
-/// > **This is not for release builds in any way!**
-#[cfg(test)]
-pub async fn test_run(listener: TcpListener, db: CoreDB, sig: impl Future) {
-    let (signal, _) = broadcast::channel(1);
-    let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    let mut server = Listener {
-        listener,
-        db,
-        climit: Arc::new(Semaphore::new(50000)),
-        signal,
-        terminate_tx,
-        terminate_rx,
-    };
-    tokio::select! {
-        _ = server.run() => {}
-        _ = sig => {}
-    }
-    let Listener {
-        mut terminate_rx,
-        terminate_tx,
-        signal,
-        ..
-    } = server;
-    drop(signal);
-    drop(terminate_tx);
-    let _ = terminate_rx.recv().await;
-}

@@ -29,6 +29,7 @@
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
+use crate::coredb::htable::HTable;
 use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
@@ -40,7 +41,6 @@ use libsky::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
-use crate::coredb::htable::HTable;
 use std::sync::Arc;
 use tokio;
 pub mod htable;
@@ -268,12 +268,13 @@ impl CoreDB {
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
     {
         match query {
-            Query::Simple(q) => {
+            Query::SimpleQuery(q) => {
+                con.write_simple_query_header().await?;
                 queryengine::execute_simple(&self, con, q).await?;
                 con.flush_stream().await?;
             }
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
-            Query::Pipelined(_) => unimplemented!(),
+            Query::PipelinedQuery(_) => unimplemented!(),
         }
         Ok(())
     }
@@ -386,14 +387,8 @@ impl CoreDB {
     /// **⚠ Do note**: This is super inefficient since it performs an actual
     /// clone of the `HTable` and doesn't do any `Arc`-business! This function
     /// can be used by test functions and the server, but **use with caution!**
-    pub fn get_HTable_deep_clone(&self) -> HTable<String, Data> {
+    pub fn get_htable_deep_clone(&self) -> HTable<String, Data> {
         (*self.acquire_read().get_ref()).clone()
-    }
-
-    #[cfg(test)]
-    /// **⚠⚠⚠ This deletes everything stored in the in-memory table**
-    pub fn finish_db(&self) {
-        self.acquire_write().unwrap().coremap.clear()
     }
 }
 

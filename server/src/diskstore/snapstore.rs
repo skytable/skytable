@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(dead_code)] // TODO: Enable this lint or remove offending methods
+
 //! # Snapstore
 //!
 //! Snapstore is an extremely fundamental but powerful disk storage format which comprises of two parts:
@@ -47,9 +49,9 @@
 //! > In other words, the `snapstore.bin` file is completely useless without the `snapstore.partmap` file; so,
 //! if you happen to lose it — have a good day!
 
+use crate::coredb::htable::HTable;
 use bincode;
 use serde::{Deserialize, Serialize};
-use crate::coredb::htable::HTable;
 use std::error::Error;
 use std::fs;
 use std::io::prelude::*;

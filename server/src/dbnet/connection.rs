@@ -40,13 +40,13 @@ use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
 use crate::protocol::responses;
+use crate::protocol::ParseError;
+use crate::protocol::Query;
 use crate::resp::Writable;
 use crate::CoreDB;
 use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;
-use protocol::ParseResult;
-use protocol::QueryResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -59,6 +59,15 @@ use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
+
+pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
+
+pub enum QueryResult {
+    Q(Query),
+    E(Vec<u8>),
+    Empty,
+    Wrongtype,
+}
 
 pub mod prelude {
     //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
@@ -108,11 +117,11 @@ where
         })
     }
     /// Try to parse a query from the buffered data
-    fn try_query(&self) -> Result<ParseResult, ()> {
+    fn try_query(&self) -> Result<(Query, usize), ParseError> {
         if self.get_buffer().is_empty() {
-            return Err(());
+            return Err(ParseError::Empty);
         }
-        Ok(protocol::parse(&self.get_buffer()))
+        protocol::Parser::new(&self.get_buffer()).parse()
     }
     /// Read a query from the remote end
     ///
@@ -128,23 +137,25 @@ where
         Box::pin(async move {
             let mv_self = self;
             let _: Result<QueryResult, IoError> = {
-                mv_self.read_again().await?;
                 loop {
+                    mv_self.read_again().await?;
                     match mv_self.try_query() {
-                        Ok(ParseResult::Query(query, forward)) => {
-                            mv_self.advance_buffer(forward);
+                        Ok((query, forward_by)) => {
+                            mv_self.advance_buffer(forward_by);
                             return Ok(QueryResult::Q(query));
                         }
-                        Ok(ParseResult::BadPacket) => {
-                            mv_self.clear_buffer();
-                            return Ok(QueryResult::E(responses::fresp::R_PACKET_ERR.to_owned()));
+                        Err(ParseError::Empty) => return Ok(QueryResult::Empty),
+                        Err(ParseError::NotEnough) => (),
+                        Err(ParseError::DataTypeParseError) => return Ok(QueryResult::Wrongtype),
+                        Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
+                            return Ok(QueryResult::E(
+                                responses::full_responses::R_PACKET_ERR.to_owned(),
+                            ));
                         }
-                        Err(_) => {
-                            return Ok(QueryResult::Empty);
+                        Err(ParseError::UnknownDatatype) => {
+                            unimplemented!()
                         }
-                        _ => (),
                     }
-                    mv_self.read_again().await?;
                 }
             };
         })
@@ -163,6 +174,63 @@ where
             let streamer = streamer;
             let ret: IoResult<()> = {
                 streamer.write(&mut mv_self.get_mut_stream()).await?;
+                Ok(())
+            };
+            ret
+        })
+    }
+    /// Write the simple query header `*1\n` to the stream
+    fn write_simple_query_header<'r, 's>(
+        &'r mut self,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + 's,
+    {
+        Box::pin(async move {
+            let mv_self = self;
+            let ret: IoResult<()> = {
+                mv_self.write_response(&SIMPLE_QUERY_HEADER[..]).await?;
+                Ok(())
+            };
+            ret
+        })
+    }
+    /// Write the flat array length (`_<size>\n`)
+    fn write_flat_array_length<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + 's,
+    {
+        Box::pin(async move {
+            let mv_self = self;
+            let ret: IoResult<()> = {
+                mv_self.write_response(&[b'_'][..]).await?;
+                mv_self.write_response(len.to_string().into_bytes()).await?;
+                mv_self.write_response(&[b'\n'][..]).await?;
+                Ok(())
+            };
+            ret
+        })
+    }
+    /// Write the array length (`&<size>\n`)
+    fn write_array_length<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + 's,
+    {
+        Box::pin(async move {
+            let mv_self = self;
+            let ret: IoResult<()> = {
+                mv_self.write_response(&[b'&'][..]).await?;
+                mv_self.write_response(len.to_string().into_bytes()).await?;
+                mv_self.write_response(&[b'\n'][..]).await?;
                 Ok(())
             };
             ret
@@ -315,7 +383,7 @@ where
         }
     }
     pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("SslConnectionHanler initialized to handle a remote client");
+        log::debug!("ConnectionHandler initialized to handle a remote client");
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,
@@ -330,6 +398,11 @@ where
                 Ok(QueryResult::E(r)) => {
                     log::debug!("Failed to read query!");
                     self.con.close_conn_with_error(r).await?
+                }
+                Ok(QueryResult::Wrongtype) => {
+                    self.con
+                        .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
+                        .await?
                 }
                 Ok(QueryResult::Empty) => return Ok(()),
                 #[cfg(windows)]

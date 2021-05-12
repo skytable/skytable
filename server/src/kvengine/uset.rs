@@ -27,8 +27,6 @@
 use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use crate::resp::GroupBegin;
-
 
 /// Run an `USET` query
 ///
@@ -36,23 +34,20 @@ use crate::resp::GroupBegin;
 pub async fn uset<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    // Write #<m>\n#<n>\n&<howmany>\n to the stream
-    // It is howmany/2 since we will be writing howmany/2 number of responses
-    con.write_response(GroupBegin(1)).await?;
-    let mut kviter = act.into_iter();
+    let mut kviter = act.into_iter().skip(1);
     let failed = {
         if let Some(mut whandle) = handle.acquire_write() {
             let writer = whandle.get_mut_ref();
@@ -67,7 +62,7 @@ where
         }
     };
     if failed {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     } else {
         con.write_response(howmany / 2).await
     }

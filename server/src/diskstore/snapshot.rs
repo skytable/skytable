@@ -246,7 +246,7 @@ fn test_snapshot() {
     let _ = snapengine.mksnap();
     let current = snapengine.get_snapshots().next().unwrap();
     let read_hmap = diskstore::test_deserialize(fs::read(PathBuf::from(current)).unwrap()).unwrap();
-    let dbhmap = db.get_HTable_deep_clone();
+    let dbhmap = db.get_htable_deep_clone();
     assert_eq!(read_hmap, dbhmap);
     snapengine.clearall().unwrap();
     fs::remove_dir_all(ourdir).unwrap();

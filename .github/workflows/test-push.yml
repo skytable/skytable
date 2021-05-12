@@ -95,13 +95,20 @@ jobs:
         if: runner.os == 'Linux' && env.IS_ACTIONS_DOC == 'true'
 
       - name: Run Tests
-        run: cargo test --verbose --target ${{ matrix.rust }}
+        run: |
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
+          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Run Tests (Windows)
-        run: cargo test --verbose --target ${{ matrix.rust }}
+        run: |
+          cargo build -p skyd --target ${{ matrix.rust }}
+          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
+          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
+          taskkill /IM skyd.exe /F
         env:
           RUST_BACKTRACE: 1
         shell: cmd
@@ -192,13 +199,20 @@ jobs:
         if: runner.os == 'Linux'
 
       - name: Run Tests
-        run: cargo test --verbose --target ${{ matrix.rust }}
+        run: |
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
+          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
 
       - name: Run Tests (Windows)
-        run: cargo test --verbose --target ${{ matrix.rust }}
+        run: |
+          cargo build -p skyd --target ${{ matrix.rust }}
+          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
+          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
+          taskkill /IM skyd.exe /F
         env:
           RUST_BACKTRACE: 1
         shell: cmd
@@ -274,7 +288,7 @@ jobs:
           restore-keys: |
             ${{ matrix.rust }}-target-
         if: env.IS_MD_FILE == 'false'
-      
+
       - name: Install MUSL tools
         run: sudo apt-get update && sudo apt-get install musl-tools -y
         if: runner.os == 'Linux'
@@ -286,7 +300,10 @@ jobs:
         if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
-        run: cargo test --verbose --target ${{ matrix.rust }}
+        run: |
+          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
+          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
