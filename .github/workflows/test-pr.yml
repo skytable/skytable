@@ -77,7 +77,7 @@ jobs:
       - name: Run Tests (Windows)
         run: |
           cargo build -p skyd
-          START /B target\debug\skyd.exe --nosave --noart
+          START /B cargo run -p skyd -- --nosave --noart
           cargo test --verbose -- --test-threads=1
           taskkill /IM skyd.exe /F
         env:

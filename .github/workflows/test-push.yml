@@ -106,7 +106,7 @@ jobs:
       - name: Run Tests (Windows)
         run: |
           cargo build -p skyd --target ${{ matrix.rust }}
-          START /B target\debug\skyd.exe --nosave --noart
+          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
           cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
           taskkill /IM skyd.exe /F
         env:
@@ -210,7 +210,7 @@ jobs:
       - name: Run Tests (Windows)
         run: |
           cargo build -p skyd --target ${{ matrix.rust }}
-          START /B target\debug\skyd.exe --nosave --noart
+          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
           cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
           taskkill /IM skyd.exe /F
         env:
