@@ -26,34 +26,4 @@
 
 //! This module contains automated tests for queries
 
-use crate::coredb::CoreDB;
-use crate::dbnet;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::TcpListener;
 mod kvengine;
-
-/// The function macro returns the name of a function
-#[macro_export]
-macro_rules! __func__ {
-    () => {{
-        fn f() {}
-        fn typename<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
-        }
-        let fn_name = typename(f);
-        &fn_name[..fn_name.len() - 3]
-    }};
-}
-
-async fn start_test_server(port: u16, db: Option<CoreDB>) -> SocketAddr {
-    let mut socket = String::from("127.0.0.1:");
-    socket.push_str(&port.to_string());
-    let db = db.unwrap_or(CoreDB::new_empty(0, Arc::new(None)));
-    let listener = TcpListener::bind(socket)
-        .await
-        .expect(&format!("Failed to bind to port {}", port));
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move { dbnet::test_run(listener, db, tokio::signal::ctrl_c()).await });
-    addr
-}

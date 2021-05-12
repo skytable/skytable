@@ -8,33 +8,34 @@ build = "build.rs"
 [dependencies]
 tokio = { version = "1.5.0", features = ["full"] }
 bytes = "1.0.1"
-libsky = {path ="../libsky"}
+libsky = { path = "../libsky" }
 bincode = "1.3.3"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 serde_derive = "1.0.125"
 futures = "0.3.14"
-serde = {version = "1.0.125", features= ["derive"]}
+serde = { version = "1.0.125", features = ["derive"] }
 toml = "0.5.8"
-clap = {version = "2.33.3", features=["yaml"]}
+clap = { version = "2.33.3", features = ["yaml"] }
 env_logger = "0.8.3"
 log = "0.4.14"
 chrono = "0.4.19"
 regex = "1.5.4"
-sky_macros = {path="../sky-macros"}
+sky_macros = { path = "../sky-macros" }
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.34", features = ["vendored"] }
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winapi = {version="0.3.9", features=["fileapi"]}
+winapi = { version = "0.3.9", features = ["fileapi"] }
 
 [target.'cfg(unix)'.build-dependencies]
 cc = "1.0.67"
 
 [dev-dependencies]
 tokio = { version = "1.5.0", features = ["test-util"] }
+skytable = { git = "https://github.com/skytable/client-rust", features = ["async"], default-features = false, branch = "next" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.94"

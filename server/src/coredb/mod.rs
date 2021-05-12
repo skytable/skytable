@@ -390,12 +390,6 @@ impl CoreDB {
     pub fn get_htable_deep_clone(&self) -> HTable<String, Data> {
         (*self.acquire_read().get_ref()).clone()
     }
-
-    #[cfg(test)]
-    /// **⚠⚠⚠ This deletes everything stored in the in-memory table**
-    pub fn finish_db(&self) {
-        self.acquire_write().unwrap().coremap.clear()
-    }
 }
 
 impl Drop for CoreDB {

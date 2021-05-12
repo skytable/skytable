@@ -813,7 +813,6 @@ version = "0.5.2"
 dependencies = [
  "proc-macro2",
  "quote",
- "rand",
  "syn",
 ]
 
@@ -839,6 +838,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "sky_macros",
+ "skytable",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -857,6 +857,15 @@ dependencies = [
  "rustyline",
  "tokio",
  "tokio-openssl",
+]
+
+[[package]]
+name = "skytable"
+version = "0.2.3"
+source = "git+https://github.com/skytable/client-rust?branch=next#8c04478b630d735002d64a1b9ffc199e6130919c"
+dependencies = [
+ "bytes",
+ "tokio",
 ]
 
 [[package]]
