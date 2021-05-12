@@ -66,13 +66,17 @@ jobs:
         if: env.BUILD == 'true'
 
       - name: Run Tests
-        run: cargo test --verbose
+        run: |
+          cargo run -p skyd &
+          cargo test --verbose
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
 
       - name: Run Tests (Windows)
-        run: cargo test --verbose
+        run: |
+          cargo run -p skyd -- --nosave &
+          cargo test --verbose
         env:
           RUST_BACKTRACE: 1
         shell: cmd
