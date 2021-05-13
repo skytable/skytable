@@ -62,7 +62,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "Skytable v0.5.2 | https://github.com/skytable/skytable";
+static MSG: &'static str = "Skytable v0.6.0 | https://github.com/skytable/skytable";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = "\n███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  ";
 

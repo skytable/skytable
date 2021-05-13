@@ -369,7 +369,7 @@ checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
 
 [[package]]
 name = "libsky"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "bytes",
  "lazy_static",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "sky-bench"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "clap",
  "devtimer",
@@ -814,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "sky_macros"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "skyd"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "bincode",
  "bytes",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "skysh"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "bytes",
  "clap",

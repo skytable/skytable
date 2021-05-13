@@ -36,7 +36,7 @@ use skytable::AsyncConnection;
 use std::io::stdout;
 use std::process;
 use std::process::exit;
-const MSG_WELCOME: &'static str = "Skytable v0.5.2";
+const MSG_WELCOME: &'static str = "Skytable v0.6.0";
 const ADDR: &str = "127.0.0.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
@@ -77,6 +77,7 @@ pub async fn start_repl() {
     editor.set_auto_add_history(true);
     editor.set_history_ignore_dups(true);
     let _ = editor.load_history(".sky_history");
+    println!("Connected to skyhash://{}:{}", host, port);
     println!("{}", MSG_WELCOME);
     loop {
         match editor.readline("skysh> ") {

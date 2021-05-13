@@ -236,7 +236,7 @@ impl MultiListener {
             }
             MultiListener::InsecureOnly(insecure_listener) => {
                 log::info!(
-                    "Server started on tp://{}",
+                    "Server started on skyhash://{}",
                     insecure_listener
                         .listener
                         .local_addr()
@@ -245,7 +245,7 @@ impl MultiListener {
             }
             MultiListener::Multi(insecure_listener, secure_listener) => {
                 log::info!(
-                    "Listening to tp://{} and tps://{}",
+                    "Listening to skyhash://{} and tps://{}",
                     insecure_listener
                         .listener
                         .local_addr()
