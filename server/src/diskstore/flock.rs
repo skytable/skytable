@@ -98,18 +98,6 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
-    pub fn try_clone(&self) -> Result<Self> {
-        Ok(Self {
-            file: self.file.try_clone()?,
-            unlocked: false,
-        })
-    }
-    /// Reacquire a lock
-    pub fn reacquire(&mut self) -> Result<()> {
-        Self::_lock(&self.file)?;
-        self.unlocked = false;
-        Ok(())
-    }
 }
 
 impl Drop for FileLock {

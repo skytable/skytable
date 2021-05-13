@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.5.3 [2021-05-13]
+
+> No breaking changes
+
+Fix persistence (see [#150](https://github.com/skytable/skytable/issues/150))
+
 ## Version 0.5.2 [2021-05-07]
 
 > No breaking changes
