@@ -33,6 +33,7 @@
 use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use crate::diskstore::PERSIST_FILE;
 use std::io::{self, prelude::*};
 mod config;
 use std::env;
@@ -62,7 +63,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "Skytable v0.5.1 | https://github.com/skytable/skytable\n";
+static MSG: &'static str = "Skytable v0.5.2 | https://github.com/skytable/skytable\n";
 /// The terminal art for `!noart` configurations
 static TEXT: &'static str = "███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  \n                                                                  ";
 
@@ -97,7 +98,7 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    let mut lock = match diskstore::flock::FileLock::lock("data.bin") {
+    let mut lock = match diskstore::flock::FileLock::lock(&*PERSIST_FILE) {
         Ok(lck) => lck,
         Err(e) => {
             log::error!("Failed to reacquire lock on data file with '{}'", e);
@@ -126,12 +127,7 @@ fn main() {
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-async fn check_args_and_get_cfg() -> (
-    PortConfig,
-    BGSave,
-    SnapshotConfig,
-    Option<std::path::PathBuf>,
-) {
+async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {

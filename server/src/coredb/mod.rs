@@ -41,7 +41,6 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::Notify;
@@ -285,7 +284,7 @@ impl CoreDB {
     pub fn new(
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
-        restore_file: Option<PathBuf>,
+        restore_file: Option<String>,
     ) -> TResult<(Self, Option<flock::FileLock>)> {
         let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
@@ -322,7 +321,7 @@ impl CoreDB {
             db.clone(),
             snapshot_cfg,
         ));
-        let lock = flock::FileLock::lock("data.bin")
+        let lock = flock::FileLock::lock(&*PERSIST_FILE)
             .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
         if bgsave.is_disabled() {
             Ok((db, Some(lock)))

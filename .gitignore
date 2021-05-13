@@ -1,9 +1,11 @@
 /target
 /.vscode
-data.bin
+*.bin
+data
 /server/snapshots
 snapstore.bin
 snapstore.partmap
 /snapshots 
 /.idea
 .DS_Store
+.sky_history

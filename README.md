@@ -39,7 +39,9 @@ You can learn more about installation [here](https://skytable.github.io/docs/get
 
 ## Clients 🔌
 
-Until we release an official driver, you'll have to write your own clients — all you need to do is implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/protocol/terrapipe).
+The project currently maintains an official [Rust driver](https://github.com/skytable/client-rust) and we have plans
+to support more languages along the way! If you want to use a different language, for now you'll just need to do
+implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/protocol/terrapipe).
 
 ## Community 👐
 

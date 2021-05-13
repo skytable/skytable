@@ -20,7 +20,7 @@
 #
 
 name: Skytable Benchmark Tool
-version: 0.5.1
+version: 0.5.2
 author: Sayan N. <ohsayan@outlook.com>
 about: |
         The Skytable benchmark tool can be used to benchmark Skytable installations. 

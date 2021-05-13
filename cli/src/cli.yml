@@ -20,7 +20,7 @@
 #
 
 name: Skytable Shell
-version: 0.5.1
+version: 0.5.2
 author: Sayan N. <ohsayan@outlook.com>
 about: The Skytable Shell (skysh)
 args:

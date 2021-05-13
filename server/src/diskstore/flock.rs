@@ -35,6 +35,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 /// # File Lock
@@ -63,12 +64,12 @@ impl FileLock {
     ///
     /// This function will create and lock a file if it doesn't exist or it
     /// will create and lock a new file
-    pub fn lock(filename: &str) -> Result<Self> {
+    pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
             .read(false)
             .write(true)
-            .open(filename)?;
+            .open(filename.into())?;
         Self::_lock(&file)?;
         Ok(Self {
             file,
@@ -97,6 +98,18 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(Self {
+            file: self.file.try_clone()?,
+            unlocked: false,
+        })
+    }
+    /// Reacquire a lock
+    pub fn reacquire(&mut self) -> Result<()> {
+        Self::_lock(&self.file)?;
+        self.unlocked = false;
+        Ok(())
+    }
 }
 
 impl Drop for FileLock {
@@ -116,7 +129,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_basic_file_lock() {
-        let mut file = FileLock::lock("data.bin").unwrap();
+        let mut file = FileLock::lock("datalock.bin").unwrap();
         file.write(&[1, 2, 3]).unwrap();
         file.unlock().unwrap();
     }
@@ -145,6 +158,17 @@ mod tests {
         let mut file2 = FileLock::lock("data4.bin").unwrap();
         file2.unlock().unwrap();
         drop(file2);
+    }
+    #[cfg(windows)]
+    #[test]
+    fn test_release_one_acquire_second() {
+        let mut file = FileLock::lock("data5.bin").unwrap();
+        let mut cloned = file.try_clone().unwrap();
+        file.write(&[1, 2, 3]).unwrap();
+        drop(file);
+        cloned.reacquire().unwrap();
+        cloned.write(&[4, 5, 6]).unwrap();
+        cloned.unlock().unwrap();
     }
 }
 

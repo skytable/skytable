@@ -1,6 +1,6 @@
 [package]
 name = "skyd"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 build = "build.rs"
@@ -20,10 +20,10 @@ clap = {version = "2.33.3", features=["yaml"]}
 env_logger = "0.8.3"
 log = "0.4.14"
 chrono = "0.4.19"
-regex = "1.4.6"
+regex = "1.5.4"
 sky_macros = {path="../sky-macros"}
 tokio-openssl = "0.6.1"
-openssl = { version = "0.10.33", features = ["vendored"] }
+openssl = { version = "0.10.34", features = ["vendored"] }
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.3.2"
 
