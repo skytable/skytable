@@ -97,14 +97,21 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    if let Err(e) = flush_db!(db) {
+    let mut lock = match diskstore::flock::FileLock::lock("data.bin") {
+        Ok(lck) => lck,
+        Err(e) => {
+            log::error!("Failed to reacquire lock on data file with '{}'", e);
+            std::process::exit(0x100);
+        }
+    };
+    if let Err(e) = flush_db!(db, lock) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db) {
+            if let Ok(_) = flush_db!(db, lock) {
                 log::info!("Successfully saved data to disk");
                 break;
             } else {
