@@ -44,8 +44,7 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::dbnet::tcp::Listener;
-use crate::diskstore::{self, snapshot::DIR_REMOTE_SNAPSHOT};
-use diskstore::flock;
+use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 mod tcp;
 use crate::CoreDB;
 use libsky::TResult;
@@ -315,7 +314,7 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
-) -> (CoreDB, flock::FileLock) {
+) -> CoreDB {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
@@ -328,14 +327,13 @@ pub async fn run(
             }
         },
     }
-    let (db, lock, cloned_descriptor) =
-        match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
-            Ok((db, lock, cloned_descriptor)) => (db, lock, cloned_descriptor),
-            Err(e) => {
-                log::error!("ERROR: {}", e);
-                process::exit(0x100);
-            }
-        };
+    let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
+        Ok((db, lock)) => (db, lock),
+        Err(e) => {
+            log::error!("ERROR: {}", e);
+            process::exit(0x100);
+        }
+    };
     let climit = Arc::new(Semaphore::new(50000));
     let mut server = match ports {
         PortConfig::InsecureOnly { host, port } => {
@@ -392,5 +390,5 @@ pub async fn run(
         log::error!("Failed to release lock on data file with '{}'", e);
         process::exit(0x100);
     }
-    (db, cloned_descriptor)
+    db
 }

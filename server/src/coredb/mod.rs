@@ -287,7 +287,7 @@ impl CoreDB {
         bgsave: BGSave,
         snapshot_cfg: SnapshotConfig,
         restore_file: Option<String>,
-    ) -> TResult<(Self, Option<flock::FileLock>, flock::FileLock)> {
+    ) -> TResult<(Self, Option<flock::FileLock>)> {
         let coretable = diskstore::get_saved(restore_file)?;
         let mut background_tasks: usize = 0;
         if !bgsave.is_disabled() {
@@ -325,13 +325,12 @@ impl CoreDB {
         ));
         let lock = flock::FileLock::lock(&*PERSIST_FILE)
             .map_err(|e| format!("Failed to acquire lock on data file with error '{}'", e))?;
-        let cloned_descriptor = lock.try_clone()?;
         if bgsave.is_disabled() {
-            Ok((db, Some(lock), cloned_descriptor))
+            Ok((db, Some(lock)))
         } else {
             // Spawn the BGSAVE service in a separate task
             tokio::spawn(diskstore::bgsave_scheduler(db.clone(), bgsave, lock));
-            Ok((db, None, cloned_descriptor))
+            Ok((db, None))
         }
     }
     /// Create an empty in-memory table

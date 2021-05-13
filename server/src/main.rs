@@ -33,6 +33,7 @@
 use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use crate::diskstore::PERSIST_FILE;
 use std::io::{self, prelude::*};
 mod config;
 use std::env;
@@ -77,10 +78,10 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let (db, mut descriptor) = runtime.block_on(async {
+    let db = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
-        let (db, descriptor) = run(
+        let db = run(
             tcplistener,
             bgsave_config,
             snapshot_config,
@@ -88,7 +89,7 @@ fn main() {
             restore_filepath,
         )
         .await;
-        (db, descriptor)
+        db
     });
     // Make sure all background workers terminate
     drop(runtime);
@@ -98,18 +99,21 @@ fn main() {
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
     // Try to acquire lock almost immediately
-    if let Err(e) = descriptor.reacquire() {
-        log::error!("Failed to reacquire lock on data file with error: '{}'", e);
-        panic!("FATAL: data file relocking failure");
-    }
-    if let Err(e) = flush_db!(db, descriptor) {
+    let mut lock = match diskstore::flock::FileLock::lock(&*PERSIST_FILE) {
+        Ok(lck) => lck,
+        Err(e) => {
+            log::error!("Failed to reacquire lock on data file with '{}'", e);
+            std::process::exit(0x100);
+        }
+    };
+    if let Err(e) = flush_db!(db, lock) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db, descriptor) {
+            if let Ok(_) = flush_db!(db, lock) {
                 log::info!("Successfully saved data to disk");
                 break;
             } else {
@@ -124,12 +128,7 @@ fn main() {
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-async fn check_args_and_get_cfg() -> (
-    PortConfig,
-    BGSave,
-    SnapshotConfig,
-    Option<String>,
-) {
+async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {
