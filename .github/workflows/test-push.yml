@@ -96,6 +96,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          cargo build --target ${{ matrix.rust }} -p skyd
           cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
           sudo pkill skyd
@@ -200,6 +201,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          cargo build --target ${{ matrix.rust }} -p skyd
           cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
           sudo pkill skyd
@@ -301,6 +303,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          cargo build --target ${{ matrix.rust }} -p skyd
           cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
           cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
           sudo pkill skyd

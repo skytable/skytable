@@ -67,6 +67,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          cargo build -p skyd
           cargo run -p skyd -- --nosave --noart &
           cargo test --verbose -- --test-threads=1
           sudo pkill skyd
