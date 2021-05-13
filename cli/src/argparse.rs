@@ -36,7 +36,7 @@ use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
 use std::process;
-const MSG_WELCOME: &'static str = "Skytable v0.5.2";
+const MSG_WELCOME: &'static str = "Skytable v0.5.3";
 
 #[macro_use]
 macro_rules! close_con {

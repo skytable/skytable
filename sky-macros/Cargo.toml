@@ -1,6 +1,6 @@
 [package]
 name = "sky_macros"
-version = "0.5.2"
+version = "0.5.3"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
