@@ -201,7 +201,22 @@ pub async fn bgsave_scheduler(
                 tokio::select! {
                     // Sleep until `duration` from the current time instant
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        if !handle.shared.run_bgsave(&mut file) {break;}
+                        let clone_file = match file.try_clone() {
+                            Ok(cloned_descriptor) => cloned_descriptor,
+                            Err(e) => {
+                                // failed to get a clone of the descriptor ugh
+                                handle.poison();
+                                log::error!("BGSAVE service failed to clone descriptor: '{}'", e);
+                                continue;
+                            }
+                        };
+                        let cloned_handle = handle.clone();
+                        let continue_running = tokio::task::spawn_blocking(move || {
+                            let mut owned_file = clone_file;
+                            let owned_handle = cloned_handle;
+                            owned_handle.shared.run_bgsave(&mut owned_file)
+                        }).await.expect("Something caused the background service to panic");
+                        if !continue_running {break;}
                     }
                     // Otherwise wait for a notification
                     _ = handle.shared.bgsave_task.notified() => {

@@ -98,6 +98,12 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(FileLock {
+            file: self.file.try_clone()?,
+            unlocked: self.unlocked,
+        })
+    }
 }
 
 impl Drop for FileLock {

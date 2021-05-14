@@ -243,6 +243,10 @@ impl CoreDB {
             println!("{:#?}", self.acquire_read());
         }
     }
+    
+    pub fn poison(&self) {
+        (*self.shared).table.write().poisoned = true;
+    }
 
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
