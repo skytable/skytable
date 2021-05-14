@@ -198,16 +198,16 @@ pub async fn bgsave_scheduler(
             // his data - which is good! So we'll turn this into a `Duration`
             let duration = Duration::from_secs(duration);
             while !handle.shared.is_termsig() {
-                if handle.shared.run_bgsave(&mut file) {
-                    tokio::select! {
-                        // Sleep until `duration` from the current time instant
-                        _ = time::sleep_until(time::Instant::now() + duration) => {}
-                        // Otherwise wait for a notification
-                        _ = handle.shared.bgsave_task.notified() => {
-                            println!("Told to quit");
-                            // we got a notification to quit; so break out
-                            break;
-                        }
+                tokio::select! {
+                    // Sleep until `duration` from the current time instant
+                    _ = time::sleep_until(time::Instant::now() + duration) => {
+                        if !handle.shared.run_bgsave(&mut file) {break;}
+                    }
+                    // Otherwise wait for a notification
+                    _ = handle.shared.bgsave_task.notified() => {
+                        println!("Told to quit");
+                        // we got a notification to quit; so break out
+                        break;
                     }
                 }
             }
