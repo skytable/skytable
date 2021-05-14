@@ -265,9 +265,23 @@ impl CoreDB {
         (*self.snapcfg).as_ref().unwrap().unlock_snap();
     }
 
-    /// Returns the expected `Arc::strong_count` for the `CoreDB` object
-    pub const fn expected_strong_count(&self) -> usize {
-        self.background_tasks + 1
+    /// Returns the expected `Arc::strong_count` for the `CoreDB` object when it is about to be dropped
+    ///
+    /// This is the deal:
+    /// 1. Runtime starts
+    /// 2. [`dbnet::run`] creates a coredb, so strong count is 1
+    /// 4. [`coredb::CoreDB::new()`] spawns the background task who's count we have here, so strong count is 2/3
+    /// 3. [`dbnet::run`] distributes clones to listeners, so strong count is either 4/5
+    /// 4. Listeners further distributed clones per-stream, so strong count can potentially cross 50000 (semaphore)
+    /// 5. Now all workers terminate and we should be back to a strong count of 2/3
+    ///
+    /// Step 5 is where CoreDB should notify the background services to stop. So, at step 5 we have this ingenious
+    /// listener who should tell the services to terminate. At this point, our listener itself holds an atomic
+    /// reference, the [`dbnet::run`] holds one and the background tasks hold some. So there should be:
+    /// `background_tasks + 2` number of atomic references when we should signal a quit; in other words, this
+    /// the last active listener who is about to bring down the server xD
+    pub const fn expected_strong_count_at_drop(&self) -> usize {
+        self.background_tasks + 2
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
@@ -401,15 +415,10 @@ impl CoreDB {
 }
 
 impl Drop for CoreDB {
-    // This prevents us from killing the database, in the event someone tries
-    // to access it
-    // If this is indeed the last DB instance, we should tell BGSAVE and the snapshot
-    // service to quit
     fn drop(&mut self) {
-        // If the strong count is equal to the `expected_strong_count()`
-        // then the background services are still running, so don't terminate
-        // the database
-        if Arc::strong_count(&self.shared) == self.expected_strong_count() {
+        // If the strong count is equal to the `expected_strong_count_at_drop()`
+        // then the background services are still running, so tell them to terminate
+        if Arc::strong_count(&self.shared) == self.expected_strong_count_at_drop() {
             // Acquire a lock to prevent anyone from writing something
             let mut coretable = self.shared.table.write();
             coretable.terminate = true;

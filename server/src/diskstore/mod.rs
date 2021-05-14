@@ -205,7 +205,6 @@ pub async fn bgsave_scheduler(
                     }
                     // Otherwise wait for a notification
                     _ = handle.shared.bgsave_task.notified() => {
-                        println!("Told to quit");
                         // we got a notification to quit; so break out
                         break;
                     }
