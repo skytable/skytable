@@ -306,13 +306,14 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
                 }
             };
             while !handle.shared.is_termsig() {
-                if sengine.mksnap().is_some() {
-                    tokio::select! {
-                        _ = time::sleep_until(time::Instant::now() + duration) => {},
-                        _ = handle.shared.bgsave_task.notified() => {}
+                tokio::select! {
+                    _ = time::sleep_until(time::Instant::now() + duration) => {
+                        if !sengine.mksnap().is_some() { /*time to terminate; goodbye; */ break;}
+                    },
+                    _ = handle.shared.bgsave_task.notified() => {
+                        // time to terminate; goodbye!
+                        break;
                     }
-                } else {
-                    handle.shared.bgsave_task.notified().await;
                 }
             }
         }
