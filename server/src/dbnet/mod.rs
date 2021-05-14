@@ -312,7 +312,8 @@ pub async fn run(
     ports: PortConfig,
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
-    sig: impl Future,
+    sig_ctrl_c: impl Future,
+    #[cfg(windows)] sig_ctrl_break: impl Future,
     restore_filepath: Option<String>,
 ) -> CoreDB {
     let (signal, _) = broadcast::channel(1);
@@ -379,12 +380,18 @@ pub async fn run(
         }
     };
     server.print_binding();
+    #[cfg(not(windows))]
     tokio::select! {
         _ = server.run_server() => {}
-        _ = sig => {
-            log::info!("Signalling all workers to shut down");
-        }
+        _ = sig_ctrl_c => {}
     }
+    #[cfg(windows)]
+    tokio::select! {
+        _ = server.run_server() => {}
+        _ = sig_ctrl_c => {}
+        _ = sig_ctrl_break => {}
+    }
+    log::info!("Signalling all workers to shut down");
     server.finish_with_termsig().await;
     if let Some(Err(e)) = lock.map(|mut val| val.unlock()) {
         log::error!("Failed to release lock on data file with '{}'", e);

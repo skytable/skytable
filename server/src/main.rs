@@ -78,6 +78,9 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
+    #[cfg(windows)]
+    let mut signal_sigbreak =
+        signal::windows::ctrl_break().expect("Can't listen to CTRL+BREAK signals");
     let db = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
@@ -86,6 +89,8 @@ fn main() {
             bgsave_config,
             snapshot_config,
             signal::ctrl_c(),
+            #[cfg(windows)]
+            signal_sigbreak.recv(),
             restore_filepath,
         )
         .await;
