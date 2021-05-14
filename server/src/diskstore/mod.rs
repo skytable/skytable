@@ -27,12 +27,12 @@
 //! This module provides tools for handling persistently stored data
 
 use crate::config::BGSave;
+use crate::coredb::htable::HTable;
 use crate::coredb::{self, Data};
 use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
 use libsky::TResult;
-use crate::coredb::htable::HTable;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
@@ -41,7 +41,6 @@ use std::time::Duration;
 use tokio::time;
 pub mod flock;
 pub mod snapshot;
-use std::process;
 mod snapstore;
 
 /// This type alias is to be used when deserializing binary data from disk
@@ -193,34 +192,32 @@ pub async fn bgsave_scheduler(
     bgsave_cfg: BGSave,
     mut file: flock::FileLock,
 ) {
-    let duration = match bgsave_cfg {
-        BGSave::Disabled => {
-            // So, there's no BGSAVE! Looks like our user's pretty confident
-            // that there won't be any power failures! Never mind, we'll just
-            // shut down the BGSAVE task, and immediately return
-            handle.shared.bgsave_task.notified().await;
-            return;
-        }
+    match bgsave_cfg {
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
             // his data - which is good! So we'll turn this into a `Duration`
-            Duration::from_secs(duration)
-        }
-    };
-    while !handle.shared.is_termsig() {
-        if handle.shared.run_bgsave(&mut file) {
-            tokio::select! {
-                // Sleep until `duration` from the current time instant
-                _ = time::sleep_until(time::Instant::now() + duration) => {}
-                // Otherwise wait for a notification
-                _ = handle.shared.bgsave_task.notified() => {}
+            let duration = Duration::from_secs(duration);
+            while !handle.shared.is_termsig() {
+                if handle.shared.run_bgsave(&mut file) {
+                    tokio::select! {
+                        // Sleep until `duration` from the current time instant
+                        _ = time::sleep_until(time::Instant::now() + duration) => {}
+                        // Otherwise wait for a notification
+                        _ = handle.shared.bgsave_task.notified() => {
+                            println!("Told to quit");
+                            // we got a notification to quit; so break out
+                            break;
+                        }
+                    }
+                }
             }
-        } else {
-            handle.shared.bgsave_task.notified().await
+        }
+        BGSave::Disabled => {
+            // coredb only spawns this IF BGSAVE is enabled, so this is unreachable
+            unreachable!()
         }
     }
     if let Err(e) = file.unlock() {
         log::error!("BGSAVE task failed to unlock file with '{}'", e);
-        process::exit(0x100);
     }
 }

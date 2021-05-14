@@ -142,13 +142,19 @@ impl Shared {
     pub fn run_bgsave(&self, file: &mut flock::FileLock) -> bool {
         log::trace!("BGSAVE started");
         let rlock = self.table.read();
-        if rlock.terminate || rlock.poisoned {
+        if rlock.terminate {
             drop(rlock);
             return false;
         }
         // Kick in BGSAVE
         match diskstore::flush_data(file, rlock.get_ref()) {
             Ok(_) => {
+                drop(rlock);
+                {
+                    // just scope it to ensure dropping of the lock
+                    // since this bgsave succeeded, mark the service as !poisoned, enabling it to recover
+                    self.table.write().poisoned = false;
+                }
                 log::info!("BGSAVE completed successfully");
                 return true;
             }
@@ -156,7 +162,10 @@ impl Shared {
                 // IMPORTANT! Drop the read lock first fella!
                 drop(rlock);
                 // IMPORTANT! POISON THE DATABASE, NO MORE WRITES FOR YOU!
-                self.table.write().poisoned = true;
+                {
+                    // scope to ensure dropping of the lock
+                    self.table.write().poisoned = true;
+                }
                 log::error!("BGSAVE failed with error: '{}'", e);
                 return false;
             }
