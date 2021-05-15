@@ -177,8 +177,9 @@ mod __sys {
     use std::io::{Error, Result};
     use std::mem;
     use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::FromRawHandle;
     use std::ptr;
-    use winapi::shared::minwindef::DWORD;
+    use winapi::shared::minwindef::{BOOL, DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
     use winapi::um::handleapi::DuplicateHandle;
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
