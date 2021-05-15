@@ -153,12 +153,12 @@ mod tests {
         // this will truncate the entire previous file and write 4, 5, 6
         cloned.write(&[4, 5, 6]).unwrap();
         drop(cloned);
-        // this will again truncate the entire previous file and write 7, 8, 9
-        file.write(&[7, 8, 9]).unwrap();
+        // this will again truncate the entire previous file and write 7, 8
+        file.write(&[7, 8]).unwrap();
         drop(file);
         let res = std::fs::read("data5.bin").unwrap();
-        // hence ultimately we'll have 7, 8, 9
-        assert_eq!(res, vec![7, 8, 9]);
+        // hence ultimately we'll have 7, 8
+        assert_eq!(res, vec![7, 8]);
     }
 }
 
