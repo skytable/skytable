@@ -33,7 +33,6 @@
 use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
-use crate::diskstore::PERSIST_FILE;
 use std::io::{self, prelude::*};
 mod config;
 use std::env;
@@ -78,10 +77,10 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let db = runtime.block_on(async {
+    let (db, mut lock) = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
-        let db = run(
+        let (db, lock) = run(
             tcplistener,
             bgsave_config,
             snapshot_config,
@@ -89,7 +88,7 @@ fn main() {
             restore_filepath,
         )
         .await;
-        db
+        (db, lock)
     });
     // Make sure all background workers terminate
     drop(runtime);
@@ -98,14 +97,6 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    // Try to acquire lock almost immediately
-    let mut lock = match diskstore::flock::FileLock::lock(&*PERSIST_FILE) {
-        Ok(lck) => lck,
-        Err(e) => {
-            log::error!("Failed to reacquire lock on data file with '{}'", e);
-            std::process::exit(0x100);
-        }
-    };
     if let Err(e) = flush_db!(db, lock) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {

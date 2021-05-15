@@ -30,6 +30,7 @@ use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
 #[cfg(test)]
 use crate::coredb::SnapshotStatus;
+use crate::dbnet::Terminator;
 use crate::diskstore;
 use chrono::prelude::*;
 use libsky::TResult;
@@ -165,7 +166,7 @@ impl<'a> SnapshotEngine<'a> {
     /// ## Panics
     /// If snapshotting is disabled in `CoreDB` then this will panic badly! It
     /// may not even panic: but terminate abruptly with `SIGILL`
-    pub fn mksnap(&mut self) -> Option<bool> {
+    pub fn mksnap(&mut self) -> bool {
         log::trace!("Snapshotting was initiated");
         while (*self.dbref.snapcfg)
             .as_ref()
@@ -180,25 +181,17 @@ impl<'a> SnapshotEngine<'a> {
         }
         log::trace!("Acquired a lock on the snapshot service");
         self.dbref.lock_snap(); // Set the snapshotting service to be busy
-        let rlock = self.dbref.acquire_read();
-        if rlock.terminate {
-            self.dbref.unlock_snap();
-            // The database is shutting down, don't create a snapshot
-            return None;
-        }
         let mut snapname = PathBuf::new();
         snapname.push(&self.snap_dir);
         snapname.push(self.get_snapname());
-        if let Err(e) = diskstore::write_to_disk(&snapname, &rlock.get_ref()) {
+        if let Err(e) = diskstore::write_to_disk(&snapname, self.dbref.acquire_read().get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
             self.dbref.unlock_snap();
             log::trace!("Released lock on the snapshot service");
-            return Some(false);
+            return false;
         } else {
             log::info!("Successfully created snapshot");
         }
-        // Release the read lock for the poor clients who are waiting for a write lock
-        drop(rlock);
         if let Some(old_snapshot) = self.snaps.add(snapname.to_str().unwrap().to_string()) {
             if let Err(e) = fs::remove_file(&old_snapshot) {
                 log::error!(
@@ -208,14 +201,14 @@ impl<'a> SnapshotEngine<'a> {
                 );
                 self.dbref.unlock_snap();
                 log::trace!("Released lock on the snapshot service");
-                return Some(false);
+                return false;
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
         self.dbref.unlock_snap();
         log::trace!("Released lock on the snapshot service");
-        Some(true)
+        true
     }
     #[cfg(test)]
     /// Delete all snapshots
@@ -235,7 +228,7 @@ impl<'a> SnapshotEngine<'a> {
 #[test]
 fn test_snapshot() {
     let ourdir = "TEST_SS";
-    let db = CoreDB::new_empty(3, std::sync::Arc::new(Some(SnapshotStatus::new(4))));
+    let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut write = db.acquire_write().unwrap();
     let _ = write.get_mut_ref().insert(
         String::from("ohhey"),
@@ -255,16 +248,16 @@ fn test_snapshot() {
 #[test]
 fn test_pre_existing_snapshots() {
     let ourdir = "TEST_PX_SS";
-    let db = CoreDB::new_empty(3, std::sync::Arc::new(Some(SnapshotStatus::new(4))));
+    let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
-    assert!(snapengine.mksnap().unwrap().eq(&true));
+    assert!(snapengine.mksnap());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap().unwrap().eq(&true));
+    assert!(snapengine.mksnap());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap().unwrap().eq(&true));
+    assert!(snapengine.mksnap());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap().unwrap().eq(&true));
+    assert!(snapengine.mksnap());
     // Now close everything down
     drop(snapengine);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
@@ -286,13 +279,16 @@ use tokio::time;
 ///
 /// This service calls `SnapEngine::mksnap()` periodically to create snapshots. Whenever
 /// the interval for snapshotting expires or elapses, we create a snapshot. The snapshot service
-/// keeps creating snapshots, as long as the database keeps running, i.e `CoreDB` does return true for
-/// `is_termsig()`
-pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
+/// keeps creating snapshots, as long as the database keeps running. Once [`dbnet::run`] broadcasts
+/// a termination signal, we're ready to quit
+pub async fn snapshot_service(
+    handle: CoreDB,
+    ss_config: SnapshotConfig,
+    mut termination_signal: Terminator,
+) {
     match ss_config {
         SnapshotConfig::Disabled => {
             // since snapshotting is disabled, we'll imediately return
-            handle.shared.bgsave_task.notified().await;
             return;
         }
         SnapshotConfig::Enabled(configuration) => {
@@ -305,12 +301,12 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
                     return;
                 }
             };
-            while !handle.shared.is_termsig() {
+            loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        if !sengine.mksnap().is_some() { /*time to terminate; goodbye; */ break;}
+                        let _ = sengine.mksnap();
                     },
-                    _ = handle.shared.bgsave_task.notified() => {
+                    _ = termination_signal.receive_signal() => {
                         // time to terminate; goodbye!
                         break;
                     }
@@ -318,6 +314,7 @@ pub async fn snapshot_service(handle: CoreDB, ss_config: SnapshotConfig) {
             }
         }
     }
+    log::info!("Snapshot service has exited");
 }
 
 mod queue {

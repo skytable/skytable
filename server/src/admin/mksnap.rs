@@ -54,8 +54,7 @@ where
         }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
-        let mut snap_result = None;
-        let mut engine_was_busy = false;
+        let mut succeeded = None;
         {
             let snaphandle = handle.snapcfg.clone();
             let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
@@ -68,7 +67,7 @@ where
                 was_engine_error = true;
             } else {
                 if snapstatus.is_busy() {
-                    engine_was_busy = true;
+                    succeeded = None;
                 } else {
                     let mut snapengine = snapengine.unwrap_or_else(|_| unsafe {
                         // UNSAFE(@ohsayan) This is safe as we've already checked
@@ -76,7 +75,7 @@ where
                         unreachable_unchecked()
                     });
 
-                    snap_result = snapengine.mksnap();
+                    succeeded = Some(snapengine.mksnap());
                 }
             }
         }
@@ -85,12 +84,7 @@ where
                 .write_response(responses::groups::SERVER_ERR.to_owned())
                 .await;
         }
-        if engine_was_busy {
-            return con
-                .write_response(&**responses::groups::SNAPSHOT_BUSY)
-                .await;
-        }
-        if let Some(succeeded) = snap_result {
+        if let Some(succeeded) = succeeded {
             if succeeded {
                 // Snapshotting succeeded, return Okay
                 return con.write_response(responses::groups::OKAY.to_owned()).await;
@@ -102,10 +96,8 @@ where
                     .await;
             }
         } else {
-            // We shouldn't ever reach here if all our logic is correct
-            // but if we do, something is wrong with the runtime
             return con
-                .write_response(&**responses::groups::ERR_ACCESS_AFTER_TERMSIG)
+                .write_response(&**responses::groups::SNAPSHOT_BUSY)
                 .await;
         }
     } else {

@@ -44,7 +44,9 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::dbnet::tcp::Listener;
-use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use crate::diskstore;
+use diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
+use diskstore::{flock, PERSIST_FILE};
 mod tcp;
 use crate::CoreDB;
 use libsky::TResult;
@@ -81,7 +83,7 @@ impl Terminator {
     pub const fn is_termination_signal(&self) -> bool {
         self.terminate
     }
-    /// Check if a shutdown signal was received
+    /// Wait to receive a shutdown signal
     pub async fn receive_signal(&mut self) {
         // The server may have already been terminated
         // In that event, just return
@@ -314,7 +316,7 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
-) -> CoreDB {
+) -> (CoreDB, flock::FileLock) {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
@@ -327,13 +329,31 @@ pub async fn run(
             }
         },
     }
-    let (db, lock) = match CoreDB::new(bgsave_cfg, snapshot_cfg, restore_filepath) {
-        Ok((db, lock)) => (db, lock),
+    let db = match CoreDB::new(&snapshot_cfg, restore_filepath) {
+        Ok(db) => db,
         Err(e) => {
             log::error!("ERROR: {}", e);
             process::exit(0x100);
         }
     };
+    let file = match flock::FileLock::lock(&*PERSIST_FILE) {
+        Ok(lck) => lck,
+        Err(e) => {
+            log::error!("Failed to acquire lock on data file with error: {}", e);
+            process::exit(1);
+        }
+    };
+    let bgsave_handle = tokio::spawn(diskstore::bgsave_scheduler(
+        db.clone(),
+        bgsave_cfg,
+        file,
+        Terminator::new(signal.subscribe()),
+    ));
+    let snapshot_handle = tokio::spawn(diskstore::snapshot::snapshot_service(
+        db.clone(),
+        snapshot_cfg,
+        Terminator::new(signal.subscribe()),
+    ));
     let climit = Arc::new(Semaphore::new(50000));
     let mut server = match ports {
         PortConfig::InsecureOnly { host, port } => {
@@ -386,9 +406,7 @@ pub async fn run(
         }
     }
     server.finish_with_termsig().await;
-    if let Some(Err(e)) = lock.map(|mut val| val.unlock()) {
-        log::error!("Failed to release lock on data file with '{}'", e);
-        process::exit(0x100);
-    }
-    db
+    let _ = snapshot_handle.await;
+    let lock = bgsave_handle.await.unwrap();
+    (db, lock)
 }

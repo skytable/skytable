@@ -29,6 +29,7 @@
 use crate::config::BGSave;
 use crate::coredb::htable::HTable;
 use crate::coredb::{self, Data};
+use crate::dbnet::Terminator;
 use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
@@ -190,14 +191,15 @@ fn serialize(data: &HTable<String, Data>) -> TResult<Vec<u8>> {
 pub async fn bgsave_scheduler(
     handle: coredb::CoreDB,
     bgsave_cfg: BGSave,
-    mut file: flock::FileLock,
-) {
+    file: flock::FileLock,
+    mut terminator: Terminator,
+) -> flock::FileLock {
     match bgsave_cfg {
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
             // his data - which is good! So we'll turn this into a `Duration`
             let duration = Duration::from_secs(duration);
-            while !handle.shared.is_termsig() {
+            loop {
                 tokio::select! {
                     // Sleep until `duration` from the current time instant
                     _ = time::sleep_until(time::Instant::now() + duration) => {
@@ -211,15 +213,14 @@ pub async fn bgsave_scheduler(
                             }
                         };
                         let cloned_handle = handle.clone();
-                        let continue_running = tokio::task::spawn_blocking(move || {
+                        tokio::task::spawn_blocking(move || {
                             let mut owned_file = clone_file;
                             let owned_handle = cloned_handle;
                             owned_handle.shared.run_bgsave(&mut owned_file)
                         }).await.expect("Something caused the background service to panic");
-                        if !continue_running {break;}
                     }
                     // Otherwise wait for a notification
-                    _ = handle.shared.bgsave_task.notified() => {
+                    _ = terminator.receive_signal() => {
                         // we got a notification to quit; so break out
                         break;
                     }
@@ -227,11 +228,9 @@ pub async fn bgsave_scheduler(
             }
         }
         BGSave::Disabled => {
-            // coredb only spawns this IF BGSAVE is enabled, so this is unreachable
-            unreachable!()
+            // the user doesn't bother about his data; cool, let's not bother about it either
         }
     }
-    if let Err(e) = file.unlock() {
-        log::error!("BGSAVE task failed to unlock file with '{}'", e);
-    }
+    log::info!("BGSAVE service has exited");
+    file
 }
