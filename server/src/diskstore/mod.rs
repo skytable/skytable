@@ -27,12 +27,13 @@
 //! This module provides tools for handling persistently stored data
 
 use crate::config::BGSave;
+use crate::coredb::htable::HTable;
 use crate::coredb::{self, Data};
+use crate::dbnet::Terminator;
 use crate::diskstore::snapshot::{DIR_OLD_SNAPSHOT, DIR_SNAPSHOT};
 use bincode;
 use bytes::Bytes;
 use libsky::TResult;
-use crate::coredb::htable::HTable;
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::iter::FromIterator;
@@ -41,7 +42,6 @@ use std::time::Duration;
 use tokio::time;
 pub mod flock;
 pub mod snapshot;
-use std::process;
 mod snapstore;
 
 /// This type alias is to be used when deserializing binary data from disk
@@ -191,36 +191,46 @@ fn serialize(data: &HTable<String, Data>) -> TResult<Vec<u8>> {
 pub async fn bgsave_scheduler(
     handle: coredb::CoreDB,
     bgsave_cfg: BGSave,
-    mut file: flock::FileLock,
-) {
-    let duration = match bgsave_cfg {
-        BGSave::Disabled => {
-            // So, there's no BGSAVE! Looks like our user's pretty confident
-            // that there won't be any power failures! Never mind, we'll just
-            // shut down the BGSAVE task, and immediately return
-            handle.shared.bgsave_task.notified().await;
-            return;
-        }
+    file: flock::FileLock,
+    mut terminator: Terminator,
+) -> flock::FileLock {
+    match bgsave_cfg {
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
             // his data - which is good! So we'll turn this into a `Duration`
-            Duration::from_secs(duration)
-        }
-    };
-    while !handle.shared.is_termsig() {
-        if handle.shared.run_bgsave(&mut file) {
-            tokio::select! {
-                // Sleep until `duration` from the current time instant
-                _ = time::sleep_until(time::Instant::now() + duration) => {}
-                // Otherwise wait for a notification
-                _ = handle.shared.bgsave_task.notified() => {}
+            let duration = Duration::from_secs(duration);
+            loop {
+                tokio::select! {
+                    // Sleep until `duration` from the current time instant
+                    _ = time::sleep_until(time::Instant::now() + duration) => {
+                        let clone_file = match file.try_clone() {
+                            Ok(cloned_descriptor) => cloned_descriptor,
+                            Err(e) => {
+                                // failed to get a clone of the descriptor ugh
+                                handle.poison();
+                                log::error!("BGSAVE service failed to clone descriptor: '{}'", e);
+                                continue;
+                            }
+                        };
+                        let cloned_handle = handle.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let mut owned_file = clone_file;
+                            let owned_handle = cloned_handle;
+                            owned_handle.shared.run_bgsave(&mut owned_file)
+                        }).await.expect("Something caused the background service to panic");
+                    }
+                    // Otherwise wait for a notification
+                    _ = terminator.receive_signal() => {
+                        // we got a notification to quit; so break out
+                        break;
+                    }
+                }
             }
-        } else {
-            handle.shared.bgsave_task.notified().await
+        }
+        BGSave::Disabled => {
+            // the user doesn't bother about his data; cool, let's not bother about it either
         }
     }
-    if let Err(e) = file.unlock() {
-        log::error!("BGSAVE task failed to unlock file with '{}'", e);
-        process::exit(0x100);
-    }
+    log::info!("BGSAVE service has exited");
+    file
 }

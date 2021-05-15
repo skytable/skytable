@@ -54,30 +54,27 @@ where
         }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
-        let mut snap_result = None;
-        let mut engine_was_busy = false;
-        {
-            let snaphandle = handle.snapcfg.clone();
-            let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan) This is safe as we've already checked
-                // if snapshots are enabled or not with `is_snapshot_enabled`
-                unreachable_unchecked()
-            });
-            let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
-            if snapengine.is_err() {
-                was_engine_error = true;
-            } else {
-                if snapstatus.is_busy() {
-                    engine_was_busy = true;
-                } else {
-                    let mut snapengine = snapengine.unwrap_or_else(|_| unsafe {
-                        // UNSAFE(@ohsayan) This is safe as we've already checked
-                        // if snapshots are enabled or not with `is_snapshot_enabled`
-                        unreachable_unchecked()
-                    });
+        let mut succeeded = None;
 
-                    snap_result = snapengine.mksnap();
-                }
+        let snaphandle = handle.snapcfg.clone();
+        let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
+            // UNSAFE(@ohsayan) This is safe as we've already checked
+            // if snapshots are enabled or not with `is_snapshot_enabled`
+            unreachable_unchecked()
+        });
+        let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
+        if snapengine.is_err() {
+            was_engine_error = true;
+        } else {
+            if snapstatus.is_busy() {
+                succeeded = None;
+            } else {
+                let snapengine = snapengine.unwrap_or_else(|_| unsafe {
+                    // UNSAFE(@ohsayan) This is safe as we've already checked
+                    // if snapshots are enabled or not with `is_snapshot_enabled`
+                    unreachable_unchecked()
+                });
+                succeeded = Some(snapengine);
             }
         }
         if was_engine_error {
@@ -85,12 +82,8 @@ where
                 .write_response(responses::groups::SERVER_ERR.to_owned())
                 .await;
         }
-        if engine_was_busy {
-            return con
-                .write_response(&**responses::groups::SNAPSHOT_BUSY)
-                .await;
-        }
-        if let Some(succeeded) = snap_result {
+        if let Some(mut succeeded) = succeeded {
+            let succeeded = succeeded.mksnap().await;
             if succeeded {
                 // Snapshotting succeeded, return Okay
                 return con.write_response(responses::groups::OKAY.to_owned()).await;
@@ -102,10 +95,8 @@ where
                     .await;
             }
         } else {
-            // We shouldn't ever reach here if all our logic is correct
-            // but if we do, something is wrong with the runtime
             return con
-                .write_response(&**responses::groups::ERR_ACCESS_AFTER_TERMSIG)
+                .write_response(&**responses::groups::SNAPSHOT_BUSY)
                 .await;
         }
     } else {

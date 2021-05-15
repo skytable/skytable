@@ -35,6 +35,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
 use std::io::Write;
+use std::io::{Seek, SeekFrom};
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl FileLock {
     pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
-            .read(false)
+            .read(true)
             .write(true)
             .open(filename.into())?;
         Self::_lock(&file)?;
@@ -83,6 +84,12 @@ impl FileLock {
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
+    #[cfg(test)]
+    pub fn relock(&mut self) -> Result<()> {
+        __sys::try_lock_ex(&self.file)?;
+        self.unlocked = false;
+        Ok(())
+    }
     /// Unlock the file
     ///
     /// This sets the `unlocked` flag to true
@@ -93,22 +100,18 @@ impl FileLock {
     }
     /// Write something to this file
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        // Truncate the file
+        // empty the file
         self.file.set_len(0)?;
+        // set the cursor to start
+        self.file.seek(SeekFrom::Start(0))?;
         // Now write to the file
         self.file.write_all(bytes)
     }
-}
-
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        // If the file isn't unlocked already, attempt to unlock it
-        if !self.unlocked {
-            if self.unlock().is_err() {
-                // This is wild; uh, oh
-                panic!("Failed to unlock file when dropping value");
-            }
-        }
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(FileLock {
+            file: __sys::duplicate(&self.file)?,
+            unlocked: self.unlocked,
+        })
     }
 }
 
@@ -147,16 +150,21 @@ mod tests {
         file2.unlock().unwrap();
         drop(file2);
     }
-    #[cfg(windows)]
     #[test]
-    fn test_release_one_acquire_second() {
+    fn test_cloned_lock_writes() {
         let mut file = FileLock::lock("data5.bin").unwrap();
         let mut cloned = file.try_clone().unwrap();
+        // this writes 1, 2, 3
         file.write(&[1, 2, 3]).unwrap();
-        drop(file);
-        cloned.reacquire().unwrap();
+        // this will truncate the entire previous file and write 4, 5, 6
         cloned.write(&[4, 5, 6]).unwrap();
-        cloned.unlock().unwrap();
+        drop(cloned);
+        // this will again truncate the entire previous file and write 7, 8
+        file.write(&[7, 8]).unwrap();
+        drop(file);
+        let res = std::fs::read("data5.bin").unwrap();
+        // hence ultimately we'll have 7, 8
+        assert_eq!(res, vec![7, 8]);
     }
 }
 
@@ -169,9 +177,14 @@ mod __sys {
     use std::io::{Error, Result};
     use std::mem;
     use std::os::windows::io::AsRawHandle;
-    use winapi::shared::minwindef::DWORD;
+    use std::os::windows::io::FromRawHandle;
+    use std::ptr;
+    use winapi::shared::minwindef::{BOOL, DWORD};
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
+    use winapi::um::handleapi::DuplicateHandle;
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
+    use winapi::um::processthreadsapi::GetCurrentProcess;
+    use winapi::um::winnt::{DUPLICATE_SAME_ACCESS, MAXDWORD};
     /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
@@ -187,7 +200,14 @@ mod __sys {
     fn lock_file(file: &File, flags: DWORD) -> Result<()> {
         unsafe {
             let mut overlapped = mem::zeroed();
-            let ret = LockFileEx(file.as_raw_handle(), flags, 0, !0, !0, &mut overlapped);
+            let ret = LockFileEx(
+                file.as_raw_handle(), // handle
+                flags,                // flags
+                0,                    // reserved DWORD, has to be 0
+                MAXDWORD, // nNumberOfBytesToLockLow; low-order (LOWORD) 32-bits of file range to lock
+                MAXDWORD, // nNumberOfBytesToLockHigh; high-order (HIWORD) 32-bits of file range to lock
+                &mut overlapped,
+            );
             if ret == 0 {
                 Err(Error::last_os_error())
             } else {
@@ -197,11 +217,43 @@ mod __sys {
     }
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
-        let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
+        let ret = unsafe {
+            UnlockFile(
+                file.as_raw_handle(), // handle
+                0,                    // LOWORD of starting byte offset
+                0,                    // HIWORD of starting byte offset
+                MAXDWORD,             // LOWORD of file range to unlock
+                MAXDWORD,             // HIWORD of file range to unlock
+            )
+        };
         if ret == 0 {
             Err(Error::last_os_error())
         } else {
             Ok(())
+        }
+    }
+    /// Duplicate a file
+    ///
+    /// The most important part is the `DUPLICATE_SAME_ACCESS` DWORD. It ensures that the cloned file
+    /// has the same permissions as the original file
+    pub fn duplicate(file: &File) -> Result<File> {
+        unsafe {
+            let mut handle = ptr::null_mut();
+            let current_process = GetCurrentProcess();
+            let ret = DuplicateHandle(
+                current_process,
+                file.as_raw_handle(),
+                current_process,
+                &mut handle,
+                0,
+                true as BOOL,
+                DUPLICATE_SAME_ACCESS,
+            );
+            if ret == 0 {
+                Err(Error::last_os_error())
+            } else {
+                Ok(File::from_raw_handle(handle))
+            }
         }
     }
 }
@@ -217,6 +269,7 @@ mod __sys {
     use std::io::Error;
     use std::io::Result;
     use std::os::unix::io::AsRawFd;
+    use std::os::unix::io::FromRawFd;
 
     extern "C" {
         /// Block and acquire an exclusive lock with `libc`'s `flock`
@@ -255,6 +308,19 @@ mod __sys {
         match errno {
             0 => Ok(()),
             x @ _ => Err(Error::from_raw_os_error(x)),
+        }
+    }
+    /// Duplicate a file
+    ///
+    /// Good ol' libc dup() calls
+    pub fn duplicate(file: &File) -> Result<File> {
+        unsafe {
+            let fd = libc::dup(file.as_raw_fd());
+            if fd < 0 {
+                Err(Error::last_os_error())
+            } else {
+                Ok(File::from_raw_fd(fd))
+            }
         }
     }
 }
