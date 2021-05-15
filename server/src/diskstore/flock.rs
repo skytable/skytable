@@ -84,6 +84,11 @@ impl FileLock {
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
+    pub fn relock(&mut self) -> Result<()> {
+        __sys::try_lock_ex(&self.file)?;
+        self.unlocked = false;
+        Ok(())
+    }
     /// Unlock the file
     ///
     /// This sets the `unlocked` flag to true
