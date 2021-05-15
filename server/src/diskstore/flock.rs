@@ -184,7 +184,7 @@ mod __sys {
     use winapi::um::handleapi::DuplicateHandle;
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
     use winapi::um::processthreadsapi::GetCurrentProcess;
-    use winapi::um::winnt::DUPLICATE_SAME_ACCESS;
+    use winapi::um::winnt::{DUPLICATE_SAME_ACCESS, MAXDWORD};
     /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
@@ -200,7 +200,14 @@ mod __sys {
     fn lock_file(file: &File, flags: DWORD) -> Result<()> {
         unsafe {
             let mut overlapped = mem::zeroed();
-            let ret = LockFileEx(file.as_raw_handle(), flags, 0, !0, !0, &mut overlapped);
+            let ret = LockFileEx(
+                file.as_raw_handle(), // handle
+                flags,                // flags
+                0,                    // reserved DWORD, has to be 0
+                MAXDWORD, // nNumberOfBytesToLockLow; low-order (LOWORD) 32-bits of file range to lock
+                MAXDWORD, // nNumberOfBytesToLockHigh; high-order (HIWORD) 32-bits of file range to lock
+                &mut overlapped,
+            );
             if ret == 0 {
                 Err(Error::last_os_error())
             } else {
@@ -210,7 +217,15 @@ mod __sys {
     }
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
-        let ret = unsafe { UnlockFile(file.as_raw_handle(), 0, 0, !0, !0) };
+        let ret = unsafe {
+            UnlockFile(
+                file.as_raw_handle(), // handle
+                0,                    // LOWORD of starting byte offset
+                0,                    // HIWORD of starting byte offset
+                MAXDWORD,             // LOWORD of file range to unlock
+                MAXDWORD,             // HIWORD of file range to unlock
+            )
+        };
         if ret == 0 {
             Err(Error::last_os_error())
         } else {
