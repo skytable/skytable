@@ -109,18 +109,6 @@ impl FileLock {
     }
 }
 
-impl Drop for FileLock {
-    fn drop(&mut self) {
-        // If the file isn't unlocked already, attempt to unlock it
-        if !self.unlocked {
-            if self.unlock().is_err() {
-                // This is wild; uh, oh
-                panic!("Failed to unlock file when dropping value");
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

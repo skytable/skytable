@@ -114,7 +114,15 @@ fn main() {
     } else {
         log::info!("Successfully saved data to disk");
     }
-    terminal::write_info("Goodbye :)\n").unwrap();
+    if let Err(e) = lock.unlock() {
+        log::error!(
+            "Failed to unlock data file even after successfully saving data: {}",
+            e
+        );
+        std::process::exit(0x100);
+    } else {
+        terminal::write_info("Goodbye :)\n").unwrap();
+    }
 }
 
 /// This function checks the command line arguments and either returns a config object
