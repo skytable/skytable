@@ -84,6 +84,7 @@ impl FileLock {
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
+    #[cfg(test)]
     pub fn relock(&mut self) -> Result<()> {
         __sys::try_lock_ex(&self.file)?;
         self.unlocked = false;
@@ -108,7 +109,7 @@ impl FileLock {
     }
     pub fn try_clone(&self) -> Result<Self> {
         Ok(FileLock {
-            file: self.file.try_clone()?,
+            file: __sys::duplicate(&self.file)?,
             unlocked: self.unlocked,
         })
     }
@@ -176,9 +177,13 @@ mod __sys {
     use std::io::{Error, Result};
     use std::mem;
     use std::os::windows::io::AsRawHandle;
+    use std::ptr;
     use winapi::shared::minwindef::DWORD;
     use winapi::um::fileapi::{LockFileEx, UnlockFile};
+    use winapi::um::handleapi::DuplicateHandle;
     use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
+    use winapi::um::processthreadsapi::GetCurrentProcess;
+    use winapi::um::winnt::DUPLICATE_SAME_ACCESS;
     /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
@@ -211,6 +216,30 @@ mod __sys {
             Ok(())
         }
     }
+    /// Duplicate a file
+    ///
+    /// The most important part is the `DUPLICATE_SAME_ACCESS` DWORD. It ensures that the cloned file
+    /// has the same permissions as the original file
+    pub fn duplicate(file: &File) -> Result<File> {
+        unsafe {
+            let mut handle = ptr::null_mut();
+            let current_process = GetCurrentProcess();
+            let ret = DuplicateHandle(
+                current_process,
+                file.as_raw_handle(),
+                current_process,
+                &mut handle,
+                0,
+                true as BOOL,
+                DUPLICATE_SAME_ACCESS,
+            );
+            if ret == 0 {
+                Err(Error::last_os_error())
+            } else {
+                Ok(File::from_raw_handle(handle))
+            }
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -224,6 +253,7 @@ mod __sys {
     use std::io::Error;
     use std::io::Result;
     use std::os::unix::io::AsRawFd;
+    use std::os::unix::io::FromRawFd;
 
     extern "C" {
         /// Block and acquire an exclusive lock with `libc`'s `flock`
@@ -262,6 +292,19 @@ mod __sys {
         match errno {
             0 => Ok(()),
             x @ _ => Err(Error::from_raw_os_error(x)),
+        }
+    }
+    /// Duplicate a file
+    ///
+    /// Good ol' libc dup() calls
+    pub fn duplicate(file: &File) -> Result<File> {
+        unsafe {
+            let fd = libc::dup(file.as_raw_fd());
+            if fd < 0 {
+                Err(Error::last_os_error())
+            } else {
+                Ok(File::from_raw_fd(fd))
+            }
         }
     }
 }
