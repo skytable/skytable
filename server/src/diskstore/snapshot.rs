@@ -33,11 +33,13 @@ use crate::coredb::SnapshotStatus;
 use crate::dbnet::Terminator;
 use crate::diskstore;
 use chrono::prelude::*;
-use libsky::TResult;
+#[cfg(test)]
+use io::Result as IoResult;
 use regex::Regex;
+use std::fmt;
 use std::fs;
 use std::hint::unreachable_unchecked;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::path::PathBuf;
 lazy_static::lazy_static! {
     /// Matches any string which is in the following format:
@@ -72,12 +74,38 @@ pub struct SnapshotEngine<'a> {
     snap_dir: String,
 }
 
+#[derive(Debug)]
+pub enum SnapengineError {
+    EngineError(&'static str),
+    IoError(io::Error),
+}
+
+impl fmt::Display for SnapengineError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+        match self {
+            Self::EngineError(estr) => {
+                formatter.write_str("Snapshot engine error")?;
+                formatter.write_str(estr)?;
+            }
+            Self::IoError(e) => {
+                formatter.write_str("Snapshot engine IOError:")?;
+                formatter.write_str(&e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<'a> SnapshotEngine<'a> {
     /// Create a new `Snapshot` instance
     ///
     /// This also attempts to check if the snapshots directory exists;
     /// If the directory doesn't exist, then it is created
-    pub fn new<'b: 'a>(maxtop: usize, dbref: &'b CoreDB, snap_dir: Option<&str>) -> TResult<Self> {
+    pub fn new<'b: 'a>(
+        maxtop: usize,
+        dbref: &'b CoreDB,
+        snap_dir: Option<&str>,
+    ) -> Result<Self, SnapengineError> {
         let mut snaps = Vec::with_capacity(maxtop);
         let q_cfg_tuple = if maxtop == 0 {
             (DEF_SNAPSHOT_COUNT, true)
@@ -90,18 +118,17 @@ impl<'a> SnapshotEngine<'a> {
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => {
                     // Now it's our turn to look for the existing snapshots
-                    let dir = fs::read_dir(snap_dir)?;
+                    let dir = fs::read_dir(snap_dir).map_err(|e| SnapengineError::IoError(e))?;
                     for entry in dir {
-                        let entry = entry?;
+                        let entry = entry.map_err(|e| SnapengineError::IoError(e))?;
                         let path = entry.path();
                         // We'll skip the directory that contains remotely created snapshots
                         if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
                             // If the entry is not a directory then some other
                             // file(s) is present in the directory
-                            return Err(
-                                "The snapshot directory contains unrecognized files/directories"
-                                    .into(),
-                            );
+                            return Err(SnapengineError::EngineError(
+                                "The snapshot directory contains unrecognized files/directories",
+                            ));
                         }
                         if !path.is_dir() {
                             let fname = entry.file_name();
@@ -109,8 +136,8 @@ impl<'a> SnapshotEngine<'a> {
                                 good_file_name
                             } else {
                                 // The filename contains invalid characters
-                                return Err(
-                                "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
+                                return Err(SnapengineError::EngineError(
+                                "The snapshot file names have invalid characters. This should not happen! Please report an error")
                             );
                             };
                             if SNAP_MATCH.is_match(&file_name) {
@@ -119,9 +146,9 @@ impl<'a> SnapshotEngine<'a> {
                                 snaps.push(path);
                             } else {
                                 // The filename contains invalid characters
-                                return Err(
-                                "The snapshot file names have invalid characters. This should not happen! Please report an error".into()
-                            );
+                                return Err(SnapengineError::EngineError(
+                                "The snapshot file names have invalid characters. This should not happen! Please report an error"
+                            ));
                             }
                         }
                     }
@@ -139,7 +166,7 @@ impl<'a> SnapshotEngine<'a> {
                         });
                     }
                 }
-                _ => return Err(e.into()),
+                _ => return Err(SnapengineError::IoError(e)),
             },
         }
         Ok(SnapshotEngine {
@@ -152,21 +179,15 @@ impl<'a> SnapshotEngine<'a> {
     fn get_snapname(&self) -> String {
         Utc::now().format("%Y%m%d-%H%M%S.snapshot").to_string()
     }
-    /// Create a snapshot
-    ///
-    /// This returns `Some(true)` if everything went well, otherwise it returns
-    /// `Some(false)`. If the database is about to terminate, it returns `None`.
-    ///
-    /// ## Nature
-    ///
-    /// This function is **blocking in nature** since it waits for the snapshotting service
-    /// to be free. It's best to check if the snapshotting service is busy by using the function `coredb.snapcfg.is_busy()`
-    ///
-    ///
-    /// ## Panics
-    /// If snapshotting is disabled in `CoreDB` then this will panic badly! It
-    /// may not even panic: but terminate abruptly with `SIGILL`
-    pub fn mksnap(&mut self) -> bool {
+    pub fn _mksnap_nonblocking_section(&mut self) -> (PathBuf, Option<PathBuf>) {
+        let mut snapname = PathBuf::new();
+        snapname.push(&self.snap_dir);
+        snapname.push(self.get_snapname());
+        let old_snap_if_any = self.snaps.add(snapname.to_string_lossy().to_string());
+        (snapname, old_snap_if_any)
+    }
+    #[cfg(test)]
+    fn mksnap_test(&mut self) -> bool {
         log::trace!("Snapshotting was initiated");
         while (*self.dbref.snapcfg)
             .as_ref()
@@ -179,40 +200,127 @@ impl<'a> SnapshotEngine<'a> {
         {
             // Endlessly wait for a lock to be free
         }
+
+        // Now log that we locked the snapshot service. Also mark this in `CoreDB`
         log::trace!("Acquired a lock on the snapshot service");
         self.dbref.lock_snap(); // Set the snapshotting service to be busy
-        let mut snapname = PathBuf::new();
-        snapname.push(&self.snap_dir);
-        snapname.push(self.get_snapname());
-        if let Err(e) = diskstore::write_to_disk(&snapname, self.dbref.acquire_read().get_ref()) {
+
+        // Now let us get the name of the files to create
+        let (create_this, delete_this) = self._mksnap_nonblocking_section();
+        let lock = self.dbref.acquire_read();
+        // Now begin writing the files
+        if let Err(e) = diskstore::write_to_disk(&create_this, &lock.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
-            self.dbref.unlock_snap();
             log::trace!("Released lock on the snapshot service");
+            self.dbref.unlock_snap();
             return false;
         } else {
             log::info!("Successfully created snapshot");
         }
-        if let Some(old_snapshot) = self.snaps.add(snapname.to_str().unwrap().to_string()) {
+        if let Some(old_snapshot) = delete_this {
             if let Err(e) = fs::remove_file(&old_snapshot) {
                 log::error!(
                     "Failed to delete snapshot '{}' with error '{}'",
                     old_snapshot.to_string_lossy(),
                     e
                 );
-                self.dbref.unlock_snap();
                 log::trace!("Released lock on the snapshot service");
+                self.dbref.unlock_snap();
                 return false;
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
         self.dbref.unlock_snap();
-        log::trace!("Released lock on the snapshot service");
+        log::trace!("Released lock on snapshot service");
         true
+    }
+
+    /// Blocking section of the snapshotting process
+    ///
+    /// This is the blocking section of the snapshot process that requires slow disk I/O. This has been logically
+    /// separated for the `Self::mksnap()` async task that will spawn this blocking section on the runtime's
+    /// dedicated thread for performing blocking operations
+    pub(in crate::diskstore::snapshot) fn mksnap_blocking_section(
+        snapname: PathBuf,
+        handle: CoreDB,
+        oldsnap: Option<PathBuf>,
+    ) -> bool {
+        log::trace!("Snapshotting was initiated");
+        // This is a potentially blocking section
+        while (*handle.snapcfg)
+            .as_ref()
+            .unwrap_or_else(|| unsafe {
+                // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
+                // the developer to be sane enough to only call mksnap if snapshotting is enabled
+                unreachable_unchecked()
+            })
+            .is_busy()
+        {
+            // Endlessly wait for a lock to be free
+        }
+
+        // So we acquired a lock
+        log::trace!("Acquired a lock on the snapshot service");
+        handle.lock_snap(); // Set the snapshotting service to be busy
+        let lock = handle.acquire_read();
+
+        // Another blocking section that does the actual I/O
+        if let Err(e) = diskstore::write_to_disk(&snapname, &lock.get_ref()) {
+            log::error!("Snapshotting failed with error: '{}'", e);
+            log::trace!("Released lock on the snapshot service");
+            handle.unlock_snap();
+            drop(lock);
+            return false;
+        } else {
+            log::info!("Successfully created snapshot");
+        }
+        if let Some(old_snapshot) = oldsnap {
+            if let Err(e) = fs::remove_file(&old_snapshot) {
+                log::error!(
+                    "Failed to delete snapshot '{}' with error '{}'",
+                    old_snapshot.to_string_lossy(),
+                    e
+                );
+                log::trace!("Released lock on the snapshot service");
+                handle.unlock_snap();
+                drop(lock);
+                return false;
+            } else {
+                log::info!("Successfully removed old snapshot");
+            }
+        }
+        handle.unlock_snap();
+        log::trace!("Released lock on snapshot service");
+        true
+    }
+    /// Create a snapshot
+    ///
+    /// This returns `true` if everything went well, otherwise it returns
+    /// `false`.
+    ///
+    /// ## Nature
+    ///
+    /// This function is **blocking in nature** since it waits for the snapshotting service
+    /// to be free. It's best to check if the snapshotting service is busy by using the function `coredb.snapcfg.is_busy()`
+    ///
+    ///
+    /// ## Panics
+    /// If snapshotting is disabled in `CoreDB` then this will panic badly! It
+    /// may not even panic: but terminate abruptly with `SIGILL`. This service will also panic in the case
+    /// of a runtime error.
+    pub async fn mksnap(&mut self) -> bool {
+        let (create_this, remove_this) = self._mksnap_nonblocking_section();
+        let owned_handle = self.dbref.clone();
+        tokio::task::spawn_blocking(move || {
+            SnapshotEngine::mksnap_blocking_section(create_this, owned_handle, remove_this)
+        })
+        .await
+        .expect("MKSNAP INTERNAL SERVICE PANIC")
     }
     #[cfg(test)]
     /// Delete all snapshots
-    pub fn clearall(&mut self) -> TResult<()> {
+    pub fn clearall(&mut self) -> IoResult<()> {
         for snap in self.snaps.iter() {
             fs::remove_file(snap)?;
         }
@@ -236,7 +344,7 @@ fn test_snapshot() {
     );
     drop(write);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(&ourdir)).unwrap();
-    let _ = snapengine.mksnap();
+    let _ = snapengine.mksnap_test();
     let current = snapengine.get_snapshots().next().unwrap();
     let read_hmap = diskstore::test_deserialize(fs::read(PathBuf::from(current)).unwrap()).unwrap();
     let dbhmap = db.get_htable_deep_clone();
@@ -251,22 +359,22 @@ fn test_pre_existing_snapshots() {
     let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap_test());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap_test());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap_test());
     std::thread::sleep(Duration::from_secs(2));
-    assert!(snapengine.mksnap());
+    assert!(snapengine.mksnap_test());
     // Now close everything down
     drop(snapengine);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     let it_len = snapengine.get_snapshots().len();
     assert_eq!(it_len, 4);
     std::thread::sleep(Duration::from_secs(2));
-    snapengine.mksnap();
+    snapengine.mksnap_test();
     std::thread::sleep(Duration::from_secs(2));
-    snapengine.mksnap();
+    snapengine.mksnap_test();
     let it_len = snapengine.get_snapshots().len();
     assert_eq!(it_len, 4);
     snapengine.clearall().unwrap();
@@ -304,7 +412,7 @@ pub async fn snapshot_service(
             loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        let _ = sengine.mksnap();
+                        let _ = sengine.mksnap().await;
                     },
                     _ = termination_signal.receive_signal() => {
                         // time to terminate; goodbye!

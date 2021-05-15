@@ -55,28 +55,26 @@ where
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
         let mut succeeded = None;
-        {
-            let snaphandle = handle.snapcfg.clone();
-            let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan) This is safe as we've already checked
-                // if snapshots are enabled or not with `is_snapshot_enabled`
-                unreachable_unchecked()
-            });
-            let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
-            if snapengine.is_err() {
-                was_engine_error = true;
-            } else {
-                if snapstatus.is_busy() {
-                    succeeded = None;
-                } else {
-                    let mut snapengine = snapengine.unwrap_or_else(|_| unsafe {
-                        // UNSAFE(@ohsayan) This is safe as we've already checked
-                        // if snapshots are enabled or not with `is_snapshot_enabled`
-                        unreachable_unchecked()
-                    });
 
-                    succeeded = Some(snapengine.mksnap());
-                }
+        let snaphandle = handle.snapcfg.clone();
+        let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
+            // UNSAFE(@ohsayan) This is safe as we've already checked
+            // if snapshots are enabled or not with `is_snapshot_enabled`
+            unreachable_unchecked()
+        });
+        let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
+        if snapengine.is_err() {
+            was_engine_error = true;
+        } else {
+            if snapstatus.is_busy() {
+                succeeded = None;
+            } else {
+                let snapengine = snapengine.unwrap_or_else(|_| unsafe {
+                    // UNSAFE(@ohsayan) This is safe as we've already checked
+                    // if snapshots are enabled or not with `is_snapshot_enabled`
+                    unreachable_unchecked()
+                });
+                succeeded = Some(snapengine);
             }
         }
         if was_engine_error {
@@ -84,7 +82,8 @@ where
                 .write_response(responses::groups::SERVER_ERR.to_owned())
                 .await;
         }
-        if let Some(succeeded) = succeeded {
+        if let Some(mut succeeded) = succeeded {
+            let succeeded = succeeded.mksnap().await;
             if succeeded {
                 // Snapshotting succeeded, return Okay
                 return con.write_response(responses::groups::OKAY.to_owned()).await;

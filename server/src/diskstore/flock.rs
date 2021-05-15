@@ -35,6 +35,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
 use std::io::Write;
+use std::io::{Seek, SeekFrom};
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl FileLock {
     pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
-            .read(false)
+            .read(true)
             .write(true)
             .open(filename.into())?;
         Self::_lock(&file)?;
@@ -93,8 +94,10 @@ impl FileLock {
     }
     /// Write something to this file
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        // Truncate the file
+        // empty the file
         self.file.set_len(0)?;
+        // set the cursor to start
+        self.file.seek(SeekFrom::Start(0))?;
         // Now write to the file
         self.file.write_all(bytes)
     }
@@ -153,16 +156,21 @@ mod tests {
         file2.unlock().unwrap();
         drop(file2);
     }
-    #[cfg(windows)]
     #[test]
-    fn test_release_one_acquire_second() {
+    fn test_cloned_lock_writes() {
         let mut file = FileLock::lock("data5.bin").unwrap();
         let mut cloned = file.try_clone().unwrap();
+        // this writes 1, 2, 3
         file.write(&[1, 2, 3]).unwrap();
-        drop(file);
-        cloned.reacquire().unwrap();
+        // this will truncate the entire previous file and write 4, 5, 6
         cloned.write(&[4, 5, 6]).unwrap();
-        cloned.unlock().unwrap();
+        drop(cloned);
+        // this will again truncate the entire previous file and write 7, 8, 9
+        file.write(&[7, 8, 9]).unwrap();
+        drop(file);
+        let res = std::fs::read("data5.bin").unwrap();
+        // hence ultimately we'll have 7, 8, 9
+        assert_eq!(res, vec![7, 8, 9]);
     }
 }
 
