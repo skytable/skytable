@@ -29,6 +29,4 @@ steps:
       - export RUSTUP_HOME=$SRCENV/.rustup
       - cargo run -p skyd -- --nosave &
       - cargo test -- --test-threads=1
-  - name: Stop skyd
-    commands:
       - pkill skyd
