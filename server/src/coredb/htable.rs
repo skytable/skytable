@@ -153,6 +153,17 @@ impl Hash for Data {
     }
 }
 
+impl<T> From<T> for Data
+where
+    T: Into<Bytes>,
+{
+    fn from(dat: T) -> Self {
+        Self {
+            blob: Bytes::from(dat.into()),
+        }
+    }
+}
+
 use serde::ser::{SerializeSeq, Serializer};
 
 impl Serialize for Data {

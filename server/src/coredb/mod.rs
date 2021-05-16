@@ -33,7 +33,7 @@ use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
-use bytes::Bytes;
+pub use htable::Data;
 use libsky::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
@@ -123,34 +123,6 @@ impl Coretable {
     /// Get a **mutable** reference to the inner `HTable`
     pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HTable<String, Data> {
         &mut self.coremap
-    }
-}
-
-/// A wrapper for `Bytes`
-#[derive(Debug, PartialEq, Clone)]
-pub struct Data {
-    /// The blob of data
-    blob: Bytes,
-}
-
-impl Data {
-    /// Create a new blob from a string
-    pub fn from_string(val: String) -> Self {
-        Data {
-            blob: Bytes::from(val.into_bytes()),
-        }
-    }
-    /// Create a new blob from an existing `Bytes` instance
-    pub const fn from_blob(blob: Bytes) -> Self {
-        Data { blob }
-    }
-    /// Get the inner blob (raw `Bytes`)
-    pub const fn get_blob(&self) -> &Bytes {
-        &self.blob
-    }
-    /// Get the inner blob as an `u8` slice (coerced)
-    pub fn get_inner_ref(&self) -> &[u8] {
-        &self.blob
     }
 }
 
