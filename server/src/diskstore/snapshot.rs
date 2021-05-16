@@ -26,11 +26,9 @@
 
 //! Tools for creating snapshots
 
-use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
 #[cfg(test)]
 use crate::coredb::SnapshotStatus;
-use crate::dbnet::Terminator;
 use crate::diskstore;
 use chrono::prelude::*;
 #[cfg(test)]
@@ -355,6 +353,7 @@ fn test_snapshot() {
 
 #[test]
 fn test_pre_existing_snapshots() {
+    use std::time::Duration;
     let ourdir = "TEST_PX_SS";
     let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
@@ -379,50 +378,6 @@ fn test_pre_existing_snapshots() {
     assert_eq!(it_len, 4);
     snapengine.clearall().unwrap();
     fs::remove_dir_all(ourdir).unwrap();
-}
-
-use std::time::Duration;
-use tokio::time;
-/// The snapshot service
-///
-/// This service calls `SnapEngine::mksnap()` periodically to create snapshots. Whenever
-/// the interval for snapshotting expires or elapses, we create a snapshot. The snapshot service
-/// keeps creating snapshots, as long as the database keeps running. Once [`dbnet::run`] broadcasts
-/// a termination signal, we're ready to quit
-pub async fn snapshot_service(
-    handle: CoreDB,
-    ss_config: SnapshotConfig,
-    mut termination_signal: Terminator,
-) {
-    match ss_config {
-        SnapshotConfig::Disabled => {
-            // since snapshotting is disabled, we'll imediately return
-            return;
-        }
-        SnapshotConfig::Enabled(configuration) => {
-            let (duration, atmost) = configuration.decompose();
-            let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle, None) {
-                Ok(ss) => ss,
-                Err(e) => {
-                    log::error!("Failed to initialize snapshot service with error: '{}'", e);
-                    return;
-                }
-            };
-            loop {
-                tokio::select! {
-                    _ = time::sleep_until(time::Instant::now() + duration) => {
-                        let _ = sengine.mksnap().await;
-                    },
-                    _ = termination_signal.receive_signal() => {
-                        // time to terminate; goodbye!
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    log::info!("Snapshot service has exited");
 }
 
 mod queue {

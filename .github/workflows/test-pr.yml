@@ -70,7 +70,6 @@ jobs:
           cargo build -p skyd
           cargo run -p skyd -- --nosave --noart &
           cargo test --verbose -- --test-threads=1
-          sudo pkill skyd
         env:
           RUST_BACKTRACE: 1
         if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
@@ -80,7 +79,6 @@ jobs:
           cargo build -p skyd
           START /B cargo run -p skyd -- --nosave --noart
           cargo test --verbose -- --test-threads=1
-          taskkill /IM skyd.exe /F
         env:
           RUST_BACKTRACE: 1
         shell: cmd

@@ -34,24 +34,12 @@ use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
 use bytes::Bytes;
-use diskstore::flock;
-use diskstore::PERSIST_FILE;
 use libsky::TResult;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::sync::Arc;
 pub mod htable;
-
-#[macro_export]
-macro_rules! flush_db {
-    ($db:expr) => {
-        crate::coredb::CoreDB::flush_db(&$db, None)
-    };
-    ($db:expr, $file:expr) => {
-        crate::coredb::CoreDB::flush_db(&$db, Some(&mut $file))
-    };
-}
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
@@ -113,38 +101,6 @@ impl SnapshotStatus {
 pub struct Shared {
     /// A `Coretable` wrapped in a R/W lock
     pub table: RwLock<Coretable>,
-}
-
-impl Shared {
-    /// This task performs a `sync`hronous background save operation
-    ///
-    /// It runs BGSAVE and then returns control to the caller. The caller is responsible
-    /// for periodically calling BGSAVE
-    pub fn run_bgsave(&self, file: &mut flock::FileLock) {
-        log::trace!("BGSAVE started");
-        let rlock = self.table.read();
-        // Kick in BGSAVE
-        match diskstore::flush_data(file, rlock.get_ref()) {
-            Ok(_) => {
-                drop(rlock);
-                {
-                    // just scope it to ensure dropping of the lock
-                    // since this bgsave succeeded, mark the service as !poisoned, enabling it to recover
-                    self.table.write().poisoned = false;
-                }
-                log::info!("BGSAVE completed successfully");
-            }
-            Err(e) => {
-                drop(rlock);
-                // IMPORTANT! POISON THE DATABASE, NO MORE WRITES FOR YOU!
-                {
-                    // scope to ensure dropping of the lock
-                    self.table.write().poisoned = true;
-                }
-                log::error!("BGSAVE failed with error: '{}'", e);
-            }
-        }
-    }
 }
 
 /// The `Coretable` holds all the key-value pairs in a `HTable`
@@ -211,6 +167,10 @@ impl CoreDB {
     }
     pub fn poison(&self) {
         (*self.shared).table.write().poisoned = true;
+    }
+
+    pub fn unpoison(&self) {
+        (*self.shared).table.write().poisoned = false;
     }
 
     /// Check if snapshotting is enabled
@@ -308,19 +268,6 @@ impl CoreDB {
     /// Acquire a read lock
     pub fn acquire_read(&self) -> RwLockReadGuard<'_, Coretable> {
         self.shared.table.read()
-    }
-    /// Flush the contents of the in-memory table onto disk
-    pub fn flush_db(&self, file: Option<&mut flock::FileLock>) -> TResult<()> {
-        let data = match self.acquire_write() {
-            Some(wlock) => wlock,
-            None => return Err("Can no longer flush data; coretable is poisoned".into()),
-        };
-        if let Some(mut file) = file {
-            diskstore::flush_data(&mut file, &data.coremap)?;
-        } else {
-            diskstore::write_to_disk(&PERSIST_FILE, &data.coremap)?;
-        }
-        Ok(())
     }
 
     #[cfg(test)]

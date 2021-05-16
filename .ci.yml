@@ -13,19 +13,22 @@ server:
     from_secret: password
 
 steps:
-- name: Update rust
-  commands:
-    - /usr/local/bin/rustup-update
-- name: Run tests
-  environment:
-    SRCENV:
-      from_secret: srcenv
-    CARGO_HOME:
-      from_secret: cargohome
-    CARGO_TARGET_DIR:
-      from_secret: cargotarget
-  commands:
-    - source $SRCENV/.cargo/env
-    - export RUSTUP_HOME=$SRCENV/.rustup
-    - cargo run -p skyd -- --nosave &
-    - cargo test -- --test-threads=1
+  - name: Update rust
+    commands:
+      - /usr/local/bin/rustup-update
+  - name: Run tests
+    environment:
+      SRCENV:
+        from_secret: srcenv
+      CARGO_HOME:
+        from_secret: cargohome
+      CARGO_TARGET_DIR:
+        from_secret: cargotarget
+    commands:
+      - source $SRCENV/.cargo/env
+      - export RUSTUP_HOME=$SRCENV/.rustup
+      - cargo run -p skyd -- --nosave &
+      - cargo test -- --test-threads=1
+  - name: Stop skyd
+    commands:
+      - pkill skyd
