@@ -212,7 +212,7 @@ impl MultiListener {
             MultiListener::Multi(insecure_listener, secure_listener) => {
                 let insec = insecure_listener.run();
                 let sec = secure_listener.run();
-                let (e1, e2) = futures::join!(insec, sec);
+                let (e1, e2) = tokio::join!(insec, sec);
                 if let Err(e) = e1 {
                     log::error!("Insecure listener failed with: {}", e);
                 }
@@ -346,7 +346,7 @@ pub async fn run(
         snapshot_cfg,
         Terminator::new(signal.subscribe()),
     ));
-    let climit = Arc::new(Semaphore::new(50000));
+    let climit = Arc::new(Semaphore::const_new(50000));
     let mut server = match ports {
         PortConfig::InsecureOnly { host, port } => {
             MultiListener::new_insecure_only(
