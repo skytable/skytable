@@ -45,8 +45,8 @@ use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
 use crate::dbnet::tcp::Listener;
 use crate::diskstore;
+use crate::services;
 use diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
-use diskstore::{flock, PERSIST_FILE};
 mod tcp;
 use crate::CoreDB;
 use libsky::TResult;
@@ -316,7 +316,7 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
-) -> (CoreDB, flock::FileLock) {
+) -> CoreDB {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
     match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
@@ -336,20 +336,12 @@ pub async fn run(
             process::exit(0x100);
         }
     };
-    let file = match flock::FileLock::lock(&*PERSIST_FILE) {
-        Ok(lck) => lck,
-        Err(e) => {
-            log::error!("Failed to acquire lock on data file with error: {}", e);
-            process::exit(1);
-        }
-    };
-    let bgsave_handle = tokio::spawn(diskstore::bgsave_scheduler(
+    let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
         db.clone(),
         bgsave_cfg,
-        file,
         Terminator::new(signal.subscribe()),
     ));
-    let snapshot_handle = tokio::spawn(diskstore::snapshot::snapshot_service(
+    let snapshot_handle = tokio::spawn(services::snapshot::snapshot_service(
         db.clone(),
         snapshot_cfg,
         Terminator::new(signal.subscribe()),
@@ -407,6 +399,6 @@ pub async fn run(
     }
     server.finish_with_termsig().await;
     let _ = snapshot_handle.await;
-    let lock = bgsave_handle.await.unwrap();
-    (db, lock)
+    let _ = bgsave_handle.await;
+    db
 }

@@ -41,7 +41,7 @@ use std::path::PathBuf;
 #[derive(Debug)]
 /// # File Lock
 /// A file lock object holds a `std::fs::File` that is used to `lock()` and `unlock()` a file with a given
-/// `filename` passed into the `lock()` method. The file lock is configured to drop the file lock when the
+/// `filename` passed into the `lock()` method. The file lock is **not configured** to drop the file lock when the
 /// object is dropped. The `file` field is essentially used to get the raw file descriptor for passing to
 /// the platform-specific lock/unlock methods.
 ///
@@ -49,9 +49,8 @@ use std::path::PathBuf;
 ///
 /// ## Suggestions
 ///
-/// It is always a good idea to attempt a lock release (unlock) explicitly than letting the `Drop` implementation
-/// run it for you as that may cause some Wild West panic if the lock release fails (haha!).
-/// If you manually run unlock, then `Drop`'s implementation won't call another unlock to avoid an extra
+/// It is always a good idea to attempt a lock release (unlock) explicitly than leaving it to the operating
+/// system. If you manually run unlock, another unlock won't be called to avoid an extra costly (is it?)
 /// syscall; this is achieved with the `unlocked` flag (field) which is set to true when the `unlock()` function
 /// is called.
 ///
@@ -84,19 +83,17 @@ impl FileLock {
     fn _lock(file: &File) -> Result<()> {
         __sys::try_lock_ex(file)
     }
-    #[cfg(test)]
-    pub fn relock(&mut self) -> Result<()> {
-        __sys::try_lock_ex(&self.file)?;
-        self.unlocked = false;
-        Ok(())
-    }
     /// Unlock the file
     ///
     /// This sets the `unlocked` flag to true
     pub fn unlock(&mut self) -> Result<()> {
-        __sys::unlock_file(&self.file)?;
-        self.unlocked = true;
-        Ok(())
+        if !self.unlocked {
+            __sys::unlock_file(&self.file)?;
+            self.unlocked = true;
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
     /// Write something to this file
     pub fn write(&mut self, bytes: &[u8]) -> Result<()> {
@@ -107,6 +104,7 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
+    #[cfg(test)]
     pub fn try_clone(&self) -> Result<Self> {
         Ok(FileLock {
             file: __sys::duplicate(&self.file)?,
@@ -130,15 +128,6 @@ mod tests {
         let _file = FileLock::lock("data2.bin").unwrap();
         let _file2 = FileLock::lock("data2.bin").unwrap();
         std::fs::remove_file("data2.bin").unwrap();
-    }
-    #[cfg(windows)]
-    #[test]
-    #[should_panic]
-    fn test_windows_with_two_unlock_attempts() {
-        // This is a windows specific test to ensure that our logic with the `unlocked` field is correct
-        let mut file = FileLock::lock("data3.bin").unwrap();
-        file.unlock().unwrap();
-        file.unlock().unwrap();
     }
     #[cfg(windows)]
     #[test]
