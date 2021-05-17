@@ -70,6 +70,8 @@ mod tags {
     pub const TAG_KEYLEN: &'static str = "KEYLEN";
     /// `MKSNAP` action tag
     pub const TAG_MKSNAP: &'static str = "MKSNAP";
+    /// `LSKEYS` action tag
+    pub const TAG_LSKEYS: &str = "LSKEYS";
 }
 
 /// Execute a simple(*) query
@@ -103,7 +105,8 @@ where
         tags::TAG_FLUSHDB => kvengine::flushdb::flushdb,
         tags::TAG_USET => kvengine::uset::uset,
         tags::TAG_KEYLEN => kvengine::keylen::keylen,
-        tags::TAG_MKSNAP => admin::mksnap::mksnap
+        tags::TAG_MKSNAP => admin::mksnap::mksnap,
+        tags::TAG_LSKEYS => kvengine::lskeys::lskeys
     );
     Ok(())
 }

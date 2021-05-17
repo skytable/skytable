@@ -35,6 +35,7 @@ pub mod flushdb;
 pub mod get;
 pub mod jget;
 pub mod keylen;
+pub mod lskeys;
 pub mod mget;
 pub mod mset;
 pub mod mupdate;
