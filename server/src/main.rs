@@ -46,6 +46,7 @@ mod queryengine;
 mod resp;
 use coredb::CoreDB;
 use dbnet::run;
+mod compat;
 use env_logger::*;
 use libsky::util::terminal;
 use std::sync::Arc;

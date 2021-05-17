@@ -53,11 +53,13 @@ where
     let did_we = {
         if let Some(mut whandle) = handle.acquire_write() {
             let writer = whandle.get_mut_ref();
-            if let Entry::Occupied(mut e) = writer.entry(it.next().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked that the action contains exactly
-                // two arguments (excluding the action itself). So, this branch won't ever be reached
-                unreachable_unchecked()
-            })) {
+            if let Entry::Occupied(mut e) =
+                writer.entry(Data::from(it.next().unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): We've already checked that the action contains exactly
+                    // two arguments (excluding the action itself). So, this branch won't ever be reached
+                    unreachable_unchecked()
+                })))
+            {
                 e.insert(Data::from_string(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): We've already checked that the action contains exactly
                     // two arguments (excluding the action itself). So, this branch won't ever be reached

@@ -47,7 +47,7 @@ where
         let res: Option<Bytes> = {
             let rhandle = handle.acquire_read();
             let reader = rhandle.get_ref();
-            reader.get(&key).map(|b| b.get_blob().clone())
+            reader.get(key.as_bytes()).map(|b| b.get_blob().clone())
         };
         if let Some(value) = res {
             // Good, we got the value, write it off to the stream

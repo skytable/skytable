@@ -44,7 +44,7 @@ lazy_static::lazy_static! {
     /// ```text
     /// YYYYMMDD-HHMMSS.snapshot
     /// ```
-    static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
+    pub static ref SNAP_MATCH: Regex = Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)(.snapshot)$").unwrap();
     /// The directory for remote snapshots
     pub static ref DIR_REMOTE_SNAPSHOT: PathBuf = PathBuf::from("./data/snapshots/remote");
 }
@@ -53,7 +53,6 @@ lazy_static::lazy_static! {
 ///
 /// This is currently a `snapshot` directory under the current directory
 pub const DIR_SNAPSHOT: &'static str = "data/snapshots";
-pub const DIR_OLD_SNAPSHOT: &'static str = "snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;
@@ -337,7 +336,7 @@ fn test_snapshot() {
     let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut write = db.acquire_write().unwrap();
     let _ = write.get_mut_ref().insert(
-        String::from("ohhey"),
+        crate::coredb::Data::from(String::from("ohhey")),
         crate::coredb::Data::from_string(String::from("heya!")),
     );
     drop(write);

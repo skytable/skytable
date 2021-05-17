@@ -45,7 +45,7 @@ where
         let rhandle = handle.acquire_read();
         let cmap = rhandle.get_ref();
         act.into_iter().skip(1).for_each(|key| {
-            if cmap.contains_key(&key) {
+            if cmap.contains_key(key.as_bytes()) {
                 how_many_of_them_exist += 1;
             }
         });

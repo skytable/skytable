@@ -76,7 +76,7 @@ where
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
             while let Some(key) = key_iter.next() {
-                if mut_table.contains_key(key.as_str()) {
+                if mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys existing - this action can't clearly be done
                     // So we'll set `failed` to true and ensure that we check this while
                     // writing a response back to the client
@@ -92,7 +92,10 @@ where
                 // So we can safely set the keys
                 let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-                    if mut_table.insert(key, Data::from_string(value)).is_some() {
+                    if mut_table
+                        .insert(Data::from(key), Data::from_string(value))
+                        .is_some()
+                    {
                         // Tell the compiler that this will never be the case
                         unsafe {
                             // UNSAFE(@ohsayan): As none of the keys exist in the table, no
@@ -151,7 +154,7 @@ where
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
             while let Some(key) = key_iter.next() {
-                if !mut_table.contains_key(key.as_str()) {
+                if !mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys not existing - this action can't clearly be done
                     // So we'll set `failed` to true and ensure that we check this while
                     // writing a response back to the client
@@ -169,7 +172,7 @@ where
                 act.into_iter().skip(1).for_each(|key| {
                     // Since we've already checked that the keys don't exist
                     // We'll tell the compiler to optimize this
-                    let _ = mut_table.remove(&key).unwrap_or_else(|| unsafe {
+                    let _ = mut_table.remove(key.as_bytes()).unwrap_or_else(|| unsafe {
                         // UNSAFE(@ohsayan): Since all the values exist, all of them will return
                         // some value. Hence, this branch won't ever be reached. Hence, this is safe.
                         unreachable_unchecked()
@@ -223,7 +226,7 @@ where
         if let Some(mut whandle) = handle.acquire_write() {
             let mut_table = whandle.get_mut_ref();
             while let Some(key) = key_iter.next() {
-                if !mut_table.contains_key(key.as_str()) {
+                if !mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys failing to exist - this action can't clearly be done
                     // So we'll set `failed` to true and ensure that we check this while
                     // writing a response back to the client
@@ -245,7 +248,10 @@ where
                 // So we can safely update the keys
                 let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-                    if mut_table.insert(key, Data::from_string(value)).is_none() {
+                    if mut_table
+                        .insert(Data::from(key), Data::from_string(value))
+                        .is_none()
+                    {
                         // Tell the compiler that this will never be the case
                         unsafe { unreachable_unchecked() }
                     }

@@ -26,6 +26,7 @@
 
 //! This module provides tools to handle configuration files and settings
 
+use crate::compat;
 #[cfg(test)]
 use libsky::TResult;
 use serde::Deserialize;
@@ -35,6 +36,7 @@ use std::fs;
 #[cfg(test)]
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
+use std::process;
 use toml;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
@@ -408,6 +410,15 @@ impl fmt::Display for ConfigError {
 pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
+    // check upgrades
+    if matches.subcommand_matches("upgrade").is_some() {
+        if let Err(e) = compat::upgrade() {
+            log::error!("Dataset upgrade failed with error: {}", e);
+            process::exit(0x100);
+        } else {
+            process::exit(0x000);
+        }
+    }
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
     // Check flags
     let sslonly = matches.is_present("sslonly");

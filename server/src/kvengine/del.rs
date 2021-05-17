@@ -50,7 +50,7 @@ where
             let mut many = 0;
             let cmap = (*whandle).get_mut_ref();
             act.into_iter().skip(1).for_each(|key| {
-                if cmap.remove(&key).is_some() {
+                if cmap.remove(key.as_bytes()).is_some() {
                     many += 1
                 }
             });

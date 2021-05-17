@@ -79,3 +79,6 @@ args:
           long: sslonly
           takes_value: false
           help: Tells the server to only accept SSL connections and disables the non-SSL port
+subcommands:
+      - upgrade:
+            about: Upgrades old datsets to the latest format supported by this server edition

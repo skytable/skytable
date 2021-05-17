@@ -26,6 +26,7 @@
 
 use crate::coredb;
 use crate::coredb::htable::Entry;
+use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 
@@ -53,7 +54,7 @@ where
             let writer = whandle.get_mut_ref();
             let mut didmany = 0;
             while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-                if let Entry::Vacant(v) = writer.entry(key) {
+                if let Entry::Vacant(v) = writer.entry(Data::from(key)) {
                     let _ = v.insert(coredb::Data::from_string(val));
                     didmany += 1;
                 }
