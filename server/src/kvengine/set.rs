@@ -53,11 +53,13 @@ where
     let did_we = {
         if let Some(mut writer) = handle.acquire_write() {
             let writer = writer.get_mut_ref();
-            if let Entry::Vacant(e) = writer.entry(it.next().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                // that there are exactly 2 arguments
-                unreachable_unchecked()
-            })) {
+            if let Entry::Vacant(e) =
+                writer.entry(Data::from(it.next().unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
+                    unreachable_unchecked()
+                })))
+            {
                 e.insert(Data::from_string(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments

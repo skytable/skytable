@@ -336,7 +336,7 @@ fn test_snapshot() {
     let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
     let mut write = db.acquire_write().unwrap();
     let _ = write.get_mut_ref().insert(
-        String::from("ohhey"),
+        crate::coredb::Data::from(String::from("ohhey")),
         crate::coredb::Data::from_string(String::from("heya!")),
     );
     drop(write);

@@ -44,7 +44,7 @@ mod bgsave {
         // pre-initialize our maps for comparison
         let mut map_should_be_with_one = HTable::new();
         map_should_be_with_one.insert(
-            String::from("sayan"),
+            Data::from(String::from("sayan")),
             Data::from_string("is testing bgsave".to_owned()),
         );
         #[allow(non_snake_case)]
@@ -60,19 +60,21 @@ mod bgsave {
         // sleep for 10 seconds with epsilon 1.5s
         time::sleep(DUR_WITH_EPSILON).await;
         // we should get an empty map
-        let saved = diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
         assert!(saved.len() == 0);
         // now let's quickly write some data
         {
             datahandle.acquire_write().unwrap().get_mut_ref().insert(
-                String::from("sayan"),
-                Data::from_string("is testing bgsave".to_owned()),
+                Data::from(String::from("sayan")),
+                Data::from("is testing bgsave".to_owned()),
             );
         }
         // sleep for 10 seconds with epsilon 1.5s
         time::sleep(DUR_WITH_EPSILON).await;
         // we should get a map with the one key
-        let saved = diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
         assert_eq!(saved, map_should_be_with_one);
         // now let's remove all the data
         {
@@ -80,13 +82,15 @@ mod bgsave {
         }
         // sleep for 10 seconds with epsilon 1.5s
         time::sleep(DUR_WITH_EPSILON).await;
-        let saved = diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
         assert!(saved.len() == 0);
         // drop the signal; all waiting tasks can now terminate
         drop(signal);
         handle.await.unwrap();
         // check the file again after unlocking
-        let saved = diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
         assert!(saved.len() == 0);
         fs::remove_file(BGSAVE_DIRECTORY_TESTING_LOC).unwrap();
     }

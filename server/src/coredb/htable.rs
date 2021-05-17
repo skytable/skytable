@@ -34,6 +34,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
+use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HTable<K, V>
@@ -92,12 +93,30 @@ where
         self.inner.values()
     }
 }
-
 impl<K: Eq + Hash, V> IntoIterator for HTable<K, V> {
     type Item = (K, V);
     type IntoIter = std::collections::hash_map::IntoIter<K, V>;
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
+    }
+}
+
+impl Deref for Data {
+    type Target = [u8];
+    fn deref(&self) -> &<Self>::Target {
+        &self.blob
+    }
+}
+
+impl Borrow<[u8]> for Data {
+    fn borrow(&self) -> &[u8] {
+        &self.blob.borrow()
+    }
+}
+
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        &self.blob
     }
 }
 
@@ -218,4 +237,7 @@ fn test_de() {
     let ser = bincode::serialize(&x).unwrap();
     let de: HTable<String, Data> = bincode::deserialize(&ser).unwrap();
     assert_eq!(de, x);
+    let mut hmap: HTable<Data, Data> = HTable::new();
+    hmap.insert(Data::from("sayan"), Data::from("writes code"));
+    assert!(hmap.get("sayan".as_bytes()).is_some());
 }

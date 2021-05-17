@@ -24,7 +24,7 @@
  *
 */
 
-use crate::coredb::{self};
+use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 
@@ -52,7 +52,7 @@ where
         if let Some(mut whandle) = handle.acquire_write() {
             let writer = whandle.get_mut_ref();
             while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-                let _ = writer.insert(key, coredb::Data::from_string(val));
+                let _ = writer.insert(Data::from(key), Data::from(val));
             }
             drop(writer);
             drop(whandle);

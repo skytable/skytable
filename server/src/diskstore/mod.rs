@@ -42,7 +42,7 @@ lazy_static::lazy_static! {
     pub static ref PERSIST_FILE: PathBuf = PathBuf::from("./data/data.bin");
 }
 
-fn get_snapshot(path: String) -> TResult<Option<HTable<String, Data>>> {
+fn get_snapshot(path: String) -> TResult<Option<HTable<Data, Data>>> {
     // the path just has the snapshot name, let's improve that
     let mut snap_location = PathBuf::from(DIR_SNAPSHOT);
     snap_location.push(&path);
@@ -56,7 +56,7 @@ fn get_snapshot(path: String) -> TResult<Option<HTable<String, Data>>> {
 
 /// Try to get the saved data from disk. This returns `None`, if the `data/data.bin` wasn't found
 /// otherwise the `data/data.bin` file is deserialized and parsed into a `HTable`
-pub fn get_saved(path: Option<String>) -> TResult<Option<HTable<String, Data>>> {
+pub fn get_saved(path: Option<String>) -> TResult<Option<HTable<Data, Data>>> {
     if let Some(path) = path {
         get_snapshot(path)
     } else {
@@ -75,10 +75,10 @@ pub fn get_saved(path: Option<String>) -> TResult<Option<HTable<String, Data>>> 
 }
 
 #[cfg(test)]
-pub fn test_deserialize(file: Vec<u8>) -> TResult<HTable<String, Data>> {
+pub fn test_deserialize(file: Vec<u8>) -> TResult<HTable<Data, Data>> {
     deserialize(file)
 }
-fn deserialize(file: Vec<u8>) -> TResult<HTable<String, Data>> {
+fn deserialize(file: Vec<u8>) -> TResult<HTable<Data, Data>> {
     let parsed = bincode::deserialize(&file)?;
     Ok(parsed)
 }
@@ -87,20 +87,20 @@ fn deserialize(file: Vec<u8>) -> TResult<HTable<String, Data>> {
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data/data.bin` file
-pub fn flush_data(file: &mut flock::FileLock, data: &HTable<String, Data>) -> TResult<()> {
+pub fn flush_data(file: &mut flock::FileLock, data: &HTable<Data, Data>) -> TResult<()> {
     let encoded = serialize(&data)?;
     file.write(&encoded)?;
     Ok(())
 }
 
-pub fn write_to_disk(file: &PathBuf, data: &HTable<String, Data>) -> TResult<()> {
+pub fn write_to_disk(file: &PathBuf, data: &HTable<Data, Data>) -> TResult<()> {
     let mut file = fs::File::create(&file)?;
     let encoded = serialize(&data)?;
     file.write_all(&encoded)?;
     Ok(())
 }
 
-fn serialize(data: &HTable<String, Data>) -> TResult<Vec<u8>> {
+fn serialize(data: &HTable<Data, Data>) -> TResult<Vec<u8>> {
     let encoded = bincode::serialize(&data)?;
     Ok(encoded)
 }

@@ -107,7 +107,7 @@ pub struct Shared {
 #[derive(Debug)]
 pub struct Coretable {
     /// The core table contain key-value pairs
-    coremap: HTable<String, Data>,
+    coremap: HTable<Data, Data>,
     /// Whether the database is poisoned or not
     ///
     /// If the database is poisoned -> the database can no longer accept writes
@@ -117,11 +117,11 @@ pub struct Coretable {
 
 impl Coretable {
     /// Get a reference to the inner `HTable`
-    pub const fn get_ref<'a>(&'a self) -> &'a HTable<String, Data> {
+    pub const fn get_ref<'a>(&'a self) -> &'a HTable<Data, Data> {
         &self.coremap
     }
     /// Get a **mutable** reference to the inner `HTable`
-    pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HTable<String, Data> {
+    pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HTable<Data, Data> {
         &mut self.coremap
     }
 }
@@ -217,7 +217,7 @@ impl CoreDB {
         CoreDB {
             shared: Arc::new(Shared {
                 table: RwLock::new(Coretable {
-                    coremap: HTable::<String, Data>::new(),
+                    coremap: HTable::<Data, Data>::new(),
                     poisoned: false,
                 }),
             }),
@@ -248,7 +248,7 @@ impl CoreDB {
     /// **⚠ Do note**: This is super inefficient since it performs an actual
     /// clone of the `HTable` and doesn't do any `Arc`-business! This function
     /// can be used by test functions and the server, but **use with caution!**
-    pub fn get_htable_deep_clone(&self) -> HTable<String, Data> {
+    pub fn get_htable_deep_clone(&self) -> HTable<Data, Data> {
         (*self.acquire_read().get_ref()).clone()
     }
 }
