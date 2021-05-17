@@ -969,4 +969,87 @@ mod __private {
             )))
         );
     }
+    async fn test_lskeys_default() {
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apples");
+        query.arg("b");
+        query.arg("burgers");
+        query.arg("c");
+        query.arg("carrots");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now get 'em
+        let mut query = Query::new();
+        query.arg("lskeys");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::FlatArray(vec![
+                "x".to_owned(),
+                "y".to_owned(),
+                "z".to_owned(),
+                "a".to_owned(),
+                "b".to_owned(),
+                "c".to_owned()
+            ]))
+        );
+    }
+    async fn test_lskeys_custom_limit() {
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apples");
+        query.arg("b");
+        query.arg("burgers");
+        query.arg("c");
+        query.arg("carrots");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        let mut query = Query::new();
+        query.arg("lskeys");
+        query.arg("1000");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::FlatArray(vec![
+                "x".to_owned(),
+                "y".to_owned(),
+                "z".to_owned(),
+                "a".to_owned(),
+                "b".to_owned(),
+                "c".to_owned()
+            ]))
+        );
+    }
+    async fn test_lskeys_wrongtype() {
+        query.arg("lskeys");
+        query.arg("abcdefg");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Wrongtype))
+        );
+    }
+    async fn test_lskeys_syntax_error() {
+        query.arg("lskeys");
+        query.arg("abcdefg");
+        query.arg("hijklmn");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
 }
