@@ -152,7 +152,10 @@ fn print_rcode(rcode: RespCode, idx: Option<usize>) {
 }
 
 fn print_flat_array(flat_array: Vec<String>) {
-    flat_array.into_iter().for_each(|item| write_string!(item))
+    flat_array.into_iter().enumerate().for_each(|(idx, item)| {
+        let idx = idx + 1;
+        write_string!(idx, item)
+    })
 }
 fn print_array(array: Vec<Element>) {
     for (idx, item) in array.into_iter().enumerate() {
