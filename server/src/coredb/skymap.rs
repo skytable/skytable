@@ -292,6 +292,24 @@ where
     fn find_free_mut(&self, key: &K) -> RwLockWriteGuard<HashBucket<K, V>> {
         self.scan_mut(key, |bucket| bucket.is_available())
     }
+    fn fill_from(&mut self, table: Self) {
+        table.buckets.into_iter().for_each(|bucket| {
+            // take each item in the other table and check if it contains some value
+            if let HashBucket::Contains(key, val) = bucket.into_inner() {
+                // good so there is a value; let us find an empty bucket where we can insert this
+                let mut bucket = self.scan_mut(&key, |hb| match *hb {
+                    // we'll return true for empty, unused buckets
+                    HashBucket::Empty => true,
+                    // in other cases, just return false because this method will be called by
+                    // the reserve function that will give us an empty table will not have any removed
+                    // entries
+                    _ => false,
+                });
+                // now set its value
+                *bucket = HashBucket::Contains(key, val);
+            }
+        });
+    }
 }
 
 impl<K: Clone, V: Clone> Clone for Table<K, V> {
@@ -407,6 +425,31 @@ where
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
         }
     }
+    fn reserve_space(&self, for_how_many: usize) {
+        // so let's say we currently have 10 buckets, we want to add 1 more
+        // so our target len should be 11 buckets times 4 or 44 buckets
+        let len = (self.len() + for_how_many) * MULTIPLICATION_FACTOR;
+        // freeze the entire table
+        let mut lock = self.table.write();
+        // if this condition is true, we don't have space for 44 buckets, so let's add more capacity
+        if lock.buckets.len() < len {
+            // so we need to reserve more capacity
+            // replace the current table with a new table
+            let table = mem::replace(&mut *lock, Table::with_capacity(len));
+            // then fill from the old data
+            lock.fill_from(table);
+        }
+    }
+    fn reshard_table(&self, lock: RwLockReadGuard<Table<K, V>>) {
+        let len = (self.len.fetch_add(1, MEMORY_ORDERING)) + 1;
+        if len * MAX_LOAD_FACTOR_DENOM > lock.buckets.len() * MAX_LOAD_FACTOR_TOP {
+            // we need to drop the lock; remember how we messed up with the bgsave function in coredb;
+            // don't do that mistake again!
+            drop(lock);
+            // add space more one more entry; of course this will reserve way more additonal buckets
+            self.reserve_space(1);
+        }
+    }
     pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<guards::ReadGuard<K, V>>
     where
         K: Borrow<Q>,
@@ -448,30 +491,6 @@ where
             None
         }
     }
-    // I'm not going to have this implemented right now
-    // pub fn entry_mut<Q: ?Sized>(&self, key: &Q) -> guards::WriteGuard<K, V, HashBucket<K, V>>
-    // where
-    //     K: Borrow<Q>,
-    //     Q: Hash + PartialEq,
-    // {
-    //     let mutref: Result<
-    //         OwningHandle<
-    //             OwningHandle<
-    //                 RwLockReadGuard<'_, Table<K, V>>,
-    //                 RwLockWriteGuard<'_, HashBucket<K, V>>,
-    //             >,
-    //             &'_ mut HashBucket<K, V>,
-    //         >,
-    //         (),
-    //     > = OwningHandle::try_new(
-    //         OwningHandle::new_with_fn(self.table.read(), |x| unsafe { &*x }.lookup_mut(key)),
-    //         |x| Ok(unsafe { &mut *(x as *mut HashBucket<K, V>) }),
-    //     );
-    //     return guards::WriteGuard::from_inner(
-    //         mutref.unwrap_or_else(|_| unsafe { unreachable_unchecked() }),
-    //     );
-    //     todo!()
-    // }
     pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -481,6 +500,73 @@ where
         let bucket = lock.lookup(key);
         // Since it isn't available, it has to be occupied
         !bucket.is_available()
+    }
+    /// Insert a **new key**. This operation will return true if the operation succeeded or it will return
+    /// false if the key already existed
+    pub fn insert(&self, key: K, val: V) -> bool {
+        if self.contains_key(&key) {
+            false
+        } else {
+            let lock = self.table.read();
+            {
+                // don't try doing this directly with a deref as you'll get a move error as K doesn't
+                // implement copy (it doesn't have to; we just need Eq + Hash; these bounds are enough)
+                let mut bucket = lock.find_free_mut(&key);
+                *bucket = HashBucket::Contains(key, val);
+            }
+            // we inserted a new key, so expand
+            self.reshard_table(lock);
+            true
+        }
+    }
+    /// This will return true if the value was updated. Otherwise it will return false if the value
+    /// didn't exist
+    pub fn update(&self, key: K, val: V) -> bool {
+        let lock = self.table.read();
+        let mut bucket = lock.lookup_mut(&key);
+        match *bucket {
+            HashBucket::Contains(_, ref mut value) => {
+                *value = val;
+                return true;
+            }
+            _ => return false,
+        }
+    }
+    pub fn remove<Q>(&self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: PartialEq + Hash,
+    {
+        let lock = self.table.read();
+        let mut bucket = lock.lookup_mut(&key);
+        match &mut *bucket {
+            // now borrowck is giving us weird errors when we do something like this_bucket @ HashBucket::Contain(_, _)
+            // so bypass that
+            HashBucket::Removed | HashBucket::Empty => None,
+            this_bucket => {
+                let ret = mem::replace(this_bucket, HashBucket::Removed).get_value();
+                self.len.fetch_sub(1, MEMORY_ORDERING);
+                ret
+            }
+        }
+    }
+    pub fn true_if_removed<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: PartialEq + Hash,
+    {
+        let lock = self.table.read();
+        let mut bucket = lock.lookup_mut(&key);
+        match &mut *bucket {
+            // now borrowck is giving us weird errors when we do something like this_bucket @ HashBucket::Contain(_, _)
+            // so bypass that
+            HashBucket::Removed | HashBucket::Empty => false,
+            this_bucket => {
+                let _ = mem::replace(this_bucket, HashBucket::Removed);
+                self.len.fetch_sub(1, MEMORY_ORDERING);
+                true
+            }
+        }
     }
 }
 
