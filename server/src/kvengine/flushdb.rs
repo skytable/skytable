@@ -24,24 +24,20 @@
  *
 */
 
-
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-
 
 /// Delete all the keys in the database
 pub async fn flushdb<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    if act.howmany() != 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
+    crate::err_if_len_is!(act, con, != 0);
     let failed;
     {
         if let Some(mut table) = handle.acquire_write() {
@@ -52,8 +48,8 @@ where
         }
     }
     if failed {
-        con.write_response(&**responses::fresp::R_SERVER_ERR).await
+        con.write_response(&**responses::groups::SERVER_ERR).await
     } else {
-        con.write_response(&**responses::fresp::R_OKAY).await
+        con.write_response(&**responses::groups::OKAY).await
     }
 }

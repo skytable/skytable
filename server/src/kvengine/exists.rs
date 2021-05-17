@@ -27,34 +27,25 @@
 //! # `EXISTS` queries
 //! This module provides functions to work with `EXISTS` queries
 
-
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::resp::GroupBegin;
-
 
 /// Run an `EXISTS` query
 pub async fn exists<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany == 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
-    // Write #<m>\n#<n>\n&1\n to the stream
-    con.write_response(GroupBegin(1)).await?;
+    crate::err_if_len_is!(act, con, == 0);
     let mut how_many_of_them_exist = 0usize;
     {
         let rhandle = handle.acquire_read();
         let cmap = rhandle.get_ref();
-        act.into_iter().for_each(|key| {
-            if cmap.contains_key(&key) {
+        act.into_iter().skip(1).for_each(|key| {
+            if cmap.contains_key(key.as_bytes()) {
                 how_many_of_them_exist += 1;
             }
         });

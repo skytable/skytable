@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.5.3 [2021-05-13]
+
+> No breaking changes
+
+Fix persistence (see [#150](https://github.com/skytable/skytable/issues/150))
+
 ## Version 0.5.2 [2021-05-07]
 
 > No breaking changes
@@ -125,13 +131,13 @@ The only significant change in the protocol is the new metalayout format: `#a#b#
 
 The disk storage format was changed rendering existing binary data files incompatible. However, if you have any existing data - which is important, open an issue - because we'll be able to provide a tool that can help you easily migrate your existing datasets - with a one line command - so - no worries!
 
-## Version 0.3.0 [2020-07-28]
+## Version 0.3.0 [2020-07-28] (⚠ EOL)
 
-> No breaking changes
+> No breaking changes.
 
 This version enables persistence for stored data
 
-## Version 0.2.0 [2020-07-27]
+## Version 0.2.0 [2020-07-27] (⚠ EOL)
 
 > This release introduces breaking changes
 
@@ -141,6 +147,6 @@ This release implements the latest version of the Terrapipe protocol.
 
 All clients have to reimplement the Terrapipe protocol to match the [latest spec](https://terrabasedb.github.io/docs/Protocols/unsupported-tp).
 
-## Version 0.1.0 [2020-07-17]
+## Version 0.1.0 [2020-07-17] (⚠ EOL)
 
 This release provides an experimental client and server implementation.

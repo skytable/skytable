@@ -25,28 +25,22 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::resp::GroupBegin;
-
 
 /// Get the number of keys in the database
 pub async fn dbsize<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    if act.howmany() != 0 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
+    crate::err_if_len_is!(act, con, != 0);
     let len;
     {
         len = handle.acquire_read().get_ref().len();
     }
-    con.write_response(GroupBegin(1)).await?;
     con.write_response(len).await?;
     Ok(())
 }

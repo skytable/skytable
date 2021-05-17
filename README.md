@@ -40,8 +40,9 @@ You can learn more about installation [here](https://skytable.github.io/docs/get
 ## Clients 🔌
 
 The project currently maintains an official [Rust driver](https://github.com/skytable/client-rust) and we have plans
-to support more languages along the way! If you want to use a different language, for now you'll just need to do
-implement the simple and performant [Terrapipe protocol spec](https://skytable.github.io/docs/protocol/terrapipe).
+to support more languages along the way!
+
+If you want to use a different language, for now you'll just need to implement the simple and performant [Skyhash Protocol Spec](https://skytable.github.io/docs/next/protocol/skyhash) or for versions prior to 0.6.0, the [Terrapipe Protocol Spec](https://skytable.github.io/docs/protocol/terrapipe).
 
 ## Community 👐
 
@@ -53,7 +54,7 @@ A project which is powered by the community believes in the power of community! 
 
 ## Platforms 💻
 
-![Linux supported](https://img.shields.io/badge/Linux%20x86__64-supported%20✓-228B22?style=flat-square&logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%20x86__64-supported%20✓-228B22?style=flat-square&logo=windows)
+![Linux supported](https://img.shields.io/badge/Linux%2032--bit%2F64--bit-Supported%20✓-%23228B22?logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%2032--bit%2F64--bit-supported%20✓-228B22?style=flat-square&logo=windows)
 
 ## Versioning 
 

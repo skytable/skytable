@@ -1,5 +1,5 @@
 name: Skytable Server
-version: 0.5.2
+version: 0.6.0
 author: Sayan N. <ohsayan@outlook.com>
 about: The Skytable Database server
 args:
@@ -79,3 +79,6 @@ args:
           long: sslonly
           takes_value: false
           help: Tells the server to only accept SSL connections and disables the non-SSL port
+subcommands:
+      - upgrade:
+            about: Upgrades old datsets to the latest format supported by this server edition

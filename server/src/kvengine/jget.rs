@@ -28,10 +28,7 @@
 //! #`JGET` queries
 //! Functions for handling `JGET` queries
 
-
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-
 
 /// Run a `JGET` query
 /// This returns a JSON key/value pair of keys and values
@@ -45,16 +42,13 @@ use crate::protocol::responses;
 pub async fn jget<T, Strm>(
     _handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany != 1 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
+    crate::err_if_len_is!(act, con, != 1);
     todo!()
 }
 

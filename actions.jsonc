@@ -156,5 +156,13 @@
         "args": "MKSNAP <SNAPNAME>",
         "desc": "This action can be used to create a snapshot. Do note that this action **requires snapshotting to be enabled on the server side**, before it can create snapshots.  \nIf you want to create snapshots **without** snapshots being enabled on the server-side, use a second argument (`[SNAPNAME]`) to specify a snapshot name and a snapshot will be create in a folder called `remote` under your snapshots directory.  \nFor more information on snapshots, read [this document](/snapshots)",
         "return": "Okay if succeeded, otherwise it returns `err-snapshot-disabled` if snapshotting is disabled or `err-snapshot-busy` if a snapshotting operation is already in progress"
+    },
+    {
+        "name": "LSKEYS",
+        "since": "0.6.0",
+        "complexity": "O(n)",
+        "args": "LSKEYS <limit>",
+        "desc": "Returns a flat string array of keys present in the database. If no <limit> is given, then a maximum of 10 keys are returned. If a limit is specified, then a maximum of <limit> keys are returned",
+        "return": "Returns a maximum of 10 keys if no limit is specified or returns a maximum number of keys for the given limit"
     }
 ]

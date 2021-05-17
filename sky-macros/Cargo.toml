@@ -1,6 +1,6 @@
 [package]
 name = "sky_macros"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
@@ -12,5 +12,4 @@ proc-macro = true
 [dependencies]
 syn = {version = "1.0.72", features = ["full"]}
 quote = "1.0.9"
-rand = "0.8.3"
 proc-macro2 = "1.0.26"

@@ -46,9 +46,11 @@ mod queryengine;
 mod resp;
 use coredb::CoreDB;
 use dbnet::run;
+mod compat;
 use env_logger::*;
 use libsky::util::terminal;
 use std::sync::Arc;
+mod services;
 use tokio::signal;
 #[cfg(test)]
 mod tests;
@@ -62,9 +64,9 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "Skytable v0.5.2 | https://github.com/skytable/skytable\n";
+static MSG: &'static str = "Skytable v0.6.0 | https://github.com/skytable/skytable";
 /// The terminal art for `!noart` configurations
-static TEXT: &'static str = "███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  \n                                                                  ";
+static TEXT: &'static str = "\n███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  ";
 
 fn main() {
     Builder::new()
@@ -77,10 +79,10 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let (db, mut descriptor) = runtime.block_on(async {
+    let db = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
             check_args_and_get_cfg().await;
-        let (db, descriptor) = run(
+        let db = run(
             tcplistener,
             bgsave_config,
             snapshot_config,
@@ -88,7 +90,7 @@ fn main() {
             restore_filepath,
         )
         .await;
-        (db, descriptor)
+        db
     });
     // Make sure all background workers terminate
     drop(runtime);
@@ -97,23 +99,22 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    // Try to acquire lock almost immediately
-    if let Err(e) = descriptor.reacquire() {
-        log::error!("Failed to reacquire lock on data file with error: '{}'", e);
-        panic!("FATAL: data file relocking failure");
-    }
-    if let Err(e) = flush_db!(db, descriptor) {
+    if let Err(e) = services::bgsave::_bgsave_blocking_section(&db) {
         log::error!("Failed to flush data to disk with '{}'", e);
         loop {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
             io::stdin().read(&mut [0]).unwrap();
-            if let Ok(_) = flush_db!(db, descriptor) {
-                log::info!("Successfully saved data to disk");
-                break;
-            } else {
-                continue;
+            match services::bgsave::_bgsave_blocking_section(&db) {
+                Ok(_) => {
+                    log::info!("Successfully saved data to disk");
+                    break;
+                }
+                Err(e) => {
+                    log::error!("Failed to flush data to disk with '{}'", e);
+                    continue;
+                }
             }
         }
     } else {
@@ -124,12 +125,7 @@ fn main() {
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-async fn check_args_and_get_cfg() -> (
-    PortConfig,
-    BGSave,
-    SnapshotConfig,
-    Option<String>,
-) {
+async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {

@@ -1,6 +1,6 @@
 [package]
 name = "libsky"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
@@ -11,3 +11,4 @@ lazy_static = "1.4.0"
 bytes = "1.0.1"
 termcolor = "1.1.2"
 regex = "1.5.4"
+skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = ["dbg"], default-features = false }

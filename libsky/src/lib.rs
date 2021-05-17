@@ -28,10 +28,36 @@
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
-pub mod terrapipe;
 pub mod util;
+use skytable::Query;
 use std::error::Error;
 /// A generic result
 pub type TResult<T> = Result<T, Box<dyn Error>>;
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
+
+use std::str::FromStr;
+
+lazy_static::lazy_static! {
+    static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
+}
+
+pub fn split_into_args(q: &str) -> Vec<String> {
+    let args: Vec<String> = RE
+        .find_iter(q)
+        .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
+        .collect();
+    args
+}
+
+pub fn turn_into_query(q: &str) -> Query {
+    let mut query = Query::new();
+    split_into_args(q).into_iter().for_each(|arg| {
+        query.arg(arg);
+    });
+    query
+}
+
+pub fn into_raw_query(q: &str) -> Vec<u8> {
+    turn_into_query(q).into_raw_query()
+}

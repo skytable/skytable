@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Thu May 13 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,17 +24,13 @@
  *
 */
 
-//! # `DEL` queries
-//! This module provides functions to work with `DEL` queries
-
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::resp::BytesWrapper;
+use bytes::Bytes;
 
-/// Run a `DEL` query
-///
-/// Do note that this function is blocking since it acquires a write lock.
-/// It will write an entire datagroup, for this `del` action
-pub async fn del<T, Strm>(
+/// Run an `LSKEYS` query
+pub async fn lskeys<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
     act: Vec<String>,
@@ -43,27 +39,31 @@ where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, == 0);
-    let done_howmany: Option<usize>;
-    {
-        if let Some(mut whandle) = handle.acquire_write() {
-            let mut many = 0;
-            let cmap = (*whandle).get_mut_ref();
-            act.into_iter().skip(1).for_each(|key| {
-                if cmap.remove(key.as_bytes()).is_some() {
-                    many += 1
-                }
-            });
-            drop(cmap);
-            drop(whandle);
-            done_howmany = Some(many);
+    crate::err_if_len_is!(act, con, > 1);
+    let item_count = if let Some(cnt) = act.get(1) {
+        if let Ok(cnt) = cnt.parse::<usize>() {
+            cnt
         } else {
-            done_howmany = None;
+            return con
+                .write_response(&**responses::groups::WRONGTYPE_ERR)
+                .await;
         }
-    }
-    if let Some(done_howmany) = done_howmany {
-        con.write_response(done_howmany).await
     } else {
-        con.write_response(&**responses::groups::SERVER_ERR).await
+        10
+    };
+    let items: Vec<Bytes>;
+    {
+        let rhandle = handle.acquire_read();
+        let reader = rhandle.get_ref();
+        items = reader
+            .keys()
+            .map(|key| key.get_blob().clone())
+            .take(item_count)
+            .collect();
     }
+    con.write_flat_array_length(items.len()).await?;
+    for item in items {
+        con.write_response(BytesWrapper(item)).await?;
+    }
+    Ok(())
 }

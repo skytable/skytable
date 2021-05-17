@@ -26,8 +26,6 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use crate::resp::GroupBegin;
-
 
 /// Run a `KEYLEN` query
 ///
@@ -35,18 +33,13 @@ use crate::resp::GroupBegin;
 pub async fn keylen<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
-    if howmany != 1 {
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
-    }
-    // Write #<m>\n#<n>\n&1\n to the stream
-    con.write_response(GroupBegin(1)).await?;
+    crate::err_if_len_is!(act, con, != 1);
     let res: Option<usize> = {
         let rhandle = handle.acquire_read();
         let reader = rhandle.get_ref();
@@ -54,7 +47,7 @@ where
             // UNSAFE(@ohsayan): get_unchecked() is completely safe as we've already checked
             // the number of arguments is one
             reader
-                .get(act.get_ref().get_unchecked(1))
+                .get(act.get_unchecked(1).as_bytes())
                 .map(|b| b.get_blob().len())
         }
     };

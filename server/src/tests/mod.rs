@@ -26,34 +26,72 @@
 
 //! This module contains automated tests for queries
 
-use crate::coredb::CoreDB;
-use crate::dbnet;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::TcpListener;
 mod kvengine;
 
-/// The function macro returns the name of a function
-#[macro_export]
-macro_rules! __func__ {
-    () => {{
-        fn f() {}
-        fn typename<T>(_: T) -> &'static str {
-            std::any::type_name::<T>()
+mod bgsave {
+    use crate::config::BGSave;
+    use crate::coredb::{htable::HTable, CoreDB, Data};
+    use crate::dbnet::Terminator;
+    use crate::diskstore;
+    use crate::services;
+    use services::bgsave::BGSAVE_DIRECTORY_TESTING_LOC;
+    use std::fs;
+    use std::sync::Arc;
+    use tokio::sync::broadcast;
+    use tokio::time::{self, Duration};
+    #[tokio::test]
+    async fn test_bgsave() {
+        // pre-initialize our maps for comparison
+        let mut map_should_be_with_one = HTable::new();
+        map_should_be_with_one.insert(
+            Data::from(String::from("sayan")),
+            Data::from_string("is testing bgsave".to_owned()),
+        );
+        #[allow(non_snake_case)]
+        let DUR_WITH_EPSILON: Duration = Duration::from_millis(1500) + Duration::from_secs(10);
+        let (signal, _) = broadcast::channel(1);
+        let datahandle = CoreDB::new_empty(Arc::new(None));
+        let bgsave_configuration = BGSave::Enabled(10);
+        let handle = tokio::spawn(services::bgsave::bgsave_scheduler(
+            datahandle.clone(),
+            bgsave_configuration,
+            Terminator::new(signal.subscribe()),
+        ));
+        // sleep for 10 seconds with epsilon 1.5s
+        time::sleep(DUR_WITH_EPSILON).await;
+        // we should get an empty map
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        assert!(saved.len() == 0);
+        // now let's quickly write some data
+        {
+            datahandle.acquire_write().unwrap().get_mut_ref().insert(
+                Data::from(String::from("sayan")),
+                Data::from("is testing bgsave".to_owned()),
+            );
         }
-        let fn_name = typename(f);
-        &fn_name[..fn_name.len() - 3]
-    }};
-}
-
-async fn start_test_server(port: u16, db: Option<CoreDB>) -> SocketAddr {
-    let mut socket = String::from("127.0.0.1:");
-    socket.push_str(&port.to_string());
-    let db = db.unwrap_or(CoreDB::new_empty(0, Arc::new(None)));
-    let listener = TcpListener::bind(socket)
-        .await
-        .expect(&format!("Failed to bind to port {}", port));
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move { dbnet::test_run(listener, db, tokio::signal::ctrl_c()).await });
-    addr
+        // sleep for 10 seconds with epsilon 1.5s
+        time::sleep(DUR_WITH_EPSILON).await;
+        // we should get a map with the one key
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        assert_eq!(saved, map_should_be_with_one);
+        // now let's remove all the data
+        {
+            datahandle.acquire_write().unwrap().get_mut_ref().clear();
+        }
+        // sleep for 10 seconds with epsilon 1.5s
+        time::sleep(DUR_WITH_EPSILON).await;
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        assert!(saved.len() == 0);
+        // drop the signal; all waiting tasks can now terminate
+        drop(signal);
+        handle.await.unwrap();
+        // check the file again after unlocking
+        let saved =
+            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
+        assert!(saved.len() == 0);
+        fs::remove_file(BGSAVE_DIRECTORY_TESTING_LOC).unwrap();
+    }
 }

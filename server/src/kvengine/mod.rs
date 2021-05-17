@@ -35,6 +35,7 @@ pub mod flushdb;
 pub mod get;
 pub mod jget;
 pub mod keylen;
+pub mod lskeys;
 pub mod mget;
 pub mod mset;
 pub mod mupdate;
@@ -44,19 +45,72 @@ pub mod update;
 pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
-    use crate::protocol;
     use crate::dbnet::connection::prelude::*;
+    use crate::protocol;
     use protocol::responses;
     /// Returns a `HEY!` `Response`
     pub async fn heya<T, Strm>(
         _handle: &crate::coredb::CoreDB,
         con: &mut T,
-        _act: crate::protocol::ActionGroup,
+        _act: Vec<String>,
     ) -> std::io::Result<()>
     where
         T: ProtocolConnectionExt<Strm>,
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
     {
-        con.write_response(&**responses::fresp::R_HEYA).await
+        con.write_response(&**responses::groups::HEYA).await
     }
+}
+
+#[macro_export]
+macro_rules! err_if_len_is {
+    ($buf:ident, $con:ident, == $len:literal) => {
+        if $buf.len() - 1 == $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, != $len:literal) => {
+        if $buf.len() - 1 != $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, > $len:literal) => {
+        if $buf.len() - 1 > $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, < $len:literal) => {
+        if $buf.len() - 1 < $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, >= $len:literal) => {
+        if $buf.len() - 1 >= $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, <= $len:literal) => {
+        if $buf.len() - 1 <= $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
+    ($buf:ident, $con:ident, & $len:literal) => {
+        if $buf.len() - 1 & $len {
+            return $con
+                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
 }

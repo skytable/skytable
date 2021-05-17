@@ -31,7 +31,6 @@
 mod benchtool {
     use clap::{load_yaml, App};
     use devtimer::DevTime;
-    use libsky::terrapipe;
     use rand::distributions::Alphanumeric;
     use rand::thread_rng;
     use serde::Serialize;
@@ -162,24 +161,26 @@ mod benchtool {
             Some(h) => h.to_owned(),
             None => "127.0.0.1".to_owned(),
         };
-        host.push(':');
-        match matches.value_of("port") {
+        let port = match matches.value_of("port") {
             Some(p) => match p.parse::<u16>() {
-                Ok(p) => host.push_str(&p.to_string()),
+                Ok(p) => p,
                 Err(_) => {
                     eprintln!("ERROR: Invalid port");
                     std::process::exit(0x100);
                 }
             },
-            None => host.push_str("2003"),
-        }
+            None => 2003,
+        };
         println!("Running a sanity test...");
-        // Run a ping test
-        if let Err(e) = sanity_test(&host) {
+        // Run a sanity test
+        if let Err(e) = sanity_test(&host, port) {
             eprintln!("ERROR: Sanity test failed: {}\nBenchmark terminated", e);
             return;
         }
         println!("Sanity test succeeded");
+        // now push in the port to the host string
+        host.push_str(":");
+        host.push_str(&port.to_string());
         let mut rand = thread_rng();
         if let Some(matches) = matches.subcommand_matches("testkey") {
             let numkeys = matches.value_of("count").unwrap();
@@ -195,7 +196,7 @@ mod benchtool {
                     .map(|_| ran_string(8, &mut rand))
                     .collect();
                 let set_packs: Vec<Vec<u8>> = (0..num)
-                    .map(|idx| terrapipe::proc_query(format!("SET {} {}", keys[idx], values[idx])))
+                    .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
                     .collect();
                 set_packs.into_iter().for_each(|packet| {
                     np.execute(packet);
@@ -254,13 +255,13 @@ mod benchtool {
         one of `set_packs`
         */
         let set_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| terrapipe::proc_query(format!("SET {} {}", keys[idx], values[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
             .collect();
         let get_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| terrapipe::proc_query(format!("GET {}", keys[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
             .collect();
         let del_packs: Vec<Vec<u8>> = (0..max_queries)
-            .map(|idx| terrapipe::proc_query(format!("DEL {}", keys[idx])))
+            .map(|idx| libsky::into_raw_query(&format!("DEL {}", keys[idx])))
             .collect();
         eprintln!("Per-packet size (GET): {} bytes", get_packs[0].len());
         eprintln!("Per-packet size (SET): {} bytes", set_packs[0].len());
@@ -314,50 +315,51 @@ mod benchtool {
     /// ## Limitations
     /// A 65535 character long key/value pair is created and fetched. This random string has extremely low
     /// chances of colliding with any existing key
-    fn sanity_test(host: &String) -> Result<(), Box<dyn Error>> {
-        let mut sock = TcpStream::connect(host)
-            .map_err(|e| format!("connection to host failed with error '{}'", e))?;
-        let query = terrapipe::proc_query("HEYA");
-        sock.write_all(&query)
-            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
-        let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        sock.read_exact(&mut response)
-            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
-        if response != res_should_be {
+    fn sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
+        use skytable::{Connection, Element, Query, RespCode, Response};
+        let mut rng = thread_rng();
+        let mut connection = Connection::new(host, port)?;
+        // test heya
+        let mut query = Query::new();
+        query.arg("heya");
+        if !connection
+            .run_simple_query(query)
+            .unwrap()
+            .eq(&Response::Item(Element::String("HEY!".to_owned())))
+        {
             return Err("HEYA test failed".into());
         }
-        let mut ran = thread_rng();
-        let key = ran_string(65535, &mut ran);
-        let value = ran_string(65535, &mut ran);
-        let query = terrapipe::proc_query(format!("SET {} {}", key, value));
-        sock.write_all(&query)
-            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
-        let res_should_be = "#2\n*1\n#2\n&1\n!1\n0\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        sock.read_exact(&mut response)
-            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
-        if response != res_should_be {
+        let key = ran_string(65536, &mut rng);
+        let value = ran_string(65536, &mut rng);
+        let mut query = Query::new();
+        query.arg("set");
+        query.arg(&key);
+        query.arg(&value);
+        if !connection
+            .run_simple_query(query)
+            .unwrap()
+            .eq(&Response::Item(Element::RespCode(RespCode::Okay)))
+        {
             return Err("SET test failed".into());
         }
-        let query = terrapipe::proc_query(format!("GET {}", key));
-        sock.write_all(&query)
-            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
-        let res_should_be = format!("#2\n*1\n#2\n&1\n+65535\n{}\n", value).into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        sock.read_exact(&mut response)
-            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
-        if response != res_should_be {
+        let mut query = Query::new();
+        query.arg("get");
+        query.arg(&key);
+        if !connection
+            .run_simple_query(query)
+            .unwrap()
+            .eq(&Response::Item(Element::String(value.to_owned())))
+        {
             return Err("GET test failed".into());
         }
-        let query = terrapipe::proc_query(format!("DEL {}", key));
-        sock.write_all(&query)
-            .map_err(|e| format!("couldn't write data to socket with error '{}'", e))?;
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        sock.read_exact(&mut response)
-            .map_err(|e| format!("couldn't read data from socket with error '{}'", e))?;
-        if response != res_should_be {
+        let mut query = Query::new();
+        query.arg("del");
+        query.arg(&key);
+        if !connection
+            .run_simple_query(query)
+            .unwrap()
+            .eq(&Response::Item(Element::UnsignedInt(1)))
+        {
             return Err("DEL test failed".into());
         }
         Ok(())

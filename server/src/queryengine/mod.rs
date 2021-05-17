@@ -30,7 +30,7 @@ use crate::coredb::CoreDB;
 use crate::dbnet::connection::prelude::*;
 use crate::gen_match;
 use crate::protocol::responses;
-use crate::protocol::ActionGroup;
+use crate::protocol::Element;
 use crate::{admin, kvengine};
 
 mod tags {
@@ -70,26 +70,19 @@ mod tags {
     pub const TAG_KEYLEN: &'static str = "KEYLEN";
     /// `MKSNAP` action tag
     pub const TAG_MKSNAP: &'static str = "MKSNAP";
+    /// `LSKEYS` action tag
+    pub const TAG_LSKEYS: &str = "LSKEYS";
 }
 
 /// Execute a simple(*) query
-pub async fn execute_simple<T, Strm>(
-    db: &CoreDB,
-    con: &mut T,
-    buf: ActionGroup,
-) -> std::io::Result<()>
+pub async fn execute_simple<T, Strm>(db: &CoreDB, con: &mut T, buf: Element) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     let first = match buf.get_first() {
-        None => {
-            return con
-                .write_response(responses::fresp::R_PACKET_ERR.to_owned())
-                .await
-                .map_err(|e| e.into());
-        }
-        Some(f) => f.to_uppercase(),
+        Some(element) => element.to_uppercase(),
+        None => return con.write_response(&**responses::groups::PACKET_ERR).await,
     };
     gen_match!(
         first,
@@ -112,7 +105,8 @@ where
         tags::TAG_FLUSHDB => kvengine::flushdb::flushdb,
         tags::TAG_USET => kvengine::uset::uset,
         tags::TAG_KEYLEN => kvengine::keylen::keylen,
-        tags::TAG_MKSNAP => admin::mksnap::mksnap
+        tags::TAG_MKSNAP => admin::mksnap::mksnap,
+        tags::TAG_LSKEYS => kvengine::lskeys::lskeys
     );
     Ok(())
 }
@@ -123,16 +117,21 @@ where
 /// **NOTE:** This macro needs _paths_ for both sides of the $x => $y, to produce something sensible
 macro_rules! gen_match {
     ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:path => $y:path),*) => {
+        let flat_array = if let crate::protocol::Element::FlatArray(array) = $buf {
+            array
+        } else {
+            return $con.write_response(&**responses::groups::WRONGTYPE_ERR).await;
+        };
         match $pre.as_str() {
             // First repeat over all the $x => $y patterns, passing in the variables
             // and adding .await calls and adding the `?`
             $(
-                $x => $y($db, $con, $buf).await?,
+                $x => $y($db, $con, flat_array).await?,
             )*
             // Now add the final case where no action is matched
             _ => {
-                $con.write_response(responses::fresp::R_UNKNOWN_ACTION.to_owned())
-                .await?;
+                return $con.write_response(&**responses::groups::UNKNOWN_ACTION)
+                .await;
             },
         }
     };

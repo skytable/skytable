@@ -1,6 +1,6 @@
 [package]
 name = "sky-bench"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
@@ -9,7 +9,10 @@ edition = "2018"
 [dependencies]
 rand = "0.8.3"
 devtimer = "4.0.1"
-libsky = {path="../libsky"}
-clap = {version = "2.33.3", features=["yaml"]}
-serde = {version="1.0.125", features=["derive"]}
+skytable = { git = "https://github.com/skytable/client-rust", branch = "next" }
+clap = { version = "2.33.3", features = ["yaml"] }
+serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0.64"
+regex = "1.5.4"
+lazy_static = "1.4.0"
+libsky = {path = "../libsky"}

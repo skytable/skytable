@@ -27,7 +27,7 @@
 //! Utilities for generating responses, which are only used by the `server`
 //!
 use bytes::Bytes;
-use libsky::terrapipe::RespCodes;
+use skytable::RespCode;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::pin::Pin;
@@ -59,7 +59,7 @@ pub trait IsConnection: std::marker::Sync + std::marker::Send {
     fn write_lowlevel<'s>(
         &'s mut self,
         bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>>;
 }
 
 impl<T> IsConnection for T
@@ -69,8 +69,8 @@ where
     fn write_lowlevel<'s>(
         &'s mut self,
         bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<usize, IoError>> + Send + Sync + 's>> {
-        Box::pin(self.write(bytes))
+    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>> {
+        Box::pin(self.write_all(bytes))
     }
 }
 
@@ -81,16 +81,6 @@ where
 /// an impl for `fmt::Display` may be implemented upstream
 #[derive(Debug, PartialEq)]
 pub struct BytesWrapper(pub Bytes);
-
-/// This indicates the beginning of a response group in a response.
-///
-/// It holds the number of items to be written and writes:
-/// ```text
-/// #<self.0.to_string().len().to_string().into_bytes()>\n
-/// &<self.0.to_string()>\n
-/// ```
-#[derive(Debug, PartialEq)]
-pub struct GroupBegin(pub usize);
 
 impl BytesWrapper {
     pub fn finish_into_bytes(self) -> Bytes {
@@ -151,13 +141,13 @@ impl Writable for BytesWrapper {
     }
 }
 
-impl Writable for RespCodes {
+impl Writable for RespCode {
     fn write<'s>(
         self,
         con: &'s mut impl IsConnection,
     ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
-        async fn write_bytes(con: &mut impl IsConnection, code: RespCodes) -> Result<(), IoError> {
-            if let RespCodes::OtherError(Some(e)) = code {
+        async fn write_bytes(con: &mut impl IsConnection, code: RespCode) -> Result<(), IoError> {
+            if let RespCode::ErrorString(e) = code {
                 // Since this is an other error which contains a description
                 // we'll write !<no_of_bytes> followed by the string
                 con.write_lowlevel(&[b'!']).await?;
@@ -191,32 +181,6 @@ impl Writable for RespCodes {
             Ok(())
         }
         Box::pin(write_bytes(con, self))
-    }
-}
-
-impl Writable for GroupBegin {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
-        async fn write_bytes(con: &mut impl IsConnection, size: usize) -> Result<(), IoError> {
-            con.write_lowlevel(b"#2\n*1\n").await?;
-            // First write a `#` which indicates that the next bytes give the
-            // prefix length
-            con.write_lowlevel(&[b'#']).await?;
-            let group_len_as_bytes = size.to_string().into_bytes();
-            let group_prefix_len_as_bytes = (group_len_as_bytes.len() + 1).to_string().into_bytes();
-            // Now write Self's len as bytes
-            con.write_lowlevel(&group_prefix_len_as_bytes).await?;
-            // Now write a LF and '&' which signifies the beginning of a datagroup
-            con.write_lowlevel(&[b'\n', b'&']).await?;
-            // Now write the number of items in the datagroup as bytes
-            con.write_lowlevel(&group_len_as_bytes).await?;
-            // Now write a '\n' character
-            con.write_lowlevel(&[b'\n']).await?;
-            Ok(())
-        }
-        Box::pin(write_bytes(con, self.0))
     }
 }
 

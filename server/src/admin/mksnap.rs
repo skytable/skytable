@@ -37,83 +37,72 @@ use std::path::{Component, PathBuf};
 pub async fn mksnap<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany == 0 {
         if !handle.is_snapshot_enabled() {
             // Since snapshotting is disabled, we can't create a snapshot!
             // We'll just return an error returning the same
             return con
-                .write_response(&**responses::fresp::R_SNAPSHOT_DISABLED)
+                .write_response(&**responses::groups::SNAPSHOT_DISABLED)
                 .await;
         }
         // We will just follow the standard convention of creating snapshots
         let mut was_engine_error = false;
-        let mut snap_result = None;
-        let mut engine_was_busy = false;
-        {
-            let snaphandle = handle.snapcfg.clone();
-            let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan) This is safe as we've already checked
-                // if snapshots are enabled or not with `is_snapshot_enabled`
-                unreachable_unchecked()
-            });
-            let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
-            if snapengine.is_err() {
-                was_engine_error = true;
-            } else {
-                if snapstatus.is_busy() {
-                    engine_was_busy = true;
-                } else {
-                    let mut snapengine = snapengine.unwrap_or_else(|_| unsafe {
-                        // UNSAFE(@ohsayan) This is safe as we've already checked
-                        // if snapshots are enabled or not with `is_snapshot_enabled`
-                        unreachable_unchecked()
-                    });
+        let mut succeeded = None;
 
-                    snap_result = snapengine.mksnap();
-                }
+        let snaphandle = handle.snapcfg.clone();
+        let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
+            // UNSAFE(@ohsayan) This is safe as we've already checked
+            // if snapshots are enabled or not with `is_snapshot_enabled`
+            unreachable_unchecked()
+        });
+        let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
+        if snapengine.is_err() {
+            was_engine_error = true;
+        } else {
+            if snapstatus.is_busy() {
+                succeeded = None;
+            } else {
+                let snapengine = snapengine.unwrap_or_else(|_| unsafe {
+                    // UNSAFE(@ohsayan) This is safe as we've already checked
+                    // if snapshots are enabled or not with `is_snapshot_enabled`
+                    unreachable_unchecked()
+                });
+                succeeded = Some(snapengine);
             }
         }
         if was_engine_error {
             return con
-                .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                .write_response(responses::groups::SERVER_ERR.to_owned())
                 .await;
         }
-        if engine_was_busy {
-            return con
-                .write_response(&**responses::fresp::R_SNAPSHOT_BUSY)
-                .await;
-        }
-        if let Some(succeeded) = snap_result {
+        if let Some(mut succeeded) = succeeded {
+            let succeeded = succeeded.mksnap().await;
             if succeeded {
                 // Snapshotting succeeded, return Okay
-                return con
-                    .write_response(responses::fresp::R_OKAY.to_owned())
-                    .await;
+                return con.write_response(responses::groups::OKAY.to_owned()).await;
             } else {
                 // Nope, something happened while creating a snapshot
                 // return a server error
                 return con
-                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .write_response(responses::groups::SERVER_ERR.to_owned())
                     .await;
             }
         } else {
-            // We shouldn't ever reach here if all our logic is correct
-            // but if we do, something is wrong with the runtime
             return con
-                .write_response(&**responses::fresp::R_ERR_ACCESS_AFTER_TERMSIG)
+                .write_response(&**responses::groups::SNAPSHOT_BUSY)
                 .await;
         }
     } else {
         if howmany == 1 {
             // This means that the user wants to create a 'named' snapshot
-            let snapname = act.get_ref().get(1).unwrap_or_else(|| unsafe {
+            let snapname = act.get(1).unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): We've already checked that the action
                 // contains a second argument, so this can't be reached
                 unreachable_unchecked()
@@ -134,7 +123,7 @@ where
                 != 0;
             if illegal_snapshot {
                 return con
-                    .write_response(&**responses::fresp::R_SNAPSHOT_ILLEGAL_NAME)
+                    .write_response(&**responses::groups::SNAPSHOT_ILLEGAL_NAME)
                     .await;
             }
             let failed;
@@ -149,16 +138,14 @@ where
             }
             if failed {
                 return con
-                    .write_response(responses::fresp::R_SERVER_ERR.to_owned())
+                    .write_response(responses::groups::SERVER_ERR.to_owned())
                     .await;
             } else {
-                return con
-                    .write_response(responses::fresp::R_OKAY.to_owned())
-                    .await;
+                return con.write_response(responses::groups::OKAY.to_owned()).await;
             }
         } else {
             return con
-                .write_response(responses::fresp::R_ACTION_ERR.to_owned())
+                .write_response(responses::groups::ACTION_ERR.to_owned())
                 .await;
         }
     }

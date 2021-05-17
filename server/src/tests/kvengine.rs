@@ -32,664 +32,1026 @@
 //! and its data is destroyed; but the spawned database instances are started up in a way to not store any
 //! data at all, so this is just a precautionary step.
 
-#[sky_macros::dbtest(skip = "set_values")]
+#[sky_macros::dbtest]
 mod __private {
-    use crate::protocol::responses::fresp;
-    use libsky::terrapipe;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    #[cfg(test)]
+    use skytable::{Element, Query, RespCode, Response};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
-        let heya = terrapipe::proc_query("HEYA");
-        stream.write_all(&heya).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n+4\nHEY!\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        query.arg("heya");
+        let resp = con.run_simple_query(query).await.unwrap();
+        assert_eq!(resp, Response::Item(Element::String("HEY!".to_owned())));
     }
 
     /// Test a GET query: for a non-existing key
     async fn test_get_single_nil() {
-        let get_single_nil = terrapipe::proc_query("GET x");
-        stream.write_all(&get_single_nil).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        query.arg("get");
+        query.arg("x");
+        let resp = con.run_simple_query(query).await.unwrap();
+        assert_eq!(resp, Response::Item(Element::RespCode(RespCode::NotFound)));
     }
 
     /// Test a GET query: for an existing key
     async fn test_get_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let get_single_nil = terrapipe::proc_query("GET x");
-        stream.write_all(&get_single_nil).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n+3\n100\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        query.arg("set");
+        query.arg("x");
+        query.arg("100");
+        let resp = con.run_simple_query(query).await.unwrap();
+        assert_eq!(resp, Response::Item(Element::RespCode(RespCode::Okay)));
+        let mut query = Query::new();
+        query.arg("get");
+        query.arg("x");
+        let resp = con.run_simple_query(query).await.unwrap();
+        assert_eq!(resp, Response::Item(Element::String("100".to_owned())));
     }
 
     /// Test a GET query with an incorrect number of arguments
     async fn test_get_syntax_error() {
-        let syntax_error = terrapipe::proc_query("GET");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)");
-        let syntax_error = terrapipe::proc_query("GET one two");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With two arg(s)");
-    }
-
-    /// Set a couple of values, which are to be passed as a list of whitespace separated values
-    ///
-    ///
-    /// `howmany` is the number of values, which really depends on the calling query:
-    /// it can be n/2 for set, n/1 for get and so on. To avoid unnecessary complexity,
-    /// we'll tell the caller to explicitly specify how many keys we should expect
-    async fn set_values<T>(
-        values_split_with_whitespace: T,
-        homwany: usize,
-        stream: &mut tokio::net::TcpStream,
-    ) where
-        T: AsRef<str>,
-    {
-        use tokio::io::AsyncWriteExt;
-        let mut query = String::from("MSET ");
-        query.push_str(values_split_with_whitespace.as_ref());
-        let count_bytes_len = homwany.to_string().as_bytes().len();
-        let q = libsky::terrapipe::proc_query(query);
-        stream.write_all(&q).await.unwrap();
-        let res_should_be =
-            format!("#2\n*1\n#2\n&1\n:{}\n{}\n", count_bytes_len, homwany).into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        query.arg("get");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+        let mut query = Query::new();
+        query.arg("get");
+        query.arg("x");
+        query.arg("y");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test a SET query: SET a non-existing key, which should return code: 0
     async fn test_set_single_okay() {
-        let set_single_okay = terrapipe::proc_query("SET x 100");
-        stream.write_all(&set_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        query.arg("sEt");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test a SET query: SET an existing key, which should return code: 2
     async fn test_set_single_overwrite_error() {
-        set_values("x 100", 1, &mut stream).await;
-        let set_single_code_2 = terrapipe::proc_query("SET x 200");
-        stream.write_all(&set_single_code_2).await.unwrap();
-        let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
+        // first set the key
+        query.arg("set");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // attempt the same thing again
+        let mut query = Query::new();
+        query.arg("set");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::OverwriteError))
+        );
     }
 
     /// Test a SET query with incorrect number of arugments
     async fn test_set_syntax_error() {
-        let syntax_error = terrapipe::proc_query("SET");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)",);
-        let syntax_error = terrapipe::proc_query("SET one");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With one arg(s)",);
-        let syntax_error = terrapipe::proc_query("SET one 1 two 2");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With four arg(s)",);
+        query.arg("set");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+        let mut query = Query::new();
+        query.arg("set");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test an UPDATE query: which should return code: 0
     async fn test_update_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("UPDATE x 200");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // first set the key
+        query.arg("set");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // attempt to update it
+        let mut query = Query::new();
+        query.arg("update");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test an UPDATE query: which should return code: 1
     async fn test_update_single_nil() {
-        let update_single_okay = terrapipe::proc_query("UPDATE x 200");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        // attempt to update it
+        query.arg("update");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::NotFound))
+        );
     }
 
     async fn test_update_syntax_error() {
-        let syntax_error = terrapipe::proc_query("UPDATE");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With zero arg(s)",);
-        let syntax_error = terrapipe::proc_query("UPDATE one");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With one arg(s)",);
-        let syntax_error = terrapipe::proc_query("UPDATE one 1 two 2");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned(), "With four arg(s)",);
+        query.arg("update");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+        let mut query = Query::new();
+        query.arg("update");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test a DEL query: which should return int 0
     async fn test_del_single_zero() {
-        let update_single_okay = terrapipe::proc_query("DEL x");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        query.arg("del");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(0))
+        );
     }
 
     /// Test a DEL query: which should return int 1
     async fn test_del_single_one() {
-        set_values("x 100", 1, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("DEL x");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the key
+        query.arg("set");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now delete it
+        let mut query = Query::new();
+        query.arg("del");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(1))
+        );
     }
 
     /// Test a DEL query: which should return the number of keys deleted
     async fn test_del_multiple() {
-        set_values("x 100 y 200 z 300", 3, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("DEL x y z");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now delete them
+        let mut query = Query::new();
+        query.arg("del");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test a DEL query with an incorrect number of arguments
     async fn test_del_syntax_error() {
-        let syntax_error = terrapipe::proc_query("DEL");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("del");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
-    /// Test an EXISTS query for mixed outcomes
-    async fn test_exists_multiple_mixed() {
-        set_values("x ex y why z zed", 3, &mut stream).await;
-        let query = terrapipe::proc_query("EXISTS x");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With one arg(s)");
-        let query = terrapipe::proc_query("EXISTS x y z");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With three arg(s)",);
+    /// Test an EXISTS query
+    async fn test_exists_multiple() {
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now check if they exist
+        let mut query = Query::new();
+        query.arg("exists");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        query.arg("a");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test an EXISTS query with an incorrect number of arguments
     async fn test_exists_syntax_error() {
-        let syntax_error = terrapipe::proc_query("EXISTS");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("exists");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test an MGET query on a single existing key
-    async fn test_mget_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let query = terrapipe::proc_query("MGET x");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n+3\n100\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
-    }
-
-    /// Test an MGET query on multiple existing keys
-    async fn test_mget_multiple_allokay() {
-        set_values("x 100 y 200 z 300", 3, &mut stream).await;
-        let query = terrapipe::proc_query("MGET x y z");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&3\n+3\n100\n+3\n200\n+3\n300\n"
-            .to_owned()
-            .into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+    async fn test_mget_multiple_okay() {
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now get them
+        let mut query = Query::new();
+        query.arg("mget");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::Array(vec![
+                Element::String("100".to_owned()),
+                Element::String("200".to_owned()),
+                Element::String("300".to_owned())
+            ]))
+        );
     }
 
     /// Test an MGET query with different outcomes
     async fn test_mget_multiple_mixed() {
-        set_values("x 100 z 200", 2, &mut stream).await;
-        let query = terrapipe::proc_query("mget x y z");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&3\n+3\n100\n!1\n1\n+3\n200\n"
-            .to_owned()
-            .into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        let mut query = Query::new();
+        query.arg("mget");
+        query.arg("x");
+        query.arg("y");
+        query.arg("a");
+        query.arg("z");
+        query.arg("b");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::Array(vec![
+                Element::String("100".to_owned()),
+                Element::String("200".to_owned()),
+                Element::RespCode(RespCode::NotFound),
+                Element::String("300".to_owned()),
+                Element::RespCode(RespCode::NotFound)
+            ]))
+        );
     }
 
     /// Test an MGET query with an incorrect number of arguments
     async fn test_mget_syntax_error() {
-        let syntax_error = terrapipe::proc_query("MGET");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mget");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
-    /// Test an MSET query with a single non-existing keys
+    /// Test an MSET query with a single non-existing key
     async fn test_mset_single_okay() {
-        let query = terrapipe::proc_query("MSET x ex");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(1))
+        );
     }
 
     /// Test an MSET query with non-existing keys
     async fn test_mset_multiple_okay() {
-        let query = terrapipe::proc_query("MSET x ex y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test an MSET query with a mixed set of outcomes
     async fn test_mset_multiple_mixed() {
-        set_values("x ex", 1, &mut stream).await;
-        let query = terrapipe::proc_query("MSET x ex y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n2\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
-        // Now all the keys have been set, so we should get a 0
-        let query = terrapipe::proc_query("MSET x ex y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now try to set them again with just another new key
+        let mut query = Query::new();
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apple");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(1))
+        );
     }
 
     /// Test an MSET query with the wrong number of arguments
     async fn test_mset_syntax_error_args_one() {
-        let syntax_error = terrapipe::proc_query("MSET");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mset");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
     async fn test_mset_syntax_error_args_three() {
-        let syntax_error = terrapipe::proc_query("MSET x ex y");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mset");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
-    /// Test an MUPDATE query with a single non-existing keys
+    /// Test an MUPDATE query with a single non-existing key
     async fn test_mupdate_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let query = terrapipe::proc_query("MUPDATE x ex");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the key
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(1))
+        );
+        // now attempt to update it
+        // first set the keys
+        let mut query = Query::new();
+        query.arg("mupdate");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(1))
+        );
     }
 
     /// Test an MUPDATE query with a mixed set of outcomes
     async fn test_mupdate_multiple_mixed() {
-        set_values("x ex", 1, &mut stream).await;
-        let query = terrapipe::proc_query("MUPDATE x ex y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n1\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With 3 k/v pair(s)");
-        // None of these keys exist, so we should get a 0
-        let query = terrapipe::proc_query("MUPDATE y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be, "With 2 k/v pair(s)");
+        // first set the keys
+        query.arg("mset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now try to update them with just another new key
+        let mut query = Query::new();
+        query.arg("mupdate");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apple");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test an MUPDATE query with the wrong number of arguments
     async fn test_mupdate_syntax_error_args_one() {
-        let syntax_error = terrapipe::proc_query("MUPDATE");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mupdate");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     async fn test_mupdate_syntax_error_args_three() {
-        let syntax_error = terrapipe::proc_query("MUPDATE x ex y");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mupdate");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test an SSET query: which should return code: 0
     async fn test_sset_single_okay() {
-        let sset_single_okay = terrapipe::proc_query("SSET x 200");
-        stream.write_all(&sset_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test an SSET query: which should return code: 2
     async fn test_sset_single_overwrite_error() {
-        set_values("x 200", 1, &mut stream).await;
-        let sset_single_error = terrapipe::proc_query("SSET x 200");
-        stream.write_all(&sset_single_error).await.unwrap();
-        let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
+        // first set the keys
+        query.arg("set");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now attempt to overwrite it
+        let mut query = Query::new();
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::OverwriteError))
+        );
     }
 
     /// Test an SSET query: which should return code: 0
     async fn test_sset_multiple_okay() {
-        let update_single_okay = terrapipe::proc_query("SSET x 100 y 200 z 300");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test an SSET query: which should return code: 2
     async fn test_sset_multiple_overwrite_error() {
-        set_values("x ex", 1, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("SSET x 100 y 200 z 300");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OVERWRITE_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OVERWRITE_ERR.to_owned());
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now attempt to sset again with just one new extra key
+        let mut query = Query::new();
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("b");
+        query.arg("bananas");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::OverwriteError))
+        );
     }
 
     /// Test an SSET query with the wrong number of arguments
     async fn test_sset_syntax_error_args_one() {
-        let syntax_error = terrapipe::proc_query("SSET");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("sset");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     async fn test_sset_syntax_error_args_three() {
-        let syntax_error = terrapipe::proc_query("SSET x ex y");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("sset");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test an SUPDATE query: which should return code: 0
     async fn test_supdate_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("SUPDATE x 200");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // set the key
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // update it
+        let mut query = Query::new();
+        query.arg("supdate");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test an SUPDATE query: which should return code: 1
     async fn test_supdate_single_nil() {
-        let update_single_okay = terrapipe::proc_query("SUPDATE x 200");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        query.arg("supdate");
+        query.arg("x");
+        query.arg("200");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::NotFound))
+        );
     }
 
     /// Test an SUPDATE query: which should return code: 0
     async fn test_supdate_multiple_okay() {
-        set_values("x ex y why z zed", 3, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("SUPDATE x 100 y 200 z 300");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now update all of them
+        let mut query = Query::new();
+        query.arg("supdate");
+        query.arg("x");
+        query.arg("200");
+        query.arg("y");
+        query.arg("300");
+        query.arg("z");
+        query.arg("400");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
-    /// Test an SUPDATE query: which should return code: 0
     async fn test_supdate_multiple_nil() {
-        set_values("x ex", 1, &mut stream).await;
-        let update_single_okay = terrapipe::proc_query("SUPDATE x 100 y 200 z 300");
-        stream.write_all(&update_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        // no keys exist, so we get a nil
+        query.arg("supdate");
+        query.arg("x");
+        query.arg("200");
+        query.arg("y");
+        query.arg("300");
+        query.arg("z");
+        query.arg("400");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::NotFound))
+        );
     }
 
     /// Test an SUPDATE query with the wrong number of arguments
     async fn test_supdate_syntax_error_args_one() {
-        let syntax_error = terrapipe::proc_query("SUPDATE");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("mupdate");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
-    async fn test_supdate_syntax_error_args_two() {
-        let syntax_error = terrapipe::proc_query("SUPDATE x ex y");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+    async fn test_supdate_syntax_error_args_three() {
+        query.arg("mupdate");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test an SDEL query: which should return nil
     async fn test_sdel_single_nil() {
-        let sdel_single_nil = terrapipe::proc_query("SDEL x");
-        stream.write_all(&sdel_single_nil).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        query.arg("sdel");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::NotFound))
+        );
     }
 
     /// Test an SDEL query: which should return okay
     async fn test_sdel_single_okay() {
-        set_values("x 100", 1, &mut stream).await;
-        let sdel_single_okay = terrapipe::proc_query("SDEL x");
-        stream.write_all(&sdel_single_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        let mut query = Query::new();
+        query.arg("sdel");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
     /// Test an SDEL query: which should return okay
     async fn test_sdel_multiple_okay() {
-        set_values("x 100 y 200 z 300", 3, &mut stream).await;
-        let sdel_okay = terrapipe::proc_query("SDEL x y z");
-        stream.write_all(&sdel_okay).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now delete them
+        let mut query = Query::new();
+        query.arg("sdel");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
     }
 
-    /// Test an SDEL query: which should return okay
     async fn test_sdel_multiple_nil() {
-        set_values("x 100 y 200", 2, &mut stream).await;
-        let sdel_nil = terrapipe::proc_query("SDEL x y z");
-        stream.write_all(&sdel_nil).await.unwrap();
-        let mut response = vec![0; fresp::R_NIL.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_NIL.to_owned());
+        query.arg("sdel");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::NotFound))
+        );
     }
 
     /// Test an SDEL query with an incorrect number of arguments
     async fn test_sdel_syntax_error() {
-        let syntax_error = terrapipe::proc_query("SDEL");
-        stream.write_all(&syntax_error).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("sdel");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test a `DBSIZE` query
-    async fn test_dbsize_mixed() {
-        set_values(
-            "x ex y why z zed a firstalphabet b secondalphabet",
-            5,
-            &mut stream,
-        )
-        .await;
-        let query = terrapipe::proc_query("DBSIZE");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n5\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+    async fn test_dbsize() {
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now check the size
+        let mut query = Query::new();
+        query.arg("dbsize");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test `DBSIZE` with an incorrect number of arguments
     async fn test_dbsize_syntax_error() {
-        let query = terrapipe::proc_query("DBSIZE x y z");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("dbsize");
+        query.arg("iroegjoeijgor");
+        query.arg("roigjoigjj094");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test `FLUSHDB`
     async fn test_flushdb_okay() {
-        set_values(
-            "x ex y why z zed a firstalphabet b secondalphabet",
-            5,
-            &mut stream,
-        )
-        .await;
-        let query = terrapipe::proc_query("FLUSHDB");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; fresp::R_OKAY.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_OKAY.to_owned());
-        let query = terrapipe::proc_query("DBSIZE");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n0\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the keys
+        query.arg("sset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now flush the database
+        let mut query = Query::new();
+        query.arg("flushdb");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now check the size
+        let mut query = Query::new();
+        query.arg("dbsize");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(0))
+        );
     }
 
     /// Test `FLUSHDB` with an incorrect number of arguments
     async fn test_flushdb_syntax_error() {
-        let query = terrapipe::proc_query("FLUSHDB x y z");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("flushdb");
+        query.arg("x");
+        query.arg("y");
+        query.arg("z");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test `USET` which returns okay
     ///
     /// `USET` almost always returns okay for the correct number of key(s)/value(s)
     async fn test_uset_all_okay() {
-        set_values("x 100 y 200 z 300", 3, &mut stream).await;
-        let query = terrapipe::proc_query("USET x ex y why z zed");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n3\n".as_bytes().to_owned();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
+        // now that the keys already exist, do it all over again
+        let mut query = Query::new();
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test `USET` with an incorrect number of arguments
     async fn test_uset_syntax_error_args_one() {
-        let query = terrapipe::proc_query("USET");
-        let mut resp1 = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.write_all(&query).await.unwrap();
-        stream.read_exact(&mut resp1).await.unwrap();
-        assert_eq!(resp1, fresp::R_ACTION_ERR.to_owned());
+        query.arg("uset");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
-    async fn test_uset_syntax_error_args_two() {
-        let mut resp2 = vec![0; fresp::R_ACTION_ERR.len()];
-        let query2 = terrapipe::proc_query("USET x");
-        stream.write_all(&query2).await.unwrap();
-        stream.read_exact(&mut resp2).await.unwrap();
-        assert_eq!(resp2, fresp::R_ACTION_ERR.to_owned(),);
+    async fn test_uset_syntax_error_args_three() {
+        query.arg("uset");
+        query.arg("one");
+        query.arg("two");
+        query.arg("three");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 
     /// Test `KEYLEN`
     async fn test_keylen() {
-        set_values("4 four", 1, &mut stream).await;
-        let query = terrapipe::proc_query("keylen 4");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n:1\n4\n".to_owned().into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, res_should_be);
+        // first set the key
+        query.arg("set");
+        query.arg("x");
+        query.arg("helloworld");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now check for the length
+        let mut query = Query::new();
+        query.arg("keylen");
+        query.arg("x");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(10))
+        );
     }
 
     /// Test `KEYLEN` with an incorrect number of arguments
     async fn test_keylen_syntax_error_args_one() {
-        let query = terrapipe::proc_query("KEYLEN");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("keylen");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
     async fn test_keylen_syntax_error_args_two() {
-        let query = terrapipe::proc_query("KEYLEN x y");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; fresp::R_ACTION_ERR.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(response, fresp::R_ACTION_ERR.to_owned());
+        query.arg("keylen");
+        query.arg("x");
+        query.arg("y");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
     async fn test_mksnap_disabled() {
-        let query = terrapipe::proc_query("MKSNAP");
-        stream.write_all(&query).await.unwrap();
-        let res_should_be = "#2\n*1\n#2\n&1\n!21\nerr-snapshot-disabled\n"
-            .to_owned()
-            .into_bytes();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(res_should_be, response);
+        query.arg("mksnap");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ErrorString(
+                "err-snapshot-disabled".to_owned()
+            )))
+        );
     }
     async fn test_mksnap_sanitization() {
-        let res_should_be = "#2\n*1\n#2\n&1\n!25\nerr-invalid-snapshot-name\n"
-            .to_owned()
-            .into_bytes();
-        // First check parent directory syntax
-        let query = terrapipe::proc_query("MKSNAP ../../badsnappy");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(res_should_be, response);
-        // Now check root directory syntax
-        let query = terrapipe::proc_query("MKSNAP /var/omgcrazysnappy");
-        stream.write_all(&query).await.unwrap();
-        let mut response = vec![0; res_should_be.len()];
-        stream.read_exact(&mut response).await.unwrap();
-        assert_eq!(res_should_be, response);
+        query.arg("mksnap");
+        query.arg("/var/omgcrazysnappy");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ErrorString(
+                "err-invalid-snapshot-name".to_owned()
+            )))
+        );
+        let mut query = Query::new();
+        query.arg("mksnap");
+        query.arg("../omgbacktoparent");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ErrorString(
+                "err-invalid-snapshot-name".to_owned()
+            )))
+        );
+    }
+    async fn test_lskeys_default() {
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apples");
+        query.arg("b");
+        query.arg("burgers");
+        query.arg("c");
+        query.arg("carrots");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(6))
+        );
+        // now get 'em
+        let mut query = Query::new();
+        query.arg("lskeys");
+        let ret = con.run_simple_query(query).await.unwrap();
+        // don't forget that the keys returned are arranged according to their hashes
+        let ret_should_have: Vec<String> = vec!["a", "b", "c", "x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
+    }
+    async fn test_lskeys_custom_limit() {
+        query.arg("uset");
+        query.arg("x");
+        query.arg("100");
+        query.arg("y");
+        query.arg("200");
+        query.arg("z");
+        query.arg("300");
+        query.arg("a");
+        query.arg("apples");
+        query.arg("b");
+        query.arg("burgers");
+        query.arg("c");
+        query.arg("carrots");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(6))
+        );
+        let mut query = Query::new();
+        query.arg("lskeys");
+        query.arg("1000");
+        let ret = con.run_simple_query(query).await.unwrap();
+        // don't forget that the keys returned are arranged according to their hashes
+        let ret_should_have: Vec<String> = vec!["a", "b", "c", "x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
+    }
+    async fn test_lskeys_wrongtype() {
+        query.arg("lskeys");
+        query.arg("abcdefg");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Wrongtype))
+        );
+    }
+    async fn test_lskeys_syntax_error() {
+        query.arg("lskeys");
+        query.arg("abcdefg");
+        query.arg("hijklmn");
+        assert_eq!(
+            con.run_simple_query(query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 }

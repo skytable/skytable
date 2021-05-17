@@ -27,38 +27,39 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
+use crate::coredb::htable::Entry;
 use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use coredb::Data;
-
-use std::collections::hash_map::Entry;
 use std::hint::unreachable_unchecked;
 
 /// Run a `SET` query
 pub async fn set<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: crate::protocol::ActionGroup,
+    act: Vec<String>,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.howmany();
+    let howmany = act.len() - 1;
     if howmany != 2 {
         // There should be exactly 2 arguments
-        return con.write_response(&**responses::fresp::R_ACTION_ERR).await;
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut it = act.into_iter();
+    let mut it = act.into_iter().skip(1);
     let did_we = {
         if let Some(mut writer) = handle.acquire_write() {
             let writer = writer.get_mut_ref();
-            if let Entry::Vacant(e) = writer.entry(it.next().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                // that there are exactly 2 arguments
-                unreachable_unchecked()
-            })) {
+            if let Entry::Vacant(e) =
+                writer.entry(Data::from(it.next().unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
+                    unreachable_unchecked()
+                })))
+            {
                 e.insert(Data::from_string(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
@@ -74,14 +75,13 @@ where
     };
     if let Some(did_we) = did_we {
         if did_we {
-            con.write_response(&**responses::fresp::R_OKAY).await?;
+            con.write_response(&**responses::groups::OKAY).await?;
         } else {
-            con.write_response(&**responses::fresp::R_OVERWRITE_ERR)
+            con.write_response(&**responses::groups::OVERWRITE_ERR)
                 .await?;
         }
     } else {
-        con.write_response(&**responses::fresp::R_SERVER_ERR)
-            .await?;
+        con.write_response(&**responses::groups::SERVER_ERR).await?;
     }
     Ok(())
 }
