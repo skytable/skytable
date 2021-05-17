@@ -69,7 +69,9 @@ use std::hint::unreachable_unchecked;
 use std::iter;
 use std::mem;
 use std::ops;
+use std::ops::Deref;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// The memory ordering that we'll follow throughout
 const MEMORY_ORDERING: Ordering = Ordering::Relaxed;
@@ -162,6 +164,16 @@ impl<K, V> HashBucket<K, V> {
             Some(val)
         } else {
             None
+        }
+    }
+    fn has_key(&self, key: &K) -> bool
+    where
+        K: PartialEq,
+    {
+        if let HashBucket::Contains(bucket_key, _) = self {
+            bucket_key == key
+        } else {
+            false
         }
     }
 }
@@ -288,6 +300,25 @@ where
             _ => false,
         })
     }
+    fn lookup_or_free(&self, key: &K) -> RwLockWriteGuard<HashBucket<K, V>> {
+        let hash = self.hash(key);
+        let mut free = None;
+        for (idx, _) in self.buckets.iter().enumerate() {
+            let lock = self.buckets[(hash + idx) % self.buckets.len()].write();
+            if lock.has_key(key) {
+                // got a matching bucket, return the mutable guard
+                free = Some(lock)
+            } else if lock.is_empty() {
+                // found an empty bucket, return the mutable guard
+                free = Some(lock);
+                break;
+            } else if lock.is_removed() && free.is_none() {
+                // this is a removed bucket; let's see if we can use it later
+                free = Some(lock);
+            }
+        }
+        free.unwrap()
+    }
     /// Returns a free bucket available to store a key
     fn find_free_mut(&self, key: &K) -> RwLockWriteGuard<HashBucket<K, V>> {
         self.scan_mut(key, |bucket| bucket.is_available())
@@ -327,7 +358,7 @@ impl<K: Clone, V: Clone> Clone for Table<K, V> {
 
 // into_innner will consume the r/w lock
 
-/// An iterator over the keys in the table (Skymap)
+/// An iterator over the keys in the table (SkymapInner)
 pub struct KeyIterator<K, V> {
     table: Table<K, V>,
 }
@@ -344,7 +375,7 @@ impl<K, V> Iterator for KeyIterator<K, V> {
     }
 }
 
-/// An iterator over the values in the table (Skymap)
+/// An iterator over the values in the table (SkymapInner)
 pub struct ValueIterator<K, V> {
     table: Table<K, V>,
 }
@@ -361,7 +392,7 @@ impl<K, V> Iterator for ValueIterator<K, V> {
     }
 }
 
-/// An iterator over the key/value pairs in the Skymap
+/// An iterator over the key/value pairs in the SkymapInner
 pub struct TableIterator<K, V> {
     table: Table<K, V>,
 }
@@ -386,21 +417,22 @@ impl<K, V> IntoIterator for Table<K, V> {
     }
 }
 
-/// A [`Skymap`] is a concurrent hashtable
-pub struct Skymap<K, V> {
+/// A [`SkymapInner`] is a concurrent hashtable
+pub struct SkymapInner<K, V> {
     table: RwLock<Table<K, V>>,
     len: AtomicUsize,
 }
 
-impl<K, V> Skymap<K, V>
+impl<K, V> SkymapInner<K, V>
 where
     K: Hash + PartialEq,
 {
     pub fn new() -> Self {
         Self::with_capacity(DEF_INIT_CAPACITY)
     }
+    /// Returns a table with space for atleast `cap` keys
     pub fn with_capacity(cap: usize) -> Self {
-        Skymap {
+        SkymapInner {
             table: RwLock::new(Table::with_capacity(cap)),
             len: AtomicUsize::new(0),
         }
@@ -420,7 +452,7 @@ where
     }
     pub fn clear(&self) -> Self {
         let mut lock = self.table.write();
-        Skymap {
+        SkymapInner {
             table: RwLock::new(mem::replace(&mut *lock, Table::new(DEF_INIT_CAPACITY))),
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
         }
@@ -532,6 +564,7 @@ where
             _ => return false,
         }
     }
+    /// This returns the removed value if the key was present or returns None
     pub fn remove<Q>(&self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
@@ -550,6 +583,7 @@ where
             }
         }
     }
+    /// This returns true if the value was removed
     pub fn true_if_removed<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
@@ -562,20 +596,39 @@ where
             // so bypass that
             HashBucket::Removed | HashBucket::Empty => false,
             this_bucket => {
-                let _ = mem::replace(this_bucket, HashBucket::Removed);
+                *this_bucket = HashBucket::Removed;
                 self.len.fetch_sub(1, MEMORY_ORDERING);
                 true
             }
         }
     }
+    /// Update or insert
+    ///
+    /// This method will always succeed
+    pub fn upsert(&self, key: K, value: V) {
+        let lock = self.table.read();
+        {
+            let mut bucket = lock.lookup_or_free(&key);
+            match *bucket {
+                HashBucket::Contains(_, ref mut val) => {
+                    *val = value;
+                    return;
+                }
+                ref mut some_available_bucket => {
+                    *some_available_bucket = HashBucket::Contains(key, value);
+                }
+            }
+        }
+        self.reshard_table(lock);
+    }
 }
 
 mod guards {
-    //! # RAII Guards for [`Skymap`]
+    //! # RAII Guards for [`SkymapInner`]
     //!
-    //! If we implemented Skymap and tried to get a reference to the original value like the following:
+    //! If we implemented SkymapInner and tried to get a reference to the original value like the following:
     //! ```rust
-    //! impl<K, V> Skymap<K, V>
+    //! impl<K, V> SkymapInner<K, V>
     //! where
     //!     K: Hash + PartialEq,
     //! {
@@ -594,7 +647,7 @@ mod guards {
     //! guards! This module implements two guards: an immutable [`ReadGuard`] and a mutable [`WriteGuard`]
     use super::*;
     use owning_ref::{OwningHandle, OwningRef};
-    /// A RAII Guard for reading an entry in a [`Skymap`]
+    /// A RAII Guard for reading an entry in a [`SkymapInner`]
     pub struct ReadGuard<'a, K: 'a, V: 'a> {
         inner: OwningRef<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
@@ -629,6 +682,11 @@ mod guards {
             self == rhs
         }
     }
+    impl<'a, K, V: PartialEq> PartialEq<V> for ReadGuard<'a, K, V> {
+        fn eq(&self, rhs: &V) -> bool {
+            self == rhs
+        }
+    }
 
     impl<'a, K, V> Drop for ReadGuard<'a, K, V> {
         fn drop(&mut self) {
@@ -639,7 +697,7 @@ mod guards {
 
     impl<'a, K, V: Eq> Eq for ReadGuard<'a, K, V> {}
 
-    /// A RAII Guard for reading an entry in a [`Skymap`]
+    /// A RAII Guard for reading an entry in a [`SkymapInner`]
     pub struct WriteGuard<'a, K, V, T> {
         inner: OwningHandle<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockWriteGuard<'a, HashBucket<K, V>>>,
@@ -691,8 +749,41 @@ mod guards {
     impl<'a, K, V: Eq, T: Eq> Eq for WriteGuard<'a, K, V, T> {}
 }
 
+pub struct Skymap<K, V> {
+    inner: Arc<SkymapInner<K, V>>,
+}
+
+impl<K: Hash + PartialEq, V> Skymap<K, V> {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(SkymapInner::new()),
+        }
+    }
+    pub fn with_capacity(cap_for: usize) -> Self {
+        Self {
+            inner: Arc::new(SkymapInner::with_capacity(cap_for)),
+        }
+    }
+}
+
+impl<K, V> Clone for Skymap<K, V> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl<K, V> Deref for Skymap<K, V> {
+    type Target = SkymapInner<K, V>;
+    fn deref(&self) -> &<Self>::Target {
+        &self.inner
+    }
+}
+
 #[test]
 fn test_basic_get_get_mut() {
-    let skymap: Skymap<&str, ()> = Skymap::new();
-    assert!(skymap.get("sayan").is_none());
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    skymap.insert("sayan", "is FOSSing");
+    assert_eq!(skymap.get("sayan").map(|v| *v), Some("is FOSSing"));
 }
