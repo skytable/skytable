@@ -985,22 +985,23 @@ mod __private {
         query.arg("carrots");
         assert_eq!(
             con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Response::Item(Element::UnsignedInt(6))
         );
         // now get 'em
         let mut query = Query::new();
         query.arg("lskeys");
-        assert_eq!(
-            con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::FlatArray(vec![
-                "x".to_owned(),
-                "y".to_owned(),
-                "z".to_owned(),
-                "a".to_owned(),
-                "b".to_owned(),
-                "c".to_owned()
-            ]))
-        );
+        let ret = con.run_simple_query(query).await.unwrap();
+        // don't forget that the keys returned are arranged according to their hashes
+        let ret_should_have: Vec<String> = vec!["a", "b", "c", "x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
     }
     async fn test_lskeys_custom_limit() {
         query.arg("uset");
@@ -1018,22 +1019,23 @@ mod __private {
         query.arg("carrots");
         assert_eq!(
             con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Response::Item(Element::UnsignedInt(6))
         );
         let mut query = Query::new();
         query.arg("lskeys");
         query.arg("1000");
-        assert_eq!(
-            con.run_simple_query(query).await.unwrap(),
-            Response::Item(Element::FlatArray(vec![
-                "x".to_owned(),
-                "y".to_owned(),
-                "z".to_owned(),
-                "a".to_owned(),
-                "b".to_owned(),
-                "c".to_owned()
-            ]))
-        );
+        let ret = con.run_simple_query(query).await.unwrap();
+        // don't forget that the keys returned are arranged according to their hashes
+        let ret_should_have: Vec<String> = vec!["a", "b", "c", "x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
     }
     async fn test_lskeys_wrongtype() {
         query.arg("lskeys");
