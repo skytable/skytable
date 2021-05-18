@@ -924,6 +924,7 @@ fn test_basic_get_get_mut() {
 fn test_race_and_multiple_table_lock_state_guards() {
     // this will test for a race condition and should take approximately 40 seconds to complete
     // although that doesn't include any possible delays involved
+    // Uncomment the `println`s for seeing the thing in action (or to debug)
     use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
@@ -1019,4 +1020,83 @@ fn test_race_and_multiple_table_lock_state_guards() {
             }
         }
     }
+}
+
+#[test]
+fn test_wait_on_one_thread_insert_others() {
+    use devtimer::DevTime;
+    use std::thread;
+    use std::time::Duration;
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    assert!(skymap.insert("sayan", "wrote some dumb stuff"));
+    let c1 = skymap.clone();
+    let c2 = skymap.clone();
+    let c3 = skymap.clone();
+    let c4 = skymap.clone();
+    let c5 = skymap.clone();
+    let h1 = thread::spawn(move || {
+        let x = c1.lock_writes();
+        for _i in 0..10 {
+            // println!("Waiting to unlock write: {}/10", i + 1);
+            thread::sleep(Duration::from_secs(1));
+        }
+        drop(x);
+    });
+    /*
+      wait for h1 to start up; 2s wait
+      the other threads will have to wait atleast 7.5x10^9 nanoseconds before
+      they can do anything useful. Atleast because thread::sleep can essentially sleep for
+      longer but not lesser. So let's say the sleep is actually 2s, then each thread will have to wait for 8s,
+      if the sleep is longer, say 2.5ms (we'll **assume** a maximum delay of 500ms in the sleep duration)
+      then each thread will have to wait for ~7.5s. This is the basis of this test, to ensure that the waiting
+      threads are notified in a timely fashion, approximate of course. The only exception is the get that
+      doesn't need to mutate anything. Uncomment the `println`s for seeing the thing in action (or to debug)
+      If anyone sees too many test failures with this duration, adjust it one the basis of the knowledge
+      that you have acquired here.
+    */
+    thread::sleep(Duration::from_millis(2000));
+    let h2 = thread::spawn(move || {
+        let mut dt = DevTime::new_simple();
+        // println!("[T2] Waiting to insert value");
+        dt.start();
+        c2.insert("sayan1", "writes-code");
+        dt.stop();
+        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+        // println!("[T2] Finished inserting");
+    });
+    let h3 = thread::spawn(move || {
+        let mut dt = DevTime::new_simple();
+        // println!("[T3] Waiting to insert value");
+        dt.start();
+        c3.insert("sayan2", "writes-code");
+        dt.stop();
+        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+        // println!("[T3] Finished inserting");
+    });
+    let h4 = thread::spawn(move || {
+        let mut dt = DevTime::new_simple();
+        // println!("[T4] Waiting to insert value");
+        dt.start();
+        c4.insert("sayan3", "writes-code");
+        dt.stop();
+        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+        // println!("[T4] Finished inserting");
+    });
+    let h5 = thread::spawn(move || {
+        let mut dt = DevTime::new_simple();
+        // println!("[T3] Waiting to get value");
+        dt.start();
+        let _got = c5.get("sayan").map(|v| *v).unwrap_or("<none>");
+        dt.stop();
+        assert!(dt.time_in_nanos().unwrap() <= 1_000_000_000);
+        // println!("Got: '{:?}'", got);
+        // println!("[T3] Finished reading. Returned immediately from now");
+    });
+    drop((
+        h1.join().unwrap(),
+        h2.join().unwrap(),
+        h3.join().unwrap(),
+        h4.join().unwrap(),
+        h5.join().unwrap(),
+    ));
 }

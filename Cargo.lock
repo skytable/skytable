@@ -876,6 +876,7 @@ dependencies = [
  "cc",
  "chrono",
  "clap",
+ "devtimer",
  "env_logger",
  "jemallocator",
  "lazy_static",
