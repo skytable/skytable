@@ -58,6 +58,8 @@
 
 use owning_ref::OwningHandle;
 use owning_ref::OwningRef;
+use parking_lot::Condvar;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
@@ -65,8 +67,6 @@ use std::borrow::Borrow;
 use std::cmp;
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::hint::unreachable_unchecked;
-use std::iter;
 use std::mem;
 use std::ops;
 use std::ops::Deref;
@@ -417,10 +417,77 @@ impl<K, V> IntoIterator for Table<K, V> {
     }
 }
 
+/// A [`CVar`] is a conditional variable that uses zero CPU time while waiting on a condition
+///
+/// This Condvar was specifically built for use with [`SkymapInner`] which uses a [`TableLockstateGuard`]
+/// object to temporarily deny all writes
+struct Cvar {
+    c: Condvar,
+    m: Mutex<()>,
+}
+
+impl Cvar {
+    fn new() -> Self {
+        Self {
+            c: Condvar::new(),
+            m: Mutex::new(()),
+        }
+    }
+    /// Notify all the threads waiting on this condvar that the state has changed
+    fn notify_all(&self) {
+        let _ = self.c.notify_all();
+    }
+    /// Wait for a notification on the conditional variable
+    fn wait(&self, mut locked_state: RwLockReadGuard<'_, bool>) {
+        if *locked_state {
+            // only wait if locked_state is true
+            RwLockReadGuard::unlocked(&mut locked_state, || {
+                let guard = self.m.lock();
+                let mut owned_guard = guard;
+                self.c.wait(&mut owned_guard);
+            });
+        }
+    }
+}
+
+/// A table lock state guard
+///
+/// This object holds a locked [`SkymapInner`] object. The locked state corresponds to the internal `locked_state`
+/// RwLock's value. You can use the [`TableLockStateGuard`] to reference the actual table and do any operations
+/// on it. It is recommended that whenever you're about to do a BGSAVE operation, call [`SkymapInner::lock_writes()`]
+/// and you'll get this object. Use this object to mutate/read the data of the inner hashtable and then as soon
+/// as this lock state goes out of scope, you can be sure that all threads waiting to write will get access.
+///
+/// ## Undefined Behavior (UB)
+///
+/// It is **absolutely undefined behavior to hold two lock states** for the same table because each one will
+/// attempt to notify the other waiting threads. This will never happen unless you explicitly attempt to do it
+/// as [`SkymapInner`] will wait for a [`TableLockStateGuard`] to be available before it gives you one
+pub struct TableLockStateGuard<'a, K: Hash + PartialEq, V> {
+    inner_table_ref: &'a SkymapInner<K, V>,
+}
+
+impl<'a, K: Hash + PartialEq, V> Drop for TableLockStateGuard<'a, K, V> {
+    fn drop(&mut self) {
+        unsafe {
+            self.inner_table_ref.force_unlock_writes();
+        }
+    }
+}
+
+impl<'a, K: Hash + PartialEq, V> Deref for TableLockStateGuard<'a, K, V> {
+    type Target = SkymapInner<K, V>;
+    fn deref(&self) -> &<Self>::Target {
+        &self.inner_table_ref
+    }
+}
+
 /// A [`SkymapInner`] is a concurrent hashtable
 pub struct SkymapInner<K, V> {
     table: RwLock<Table<K, V>>,
     len: AtomicUsize,
+    state_condvar: Cvar,
+    state_lock: RwLock<bool>,
 }
 
 impl<K, V> SkymapInner<K, V>
@@ -435,7 +502,40 @@ where
         SkymapInner {
             table: RwLock::new(Table::with_capacity(cap)),
             len: AtomicUsize::new(0),
+            state_condvar: Cvar::new(),
+            state_lock: RwLock::new(false),
         }
+    }
+    /// Blocks the current thread, waiting for an unlock on writes
+    fn wait_for_write_unlock(&self) {
+        self.state_condvar.wait(self.state_lock.read())
+    }
+    /// This will forcefully lock writes
+    ///
+    /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
+    unsafe fn force_lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
+        *self.state_lock.write() = true;
+        self.state_condvar.notify_all();
+        TableLockStateGuard {
+            inner_table_ref: &self,
+        }
+    }
+    /// This will wait for a table-wide write unlock and then return a write lock
+    pub fn lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
+        self.wait_for_write_unlock();
+        unsafe {
+            // since we've got a write unlock at this exact point, we're free to lock the table
+            // so this _should be_ safe
+            // FIXME: UB/race condition here? What if exactly after the write unlock another thread does a lock_writes?
+            self.force_lock_writes()
+        }
+    }
+    /// This will forcefully unlock writes
+    ///
+    /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
+    unsafe fn force_unlock_writes(&self) {
+        *self.state_lock.write() = false;
+        self.state_condvar.notify_all();
     }
     pub fn len(&self) -> usize {
         self.len.load(MEMORY_ORDERING)
@@ -451,13 +551,17 @@ where
         self.len() == 0
     }
     pub fn clear(&self) -> Self {
+        self.wait_for_write_unlock();
         let mut lock = self.table.write();
         SkymapInner {
             table: RwLock::new(mem::replace(&mut *lock, Table::new(DEF_INIT_CAPACITY))),
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
+            state_condvar: Cvar::new(),
+            state_lock: RwLock::new(false),
         }
     }
     fn reserve_space(&self, for_how_many: usize) {
+        self.wait_for_write_unlock();
         // so let's say we currently have 10 buckets, we want to add 1 more
         // so our target len should be 11 buckets times 4 or 44 buckets
         let len = (self.len() + for_how_many) * MULTIPLICATION_FACTOR;
@@ -473,6 +577,7 @@ where
         }
     }
     fn reshard_table(&self, lock: RwLockReadGuard<Table<K, V>>) {
+        self.wait_for_write_unlock();
         let len = (self.len.fetch_add(1, MEMORY_ORDERING)) + 1;
         if len * MAX_LOAD_FACTOR_DENOM > lock.buckets.len() * MAX_LOAD_FACTOR_TOP {
             // we need to drop the lock; remember how we messed up with the bgsave function in coredb;
@@ -504,6 +609,7 @@ where
         K: Borrow<Q>,
         Q: Hash + PartialEq,
     {
+        self.wait_for_write_unlock();
         if let Ok(inner) = OwningHandle::try_new(
             OwningHandle::new_with_fn(self.table.read(), |x| unsafe { &*x }.lookup_mut(key)),
             |x| {
@@ -536,6 +642,7 @@ where
     /// Insert a **new key**. This operation will return true if the operation succeeded or it will return
     /// false if the key already existed
     pub fn insert(&self, key: K, val: V) -> bool {
+        self.wait_for_write_unlock();
         if self.contains_key(&key) {
             false
         } else {
@@ -554,6 +661,7 @@ where
     /// This will return true if the value was updated. Otherwise it will return false if the value
     /// didn't exist
     pub fn update(&self, key: K, val: V) -> bool {
+        self.wait_for_write_unlock();
         let lock = self.table.read();
         let mut bucket = lock.lookup_mut(&key);
         match *bucket {
@@ -570,6 +678,7 @@ where
         K: Borrow<Q>,
         Q: PartialEq + Hash,
     {
+        self.wait_for_write_unlock();
         let lock = self.table.read();
         let mut bucket = lock.lookup_mut(&key);
         match &mut *bucket {
@@ -589,6 +698,7 @@ where
         K: Borrow<Q>,
         Q: PartialEq + Hash,
     {
+        self.wait_for_write_unlock();
         let lock = self.table.read();
         let mut bucket = lock.lookup_mut(&key);
         match &mut *bucket {
@@ -606,6 +716,7 @@ where
     ///
     /// This method will always succeed
     pub fn upsert(&self, key: K, value: V) {
+        self.wait_for_write_unlock();
         let lock = self.table.read();
         {
             let mut bucket = lock.lookup_or_free(&key);
@@ -784,6 +895,6 @@ impl<K, V> Deref for Skymap<K, V> {
 #[test]
 fn test_basic_get_get_mut() {
     let skymap: Skymap<&str, &str> = Skymap::new();
-    skymap.insert("sayan", "is FOSSing");
+    assert!(skymap.insert("sayan", "is FOSSing"));
     assert_eq!(skymap.get("sayan").map(|v| *v), Some("is FOSSing"));
 }
