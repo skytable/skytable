@@ -79,7 +79,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// The memory ordering that we'll follow throughout
-const MEMORY_ORDERING: Ordering = Ordering::Relaxed;
+const MEMORY_ORDERING_RELAXED: Ordering = Ordering::Relaxed;
 
 /// Length-to-capacity factor; i.e when reallocating, if size is x, we'll increase capacity for 4x items
 const MULTIPLICATION_FACTOR: usize = 4;
@@ -444,7 +444,7 @@ impl Cvar {
     }
     /// Wait for a notification on the conditional variable
     fn wait(&self, locked_state: &AtomicBool) {
-        while locked_state.load(Ordering::Acquire) {
+        while locked_state.load(MEMORY_ORDERING_RELAXED) {
             // only wait if locked_state is true
             let guard = self.m.lock();
             let mut owned_guard = guard;
@@ -455,7 +455,7 @@ impl Cvar {
     where
         F: Fn() -> T,
     {
-        while locked_state.load(Ordering::Acquire) {
+        while locked_state.load(MEMORY_ORDERING_RELAXED) {
             // only wait if locked_state is true
             let guard = self.m.lock();
             let mut owned_guard = guard;
@@ -536,7 +536,7 @@ where
     ///
     /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
     unsafe fn force_lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
-        self.state_lock.store(true, Ordering::Release);
+        self.state_lock.store(true, MEMORY_ORDERING_RELAXED);
         self.state_condvar.notify_all();
         TableLockStateGuard {
             inner_table_ref: &self,
@@ -555,11 +555,11 @@ where
     ///
     /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
     unsafe fn force_unlock_writes(&self) {
-        self.state_lock.store(false, Ordering::Release);
+        self.state_lock.store(false, MEMORY_ORDERING_RELAXED);
         self.state_condvar.notify_all();
     }
     pub fn len(&self) -> usize {
-        self.len.load(MEMORY_ORDERING)
+        self.len.load(MEMORY_ORDERING_RELAXED)
     }
     pub fn buckets_count(&self) -> usize {
         self.table.read().buckets.len()
@@ -576,7 +576,7 @@ where
         let mut lock = self.table.write();
         SkymapInner {
             table: RwLock::new(mem::replace(&mut *lock, Table::new(DEF_INIT_CAPACITY))),
-            len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
+            len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING_RELAXED)),
             state_condvar: Cvar::new(),
             state_lock: AtomicBool::new(false),
         }
@@ -599,7 +599,7 @@ where
     }
     fn reshard_table(&self, lock: RwLockReadGuard<Table<K, V>>) {
         self.wait_for_write_unlock();
-        let len = (self.len.fetch_add(1, MEMORY_ORDERING)) + 1;
+        let len = (self.len.fetch_add(1, MEMORY_ORDERING_RELAXED)) + 1;
         if len * MAX_LOAD_FACTOR_DENOM > lock.buckets.len() * MAX_LOAD_FACTOR_TOP {
             // we need to drop the lock; remember how we messed up with the bgsave function in coredb;
             // don't do that mistake again!
@@ -708,7 +708,7 @@ where
             HashBucket::Removed | HashBucket::Empty => None,
             this_bucket => {
                 let ret = mem::replace(this_bucket, HashBucket::Removed).get_value();
-                self.len.fetch_sub(1, MEMORY_ORDERING);
+                self.len.fetch_sub(1, MEMORY_ORDERING_RELAXED);
                 ret
             }
         }
@@ -728,7 +728,7 @@ where
             HashBucket::Removed | HashBucket::Empty => false,
             this_bucket => {
                 *this_bucket = HashBucket::Removed;
-                self.len.fetch_sub(1, MEMORY_ORDERING);
+                self.len.fetch_sub(1, MEMORY_ORDERING_RELAXED);
                 true
             }
         }
@@ -921,67 +921,97 @@ fn test_basic_get_get_mut() {
 }
 
 #[test]
-#[cfg(loom)]
-fn test_race() {
-    use loom::thread;
+fn test_race_and_multiple_table_lock_state_guards() {
+    // this will test for a race condition and should take approximately 40 seconds to complete
+    // although that doesn't include any possible delays involved
+    use std::sync::mpsc;
+    use std::thread;
     use std::time::Duration;
     let skymap: Skymap<&str, &str> = Skymap::new();
-    let c1 = skymap.clone();
-    let c2 = skymap.clone();
-    let c3 = skymap.clone();
-    let c4 = skymap.clone();
-    loom::model(|| {
+    for _ in 0..1000 {
+        let c1 = skymap.clone();
+        let c2 = skymap.clone();
+        let c3 = skymap.clone();
+        let c4 = skymap.clone();
+        // all producers will send a +1 on acquiring a lock and -1 on releasing a lock
+        let (tx, rx) = mpsc::channel::<isize>();
+        // this variable maintains the number of table wide write locks that are currently held
+        let mut number_of_table_wide_locks = 0;
+        let thread_2_sender = tx.clone();
+        let thread_3_sender = tx.clone();
+        let thread_4_sender = tx.clone();
         let (h1, h2, h3, h4) = (
             thread::spawn(move || {
                 // println!("[T1] attempting acquire/waiting on lock");
                 let lck = c1.lock_writes();
+                tx.send(1).unwrap();
                 // println!("[T1] Acquired lock now");
-                for i in 0..10 {
+                for _i in 0..10 {
                     // println!("[T1] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_micros(500));
+                    thread::sleep(Duration::from_millis(1));
                 }
                 drop(lck);
+                tx.send(-1).unwrap();
                 // println!("[T1] Dropped lock");
             }),
             thread::spawn(move || {
+                let tx = thread_2_sender;
                 // println!("[T2] attempting acquire/waiting on lock");
                 let lck = c2.lock_writes();
+                tx.send(1).unwrap();
                 // println!("[T2] Acquired lock now");
-                for i in 0..10 {
+                for _i in 0..10 {
                     // println!("[T2] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_micros(500));
+                    thread::sleep(Duration::from_millis(1));
                 }
                 drop(lck);
+                tx.send(-1).unwrap();
                 // println!("[T2] Dropped lock")
             }),
             thread::spawn(move || {
+                let tx = thread_3_sender;
                 // println!("[T3] attempting acquire/waiting on lock");
                 let lck = c3.lock_writes();
+                tx.send(1).unwrap();
                 // println!("[T3] Acquired lock now");
-                for i in 0..10 {
+                for _i in 0..10 {
                     // println!("[T3] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_micros(500));
+                    thread::sleep(Duration::from_millis(1));
                 }
                 drop(lck);
+                tx.send(-1).unwrap();
                 // println!("[T3] Dropped lock");
             }),
             thread::spawn(move || {
+                let tx = thread_4_sender;
                 // println!("[T4] attempting acquire/waiting on lock");
                 let lck = c4.lock_writes();
+                tx.send(1).unwrap();
                 // println!("[T4] Acquired lock now");
-                for i in 0..10 {
+                for _i in 0..10 {
                     // println!("[T4] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_micros(500));
+                    thread::sleep(Duration::from_millis(1));
                 }
                 drop(lck);
+                tx.send(-1).unwrap();
                 // println!("[T4] Dropped lock");
             }),
         );
+        // wait in a loop to receive notifications on this mpsc channel
+        for msg in rx.recv() {
+            // add the sent isize to the counter of number of table wide write locks
+            number_of_table_wide_locks += msg;
+            if number_of_table_wide_locks >= 2 {
+                // if there are more than/same as 2 writes at the same time, then that's trouble
+                // for us
+                panic!("Two threads acquired lock");
+            }
+        }
         drop((
             h1.join().unwrap(),
             h2.join().unwrap(),
             h3.join().unwrap(),
             h4.join().unwrap(),
         ));
-    });
+    }
 }
