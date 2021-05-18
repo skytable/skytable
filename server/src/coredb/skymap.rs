@@ -952,6 +952,7 @@ fn test_race_and_multiple_table_lock_state_guards() {
                 }
                 drop(lck);
                 tx.send(-1).unwrap();
+                drop(tx);
                 // println!("[T1] Dropped lock");
             }),
             thread::spawn(move || {
@@ -966,6 +967,7 @@ fn test_race_and_multiple_table_lock_state_guards() {
                 }
                 drop(lck);
                 tx.send(-1).unwrap();
+                drop(tx);
                 // println!("[T2] Dropped lock")
             }),
             thread::spawn(move || {
@@ -980,6 +982,7 @@ fn test_race_and_multiple_table_lock_state_guards() {
                 }
                 drop(lck);
                 tx.send(-1).unwrap();
+                drop(tx);
                 // println!("[T3] Dropped lock");
             }),
             thread::spawn(move || {
@@ -994,10 +997,18 @@ fn test_race_and_multiple_table_lock_state_guards() {
                 }
                 drop(lck);
                 tx.send(-1).unwrap();
+                drop(tx);
                 // println!("[T4] Dropped lock");
             }),
         );
+        drop((
+            h1.join().unwrap(),
+            h2.join().unwrap(),
+            h3.join().unwrap(),
+            h4.join().unwrap(),
+        ));
         // wait in a loop to receive notifications on this mpsc channel
+        // all received messages are in the same order as they were produced
         for msg in rx.recv() {
             // add the sent isize to the counter of number of table wide write locks
             number_of_table_wide_locks += msg;
@@ -1007,11 +1018,5 @@ fn test_race_and_multiple_table_lock_state_guards() {
                 panic!("Two threads acquired lock");
             }
         }
-        drop((
-            h1.join().unwrap(),
-            h2.join().unwrap(),
-            h3.join().unwrap(),
-            h4.join().unwrap(),
-        ));
     }
 }
