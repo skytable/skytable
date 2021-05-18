@@ -312,11 +312,11 @@ where
             let lock = self.buckets[(hash + idx) % self.buckets.len()].write();
             if lock.has_key(key) {
                 // got a matching bucket, return the mutable guard
-                free = Some(lock)
+                return lock;
             } else if lock.is_empty() {
-                // found an empty bucket, return the mutable guard
-                free = Some(lock);
-                break;
+                // found an empty bucket, return the mutable guard or the free lock if there
+                // is any
+                return free.unwrap_or(lock);
             } else if lock.is_removed() && free.is_none() {
                 // this is a removed bucket; let's see if we can use it later
                 free = Some(lock);
@@ -744,7 +744,6 @@ where
             match *bucket {
                 HashBucket::Contains(_, ref mut val) => {
                     *val = value;
-                    return;
                 }
                 ref mut some_available_bucket => {
                     *some_available_bucket = HashBucket::Contains(key, value);
@@ -914,189 +913,239 @@ impl<K, V> Deref for Skymap<K, V> {
 }
 
 #[test]
-fn test_basic_get_get_mut() {
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    assert!(skymap.insert("sayan", "is FOSSing"));
-    assert_eq!(skymap.get("sayan").map(|v| *v), Some("is FOSSing"));
+fn test_get_none() {
+    let skymap: Skymap<&str, ()> = Skymap::new();
+    assert!(skymap.get("ooh").is_none());
 }
 
 #[test]
-fn test_race_and_multiple_table_lock_state_guards() {
-    // this will test for a race condition and should take approximately 40 seconds to complete
-    // although that doesn't include any possible delays involved
-    // Uncomment the `println`s for seeing the thing in action (or to debug)
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
+fn test_set_some() {
+    let skymap: Skymap<&str, ()> = Skymap::new();
+    assert!(skymap.insert("sayan", ()));
+}
+
+#[test]
+fn test_update_get_set_some() {
     let skymap: Skymap<&str, &str> = Skymap::new();
-    for _ in 0..1000 {
+    assert!(skymap.insert("foss", "is for freedom"));
+    assert!(skymap.update(
+        "foss",
+        "is for freedom. But doesn't always mean that it's sustainable"
+    ));
+    assert_eq!(
+        skymap.get("foss").map(|v| *v),
+        Some("is for freedom. But doesn't always mean that it's sustainable")
+    );
+}
+
+#[test]
+fn test_update_none() {
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    assert!(!skymap.update("nonexistentkey", "something"));
+}
+
+#[test]
+fn test_upsert_non_existing() {
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    skymap.upsert("sayan", "is writing open source code");
+    assert_eq!(
+        skymap.get("sayan").map(|v| *v),
+        Some("is writing open source code")
+    );
+}
+
+#[test]
+fn test_upsert_existing() {
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    skymap.insert("sayan", "is writing open source code");
+    skymap.upsert("sayan", "is wandering around clueless");
+    assert_eq!(
+        skymap.get("sayan").map(|v| *v),
+        Some("is wandering around clueless")
+    );
+}
+
+#[cfg(test)]
+mod tests_concurrency {
+    use super::*;
+    #[test]
+    fn test_race_and_multiple_table_lock_state_guards() {
+        // this will test for a race condition and should take approximately 40 seconds to complete
+        // although that doesn't include any possible delays involved
+        // Uncomment the `println`s for seeing the thing in action (or to debug)
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        for _ in 0..1000 {
+            let c1 = skymap.clone();
+            let c2 = skymap.clone();
+            let c3 = skymap.clone();
+            let c4 = skymap.clone();
+            // all producers will send a +1 on acquiring a lock and -1 on releasing a lock
+            let (tx, rx) = mpsc::channel::<isize>();
+            // this variable maintains the number of table wide write locks that are currently held
+            let mut number_of_table_wide_locks = 0;
+            let thread_2_sender = tx.clone();
+            let thread_3_sender = tx.clone();
+            let thread_4_sender = tx.clone();
+            let (h1, h2, h3, h4) = (
+                thread::spawn(move || {
+                    // println!("[T1] attempting acquire/waiting on lock");
+                    let lck = c1.lock_writes();
+                    tx.send(1).unwrap();
+                    // println!("[T1] Acquired lock now");
+                    for _i in 0..10 {
+                        // println!("[T1] Sleeping for {}/10ms", i + 1);
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    drop(lck);
+                    tx.send(-1).unwrap();
+                    drop(tx);
+                    // println!("[T1] Dropped lock");
+                }),
+                thread::spawn(move || {
+                    let tx = thread_2_sender;
+                    // println!("[T2] attempting acquire/waiting on lock");
+                    let lck = c2.lock_writes();
+                    tx.send(1).unwrap();
+                    // println!("[T2] Acquired lock now");
+                    for _i in 0..10 {
+                        // println!("[T2] Sleeping for {}/10ms", i + 1);
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    drop(lck);
+                    tx.send(-1).unwrap();
+                    drop(tx);
+                    // println!("[T2] Dropped lock")
+                }),
+                thread::spawn(move || {
+                    let tx = thread_3_sender;
+                    // println!("[T3] attempting acquire/waiting on lock");
+                    let lck = c3.lock_writes();
+                    tx.send(1).unwrap();
+                    // println!("[T3] Acquired lock now");
+                    for _i in 0..10 {
+                        // println!("[T3] Sleeping for {}/10ms", i + 1);
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    drop(lck);
+                    tx.send(-1).unwrap();
+                    drop(tx);
+                    // println!("[T3] Dropped lock");
+                }),
+                thread::spawn(move || {
+                    let tx = thread_4_sender;
+                    // println!("[T4] attempting acquire/waiting on lock");
+                    let lck = c4.lock_writes();
+                    tx.send(1).unwrap();
+                    // println!("[T4] Acquired lock now");
+                    for _i in 0..10 {
+                        // println!("[T4] Sleeping for {}/10ms", i + 1);
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    drop(lck);
+                    tx.send(-1).unwrap();
+                    drop(tx);
+                    // println!("[T4] Dropped lock");
+                }),
+            );
+            drop((
+                h1.join().unwrap(),
+                h2.join().unwrap(),
+                h3.join().unwrap(),
+                h4.join().unwrap(),
+            ));
+            // wait in a loop to receive notifications on this mpsc channel
+            // all received messages are in the same order as they were produced
+            for msg in rx.recv() {
+                // add the sent isize to the counter of number of table wide write locks
+                number_of_table_wide_locks += msg;
+                if number_of_table_wide_locks >= 2 {
+                    // if there are more than/same as 2 writes at the same time, then that's trouble
+                    // for us
+                    panic!("Two threads acquired lock");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_wait_on_one_thread_insert_others() {
+        use devtimer::DevTime;
+        use std::thread;
+        use std::time::Duration;
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        assert!(skymap.insert("sayan", "wrote some dumb stuff"));
         let c1 = skymap.clone();
         let c2 = skymap.clone();
         let c3 = skymap.clone();
         let c4 = skymap.clone();
-        // all producers will send a +1 on acquiring a lock and -1 on releasing a lock
-        let (tx, rx) = mpsc::channel::<isize>();
-        // this variable maintains the number of table wide write locks that are currently held
-        let mut number_of_table_wide_locks = 0;
-        let thread_2_sender = tx.clone();
-        let thread_3_sender = tx.clone();
-        let thread_4_sender = tx.clone();
-        let (h1, h2, h3, h4) = (
-            thread::spawn(move || {
-                // println!("[T1] attempting acquire/waiting on lock");
-                let lck = c1.lock_writes();
-                tx.send(1).unwrap();
-                // println!("[T1] Acquired lock now");
-                for _i in 0..10 {
-                    // println!("[T1] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_millis(1));
-                }
-                drop(lck);
-                tx.send(-1).unwrap();
-                drop(tx);
-                // println!("[T1] Dropped lock");
-            }),
-            thread::spawn(move || {
-                let tx = thread_2_sender;
-                // println!("[T2] attempting acquire/waiting on lock");
-                let lck = c2.lock_writes();
-                tx.send(1).unwrap();
-                // println!("[T2] Acquired lock now");
-                for _i in 0..10 {
-                    // println!("[T2] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_millis(1));
-                }
-                drop(lck);
-                tx.send(-1).unwrap();
-                drop(tx);
-                // println!("[T2] Dropped lock")
-            }),
-            thread::spawn(move || {
-                let tx = thread_3_sender;
-                // println!("[T3] attempting acquire/waiting on lock");
-                let lck = c3.lock_writes();
-                tx.send(1).unwrap();
-                // println!("[T3] Acquired lock now");
-                for _i in 0..10 {
-                    // println!("[T3] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_millis(1));
-                }
-                drop(lck);
-                tx.send(-1).unwrap();
-                drop(tx);
-                // println!("[T3] Dropped lock");
-            }),
-            thread::spawn(move || {
-                let tx = thread_4_sender;
-                // println!("[T4] attempting acquire/waiting on lock");
-                let lck = c4.lock_writes();
-                tx.send(1).unwrap();
-                // println!("[T4] Acquired lock now");
-                for _i in 0..10 {
-                    // println!("[T4] Sleeping for {}/10ms", i + 1);
-                    thread::sleep(Duration::from_millis(1));
-                }
-                drop(lck);
-                tx.send(-1).unwrap();
-                drop(tx);
-                // println!("[T4] Dropped lock");
-            }),
-        );
+        let c5 = skymap.clone();
+        let h1 = thread::spawn(move || {
+            let x = c1.lock_writes();
+            for _i in 0..10 {
+                // println!("Waiting to unlock write: {}/10", i + 1);
+                thread::sleep(Duration::from_secs(1));
+            }
+            drop(x);
+        });
+        /*
+          wait for h1 to start up; 2s wait
+          the other threads will have to wait atleast 7.5x10^9 nanoseconds before
+          they can do anything useful. Atleast because thread::sleep can essentially sleep for
+          longer but not lesser. So let's say the sleep is actually 2s, then each thread will have to wait for 8s,
+          if the sleep is longer, say 2.5ms (we'll **assume** a maximum delay of 500ms in the sleep duration)
+          then each thread will have to wait for ~7.5s. This is the basis of this test, to ensure that the waiting
+          threads are notified in a timely fashion, approximate of course. The only exception is the get that
+          doesn't need to mutate anything. Uncomment the `println`s for seeing the thing in action (or to debug)
+          If anyone sees too many test failures with this duration, adjust it one the basis of the knowledge
+          that you have acquired here.
+        */
+        thread::sleep(Duration::from_millis(2000));
+        let h2 = thread::spawn(move || {
+            let mut dt = DevTime::new_simple();
+            // println!("[T2] Waiting to insert value");
+            dt.start();
+            c2.insert("sayan1", "writes-code");
+            dt.stop();
+            assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+            // println!("[T2] Finished inserting");
+        });
+        let h3 = thread::spawn(move || {
+            let mut dt = DevTime::new_simple();
+            // println!("[T3] Waiting to insert value");
+            dt.start();
+            c3.insert("sayan2", "writes-code");
+            dt.stop();
+            assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+            // println!("[T3] Finished inserting");
+        });
+        let h4 = thread::spawn(move || {
+            let mut dt = DevTime::new_simple();
+            // println!("[T4] Waiting to insert value");
+            dt.start();
+            c4.insert("sayan3", "writes-code");
+            dt.stop();
+            assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
+            // println!("[T4] Finished inserting");
+        });
+        let h5 = thread::spawn(move || {
+            let mut dt = DevTime::new_simple();
+            // println!("[T3] Waiting to get value");
+            dt.start();
+            let _got = c5.get("sayan").map(|v| *v).unwrap_or("<none>");
+            dt.stop();
+            assert!(dt.time_in_nanos().unwrap() <= 1_000_000_000);
+            // println!("Got: '{:?}'", got);
+            // println!("[T3] Finished reading. Returned immediately from now");
+        });
         drop((
             h1.join().unwrap(),
             h2.join().unwrap(),
             h3.join().unwrap(),
             h4.join().unwrap(),
+            h5.join().unwrap(),
         ));
-        // wait in a loop to receive notifications on this mpsc channel
-        // all received messages are in the same order as they were produced
-        for msg in rx.recv() {
-            // add the sent isize to the counter of number of table wide write locks
-            number_of_table_wide_locks += msg;
-            if number_of_table_wide_locks >= 2 {
-                // if there are more than/same as 2 writes at the same time, then that's trouble
-                // for us
-                panic!("Two threads acquired lock");
-            }
-        }
     }
-}
-
-#[test]
-fn test_wait_on_one_thread_insert_others() {
-    use devtimer::DevTime;
-    use std::thread;
-    use std::time::Duration;
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    assert!(skymap.insert("sayan", "wrote some dumb stuff"));
-    let c1 = skymap.clone();
-    let c2 = skymap.clone();
-    let c3 = skymap.clone();
-    let c4 = skymap.clone();
-    let c5 = skymap.clone();
-    let h1 = thread::spawn(move || {
-        let x = c1.lock_writes();
-        for _i in 0..10 {
-            // println!("Waiting to unlock write: {}/10", i + 1);
-            thread::sleep(Duration::from_secs(1));
-        }
-        drop(x);
-    });
-    /*
-      wait for h1 to start up; 2s wait
-      the other threads will have to wait atleast 7.5x10^9 nanoseconds before
-      they can do anything useful. Atleast because thread::sleep can essentially sleep for
-      longer but not lesser. So let's say the sleep is actually 2s, then each thread will have to wait for 8s,
-      if the sleep is longer, say 2.5ms (we'll **assume** a maximum delay of 500ms in the sleep duration)
-      then each thread will have to wait for ~7.5s. This is the basis of this test, to ensure that the waiting
-      threads are notified in a timely fashion, approximate of course. The only exception is the get that
-      doesn't need to mutate anything. Uncomment the `println`s for seeing the thing in action (or to debug)
-      If anyone sees too many test failures with this duration, adjust it one the basis of the knowledge
-      that you have acquired here.
-    */
-    thread::sleep(Duration::from_millis(2000));
-    let h2 = thread::spawn(move || {
-        let mut dt = DevTime::new_simple();
-        // println!("[T2] Waiting to insert value");
-        dt.start();
-        c2.insert("sayan1", "writes-code");
-        dt.stop();
-        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
-        // println!("[T2] Finished inserting");
-    });
-    let h3 = thread::spawn(move || {
-        let mut dt = DevTime::new_simple();
-        // println!("[T3] Waiting to insert value");
-        dt.start();
-        c3.insert("sayan2", "writes-code");
-        dt.stop();
-        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
-        // println!("[T3] Finished inserting");
-    });
-    let h4 = thread::spawn(move || {
-        let mut dt = DevTime::new_simple();
-        // println!("[T4] Waiting to insert value");
-        dt.start();
-        c4.insert("sayan3", "writes-code");
-        dt.stop();
-        assert!(dt.time_in_nanos().unwrap() >= 7_500_000_000);
-        // println!("[T4] Finished inserting");
-    });
-    let h5 = thread::spawn(move || {
-        let mut dt = DevTime::new_simple();
-        // println!("[T3] Waiting to get value");
-        dt.start();
-        let _got = c5.get("sayan").map(|v| *v).unwrap_or("<none>");
-        dt.stop();
-        assert!(dt.time_in_nanos().unwrap() <= 1_000_000_000);
-        // println!("Got: '{:?}'", got);
-        // println!("[T3] Finished reading. Returned immediately from now");
-    });
-    drop((
-        h1.join().unwrap(),
-        h2.join().unwrap(),
-        h3.join().unwrap(),
-        h4.join().unwrap(),
-        h5.join().unwrap(),
-    ));
 }
