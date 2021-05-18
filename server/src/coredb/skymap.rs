@@ -56,6 +56,8 @@
 //! - `Hashbrown` that is released under the Apache-2.0 or MIT License (http://github.com/rust-lang/hashbrown)
 //!
 
+#[cfg(loom)]
+use loom::sync::atomic::{AtomicBool, AtomicUsize};
 use owning_ref::OwningHandle;
 use owning_ref::OwningRef;
 use parking_lot::Condvar;
@@ -70,6 +72,9 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::mem;
 use std::ops;
 use std::ops::Deref;
+#[cfg(not(loom))]
+use std::sync::atomic::AtomicBool;
+#[cfg(not(loom))]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -438,15 +443,25 @@ impl Cvar {
         let _ = self.c.notify_all();
     }
     /// Wait for a notification on the conditional variable
-    fn wait(&self, mut locked_state: RwLockReadGuard<'_, bool>) {
-        if *locked_state {
+    fn wait(&self, locked_state: &AtomicBool) {
+        while locked_state.load(Ordering::Acquire) {
             // only wait if locked_state is true
-            RwLockReadGuard::unlocked(&mut locked_state, || {
-                let guard = self.m.lock();
-                let mut owned_guard = guard;
-                self.c.wait(&mut owned_guard);
-            });
+            let guard = self.m.lock();
+            let mut owned_guard = guard;
+            self.c.wait(&mut owned_guard);
         }
+    }
+    fn wait_and_then_immediately<T, F>(&self, locked_state: &AtomicBool, and_then: F) -> T
+    where
+        F: Fn() -> T,
+    {
+        while locked_state.load(Ordering::Acquire) {
+            // only wait if locked_state is true
+            let guard = self.m.lock();
+            let mut owned_guard = guard;
+            self.c.wait(&mut owned_guard);
+        }
+        and_then()
     }
 }
 
@@ -487,7 +502,7 @@ pub struct SkymapInner<K, V> {
     table: RwLock<Table<K, V>>,
     len: AtomicUsize,
     state_condvar: Cvar,
-    state_lock: RwLock<bool>,
+    state_lock: AtomicBool,
 }
 
 impl<K, V> SkymapInner<K, V>
@@ -503,18 +518,25 @@ where
             table: RwLock::new(Table::with_capacity(cap)),
             len: AtomicUsize::new(0),
             state_condvar: Cvar::new(),
-            state_lock: RwLock::new(false),
+            state_lock: AtomicBool::new(false),
         }
     }
     /// Blocks the current thread, waiting for an unlock on writes
     fn wait_for_write_unlock(&self) {
-        self.state_condvar.wait(self.state_lock.read())
+        self.state_condvar.wait(&self.state_lock)
+    }
+    fn wait_for_write_unlock_and_then<T, F>(&self, then: F) -> T
+    where
+        F: Fn() -> T,
+    {
+        self.state_condvar
+            .wait_and_then_immediately(&self.state_lock, then)
     }
     /// This will forcefully lock writes
     ///
     /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
     unsafe fn force_lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
-        *self.state_lock.write() = true;
+        self.state_lock.store(true, Ordering::Release);
         self.state_condvar.notify_all();
         TableLockStateGuard {
             inner_table_ref: &self,
@@ -522,19 +544,18 @@ where
     }
     /// This will wait for a table-wide write unlock and then return a write lock
     pub fn lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
-        self.wait_for_write_unlock();
-        unsafe {
+        self.wait_for_write_unlock_and_then(|| unsafe {
             // since we've got a write unlock at this exact point, we're free to lock the table
             // so this _should be_ safe
             // FIXME: UB/race condition here? What if exactly after the write unlock another thread does a lock_writes?
             self.force_lock_writes()
-        }
+        })
     }
     /// This will forcefully unlock writes
     ///
     /// No [`TableLockStateGuard`] should exist at this point (within the current scope)
     unsafe fn force_unlock_writes(&self) {
-        *self.state_lock.write() = false;
+        self.state_lock.store(false, Ordering::Release);
         self.state_condvar.notify_all();
     }
     pub fn len(&self) -> usize {
@@ -557,7 +578,7 @@ where
             table: RwLock::new(mem::replace(&mut *lock, Table::new(DEF_INIT_CAPACITY))),
             len: AtomicUsize::new(self.len.swap(0, MEMORY_ORDERING)),
             state_condvar: Cvar::new(),
-            state_lock: RwLock::new(false),
+            state_lock: AtomicBool::new(false),
         }
     }
     fn reserve_space(&self, for_how_many: usize) {
@@ -897,4 +918,70 @@ fn test_basic_get_get_mut() {
     let skymap: Skymap<&str, &str> = Skymap::new();
     assert!(skymap.insert("sayan", "is FOSSing"));
     assert_eq!(skymap.get("sayan").map(|v| *v), Some("is FOSSing"));
+}
+
+#[test]
+#[cfg(loom)]
+fn test_race() {
+    use loom::thread;
+    use std::time::Duration;
+    let skymap: Skymap<&str, &str> = Skymap::new();
+    let c1 = skymap.clone();
+    let c2 = skymap.clone();
+    let c3 = skymap.clone();
+    let c4 = skymap.clone();
+    loom::model(|| {
+        let (h1, h2, h3, h4) = (
+            thread::spawn(move || {
+                // println!("[T1] attempting acquire/waiting on lock");
+                let lck = c1.lock_writes();
+                // println!("[T1] Acquired lock now");
+                for i in 0..10 {
+                    // println!("[T1] Sleeping for {}/10ms", i + 1);
+                    thread::sleep(Duration::from_micros(500));
+                }
+                drop(lck);
+                // println!("[T1] Dropped lock");
+            }),
+            thread::spawn(move || {
+                // println!("[T2] attempting acquire/waiting on lock");
+                let lck = c2.lock_writes();
+                // println!("[T2] Acquired lock now");
+                for i in 0..10 {
+                    // println!("[T2] Sleeping for {}/10ms", i + 1);
+                    thread::sleep(Duration::from_micros(500));
+                }
+                drop(lck);
+                // println!("[T2] Dropped lock")
+            }),
+            thread::spawn(move || {
+                // println!("[T3] attempting acquire/waiting on lock");
+                let lck = c3.lock_writes();
+                // println!("[T3] Acquired lock now");
+                for i in 0..10 {
+                    // println!("[T3] Sleeping for {}/10ms", i + 1);
+                    thread::sleep(Duration::from_micros(500));
+                }
+                drop(lck);
+                // println!("[T3] Dropped lock");
+            }),
+            thread::spawn(move || {
+                // println!("[T4] attempting acquire/waiting on lock");
+                let lck = c4.lock_writes();
+                // println!("[T4] Acquired lock now");
+                for i in 0..10 {
+                    // println!("[T4] Sleeping for {}/10ms", i + 1);
+                    thread::sleep(Duration::from_micros(500));
+                }
+                drop(lck);
+                // println!("[T4] Dropped lock");
+            }),
+        );
+        drop((
+            h1.join().unwrap(),
+            h2.join().unwrap(),
+            h3.join().unwrap(),
+            h4.join().unwrap(),
+        ));
+    });
 }

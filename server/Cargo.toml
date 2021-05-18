@@ -4,6 +4,7 @@ version = "0.6.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 build = "build.rs"
+doctest = false
 
 [dependencies]
 tokio = { version = "1.6.0", features = ["full"] }
@@ -41,3 +42,6 @@ skytable = { git = "https://github.com/skytable/client-rust", features = ["async
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.94"
+
+[target.'cfg(loom)'.dependencies]
+loom = "0.5"
