@@ -32,8 +32,8 @@
 //!
 //! ## Behind the implementation
 //! Skymap itself isn't lockless but attempts to distribute the locks so as to reduce lock contentions (which
-//! is the culprit for poor performance). In a Hashmap, you have buckets (or has buckets) which store the actual
-//! data. The bucket your data will go into depends on its has that is computed by a hash function. In our use
+//! is the culprit for poor performance). In a Hashmap, you have buckets (or hash buckets) which store the actual
+//! data. The bucket your data will go into depends on its hash that is computed by a hash function. In our use
 //! case for a database, this is strictly a non-cryptographic hash function &mdash; and it is so for obvious reasons.
 //! By holding a R/W lock for each bucket instead of the entire table, locks are distributed.
 //!
@@ -105,7 +105,7 @@ const DEF_MIN_CAPACITY: usize = 16;
 
 /// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
 /// of the bucket
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum HashBucket<K, V> {
     /// This bucket currently holds a K/V pair
     Contains(K, V),
@@ -183,6 +183,7 @@ impl<K, V> HashBucket<K, V> {
     }
 }
 
+#[derive(Debug)]
 /// The low-level _inner_ hashtable
 struct Table<K, V> {
     /// The buckets
@@ -308,7 +309,7 @@ where
     fn lookup_or_free(&self, key: &K) -> RwLockWriteGuard<HashBucket<K, V>> {
         let hash = self.hash(key);
         let mut free = None;
-        for (idx, _) in self.buckets.iter().enumerate() {
+        for idx in 0..self.buckets.len() {
             let lock = self.buckets[(hash + idx) % self.buckets.len()].write();
             if lock.has_key(key) {
                 // got a matching bucket, return the mutable guard
@@ -363,6 +364,7 @@ impl<K: Clone, V: Clone> Clone for Table<K, V> {
 
 // into_innner will consume the r/w lock
 
+#[derive(Debug)]
 /// An iterator over the keys in the table (SkymapInner)
 pub struct KeyIterator<K, V> {
     table: Table<K, V>,
@@ -380,6 +382,7 @@ impl<K, V> Iterator for KeyIterator<K, V> {
     }
 }
 
+#[derive(Debug)]
 /// An iterator over the values in the table (SkymapInner)
 pub struct ValueIterator<K, V> {
     table: Table<K, V>,
@@ -397,6 +400,7 @@ impl<K, V> Iterator for ValueIterator<K, V> {
     }
 }
 
+#[derive(Debug)]
 /// An iterator over the key/value pairs in the SkymapInner
 pub struct TableIterator<K, V> {
     table: Table<K, V>,
@@ -426,6 +430,7 @@ impl<K, V> IntoIterator for Table<K, V> {
 ///
 /// This Condvar was specifically built for use with [`SkymapInner`] which uses a [`TableLockstateGuard`]
 /// object to temporarily deny all writes
+#[derive(Debug)]
 struct Cvar {
     c: Condvar,
     m: Mutex<()>,
@@ -497,6 +502,7 @@ impl<'a, K: Hash + PartialEq, V> Deref for TableLockStateGuard<'a, K, V> {
     }
 }
 
+#[derive(Debug)]
 /// A [`SkymapInner`] is a concurrent hashtable
 pub struct SkymapInner<K, V> {
     table: RwLock<Table<K, V>>,
@@ -780,12 +786,21 @@ mod guards {
     //! guards! This module implements two guards: an immutable [`ReadGuard`] and a mutable [`WriteGuard`]
     use super::*;
     use owning_ref::{OwningHandle, OwningRef};
+    use std::fmt;
     /// A RAII Guard for reading an entry in a [`SkymapInner`]
     pub struct ReadGuard<'a, K: 'a, V: 'a> {
         inner: OwningRef<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
             V,
         >,
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for ReadGuard<'_, K, V> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+            f.debug_struct("ReadGuard")
+                .field("inner", &*self.inner)
+                .finish()
+        }
     }
 
     impl<'a, K: 'a, V: 'a> ReadGuard<'a, K, V> {
@@ -836,6 +851,14 @@ mod guards {
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockWriteGuard<'a, HashBucket<K, V>>>,
             &'a mut T,
         >,
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug, T: fmt::Debug> fmt::Debug for WriteGuard<'_, K, V, T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+            f.debug_struct("WriteGuard")
+                .field("inner", &*self.inner)
+                .finish()
+        }
     }
 
     impl<'a, K: 'a, V: 'a, T: 'a> WriteGuard<'a, K, V, T> {
@@ -965,6 +988,96 @@ fn test_upsert_existing() {
         skymap.get("sayan").map(|v| *v),
         Some("is wandering around clueless")
     );
+}
+
+#[test]
+fn test_multiple_set_get() {
+    let skymap: Skymap<String, String> = Skymap::new();
+    // a sample size of 30 chars has a very low probability of collisions
+    let rng = rand::thread_rng();
+    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+    keys.iter()
+        .zip(values.iter())
+        .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value.to_owned())));
+    keys.into_iter()
+        .zip(values.into_iter())
+        .for_each(|(key, value)| {
+            assert_eq!(skymap.get(&key).map(|v| v.to_owned()), Some(value));
+        });
+}
+
+#[test]
+fn test_multiple_set_contains() {
+    let rng = rand::thread_rng();
+    let skymap: Skymap<String, String> = Skymap::new();
+    // a sample size of 30 chars has a very low probability of collisions
+    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+    keys.iter()
+        .zip(values.into_iter())
+        .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value)));
+    keys.into_iter().for_each(|key| {
+        assert!(skymap.contains_key(&key));
+    });
+}
+
+#[test]
+fn test_multiple_upsert_get() {
+    let skymap = Skymap::new();
+    let rng = rand::thread_rng();
+    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+    keys.iter().zip(values.iter()).for_each(|(key, val)| {
+        skymap.upsert(key.to_owned(), val.to_owned());
+    });
+    keys.into_iter().zip(values.into_iter()).for_each(|(k, v)| {
+        assert_eq!(skymap.get(&k).map(|v| v.clone()), Some(v));
+    });
+}
+
+#[test]
+fn test_multiple_upsert_contains() {
+    let skymap = Skymap::new();
+    let rng = rand::thread_rng();
+    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+    keys.iter().zip(values.iter()).for_each(|(key, val)| {
+        skymap.upsert(key.to_owned(), val.to_owned());
+    });
+    keys.into_iter().zip(values.into_iter()).for_each(|(k, _)| {
+        assert!(skymap.contains_key(&k));
+    });
+}
+
+#[cfg(test)]
+fn generate_random_keys_values_tuple_vec(
+    count: usize,
+    per_key_length: usize,
+    mut rng: impl rand::Rng,
+) -> (Vec<String>, Vec<String>) {
+    (
+        generate_random_string_vec(count, &mut rng, per_key_length),
+        generate_random_string_vec(count, &mut rng, per_key_length),
+    )
+}
+
+#[cfg(test)]
+fn generate_random_string_vec(
+    count: usize,
+    mut rng: impl rand::Rng,
+    per_key_length: usize,
+) -> Vec<String> {
+    (0..count)
+        .into_iter()
+        .map(|_| generate_random_string(&mut rng, per_key_length))
+        .collect()
+}
+
+#[cfg(test)]
+fn generate_random_string(rng: impl rand::Rng, len: usize) -> String {
+    let randstr: String = rng
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(len)
+        .map(char::from)
+        .collect();
+    randstr
 }
 
 #[cfg(test)]
