@@ -236,6 +236,7 @@ where
     where
         F: Fn(&HashBucket<K, V>) -> bool,
         Q: ?Sized + Hash,
+        K: Borrow<Q>,
     {
         let hash = self.hash(key);
         for i in 0..self.buckets.len() {
@@ -259,6 +260,7 @@ where
     where
         F: Fn(&HashBucket<K, V>) -> bool,
         Q: ?Sized + Hash,
+        K: Borrow<Q>,
     {
         let hash = self.hash(key);
         for i in 0..self.buckets.len() {
@@ -269,6 +271,24 @@ where
             }
         }
         panic!("The given predicate doesn't match any bucket in our hash range");
+    }
+    fn scan_mut_lockless<F>(&mut self, key: &K, matches: F) -> &mut HashBucket<K, V>
+    where
+        F: Fn(&HashBucket<K, V>) -> bool,
+    {
+        let hash = self.hash(key);
+        let len = self.buckets.len();
+
+        for i in 0..self.buckets.len() {
+            let idx = (hash + i) % len;
+            if {
+                let bucket = self.buckets[idx].get_mut();
+                matches(&bucket)
+            } {
+                return self.buckets[idx].get_mut();
+            }
+        }
+        panic!("No bucket found");
     }
     /// Look up a `key`
     ///
@@ -334,7 +354,7 @@ where
             // take each item in the other table and check if it contains some value
             if let HashBucket::Contains(key, val) = bucket.into_inner() {
                 // good so there is a value; let us find an empty bucket where we can insert this
-                let mut bucket = self.scan_mut(&key, |hb| match *hb {
+                let bucket = self.scan_mut_lockless(&key, |hb| match *hb {
                     // we'll return true for empty, unused buckets
                     HashBucket::Empty => true,
                     // in other cases, just return false because this method will be called by
@@ -795,14 +815,6 @@ mod guards {
         >,
     }
 
-    impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for ReadGuard<'_, K, V> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-            f.debug_struct("ReadGuard")
-                .field("inner", &*self.inner)
-                .finish()
-        }
-    }
-
     impl<'a, K: 'a, V: 'a> ReadGuard<'a, K, V> {
         pub(super) fn from_inner(
             inner: OwningRef<
@@ -830,9 +842,10 @@ mod guards {
             self == rhs
         }
     }
-    impl<'a, K, V: PartialEq> PartialEq<V> for ReadGuard<'a, K, V> {
-        fn eq(&self, rhs: &V) -> bool {
-            self == rhs
+
+    impl<K, V: fmt::Debug> fmt::Debug for ReadGuard<'_, K, V> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_fmt(format_args!("ReadGuard({:?})", &**self))
         }
     }
 
@@ -855,9 +868,7 @@ mod guards {
 
     impl<K: fmt::Debug, V: fmt::Debug, T: fmt::Debug> fmt::Debug for WriteGuard<'_, K, V, T> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-            f.debug_struct("WriteGuard")
-                .field("inner", &*self.inner)
-                .finish()
+            f.write_fmt(format_args!("ReadGuard({:?})", &**self))
         }
     }
 
@@ -947,6 +958,7 @@ fn test_get_none() {
 fn test_set_some() {
     let skymap: Skymap<&str, ()> = Skymap::new();
     assert!(skymap.insert("sayan", ()));
+    assert!(*skymap.get("sayan").unwrap() == ());
 }
 
 #[test]
@@ -973,10 +985,7 @@ fn test_update_none() {
 fn test_upsert_non_existing() {
     let skymap: Skymap<&str, &str> = Skymap::new();
     skymap.upsert("sayan", "is writing open source code");
-    assert_eq!(
-        skymap.get("sayan").map(|v| *v),
-        Some("is writing open source code")
-    );
+    assert_eq!(*skymap.get("sayan").unwrap(), "is writing open source code");
 }
 
 #[test]
@@ -985,8 +994,8 @@ fn test_upsert_existing() {
     skymap.insert("sayan", "is writing open source code");
     skymap.upsert("sayan", "is wandering around clueless");
     assert_eq!(
-        skymap.get("sayan").map(|v| *v),
-        Some("is wandering around clueless")
+        *skymap.get("sayan").unwrap(),
+        "is wandering around clueless"
     );
 }
 
@@ -1002,7 +1011,7 @@ fn test_multiple_set_get() {
     keys.into_iter()
         .zip(values.into_iter())
         .for_each(|(key, value)| {
-            assert_eq!(skymap.get(&key).map(|v| v.to_owned()), Some(value));
+            assert_eq!(*skymap.get(&key).unwrap(), value);
         });
 }
 
@@ -1029,7 +1038,7 @@ fn test_multiple_upsert_get() {
         skymap.upsert(key.to_owned(), val.to_owned());
     });
     keys.into_iter().zip(values.into_iter()).for_each(|(k, v)| {
-        assert_eq!(skymap.get(&k).map(|v| v.clone()), Some(v));
+        assert_eq!(*skymap.get(&k).unwrap(), v);
     });
 }
 
@@ -1044,6 +1053,29 @@ fn test_multiple_upsert_contains() {
     keys.into_iter().zip(values.into_iter()).for_each(|(k, _)| {
         assert!(skymap.contains_key(&k));
     });
+}
+
+#[test]
+fn test_multiple_update_pre_existing() {
+    let mut rng = rand::thread_rng();
+    let skymap = Skymap::new();
+    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
+    keys.iter().zip(values.iter()).for_each(|(key, val)| {
+        skymap.upsert(key.to_owned(), val.to_owned());
+    });
+    keys.iter().zip(values.into_iter()).for_each(|(k, v)| {
+        assert_eq!(*skymap.get(k.as_str()).unwrap(), v);
+    });
+    // now update these values
+    let new_values = generate_random_string_vec(100_000, &mut rng, 30);
+    keys.iter()
+        .zip(new_values.iter())
+        .for_each(|(k, v)| assert!(skymap.update(k.to_owned(), v.to_owned())));
+    keys.into_iter()
+        .zip(new_values.into_iter())
+        .for_each(|(k, v)| {
+            assert_eq!(*skymap.get(&k).unwrap(), v);
+        })
 }
 
 #[cfg(test)]
