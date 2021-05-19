@@ -1081,6 +1081,19 @@ mod tests {
     }
 
     #[test]
+    fn test_multiple_update_non_existing() {
+        let mut rng = rand::thread_rng();
+        let skymap = Skymap::new();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            assert!(!skymap.update(key.to_owned(), val.to_owned()));
+        });
+        keys.iter().zip(values.into_iter()).for_each(|(k, _)| {
+            assert!(skymap.get(k.as_str()).is_none());
+        });
+    }
+
+    #[test]
     fn test_multiple_upsert_pre_existing() {
         let mut rng = rand::thread_rng();
         let skymap = Skymap::new();
