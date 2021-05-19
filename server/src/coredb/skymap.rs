@@ -386,11 +386,11 @@ impl<K: Clone, V: Clone> Clone for Table<K, V> {
 
 #[derive(Debug)]
 /// An iterator over the keys in the table (SkymapInner)
-pub struct KeyIterator<K, V> {
+pub struct ConsumingKeyIterator<K, V> {
     table: Table<K, V>,
 }
 
-impl<K, V> Iterator for KeyIterator<K, V> {
+impl<K, V> Iterator for ConsumingKeyIterator<K, V> {
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
@@ -404,11 +404,11 @@ impl<K, V> Iterator for KeyIterator<K, V> {
 
 #[derive(Debug)]
 /// An iterator over the values in the table (SkymapInner)
-pub struct ValueIterator<K, V> {
+pub struct ConsumingValueIterator<K, V> {
     table: Table<K, V>,
 }
 
-impl<K, V> Iterator for ValueIterator<K, V> {
+impl<K, V> Iterator for ConsumingValueIterator<K, V> {
     type Item = V;
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
@@ -422,11 +422,11 @@ impl<K, V> Iterator for ValueIterator<K, V> {
 
 #[derive(Debug)]
 /// An iterator over the key/value pairs in the SkymapInner
-pub struct TableIterator<K, V> {
+pub struct ConsumingTableIterator<K, V> {
     table: Table<K, V>,
 }
 
-impl<K, V> Iterator for TableIterator<K, V> {
+impl<K, V> Iterator for ConsumingTableIterator<K, V> {
     type Item = (K, V);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
@@ -440,9 +440,9 @@ impl<K, V> Iterator for TableIterator<K, V> {
 
 impl<K, V> IntoIterator for Table<K, V> {
     type Item = (K, V);
-    type IntoIter = TableIterator<K, V>;
+    type IntoIter = ConsumingTableIterator<K, V>;
     fn into_iter(self) -> Self::IntoIter {
-        TableIterator { table: self }
+        ConsumingTableIterator { table: self }
     }
 }
 
