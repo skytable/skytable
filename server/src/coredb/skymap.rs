@@ -105,7 +105,7 @@ const DEF_MIN_CAPACITY: usize = 16;
 
 /// A `HashBucket` is a single entry (or _brick in a wall_) in a hashtable and represents the state
 /// of the bucket
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum HashBucket<K, V> {
     /// This bucket currently holds a K/V pair
     Contains(K, V),
@@ -162,6 +162,13 @@ impl<K, V> HashBucket<K, V> {
             Err(())
         }
     }
+    const fn get_self_ref(&self) -> Result<&Self, ()> {
+        if let Self::Contains(_, _) = self {
+            Ok(&self)
+        } else {
+            Err(())
+        }
+    }
     // don't try to const this; destructors aren't known at compile time!
     /// Same return as [`BucketState::get_value_ref()`] except for this function dropping the bucket
     fn get_value(self) -> Option<V> {
@@ -177,6 +184,13 @@ impl<K, V> HashBucket<K, V> {
     {
         if let HashBucket::Contains(bucket_key, _) = self {
             bucket_key == key
+        } else {
+            false
+        }
+    }
+    const fn is_not_available(&self) -> bool {
+        if let Self::Contains(_, _) = self {
+            true
         } else {
             false
         }
@@ -310,6 +324,9 @@ where
             // Nah, that doesn't work
             _ => false,
         })
+    }
+    fn get_idx(&self, idx: usize) -> RwLockReadGuard<HashBucket<K, V>> {
+        self.buckets[idx].read()
     }
     /// Same as [`Self::lookup`] except that it returns a mutable guard to the bucket
     fn lookup_mut<Q>(&self, key: &Q) -> RwLockWriteGuard<HashBucket<K, V>>
@@ -782,6 +799,46 @@ where
     }
 }
 
+struct KVIterator<'a, K, V> {
+    inner_table: &'a SkymapInner<K, V>,
+    state: usize,
+}
+
+impl<'a, K: Hash + Eq, V> Iterator for KVIterator<'a, K, V> {
+    type Item = guards::EntryReadGuard<'a, K, V>;
+    fn next(&mut self) -> Option<<Self>::Item> {
+        while self.state < self.inner_table.buckets_count() {
+            if let Ok(inner) = OwningRef::new(OwningHandle::new_with_fn(
+                self.inner_table.table.read(),
+                |table| unsafe { &*table }.get_idx(self.state),
+            ))
+            .try_map(|v| v.get_self_ref())
+            {
+                // The bucket contains data.
+                return Some(guards::EntryReadGuard { inner });
+            } else {
+                self.state += 1;
+                continue;
+            }
+        }
+        None
+    }
+}
+
+#[test]
+fn test_key_iter() {
+    let inner = SkymapInner::new();
+    assert!(inner.insert("sayan", "writes-code"));
+    let mut keyiter = KVIterator {
+        inner_table: &inner,
+        state: 0,
+    };
+    assert_eq!(
+        *keyiter.next().unwrap(),
+        HashBucket::Contains("sayan", "writes-code")
+    );
+}
+
 mod guards {
     //! # RAII Guards for [`SkymapInner`]
     //!
@@ -914,6 +971,25 @@ mod guards {
     }
 
     impl<'a, K, V: Eq, T: Eq> Eq for WriteGuard<'a, K, V, T> {}
+
+    pub struct EntryReadGuard<'a, K: 'a, V: 'a> {
+        pub(super) inner: OwningRef<
+            OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
+            HashBucket<K, V>,
+        >,
+    }
+
+    impl<'a, K, V> ops::Deref for EntryReadGuard<'a, K, V> {
+        type Target = HashBucket<K, V>;
+        fn deref(&self) -> &Self::Target {
+            &self.inner
+        }
+    }
+    impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for EntryReadGuard<'_, K, V> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_fmt(format_args!("EntryReadGuard({:?})", &**self))
+        }
+    }
 }
 
 pub struct Skymap<K, V> {
