@@ -948,173 +948,222 @@ impl<K, V> Deref for Skymap<K, V> {
     }
 }
 
-#[test]
-fn test_get_none() {
-    let skymap: Skymap<&str, ()> = Skymap::new();
-    assert!(skymap.get("ooh").is_none());
-}
+mod tests {
+    use super::Skymap;
+    #[test]
+    fn test_get_none() {
+        let skymap: Skymap<&str, ()> = Skymap::new();
+        assert!(skymap.get("ooh").is_none());
+    }
 
-#[test]
-fn test_set_some() {
-    let skymap: Skymap<&str, ()> = Skymap::new();
-    assert!(skymap.insert("sayan", ()));
-    assert!(*skymap.get("sayan").unwrap() == ());
-}
+    #[test]
+    fn test_set_some() {
+        let skymap: Skymap<&str, ()> = Skymap::new();
+        assert!(skymap.insert("sayan", ()));
+        assert!(*skymap.get("sayan").unwrap() == ());
+    }
 
-#[test]
-fn test_update_get_set_some() {
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    assert!(skymap.insert("foss", "is for freedom"));
-    assert!(skymap.update(
-        "foss",
-        "is for freedom. But doesn't always mean that it's sustainable"
-    ));
-    assert_eq!(
-        skymap.get("foss").map(|v| *v),
-        Some("is for freedom. But doesn't always mean that it's sustainable")
-    );
-}
+    #[test]
+    fn test_update_get_set_some() {
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        assert!(skymap.insert("foss", "is for freedom"));
+        assert!(skymap.update(
+            "foss",
+            "is for freedom. But doesn't always mean that it's sustainable"
+        ));
+        assert_eq!(
+            skymap.get("foss").map(|v| *v),
+            Some("is for freedom. But doesn't always mean that it's sustainable")
+        );
+    }
 
-#[test]
-fn test_update_none() {
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    assert!(!skymap.update("nonexistentkey", "something"));
-}
+    #[test]
+    fn test_update_none() {
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        assert!(!skymap.update("nonexistentkey", "something"));
+    }
 
-#[test]
-fn test_upsert_non_existing() {
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    skymap.upsert("sayan", "is writing open source code");
-    assert_eq!(*skymap.get("sayan").unwrap(), "is writing open source code");
-}
+    #[test]
+    fn test_upsert_non_existing() {
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        skymap.upsert("sayan", "is writing open source code");
+        assert_eq!(*skymap.get("sayan").unwrap(), "is writing open source code");
+    }
 
-#[test]
-fn test_upsert_existing() {
-    let skymap: Skymap<&str, &str> = Skymap::new();
-    skymap.insert("sayan", "is writing open source code");
-    skymap.upsert("sayan", "is wandering around clueless");
-    assert_eq!(
-        *skymap.get("sayan").unwrap(),
-        "is wandering around clueless"
-    );
-}
+    #[test]
+    fn test_upsert_existing() {
+        let skymap: Skymap<&str, &str> = Skymap::new();
+        skymap.insert("sayan", "is writing open source code");
+        skymap.upsert("sayan", "is wandering around clueless");
+        assert_eq!(
+            *skymap.get("sayan").unwrap(),
+            "is wandering around clueless"
+        );
+    }
 
-#[test]
-fn test_multiple_set_get() {
-    let skymap: Skymap<String, String> = Skymap::new();
-    // a sample size of 30 chars has a very low probability of collisions
-    let rng = rand::thread_rng();
-    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
-    keys.iter()
-        .zip(values.iter())
-        .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value.to_owned())));
-    keys.into_iter()
-        .zip(values.into_iter())
-        .for_each(|(key, value)| {
-            assert_eq!(*skymap.get(&key).unwrap(), value);
+    #[test]
+    fn test_multiple_set_get() {
+        let skymap: Skymap<String, String> = Skymap::new();
+        // a sample size of 30 chars has a very low probability of collisions
+        let rng = rand::thread_rng();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+        keys.iter()
+            .zip(values.iter())
+            .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value.to_owned())));
+        keys.into_iter()
+            .zip(values.into_iter())
+            .for_each(|(key, value)| {
+                assert_eq!(*skymap.get(&key).unwrap(), value);
+            });
+    }
+
+    #[test]
+    fn test_multiple_set_contains() {
+        let rng = rand::thread_rng();
+        let skymap: Skymap<String, String> = Skymap::new();
+        // a sample size of 30 chars has a very low probability of collisions
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+        keys.iter()
+            .zip(values.into_iter())
+            .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value)));
+        keys.into_iter().for_each(|key| {
+            assert!(skymap.contains_key(&key));
         });
-}
+    }
 
-#[test]
-fn test_multiple_set_contains() {
-    let rng = rand::thread_rng();
-    let skymap: Skymap<String, String> = Skymap::new();
-    // a sample size of 30 chars has a very low probability of collisions
-    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
-    keys.iter()
-        .zip(values.into_iter())
-        .for_each(|(key, value)| assert!(skymap.insert(key.to_owned(), value)));
-    keys.into_iter().for_each(|key| {
-        assert!(skymap.contains_key(&key));
-    });
-}
-
-#[test]
-fn test_multiple_upsert_get() {
-    let skymap = Skymap::new();
-    let rng = rand::thread_rng();
-    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
-    keys.iter().zip(values.iter()).for_each(|(key, val)| {
-        skymap.upsert(key.to_owned(), val.to_owned());
-    });
-    keys.into_iter().zip(values.into_iter()).for_each(|(k, v)| {
-        assert_eq!(*skymap.get(&k).unwrap(), v);
-    });
-}
-
-#[test]
-fn test_multiple_upsert_contains() {
-    let skymap = Skymap::new();
-    let rng = rand::thread_rng();
-    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
-    keys.iter().zip(values.iter()).for_each(|(key, val)| {
-        skymap.upsert(key.to_owned(), val.to_owned());
-    });
-    keys.into_iter().zip(values.into_iter()).for_each(|(k, _)| {
-        assert!(skymap.contains_key(&k));
-    });
-}
-
-#[test]
-fn test_multiple_update_pre_existing() {
-    let mut rng = rand::thread_rng();
-    let skymap = Skymap::new();
-    let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
-    keys.iter().zip(values.iter()).for_each(|(key, val)| {
-        skymap.upsert(key.to_owned(), val.to_owned());
-    });
-    keys.iter().zip(values.into_iter()).for_each(|(k, v)| {
-        assert_eq!(*skymap.get(k.as_str()).unwrap(), v);
-    });
-    // now update these values
-    let new_values = generate_random_string_vec(100_000, &mut rng, 30);
-    keys.iter()
-        .zip(new_values.iter())
-        .for_each(|(k, v)| assert!(skymap.update(k.to_owned(), v.to_owned())));
-    keys.into_iter()
-        .zip(new_values.into_iter())
-        .for_each(|(k, v)| {
+    #[test]
+    fn test_multiple_upsert_get() {
+        let skymap = Skymap::new();
+        let rng = rand::thread_rng();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.upsert(key.to_owned(), val.to_owned());
+        });
+        keys.into_iter().zip(values.into_iter()).for_each(|(k, v)| {
             assert_eq!(*skymap.get(&k).unwrap(), v);
-        })
+        });
+    }
+
+    #[test]
+    fn test_multiple_upsert_contains() {
+        let skymap = Skymap::new();
+        let rng = rand::thread_rng();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.upsert(key.to_owned(), val.to_owned());
+        });
+        keys.into_iter().zip(values.into_iter()).for_each(|(k, _)| {
+            assert!(skymap.contains_key(&k));
+        });
+    }
+
+    #[test]
+    fn test_multiple_update_pre_existing() {
+        let mut rng = rand::thread_rng();
+        let skymap = Skymap::new();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.upsert(key.to_owned(), val.to_owned());
+        });
+        keys.iter().zip(values.into_iter()).for_each(|(k, v)| {
+            assert_eq!(*skymap.get(k.as_str()).unwrap(), v);
+        });
+        // now update these values
+        let new_values = generate_random_string_vec(100_000, &mut rng, 30);
+        keys.iter()
+            .zip(new_values.iter())
+            .for_each(|(k, v)| assert!(skymap.update(k.to_owned(), v.to_owned())));
+        keys.into_iter()
+            .zip(new_values.into_iter())
+            .for_each(|(k, v)| {
+                assert_eq!(*skymap.get(&k).unwrap(), v);
+            })
+    }
+
+    #[test]
+    fn test_multiple_upsert_pre_existing() {
+        let mut rng = rand::thread_rng();
+        let skymap = Skymap::new();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.upsert(key.to_owned(), val.to_owned());
+        });
+        keys.iter().zip(values.into_iter()).for_each(|(k, v)| {
+            assert_eq!(*skymap.get(k.as_str()).unwrap(), v);
+        });
+        // now update these values
+        let new_values = generate_random_string_vec(100_000, &mut rng, 30);
+        keys.iter()
+            .zip(new_values.iter())
+            .for_each(|(k, v)| skymap.upsert(k.to_owned(), v.to_owned()));
+        keys.into_iter()
+            .zip(new_values.into_iter())
+            .for_each(|(k, v)| {
+                assert_eq!(*skymap.get(&k).unwrap(), v);
+            })
+    }
+
+    #[test]
+    fn test_multiple_get_mut() {
+        let mut rng = rand::thread_rng();
+        let skymap = Skymap::new();
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.insert(key.to_owned(), val.to_owned());
+        });
+        keys.iter().zip(values.into_iter()).for_each(|(k, v)| {
+            assert_eq!(*skymap.get(k.as_str()).unwrap(), v);
+        });
+        // now update these values
+        let new_values = generate_random_string_vec(100_000, &mut rng, 30);
+        keys.iter()
+            .zip(new_values.iter())
+            .for_each(|(k, v)| *skymap.get_mut(k.as_str()).unwrap() = v.to_owned());
+        keys.into_iter()
+            .zip(new_values.into_iter())
+            .for_each(|(k, v)| {
+                assert_eq!(*skymap.get(&k).unwrap(), v);
+            })
+    }
+
+    #[cfg(test)]
+    fn generate_random_keys_values_tuple_vec(
+        count: usize,
+        per_key_length: usize,
+        mut rng: impl rand::Rng,
+    ) -> (Vec<String>, Vec<String>) {
+        (
+            generate_random_string_vec(count, &mut rng, per_key_length),
+            generate_random_string_vec(count, &mut rng, per_key_length),
+        )
+    }
+
+    #[cfg(test)]
+    fn generate_random_string_vec(
+        count: usize,
+        mut rng: impl rand::Rng,
+        per_key_length: usize,
+    ) -> Vec<String> {
+        (0..count)
+            .into_iter()
+            .map(|_| generate_random_string(&mut rng, per_key_length))
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn generate_random_string(rng: impl rand::Rng, len: usize) -> String {
+        let randstr: String = rng
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(len)
+            .map(char::from)
+            .collect();
+        randstr
+    }
 }
 
 #[cfg(test)]
-fn generate_random_keys_values_tuple_vec(
-    count: usize,
-    per_key_length: usize,
-    mut rng: impl rand::Rng,
-) -> (Vec<String>, Vec<String>) {
-    (
-        generate_random_string_vec(count, &mut rng, per_key_length),
-        generate_random_string_vec(count, &mut rng, per_key_length),
-    )
-}
-
-#[cfg(test)]
-fn generate_random_string_vec(
-    count: usize,
-    mut rng: impl rand::Rng,
-    per_key_length: usize,
-) -> Vec<String> {
-    (0..count)
-        .into_iter()
-        .map(|_| generate_random_string(&mut rng, per_key_length))
-        .collect()
-}
-
-#[cfg(test)]
-fn generate_random_string(rng: impl rand::Rng, len: usize) -> String {
-    let randstr: String = rng
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect();
-    randstr
-}
-
-#[cfg(test)]
-mod tests_concurrency {
-    use super::*;
+mod concurreny_tests {
+    use super::Skymap;
     #[test]
     fn test_race_and_multiple_table_lock_state_guards() {
         // this will test for a race condition and should take approximately 40 seconds to complete
