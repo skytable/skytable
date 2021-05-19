@@ -108,7 +108,7 @@ const DEF_MIN_CAPACITY: usize = 16;
 #[derive(Clone, Debug, PartialEq)]
 pub enum HashBucket<K, V> {
     /// This bucket currently holds a K/V pair
-    Contains(K, V),
+    Contains(OccupiedEntry<K, V>),
     /// This bucket is empty and has never been used
     ///
     /// As linear probing resolves hash collisions by moving to the next bucket, it can cause
@@ -156,15 +156,24 @@ impl<K, V> HashBucket<K, V> {
     ///
     /// This will return `Some(value)` if the value exists or `None` if the bucket has no value
     const fn get_value_ref(&self) -> Result<&V, ()> {
-        if let Self::Contains(_, ref val) = self {
-            Ok(val)
+        if let Self::Contains(oc) = self {
+            Ok(oc.value())
         } else {
             Err(())
         }
     }
-    const fn get_self_ref(&self) -> Result<&Self, ()> {
-        if let Self::Contains(_, _) = self {
-            Ok(&self)
+    /// Get a reference to the key if `Self` has a `Contains` state
+    const fn get_key_ref(&self) -> Result<&K, ()> {
+        if let Self::Contains(oc) = self {
+            Ok(oc.key())
+        } else {
+            Err(())
+        }
+    }
+    /// This returns `Ok(OccupiedEntry(K, V))` if `Self` is occupied
+    const fn get_occupied_entry_ref(&self) -> Result<&OccupiedEntry<K, V>, ()> {
+        if let Self::Contains(oc) = self {
+            Ok(&oc)
         } else {
             Err(())
         }
@@ -172,8 +181,8 @@ impl<K, V> HashBucket<K, V> {
     // don't try to const this; destructors aren't known at compile time!
     /// Same return as [`BucketState::get_value_ref()`] except for this function dropping the bucket
     fn get_value(self) -> Option<V> {
-        if let Self::Contains(_, val) = self {
-            Some(val)
+        if let Self::Contains(oc) = self {
+            Some(oc.pop_value())
         } else {
             None
         }
@@ -182,18 +191,32 @@ impl<K, V> HashBucket<K, V> {
     where
         K: PartialEq,
     {
-        if let HashBucket::Contains(bucket_key, _) = self {
+        if let HashBucket::Contains(OccupiedEntry(bucket_key, _)) = self {
             bucket_key == key
         } else {
             false
         }
     }
     const fn is_not_available(&self) -> bool {
-        if let Self::Contains(_, _) = self {
+        if let Self::Contains(_) = self {
             true
         } else {
             false
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OccupiedEntry<K, V>(K, V);
+impl<K, V> OccupiedEntry<K, V> {
+    pub const fn key(&self) -> &K {
+        &self.0
+    }
+    pub const fn value(&self) -> &V {
+        &self.1
+    }
+    pub fn pop_value(self) -> V {
+        self.1
     }
 }
 
@@ -318,7 +341,11 @@ where
         self.scan(key, |val| match *val {
             // Check if the keys DO match; remember fella -- same hash doesn't mean the keys have to
             // be the same -- we're linear probing
-            HashBucket::Contains(ref target_key, _) if key == target_key.borrow() => true,
+            HashBucket::Contains(OccupiedEntry(ref target_key, _))
+                if key == target_key.borrow() =>
+            {
+                true
+            }
             // Good, so there's nothing ahead; this predicate rets true, so we'll get an empty bucket
             HashBucket::Empty => true,
             // Nah, that doesn't work
@@ -336,7 +363,11 @@ where
     {
         self.scan_mut(key, |val| match *val {
             // Check if the keys DO match
-            HashBucket::Contains(ref target_key, _) if key == target_key.borrow() => true,
+            HashBucket::Contains(OccupiedEntry(ref target_key, _))
+                if key == target_key.borrow() =>
+            {
+                true
+            }
             // we'll get an empty bucket mutable bucket
             HashBucket::Empty => true,
             // Nah, that doesn't work
@@ -369,7 +400,7 @@ where
     fn fill_from(&mut self, table: Self) {
         table.buckets.into_iter().for_each(|bucket| {
             // take each item in the other table and check if it contains some value
-            if let HashBucket::Contains(key, val) = bucket.into_inner() {
+            if let HashBucket::Contains(OccupiedEntry(key, val)) = bucket.into_inner() {
                 // good so there is a value; let us find an empty bucket where we can insert this
                 let bucket = self.scan_mut_lockless(&key, |hb| match *hb {
                     // we'll return true for empty, unused buckets
@@ -380,7 +411,7 @@ where
                     _ => false,
                 });
                 // now set its value
-                *bucket = HashBucket::Contains(key, val);
+                *bucket = HashBucket::Contains(OccupiedEntry(key, val));
             }
         });
     }
@@ -411,7 +442,7 @@ impl<K, V> Iterator for ConsumingKeyIterator<K, V> {
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
-            if let HashBucket::Contains(key, _) = bucket.into_inner() {
+            if let HashBucket::Contains(OccupiedEntry(key, _)) = bucket.into_inner() {
                 return Some(key);
             }
         }
@@ -429,7 +460,7 @@ impl<K, V> Iterator for ConsumingValueIterator<K, V> {
     type Item = V;
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
-            if let HashBucket::Contains(_, value) = bucket.into_inner() {
+            if let HashBucket::Contains(OccupiedEntry(_, value)) = bucket.into_inner() {
                 return Some(value);
             }
         }
@@ -447,7 +478,7 @@ impl<K, V> Iterator for ConsumingTableIterator<K, V> {
     type Item = (K, V);
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(bucket) = self.table.buckets.pop() {
-            if let HashBucket::Contains(key, value) = bucket.into_inner() {
+            if let HashBucket::Contains(OccupiedEntry(key, value)) = bucket.into_inner() {
                 return Some((key, value));
             }
         }
@@ -564,6 +595,27 @@ where
             state_lock: AtomicBool::new(false),
         }
     }
+    /// A non-consuming iterator over the underlying key/value pairs
+    ///
+    /// ## Efficiency
+    /// Currently this method is very inefficient, especially because keys can lie very far
+    /// apart from each other and as we have to go through the entire hashtable to look for
+    /// occupied entries, it's a rather inefficient task.
+    ///
+    /// Using this method directly is not UB itself, but the results may be meaningless if the
+    /// table is not frozen before this is called. Here's why:
+    /// 1. User A calls `iter()` and gets some elements from the Table which initially looks like:
+    /// [1, 2, 3, 4]
+    /// 2. User B appends some new elements changing the structure to: [1, A, 2, 3, 4]
+    /// 3. On collecting the first 4 elements, A gets a different result
+    ///
+    /// FIXME: Use quadratic probing and measure speeds? SIMD lookup?
+    pub fn iter_key_value(&self) -> KVIterator<K, V> {
+        KVIterator {
+            inner_table: &self,
+            state: 0,
+        }
+    }
     /// Blocks the current thread, waiting for an unlock on writes
     fn wait_for_write_unlock(&self) {
         self.state_condvar.wait(&self.state_lock)
@@ -651,7 +703,7 @@ where
             self.reserve_space(1);
         }
     }
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<guards::ReadGuard<K, V>>
+    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<guards::ReadGuard<K, V, V>>
     where
         K: Borrow<Q>,
         Q: Hash + PartialEq,
@@ -677,7 +729,7 @@ where
         if let Ok(inner) = OwningHandle::try_new(
             OwningHandle::new_with_fn(self.table.read(), |x| unsafe { &*x }.lookup_mut(key)),
             |x| {
-                if let &mut HashBucket::Contains(_, ref mut val) =
+                if let &mut HashBucket::Contains(OccupiedEntry(_, ref mut val)) =
                     unsafe { &mut *(x as *mut HashBucket<K, V>) }
                 {
                     // The bucket contains data.
@@ -715,7 +767,7 @@ where
                 // don't try doing this directly with a deref as you'll get a move error as K doesn't
                 // implement copy (it doesn't have to; we just need Eq + Hash; these bounds are enough)
                 let mut bucket = lock.find_free_mut(&key);
-                *bucket = HashBucket::Contains(key, val);
+                *bucket = HashBucket::Contains(OccupiedEntry(key, val));
             }
             // we inserted a new key, so expand
             self.reshard_table(lock);
@@ -729,7 +781,7 @@ where
         let lock = self.table.read();
         let mut bucket = lock.lookup_mut(&key);
         match *bucket {
-            HashBucket::Contains(_, ref mut value) => {
+            HashBucket::Contains(OccupiedEntry(_, ref mut value)) => {
                 *value = val;
                 return true;
             }
@@ -785,13 +837,13 @@ where
         {
             let mut bucket = lock.lookup_or_free(&key);
             match *bucket {
-                HashBucket::Contains(_, ref mut val) => {
+                HashBucket::Contains(OccupiedEntry(_, ref mut val)) => {
                     *val = value;
                     // immediately return because we don't need a reshard
                     return;
                 }
                 ref mut some_available_bucket => {
-                    *some_available_bucket = HashBucket::Contains(key, value);
+                    *some_available_bucket = HashBucket::Contains(OccupiedEntry(key, value));
                 }
             }
         }
@@ -799,44 +851,29 @@ where
     }
 }
 
-struct KVIterator<'a, K, V> {
+pub struct KVIterator<'a, K, V> {
     inner_table: &'a SkymapInner<K, V>,
     state: usize,
 }
 
 impl<'a, K: Hash + Eq, V> Iterator for KVIterator<'a, K, V> {
-    type Item = guards::EntryReadGuard<'a, K, V>;
+    type Item = guards::ReadGuard<'a, K, V, OccupiedEntry<K, V>>;
     fn next(&mut self) -> Option<<Self>::Item> {
         while self.state < self.inner_table.buckets_count() {
             if let Ok(inner) = OwningRef::new(OwningHandle::new_with_fn(
                 self.inner_table.table.read(),
                 |table| unsafe { &*table }.get_idx(self.state),
             ))
-            .try_map(|v| v.get_self_ref())
+            .try_map(|v| v.get_occupied_entry_ref())
             {
                 // The bucket contains data.
-                return Some(guards::EntryReadGuard { inner });
-            } else {
                 self.state += 1;
-                continue;
+                return Some(guards::ReadGuard::from_inner(inner));
             }
+            self.state += 1;
         }
         None
     }
-}
-
-#[test]
-fn test_key_iter() {
-    let inner = SkymapInner::new();
-    assert!(inner.insert("sayan", "writes-code"));
-    let mut keyiter = KVIterator {
-        inner_table: &inner,
-        state: 0,
-    };
-    assert_eq!(
-        *keyiter.next().unwrap(),
-        HashBucket::Contains("sayan", "writes-code")
-    );
 }
 
 mod guards {
@@ -865,55 +902,55 @@ mod guards {
     use owning_ref::{OwningHandle, OwningRef};
     use std::fmt;
     /// A RAII Guard for reading an entry in a [`SkymapInner`]
-    pub struct ReadGuard<'a, K: 'a, V: 'a> {
+    pub struct ReadGuard<'a, K: 'a, V: 'a, T: 'a> {
         inner: OwningRef<
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
-            V,
+            T,
         >,
     }
 
-    impl<'a, K: 'a, V: 'a> ReadGuard<'a, K, V> {
+    impl<'a, K: 'a, V: 'a, T: 'a> ReadGuard<'a, K, V, T> {
         pub(super) fn from_inner(
             inner: OwningRef<
                 OwningHandle<
                     RwLockReadGuard<'a, Table<K, V>>,
                     RwLockReadGuard<'a, HashBucket<K, V>>,
                 >,
-                V,
+                T,
             >,
         ) -> Self {
             Self { inner }
         }
     }
 
-    impl<'a, K, V> ops::Deref for ReadGuard<'a, K, V> {
-        type Target = V;
+    impl<'a, K, V, T> ops::Deref for ReadGuard<'a, K, V, T> {
+        type Target = T;
         fn deref(&self) -> &Self::Target {
             &self.inner
         }
     }
 
-    impl<'a, K, V: PartialEq> PartialEq for ReadGuard<'a, K, V> {
-        fn eq(&self, rhs: &ReadGuard<'a, K, V>) -> bool {
+    impl<'a, K, V: PartialEq, T: PartialEq> PartialEq for ReadGuard<'a, K, V, T> {
+        fn eq(&self, rhs: &ReadGuard<'a, K, V, T>) -> bool {
             // this implictly derefs self
             self == rhs
         }
     }
 
-    impl<K, V: fmt::Debug> fmt::Debug for ReadGuard<'_, K, V> {
+    impl<K, V: fmt::Debug, T: fmt::Debug> fmt::Debug for ReadGuard<'_, K, V, T> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_fmt(format_args!("ReadGuard({:?})", &**self))
         }
     }
 
-    impl<'a, K, V> Drop for ReadGuard<'a, K, V> {
+    impl<'a, K, V, T> Drop for ReadGuard<'a, K, V, T> {
         fn drop(&mut self) {
             let Self { inner } = self;
             drop(inner);
         }
     }
 
-    impl<'a, K, V: Eq> Eq for ReadGuard<'a, K, V> {}
+    impl<'a, K, V: Eq, T: Eq> Eq for ReadGuard<'a, K, V, T> {}
 
     /// A RAII Guard for reading an entry in a [`SkymapInner`]
     pub struct WriteGuard<'a, K, V, T> {
@@ -977,18 +1014,6 @@ mod guards {
             OwningHandle<RwLockReadGuard<'a, Table<K, V>>, RwLockReadGuard<'a, HashBucket<K, V>>>,
             HashBucket<K, V>,
         >,
-    }
-
-    impl<'a, K, V> ops::Deref for EntryReadGuard<'a, K, V> {
-        type Target = HashBucket<K, V>;
-        fn deref(&self) -> &Self::Target {
-            &self.inner
-        }
-    }
-    impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for EntryReadGuard<'_, K, V> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_fmt(format_args!("EntryReadGuard({:?})", &**self))
-        }
     }
 }
 
@@ -1214,6 +1239,21 @@ mod tests {
                 assert_eq!(*skymap.get(&k).unwrap(), v);
             })
     }
+    #[test]
+    fn test_non_consuming_iterator() {
+        // chose a small size for this as iteration is very inefficient since keys can be very far away
+        let mut rng = rand::thread_rng();
+        let skymap = Skymap::new();
+        let (keys, values) = generate_random_keys_values_tuple_vec(10_000, 30, &mut rng);
+        keys.iter().zip(values.iter()).for_each(|(key, val)| {
+            skymap.insert(key.to_owned(), val.to_owned());
+        });
+        let iter_len = skymap.iter_key_value().count();
+        assert_eq!(iter_len, 10_000);
+        skymap.iter_key_value().for_each(|occupied_entry| {
+            assert!(keys.contains(&occupied_entry.key()));
+        })
+    }
 
     #[cfg(test)]
     fn generate_random_keys_values_tuple_vec(
@@ -1251,7 +1291,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod concurreny_tests {
+mod concurrency_tests {
     use super::Skymap;
     #[test]
     fn test_race_and_multiple_table_lock_state_guards() {
