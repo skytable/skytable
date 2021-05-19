@@ -45,15 +45,21 @@
 //!
 //! ### Collision Resolution
 //! When two hashes for a given `Hash`able type `T` collide, we have to do something because they can't share the
-//! same bucket. This is where Skymap uses an algorithm called [linear probing](https://en.wikipedia.org/wiki/Linear_probing)
-//! as first suggested by G. Amdahl, Elaine M. McGraw and Arthur Samuel and first analyzed by Donald Knuth.
-//! In this _strategy_ we move to the next bucket following the bucket where the hash collided and keep on moving
-//! from then on until we find an empty bucket. The same happens while searching through the buckets
+//! same bucket. This is where Skymap uses an [open-addressing](https://en.wikipedia.org/wiki/Open_addressing)
+//! algorithm called [quadratic probing](https://en.wikipedia.org/wiki/Quadratic_probing).
+//! In this algorithm we move to the next bucket by using the following formula:
+//! let h(x) be a hash function and i(x) be the function that gives the index, then for a key x, the index
+//! of the bucket to look at is given by:
+//! i(x) = h(x) + (current_bucket_idx ^ 2)
+//! and keep on moving from then on until we find an empty bucket. The same happens while searching through
+//! the buckets. We use quadratic probing because it gives a good tradeoff between clustering and caching.
+//! Secondary clusters that are indeed formed are _less dangerous_ to performance than the primary clusters
+//! formed by linear probing
 //!
 //! ## Acknowledgements
 //! Built with ideas from:
-//! - `CHashMap` that is released under the MIT License (https://lib.rs/crates/chashmap)
 //! - `Hashbrown` that is released under the Apache-2.0 or MIT License (http://github.com/rust-lang/hashbrown)
+//! - `CHashMap` that is released under the MIT License (https://lib.rs/crates/chashmap)
 //!
 
 #[cfg(loom)]
@@ -111,14 +117,14 @@ pub enum HashBucket<K, V> {
     Contains(OccupiedEntry<K, V>),
     /// This bucket is empty and has never been used
     ///
-    /// As linear probing resolves hash collisions by moving to the next bucket, it can cause
+    /// As quadratic probing resolves hash collisions by moving to the next bucket, it can cause
     /// clustering across the underlying structure. An `Empty` state indicates that it is the
     /// end of such a cluster
     Empty,
     /// This bucket is **not empty** but **is free for new data** and was removed
     ///
     /// It is very important for us to distinguish between `Empty` and `Removed` buckets; here's why:
-    /// - An `Empty` bucket indicates that it has never been used; so while running a linear probe as
+    /// - An `Empty` bucket indicates that it has never been used; so while running a quadratic probe as
     /// part of a search, if we encounter an `Empty` field for a hash, we can safely consider that
     /// there won't be any buckets beyond that point for this hash.
     /// - However, if it is in a `Removed` state, it indicates that some data was stored in it initially
@@ -279,13 +285,13 @@ where
         for i in 0..self.buckets.len() {
             /*
               The hashes are distributed across the buckets. We start scanning from the bottom of the table
-              and start going up. Our hash index = (hash + bucket_we_are_at) % number of buckets
+              and start going up. Our hash index = (hash + bucket_we_are_at.pow(2)) % number of buckets
               Why the modulus (%) and all that -- well, hashes can get SUPER LARGE and like 2^64 large, so
               you possibly won't have that many buckets; that's why we shard them across the limited space we
-              have. Why +i? Well, we just checked one bucket, it didn't match the predicate, so we'll obviously
-              have to move away ... that's what linear probing does, doesn't it?
+              have. Why +i(.pow(2))? Well, we just checked one bucket, it didn't match the predicate, so we'll obviously
+              have to move away ... that's what quadratic probing does, doesn't it?
             */
-            let lock = self.buckets[(hash + i) % self.buckets.len()].read();
+            let lock = self.buckets[(hash + i.pow(2)) % self.buckets.len()].read();
             if predicate(&lock) {
                 return lock;
             }
@@ -302,7 +308,7 @@ where
         let hash = self.hash(key);
         for i in 0..self.buckets.len() {
             // To understand what's going on here, see my comment for `Self::scan`
-            let lock = self.buckets[(hash + i) % self.buckets.len()].write();
+            let lock = self.buckets[(hash + i.pow(2)) % self.buckets.len()].write();
             if predicate(&lock) {
                 return lock;
             }
@@ -317,7 +323,7 @@ where
         let len = self.buckets.len();
 
         for i in 0..self.buckets.len() {
-            let idx = (hash + i) % len;
+            let idx = (hash + i.pow(2)) % len;
             if {
                 let bucket = self.buckets[idx].get_mut();
                 matches(&bucket)
@@ -340,7 +346,7 @@ where
     {
         self.scan(key, |val| match *val {
             // Check if the keys DO match; remember fella -- same hash doesn't mean the keys have to
-            // be the same -- we're linear probing
+            // be the same -- we're quadratic probing
             HashBucket::Contains(OccupiedEntry(ref target_key, _))
                 if key == target_key.borrow() =>
             {
@@ -378,7 +384,7 @@ where
         let hash = self.hash(key);
         let mut free = None;
         for idx in 0..self.buckets.len() {
-            let lock = self.buckets[(hash + idx) % self.buckets.len()].write();
+            let lock = self.buckets[(hash + idx.pow(2)) % self.buckets.len()].write();
             if lock.has_key(key) {
                 // got a matching bucket, return the mutable guard
                 return lock;
@@ -609,8 +615,8 @@ where
     /// 2. User B appends some new elements changing the structure to: [1, A, 2, 3, 4]
     /// 3. On collecting the first 4 elements, A gets a different result
     ///
-    /// FIXME: Use quadratic probing and measure speeds? SIMD lookup?
-    pub fn iter_key_value(&self) -> KVIterator<K, V> {
+    /// FIXME: SIMD lookup?
+    pub fn entries(&self) -> KVIterator<K, V> {
         KVIterator {
             inner_table: &self,
             state: 0,
@@ -1244,13 +1250,13 @@ mod tests {
         // chose a small size for this as iteration is very inefficient since keys can be very far away
         let mut rng = rand::thread_rng();
         let skymap = Skymap::new();
-        let (keys, values) = generate_random_keys_values_tuple_vec(10_000, 30, &mut rng);
+        let (keys, values) = generate_random_keys_values_tuple_vec(100_000, 30, &mut rng);
         keys.iter().zip(values.iter()).for_each(|(key, val)| {
             skymap.insert(key.to_owned(), val.to_owned());
         });
-        let iter_len = skymap.iter_key_value().count();
-        assert_eq!(iter_len, 10_000);
-        skymap.iter_key_value().for_each(|occupied_entry| {
+        let iter_len = skymap.entries().count();
+        assert_eq!(iter_len, 100_000);
+        skymap.entries().for_each(|occupied_entry| {
             assert!(keys.contains(&occupied_entry.key()));
         })
     }
