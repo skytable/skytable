@@ -468,7 +468,7 @@ impl Cvar {
 /// A table lock state guard
 ///
 /// This object holds a locked [`SkymapInner`] object. The locked state corresponds to the internal `locked_state`
-/// RwLock's value. You can use the [`TableLockStateGuard`] to reference the actual table and do any operations
+/// `AtomicBool`'s value. You can use the [`TableLockStateGuard`] to reference the actual table and do any operations
 /// on it. It is recommended that whenever you're about to do a BGSAVE operation, call [`SkymapInner::lock_writes()`]
 /// and you'll get this object. Use this object to mutate/read the data of the inner hashtable and then as soon
 /// as this lock state goes out of scope, you can be sure that all threads waiting to write will get access.
@@ -744,6 +744,8 @@ where
             match *bucket {
                 HashBucket::Contains(_, ref mut val) => {
                     *val = value;
+                    // immediately return because we don't need a reshard
+                    return;
                 }
                 ref mut some_available_bucket => {
                     *some_available_bucket = HashBucket::Contains(key, value);
