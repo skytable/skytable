@@ -46,6 +46,7 @@ pub mod htable;
 pub struct CoreDB {
     /// The shared object, which contains a `Shared` object wrapped in an atomic RC
     pub shared: Arc<Shared>,
+    /// The actual in-memory hashtable
     pub coremap: HTable<Data, Data>,
 }
 
@@ -193,6 +194,7 @@ impl CoreDB {
     pub fn is_poisoned(&self) -> bool {
         *(self.shared).poisoned.read()
     }
+    /// Provides a reference to the shared [`Coremap`] object
     pub fn get_ref(&self) -> &HTable<Data, Data> {
         &self.coremap
     }

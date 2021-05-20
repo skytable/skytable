@@ -25,10 +25,6 @@
 */
 
 use bytes::Bytes;
-use dashmap::iter::Iter;
-use dashmap::mapref::entry::Entry;
-use dashmap::mapref::one::Ref;
-use dashmap::DashMap;
 use libsky::TResult;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -41,14 +37,15 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-
-pub type HashTable<K, V> = DashMap<K, V>;
-
 use std::sync::Arc;
 
 const ORDERING_RELAXED: Ordering = Ordering::Relaxed;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+/// A thread-safe in-memory hashtable
+///
+/// This wraps around a [`Coremap`] object in an [`Arc`] to make it shareable across threads. Clones
+/// are cheap because it just increments the atomic reference counter
 pub struct HTable<K: Eq + Hash, V>
 where
     K: Eq + Hash,
@@ -59,6 +56,7 @@ where
 }
 
 impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
+    /// Create a new, empty in-memory table
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Coremap::new()),
@@ -66,11 +64,25 @@ impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
             _marker_value: PhantomData,
         }
     }
+    /// Initialize a new HTable instance from an existing [`Coremap`]
     pub fn from_raw(inner: Coremap<K, V>) -> Self {
         Self {
             inner: Arc::new(inner),
             _marker_key: PhantomData,
             _marker_value: PhantomData,
+        }
+    }
+}
+
+impl<K, V> Clone for HTable<K, V>
+where
+    K: Eq + Hash,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            _marker_key: self._marker_key.clone(),
+            _marker_value: self._marker_value.clone(),
         }
     }
 }
@@ -105,6 +117,8 @@ impl Cvar {
             self.c.wait(&mut owned_guard);
         }
     }
+    /// Wait for a notification and then immediately run a closure as soon as the `locked_state`
+    /// is false
     fn wait_and_then_immediately<T, F>(&self, locked_state: &AtomicBool, and_then: F) -> T
     where
         F: Fn() -> T,
@@ -119,7 +133,15 @@ impl Cvar {
     }
 }
 
+use dashmap::iter::Iter;
+use dashmap::mapref::entry::Entry;
+use dashmap::mapref::one::Ref;
+use dashmap::DashMap;
+pub type HashTable<K, V> = DashMap<K, V>;
+
 #[derive(Debug)]
+/// The Coremap contains the actual key/value pairs along with additional fields for data safety
+/// and protection
 pub struct Coremap<K, V>
 where
     K: Eq + Hash,
@@ -167,6 +189,7 @@ impl<'a, K: Eq + Hash + Serialize, V: Serialize> Deref for TableLockStateGuard<'
 impl<'a, K: Hash + Eq + Serialize, V: Serialize> Drop for TableLockStateGuard<'a, K, V> {
     fn drop(&mut self) {
         unsafe {
+            // we know that no such guards exist, so indicate that the guards has been released
             self.inner._force_unlock_writes();
         }
     }
@@ -177,9 +200,10 @@ where
     K: Eq + Hash + Serialize,
     V: Serialize,
 {
+    /// Create an empty coremap
     pub fn new() -> Self {
         Coremap {
-            inner: DashMap::new(),
+            inner: HashTable::new(),
             state_lock: AtomicBool::new(false),
             state_condvar: Cvar::new(),
         }
@@ -256,14 +280,26 @@ where
             false
         }
     }
+    /// Serialize the hashtable into a `Vec<u8>` that can be saved to a file
     pub fn serialize(&self) -> TResult<Vec<u8>> {
         bincode::serialize(&self.inner).map_err(|e| e.into())
     }
+    /// Force lock writes on the underlying table
+    ///
+    /// ## Safety
+    /// This function is unsafe to be called directly and may result in undefined behavior (UB).
+    /// Instead, call [`Coremap::lock_writes`]
     unsafe fn _force_lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
         self.state_lock.store(true, ORDERING_RELAXED);
         self.state_condvar.notify_all();
         TableLockStateGuard { inner: &self }
     }
+    /// Force unlock writes on the underlying table
+    ///
+    /// ## Safety
+    /// This function is unsafe to be called directly and may result in undefined behavior (UB).
+    /// Instead, call [`Coremap::lock_writes`] and then drop the [`TableLockStateGuard`] to unlock
+    /// writes on the table (will be dropped as soon as it goes out of scope)
     unsafe fn _force_unlock_writes(&self) {
         self.state_lock.store(false, ORDERING_RELAXED);
         self.state_condvar.notify_all();
@@ -272,6 +308,7 @@ where
     fn wait_for_write_unlock(&self) {
         self.state_condvar.wait(&self.state_lock);
     }
+    /// Wait for an unlock on writes and then immediately run the provided closure (`then`)
     fn wait_for_write_unlock_and_then<T, F>(&self, then: F) -> T
     where
         F: Fn() -> T,
@@ -279,6 +316,10 @@ where
         self.state_condvar
             .wait_and_then_immediately(&self.state_lock, then)
     }
+    /// Lock writes on the table
+    ///
+    /// This will immediately return a [`TableLockStateGuard`] if the table is in an unlocked state,
+    /// but however **will block if the table is already locked** and then return when a guard is available
     pub fn lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
         self.wait_for_write_unlock_and_then(|| unsafe {
             // since we've got a write unlock at this exact point, we're free to lock the table
@@ -290,6 +331,7 @@ where
 }
 
 impl Coremap<Data, Data> {
+    /// Returns a `Coremap<Data, Data>` from the provided file (as a `Vec<u8>`)
     pub fn deserialize(src: Vec<u8>) -> TResult<Self> {
         let h: HashTable<Data, Data> = bincode::deserialize(&src)?;
         Ok(Self {
@@ -298,6 +340,7 @@ impl Coremap<Data, Data> {
             state_condvar: Cvar::new(),
         })
     }
+    /// Returns atleast `count` number of keys from the hashtable
     pub fn get_keys(&self, count: usize) -> Vec<Bytes> {
         let mut v = Vec::with_capacity(count);
         self.iter()

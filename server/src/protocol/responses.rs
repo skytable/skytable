@@ -24,7 +24,7 @@
  *
 */
 
-//! Primitives for generating Terrapipe compatible responses
+//! Primitives for generating Skyhash compatible responses
 
 pub mod groups {
     //! # Pre-compiled response **elements**
