@@ -49,16 +49,15 @@ where
     }
     let mut kviter = act.into_iter().skip(1);
     let failed = {
-        if let Some(mut whandle) = handle.acquire_write() {
-            let writer = whandle.get_mut_ref();
+        if handle.is_poisoned() {
+            true
+        } else {
+            let writer = handle.get_ref();
             while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-                let _ = writer.insert(Data::from(key), Data::from(val));
+                let _ = writer.upsert(Data::from(key), Data::from(val));
             }
             drop(writer);
-            drop(whandle);
             false
-        } else {
-            true
         }
     };
     if failed {

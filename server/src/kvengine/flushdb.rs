@@ -40,11 +40,11 @@ where
     crate::err_if_len_is!(act, con, != 0);
     let failed;
     {
-        if let Some(mut table) = handle.acquire_write() {
-            table.get_mut_ref().clear();
-            failed = false;
-        } else {
+        if handle.is_poisoned() {
             failed = true;
+        } else {
+            handle.get_ref().clear();
+            failed = false;
         }
     }
     if failed {

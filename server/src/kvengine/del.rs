@@ -46,19 +46,18 @@ where
     crate::err_if_len_is!(act, con, == 0);
     let done_howmany: Option<usize>;
     {
-        if let Some(mut whandle) = handle.acquire_write() {
+        if handle.is_poisoned() {
+            done_howmany = None;
+        } else {
             let mut many = 0;
-            let cmap = (*whandle).get_mut_ref();
+            let cmap = handle.get_ref();
             act.into_iter().skip(1).for_each(|key| {
-                if cmap.remove(key.as_bytes()).is_some() {
+                if cmap.true_if_removed(key.as_bytes()) {
                     many += 1
                 }
             });
             drop(cmap);
-            drop(whandle);
             done_howmany = Some(many);
-        } else {
-            done_howmany = None;
         }
     }
     if let Some(done_howmany) = done_howmany {

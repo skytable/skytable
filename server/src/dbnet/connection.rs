@@ -26,14 +26,14 @@
 
 //! # Generic connection traits
 //! The `con` module defines the generic connection traits `ProtocolConnection` and `ProtocolConnectionExt`.
-//! These two traits can be used to interface with sockets that are used for communication through the Terrapipe
+//! These two traits can be used to interface with sockets that are used for communication through the Skyhash
 //! protocol.
 //!
 //! The `ProtocolConnection` trait provides a basic set of methods that are required by prospective connection
 //! objects to be eligible for higher level protocol interactions (such as interactions with high-level query objects).
 //! Once a type implements this trait, it automatically gets a free `ProtocolConnectionExt` implementation. This immediately
 //! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
-//! respones in compliance with the Terrapipe protocol.
+//! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
 use crate::dbnet::tcp::BufferedSocketStream;

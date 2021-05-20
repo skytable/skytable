@@ -24,8 +24,6 @@
  *
 */
 
-use crate::coredb;
-use crate::coredb::htable::Entry;
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
@@ -50,20 +48,18 @@ where
     let mut kviter = act.into_iter().skip(1);
     let done_howmany: Option<usize>;
     {
-        if let Some(mut whandle) = handle.acquire_write() {
-            let writer = whandle.get_mut_ref();
+        if handle.is_poisoned() {
+            done_howmany = None;
+        } else {
+            let writer = handle.get_ref();
             let mut didmany = 0;
             while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-                if let Entry::Occupied(mut v) = writer.entry(Data::from(key)) {
-                    let _ = v.insert(coredb::Data::from_string(val));
+                if writer.true_if_update(Data::from(key), Data::from(val)) {
                     didmany += 1;
                 }
             }
             drop(writer);
-            drop(whandle);
             done_howmany = Some(didmany);
-        } else {
-            done_howmany = None;
         }
     }
     if let Some(done_howmany) = done_howmany {

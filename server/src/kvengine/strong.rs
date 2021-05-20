@@ -73,8 +73,10 @@ where
                 unreachable_unchecked()
             })
             .iter();
-        if let Some(mut whandle) = handle.acquire_write() {
-            let mut_table = whandle.get_mut_ref();
+        if handle.is_poisoned() {
+            failed = None;
+        } else {
+            let mut_table = handle.get_ref();
             while let Some(key) = key_iter.next() {
                 if mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys existing - this action can't clearly be done
@@ -92,10 +94,7 @@ where
                 // So we can safely set the keys
                 let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-                    if mut_table
-                        .insert(Data::from(key), Data::from_string(value))
-                        .is_some()
-                    {
+                    if !mut_table.true_if_insert(Data::from(key), Data::from_string(value)) {
                         // Tell the compiler that this will never be the case
                         unsafe {
                             // UNSAFE(@ohsayan): As none of the keys exist in the table, no
@@ -106,8 +105,6 @@ where
                     }
                 }
             }
-        } else {
-            failed = None;
         }
     }
     if let Some(failed) = failed {
@@ -151,8 +148,10 @@ where
                 unreachable_unchecked()
             })
             .iter();
-        if let Some(mut whandle) = handle.acquire_write() {
-            let mut_table = whandle.get_mut_ref();
+        if handle.is_poisoned() {
+            failed = None;
+        } else {
+            let mut_table = handle.get_ref();
             while let Some(key) = key_iter.next() {
                 if !mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys not existing - this action can't clearly be done
@@ -179,8 +178,6 @@ where
                     });
                 });
             }
-        } else {
-            failed = None;
         }
     }
     if let Some(failed) = failed {
@@ -223,8 +220,10 @@ where
                 unreachable_unchecked()
             })
             .iter();
-        if let Some(mut whandle) = handle.acquire_write() {
-            let mut_table = whandle.get_mut_ref();
+        if handle.is_poisoned() {
+            failed = None;
+        } else {
+            let mut_table = handle.get_ref();
             while let Some(key) = key_iter.next() {
                 if !mut_table.contains_key(key.as_bytes()) {
                     // With one of the keys failing to exist - this action can't clearly be done
@@ -248,17 +247,12 @@ where
                 // So we can safely update the keys
                 let mut iter = act.into_iter().skip(1);
                 while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-                    if mut_table
-                        .insert(Data::from(key), Data::from_string(value))
-                        .is_none()
-                    {
+                    if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
                         // Tell the compiler that this will never be the case
                         unsafe { unreachable_unchecked() }
                     }
                 }
             }
-        } else {
-            failed = None;
         }
     }
     if let Some(failed) = failed {

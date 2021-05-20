@@ -36,21 +36,20 @@ mod bgsave {
     use crate::services;
     use services::bgsave::BGSAVE_DIRECTORY_TESTING_LOC;
     use std::fs;
-    use std::sync::Arc;
     use tokio::sync::broadcast;
     use tokio::time::{self, Duration};
     #[tokio::test]
     async fn test_bgsave() {
         // pre-initialize our maps for comparison
-        let mut map_should_be_with_one = HTable::new();
-        map_should_be_with_one.insert(
+        let map_should_be_with_one = HTable::new();
+        map_should_be_with_one.upsert(
             Data::from(String::from("sayan")),
             Data::from_string("is testing bgsave".to_owned()),
         );
         #[allow(non_snake_case)]
         let DUR_WITH_EPSILON: Duration = Duration::from_millis(1500) + Duration::from_secs(10);
         let (signal, _) = broadcast::channel(1);
-        let datahandle = CoreDB::new_empty(Arc::new(None));
+        let datahandle = CoreDB::new_empty(None);
         let bgsave_configuration = BGSave::Enabled(10);
         let handle = tokio::spawn(services::bgsave::bgsave_scheduler(
             datahandle.clone(),
@@ -65,7 +64,7 @@ mod bgsave {
         assert!(saved.len() == 0);
         // now let's quickly write some data
         {
-            datahandle.acquire_write().unwrap().get_mut_ref().insert(
+            datahandle.get_ref().upsert(
                 Data::from(String::from("sayan")),
                 Data::from("is testing bgsave".to_owned()),
             );
@@ -78,7 +77,7 @@ mod bgsave {
         assert_eq!(saved, map_should_be_with_one);
         // now let's remove all the data
         {
-            datahandle.acquire_write().unwrap().get_mut_ref().clear();
+            datahandle.get_ref().clear();
         }
         // sleep for 10 seconds with epsilon 1.5s
         time::sleep(DUR_WITH_EPSILON).await;

@@ -90,8 +90,8 @@ pub fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
     // first lock our temporary file
     let mut file = flock::FileLock::lock(SKY_TEMP_FILE)?;
     // get a read lock on the coretable
-    let lock = handle.acquire_read();
-    diskstore::flush_data(&mut file, lock.get_ref())?;
+    let lock = handle.lock_writes();
+    diskstore::flush_data(&mut file, &*lock)?;
     // now rename the file
     #[cfg(not(test))]
     fs::rename(SKY_TEMP_FILE, &*PERSIST_FILE)?;

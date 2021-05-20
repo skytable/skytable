@@ -39,7 +39,7 @@ where
     crate::err_if_len_is!(act, con, != 0);
     let len;
     {
-        len = handle.acquire_read().get_ref().len();
+        len = handle.get_ref().len();
     }
     con.write_response(len).await?;
     Ok(())

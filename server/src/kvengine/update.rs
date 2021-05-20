@@ -27,7 +27,7 @@
 //! # `UPDATE` queries
 //! This module provides functions to work with `UPDATE` queries
 //!
-use crate::coredb::htable::Entry;
+
 use crate::coredb::{self};
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
@@ -51,26 +51,26 @@ where
     }
     let mut it = act.into_iter().skip(1);
     let did_we = {
-        if let Some(mut whandle) = handle.acquire_write() {
-            let writer = whandle.get_mut_ref();
-            if let Entry::Occupied(mut e) =
-                writer.entry(Data::from(it.next().unwrap_or_else(|| unsafe {
+        if handle.is_poisoned() {
+            None
+        } else {
+            let writer = handle.get_ref();
+            if writer.true_if_update(
+                Data::from(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): We've already checked that the action contains exactly
                     // two arguments (excluding the action itself). So, this branch won't ever be reached
                     unreachable_unchecked()
-                })))
-            {
-                e.insert(Data::from_string(it.next().unwrap_or_else(|| unsafe {
+                })),
+                Data::from_string(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): We've already checked that the action contains exactly
                     // two arguments (excluding the action itself). So, this branch won't ever be reached
                     unreachable_unchecked()
-                })));
+                })),
+            ) {
                 Some(true)
             } else {
                 Some(false)
             }
-        } else {
-            None
         }
     };
     if let Some(did_we) = did_we {
