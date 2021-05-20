@@ -42,15 +42,13 @@ where
     crate::err_if_len_is!(act, con, == 0);
     let mut how_many_of_them_exist = 0usize;
     {
-        let rhandle = handle.acquire_read();
-        let cmap = rhandle.get_ref();
+        let cmap = handle.get_ref();
         act.into_iter().skip(1).for_each(|key| {
             if cmap.contains_key(key.as_bytes()) {
                 how_many_of_them_exist += 1;
             }
         });
         drop(cmap);
-        drop(rhandle);
     }
     con.write_response(how_many_of_them_exist).await?;
     Ok(())

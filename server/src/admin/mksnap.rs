@@ -56,8 +56,8 @@ where
         let mut was_engine_error = false;
         let mut succeeded = None;
 
-        let snaphandle = handle.snapcfg.clone();
-        let snapstatus = (*snaphandle).as_ref().unwrap_or_else(|| unsafe {
+        let snaphandle = handle.shared.clone();
+        let snapstatus = snaphandle.snapcfg.as_ref().unwrap_or_else(|| unsafe {
             // UNSAFE(@ohsayan) This is safe as we've already checked
             // if snapshots are enabled or not with `is_snapshot_enabled`
             unreachable_unchecked()
@@ -128,13 +128,16 @@ where
             }
             let failed;
             {
-                match diskstore::write_to_disk(&path, &handle.acquire_read().get_ref()) {
+                let lock = handle.lock_writes();
+                match diskstore::write_to_disk(&path, &*lock) {
                     Ok(_) => failed = false,
                     Err(e) => {
                         log::error!("Error while creating snapshot: {}", e);
                         failed = true;
                     }
                 }
+                drop(lock);
+                // end of table lock state critical section
             }
             if failed {
                 return con

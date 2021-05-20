@@ -44,8 +44,7 @@ where
 {
     crate::err_if_len_is!(act, con, != 1);
     let res: Option<Bytes> = {
-        let rhandle = handle.acquire_read();
-        let reader = rhandle.get_ref();
+        let reader = handle.get_ref();
         unsafe {
             // UNSAFE(@ohsayan): act.get_ref().get_unchecked() is safe because we've already if the action
             // group contains one argument (excluding the action itself)

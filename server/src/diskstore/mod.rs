@@ -26,10 +26,10 @@
 
 //! This module provides tools for handling persistently stored data
 
+use crate::coredb::htable::Coremap;
 use crate::coredb::htable::HTable;
 use crate::coredb::Data;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
-use bincode;
 use libsky::TResult;
 use std::fs;
 use std::io::{ErrorKind, Write};
@@ -75,32 +75,34 @@ pub fn get_saved(path: Option<String>) -> TResult<Option<HTable<Data, Data>>> {
 }
 
 #[cfg(test)]
+impl PartialEq for HTable<Data, Data> {
+    fn eq(&self, other: &HTable<Data, Data>) -> bool {
+        other.iter().all(|key| self.contains_key(key.key())) && (other.len() == self.len())
+    }
+}
+
+#[cfg(test)]
 pub fn test_deserialize(file: Vec<u8>) -> TResult<HTable<Data, Data>> {
     deserialize(file)
 }
 fn deserialize(file: Vec<u8>) -> TResult<HTable<Data, Data>> {
-    let parsed = bincode::deserialize(&file)?;
-    Ok(parsed)
+    let parsed = Coremap::deserialize(file)?;
+    Ok(HTable::from_raw(parsed))
 }
 
 /// Flush the in-memory table onto disk
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
 /// more specifically, the `data/data.bin` file
-pub fn flush_data(file: &mut flock::FileLock, data: &HTable<Data, Data>) -> TResult<()> {
-    let encoded = serialize(&data)?;
+pub fn flush_data(file: &mut flock::FileLock, data: &Coremap<Data, Data>) -> TResult<()> {
+    let encoded = data.serialize()?;
     file.write(&encoded)?;
     Ok(())
 }
 
-pub fn write_to_disk(file: &PathBuf, data: &HTable<Data, Data>) -> TResult<()> {
+pub fn write_to_disk(file: &PathBuf, data: &Coremap<Data, Data>) -> TResult<()> {
     let mut file = fs::File::create(&file)?;
-    let encoded = serialize(&data)?;
+    let encoded = data.serialize()?;
     file.write_all(&encoded)?;
     Ok(())
-}
-
-fn serialize(data: &HTable<Data, Data>) -> TResult<Vec<u8>> {
-    let encoded = bincode::serialize(&data)?;
-    Ok(encoded)
 }

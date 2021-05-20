@@ -29,6 +29,7 @@
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::coredb::htable::HTable;
+use crate::coredb::htable::TableLockStateGuard;
 use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
@@ -36,8 +37,6 @@ use crate::queryengine;
 pub use htable::Data;
 use libsky::TResult;
 use parking_lot::RwLock;
-use parking_lot::RwLockReadGuard;
-use parking_lot::RwLockWriteGuard;
 use std::sync::Arc;
 pub mod htable;
 
@@ -45,14 +44,24 @@ pub mod htable;
 /// gives another atomic reference to the `shared` which is a `Shared` object
 #[derive(Debug, Clone)]
 pub struct CoreDB {
-    /// The shared object, which contains a `Shared` object wrapped in a thread-safe
-    /// RC
+    /// The shared object, which contains a `Shared` object wrapped in an atomic RC
     pub shared: Arc<Shared>,
+    pub coremap: HTable<Data, Data>,
+}
+
+/// A shared _state_
+#[derive(Debug)]
+pub struct Shared {
+    /// Whether the database is poisoned or not
+    ///
+    /// If the database is poisoned -> the database can no longer accept writes
+    /// but can only accept reads
+    pub poisoned: RwLock<bool>,
     /// The number of snapshots that are to be kept at the most
     ///
     /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
     /// Some(n), n ∈ Z<sup>+</sup> — then _n_ snapshots will be kept at the maximum. If set to `None`, snapshotting is disabled.
-    pub snapcfg: Arc<Option<SnapshotStatus>>,
+    pub snapcfg: Option<SnapshotStatus>,
 }
 
 /// The status and details of the snapshotting service
@@ -96,58 +105,17 @@ impl SnapshotStatus {
     }
 }
 
-/// A shared _state_
-#[derive(Debug)]
-pub struct Shared {
-    /// A `Coretable` wrapped in a R/W lock
-    pub table: RwLock<Coretable>,
-}
-
-/// The `Coretable` holds all the key-value pairs in a `HTable`
-#[derive(Debug)]
-pub struct Coretable {
-    /// The core table contain key-value pairs
-    coremap: HTable<Data, Data>,
-    /// Whether the database is poisoned or not
-    ///
-    /// If the database is poisoned -> the database can no longer accept writes
-    /// but can only accept reads
-    pub poisoned: bool,
-}
-
-impl Coretable {
-    /// Get a reference to the inner `HTable`
-    pub const fn get_ref<'a>(&'a self) -> &'a HTable<Data, Data> {
-        &self.coremap
-    }
-    /// Get a **mutable** reference to the inner `HTable`
-    pub fn get_mut_ref<'a>(&'a mut self) -> &'a mut HTable<Data, Data> {
-        &mut self.coremap
-    }
-}
-
 impl CoreDB {
-    #[cfg(debug_assertions)]
-    #[allow(dead_code)] // This has been kept for debugging purposes, so we'll suppress this lint
-    /// Flush the coretable entries when in debug mode
-    pub fn print_debug_table(&self) {
-        if self.acquire_read().coremap.len() == 0 {
-            println!("In-memory table is empty");
-        } else {
-            println!("{:#?}", self.acquire_read());
-        }
-    }
     pub fn poison(&self) {
-        (*self.shared).table.write().poisoned = true;
+        *self.shared.poisoned.write() = true;
     }
 
     pub fn unpoison(&self) {
-        (*self.shared).table.write().poisoned = false;
+        *self.shared.poisoned.write() = false;
     }
-
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
-        self.snapcfg.is_some()
+        self.shared.snapcfg.is_some()
     }
 
     /// Mark the snapshotting service to be busy
@@ -155,7 +123,7 @@ impl CoreDB {
     /// ## Panics
     /// If snapshotting is disabled, this will panic
     pub fn lock_snap(&self) {
-        (*self.snapcfg).as_ref().unwrap().lock_snap();
+        self.shared.snapcfg.as_ref().unwrap().lock_snap();
     }
 
     /// Mark the snapshotting service to be free
@@ -163,7 +131,7 @@ impl CoreDB {
     /// ## Panics
     /// If snapshotting is disabled, this will panic
     pub fn unlock_snap(&self) {
-        (*self.snapcfg).as_ref().unwrap().unlock_snap();
+        self.shared.snapcfg.as_ref().unwrap().unlock_snap();
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
@@ -189,23 +157,21 @@ impl CoreDB {
     /// This also checks if a local backup of previously saved data is available.
     /// If it is - it restores the data. Otherwise it creates a new in-memory table
     pub fn new(snapshot_cfg: &SnapshotConfig, restore_file: Option<String>) -> TResult<Self> {
-        let coretable = diskstore::get_saved(restore_file)?;
+        let coremap = diskstore::get_saved(restore_file)?;
         let mut snap_count = None;
         if let SnapshotConfig::Enabled(SnapshotPref { every: _, atmost }) = snapshot_cfg {
             snap_count = Some(atmost);
         }
         let snapcfg = snap_count
-            .map(|max| Arc::new(Some(SnapshotStatus::new(*max))))
-            .unwrap_or(Arc::new(None));
-        let db = if let Some(coretable) = coretable {
+            .map(|max| Some(SnapshotStatus::new(*max)))
+            .unwrap_or(None);
+        let db = if let Some(coremap) = coremap {
             CoreDB {
+                coremap,
                 shared: Arc::new(Shared {
-                    table: RwLock::new(Coretable {
-                        coremap: coretable,
-                        poisoned: false,
-                    }),
+                    snapcfg,
+                    poisoned: RwLock::new(false),
                 }),
-                snapcfg,
             }
         } else {
             CoreDB::new_empty(snapcfg)
@@ -213,42 +179,26 @@ impl CoreDB {
         Ok(db)
     }
     /// Create an empty in-memory table
-    pub fn new_empty(snapcfg: Arc<Option<SnapshotStatus>>) -> Self {
+    pub fn new_empty(snapcfg: Option<SnapshotStatus>) -> Self {
         CoreDB {
+            coremap: HTable::new(),
             shared: Arc::new(Shared {
-                table: RwLock::new(Coretable {
-                    coremap: HTable::<Data, Data>::new(),
-                    poisoned: false,
-                }),
+                poisoned: RwLock::new(false),
+                snapcfg,
             }),
-            snapcfg,
         }
     }
     /// Check if the database object is poisoned, that is, data couldn't be written
     /// to disk once, and hence, we have disabled write operations
     pub fn is_poisoned(&self) -> bool {
-        (*self.shared).table.read().poisoned
+        *(self.shared).poisoned.read()
     }
-    /// Acquire a write lock
-    pub fn acquire_write(&self) -> Option<RwLockWriteGuard<'_, Coretable>> {
-        if self.is_poisoned() {
-            None
-        } else {
-            Some(self.shared.table.write())
-        }
+    pub fn get_ref(&self) -> &HTable<Data, Data> {
+        &self.coremap
     }
-    /// Acquire a read lock
-    pub fn acquire_read(&self) -> RwLockReadGuard<'_, Coretable> {
-        self.shared.table.read()
-    }
-
-    #[cfg(test)]
-    /// Get a deep copy of the `HTable`
-    ///
-    /// **⚠ Do note**: This is super inefficient since it performs an actual
-    /// clone of the `HTable` and doesn't do any `Arc`-business! This function
-    /// can be used by test functions and the server, but **use with caution!**
-    pub fn get_htable_deep_clone(&self) -> HTable<Data, Data> {
-        (*self.acquire_read().get_ref()).clone()
+    /// Either returns a [`TableLockStateGuard`] preventing any write operations on the
+    /// coremap or it waits until locking is possible
+    pub fn lock_writes(&self) -> TableLockStateGuard<'_, Data, Data> {
+        self.coremap.lock_writes()
     }
 }

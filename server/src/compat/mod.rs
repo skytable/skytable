@@ -121,7 +121,7 @@ fn upgrade_file(src: impl Into<PathBuf>, destination: impl Into<PathBuf>) -> TRe
             .into_iter()
             .map(|(key, value)| (Data::from_string(key), value)),
     );
-    let data_in_new_format = bincode::serialize(&data_in_new_format)?;
+    let data_in_new_format = data_in_new_format.serialize()?;
     let destination = destination.into();
     let mut file = fs::File::create(&destination)?;
     log::info!("Writing upgraded file to {}", destination.to_string_lossy());

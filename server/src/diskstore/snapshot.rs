@@ -186,7 +186,10 @@ impl<'a> SnapshotEngine<'a> {
     #[cfg(test)]
     fn mksnap_test(&mut self) -> bool {
         log::trace!("Snapshotting was initiated");
-        while (*self.dbref.snapcfg)
+        while self
+            .dbref
+            .shared
+            .snapcfg
             .as_ref()
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
@@ -204,9 +207,9 @@ impl<'a> SnapshotEngine<'a> {
 
         // Now let us get the name of the files to create
         let (create_this, delete_this) = self._mksnap_nonblocking_section();
-        let lock = self.dbref.acquire_read();
+        let lock = self.dbref.lock_writes();
         // Now begin writing the files
-        if let Err(e) = diskstore::write_to_disk(&create_this, &lock.get_ref()) {
+        if let Err(e) = diskstore::write_to_disk(&create_this, &*lock) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
             self.dbref.unlock_snap();
@@ -245,7 +248,9 @@ impl<'a> SnapshotEngine<'a> {
     ) -> bool {
         log::trace!("Snapshotting was initiated");
         // This is a potentially blocking section
-        while (*handle.snapcfg)
+        while handle
+            .shared
+            .snapcfg
             .as_ref()
             .unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
@@ -260,10 +265,10 @@ impl<'a> SnapshotEngine<'a> {
         // So we acquired a lock
         log::trace!("Acquired a lock on the snapshot service");
         handle.lock_snap(); // Set the snapshotting service to be busy
-        let lock = handle.acquire_read();
+        let lock = handle.lock_writes();
 
         // Another blocking section that does the actual I/O
-        if let Err(e) = diskstore::write_to_disk(&snapname, &lock.get_ref()) {
+        if let Err(e) = diskstore::write_to_disk(&snapname, &*lock) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
             handle.unlock_snap();
@@ -333,19 +338,16 @@ impl<'a> SnapshotEngine<'a> {
 #[test]
 fn test_snapshot() {
     let ourdir = "TEST_SS";
-    let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
-    let mut write = db.acquire_write().unwrap();
-    let _ = write.get_mut_ref().insert(
+    let db = CoreDB::new_empty(Some(SnapshotStatus::new(4)));
+    db.coremap.upsert(
         crate::coredb::Data::from(String::from("ohhey")),
         crate::coredb::Data::from_string(String::from("heya!")),
     );
-    drop(write);
     let mut snapengine = SnapshotEngine::new(4, &db, Some(&ourdir)).unwrap();
     let _ = snapengine.mksnap_test();
     let current = snapengine.get_snapshots().next().unwrap();
     let read_hmap = diskstore::test_deserialize(fs::read(PathBuf::from(current)).unwrap()).unwrap();
-    let dbhmap = db.get_htable_deep_clone();
-    assert_eq!(read_hmap, dbhmap);
+    assert_eq!(read_hmap, db.get_ref().clone());
     snapengine.clearall().unwrap();
     fs::remove_dir_all(ourdir).unwrap();
 }
@@ -354,7 +356,7 @@ fn test_snapshot() {
 fn test_pre_existing_snapshots() {
     use std::time::Duration;
     let ourdir = "TEST_PX_SS";
-    let db = CoreDB::new_empty(std::sync::Arc::new(Some(SnapshotStatus::new(4))));
+    let db = CoreDB::new_empty(Some(SnapshotStatus::new(4)));
     let mut snapengine = SnapshotEngine::new(4, &db, Some(ourdir)).unwrap();
     // Keep sleeping to ensure the time difference
     assert!(snapengine.mksnap_test());

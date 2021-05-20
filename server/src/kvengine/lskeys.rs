@@ -53,13 +53,8 @@ where
     };
     let items: Vec<Bytes>;
     {
-        let rhandle = handle.acquire_read();
-        let reader = rhandle.get_ref();
-        items = reader
-            .keys()
-            .map(|key| key.get_blob().clone())
-            .take(item_count)
-            .collect();
+        let reader = handle.get_ref();
+        items = reader.get_keys(item_count);
     }
     con.write_flat_array_length(items.len()).await?;
     for item in items {

@@ -27,8 +27,7 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
-use crate::coredb::htable::Entry;
-use crate::coredb::{self};
+use crate::coredb;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use coredb::Data;
@@ -51,26 +50,26 @@ where
     }
     let mut it = act.into_iter().skip(1);
     let did_we = {
-        if let Some(mut writer) = handle.acquire_write() {
-            let writer = writer.get_mut_ref();
-            if let Entry::Vacant(e) =
-                writer.entry(Data::from(it.next().unwrap_or_else(|| unsafe {
+        if handle.is_poisoned() {
+            None
+        } else {
+            let writer = handle.get_ref();
+            if writer.true_if_insert(
+                Data::from_string(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     unreachable_unchecked()
-                })))
-            {
-                e.insert(Data::from_string(it.next().unwrap_or_else(|| unsafe {
+                })),
+                Data::from(it.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     unreachable_unchecked()
-                })));
+                })),
+            ) {
                 Some(true)
             } else {
                 Some(false)
             }
-        } else {
-            None
         }
     };
     if let Some(did_we) = did_we {

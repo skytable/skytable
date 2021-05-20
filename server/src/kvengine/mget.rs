@@ -45,8 +45,7 @@ where
     let mut keys = act.into_iter().skip(1);
     while let Some(key) = keys.next() {
         let res: Option<Bytes> = {
-            let rhandle = handle.acquire_read();
-            let reader = rhandle.get_ref();
+            let reader = handle.get_ref();
             reader.get(key.as_bytes()).map(|b| b.get_blob().clone())
         };
         if let Some(value) = res {

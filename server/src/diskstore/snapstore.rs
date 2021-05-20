@@ -49,20 +49,26 @@
 //! > In other words, the `snapstore.bin` file is completely useless without the `snapstore.partmap` file; so,
 //! if you happen to lose it — have a good day!
 
-use crate::coredb::htable::HTable;
-use bincode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::hash::Hash;
 use std::io::prelude::*;
 
-pub trait IntoBinaryData: Serialize {
+pub trait IntoBinaryData {
+    fn into_bin(&self) -> Vec<u8>;
+}
+
+impl<'a, T, U> IntoBinaryData for &'a HashMap<T, U>
+where
+    T: Serialize + Eq + Hash,
+    U: Serialize,
+{
     fn into_bin(&self) -> Vec<u8> {
         bincode::serialize(&self).unwrap()
     }
 }
-
-impl<'a> IntoBinaryData for &'a HTable<String, Vec<u8>> {}
 
 #[derive(Serialize, Deserialize, Debug)]
 /// The `PartMap` is a partition map which contains metadata about multiple partitions stored in a
@@ -117,7 +123,7 @@ impl IntoIterator for PartMap {
 /// This function creates two files: `snapstore.bin` and `snapstore.partmap`; the former is the data file
 /// and the latter one is the partition map, or simply put, the partition metadata file. This function
 /// accepts a `HTable` of `HTable`s with the key being the name of the partition.
-pub fn flush_multi_ns<T>(ns: HTable<&str, T>) -> Result<(), Box<dyn Error>>
+pub fn flush_multi_ns<T>(ns: HashMap<&str, T>) -> Result<(), Box<dyn Error>>
 where
     T: IntoBinaryData,
 {
@@ -161,14 +167,14 @@ where
 ///
 /// Once these requirements are met, the file will return a `HTable` of named partitions which
 /// can be used as required
-pub fn unflush_multi_ns() -> Result<HTable<String, HTable<String, Vec<u8>>>, Box<dyn Error>> {
+pub fn unflush_multi_ns() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, Box<dyn Error>> {
     // Try to read the partition map
     let pmap: PartMap = bincode::deserialize(&fs::read("snapstore.partmap")?)?;
     // Now read the data file
     let mut file = fs::File::open("snapstore.bin")?;
     // Get an iterator over the namespace data from the partition map
     let mut map = pmap.into_iter();
-    let mut hmaps: HTable<String, HTable<String, Vec<u8>>> = HTable::new();
+    let mut hmaps: HashMap<String, HashMap<String, Vec<u8>>> = HashMap::new();
     while let Some(partition) = map.next() {
         // Create an empty buffer which will read precisely `len()` bytes from the file
         let mut exact_op = vec![0; partition.len()];
@@ -184,17 +190,17 @@ pub fn unflush_multi_ns() -> Result<HTable<String, HTable<String, Vec<u8>>>, Box
 
 #[test]
 fn test_flush_multi_ns() {
-    let mut nsa = HTable::new();
+    let mut nsa = HashMap::new();
     nsa.insert("my".to_owned(), "ohmy".to_owned().into_bytes());
     nsa.insert("fly".to_owned(), "moondust".to_owned().into_bytes());
-    let mut nsb = HTable::new();
+    let mut nsb = HashMap::new();
     nsb.insert("make".to_owned(), "melody".to_owned().into_bytes());
     nsb.insert("aurora".to_owned(), "shower".to_owned().into_bytes());
-    let mut hm = HTable::new();
+    let mut hm = HashMap::new();
     hm.insert("nsa", &nsa);
     hm.insert("nsb", &nsb);
     let _ = flush_multi_ns(hm).unwrap();
-    let mut hm_eq = HTable::new();
+    let mut hm_eq = HashMap::new();
     hm_eq.insert("nsa".to_owned(), nsa);
     hm_eq.insert("nsb".to_owned(), nsb);
     let unflushed = unflush_multi_ns().unwrap();
