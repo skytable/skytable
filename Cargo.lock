@@ -842,6 +842,7 @@ dependencies = [
  "chrono",
  "clap",
  "dashmap",
+ "devtimer",
  "env_logger",
  "jemallocator",
  "lazy_static",

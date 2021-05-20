@@ -38,6 +38,7 @@ cc = "1.0.67"
 [dev-dependencies]
 tokio = { version = "1.6.0", features = ["test-util"] }
 skytable = { git = "https://github.com/skytable/client-rust", features = ["async"], default-features = false, branch = "next" }
+devtimer = "4.0.1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2.94"
