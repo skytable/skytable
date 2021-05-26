@@ -27,6 +27,7 @@
 //! This module provides tools to handle configuration files and settings
 
 use crate::compat;
+use core::hint::unreachable_unchecked;
 #[cfg(test)]
 use libsky::TResult;
 use serde::Deserialize;
@@ -411,12 +412,18 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
     // check upgrades
-    if matches.subcommand_matches("upgrade").is_some() {
-        if let Err(e) = compat::upgrade() {
-            log::error!("Dataset upgrade failed with error: {}", e);
-            process::exit(0x100);
+    if let Some(matches) = matches.subcommand_matches("upgrade") {
+        if let Some(format) = matches.value_of("format") {
+            if let Err(e) = compat::upgrade(format) {
+                log::error!("Dataset upgrade failed with error: {}", e);
+                process::exit(0x100);
+            } else {
+                process::exit(0x000);
+            }
         } else {
-            process::exit(0x000);
+            unsafe {
+                unreachable_unchecked();
+            }
         }
     }
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
