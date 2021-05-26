@@ -58,9 +58,9 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
 name = "cc"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3c69b077ad434294d3ce9f1f6143a2a4b89a8a2d54ef813d85003a4fd1137fd"
+checksum = "4a72c244c1ff497a746a7e1fb3d14bd08420ecda70c8f25c7112f2781652d787"
 
 [[package]]
 name = "cfg-if"
@@ -95,6 +95,17 @@ dependencies = [
  "unicode-width",
  "vec_map",
  "yaml-rust",
+]
+
+[[package]]
+name = "clipboard-win"
+version = "4.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e4ea1881992efc993e4dc50a324cdbd03216e41bdc8385720ff47efc9bd2ca8"
+dependencies = [
+ "error-code",
+ "str-buf",
+ "winapi",
 ]
 
 [[package]]
@@ -180,6 +191,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "error-code"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5115567ac25674e0043e472be13d14e537f37ea8aa4bdc4aef0c89add1db1ff"
+dependencies = [
+ "libc",
+ "str-buf",
+]
+
+[[package]]
+name = "fd-lock"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -193,16 +224,6 @@ name = "foreign-types-shared"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
-
-[[package]]
-name = "fs2"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
-dependencies = [
- "libc",
- "winapi",
-]
 
 [[package]]
 name = "fs_extra"
@@ -306,9 +327,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9495705279e7140bf035dde1f6e750c162df8b625267cd52cc44e0b156732c8"
+checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
 dependencies = [
  "cfg-if",
  "libc",
@@ -374,9 +395,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.94"
+version = "0.2.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
+checksum = "789da6d93f1b866ffe175afc5322a4d76c038605a1c3319bb57b06967ca98a36"
 
 [[package]]
 name = "libsky"
@@ -620,9 +641,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.26"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a152013215dca273577e18d2bf00fa862b89b24169fb78c4c95aeb07992c9cec"
+checksum = "f0d8caf72986c1a598726adc988bb5984792ef84f5ee5aa50209145ee8077038"
 dependencies = [
  "unicode-xid",
 ]
@@ -724,14 +745,15 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "rustyline"
-version = "8.0.0"
+version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9e1b597fcd1eeb1d6b25b493538e5aa19629eb08932184b85fef931ba87e893"
+checksum = "fbd4eaf7a7738f76c98e4f0395253ae853be3eb018f7b0bb57fe1b6c17e31874"
 dependencies = [
  "bitflags",
  "cfg-if",
+ "clipboard-win",
  "dirs-next",
- "fs2",
+ "fd-lock",
  "libc",
  "log",
  "memchr",
@@ -882,7 +904,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.2.3"
-source = "git+https://github.com/skytable/client-rust?branch=next#7ce1d2b371a0dba96c0c0c8cf1aa2ca911c225e4"
+source = "git+https://github.com/skytable/client-rust?branch=next#f36d7567ccae39a512d581d7f0d205c88db82b63"
 dependencies = [
  "bytes",
  "tokio",
@@ -899,6 +921,12 @@ name = "smallvec"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+
+[[package]]
+name = "str-buf"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d44a3643b4ff9caf57abcee9c2c621d6c03d9135e0d8b589bd9afb5992cb176a"
 
 [[package]]
 name = "strsim"
@@ -1024,9 +1052,9 @@ checksum = "936e4b492acfd135421d8dca4b1aa80a7bfc26e702ef3af710e0752684df5372"
 
 [[package]]
 name = "vcpkg"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbdbff6266a24120518560b5dc983096efb98462e51d0d68169895b237be3e5d"
+checksum = "025ce40a007e1907e58d5bc1a594def78e5573bb0b1160bc389634e8f12e4faa"
 
 [[package]]
 name = "vec_map"

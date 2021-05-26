@@ -106,7 +106,7 @@ impl Runner {
     }
     pub async fn run_query(&mut self, unescaped_items: &str) {
         let query = libsky::turn_into_query(unescaped_items);
-        match self.con.run_simple_query(query).await {
+        match self.con.run_simple_query(&query).await {
             Ok(resp) => match resp {
                 Response::InvalidResponse => {
                     println!("ERROR: The server sent an invalid response");

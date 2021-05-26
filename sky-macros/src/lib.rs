@@ -67,9 +67,9 @@ fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
         let mut query = skytable::Query::new();
         #body
         {
-            let mut __flush__ = skytable::Query::new(); __flush__.arg("flushdb");
+            let mut __flush__ = skytable::Query::from("flushdb");
             std::assert_eq!(
-                con.run_simple_query(__flush__).await.unwrap(),
+                con.run_simple_query(&__flush__).await.unwrap(),
                 skytable::Response::Item(skytable::Element::RespCode(skytable::RespCode::Okay))
             );
         }

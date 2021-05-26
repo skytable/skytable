@@ -53,7 +53,7 @@ pub fn split_into_args(q: &str) -> Vec<String> {
 pub fn turn_into_query(q: &str) -> Query {
     let mut query = Query::new();
     split_into_args(q).into_iter().for_each(|arg| {
-        query.arg(arg);
+        query.push(arg);
     });
     query
 }

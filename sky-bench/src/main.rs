@@ -196,7 +196,9 @@ mod benchtool {
                     .map(|_| ran_string(8, &mut rand))
                     .collect();
                 let set_packs: Vec<Vec<u8>> = (0..num)
-                    .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
+                    .map(|idx| {
+                        libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx]))
+                    })
                     .collect();
                 set_packs.into_iter().for_each(|packet| {
                     np.execute(packet);
@@ -321,9 +323,9 @@ mod benchtool {
         let mut connection = Connection::new(host, port)?;
         // test heya
         let mut query = Query::new();
-        query.arg("heya");
+        query.push("heya");
         if !connection
-            .run_simple_query(query)
+            .run_simple_query(&query)
             .unwrap()
             .eq(&Response::Item(Element::String("HEY!".to_owned())))
         {
@@ -332,31 +334,31 @@ mod benchtool {
         let key = ran_string(65536, &mut rng);
         let value = ran_string(65536, &mut rng);
         let mut query = Query::new();
-        query.arg("set");
-        query.arg(&key);
-        query.arg(&value);
+        query.push("set");
+        query.push(&key);
+        query.push(&value);
         if !connection
-            .run_simple_query(query)
+            .run_simple_query(&query)
             .unwrap()
             .eq(&Response::Item(Element::RespCode(RespCode::Okay)))
         {
             return Err("SET test failed".into());
         }
         let mut query = Query::new();
-        query.arg("get");
-        query.arg(&key);
+        query.push("get");
+        query.push(&key);
         if !connection
-            .run_simple_query(query)
+            .run_simple_query(&query)
             .unwrap()
             .eq(&Response::Item(Element::String(value.to_owned())))
         {
             return Err("GET test failed".into());
         }
         let mut query = Query::new();
-        query.arg("del");
-        query.arg(&key);
+        query.push("del");
+        query.push(&key);
         if !connection
-            .run_simple_query(query)
+            .run_simple_query(&query)
             .unwrap()
             .eq(&Response::Item(Element::UnsignedInt(1)))
         {
