@@ -82,3 +82,11 @@ args:
 subcommands:
       - upgrade:
             about: Upgrades old datsets to the latest format supported by this server edition
+            args:
+                  - format:
+                        short: f
+                        long: from
+                        takes_value: true
+                        value_name: format
+                        required: true
+                        help: The format of the old files which need to be upgraded

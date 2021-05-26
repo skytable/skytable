@@ -32,6 +32,7 @@
 use crate::coredb::{htable::HTable, Data};
 use crate::diskstore::snapshot::SNAP_MATCH;
 use bytes::Bytes;
+use core::hint::unreachable_unchecked;
 use libsky::TResult;
 use std::collections::HashMap;
 use std::fs;
@@ -45,57 +46,93 @@ type DiskStoreType = (Vec<String>, Vec<Vec<u8>>);
 const SKY_UPGRADE_FOLDER: &str = "newdata";
 const SKY_COMPLETE_UPGRADE_FOLDER: &str = "newdata/snapshots/remote";
 
+enum Format {
+    /// The disk storage format used in 0.3.0
+    Elstore,
+    /// The disk storage format used between 0.3.1-0.5.2
+    Neocopy,
+    /// The disk storage format used in 0.6.0
+    Sparrowlock,
+}
+
+impl Format {
+    pub const fn has_snapshots(&self) -> bool {
+        if let Self::Neocopy | Self::Sparrowlock = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
 pub fn concat_path(other: impl Into<PathBuf>) -> PathBuf {
     let mut path = PathBuf::from(SKY_UPGRADE_FOLDER);
     path.push(other.into());
     path
 }
 
-pub fn upgrade() -> TResult<()> {
+pub fn upgrade(format: &str) -> TResult<()> {
+    let fmt = match format {
+        "elstore" => Format::Elstore,
+        "neocopy" => Format::Neocopy,
+        "sparrowlock" => Format::Sparrowlock,
+        _ => return Err("Unknown format".into()),
+    };
+    if let Format::Sparrowlock = fmt {
+        log::info!("No file upgrades required");
+        return Ok(());
+    }
     fs::create_dir_all(SKY_COMPLETE_UPGRADE_FOLDER)?;
     // first attempt to upgrade the data file
     log::info!("Upgrading data file");
-    upgrade_file("data/data.bin", concat_path("data.bin"))
+    upgrade_file("data/data.bin", concat_path("data.bin"), &fmt)
         .map_err(|e| format!("Failed to upgrade data.bin file with error: {}", e))?;
     log::info!("Finished upgrading data file");
     // now let's check what files are there in the snapshots directory
-    log::info!("Upgrading snapshots");
-    let snapshot_dir = fs::read_dir("data/snapshots")?;
-    for path in snapshot_dir {
-        let path = path?.path();
-        if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
-            return Err("The snapshot directory contains unrecognized files".into());
-        }
-        if path.is_file() {
-            let fname = path
-                .file_name()
-                .ok_or("Failed to get path name in snapshot directory")?
-                .to_string_lossy();
-            if !SNAP_MATCH.is_match(&fname) {
-                return Err("The snapshot directory contains unexpected files".into());
+    if fmt.has_snapshots() {
+        log::info!("Upgrading snapshots");
+        let snapshot_dir = fs::read_dir("data/snapshots")?;
+        for path in snapshot_dir {
+            let path = path?.path();
+            if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
+                return Err("The snapshot directory contains unrecognized files".into());
             }
-            upgrade_file(path.clone(), concat_path(format!("snapshots/{}", fname)))?;
+            if path.is_file() {
+                let fname = path
+                    .file_name()
+                    .ok_or("Failed to get path name in snapshot directory")?
+                    .to_string_lossy();
+                if !SNAP_MATCH.is_match(&fname) {
+                    return Err("The snapshot directory contains unexpected files".into());
+                }
+                upgrade_file(
+                    path.clone(),
+                    concat_path(format!("snapshots/{}", fname)),
+                    &fmt,
+                )?;
+            }
         }
-    }
-    log::info!("Finished upgrading snapshots");
-    log::info!("Upgrading remote snapshots");
-    let remote_snapshot_dir = fs::read_dir("data/snapshots/remote")?;
-    for path in remote_snapshot_dir {
-        let path = path?.path();
-        if path.is_file() {
-            let fname = path
-                .file_name()
-                .ok_or("Failed to get filename in remote snapshot directory")?
-                .to_string_lossy();
-            upgrade_file(
-                path.clone(),
-                concat_path(format!("snapshots/remote/{}", fname)),
-            )?;
-        } else {
-            return Err("Unexpected files in the remote snapshot directory".into());
+        log::info!("Finished upgrading snapshots");
+        log::info!("Upgrading remote snapshots");
+        let remote_snapshot_dir = fs::read_dir("data/snapshots/remote")?;
+        for path in remote_snapshot_dir {
+            let path = path?.path();
+            if path.is_file() {
+                let fname = path
+                    .file_name()
+                    .ok_or("Failed to get filename in remote snapshot directory")?
+                    .to_string_lossy();
+                upgrade_file(
+                    path.clone(),
+                    concat_path(format!("snapshots/remote/{}", fname)),
+                    &fmt,
+                )?;
+            } else {
+                return Err("Unexpected files in the remote snapshot directory".into());
+            }
         }
+        log::info!("Finished upgrading remote snapshots");
     }
-    log::info!("Finished upgrading remote snapshots");
     log::info!("All files were upgraded. Updating directories");
     fs::rename("data", "olddata")?;
     log::info!("Moved old data into folder 'olddata'");
@@ -104,23 +141,42 @@ pub fn upgrade() -> TResult<()> {
     Ok(())
 }
 
-fn upgrade_file(src: impl Into<PathBuf>, destination: impl Into<PathBuf>) -> TResult<()> {
+fn upgrade_file(
+    src: impl Into<PathBuf>,
+    destination: impl Into<PathBuf>,
+    fmt: &Format,
+) -> TResult<()> {
     let file = src.into();
     log::info!("Upgrading file: {}", file.to_string_lossy());
     let old_data_file = fs::read(&file)?;
-    let data_from_old_file: DiskStoreType = bincode::deserialize(&old_data_file)?;
-    let data_from_old_file: HashMap<String, Data> = HashMap::from_iter(
-        data_from_old_file
-            .0
-            .into_iter()
-            .zip(data_from_old_file.1.into_iter())
-            .map(|(key, value)| (key, Data::from_blob(Bytes::from(value)))),
-    );
-    let data_in_new_format: HTable<Data, Data> = HTable::from_iter(
-        data_from_old_file
-            .into_iter()
-            .map(|(key, value)| (Data::from_string(key), value)),
-    );
+    let data_in_new_format: HTable<Data, Data> = match *fmt {
+        Format::Elstore => {
+            let data_from_old_file: HashMap<String, String> = bincode::deserialize(&old_data_file)?;
+            HTable::from_iter(
+                data_from_old_file
+                    .into_iter()
+                    .map(|(key, value)| (Data::from(key), Data::from(value))),
+            )
+        }
+        Format::Neocopy => {
+            let data_from_old_file: DiskStoreType = bincode::deserialize(&old_data_file)?;
+            let data_from_old_file: HashMap<String, Data> = HashMap::from_iter(
+                data_from_old_file
+                    .0
+                    .into_iter()
+                    .zip(data_from_old_file.1.into_iter())
+                    .map(|(key, value)| (key, Data::from_blob(Bytes::from(value)))),
+            );
+            HTable::from_iter(
+                data_from_old_file
+                    .into_iter()
+                    .map(|(key, value)| (Data::from_string(key), value)),
+            )
+        }
+        Format::Sparrowlock => unsafe {
+            unreachable_unchecked();
+        },
+    };
     let data_in_new_format = data_in_new_format.serialize()?;
     let destination = destination.into();
     let mut file = fs::File::create(&destination)?;
