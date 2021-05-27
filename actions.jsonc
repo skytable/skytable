@@ -31,7 +31,6 @@
 [
     {
         "name": "GET",
-        "since": "0.1.0",
         "complexity": "O(1)",
         "args": "GET <key>",
         "desc": "Get the value of a key",
@@ -39,7 +38,6 @@
     },
     {
         "name": "MGET",
-        "since": "0.4.0",
         "complexity": "O(n)",
         "args": "MGET <key1> <key2> ...",
         "desc": "Get the value of 'n' keys",
@@ -47,7 +45,6 @@
     },
     {
         "name": "SET",
-        "since": "0.1.0",
         "complexity": "O(1)",
         "args": "SET <key> <value>",
         "desc": "Set the value of a key",
@@ -55,7 +52,6 @@
     },
     {
         "name": "MSET",
-        "since": "0.4.0",
         "complexity": "O(n)",
         "args": "MSET <key1> <value1> <key2> <value2> ...",
         "desc": "Set the value of 'n' keys",
@@ -63,7 +59,6 @@
     },
     {
         "name": "UPDATE",
-        "since": "0.1.0",
         "complexity": "O(1)",
         "args": "UPDATE <key> <value>",
         "desc": "Update the value of an existing key",
@@ -71,7 +66,6 @@
     },
     {
         "name": "MUPDATE",
-        "since": "0.4.0",
         "complexity": "O(n)",
         "args": "MUPDATE <key1> <value1> <key2> <value2> ...",
         "desc": "Update the value of 'n' keys",
@@ -79,7 +73,6 @@
     },
     {
         "name": "DEL",
-        "since": "0.1.0",
         "complexity": "O(n)",
         "args": "DEL <key1> <key2> ...",
         "desc": "Delete 'n' keys",
@@ -87,7 +80,6 @@
     },
     {
         "name": "EXISTS",
-        "since": "0.4.0",
         "complexity": "O(n)",
         "args": "EXISTS <key1> <key2> ...",
         "desc": "Check if 'n' keys exist",
@@ -95,7 +87,6 @@
     },
     {
         "name": "SSET",
-        "since": "0.4.3",
         "complexity": "O(n)",
         "args": "SSET <key1> <value1> <key2> <value2> ...",
         "desc": "Set all keys to the given values only if all of them don't exist",
@@ -103,7 +94,6 @@
     },
     {
         "name": "SDEL",
-        "since": "0.4.3",
         "complexity": "O(n)",
         "args": "SDEL <key1> <key2> ...",
         "desc": "Delete all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
@@ -111,7 +101,6 @@
     },
     {
         "name": "SUPDATE",
-        "since": "0.4.3",
         "complexity": "O(n)",
         "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
         "desc": "Update all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
@@ -119,7 +108,6 @@
     },
     {
         "name": "DBSIZE",
-        "since": "0.4.3",
         "complexity": "O(1)",
         "args": "DBSIZE",
         "desc": "Number of key/value pairs stored in the database",
@@ -127,7 +115,6 @@
     },
     {
         "name": "FLUSHDB",
-        "since": "0.4.3",
         "complexity": "O(n)",
         "args": "FLUSHDB",
         "desc": "Removes all the key/value pairs stored in the database",
@@ -135,7 +122,6 @@
     },
     {
         "name": "USET",
-        "since": "0.4.4",
         "complexity": "O(n)",
         "args": "USET <key1> <value1> <key2> <value2> ...",
         "desc": "SET all keys if they don't exist, or UPDATE them if they do exist",
@@ -143,7 +129,6 @@
     },
     {
         "name": "KEYLEN",
-        "since": "0.4.4",
         "complexity": "O(1)",
         "args": "KEYLEN <key>",
         "desc": "Returns the length of the UTF-8 string",
@@ -151,7 +136,6 @@
     },
     {
         "name": "MKSNAP",
-        "since": "0.5.0",
         "complexity": "O(n)",
         "args": "MKSNAP <SNAPNAME>",
         "desc": "This action can be used to create a snapshot. Do note that this action **requires snapshotting to be enabled on the server side**, before it can create snapshots. \nIf you want to create snapshots **without** snapshots being enabled on the server-side, pass a second argument <SNAPNAME> to specify a snapshot name and a snapshot will be create in a folder called `remote` under your snapshots directory. \nFor more information on snapshots, read [this document](/snapshots)",
@@ -159,7 +143,6 @@
     },
     {
         "name": "LSKEYS",
-        "since": "0.6.0",
         "complexity": "O(n)",
         "args": "LSKEYS <limit>",
         "desc": "Returns a flat string array of keys present in the database. If no <limit> is given, then a maximum of 10 keys are returned. If a limit is specified, then a maximum of <limit> keys are returned",
