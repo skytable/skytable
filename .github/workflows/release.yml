@@ -276,7 +276,6 @@ jobs:
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
           release_name: ${{ steps.get_version.outputs.VERSION }}
-          prerelease: true
 
       - name: Download all artifacts
         uses: actions/download-artifact@v2
