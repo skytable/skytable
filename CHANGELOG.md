@@ -2,6 +2,39 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.6.0 [2021-05-27]
+
+> Breaking changes!
+
+* Dropped support for Terrapipe 1.0 (reached EOL)
+* Added support for Skyhash 1.0 (see [#147](https://github.com/skytable/skytable/pull/147))
+* Fixed persistence bugs (see [#151](https://github.com/skytable/skytable/pull/151))
+* Fixed bugs in background services (see [#152](https://github.com/skytable/skytable/pull/152))
+* Make BGSAVE recoverable (see [#153](https://github.com/skytable/skytable/pull/153))
+* Added `lskeys` action (see [#155](https://github.com/skytable/skytable/pull/155))
+* Added `compat` module (see [#158](https://github.com/skytable/skytable/pull/158))
+* Added backward compatibility for storage formats all the way upto 0.3.0. See [this wiki article](https://github.com/skytable/skytable/wiki/Disk-storage-formats) for more information
+
+### Upgrading existing clients
+
+As Terrapipe 1.0 has reached EOL, all clients have to be upgraded to use the [Skyhash 1.0 Protocol](https://docs.skytable.io/protocol/skyhash).
+
+### Upgrading existing datasets
+
+Please refer to [this wiki article](https://github.com/skytable/skytable/wiki/Disk-storage-formats).
+
+### Improvements in the new protocol (Skyhash)
+
+* Upto 40% lower bandwidth requirements
+* Upto 30% faster queries
+* Support for recursive arrays
+* More robust and well tested than Terrapipe
+
+### Internal codebase improvements
+
+* BGSAVE is now tested by the test suite
+* `skysh` and `sky-bench` both use the [Rust client driver for Skytable](https://github.com/skytable/client-rust).
+
 ## Version 0.5.3 [2021-05-13]
 
 > No breaking changes

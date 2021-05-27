@@ -3,7 +3,7 @@
 <img src="assets/logo.jpg" height=64 width=64>
 <h1>Skytable</h1><h3>The next-generation NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)) ![Status: Alpha](https://img.shields.io/badge/status-alpha-critical?style=flat-square) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
 [![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://skytable.github.io/docs)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks)
 
 </div>
@@ -13,7 +13,7 @@
 
 Skytable is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skytable' exemplifies our vision to create a database that has limitless possibilities. Skytable was previously known as TerrabaseDB (and then Skybase) and is also nicknamed "STable", "Sky" and "SDB" by the community.
 
-Skytable is curently in an alpha stage, but can be used as a **performant**, **secure** and **persistent key-value store**.
+Skytable is curently under development, but can be used as a **performant**, **secure** and **persistent key-value store**.
 
 ## Getting started 🚀
 
@@ -42,7 +42,7 @@ You can learn more about installation [here](https://skytable.github.io/docs/get
 The project currently maintains an official [Rust driver](https://github.com/skytable/client-rust) and we have plans
 to support more languages along the way!
 
-If you want to use a different language, for now you'll just need to implement the simple and performant [Skyhash Protocol Spec](https://skytable.github.io/docs/next/protocol/skyhash) or for versions prior to 0.6.0, the [Terrapipe Protocol Spec](https://skytable.github.io/docs/protocol/terrapipe).
+If you want to use a different language, for now you'll just need to implement the simple and performant [Skyhash Protocol](https://docs.skytable.io/protocol/skyhash).
 
 ## Community 👐
 
