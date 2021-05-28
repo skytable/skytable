@@ -116,7 +116,7 @@ where
 ///
 /// **NOTE:** This macro needs _paths_ for both sides of the $x => $y, to produce something sensible
 macro_rules! gen_match {
-    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:path => $y:path),*) => {
+    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:pat => $y:expr),*) => {
         let flat_array = if let crate::protocol::Element::FlatArray(array) = $buf {
             array
         } else {

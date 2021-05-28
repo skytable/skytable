@@ -6,7 +6,8 @@ All changes in this project will be noted in this file.
 
 > Breaking changes!
 
-* Dropped support for Terrapipe 1.0 (reached EOL)
+* ⚠ Dropped support for Terrapipe 1.0 (reached EOL)
+* ⚠ New disk storage format with much faster reads and/or writes
 * Added support for Skyhash 1.0 (see [#147](https://github.com/skytable/skytable/pull/147))
 * Fixed persistence bugs (see [#151](https://github.com/skytable/skytable/pull/151))
 * Fixed bugs in background services (see [#152](https://github.com/skytable/skytable/pull/152))
