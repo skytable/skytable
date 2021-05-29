@@ -135,6 +135,8 @@ pub struct ConfigKeySnapshot {
     ///
     /// If atmost is set to `0`, then all the snapshots will be kept
     atmost: usize,
+    /// Prevent writes to the database if snapshotting fails
+    failsafe: Option<bool>,
 }
 
 /// Port configuration
@@ -214,16 +216,22 @@ pub struct SnapshotPref {
     pub every: u64,
     /// The maximum numeber of snapshots to be kept
     pub atmost: usize,
+    /// Lock writes if snapshotting fails
+    pub poison: bool,
 }
 
 impl SnapshotPref {
     /// Create a new a new `SnapshotPref` instance
-    pub const fn new(every: u64, atmost: usize) -> Self {
-        SnapshotPref { every, atmost }
+    pub const fn new(every: u64, atmost: usize, poison: bool) -> Self {
+        SnapshotPref {
+            every,
+            atmost,
+            poison,
+        }
     }
     /// Returns `every,almost` as a tuple for pattern matching
-    pub const fn decompose(self) -> (u64, usize) {
-        (self.every, self.atmost)
+    pub const fn decompose(self) -> (u64, usize, bool) {
+        (self.every, self.atmost, self.poison)
     }
 }
 
@@ -295,7 +303,11 @@ impl ParsedConfig {
             snapshot: cfg_info
                 .snapshot
                 .map(|snapshot| {
-                    SnapshotConfig::Enabled(SnapshotPref::new(snapshot.every, snapshot.atmost))
+                    SnapshotConfig::Enabled(SnapshotPref::new(
+                        snapshot.every,
+                        snapshot.atmost,
+                        snapshot.failsafe.unwrap_or(true),
+                    ))
                 })
                 .unwrap_or(SnapshotConfig::default()),
             ports: if let Some(sslopts) = cfg_info.ssl {
@@ -526,8 +538,21 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             },
             None => None,
         };
+        let failsafe = if let Ok(failsafe) = matches
+            .value_of("stop-write-on-fail")
+            .map(|val| val.parse::<bool>())
+            .unwrap_or(Ok(true))
+        {
+            failsafe
+        } else {
+            return Err(ConfigError::CliArgErr(
+                "Please provide a boolean `true` or `false` value to --stop-write-on-fail",
+            ));
+        };
         let snapcfg = match (snapevery, snapkeep) {
-            (Some(every), Some(keep)) => SnapshotConfig::Enabled(SnapshotPref::new(every, keep)),
+            (Some(every), Some(keep)) => {
+                SnapshotConfig::Enabled(SnapshotPref::new(every, keep, failsafe))
+            }
             (Some(_), None) => {
                 return Err(ConfigError::CliArgErr(
                     "No value supplied for `--snapkeep`. When you supply `--snapevery`, you also need to specify `--snapkeep`"
@@ -702,7 +727,7 @@ mod tests {
             ParsedConfig::new(
                 false,
                 BGSave::default(),
-                SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+                SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
                 PortConfig::new_secure_only(
                     DEFAULT_IPV4,
                     SslOpts::new(
@@ -782,7 +807,7 @@ mod tests {
         assert_eq!(
             cfg,
             ParsedConfig {
-                snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4)),
+                snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
                 bgsave: BGSave::default(),
                 noart: false,
                 ports: PortConfig::default()
