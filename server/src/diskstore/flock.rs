@@ -188,6 +188,7 @@ mod __sys {
     /// unlock files on Windows platforms.
     fn lock_file(file: &File, flags: DWORD) -> Result<()> {
         unsafe {
+            // UNSAFE(@ohsayan): Interfacing with low-level winapi stuff, and we know what's happening here :D
             let mut overlapped = mem::zeroed();
             let ret = LockFileEx(
                 file.as_raw_handle(), // handle
@@ -207,6 +208,7 @@ mod __sys {
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
         let ret = unsafe {
+            // UNSAFE(@ohsayan): Interfacing with low-level winapi stuff, and we know what's happening here :D
             UnlockFile(
                 file.as_raw_handle(), // handle
                 0,                    // LOWORD of starting byte offset
@@ -227,6 +229,7 @@ mod __sys {
     /// has the same permissions as the original file
     pub fn duplicate(file: &File) -> Result<File> {
         unsafe {
+            // UNSAFE(@ohsayan): Interfacing with low-level winapi stuff, and we know what's happening here :D
             let mut handle = ptr::null_mut();
             let current_process = GetCurrentProcess();
             let ret = DuplicateHandle(
@@ -293,7 +296,10 @@ mod __sys {
     }
     /// Attempt to unlock a file
     pub fn unlock_file(file: &File) -> Result<()> {
-        let errno = unsafe { unlock(file.as_raw_fd()) };
+        let errno = unsafe {
+            // UNSAFE(@ohsayan): Again, we know what's going on here. Good ol' C stuff
+            unlock(file.as_raw_fd())
+        };
         match errno {
             0 => Ok(()),
             x @ _ => Err(Error::from_raw_os_error(x)),
@@ -304,6 +310,7 @@ mod __sys {
     /// Good ol' libc dup() calls
     pub fn duplicate(file: &File) -> Result<File> {
         unsafe {
+            // UNSAFE(@ohsayan): Completely safe, just that this is FFI
             let fd = libc::dup(file.as_raw_fd());
             if fd < 0 {
                 Err(Error::last_os_error())

@@ -433,6 +433,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             }
         } else {
             unsafe {
+                // UNSAFE(@ohsayan): Completely safe as our CLI args require a value to be passed to upgrade
                 unreachable_unchecked();
             }
         }

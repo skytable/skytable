@@ -187,7 +187,10 @@ impl<'a> Parser<'a> {
             // if 9 is given, the subtraction should give us 9!
             let curdig: usize = dig
                 .checked_sub(48)
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+                .unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
+                    unreachable_unchecked()
+                })
                 .into();
             // The usize can overflow; check that case
             let product = match item_usize.checked_mul(10) {
@@ -219,7 +222,10 @@ impl<'a> Parser<'a> {
             // if 9 is given, the subtraction should give us 9!
             let curdig: u64 = dig
                 .checked_sub(48)
-                .unwrap_or_else(|| unsafe { unreachable_unchecked() })
+                .unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
+                    unreachable_unchecked()
+                })
                 .into();
             // Now the entire u64 can overflow, so let's attempt to check it
             let product = match item_u64.checked_mul(10) {
@@ -374,7 +380,7 @@ impl<'a> Parser<'a> {
             if self
                 .will_cursor_give_char(b'*', true)
                 .unwrap_or_else(|_| unsafe {
-                    // This will never be the case because we'll always get a result and no error value
+                    // UNSAFE(@ohsayan): This will never be the case because we'll always get a result and no error value
                     // as we've passed true which will yield Ok(true) even if there is no byte ahead
                     unreachable_unchecked()
                 })

@@ -189,7 +189,7 @@ impl<'a, K: Eq + Hash + Serialize, V: Serialize> Deref for TableLockStateGuard<'
 impl<'a, K: Hash + Eq + Serialize, V: Serialize> Drop for TableLockStateGuard<'a, K, V> {
     fn drop(&mut self) {
         unsafe {
-            // we know that no such guards exist, so indicate that the guards has been released
+            // UNSAFE(@ohsayan): we know that no such guards exist, so indicate that the guards has been released
             self.inner._force_unlock_writes();
         }
     }
@@ -322,6 +322,7 @@ where
     /// but however **will block if the table is already locked** and then return when a guard is available
     pub fn lock_writes(&self) -> TableLockStateGuard<'_, K, V> {
         self.wait_for_write_unlock_and_then(|| unsafe {
+            // UNSAFE(@ohsayan): This is safe because we're running it exactly after acquiring a lock
             // since we've got a write unlock at this exact point, we're free to lock the table
             // so this _should be_ safe
             // FIXME: UB/race condition here? What if exactly after the write unlock another thread does a lock_writes?

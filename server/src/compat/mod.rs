@@ -174,6 +174,7 @@ fn upgrade_file(
             )
         }
         Format::Sparrowlock => unsafe {
+            // UNSAFE(@ohsayan): Not possible as we've already checked this earlier (no upgrades required)
             unreachable_unchecked();
         },
     };
