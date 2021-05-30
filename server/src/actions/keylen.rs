@@ -26,6 +26,8 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
+use core::hint::unreachable_unchecked;
 
 /// Run a `KEYLEN` query
 ///
@@ -33,20 +35,24 @@ use crate::protocol::responses;
 pub async fn keylen<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 1);
+    crate::err_if_len_is!(act, con, not 1);
     let res: Option<usize> = {
         let reader = handle.get_ref();
         unsafe {
-            // UNSAFE(@ohsayan): get_unchecked() is completely safe as we've already checked
+            // UNSAFE(@ohsayan): unreachable_unchecked() is completely safe as we've already checked
             // the number of arguments is one
             reader
-                .get(act.get_unchecked(1).as_bytes())
+                .get(
+                    act.next()
+                        .unwrap_or_else(|| unreachable_unchecked())
+                        .as_bytes(),
+                )
                 .map(|b| b.get_blob().len())
         }
     };

@@ -38,8 +38,8 @@
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-
-use std::hint::unreachable_unchecked;
+use crate::queryengine::ActionIter;
+use core::hint::unreachable_unchecked;
 
 /// Run an `SSET` query
 ///
@@ -48,13 +48,13 @@ use std::hint::unreachable_unchecked;
 pub async fn sset<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
+    let howmany = act.len();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
@@ -66,13 +66,7 @@ where
 
         // This iterator gives us the keys and values, skipping the first argument which
         // is the action name
-        let mut key_iter = act
-            .get(1..)
-            .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
-                unreachable_unchecked()
-            })
-            .iter();
+        let mut key_iter = act.as_ref().iter();
         if handle.is_poisoned() {
             failed = None;
         } else {
@@ -92,8 +86,7 @@ where
             }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely set the keys
-                let mut iter = act.into_iter().skip(1);
-                while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
+                while let (Some(key), Some(value)) = (act.next(), act.next()) {
                     if !mut_table.true_if_insert(Data::from(key), Data::from_string(value)) {
                         // Tell the compiler that this will never be the case
                         unsafe {
@@ -126,13 +119,13 @@ where
 pub async fn sdel<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
+    let howmany = act.len();
     if howmany == 0 {
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
@@ -141,13 +134,7 @@ where
         // We use this additional scope to tell the compiler that the write lock
         // doesn't go beyond the scope of this function - and is never used across
         // an await: cause, the compiler ain't as smart as we are ;)
-        let mut key_iter = act
-            .get(1..)
-            .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
-                unreachable_unchecked()
-            })
-            .iter();
+        let mut key_iter = act.as_ref().iter();
         if handle.is_poisoned() {
             failed = None;
         } else {
@@ -168,7 +155,7 @@ where
             }) {
                 // Since the failed flag is false, all of the keys exist
                 // So we can safely delete the keys
-                act.into_iter().skip(1).for_each(|key| {
+                act.into_iter().for_each(|key| {
                     // Since we've already checked that the keys don't exist
                     // We'll tell the compiler to optimize this
                     let _ = mut_table.remove(key.as_bytes()).unwrap_or_else(|| unsafe {
@@ -198,13 +185,13 @@ where
 pub async fn supdate<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
+    let howmany = act.len();
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
@@ -213,13 +200,7 @@ where
         // We use this additional scope to tell the compiler that the write lock
         // doesn't go beyond the scope of this function - and is never used across
         // an await: cause, the compiler ain't as smart as we are ;)
-        let mut key_iter = act
-            .get(1..)
-            .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked if the action group contains more than one arugment
-                unreachable_unchecked()
-            })
-            .iter();
+        let mut key_iter = act.as_ref().iter();
         if handle.is_poisoned() {
             failed = None;
         } else {
@@ -245,8 +226,7 @@ where
             }) {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely update the keys
-                let mut iter = act.into_iter().skip(1);
-                while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
+                while let (Some(key), Some(value)) = (act.next(), act.next()) {
                     if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
                         // Tell the compiler that this will never be the case
                         unsafe { unreachable_unchecked() }

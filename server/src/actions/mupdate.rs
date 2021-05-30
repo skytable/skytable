@@ -27,25 +27,25 @@
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
 /// Run an `MUPDATE` query
 pub async fn mupdate<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
+    let howmany = act.len();
     if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut kviter = act.into_iter().skip(1);
     let done_howmany: Option<usize>;
     {
         if handle.is_poisoned() {
@@ -53,7 +53,7 @@ where
         } else {
             let writer = handle.get_ref();
             let mut didmany = 0;
-            while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+            while let (Some(key), Some(val)) = (act.next(), act.next()) {
                 if writer.true_if_update(Data::from(key), Data::from(val)) {
                     didmany += 1;
                 }

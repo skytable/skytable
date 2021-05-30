@@ -25,6 +25,7 @@
 */
 
 use crate::dbnet::connection::prelude::*;
+use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
 use skytable::RespCode;
@@ -34,19 +35,20 @@ use skytable::RespCode;
 pub async fn mget<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, == 0);
-    con.write_array_length(act.len() - 1).await?;
-    let mut keys = act.into_iter().skip(1);
-    while let Some(key) = keys.next() {
+    crate::err_if_len_is!(act, con, eq 0);
+    con.write_array_length(act.len()).await?;
+    while let Some(key) = act.next() {
         let res: Option<Bytes> = {
-            let reader = handle.get_ref();
-            reader.get(key.as_bytes()).map(|b| b.get_blob().clone())
+            handle
+                .get_ref()
+                .get(key.as_bytes())
+                .map(|b| b.get_blob().clone())
         };
         if let Some(value) = res {
             // Good, we got the value, write it off to the stream

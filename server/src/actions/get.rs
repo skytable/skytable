@@ -29,27 +29,33 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
+use core::hint::unreachable_unchecked;
 
 /// Run a `GET` query
 pub async fn get<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 1);
+    crate::err_if_len_is!(act, con, not 1);
     let res: Option<Bytes> = {
         let reader = handle.get_ref();
         unsafe {
-            // UNSAFE(@ohsayan): act.get_ref().get_unchecked() is safe because we've already if the action
+            // UNSAFE(@ohsayan): unreachable_unchecked is safe because we've already checked if the action
             // group contains one argument (excluding the action itself)
             reader
-                .get(act.get_unchecked(1).as_bytes())
+                .get(
+                    act.next()
+                        .unwrap_or_else(|| unreachable_unchecked())
+                        .as_bytes(),
+                )
                 .map(|b| b.get_blob().clone())
         }
     };

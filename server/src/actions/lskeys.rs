@@ -26,6 +26,7 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
 
@@ -33,14 +34,14 @@ use bytes::Bytes;
 pub async fn lskeys<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, > 1);
-    let item_count = if let Some(cnt) = act.get(1) {
+    crate::err_if_len_is!(act, con, gt 1);
+    let item_count = if let Some(cnt) = act.next() {
         if let Ok(cnt) = cnt.parse::<usize>() {
             cnt
         } else {

@@ -29,6 +29,7 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
 /// Run a `DEL` query
 ///
@@ -37,13 +38,13 @@ use crate::protocol::responses;
 pub async fn del<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, == 0);
+    crate::err_if_len_is!(act, con, eq 0);
     let done_howmany: Option<usize>;
     {
         if handle.is_poisoned() {
@@ -51,7 +52,7 @@ where
         } else {
             let mut many = 0;
             let cmap = handle.get_ref();
-            act.into_iter().skip(1).for_each(|key| {
+            act.for_each(|key| {
                 if cmap.true_if_removed(key.as_bytes()) {
                     many += 1
                 }

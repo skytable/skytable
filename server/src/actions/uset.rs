@@ -27,6 +27,7 @@
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
 /// Run an `USET` query
 ///
@@ -34,26 +35,25 @@ use crate::protocol::responses;
 pub async fn uset<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
+    let howmany = act.len();
     if howmany & 1 == 1 || howmany == 0 {
         // An odd number of arguments means that the number of keys
         // is not the same as the number of values, we won't run this
         // action at all
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut kviter = act.into_iter().skip(1);
     let failed = {
         if handle.is_poisoned() {
             true
         } else {
             let writer = handle.get_ref();
-            while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
+            while let (Some(key), Some(val)) = (act.next(), act.next()) {
                 let _ = writer.upsert(Data::from(key), Data::from(val));
             }
             drop(writer);

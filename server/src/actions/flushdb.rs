@@ -26,18 +26,19 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
 /// Delete all the keys in the database
 pub async fn flushdb<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 0);
+    crate::err_if_len_is!(act, con, not 0);
     let failed;
     {
         if handle.is_poisoned() {
