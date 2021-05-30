@@ -1,5 +1,5 @@
 /*
- * Created on Sun Sep 27 2020
+ * Created on Thu Aug 27 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -25,37 +25,39 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
+use crate::queryengine::ActionIter;
+use crate::resp::BytesWrapper;
+use bytes::Bytes;
+use skytable::RespCode;
 
-/// Run a `KEYLEN` query
+/// Run an `MGET` query
 ///
-/// At this moment, `keylen` only supports a single key
-pub async fn keylen<T, Strm>(
+pub async fn mget<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 1);
-    let res: Option<usize> = {
-        let reader = handle.get_ref();
-        unsafe {
-            // UNSAFE(@ohsayan): get_unchecked() is completely safe as we've already checked
-            // the number of arguments is one
-            reader
-                .get(act.get_unchecked(1).as_bytes())
-                .map(|b| b.get_blob().len())
+    crate::err_if_len_is!(act, con, eq 0);
+    con.write_array_length(act.len()).await?;
+    while let Some(key) = act.next() {
+        let res: Option<Bytes> = {
+            handle
+                .get_ref()
+                .get(key.as_bytes())
+                .map(|b| b.get_blob().clone())
+        };
+        if let Some(value) = res {
+            // Good, we got the value, write it off to the stream
+            con.write_response(BytesWrapper(value)).await?;
+        } else {
+            // Ah, couldn't find that key
+            con.write_response(RespCode::NotFound).await?;
         }
-    };
-    if let Some(value) = res {
-        // Good, we got the key's length, write it off to the stream
-        con.write_response(value).await?;
-    } else {
-        // Ah, couldn't find that key
-        con.write_response(&**responses::groups::NIL).await?;
     }
+    drop(handle);
     Ok(())
 }

@@ -29,6 +29,7 @@
 //! Functions for handling `JGET` queries
 
 use crate::dbnet::connection::prelude::*;
+use crate::queryengine::ActionIter;
 
 /// Run a `JGET` query
 /// This returns a JSON key/value pair of keys and values
@@ -42,13 +43,13 @@ use crate::dbnet::connection::prelude::*;
 pub async fn jget<T, Strm>(
     _handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 1);
+    crate::err_if_len_is!(act, con, not 1);
     todo!()
 }
 

@@ -24,8 +24,6 @@
  *
 */
 
-use std::borrow::Cow;
-
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 /// # Data Types
@@ -40,28 +38,4 @@ pub enum Element {
     UnsignedInt(u64),
     /// A non-recursive String array; tsymbol: `_`
     FlatArray(Vec<String>),
-}
-
-impl Element {
-    /// This will return a reference to the first element in the element
-    ///
-    /// If this element is a compound type, it will return a reference to the first element in the compound
-    /// type
-    pub fn get_first(&self) -> Option<Cow<String>> {
-        match self {
-            Self::Array(elem) => match elem.first() {
-                Some(el) => match el {
-                    Element::String(st) => Some(Cow::Borrowed(&st)),
-                    _ => None,
-                },
-                None => None,
-            },
-            Self::FlatArray(elem) => match elem.first() {
-                Some(el) => Some(Cow::Borrowed(&el)),
-                None => None,
-            },
-            Self::String(ref st) => Some(Cow::Borrowed(&st)),
-            _ => None,
-        }
-    }
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Fri Sep 25 2020
+ * Created on Thu May 13 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,45 +24,42 @@
  *
 */
 
-use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
+use crate::resp::BytesWrapper;
+use bytes::Bytes;
 
-/// Run an `USET` query
-///
-/// This is like "INSERT or UPDATE"
-pub async fn uset<T, Strm>(
+/// Run an `LSKEYS` query
+pub async fn lskeys<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
-    if howmany & 1 == 1 || howmany == 0 {
-        // An odd number of arguments means that the number of keys
-        // is not the same as the number of values, we won't run this
-        // action at all
-        return con.write_response(&**responses::groups::ACTION_ERR).await;
-    }
-    let mut kviter = act.into_iter().skip(1);
-    let failed = {
-        if handle.is_poisoned() {
-            true
+    crate::err_if_len_is!(act, con, gt 1);
+    let item_count = if let Some(cnt) = act.next() {
+        if let Ok(cnt) = cnt.parse::<usize>() {
+            cnt
         } else {
-            let writer = handle.get_ref();
-            while let (Some(key), Some(val)) = (kviter.next(), kviter.next()) {
-                let _ = writer.upsert(Data::from(key), Data::from(val));
-            }
-            drop(writer);
-            false
+            return con
+                .write_response(&**responses::groups::WRONGTYPE_ERR)
+                .await;
         }
-    };
-    if failed {
-        con.write_response(&**responses::groups::SERVER_ERR).await
     } else {
-        con.write_response(howmany / 2).await
+        10
+    };
+    let items: Vec<Bytes>;
+    {
+        let reader = handle.get_ref();
+        items = reader.get_keys(item_count);
     }
+    con.write_flat_array_length(items.len()).await?;
+    for item in items {
+        con.write_response(BytesWrapper(item)).await?;
+    }
+    Ok(())
 }

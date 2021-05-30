@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Thu Sep 24 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,32 +24,33 @@
  *
 */
 
-//! # `EXISTS` queries
-//! This module provides functions to work with `EXISTS` queries
-
 use crate::dbnet::connection::prelude::*;
+use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
-/// Run an `EXISTS` query
-pub async fn exists<T, Strm>(
+/// Delete all the keys in the database
+pub async fn flushdb<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, == 0);
-    let mut how_many_of_them_exist = 0usize;
+    crate::err_if_len_is!(act, con, not 0);
+    let failed;
     {
-        let cmap = handle.get_ref();
-        act.into_iter().skip(1).for_each(|key| {
-            if cmap.contains_key(key.as_bytes()) {
-                how_many_of_them_exist += 1;
-            }
-        });
-        drop(cmap);
+        if handle.is_poisoned() {
+            failed = true;
+        } else {
+            handle.get_ref().clear();
+            failed = false;
+        }
     }
-    con.write_response(how_many_of_them_exist).await?;
-    Ok(())
+    if failed {
+        con.write_response(&**responses::groups::SERVER_ERR).await
+    } else {
+        con.write_response(&**responses::groups::OKAY).await
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Thu Aug 27 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,63 +24,47 @@
  *
 */
 
-//! # `SET` queries
-//! This module provides functions to work with `SET` queries
-
-use crate::coredb;
+use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use coredb::Data;
-use std::hint::unreachable_unchecked;
+use crate::queryengine::ActionIter;
 
-/// Run a `SET` query
-pub async fn set<T, Strm>(
+/// Run an `MUPDATE` query
+pub async fn mupdate<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
-    if howmany != 2 {
-        // There should be exactly 2 arguments
+    let howmany = act.len();
+    if howmany & 1 == 1 || howmany == 0 {
+        // An odd number of arguments means that the number of keys
+        // is not the same as the number of values, we won't run this
+        // action at all
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut it = act.into_iter().skip(1);
-    let did_we = {
+    let done_howmany: Option<usize>;
+    {
         if handle.is_poisoned() {
-            None
+            done_howmany = None;
         } else {
             let writer = handle.get_ref();
-            if writer.true_if_insert(
-                Data::from_string(it.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                    // that there are exactly 2 arguments
-                    unreachable_unchecked()
-                })),
-                Data::from(it.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                    // that there are exactly 2 arguments
-                    unreachable_unchecked()
-                })),
-            ) {
-                Some(true)
-            } else {
-                Some(false)
+            let mut didmany = 0;
+            while let (Some(key), Some(val)) = (act.next(), act.next()) {
+                if writer.true_if_update(Data::from(key), Data::from(val)) {
+                    didmany += 1;
+                }
             }
+            drop(writer);
+            done_howmany = Some(didmany);
         }
-    };
-    if let Some(did_we) = did_we {
-        if did_we {
-            con.write_response(&**responses::groups::OKAY).await?;
-        } else {
-            con.write_response(&**responses::groups::OVERWRITE_ERR)
-                .await?;
-        }
-    } else {
-        con.write_response(&**responses::groups::SERVER_ERR).await?;
     }
-    Ok(())
+    if let Some(done_howmany) = done_howmany {
+        return con.write_response(done_howmany as usize).await;
+    } else {
+        return con.write_response(&**responses::groups::SERVER_ERR).await;
+    }
 }

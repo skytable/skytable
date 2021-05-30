@@ -28,50 +28,36 @@
 
 use crate::coredb::CoreDB;
 use crate::dbnet::connection::prelude::*;
-use crate::gen_match;
 use crate::protocol::responses;
 use crate::protocol::Element;
-use crate::{admin, kvengine};
+use crate::{actions, admin};
 
-mod tags {
-    //! This module is a collection of tags/strings used for evaluating queries
-    //! and responses
-    /// `GET` action tag
-    pub const TAG_GET: &'static str = "GET";
-    /// `SET` action tag
-    pub const TAG_SET: &'static str = "SET";
-    /// `UPDATE` action tag
-    pub const TAG_UPDATE: &'static str = "UPDATE";
-    /// `DEL` action tag
-    pub const TAG_DEL: &'static str = "DEL";
-    /// `HEYA` action tag
-    pub const TAG_HEYA: &'static str = "HEYA";
-    /// `EXISTS` action tag
-    pub const TAG_EXISTS: &'static str = "EXISTS";
-    /// `MSET` action tag
-    pub const TAG_MSET: &'static str = "MSET";
-    /// `MGET` action tag
-    pub const TAG_MGET: &'static str = "MGET";
-    /// `MUPDATE` action tag
-    pub const TAG_MUPDATE: &'static str = "MUPDATE";
-    /// `SSET` action tag
-    pub const TAG_SSET: &'static str = "SSET";
-    /// `SDEL` action tag
-    pub const TAG_SDEL: &'static str = "SDEL";
-    /// `SUPDATE` action tag
-    pub const TAG_SUPDATE: &'static str = "SUPDATE";
-    /// `DBSIZE` action tag
-    pub const TAG_DBSIZE: &'static str = "DBSIZE";
-    /// `FLUSHDB` action tag
-    pub const TAG_FLUSHDB: &'static str = "FLUSHDB";
-    /// `USET` action tag
-    pub const TAG_USET: &'static str = "USET";
-    /// `KEYLEN` action tag
-    pub const TAG_KEYLEN: &'static str = "KEYLEN";
-    /// `MKSNAP` action tag
-    pub const TAG_MKSNAP: &'static str = "MKSNAP";
-    /// `LSKEYS` action tag
-    pub const TAG_LSKEYS: &str = "LSKEYS";
+use std::vec::IntoIter;
+pub type ActionIter = IntoIter<String>;
+
+macro_rules! gen_constants_and_matches {
+    ($con:ident, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
+        mod tags {
+            //! This module is a collection of tags/strings used for evaluating queries
+            //! and responses
+            $(
+                pub const $action: &'static str = stringify!($action);
+            )*
+        }
+        let mut first = match $buf.next() {
+            Some(first) => first,
+            None => return $con.write_response(&**responses::groups::PACKET_ERR).await,
+        };
+        first.make_ascii_uppercase();
+        match first.as_str() {
+            $(
+                tags::$action => $fns($db, $con, $buf).await?,
+            )*
+            _ => {
+                return $con.write_response(&**responses::groups::UNKNOWN_ACTION).await;
+            }
+        }
+    };
 }
 
 /// Execute a simple(*) query
@@ -80,59 +66,34 @@ where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let first = match buf.get_first() {
-        Some(element) => element.to_ascii_uppercase(),
-        None => return con.write_response(&**responses::groups::PACKET_ERR).await,
+    let buf = if let Element::FlatArray(arr) = buf {
+        arr
+    } else {
+        return con
+            .write_response(&**responses::full_responses::R_WRONGTYPE_ERR)
+            .await;
     };
-    gen_match!(
-        first,
-        db,
-        con,
-        buf,
-        tags::TAG_DEL => kvengine::del::del,
-        tags::TAG_GET => kvengine::get::get,
-        tags::TAG_HEYA => kvengine::heya::heya,
-        tags::TAG_EXISTS => kvengine::exists::exists,
-        tags::TAG_SET => kvengine::set::set,
-        tags::TAG_MGET => kvengine::mget::mget,
-        tags::TAG_MSET => kvengine::mset::mset,
-        tags::TAG_UPDATE => kvengine::update::update,
-        tags::TAG_MUPDATE => kvengine::mupdate::mupdate,
-        tags::TAG_SSET => kvengine::strong::sset,
-        tags::TAG_SDEL => kvengine::strong::sdel,
-        tags::TAG_SUPDATE => kvengine::strong::supdate,
-        tags::TAG_DBSIZE => kvengine::dbsize::dbsize,
-        tags::TAG_FLUSHDB => kvengine::flushdb::flushdb,
-        tags::TAG_USET => kvengine::uset::uset,
-        tags::TAG_KEYLEN => kvengine::keylen::keylen,
-        tags::TAG_MKSNAP => admin::mksnap::mksnap,
-        tags::TAG_LSKEYS => kvengine::lskeys::lskeys
+    let mut buf = buf.into_iter();
+    gen_constants_and_matches!(
+        con, buf, db,
+        GET => actions::get::get,
+        SET => actions::set::set,
+        UPDATE => actions::update::update,
+        DEL => actions::del::del,
+        HEYA => actions::heya::heya,
+        EXISTS => actions::exists::exists,
+        MSET => actions::mset::mset,
+        MGET => actions::mget::mget,
+        MUPDATE => actions::mupdate::mupdate,
+        SSET => actions::strong::sset,
+        SDEL => actions::strong::sdel,
+        SUPDATE => actions::strong::supdate,
+        DBSIZE => actions::dbsize::dbsize,
+        FLUSHDB => actions::flushdb::flushdb,
+        USET => actions::uset::uset,
+        KEYLEN => actions::keylen::keylen,
+        MKSNAP => admin::mksnap::mksnap,
+        LSKEYS => actions::lskeys::lskeys
     );
     Ok(())
-}
-
-#[macro_export]
-/// A match generator macro built specifically for the `crate::queryengine::execute_simple` function
-///
-/// **NOTE:** This macro needs _paths_ for both sides of the $x => $y, to produce something sensible
-macro_rules! gen_match {
-    ($pre:ident, $db:ident, $con:ident, $buf:ident, $($x:pat => $y:expr),*) => {
-        let flat_array = if let crate::protocol::Element::FlatArray(array) = $buf {
-            array
-        } else {
-            return $con.write_response(&**responses::groups::WRONGTYPE_ERR).await;
-        };
-        match $pre.as_str() {
-            // First repeat over all the $x => $y patterns, passing in the variables
-            // and adding .await calls and adding the `?`
-            $(
-                $x => $y($db, $con, flat_array).await?,
-            )*
-            // Now add the final case where no action is matched
-            _ => {
-                return $con.write_response(&**responses::groups::UNKNOWN_ACTION)
-                .await;
-            },
-        }
-    };
 }

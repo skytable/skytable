@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 17 2020
+ * Created on Fri Aug 14 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,46 +24,41 @@
  *
 */
 
-//! # `UPDATE` queries
-//! This module provides functions to work with `UPDATE` queries
-//!
+//! # `SET` queries
+//! This module provides functions to work with `SET` queries
 
-use crate::coredb::{self};
+use crate::coredb;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 use coredb::Data;
 use std::hint::unreachable_unchecked;
 
-/// Run an `UPDATE` query
-pub async fn update<T, Strm>(
+/// Run a `SET` query
+pub async fn set<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
-    if howmany != 2 {
-        // There should be exactly 2 arguments
-        return con.write_response(&**responses::groups::ACTION_ERR).await;
-    }
-    let mut it = act.into_iter().skip(1);
+    crate::err_if_len_is!(act, con, not 2);
     let did_we = {
         if handle.is_poisoned() {
             None
         } else {
             let writer = handle.get_ref();
-            if writer.true_if_update(
-                Data::from(it.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We've already checked that the action contains exactly
-                    // two arguments (excluding the action itself). So, this branch won't ever be reached
+            if writer.true_if_insert(
+                Data::from_string(act.next().unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
                     unreachable_unchecked()
                 })),
-                Data::from_string(it.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We've already checked that the action contains exactly
-                    // two arguments (excluding the action itself). So, this branch won't ever be reached
+                Data::from(act.next().unwrap_or_else(|| unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
                     unreachable_unchecked()
                 })),
             ) {
@@ -77,7 +72,8 @@ where
         if did_we {
             con.write_response(&**responses::groups::OKAY).await?;
         } else {
-            con.write_response(&**responses::groups::NIL).await?;
+            con.write_response(&**responses::groups::OVERWRITE_ERR)
+                .await?;
         }
     } else {
         con.write_response(&**responses::groups::SERVER_ERR).await?;

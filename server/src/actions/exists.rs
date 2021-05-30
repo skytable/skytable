@@ -1,5 +1,5 @@
 /*
- * Created on Fri Aug 14 2020
+ * Created on Wed Aug 19 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,41 +24,33 @@
  *
 */
 
-//! # `GET` queries
-//! This module provides functions to work with `GET` queries
+//! # `EXISTS` queries
+//! This module provides functions to work with `EXISTS` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::resp::BytesWrapper;
-use bytes::Bytes;
+use crate::queryengine::ActionIter;
 
-/// Run a `GET` query
-pub async fn get<T, Strm>(
+/// Run an `EXISTS` query
+pub async fn exists<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, != 1);
-    let res: Option<Bytes> = {
-        let reader = handle.get_ref();
-        unsafe {
-            // UNSAFE(@ohsayan): act.get_ref().get_unchecked() is safe because we've already if the action
-            // group contains one argument (excluding the action itself)
-            reader
-                .get(act.get_unchecked(1).as_bytes())
-                .map(|b| b.get_blob().clone())
-        }
-    };
-    if let Some(value) = res {
-        // Good, we got the value, write it off to the stream
-        con.write_response(BytesWrapper(value)).await?;
-    } else {
-        // Ah, couldn't find that key
-        con.write_response(&**responses::groups::NIL).await?;
+    crate::err_if_len_is!(act, con, eq 0);
+    let mut how_many_of_them_exist = 0usize;
+    {
+        let cmap = handle.get_ref();
+        act.for_each(|key| {
+            if cmap.contains_key(key.as_bytes()) {
+                how_many_of_them_exist += 1;
+            }
+        });
+        drop(cmap);
     }
+    con.write_response(how_many_of_them_exist).await?;
     Ok(())
 }

@@ -24,9 +24,11 @@
  *
 */
 
-//! # The Key/Value Engine
-//! This is Skytable's K/V engine. It contains utilities to interface with
-//! Skytable's K/V store
+//! # Actions
+//!
+//! Actions are like shell commands, you provide arguments -- they return output. This module contains a collection
+//! of the actions supported by Skytable
+//!
 
 pub mod dbsize;
 pub mod del;
@@ -47,12 +49,13 @@ pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
     use crate::protocol;
+    use crate::queryengine::ActionIter;
     use protocol::responses;
     /// Returns a `HEY!` `Response`
     pub async fn heya<T, Strm>(
         _handle: &crate::coredb::CoreDB,
         con: &mut T,
-        _act: Vec<String>,
+        _act: ActionIter,
     ) -> std::io::Result<()>
     where
         T: ProtocolConnectionExt<Strm>,
@@ -64,50 +67,50 @@ pub mod heya {
 
 #[macro_export]
 macro_rules! err_if_len_is {
-    ($buf:ident, $con:ident, == $len:literal) => {
-        if $buf.len() - 1 == $len {
+    ($buf:ident, $con:ident, eq $len:literal) => {
+        if $buf.len() == $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, != $len:literal) => {
-        if $buf.len() - 1 != $len {
+    ($buf:ident, $con:ident, not $len:literal) => {
+        if $buf.len() != $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, > $len:literal) => {
-        if $buf.len() - 1 > $len {
+    ($buf:ident, $con:ident, gt $len:literal) => {
+        if $buf.len() > $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, < $len:literal) => {
-        if $buf.len() - 1 < $len {
+    ($buf:ident, $con:ident, lt $len:literal) => {
+        if $buf.len() < $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, >= $len:literal) => {
-        if $buf.len() - 1 >= $len {
+    ($buf:ident, $con:ident, gt_or_eq $len:literal) => {
+        if $buf.len() >= $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, <= $len:literal) => {
-        if $buf.len() - 1 <= $len {
+    ($buf:ident, $con:ident, lt_or_eq $len:literal) => {
+        if $buf.len() <= $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, & $len:literal) => {
-        if $buf.len() - 1 & $len {
+        if $buf.len() & $len {
             return $con
                 .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
                 .await;

@@ -29,6 +29,7 @@ use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 use std::hint::unreachable_unchecked;
 use std::path::{Component, PathBuf};
 
@@ -37,14 +38,13 @@ use std::path::{Component, PathBuf};
 pub async fn mksnap<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let howmany = act.len() - 1;
-    if howmany == 0 {
+    if act.len() == 0 {
         if !handle.is_snapshot_enabled() {
             // Since snapshotting is disabled, we can't create a snapshot!
             // We'll just return an error returning the same
@@ -100,9 +100,9 @@ where
                 .await;
         }
     } else {
-        if howmany == 1 {
+        if act.len() == 1 {
             // This means that the user wants to create a 'named' snapshot
-            let snapname = act.get(1).unwrap_or_else(|| unsafe {
+            let snapname = act.next().unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): We've already checked that the action
                 // contains a second argument, so this can't be reached
                 unreachable_unchecked()

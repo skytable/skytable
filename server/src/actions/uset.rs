@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Fri Sep 25 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,45 +24,45 @@
  *
 */
 
-//! # `DEL` queries
-//! This module provides functions to work with `DEL` queries
-
+use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
+use crate::queryengine::ActionIter;
 
-/// Run a `DEL` query
+/// Run an `USET` query
 ///
-/// Do note that this function is blocking since it acquires a write lock.
-/// It will write an entire datagroup, for this `del` action
-pub async fn del<T, Strm>(
+/// This is like "INSERT or UPDATE"
+pub async fn uset<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    mut act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, == 0);
-    let done_howmany: Option<usize>;
-    {
-        if handle.is_poisoned() {
-            done_howmany = None;
-        } else {
-            let mut many = 0;
-            let cmap = handle.get_ref();
-            act.into_iter().skip(1).for_each(|key| {
-                if cmap.true_if_removed(key.as_bytes()) {
-                    many += 1
-                }
-            });
-            drop(cmap);
-            done_howmany = Some(many);
-        }
+    let howmany = act.len();
+    if howmany & 1 == 1 || howmany == 0 {
+        // An odd number of arguments means that the number of keys
+        // is not the same as the number of values, we won't run this
+        // action at all
+        return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    if let Some(done_howmany) = done_howmany {
-        con.write_response(done_howmany).await
-    } else {
+    let failed = {
+        if handle.is_poisoned() {
+            true
+        } else {
+            let writer = handle.get_ref();
+            while let (Some(key), Some(val)) = (act.next(), act.next()) {
+                let _ = writer.upsert(Data::from(key), Data::from(val));
+            }
+            drop(writer);
+            false
+        }
+    };
+    if failed {
         con.write_response(&**responses::groups::SERVER_ERR).await
+    } else {
+        con.write_response(howmany / 2).await
     }
 }

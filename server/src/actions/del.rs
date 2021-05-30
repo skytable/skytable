@@ -1,5 +1,5 @@
 /*
- * Created on Thu May 13 2021
+ * Created on Wed Aug 19 2020
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,41 +24,46 @@
  *
 */
 
+//! # `DEL` queries
+//! This module provides functions to work with `DEL` queries
+
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
-use crate::resp::BytesWrapper;
-use bytes::Bytes;
+use crate::queryengine::ActionIter;
 
-/// Run an `LSKEYS` query
-pub async fn lskeys<T, Strm>(
+/// Run a `DEL` query
+///
+/// Do note that this function is blocking since it acquires a write lock.
+/// It will write an entire datagroup, for this `del` action
+pub async fn del<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    act: Vec<String>,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    crate::err_if_len_is!(act, con, > 1);
-    let item_count = if let Some(cnt) = act.get(1) {
-        if let Ok(cnt) = cnt.parse::<usize>() {
-            cnt
-        } else {
-            return con
-                .write_response(&**responses::groups::WRONGTYPE_ERR)
-                .await;
-        }
-    } else {
-        10
-    };
-    let items: Vec<Bytes>;
+    crate::err_if_len_is!(act, con, eq 0);
+    let done_howmany: Option<usize>;
     {
-        let reader = handle.get_ref();
-        items = reader.get_keys(item_count);
+        if handle.is_poisoned() {
+            done_howmany = None;
+        } else {
+            let mut many = 0;
+            let cmap = handle.get_ref();
+            act.for_each(|key| {
+                if cmap.true_if_removed(key.as_bytes()) {
+                    many += 1
+                }
+            });
+            drop(cmap);
+            done_howmany = Some(many);
+        }
     }
-    con.write_flat_array_length(items.len()).await?;
-    for item in items {
-        con.write_response(BytesWrapper(item)).await?;
+    if let Some(done_howmany) = done_howmany {
+        con.write_response(done_howmany).await
+    } else {
+        con.write_response(&**responses::groups::SERVER_ERR).await
     }
-    Ok(())
 }
