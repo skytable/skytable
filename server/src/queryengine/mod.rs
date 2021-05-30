@@ -36,7 +36,7 @@ use std::vec::IntoIter;
 pub type ActionIter = IntoIter<String>;
 
 macro_rules! gen_constants_and_matches {
-    ($con:ident, $buf:ident, $db:ident, $($action:ident),*; $($fns:expr),*) => {
+    ($con:ident, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
         mod tags {
             //! This module is a collection of tags/strings used for evaluating queries
             //! and responses
@@ -75,26 +75,25 @@ where
     };
     let mut buf = buf.into_iter();
     gen_constants_and_matches!(
-        con, buf, db, GET, SET, UPDATE, DEL, HEYA, EXISTS, MSET, MGET, MUPDATE, SSET, SDEL,
-        SUPDATE, DBSIZE, FLUSHDB, USET, KEYLEN, MKSNAP, LSKEYS;
-        actions::get::get,
-        actions::set::set,
-        actions::update::update,
-        actions::del::del,
-        actions::heya::heya,
-        actions::exists::exists,
-        actions::mset::mset,
-        actions::mget::mget,
-        actions::mupdate::mupdate,
-        actions::strong::sset,
-        actions::strong::sdel,
-        actions::strong::supdate,
-        actions::dbsize::dbsize,
-        actions::flushdb::flushdb,
-        actions::uset::uset,
-        actions::keylen::keylen,
-        admin::mksnap::mksnap,
-        actions::lskeys::lskeys
+        con, buf, db,
+        GET => actions::get::get,
+        SET => actions::set::set,
+        UPDATE => actions::update::update,
+        DEL => actions::del::del,
+        HEYA => actions::heya::heya,
+        EXISTS => actions::exists::exists,
+        MSET => actions::mset::mset,
+        MGET => actions::mget::mget,
+        MUPDATE => actions::mupdate::mupdate,
+        SSET => actions::strong::sset,
+        SDEL => actions::strong::sdel,
+        SUPDATE => actions::strong::supdate,
+        DBSIZE => actions::dbsize::dbsize,
+        FLUSHDB => actions::flushdb::flushdb,
+        USET => actions::uset::uset,
+        KEYLEN => actions::keylen::keylen,
+        MKSNAP => admin::mksnap::mksnap,
+        LSKEYS => actions::lskeys::lskeys
     );
     Ok(())
 }
