@@ -58,7 +58,7 @@ where
     if howmany & 1 == 1 || howmany == 0 {
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut failed = Some(false);
+    let failed;
     {
         // We use this additional scope to tell the compiler that the write lock
         // doesn't go beyond the scope of this function - and is never used across
@@ -71,19 +71,8 @@ where
             failed = None;
         } else {
             let mut_table = handle.get_ref();
-            while let Some(key) = key_iter.next() {
-                if mut_table.contains_key(key.as_bytes()) {
-                    // With one of the keys existing - this action can't clearly be done
-                    // So we'll set `failed` to true and ensure that we check this while
-                    // writing a response back to the client
-                    failed = Some(true);
-                    break;
-                }
-            }
-            if !failed.unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): Completely safe because we've already set a value for `failed` earlier
-                unreachable_unchecked()
-            }) {
+            if key_iter.all(|key| !mut_table.contains_key(key.as_bytes())) {
+                failed = Some(false);
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely set the keys
                 while let (Some(key), Some(value)) = (act.next(), act.next()) {
@@ -97,6 +86,8 @@ where
                         }
                     }
                 }
+            } else {
+                failed = Some(true);
             }
         }
     }
@@ -129,7 +120,7 @@ where
     if howmany == 0 {
         return con.write_response(&**responses::groups::ACTION_ERR).await;
     }
-    let mut failed = Some(false);
+    let failed;
     {
         // We use this additional scope to tell the compiler that the write lock
         // doesn't go beyond the scope of this function - and is never used across
@@ -139,20 +130,8 @@ where
             failed = None;
         } else {
             let mut_table = handle.get_ref();
-            while let Some(key) = key_iter.next() {
-                if !mut_table.contains_key(key.as_bytes()) {
-                    // With one of the keys not existing - this action can't clearly be done
-                    // So we'll set `failed` to true and ensure that we check this while
-                    // writing a response back to the client
-                    failed = Some(true);
-                    break;
-                }
-            }
-            if !failed.unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): Again, completely safe as we always assign a value to
-                // `failed`
-                unreachable_unchecked()
-            }) {
+            if key_iter.all(|key| mut_table.contains_key(key.as_bytes())) {
+                failed = Some(false);
                 // Since the failed flag is false, all of the keys exist
                 // So we can safely delete the keys
                 act.into_iter().for_each(|key| {
@@ -164,6 +143,8 @@ where
                         unreachable_unchecked()
                     });
                 });
+            } else {
+                failed = Some(true);
             }
         }
     }
