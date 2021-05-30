@@ -318,7 +318,6 @@ impl ParsedConfig {
                             chain: sslopts.chain,
                             port: sslopts.port,
                         },
-
                         host: cfg_info.server.host,
                     }
                 } else {
