@@ -31,7 +31,7 @@ use crate::dbnet::connection::prelude::*;
 use crate::gen_match;
 use crate::protocol::responses;
 use crate::protocol::Element;
-use crate::{admin, kvengine};
+use crate::{actions, admin};
 
 mod tags {
     //! This module is a collection of tags/strings used for evaluating queries
@@ -89,24 +89,24 @@ where
         db,
         con,
         buf,
-        tags::TAG_DEL => kvengine::del::del,
-        tags::TAG_GET => kvengine::get::get,
-        tags::TAG_HEYA => kvengine::heya::heya,
-        tags::TAG_EXISTS => kvengine::exists::exists,
-        tags::TAG_SET => kvengine::set::set,
-        tags::TAG_MGET => kvengine::mget::mget,
-        tags::TAG_MSET => kvengine::mset::mset,
-        tags::TAG_UPDATE => kvengine::update::update,
-        tags::TAG_MUPDATE => kvengine::mupdate::mupdate,
-        tags::TAG_SSET => kvengine::strong::sset,
-        tags::TAG_SDEL => kvengine::strong::sdel,
-        tags::TAG_SUPDATE => kvengine::strong::supdate,
-        tags::TAG_DBSIZE => kvengine::dbsize::dbsize,
-        tags::TAG_FLUSHDB => kvengine::flushdb::flushdb,
-        tags::TAG_USET => kvengine::uset::uset,
-        tags::TAG_KEYLEN => kvengine::keylen::keylen,
+        tags::TAG_DEL => actions::del::del,
+        tags::TAG_GET => actions::get::get,
+        tags::TAG_HEYA => actions::heya::heya,
+        tags::TAG_EXISTS => actions::exists::exists,
+        tags::TAG_SET => actions::set::set,
+        tags::TAG_MGET => actions::mget::mget,
+        tags::TAG_MSET => actions::mset::mset,
+        tags::TAG_UPDATE => actions::update::update,
+        tags::TAG_MUPDATE => actions::mupdate::mupdate,
+        tags::TAG_SSET => actions::strong::sset,
+        tags::TAG_SDEL => actions::strong::sdel,
+        tags::TAG_SUPDATE => actions::strong::supdate,
+        tags::TAG_DBSIZE => actions::dbsize::dbsize,
+        tags::TAG_FLUSHDB => actions::flushdb::flushdb,
+        tags::TAG_USET => actions::uset::uset,
+        tags::TAG_KEYLEN => actions::keylen::keylen,
         tags::TAG_MKSNAP => admin::mksnap::mksnap,
-        tags::TAG_LSKEYS => kvengine::lskeys::lskeys
+        tags::TAG_LSKEYS => actions::lskeys::lskeys
     );
     Ok(())
 }
