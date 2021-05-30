@@ -2,6 +2,14 @@
 
 All changes in this project will be noted in this file.
 
+<details>
+<summary><b>Unreleased</b></summary>
+
+* Snapshotting failure will now poison the database (customizable through CLI options or the configuration file)
+[see [#160](https://github.com/skytable/skytable/pull/160)]
+
+</details>
+
 ## Version 0.6.0 [2021-05-27]
 
 > Breaking changes!

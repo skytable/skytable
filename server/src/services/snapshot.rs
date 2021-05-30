@@ -35,7 +35,8 @@ use tokio::time::{self, Duration};
 /// This service calls `SnapEngine::mksnap()` periodically to create snapshots. Whenever
 /// the interval for snapshotting expires or elapses, we create a snapshot. The snapshot service
 /// keeps creating snapshots, as long as the database keeps running. Once [`dbnet::run`] broadcasts
-/// a termination signal, we're ready to quit
+/// a termination signal, we're ready to quit. This function will, by default, poison the database
+/// if snapshotting fails, unless customized by the user.
 pub async fn snapshot_service(
     handle: CoreDB,
     ss_config: SnapshotConfig,
@@ -47,7 +48,7 @@ pub async fn snapshot_service(
             return;
         }
         SnapshotConfig::Enabled(configuration) => {
-            let (duration, atmost) = configuration.decompose();
+            let (duration, atmost, failsafe) = configuration.decompose();
             let duration = Duration::from_secs(duration);
             let mut sengine = match SnapshotEngine::new(atmost, &handle, None) {
                 Ok(ss) => ss,
@@ -59,7 +60,14 @@ pub async fn snapshot_service(
             loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        let _ = sengine.mksnap().await;
+                        if sengine.mksnap().await {
+                            // it passed, so unpoison the handle
+                            drop(handle.unpoison());
+                        } else if failsafe {
+                            // mksnap returned false and we are set to stop writes if snapshotting failed
+                            // so let's poison the handle
+                            drop(handle.poison());
+                        }
                     },
                     _ = termination_signal.receive_signal() => {
                         // time to terminate; goodbye!

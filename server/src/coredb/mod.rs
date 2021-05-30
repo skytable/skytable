@@ -160,7 +160,10 @@ impl CoreDB {
     pub fn new(snapshot_cfg: &SnapshotConfig, restore_file: Option<String>) -> TResult<Self> {
         let coremap = diskstore::get_saved(restore_file)?;
         let mut snap_count = None;
-        if let SnapshotConfig::Enabled(SnapshotPref { every: _, atmost }) = snapshot_cfg {
+        if let SnapshotConfig::Enabled(SnapshotPref {
+            every: _, atmost, ..
+        }) = snapshot_cfg
+        {
             snap_count = Some(atmost);
         }
         let snapcfg = snap_count

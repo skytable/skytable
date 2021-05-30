@@ -23,6 +23,7 @@ every = 120
 [snapshot]
 every = 3600 # Make a snapshot after every 1 hour (60min * 60sec= 3600secs)
 atmost = 4 # Keep the 4 most recent snapshots
+failsafe = true # stops accepting writes if snapshotting fails
 
 # This key is *OPTIONAL*, used for TLS/SSL config
 [ssl]
