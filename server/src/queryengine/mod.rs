@@ -81,7 +81,7 @@ where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     let first = match buf.get_first() {
-        Some(element) => element.to_uppercase(),
+        Some(element) => element.to_ascii_uppercase(),
         None => return con.write_response(&**responses::groups::PACKET_ERR).await,
     };
     gen_match!(
