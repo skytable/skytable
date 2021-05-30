@@ -903,8 +903,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.2.3"
-source = "git+https://github.com/skytable/client-rust?branch=next#f36d7567ccae39a512d581d7f0d205c88db82b63"
+version = "0.3.0"
+source = "git+https://github.com/skytable/client-rust?branch=next#acf41607ebb883e539e5e2663341c2fbcf04a97f"
 dependencies = [
  "bytes",
  "tokio",
@@ -976,9 +976,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.6.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd3076b5c8cc18138b8f8814895c11eb4de37114a5d127bafdc5e55798ceef37"
+checksum = "0a38d31d7831c6ed7aad00aa4c12d9375fd225a6dd77da1d25b707346319a975"
 dependencies = [
  "autocfg",
  "bytes",
