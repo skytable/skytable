@@ -29,8 +29,6 @@
 //! This module provides the `FileLock` struct that can be used for locking and/or unlocking files on
 //! unix-based systems and Windows systems
 
-// TODO(@ohsayan): Add support for solaris
-
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
@@ -250,7 +248,7 @@ mod __sys {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(not(target_os = "solaris"), unix))]
 mod __sys {
     #![allow(dead_code)] // TODO: Enable this lint or remove the offending methods
     //! # Unix platform-specific file locking
@@ -311,6 +309,68 @@ mod __sys {
     pub fn duplicate(file: &File) -> Result<File> {
         unsafe {
             // UNSAFE(@ohsayan): Completely safe, just that this is FFI
+            let fd = libc::dup(file.as_raw_fd());
+            if fd < 0 {
+                Err(Error::last_os_error())
+            } else {
+                Ok(File::from_raw_fd(fd))
+            }
+        }
+    }
+}
+
+#[cfg(all(target_os = "solaris", unix))]
+mod __sys {
+    //! Solaris doesn't have flock so we'll have to simulate that using fcntl
+    use std::fs::File;
+    use std::io::Error;
+    use std::io::Result;
+    use std::os::unix::io::AsRawFd;
+    use std::os::unix::io::FromRawFd;
+
+    fn simulate_flock(file: &File, flag: libc::c_int) -> Result<()> {
+        let mut fle = libc::flock {
+            l_whence: 0,
+            l_start: 0,
+            l_len: 0,
+            l_type: 0,
+            l_pad: [0; 4],
+            l_pid: 0,
+            l_sysid: 0,
+        };
+        let (cmd, op) = match flag & libc::LOCK_NB {
+            0 => (libc::F_SETLKW, flag),
+            _ => (libc::F_SETLK, flag & !libc::LOCK_NB),
+        };
+        match op {
+            libc::LOCK_SH => fle.l_type |= libc::F_RDLCK,
+            libc::LOCK_EX => fle.l_type |= libc::F_WRLCK,
+            libc::LOCK_UN => fle.l_type |= libc::F_UNLCK,
+            _ => return Err(Error::from_raw_os_error(libc::EINVAL)),
+        }
+        let ret = unsafe { libc::fcntl(file.as_raw_fd(), cmd, &fle) };
+        match ret {
+            -1 => match Error::last_os_error().raw_os_error() {
+                Some(libc::EACCES) => {
+                    // this is the 'sort of' solaris equivalent to EWOULDBLOCK
+                    Err(Error::from_raw_os_error(libc::EWOULDBLOCK))
+                }
+                _ => return Err(Error::last_os_error()),
+            },
+            _ => Ok(()),
+        }
+    }
+    pub fn lock_ex(file: &File) -> Result<()> {
+        simulate_flock(file, libc::LOCK_EX)
+    }
+    pub fn try_lock_ex(file: &File) -> Result<()> {
+        simulate_flock(file, libc::LOCK_EX | libc::LOCK_NB)
+    }
+    pub fn unlock_file(file: &File) -> Result<()> {
+        simulate_flock(file, libc::LOCK_UN)
+    }
+    pub fn duplicate(file: &File) -> Result<File> {
+        unsafe {
             let fd = libc::dup(file.as_raw_fd());
             if fd < 0 {
                 Err(Error::last_os_error())
