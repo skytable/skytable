@@ -44,6 +44,7 @@ mod diskstore;
 mod protocol;
 mod queryengine;
 mod resp;
+mod skymap;
 use coredb::CoreDB;
 use dbnet::run;
 mod compat;
