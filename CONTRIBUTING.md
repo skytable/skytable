@@ -48,7 +48,12 @@ Each project has its own jargon — and so do we!
 
 ### Branches
 
-The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download sources from the tags. Usually, when a feature is worked on, the work will be done on a separate branch, and then it will be merged into next.
+The `next` branch is the _kind of_ stable branch which contains the latest changes. However, for most purposes, you should always download sources from the tags. 
+
+Pushes are made directly
+to next if they don't change things significantly; for example, changes in documentation comments and general optimizations. If
+however the changes are huge, then they must be created on a separate branch, a pull request opened, the CI suite run and 
+finally merged into next.
 
 ## Steps
 
@@ -61,6 +66,11 @@ The `next` branch is the _kind of_ stable branch which contains the latest chang
 
 ## Testing locally
 
-1. Install rust (stable)
-2. Run `cargo build --verbose && cargo test --verbose`
-3. That's it!
+1. Install the latest Rust toolchain (stable)
+2. Install a C Compiler, Make, Perl and the libssl-dev package on platforms where they are required
+3. First build the database server by running: `cargo build --verbose`
+4. Now start the database server in the background
+5. Now run `cargo test --verbose -- --test-threads=1`. 
+    
+    **Note:** Make sure that run the tests in a single-threaded way, else you'll find that a lot of tests fail. This is because several of the tests use the same keys
+6. That's it!
