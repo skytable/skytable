@@ -31,9 +31,9 @@ cfg_if::cfg_if! {
         target_feature = "sse2",
         any(target_arch = "x86", target_arch = "x86_64")
     ))] {
-        use generic as imp;
+        use self::sse2 as imp;
     } else {
-        use sse2 as imp;
+        use self::generic as imp;
     }
 }
 
