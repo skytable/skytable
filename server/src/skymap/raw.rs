@@ -26,6 +26,48 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
 
+#[cfg(all(
+    target_feature = "sse2",
+    any(target_arch = "x86", target_arch = "x86_64")
+))]
+mod sse2 {
+    //! SSE2 Vectorized implementations of group lookups for hosts that support them
+    use super::control_bytes;
+    #[cfg(target_arch = "x86")]
+    use core::arch::x86;
+    #[cfg(target_arch = "x86_64")]
+    use core::arch::x86_64 as x86;
+    use core::mem;
+
+    pub type BitmaskWord = u16;
+    pub const BITMASK_STRIDE: usize = 1;
+    pub const BITMASK_MASK: BitmaskWord = 0xffff;
+
+    pub struct Group(x86::__m128i);
+
+    pub const WIDTH: usize = mem::size_of::<Group>();
+
+    impl Group {
+        /// This will return the size of Self, which is a 128-bit wide integer vector (128-bit SIMD register)
+        /// (intel platforms only)
+        pub const WIDTH: usize = mem::size_of::<Self>();
+        /// Returns a full group
+        pub const fn empty_static() -> &'static [u8; Group::WIDTH] {
+            #[repr(C)]
+            struct AlignedBytes {
+                // some explicit padding for alignment to ensure alignment to the group size
+                _align: [Group; 0],
+                bytes: [u8; Group::WIDTH],
+            }
+            const ALIGNED_BYTES: AlignedBytes = AlignedBytes {
+                _align: [],
+                bytes: [control_bytes::EMPTY; Group::WIDTH],
+            };
+            &ALIGNED_BYTES.bytes
+        }
+    }
+}
+
 mod generic {
     //! Implementations for CPU architectures that do not support SSE instructions
     /*
@@ -68,7 +110,6 @@ mod generic {
                 _align: [Group; 0],
                 bytes: [u8; Group::WIDTH],
             }
-            #[allow(dead_code)] // Clippy doesn't know that we're getting aligned bytes here, so suppress this lint
             const ALIGNED_BYTES: AlignedBytes = AlignedBytes {
                 _align: [],
                 bytes: [control_bytes::EMPTY; Group::WIDTH],
