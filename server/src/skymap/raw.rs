@@ -45,6 +45,7 @@ mod sse2 {
     //! SSE2 Vectorized implementations of group lookups for hosts that support them
     use super::bitmask::Bitmask;
     use super::control_bytes;
+
     #[cfg(target_arch = "x86")]
     use core::arch::x86;
     #[cfg(target_arch = "x86_64")]
@@ -279,6 +280,7 @@ mod generic {
         using 64-bit pointer sizes because using 64-bit on 32-bit systems would only add to slowness
     */
 
+    use super::bitmask::Bitmask;
     use super::control_bytes;
     use core::mem;
     use core::ptr;
@@ -291,6 +293,10 @@ mod generic {
 
     /// Just use the expected pointer width publicly for sanity
     pub type BitmaskWord = GroupWord;
+
+    fn repeat(byte: u8) -> GroupWord {
+        GroupWord::from_ne_bytes([byte; Group::WIDTH])
+    }
 
     pub const BITMASK_STRIDE: usize = 8;
     pub const BITMASK_MASK: BitmaskWord = 0x8080_8080_8080_8080_u64 as BitmaskWord;
@@ -329,6 +335,55 @@ mod generic {
         /// Store the [`Group`] in the given address. This is guaranteed to be aligned
         pub unsafe fn store_aligned(self, ptr: *mut u8) {
             ptr::write(ptr.cast(), self.0)
+        }
+
+        /// Returns a bitmask indicating which all bytes in the group _may_ have this value.
+        /// This trick is derived from (the original site is inaccesible at times, for me at least):
+        /// https://web.archive.org/web/20210523160500/http://graphics.stanford.edu/~seander/bithacks.html##ValueInWord.
+        ///
+        /// This however can return a false positive, but since after checking metadata for an entry,
+        /// we _do_ check the value for equality, so this wouldn't cause anything to go wrong, fortunately.
+        /// The drawback: a little loss on performance for the equality check in the case of a false positive,
+        /// but this is extremely insignificant. This is something like C++'s
+        /// [strchr](https://en.cppreference.com/w/c/string/byte/strchr)
+        pub fn match_byte(self, byte: u8) -> Bitmask {
+            let cmp = self.0 ^ repeat(byte);
+            // change to little endian
+            Bitmask((cmp.wrapping_sub(repeat(0x01)) & !cmp & repeat(0x80)).to_le())
+        }
+
+        /// Returns a bitmask indicating which all bytes were empty
+        pub fn match_empty(self) -> Bitmask {
+            // always change to little endian
+            Bitmask((self.0 & (self.0 << 1)) & repeat(0x80).to_le())
+        }
+
+        /// Returns a bitmask indicating which all bytes were empty or deleted
+        pub fn match_empty_or_deleted(self) -> Bitmask {
+            // A byte is EMPTY or DELETED iff the high bit is set
+            Bitmask((self.0 & repeat(0x80)).to_le())
+        }
+
+        /// Returns a bitmask indicating which all bytes were full
+        pub fn match_full(self) -> Bitmask {
+            self.match_empty_or_deleted().invert()
+        }
+
+        /// Transform DELETED => EMPTY, EMPTY => EMPTY (specials) and FULL => DELETED
+        pub fn transform_full_to_deleted_and_special_to_empty(self) -> Self {
+            /*
+             If high order bit is 1 => EMPTY or DELETED => is special
+             If high order bit is 0 => FULL => not special
+
+             So we do this manually unlike SSE2 that does it for us:
+             1. !0b1000_0000 => 1111111101111111
+             2. 1111111101111111 + 1 => (11111111)10000000 (after shl 7)
+             Similarly,
+             1. !0b0000_0000 => 1111111111111111
+             2. 1111111111111111 + 0 => (11111111)11111111 (after shl 7)
+            */
+            let full = !self.0 & repeat(0x80);
+            Group(!full + (full >> 7))
         }
     }
 }
