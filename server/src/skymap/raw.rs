@@ -98,6 +98,7 @@ mod sse2 {
 
 mod bitmask {
     use super::imp::{BitmaskWord, BITMASK_MASK, BITMASK_STRIDE};
+    #[derive(Clone, Copy)]
     pub struct Bitmask(pub BitmaskWord);
 
     impl Bitmask {
@@ -117,11 +118,86 @@ mod bitmask {
             self.0 & mask == 0
         }
 
+        /// Returns the lowest bit set in he bitmask
+        pub fn lowest_set_bit(self) -> Option<usize> {
+            if self.0 == 0 {
+                // no bits have been set!
+                None
+            } else {
+                Some(unsafe { self.lowest_set_bit_nonzero() })
+            }
+        }
+
         /// Returns the bitmask with the lowest bit removed. Pretty simple to understand:
         /// `011010` yields `011000`, i.e the lowest order bit is removed. We don't need
         /// to know the index; if we did, we could have done something like `bits ^= (1 << index)`
         pub fn remove_lowest_bit(self) -> Self {
             Bitmask(self.0 & (self.0 - 1))
+        }
+
+        /// Returns the first bit set in the bitmask, if such a bit exists
+        ///
+        /// Please check that atleast a single bit has been set in the bitmask before attempting
+        /// to use this!
+        pub unsafe fn lowest_set_bit_nonzero(self) -> usize {
+            // we can use the cttz (count trailing zeros/ unset bits) intrinsic when it is stabilized
+            self.trailing_zeros()
+        }
+
+        /// Checks if any bit has been set in the bitmask
+        pub fn any_bit_set(self) -> bool {
+            self.0 != 0
+        }
+
+        /// Returns the number of trailing zeros in this bitmask
+        ///
+        /// We just use or emulate the trailing zeros instructions, that is, by either reversing
+        /// the byte order of the word directly, or by emulating it by swapping bytes.
+        /// So if our bitmask is something like: 0b1111_1000, then we'd get 0000_0011 (base 10)
+        pub fn trailing_zeros(self) -> usize {
+            if cfg!(target_arch = "arm") && BITMASK_STRIDE % 8 == 0 {
+                /*
+                 ARM doesn't have a trailing zeros instruction and instead
+                 we need to use a combination of RBIT (reverse bits) and then CLZ (count
+                 leading zeros). However, even worse, pre-arm-v7 doesn't have RBIT (for more
+                 information, see this:
+                 https://developer.arm.com/documentation/dui0489/h/arm-and-thumb-instructions/rev--rev16--revsh--and-rbit)
+                 That is why we'll swap bytes (basically 0x12345678 becomes 0x87654321)
+                 and then get the leading zeros which effectively does the same thing
+                */
+                self.0.swap_bytes().leading_zeros() as usize / BITMASK_STRIDE
+            } else {
+                self.0.trailing_zeros() as usize / BITMASK_STRIDE
+            }
+        }
+
+        /// Returns the number of leading zeros in the bitmask
+        ///
+        pub fn leading_zeros(self) -> usize {
+            // Fortunately architectures do have the leading_zeros instruction :)
+            // so we don't have to do some cfg mess
+            self.0.leading_zeros() as usize / BITMASK_STRIDE
+        }
+    }
+
+    /// An iterator over the contents of a bitmask, returning the indices
+    /// of the set bits
+    pub struct BitmaskIterator(Bitmask);
+
+    impl Iterator for BitmaskIterator {
+        type Item = usize;
+        fn next(&mut self) -> Option<usize> {
+            let bit = self.0.lowest_set_bit()?;
+            self.0 = self.0.remove_lowest_bit();
+            Some(bit)
+        }
+    }
+
+    impl IntoIterator for Bitmask {
+        type IntoIter = BitmaskIterator;
+        type Item = usize;
+        fn into_iter(self) -> Self::IntoIter {
+            BitmaskIterator(self)
         }
     }
 }
@@ -137,7 +213,7 @@ mod generic {
         chips). NEON has multi-cycle latencies, so that needs more evaluation.
 
         Note about the `GroupWord`s: we choose the target's pointer word width than just blindly
-        using 64-bit pointer sizes because using 64-bit on 32-bit systems would only add to higher
+        using 64-bit pointer sizes because using 64-bit on 32-bit systems would only add to slowness
     */
 
     use super::control_bytes;
