@@ -24,4 +24,16 @@
  *
 */
 
+//! A hashtable with SIMD lookup, quadratic probing and thread friendliness.
+//! TODO(@ohsayan): Update this notice!
+//! 
+//! ## Acknowledgements
+//! 
+//! This implementation is inspired by:
+//! - The Rust Standard Library's hashtable implementation since 1.36, released under the 
+//! [Apache-2.0 License](https://github.com/rust-lang/hashbrown/blob/master/LICENSE-APACHE) OR
+//! the [MIT License](https://github.com/rust-lang/hashbrown/blob/master/LICENSE-MIT) at your option
+//! - Google for the [original Swisstable implementation](https://github.com/abseil/abseil-cpp/blob/master/absl/container/internal/raw_hash_set.h)
+//! that is distributed under the [Apache-2.0 License](https://github.com/abseil/abseil-cpp/blob/master/LICENSE)
+
 mod raw;

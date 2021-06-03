@@ -26,6 +26,17 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
 
+cfg_if::cfg_if! {
+    if #[cfg(all(
+        target_feature = "sse2",
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))] {
+        use generic as imp;
+    } else {
+        use sse2 as imp;
+    }
+}
+
 #[cfg(all(
     target_feature = "sse2",
     any(target_arch = "x86", target_arch = "x86_64")
@@ -65,14 +76,63 @@ mod sse2 {
             };
             &ALIGNED_BYTES.bytes
         }
+
+        /// Load a group of bytes starting at the given address (unaligned)
+        pub unsafe fn load_unaligned(ptr: *const u8) -> Self {
+            Group(x86::_mm_loadu_si128(ptr.cast()))
+        }
+
+        /// Load a group of bytes starting at the given address. This is an aligned read,
+        /// and guranteed to be aligned to the alignment of the [`Group`]
+        pub unsafe fn load_aligned(ptr: *const u8) -> Self {
+            Group(x86::_mm_load_si128(ptr.cast()))
+        }
+
+        /// Store this group of bytes (self's) at the given address. This must be aligned
+        /// to the alignment of the [`Group`]
+        pub unsafe fn store_aligned(self, ptr: *mut u8) {
+            x86::_mm_store_si128(ptr.cast(), self.0)
+        }
     }
 }
 
+mod bitmask {
+    use super::imp::{BitmaskWord, BITMASK_MASK, BITMASK_STRIDE};
+    pub struct Bitmask(pub BitmaskWord);
+
+    impl Bitmask {
+        /// Returns a bitmask with all the bits inverted
+        ///
+        /// For example (please, _just an example_), if your input is 11 base 10, or
+        /// 1011 base 2 -- then your output is 0100 base 2 or 4 base 10. So it's basically
+        /// a bitwise NOT on each bit in the integer
+        pub fn invert(self) -> Self {
+            Self(self.0 ^ BITMASK_MASK)
+        }
+
+        /// Flips the bits of the Bitmask at the given index
+        pub unsafe fn flip(&mut self, index: usize) -> bool {
+            let mask = 1 << (index * BITMASK_STRIDE + BITMASK_STRIDE - 1);
+            self.0 ^= mask;
+            self.0 & mask == 0
+        }
+
+        /// Returns the bitmask with the lowest bit removed. Pretty simple to understand:
+        /// `011010` yields `011000`, i.e the lowest order bit is removed. We don't need
+        /// to know the index; if we did, we could have done something like `bits ^= (1 << index)`
+        pub fn remove_lowest_bit(self) -> Self {
+            Bitmask(self.0 & (self.0 - 1))
+        }
+    }
+}
+
+#[cfg(any(not(target_arch = "x86_64"), not(target_arch = "x86")))]
 mod generic {
     //! Implementations for CPU architectures that do not support SSE instructions
     /*
         TODO(@ohsayan): Evaluate the need for NEON/AVX. Also note, SSE3/ SSE4 can
-        prove to have much faster vector operations, but older CPUs may not support it.
+        prove to have much faster vector operations, but older CPUs may not support it (even worse,
+        all those intrinsics are unstable on Rust, so that makes using them further problematic).
         Our job is to first build for SSE2 since that has the best support (all the way from Pentium
         chips). NEON has multi-cycle latencies, so that needs more evaluation.
 
@@ -91,10 +151,10 @@ mod generic {
     type GroupWord = u32;
 
     /// Just use the expected pointer width publicly for sanity
-    pub type BitMaskWord = GroupWord;
+    pub type BitmaskWord = GroupWord;
 
     pub const BITMASK_STRIDE: usize = 8;
-    pub const BITMASK_MASK: BitMaskWord = 0x8080_8080_8080_8080_u64 as BitMaskWord;
+    pub const BITMASK_MASK: BitmaskWord = 0x8080_8080_8080_8080_u64 as BitmaskWord;
 
     /// A group of control-bytes that can be scanned in parallel
     pub struct Group(GroupWord);
