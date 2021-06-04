@@ -57,9 +57,13 @@ cfg_if::cfg_if! {
 }
 
 use self::imp::Group;
+use self::mapalloc::self_allocate;
+use self::mapalloc::Allocator;
 use self::mapalloc::Layout;
+use core::alloc;
 use core::mem;
 use core::ptr::NonNull;
+use std::alloc::handle_alloc_error;
 
 #[cold]
 /// Attribute for an LLVM optimization that indicates that this function won't be commonly
@@ -149,6 +153,7 @@ impl ProbeSequence {
     fn move_to_next(&mut self, bucket_mask: usize) {
         self.stride += Group::WIDTH;
         self.pos += self.stride;
+        // this is the triangular magic
         self.pos &= bucket_mask;
     }
 }
@@ -206,6 +211,12 @@ impl TableLayout {
             size,
             ctrl_byte_align,
         } = self;
+
+        /*
+         Calculation of the control byte offset: we have as many control bytes
+         as the number of buckets, so multiply it by the number of buckets. Add the
+         bits needed for alignment.
+        */
 
         let ctrl_byte_offset = size
             .checked_mul(buckets)?
@@ -293,6 +304,13 @@ struct LowTable<A> {
     /// the mask to get an index from a hash value
     bucket_mask: usize,
     /// points at the beginning of the control bytes in the allocation
+    ///
+    /// Our allocation looks like:
+    /// ```text
+    /// | padding |T1|T2|T3|..|T(n-1)|Tn|C_byte1|C_byte2|C_byte3|
+    ///                                  ^
+    ///                             ctrl points here
+    /// ```
     ctrl: NonNull<u8>,
     /// Number of elements that can be inserted before rehashing the table
     growth_left: usize,
@@ -300,4 +318,181 @@ struct LowTable<A> {
     items: usize,
     /// and the allocator
     allocator: A,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum TryReserveError {
+    /// Error due to the computed capacity exceeding the maximum size
+    CapacityOverflow,
+    /// The memory allocator returned an error
+    AllocatorError {
+        /// The layout of the allocation that failed
+        layout: alloc::Layout,
+    },
+}
+
+#[derive(Clone, Copy)]
+pub enum Fallibility {
+    Fallible,
+    Infallible,
+}
+
+impl Fallibility {
+    fn capacity_overflow(self) -> TryReserveError {
+        if let Self::Fallible = self {
+            TryReserveError::CapacityOverflow
+        } else {
+            panic!("Hashtable capacity overflow")
+        }
+    }
+    fn allocator_error(self, layout: Layout) -> TryReserveError {
+        if let Self::Fallible = self {
+            TryReserveError::AllocatorError { layout }
+        } else {
+            handle_alloc_error(layout)
+        }
+    }
+}
+
+impl<A> LowTable<A> {
+    /// Get a raw pointer to the `index`th control byte
+    unsafe fn ctrlof(&self, index: usize) -> *mut u8 {
+        self.ctrl.as_ptr().add(index)
+    }
+    /// Gets the total number of control bytes
+    const fn count_ctrl_bytes(&self) -> usize {
+        self.bucket_mask + 1 + Group::WIDTH
+    }
+    const fn new_in(allocator: A) -> Self {
+        Self {
+            allocator,
+            ctrl: unsafe { NonNull::new_unchecked(Group::empty_static() as *const _ as *mut u8) },
+            bucket_mask: 0,
+            items: 0,
+            growth_left: 0,
+        }
+    }
+    fn set_ctrl_h2(&self, index: usize, hash: u64) {
+        unsafe { self.set_ctrlof(index, h2(hash)) }
+    }
+    unsafe fn set_ctrlof(&self, index: usize, ctrl: u8) {
+        /*
+         This idea is entirely taken from the hashbrown impl.
+         The first Group::WIDTH control bytes are mirrored to the end of the array.
+          - If the provided index >= Group::WIDTH, then index == index2
+            So if we are on a 64-bit system, non-SSE (just for the sake of simplicity),
+            then our Group WIDTH is 8. So if the index is at 8 or greater than 8, then we're at
+            the end.
+          - Else, idx2 = self.bucket_mask + 1 + index
+
+          So, for a bucket size of 4, the _mirrored ctrl bytes_ look like this:
+          | {A} | {B} | {EMPTY} | {EMPTY} | {A} | {B} |
+          ^    real   ^                    ^ mirrored ^
+
+          Why?
+          We do this to avoid worrying about partially wrapping a SIMD access which would
+          otherwise require us to wrap around the beginning of the ctrl_bytes
+          ---
+          Dark secret?
+          bucket mask is just the number of buckets - 1
+        */
+        let idx2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
+
+        *self.ctrlof(index) = ctrl;
+        *self.ctrlof(idx2) = ctrl;
+    }
+
+    fn probe_seq(&self, hash: u64) -> ProbeSequence {
+        ProbeSequence {
+            pos: h1(hash) & self.bucket_mask,
+            stride: 0,
+        }
+    }
+}
+
+impl<A: Allocator + Clone> LowTable<A> {
+    unsafe fn new_uinit(
+        allocator: A,
+        table_layout: TableLayout,
+        buckets: usize,
+        fallibility: Fallibility,
+    ) -> Result<Self, TryReserveError> {
+        let (layout, ctrl_offset) = match table_layout.calculate_layout_for(buckets) {
+            Some(layout_n_ctrl) => layout_n_ctrl,
+            None => return Err(fallibility.capacity_overflow()),
+        };
+
+        // To guard against allocating more than isize::MAX on 32-bit systems, we do
+        // the same thing that alloc does for RawVec (the backing storage for Vec):
+        // https://github.com/rust-lang/rust/blob/289ada5ed41fd1b9a3ffe2b694e6e73079528587/library/alloc/src/raw_vec.rs#L548
+        if mem::size_of::<usize>() < 8 && layout.size() > isize::MAX as usize {
+            return Err(fallibility.allocator_error(layout));
+        }
+
+        let ptr: NonNull<u8> = match self_allocate(&allocator, layout) {
+            Ok(contiguous_block) => contiguous_block,
+            Err(_) => return Err(fallibility.allocator_error(layout)),
+        };
+
+        let ctrl: NonNull<u8> = NonNull::new_unchecked(ptr.as_ptr().add(ctrl_offset));
+
+        Ok(Self {
+            allocator,
+            bucket_mask: buckets - 1,
+            items: 0,
+            ctrl,
+            growth_left: bucket_mask_to_capacity(buckets - 1),
+        })
+    }
+
+    fn fallible_with_capacity(
+        allocator: A,
+        table_layout: TableLayout,
+        capacity: usize,
+        fallibility: Fallibility,
+    ) -> Result<Self, TryReserveError> {
+        if capacity == 0 {
+            Ok(Self::new_in(allocator))
+        } else {
+            unsafe {
+                let buckets =
+                    capacity_to_buckets(capacity).ok_or_else(|| fallibility.capacity_overflow())?;
+                let ret = Self::new_uinit(allocator, table_layout, buckets, fallibility)?;
+                ret.ctrlof(0)
+                    .write_bytes(control_bytes::EMPTY, ret.count_ctrl_bytes());
+                Ok(ret)
+            }
+        }
+    }
+
+    fn find_insert_slot(&self, hash: u64) -> usize {
+        let mut probe_seq = self.probe_seq(hash);
+        loop {
+            unsafe {
+                let group = { Group::load_unaligned(self.ctrlof(probe_seq.pos)) };
+                if let Some(bit) = group.match_empty_or_deleted().lowest_set_bit() {
+                    let result = (probe_seq.pos + bit) & self.bucket_mask;
+                    // TODO(@ohsayan): Explain this
+                    if unlikely(is_control_byte_full(*self.ctrlof(result))) {
+                        return Group::load_aligned(self.ctrlof(0))
+                            .match_empty_or_deleted()
+                            .lowest_set_bit_nonzero();
+                    }
+                    return result;
+                }
+            }
+            probe_seq.move_to_next(self.bucket_mask);
+        }
+    }
+
+    /// Look for an empty or deleted bucket that is suitable for inserting a new
+    /// element. This function will set the hash 2 (h2) value for that slot
+    ///
+    /// There must be atleast 1 bucket in the table
+    unsafe fn prepare_insert_slot(&self, hash: u64) -> (usize, u8) {
+        let index = self.find_insert_slot(hash);
+        let old_ctrl = *self.ctrlof(index);
+        self.set_ctrl_h2(index, hash);
+        (index, old_ctrl)
+    }
 }
