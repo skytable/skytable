@@ -26,14 +26,278 @@
 
 //! A hashtable with SIMD lookup, quadratic probing and thread friendliness.
 //! TODO(@ohsayan): Update this notice!
-//! 
+//!
 //! ## Acknowledgements
-//! 
+//!
 //! This implementation is inspired by:
-//! - The Rust Standard Library's hashtable implementation since 1.36, released under the 
+//! - Google (the Abseil Developers and contributors) for the original implementation of the Swisstable, that can
+//! [be found here](https://github.com/abseil/abseil-cpp/blob/master/absl/container/internal/raw_hash_set.h)
+//! that is distributed under the [Apache-2.0 License](https://github.com/abseil/abseil-cpp/blob/master/LICENSE)
+//! - The Rust Standard Library's hashtable implementation since 1.36, released under the
 //! [Apache-2.0 License](https://github.com/rust-lang/hashbrown/blob/master/LICENSE-APACHE) OR
 //! the [MIT License](https://github.com/rust-lang/hashbrown/blob/master/LICENSE-MIT) at your option
-//! - Google for the [original Swisstable implementation](https://github.com/abseil/abseil-cpp/blob/master/absl/container/internal/raw_hash_set.h)
-//! that is distributed under the [Apache-2.0 License](https://github.com/abseil/abseil-cpp/blob/master/LICENSE)
 
-mod raw;
+#![allow(dead_code)] // TODO(@ohsayan): Remove this lint once done
+
+mod bitmask;
+mod control_bytes;
+mod mapalloc;
+
+cfg_if::cfg_if! {
+    if #[cfg(all(
+        target_feature = "sse2",
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))] {
+        mod sse2;
+        use self::sse2 as imp;
+    } else {
+        mod generic;
+        use self::generic as imp;
+    }
+}
+
+use self::imp::Group;
+use self::mapalloc::Layout;
+use core::mem;
+use core::ptr::NonNull;
+
+#[cold]
+/// Attribute for an LLVM optimization that indicates that this function won't be commonly
+/// called. Look [here](https://llvm.org/docs/LangRef.html) for more information ("coldcc")
+fn cold() {}
+
+fn likely(b: bool) -> bool {
+    if !b {
+        cold()
+    }
+    b
+}
+
+fn unlikely(b: bool) -> bool {
+    if b {
+        cold()
+    }
+    b
+}
+
+/// Returns the offset of a pointer
+///
+/// ## Safety
+/// This function is completely unsafe to be called on two pointers that aren't a part of
+/// the same allocated object. It is only safe to call it if both the `to` and `from` ptrs
+/// are a part of the same allocation (or atmost 1 byte past the end of the allocation)
+unsafe fn offset_from<T>(to: *const T, from: *const T) -> usize {
+    to.offset_from(from) as usize // cast to usize
+}
+
+/// The top bit is unset
+const fn is_control_byte_full(ctrl: u8) -> bool {
+    ctrl & 0x80 == 0
+}
+
+/// The top bit is set
+/// Is control byte special? i.e, empty or deleted?
+const fn is_control_byte_special(ctrl: u8) -> bool {
+    ctrl & 0x80 != 0
+}
+
+/// Is the special control byte an empty control byte?
+const fn is_special_empty(ctrl: u8) -> bool {
+    // this will only check 1 bit
+    ctrl & 0x01 != 0
+}
+
+/// Returns the H1 hash: this is the 57 bit hash value that will be used to identify the
+/// index of the element itself (used for lookups)
+const fn h1(hash: u64) -> usize {
+    hash as usize
+}
+
+/// Returns the H2 hash: the remaining 7 bits of the hash value that we'll use for storing
+/// metadata. This is stored separately (same allocation but different ptr offset) from the
+/// H1 hash
+fn h2(hash: u64) -> u8 {
+    /*
+     Grap the 7 high order bits of the hash. The below is done to get how many
+     bits we should take as some hash functions may return an usize, so the higher
+     order bits are just zeroed on 32-bit platforms. The shr is simple: say you're
+     on an arch with 64-bit pointer width: you then have a 64 bit hash. The hash len
+     will just be 8 because isize and u64 have the same sizes on 64-bit systems. Then
+     we need to get the number of bits, easy enough, that's hash_len times 8. But we
+     don't shr all the bits! We need to move away the difference of 7 and the total
+     number of bytes: because we need the top 7. Soon enough, the higher order 57 bits
+     are zeroed out
+    */
+    let hash_len = usize::min(mem::size_of::<isize>(), mem::size_of::<u64>());
+    let top_seven_bits = hash >> (hash_len * 8 - 7);
+    // truncate the higher order bits as we've already done our shrs
+    (top_seven_bits & 0x7f) as u8
+}
+
+/// Probing sequence based on triangular numbers that ensures that we visit every group (whether 8 or 16
+/// depending on the availability of SSE2 instructions) only once. The mathematical formula is:
+/// T(n) = (n * n+1)/2
+///
+/// and the proof that each group is visited just once, can be found
+/// [here](https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n)
+struct ProbeSequence {
+    pos: usize,
+    stride: usize,
+}
+
+impl ProbeSequence {
+    fn move_to_next(&mut self, bucket_mask: usize) {
+        self.stride += Group::WIDTH;
+        self.pos += self.stride;
+        self.pos &= bucket_mask;
+    }
+}
+
+// Our goal is to keep the load factor at 87.5%. Now this will possibly never be the case
+// due to the adjustment with the next power of two (2^p sized table, remember?)
+const LOAD_FACTOR_NUMERATOR: usize = 7;
+const LOAD_FACTOR_DENOMINATOR: usize = 8;
+
+/// Returns the number of buckets needed to hold atleast the given
+/// number of items. Hence, this will take the load factor into account
+fn capacity_to_buckets(cap: usize) -> Option<usize> {
+    if cap < 8 {
+        // for small tables, we need atleast 1 empty bucket so that the lookup probe
+        // can terminate
+        // a table size of 2 buckets can only hold 1 element (because, metadata); instead look at 4 buckets
+        // to store 3 elements
+        return Some(if cap < 4 { 4 } else { 8 });
+    }
+
+    // large table, eh? let's look at the load factor; simple math here
+    let lfactor_adjusted_target_capacity =
+        cap.checked_mul(LOAD_FACTOR_DENOMINATOR)? / LOAD_FACTOR_NUMERATOR;
+
+    // we always make the assumption that our table is always a size of 2^p
+    Some(lfactor_adjusted_target_capacity.next_power_of_two())
+}
+
+/// Returns the maximum capacity for the given bucket mask
+const fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {
+    if bucket_mask < 8 {
+        // small table with {1, 2, 4, 8} buckets
+        bucket_mask
+    } else {
+        ((bucket_mask + 1) / LOAD_FACTOR_DENOMINATOR) * LOAD_FACTOR_NUMERATOR
+    }
+}
+
+struct TableLayout {
+    size: usize,
+    ctrl_byte_align: usize,
+}
+
+impl TableLayout {
+    fn new<T>() -> Self {
+        let layout = Layout::new::<T>();
+        Self {
+            size: layout.size(),
+            ctrl_byte_align: usize::max(layout.align(), Group::WIDTH),
+        }
+    }
+
+    fn calculate_layout_for(self, buckets: usize) -> Option<(Layout, usize)> {
+        let TableLayout {
+            size,
+            ctrl_byte_align,
+        } = self;
+
+        let ctrl_byte_offset = size
+            .checked_mul(buckets)?
+            .checked_add(ctrl_byte_align - 1)?
+            & !(ctrl_byte_align - 1);
+        let len = ctrl_byte_offset.checked_add(buckets + Group::WIDTH)?;
+        Some((
+            unsafe {
+                // UNSAFE(@ohsayan): We know that the alignment len is not 0, is a power of 2
+                // and doesn't overflow
+                Layout::from_size_align_unchecked(len, ctrl_byte_align)
+            },
+            ctrl_byte_offset,
+        ))
+    }
+}
+
+/// Returns the layout required for allocating the table. This will return none
+/// if the number of buckets cause an overflow
+fn calculate_layout<T>(buckets: usize) -> Option<(Layout, usize)> {
+    TableLayout::new::<T>().calculate_layout_for(buckets)
+}
+
+/// A reference to a hash bucket containing some type `T`
+pub struct Bucket<T> {
+    // this will actually point to the next element
+    ptr: NonNull<T>,
+}
+
+impl<T> Clone for Bucket<T> {
+    fn clone(&self) -> Self {
+        Self { ptr: self.ptr }
+    }
+}
+
+impl<T> Bucket<T> {
+    unsafe fn from_base_index(base: NonNull<T>, index: usize) -> Self {
+        let ptr = if mem::size_of::<T>() == 0 {
+            // uh oh, here comes a ZST
+            (index + 1) as *mut T
+        } else {
+            base.as_ptr().sub(index)
+        };
+        Self {
+            ptr: NonNull::new_unchecked(ptr),
+        }
+    }
+    fn as_ptr(&self) -> *mut T {
+        if mem::size_of::<T>() == 0 {
+            // and here comes another ZST; just return some aligned garbage
+            mem::align_of::<T>() as *mut T
+        } else {
+            unsafe { self.as_ptr().sub(1) }
+        }
+    }
+    unsafe fn to_base_index(self, base: NonNull<T>) -> usize {
+        if mem::size_of::<T>() == 0 {
+            // ZST baby
+            self.ptr.as_ptr() as usize - 1
+        } else {
+            offset_from(base.as_ptr(), self.ptr.as_ptr())
+        }
+    }
+    unsafe fn drop(&self) {
+        self.as_ptr().drop_in_place()
+    }
+    unsafe fn read(&self) -> T {
+        self.as_ptr().read()
+    }
+    unsafe fn write(&self, val: T) {
+        self.as_ptr().write(val)
+    }
+    unsafe fn as_ref<'b, 'a: 'b>(&'a self) -> &'b T {
+        &*self.as_ptr()
+    }
+    unsafe fn as_mut<'b, 'a: 'b>(&'a self) -> &'b mut T {
+        &mut *self.as_ptr()
+    }
+    unsafe fn copy_from_nonoverlapping(&self, other: &Self) {
+        self.as_ptr().copy_from_nonoverlapping(other.as_ptr(), 1);
+    }
+}
+
+struct LowTable<A> {
+    /// the mask to get an index from a hash value
+    bucket_mask: usize,
+    /// points at the beginning of the control bytes in the allocation
+    ctrl: NonNull<u8>,
+    /// Number of elements that can be inserted before rehashing the table
+    growth_left: usize,
+    /// number of elements in the table
+    items: usize,
+    /// and the allocator
+    allocator: A,
+}
