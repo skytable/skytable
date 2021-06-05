@@ -37,8 +37,8 @@ where
     F: FnMut(&mut T),
 {
     /// the function to run on drop
-    dropfn: F,
-    value: T,
+    pub(super) dropfn: F,
+    pub(super) value: T,
 }
 
 impl<T, F> ScopeGuard<T, F>

@@ -88,6 +88,7 @@ use core::hint::unreachable_unchecked;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem;
+use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
 use std::alloc::handle_alloc_error;
 
@@ -1138,6 +1139,80 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
             allocation,
             _marker: PhantomData,
             allocator,
+        }
+    }
+}
+
+impl<T: Clone, A: Allocator + Clone> RawTable<T, A> {
+    unsafe fn clone_from_impl(&mut self, source: &Self, mut on_panic: impl FnMut(&mut Self)) {
+        source
+            .table
+            .ctrlof(0)
+            .copy_to_nonoverlapping(self.table.ctrlof(0), self.table.count_ctrl_bytes());
+
+        let mut guard = ScopeGuard::new((0, &mut *self), |(index, slf)| {
+            if mem::needs_drop::<T>() && slf.len() != 0 {
+                for i in 0..=*index {
+                    if is_control_byte_full(*slf.table.ctrlof(i)) {
+                        // call the destructor
+                        slf.get_bucket(i).drop();
+                    }
+                }
+            }
+            // if we panic, do this (let our lovely scopeguard take care of that)
+            on_panic(slf);
+        });
+        for from in source.iter() {
+            // get the idx from the ptr (ptr math man)
+            let idx = source.index_of_bucket(&from);
+            let to = guard.1.get_bucket(idx);
+            to.write(from.as_ref().clone());
+
+            // update the index in case there is a panic somewhere
+            guard.0 = idx;
+        }
+
+        // just forget the scopeguard as we've finished the clone successfully and DON'T CALL ITS DESTRUCTOR
+        // because that will atempt to clear our new table! UB ALERT!
+        mem::forget(guard);
+
+        // update the lengths as usual
+        self.table.items = source.table.items;
+        self.table.growth_left = source.table.growth_left;
+    }
+}
+
+impl<T: Clone, A: Allocator + Clone> Clone for RawTable<T, A> {
+    fn clone(&self) -> Self {
+        if self.table.is_empty_singleton() {
+            Self::new_in(self.table.allocator.clone())
+        } else {
+            unsafe {
+                // use manually drop to avoid calling the destructor in the event
+                // of unforeseen panics because we have a scopeguard of doing the
+                // clean up job. Calling the destructor would be disastrous because
+                // it will try to call destructors on every element which can have UB
+                // if the table wasn't cloned successfully
+                let mut new_table = ManuallyDrop::new(
+                    match Self::raw_new_uinit(
+                        self.table.allocator.clone(),
+                        self.buckets(),
+                        Fallibility::Infallible,
+                    ) {
+                        Ok(table) => table,
+                        Err(_) => {
+                            // would've panicked already
+                            unreachable_unchecked();
+                        }
+                    },
+                );
+                new_table.clone_from_impl(self, |new_table| {
+                    // on panic, free buckets to avoid memory leaks
+                    new_table.free_buckets();
+                });
+                // now take the value out of this magical container
+                ManuallyDrop::into_inner(new_table)
+            }
         }
     }
 }
