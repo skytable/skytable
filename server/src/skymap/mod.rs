@@ -60,10 +60,12 @@ cfg_if::cfg_if! {
 use self::imp::Group;
 use self::mapalloc::self_allocate;
 use self::mapalloc::Allocator;
+use self::mapalloc::Global;
 use self::mapalloc::Layout;
 use self::scopeguard::ScopeGuard;
 use core::alloc;
 use core::hint::unreachable_unchecked;
+use core::marker::PhantomData;
 use core::mem;
 use core::ptr::NonNull;
 use std::alloc::handle_alloc_error;
@@ -276,7 +278,7 @@ impl<T> Bucket<T> {
             unsafe { self.as_ptr().sub(1) }
         }
     }
-    unsafe fn into_base_index(self, base: NonNull<T>) -> usize {
+    unsafe fn to_base_index(&self, base: NonNull<T>) -> usize {
         if mem::size_of::<T>() == 0 {
             // ZST baby
             self.ptr.as_ptr() as usize - 1
@@ -624,5 +626,106 @@ impl<A: Allocator + Clone> LowTable<A> {
             };
         self.set_ctrlof(index, new_ctrl);
         self.items -= 1;
+    }
+}
+
+pub struct RawTable<T, A: Allocator + Clone = Global> {
+    table: LowTable<A>,
+    _marker: PhantomData<T>,
+}
+
+impl<T> RawTable<T, Global> {
+    pub const fn new() -> Self {
+        Self {
+            table: LowTable::new_in(Global),
+            _marker: PhantomData,
+        }
+    }
+    pub fn with_capacity(cap: usize) -> Self {
+        Self::with_capacity_in(cap, Global)
+    }
+}
+
+impl<T, A: Allocator + Clone> RawTable<T, A> {
+    pub fn new_in(allocator: A) -> Self {
+        Self {
+            table: LowTable::new_in(allocator),
+            _marker: PhantomData,
+        }
+    }
+
+    unsafe fn raw_new_uinit(
+        allocator: A,
+        buckets: usize,
+        fallibility: Fallibility,
+    ) -> Result<Self, TryReserveError> {
+        Ok(Self {
+            table: LowTable::new_uinit(allocator, TableLayout::new::<T>(), buckets, fallibility)?,
+            _marker: PhantomData,
+        })
+    }
+
+    fn fallible_with_capacity(
+        allocator: A,
+        capacity: usize,
+        fallibility: Fallibility,
+    ) -> Result<Self, TryReserveError> {
+        Ok(Self {
+            table: LowTable::fallible_with_capacity(
+                allocator,
+                TableLayout::new::<T>(),
+                capacity,
+                fallibility,
+            )?,
+            _marker: PhantomData,
+        })
+    }
+
+    pub fn with_capacity_in(capacity: usize, allocator: A) -> Self {
+        match Self::fallible_with_capacity(allocator, capacity, Fallibility::Infallible) {
+            Ok(rtable) => rtable,
+            Err(_) => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    pub fn allocator(&self) -> &A {
+        &self.table.allocator
+    }
+
+    // TODO(@ohsayan): Change mut rules (IMPORTANT!)
+    unsafe fn free_buckets(&self) {
+        self.table.free_buckets(TableLayout::new::<T>())
+    }
+
+    pub unsafe fn data_terminal_ptr(&self) -> NonNull<T> {
+        self.table.data_terminal_ptr()
+    }
+
+    pub unsafe fn data_start_ptr(&self) -> *mut T {
+        self.data_terminal_ptr()
+            .as_ptr()
+            .wrapping_sub(self.buckets())
+    }
+
+    fn buckets(&self) -> usize {
+        self.table.buckets()
+    }
+
+    pub unsafe fn index_of_bucket(&self, bucket: &Bucket<T>) -> usize {
+        bucket.to_base_index(self.data_terminal_ptr())
+    }
+
+    pub unsafe fn get_bucket(&self, index: usize) -> Bucket<T> {
+        Bucket::from_base_index(self.data_terminal_ptr(), index)
+    }
+
+    unsafe fn erase_without_drop(&mut self, item: &Bucket<T>) {
+        let idx = self.index_of_bucket(&item);
+        self.table.erase(idx);
+    }
+
+    pub unsafe fn erase(&mut self, item: Bucket<T>) {
+        self.erase_without_drop(&item);
+        item.drop();
     }
 }
