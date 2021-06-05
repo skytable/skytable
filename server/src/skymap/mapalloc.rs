@@ -32,8 +32,9 @@ use core::ptr::NonNull;
 /// and abstract it away with a trait is for future events when we may build our own
 /// allocator (or maybe support embedded!? gosh, that'll be some task)
 pub unsafe trait Allocator {
-    /// A pointer to the new allocation is returned on success
+    /// A pointer to the beginning of the new allocation is returned on success
     fn allocate(&self, layout: Layout) -> Result<NonNull<u8>, ()>;
+    /// Deallocates the memory starting at the given base `ptr` for the provided `layout`
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout);
 }
 

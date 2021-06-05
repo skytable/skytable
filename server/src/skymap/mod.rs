@@ -42,6 +42,7 @@
 mod bitmask;
 mod control_bytes;
 mod mapalloc;
+mod scopeguard;
 
 cfg_if::cfg_if! {
     if #[cfg(all(
@@ -60,7 +61,9 @@ use self::imp::Group;
 use self::mapalloc::self_allocate;
 use self::mapalloc::Allocator;
 use self::mapalloc::Layout;
+use self::scopeguard::ScopeGuard;
 use core::alloc;
+use core::hint::unreachable_unchecked;
 use core::mem;
 use core::ptr::NonNull;
 use std::alloc::handle_alloc_error;
@@ -192,6 +195,7 @@ const fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {
     }
 }
 
+#[derive(Clone, Copy)]
 struct TableLayout {
     size: usize,
     ctrl_byte_align: usize,
@@ -372,7 +376,7 @@ impl<A> LowTable<A> {
             growth_left: 0,
         }
     }
-    fn set_ctrl_h2(&self, index: usize, hash: u64) {
+    fn set_ctrl_h2_of(&self, index: usize, hash: u64) {
         unsafe { self.set_ctrlof(index, h2(hash)) }
     }
     unsafe fn set_ctrlof(&self, index: usize, ctrl: u8) {
@@ -401,12 +405,20 @@ impl<A> LowTable<A> {
         *self.ctrlof(index) = ctrl;
         *self.ctrlof(idx2) = ctrl;
     }
-
+    /// Returns the probe sequence for a given hash
     fn probe_seq(&self, hash: u64) -> ProbeSequence {
         ProbeSequence {
             pos: h1(hash) & self.bucket_mask,
             stride: 0,
         }
+    }
+    /// Returns the bucket count
+    const fn buckets(&self) -> usize {
+        self.bucket_mask + 1
+    }
+    /// Check if self.bucket_mask is 0 (i.e has one element)
+    const fn is_empty_singleton(&self) -> bool {
+        self.bucket_mask == 0
     }
 }
 
@@ -472,7 +484,14 @@ impl<A: Allocator + Clone> LowTable<A> {
                 let group = { Group::load_unaligned(self.ctrlof(probe_seq.pos)) };
                 if let Some(bit) = group.match_empty_or_deleted().lowest_set_bit() {
                     let result = (probe_seq.pos + bit) & self.bucket_mask;
-                    // TODO(@ohsayan): Explain this
+                    /*
+                     For tables smaller than the width (32/64 on non-SSE) or 128 on SSE,
+                     the trailing control bytes outside the table are filled with empty
+                     entries. This unfortunately triggers a match, and on applying the
+                     mask may point at an already occupied bucket. To detect this, we
+                     perform a second scan (from the beginning of the table
+                     and this guarantees to find a second slot
+                    */
                     if unlikely(is_control_byte_full(*self.ctrlof(result))) {
                         return Group::load_aligned(self.ctrlof(0))
                             .match_empty_or_deleted()
@@ -492,7 +511,118 @@ impl<A: Allocator + Clone> LowTable<A> {
     unsafe fn prepare_insert_slot(&self, hash: u64) -> (usize, u8) {
         let index = self.find_insert_slot(hash);
         let old_ctrl = *self.ctrlof(index);
-        self.set_ctrl_h2(index, hash);
+        self.set_ctrl_h2_of(index, hash);
         (index, old_ctrl)
+    }
+
+    // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    unsafe fn prepare_rehash_in_place(&self) {
+        // this will bulk convert all full bytes to deleted and all deleted control bytes
+        // to empty, effectively freeing the table of tombstones
+        for i in (0..self.buckets()).step_by(Group::WIDTH) {
+            let group = Group::load_aligned(self.ctrlof(i));
+            let group = group.transform_full_to_deleted_and_special_to_empty();
+            group.store_aligned(self.ctrlof(i));
+        }
+        // Now fix the mirrored ctrl bytes
+        if self.buckets() < Group::WIDTH {
+            self.ctrlof(0)
+                .copy_to(self.ctrlof(Group::WIDTH), self.buckets())
+        } else {
+            self.ctrlof(0)
+                .copy_to(self.ctrlof(self.buckets()), Group::WIDTH);
+        }
+    }
+
+    unsafe fn data_terminal_ptr<T>(&self) -> NonNull<T> {
+        NonNull::new_unchecked(self.ctrl.as_ptr().cast())
+    }
+    unsafe fn get_bucket<T>(&self, index: usize) -> Bucket<T> {
+        Bucket::from_base_index(self.data_terminal_ptr(), index)
+    }
+
+    // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    unsafe fn record_item_insert_at(&mut self, index: usize, old_ctrl: u8, hash: u64) {
+        self.growth_left -= is_special_empty(old_ctrl) as usize;
+        self.set_ctrl_h2_of(index, hash);
+        self.items += 1;
+    }
+
+    unsafe fn is_in_same_group(&self, idx: usize, new_idx: usize, hash: u64) -> bool {
+        let probe_seq_pos = self.probe_seq(hash).pos;
+        let probe_idx =
+            |pos: usize| (pos.wrapping_sub(probe_seq_pos) & self.bucket_mask) / Group::WIDTH;
+        probe_idx(idx) == probe_idx(new_idx)
+    }
+
+    unsafe fn update_ctrl_h2_of(&self, index: usize, hash: u64) -> u8 {
+        let last_ctrl = *self.ctrlof(index);
+        self.set_ctrl_h2_of(index, hash);
+        last_ctrl
+    }
+
+    // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    unsafe fn free_buckets(&self, table_layout: TableLayout) {
+        let (layout, ctrl_offset) = match table_layout.calculate_layout_for(self.buckets()) {
+            Some(contiguous_block) => contiguous_block,
+            None => unreachable_unchecked(),
+        };
+        self.allocator.deallocate(
+            NonNull::new_unchecked(self.ctrl.as_ptr().sub(ctrl_offset)),
+            layout,
+        );
+    }
+
+    unsafe fn prepare_resize(
+        &self,
+        table_layout: TableLayout,
+        capacity: usize,
+        fallibility: Fallibility,
+    ) -> Result<ScopeGuard<Self, impl FnMut(&mut Self)>, TryReserveError> {
+        let mut new_table = LowTable::fallible_with_capacity(
+            self.allocator.clone(),
+            table_layout,
+            capacity,
+            fallibility,
+        )?;
+        new_table.growth_left -= self.items;
+        new_table.items = self.items;
+
+        // the crazy part when the hash function panics; use our scopeguard to make sure
+        // we free all the buckets, i.e not leak memory
+        Ok(ScopeGuard::new(new_table, move |slf| {
+            if !slf.is_empty_singleton() {
+                slf.free_buckets(table_layout);
+            }
+        }))
+    }
+
+    // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    fn clear_no_drop(&mut self) {
+        if !self.is_empty_singleton() {
+            unsafe {
+                self.ctrlof(0)
+                    .write_bytes(control_bytes::EMPTY, self.count_ctrl_bytes())
+            }
+        }
+        self.items = 0;
+        self.growth_left = bucket_mask_to_capacity(self.bucket_mask);
+    }
+
+    // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    unsafe fn erase(&mut self, index: usize) {
+        let last_idx = index.wrapping_sub(Group::WIDTH) & self.bucket_mask;
+        let empty_before = Group::load_unaligned(self.ctrlof(last_idx)).match_empty();
+        let empty_after = Group::load_unaligned(self.ctrlof(index)).match_empty();
+
+        let new_ctrl =
+            if empty_before.leading_zeros() + empty_after.trailing_zeros() >= Group::WIDTH {
+                control_bytes::DELETED
+            } else {
+                self.growth_left += 1;
+                control_bytes::EMPTY
+            };
+        self.set_ctrlof(index, new_ctrl);
+        self.items -= 1;
     }
 }
