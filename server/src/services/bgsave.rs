@@ -111,12 +111,12 @@ fn bgsave_blocking_section(handle: CoreDB) -> bool {
     match _bgsave_blocking_section(&handle) {
         Ok(_) => {
             log::info!("BGSAVE completed successfully");
-            drop(handle.unpoison());
+            handle.unpoison();
             true
         }
         Err(e) => {
             log::info!("BGSAVE failed with error: {}", e);
-            drop(handle.poison());
+            handle.poison();
             false
         }
     }

@@ -172,12 +172,12 @@ impl<'a> Parser<'a> {
     }
     /// Parse a stream of bytes into [`usize`]
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
-        if bytes.len() == 0 {
+        if bytes.is_empty() {
             return Err(ParseError::NotEnough);
         }
-        let mut byte_iter = bytes.into_iter();
+        let byte_iter = bytes.iter();
         let mut item_usize = 0usize;
-        while let Some(dig) = byte_iter.next() {
+        for dig in byte_iter {
             if !dig.is_ascii_digit() {
                 // dig has to be an ASCII digit
                 return Err(ParseError::DataTypeParseError);
@@ -207,12 +207,12 @@ impl<'a> Parser<'a> {
     }
     /// Pasre a stream of bytes into an [`u64`]
     fn parse_into_u64(bytes: &[u8]) -> ParseResult<u64> {
-        if bytes.len() == 0 {
+        if bytes.is_empty() {
             return Err(ParseError::NotEnough);
         }
-        let mut byte_iter = bytes.into_iter();
+        let byte_iter = bytes.iter();
         let mut item_u64 = 0u64;
-        while let Some(dig) = byte_iter.next() {
+        for dig in byte_iter {
             if !dig.is_ascii_digit() {
                 // dig has to be an ASCII digit
                 return Err(ParseError::DataTypeParseError);
@@ -377,6 +377,8 @@ impl<'a> Parser<'a> {
             // The below line defaults to false if no item is there in the buffer
             // or it checks if the next time is a \r char; if it is, then it is the beginning
             // of the next query
+            // clippy thinks we're doing something complex when we aren't, at all!
+            #[allow(clippy::blocks_in_if_conditions)]
             if self
                 .will_cursor_give_char(b'*', true)
                 .unwrap_or_else(|_| unsafe {

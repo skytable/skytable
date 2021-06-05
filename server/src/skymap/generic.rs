@@ -61,6 +61,7 @@ fn repeat(byte: u8) -> GroupWord {
 }
 
 pub const BITMASK_STRIDE: usize = 8;
+#[allow(clippy::unnecessary_cast)] // clippy doesn't know anything about target_arch
 pub const BITMASK_MASK: BitmaskWord = 0x8080_8080_8080_8080_u64 as BitmaskWord;
 
 /// A group of control-bytes that can be scanned in parallel

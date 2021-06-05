@@ -57,7 +57,6 @@ where
                     many += 1
                 }
             });
-            drop(cmap);
             done_howmany = Some(many);
         }
     }

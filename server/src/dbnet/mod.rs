@@ -126,8 +126,8 @@ impl MultiListener {
             .await
             .expect("Failed to bind to port");
         MultiListener::InsecureOnly(Listener {
-            listener,
             db,
+            listener,
             climit,
             signal,
             terminate_tx,
@@ -162,6 +162,7 @@ impl MultiListener {
         )
     }
     /// Create a new `Multi` listener that has both a secure and an insecure listener
+    #[allow(clippy::too_many_arguments)] // TODO(@ohsayan): Optimize this
     pub async fn new_multi(
         host: IpAddr,
         port: u16,
@@ -192,8 +193,8 @@ impl MultiListener {
             .await
             .expect("Failed to bind to port");
         let insecure_listener = Listener {
-            listener,
             db,
+            listener,
             climit,
             signal,
             terminate_tx,

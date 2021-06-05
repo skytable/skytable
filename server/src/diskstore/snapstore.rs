@@ -57,7 +57,7 @@ use std::hash::Hash;
 use std::io::prelude::*;
 
 pub trait IntoBinaryData {
-    fn into_bin(&self) -> Vec<u8>;
+    fn get_bin(&self) -> Vec<u8>;
 }
 
 impl<'a, T, U> IntoBinaryData for &'a HashMap<T, U>
@@ -65,7 +65,7 @@ where
     T: Serialize + Eq + Hash,
     U: Serialize,
 {
-    fn into_bin(&self) -> Vec<u8> {
+    fn get_bin(&self) -> Vec<u8> {
         bincode::serialize(&self).unwrap()
     }
 }
@@ -132,15 +132,15 @@ where
     // This contains the partitions for the `PartMap` object
     let mut partitions = Vec::new();
     // Create an iterator over the namespaces and their corresponding data
-    let mut ns = ns.into_iter();
+    let ns = ns.into_iter();
     // The offset from the starting byte we are at currently
     let mut cur_offset = 0;
-    while let Some((ns, ns_data)) = ns.next() {
+    for (ns, ns_data) in ns {
         // We keep `start` to be the cur_offset, even if it is zero, since we're going to read it sequentially
         // TODO: Enable non-sequential or "jumpy" reading
         let start = cur_offset;
         // Serialize the data
-        let serialized = ns_data.into_bin();
+        let serialized = ns_data.get_bin();
         // We will write these many bytes to the file, so move the offset ahead
         cur_offset += serialized.len();
         // Now write the data
@@ -167,15 +167,16 @@ where
 ///
 /// Once these requirements are met, the file will return a `HTable` of named partitions which
 /// can be used as required
-pub fn unflush_multi_ns() -> Result<HashMap<String, HashMap<String, Vec<u8>>>, Box<dyn Error>> {
+type NamespaceMap = HashMap<String, HashMap<String, Vec<u8>>>;
+pub fn unflush_multi_ns() -> Result<NamespaceMap, Box<dyn Error>> {
     // Try to read the partition map
     let pmap: PartMap = bincode::deserialize(&fs::read("snapstore.partmap")?)?;
     // Now read the data file
     let mut file = fs::File::open("snapstore.bin")?;
     // Get an iterator over the namespace data from the partition map
-    let mut map = pmap.into_iter();
+    let map = pmap.into_iter();
     let mut hmaps: HashMap<String, HashMap<String, Vec<u8>>> = HashMap::new();
-    while let Some(partition) = map.next() {
+    for partition in map {
         // Create an empty buffer which will read precisely `len()` bytes from the file
         let mut exact_op = vec![0; partition.len()];
         // Now read this data

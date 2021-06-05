@@ -65,17 +65,15 @@ where
         let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
         if snapengine.is_err() {
             was_engine_error = true;
+        } else if snapstatus.is_busy() {
+            succeeded = None;
         } else {
-            if snapstatus.is_busy() {
-                succeeded = None;
-            } else {
-                let snapengine = snapengine.unwrap_or_else(|_| unsafe {
-                    // UNSAFE(@ohsayan) This is safe as we've already checked
-                    // if snapshots are enabled or not with `is_snapshot_enabled`
-                    unreachable_unchecked()
-                });
-                succeeded = Some(snapengine);
-            }
+            let snapengine = snapengine.unwrap_or_else(|_| unsafe {
+                // UNSAFE(@ohsayan) This is safe as we've already checked
+                // if snapshots are enabled or not with `is_snapshot_enabled`
+                unreachable_unchecked()
+            });
+            succeeded = Some(snapengine);
         }
         if was_engine_error {
             return con
@@ -99,57 +97,55 @@ where
                 .write_response(&**responses::groups::SNAPSHOT_BUSY)
                 .await;
         }
-    } else {
-        if act.len() == 1 {
-            // This means that the user wants to create a 'named' snapshot
-            let snapname = act.next().unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): We've already checked that the action
-                // contains a second argument, so this can't be reached
-                unreachable_unchecked()
-            });
-            let mut path = PathBuf::from(DIR_SNAPSHOT);
-            path.push("remote");
-            path.push(snapname.to_owned() + ".snapshot");
-            let illegal_snapshot = path
-                .components()
-                .filter(|dir| {
-                    // Sanitize snapshot name, to avoid directory traversal attacks
-                    // If the snapshot name has any root directory or parent directory, then
-                    // we'll allow it to pass through this adaptor.
-                    // As a result, this iterator will give us a count of the 'bad' components
-                    dir == &Component::RootDir || dir == &Component::ParentDir
-                })
-                .count()
-                != 0;
-            if illegal_snapshot {
-                return con
-                    .write_response(&**responses::groups::SNAPSHOT_ILLEGAL_NAME)
-                    .await;
-            }
-            let failed;
-            {
-                let lock = handle.lock_writes();
-                match diskstore::write_to_disk(&path, &*lock) {
-                    Ok(_) => failed = false,
-                    Err(e) => {
-                        log::error!("Error while creating snapshot: {}", e);
-                        failed = true;
-                    }
-                }
-                drop(lock);
-                // end of table lock state critical section
-            }
-            if failed {
-                return con
-                    .write_response(responses::groups::SERVER_ERR.to_owned())
-                    .await;
-            } else {
-                return con.write_response(responses::groups::OKAY.to_owned()).await;
-            }
-        } else {
+    } else if act.len() == 1 {
+        // This means that the user wants to create a 'named' snapshot
+        let snapname = act.next().unwrap_or_else(|| unsafe {
+            // UNSAFE(@ohsayan): We've already checked that the action
+            // contains a second argument, so this can't be reached
+            unreachable_unchecked()
+        });
+        let mut path = PathBuf::from(DIR_SNAPSHOT);
+        path.push("remote");
+        path.push(snapname.to_owned() + ".snapshot");
+        let illegal_snapshot = path
+            .components()
+            .filter(|dir| {
+                // Sanitize snapshot name, to avoid directory traversal attacks
+                // If the snapshot name has any root directory or parent directory, then
+                // we'll allow it to pass through this adaptor.
+                // As a result, this iterator will give us a count of the 'bad' components
+                dir == &Component::RootDir || dir == &Component::ParentDir
+            })
+            .count()
+            != 0;
+        if illegal_snapshot {
             return con
-                .write_response(responses::groups::ACTION_ERR.to_owned())
+                .write_response(&**responses::groups::SNAPSHOT_ILLEGAL_NAME)
                 .await;
         }
+        let failed;
+        {
+            let lock = handle.lock_writes();
+            match diskstore::write_to_disk(&path, &*lock) {
+                Ok(_) => failed = false,
+                Err(e) => {
+                    log::error!("Error while creating snapshot: {}", e);
+                    failed = true;
+                }
+            }
+            drop(lock);
+            // end of table lock state critical section
+        }
+        if failed {
+            return con
+                .write_response(responses::groups::SERVER_ERR.to_owned())
+                .await;
+        } else {
+            return con.write_response(responses::groups::OKAY.to_owned()).await;
+        }
+    } else {
+        return con
+            .write_response(responses::groups::ACTION_ERR.to_owned())
+            .await;
     }
 }

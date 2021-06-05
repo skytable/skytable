@@ -65,7 +65,7 @@ mod json {
             jblob.push(b'{');
             JSONBlob(jblob)
         }
-        pub fn insert(&mut self, key: &String, value: Option<&Bytes>) {
+        pub fn insert(&mut self, key: &str, value: Option<&Bytes>) {
             self.0.push(b'"');
             self.0.extend(key.as_bytes());
             self.0.extend(b"\":");

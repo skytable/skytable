@@ -278,7 +278,7 @@ mod __sys {
         };
         match errno {
             0 => Ok(()),
-            x @ _ => Err(Error::from_raw_os_error(x)),
+            x => Err(Error::from_raw_os_error(x)),
         }
     }
     /// Try to obtain an exclusive lock and **immediately return an error if this is blocking**
@@ -289,7 +289,7 @@ mod __sys {
         };
         match errno {
             0 => Ok(()),
-            x @ _ => Err(Error::from_raw_os_error(x)),
+            x => Err(Error::from_raw_os_error(x)),
         }
     }
     /// Attempt to unlock a file
@@ -300,7 +300,7 @@ mod __sys {
         };
         match errno {
             0 => Ok(()),
-            x @ _ => Err(Error::from_raw_os_error(x)),
+            x => Err(Error::from_raw_os_error(x)),
         }
     }
     /// Duplicate a file

@@ -58,7 +58,6 @@ where
                     didmany += 1;
                 }
             }
-            drop(writer);
             done_howmany = Some(didmany);
         }
     }

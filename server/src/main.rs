@@ -65,13 +65,13 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 /// The version text
-static MSG: &'static str = "Skytable v0.6.0 | https://github.com/skytable/skytable";
+static MSG: &str = "Skytable v0.6.0 | https://github.com/skytable/skytable";
 /// The terminal art for `!noart` configurations
-static TEXT: &'static str = "\n███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  ";
+static TEXT: &str = "\n███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  ";
 
 fn main() {
     Builder::new()
-        .parse_filters(&env::var("SKY_LOG").unwrap_or("info".to_owned()))
+        .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
@@ -106,7 +106,7 @@ fn main() {
             // Keep looping until we successfully write the in-memory table to disk
             log::warn!("Press enter to try again...");
             io::stdout().flush().unwrap();
-            io::stdin().read(&mut [0]).unwrap();
+            io::stdin().read_exact(&mut [0]).unwrap();
             match services::bgsave::_bgsave_blocking_section(&db) {
                 Ok(_) => {
                     log::info!("Successfully saved data to disk");

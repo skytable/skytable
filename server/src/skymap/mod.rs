@@ -272,7 +272,7 @@ impl<T> Bucket<T> {
             unsafe { self.as_ptr().sub(1) }
         }
     }
-    unsafe fn to_base_index(self, base: NonNull<T>) -> usize {
+    unsafe fn into_base_index(self, base: NonNull<T>) -> usize {
         if mem::size_of::<T>() == 0 {
             // ZST baby
             self.ptr.as_ptr() as usize - 1

@@ -37,7 +37,6 @@ use libsky::TResult;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::iter::FromIterator;
 use std::path::PathBuf;
 
 /// The disk storage type since 0.3.1
@@ -57,11 +56,7 @@ enum Format {
 
 impl Format {
     pub const fn has_snapshots(&self) -> bool {
-        if let Self::Neocopy | Self::Sparrowlock = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Neocopy | Self::Sparrowlock)
     }
 }
 
@@ -152,26 +147,23 @@ fn upgrade_file(
     let data_in_new_format: HTable<Data, Data> = match *fmt {
         Format::Elstore => {
             let data_from_old_file: HashMap<String, String> = bincode::deserialize(&old_data_file)?;
-            HTable::from_iter(
-                data_from_old_file
-                    .into_iter()
-                    .map(|(key, value)| (Data::from(key), Data::from(value))),
-            )
+            data_from_old_file
+                .into_iter()
+                .map(|(key, value)| (Data::from(key), Data::from(value)))
+                .collect()
         }
         Format::Neocopy => {
             let data_from_old_file: DiskStoreType = bincode::deserialize(&old_data_file)?;
-            let data_from_old_file: HashMap<String, Data> = HashMap::from_iter(
-                data_from_old_file
-                    .0
-                    .into_iter()
-                    .zip(data_from_old_file.1.into_iter())
-                    .map(|(key, value)| (key, Data::from_blob(Bytes::from(value)))),
-            );
-            HTable::from_iter(
-                data_from_old_file
-                    .into_iter()
-                    .map(|(key, value)| (Data::from_string(key), value)),
-            )
+            let data_from_old_file: HashMap<String, Data> = data_from_old_file
+                .0
+                .into_iter()
+                .zip(data_from_old_file.1.into_iter())
+                .map(|(key, value)| (key, Data::from_blob(Bytes::from(value))))
+                .collect();
+            data_from_old_file
+                .into_iter()
+                .map(|(key, value)| (Data::from(key), value))
+                .collect()
         }
         Format::Sparrowlock => unsafe {
             // UNSAFE(@ohsayan): Not possible as we've already checked this earlier (no upgrades required)

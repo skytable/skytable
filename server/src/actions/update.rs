@@ -51,6 +51,8 @@ where
             None
         } else {
             let writer = handle.get_ref();
+            // clippy thinks we're doing something complex when we aren't, at all!
+            #[allow(clippy::blocks_in_if_conditions)]
             if writer.true_if_update(
                 Data::from(act.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): We've already checked that the action contains exactly
