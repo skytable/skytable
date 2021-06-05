@@ -81,8 +81,8 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
-            _marker_key: self._marker_key.clone(),
-            _marker_value: self._marker_value.clone(),
+            _marker_key: self._marker_key,
+            _marker_value: self._marker_value,
         }
     }
 }
@@ -415,7 +415,7 @@ where
 }
 
 /// A wrapper for `Bytes`
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 pub struct Data {
     /// The blob of data
     blob: Bytes,
@@ -439,23 +439,13 @@ impl Data {
 }
 
 impl Eq for Data {}
-impl Hash for Data {
-    fn hash<H>(&self, hasher: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        self.blob.hash(hasher)
-    }
-}
 
 impl<T> From<T> for Data
 where
     T: Into<Bytes>,
 {
     fn from(dat: T) -> Self {
-        Self {
-            blob: Bytes::from(dat.into()),
-        }
+        Self { blob: dat.into() }
     }
 }
 
@@ -604,12 +594,16 @@ mod concurrency_tests {
                     // println!("[T4] Dropped lock");
                 }),
             );
+            // allow this because we're just trying to make sure that all threads are terminate at the same time
+            #[allow(clippy::drop_copy)]
             drop((
                 h1.join().unwrap(),
                 h2.join().unwrap(),
                 h3.join().unwrap(),
                 h4.join().unwrap(),
             ));
+            // allow this lint because this is a test where we just want to keep things simple
+            #[allow(clippy::for_loops_over_fallibles)]
             // wait in a loop to receive notifications on this mpsc channel
             // all received messages are in the same order as they were produced
             for msg in rx.recv() {
@@ -694,6 +688,8 @@ mod concurrency_tests {
             // println!("Got: '{:?}'", got);
             // println!("[T3] Finished reading. Returned immediately from now");
         });
+        // allow this because we're just trying to make sure that all threads are terminate at the same time
+        #[allow(clippy::drop_copy)]
         drop((
             h1.join().unwrap(),
             h2.join().unwrap(),

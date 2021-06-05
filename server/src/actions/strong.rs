@@ -200,6 +200,8 @@ where
                     .next()
                     .unwrap_or_else(|| unsafe { unreachable_unchecked() });
             }
+            // clippy thinks we're doing something complex when we aren't, at all!
+            #[allow(clippy::blocks_in_if_conditions)]
             if !failed.unwrap_or_else(|| unsafe {
                 // UNSAFE(@ohsayan): This is completely safe as a value is assigned to `failed`
                 // right in the beginning

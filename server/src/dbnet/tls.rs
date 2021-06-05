@@ -58,6 +58,7 @@ pub struct SslListener {
 }
 
 impl SslListener {
+    #[allow(clippy::too_many_arguments)] // TODO(@ohsayan): Optimize this
     pub fn new_pem_based_ssl_connection(
         key_file: String,
         chain_file: String,

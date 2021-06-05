@@ -56,7 +56,6 @@ where
             while let (Some(key), Some(val)) = (act.next(), act.next()) {
                 let _ = writer.upsert(Data::from(key), Data::from(val));
             }
-            drop(writer);
             false
         }
     };

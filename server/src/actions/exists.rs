@@ -49,7 +49,6 @@ where
                 how_many_of_them_exist += 1;
             }
         });
-        drop(cmap);
     }
     con.write_response(how_many_of_them_exist).await?;
     Ok(())

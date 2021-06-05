@@ -62,11 +62,11 @@ pub async fn snapshot_service(
                     _ = time::sleep_until(time::Instant::now() + duration) => {
                         if sengine.mksnap().await {
                             // it passed, so unpoison the handle
-                            drop(handle.unpoison());
+                            handle.unpoison();
                         } else if failsafe {
                             // mksnap returned false and we are set to stop writes if snapshotting failed
                             // so let's poison the handle
-                            drop(handle.poison());
+                            handle.poison();
                         }
                     },
                     _ = termination_signal.receive_signal() => {

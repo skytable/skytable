@@ -33,6 +33,7 @@ use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use libsky::TResult;
 use std::fs;
 use std::io::{ErrorKind, Write};
+use std::path::Path;
 use std::path::PathBuf;
 pub mod flock;
 pub mod snapshot;
@@ -100,7 +101,7 @@ pub fn flush_data(file: &mut flock::FileLock, data: &Coremap<Data, Data>) -> TRe
     Ok(())
 }
 
-pub fn write_to_disk(file: &PathBuf, data: &Coremap<Data, Data>) -> TResult<()> {
+pub fn write_to_disk(file: &Path, data: &Coremap<Data, Data>) -> TResult<()> {
     let mut file = fs::File::create(&file)?;
     let encoded = data.serialize()?;
     file.write_all(&encoded)?;

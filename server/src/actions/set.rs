@@ -50,8 +50,10 @@ where
             None
         } else {
             let writer = handle.get_ref();
+            // clippy thinks we're doing something complex when we aren't, at all!
+            #[allow(clippy::blocks_in_if_conditions)]
             if writer.true_if_insert(
-                Data::from_string(act.next().unwrap_or_else(|| unsafe {
+                Data::from(act.next().unwrap_or_else(|| unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     unreachable_unchecked()

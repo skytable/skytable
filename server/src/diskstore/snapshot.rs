@@ -52,7 +52,7 @@ lazy_static::lazy_static! {
 /// The default snapshot directory
 ///
 /// This is currently a `snapshot` directory under the current directory
-pub const DIR_SNAPSHOT: &'static str = "data/snapshots";
+pub const DIR_SNAPSHOT: &str = "data/snapshots";
 /// The default snapshot count is 12, assuming that the user would take a snapshot
 /// every 2 hours (or 7200 seconds)
 const DEF_SNAPSHOT_COUNT: usize = 12;
@@ -115,9 +115,9 @@ impl<'a> SnapshotEngine<'a> {
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => {
                     // Now it's our turn to look for the existing snapshots
-                    let dir = fs::read_dir(snap_dir).map_err(|e| SnapengineError::IoError(e))?;
+                    let dir = fs::read_dir(snap_dir).map_err(SnapengineError::IoError)?;
                     for entry in dir {
-                        let entry = entry.map_err(|e| SnapengineError::IoError(e))?;
+                        let entry = entry.map_err(SnapengineError::IoError)?;
                         let path = entry.path();
                         // We'll skip the directory that contains remotely created snapshots
                         if path.is_dir() && path != PathBuf::from("data/snapshots/remote") {
@@ -149,15 +149,15 @@ impl<'a> SnapshotEngine<'a> {
                             }
                         }
                     }
-                    if snaps.len() != 0 {
+                    if snaps.is_empty() {
                         return Ok(SnapshotEngine {
-                            snaps: queue::Queue::init_pre(q_cfg_tuple, snaps),
+                            snaps: queue::Queue::new(q_cfg_tuple),
                             dbref,
                             snap_dir: snap_dir.to_owned(),
                         });
                     } else {
                         return Ok(SnapshotEngine {
-                            snaps: queue::Queue::new(q_cfg_tuple),
+                            snaps: queue::Queue::init_pre(q_cfg_tuple, snaps),
                             dbref,
                             snap_dir: snap_dir.to_owned(),
                         });
@@ -416,7 +416,7 @@ mod queue {
                 // We don't need to pop anything since the user
                 // wants to keep all the items in the queue
                 self.queue.push(PathBuf::from(item));
-                return None;
+                None
             } else {
                 // The user wants to keep a maximum of `maxtop` items
                 // so we will check if the current queue is full
@@ -439,10 +439,10 @@ mod queue {
         }
         /// Remove the last item inserted
         fn pop(&mut self) -> Option<PathBuf> {
-            if self.queue.len() != 0 {
-                Some(self.queue.remove(0))
-            } else {
+            if self.queue.is_empty() {
                 None
+            } else {
+                Some(self.queue.remove(0))
             }
         }
     }

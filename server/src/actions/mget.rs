@@ -35,7 +35,7 @@ use skytable::RespCode;
 pub async fn mget<T, Strm>(
     handle: &crate::coredb::CoreDB,
     con: &mut T,
-    mut act: ActionIter,
+    act: ActionIter,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
@@ -43,7 +43,7 @@ where
 {
     crate::err_if_len_is!(act, con, eq 0);
     con.write_array_length(act.len()).await?;
-    while let Some(key) = act.next() {
+    for key in act {
         let res: Option<Bytes> = {
             handle
                 .get_ref()
@@ -58,6 +58,5 @@ where
             con.write_response(RespCode::NotFound).await?;
         }
     }
-    drop(handle);
     Ok(())
 }

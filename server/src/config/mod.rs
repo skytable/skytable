@@ -38,7 +38,6 @@ use std::fs;
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
 use std::process;
-use toml;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 #[allow(dead_code)]
@@ -106,11 +105,7 @@ impl BGSave {
     }
     /// If `self` is a `Disabled` variant, then BGSAVE has been disabled by the user
     pub const fn is_disabled(&self) -> bool {
-        if let BGSave::Disabled = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, BGSave::Disabled)
     }
 }
 
@@ -281,7 +276,7 @@ impl ParsedConfig {
         };
         match toml::from_str(&file) {
             Ok(cfgfile) => Ok(ParsedConfig::from_config(cfgfile)),
-            Err(e) => return Err(ConfigError::SyntaxError(e.into())),
+            Err(e) => Err(ConfigError::SyntaxError(e.into())),
         }
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
@@ -309,7 +304,7 @@ impl ParsedConfig {
                         snapshot.failsafe.unwrap_or(true),
                     ))
                 })
-                .unwrap_or(SnapshotConfig::default()),
+                .unwrap_or_else(SnapshotConfig::default),
             ports: if let Some(sslopts) = cfg_info.ssl {
                 if sslopts.only.is_some() {
                     PortConfig::SecureOnly {
@@ -406,8 +401,8 @@ pub enum ConfigError {
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConfigError::OSError(e) => write!(f, "error: {}\n", e),
-            ConfigError::SyntaxError(e) => write!(f, "syntax error in configuration file: {}\n", e),
+            ConfigError::OSError(e) => writeln!(f, "error: {}", e),
+            ConfigError::SyntaxError(e) => writeln!(f, "syntax error in configuration file: {}", e),
             ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
             ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
         }
@@ -502,19 +497,19 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             // It is our responsibility to keep the user aware of bad settings, so we'll send a warning
             log::warn!("BGSAVE is disabled. You might lose data if the host crashes");
             BGSave::Disabled
-        } else {
-            if let Some(duration) = saveduration.map(|dur| dur.parse()) {
-                // A duration is specified for BGSAVE, so use it
-                match duration {
-                    Ok(duration) => BGSave::new(true, duration),
-                    Err(_) => return Err(ConfigError::CliArgErr(
+        } else if let Some(duration) = saveduration.map(|dur| dur.parse()) {
+            // A duration is specified for BGSAVE, so use it
+            match duration {
+                Ok(duration) => BGSave::new(true, duration),
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
                         "Invalid value for `--saveduration`. Expected an unsigned 64-bit integer",
-                    )),
+                    ))
                 }
-            } else {
-                // There's no `nosave` and no `saveduration` - cool; we'll use the default configuration
-                BGSave::default()
             }
+        } else {
+            // There's no `nosave` and no `saveduration` - cool; we'll use the default configuration
+            BGSave::default()
         };
         let snapevery: Option<u64> = match snapevery {
             Some(dur) => match dur.parse() {
@@ -614,9 +609,9 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
                         ));
                     }
                 }
-                return Ok(ConfigType::Custom(cfg, restorefile));
+                Ok(ConfigType::Custom(cfg, restorefile))
             }
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     } else {
         Ok(ConfigType::Def(ParsedConfig::default(), restorefile))
