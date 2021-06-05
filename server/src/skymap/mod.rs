@@ -790,6 +790,10 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
     pub fn clear_no_drop(&mut self) {
         self.table.clear_no_drop()
     }
+
+    pub fn len(&self) -> usize {
+        self.table.items
+    }
 }
 
 // implment the iterators for lookups
@@ -923,10 +927,10 @@ impl<T> RawIter<T> {
             */
             // TODO(@ohsayan): Do some sort of validation
             if is_insert {
-                // so an item was inserted ahead of us, and we need to iterate by one group more
+                // so an item was inserted ahead of us, and we need to iterate by one element more
                 self.items += 1;
             } else {
-                // an item was popped ahead of us, and we need to iterate by one group less
+                // an item was popped ahead of us, and we need to iterate by one element less
                 self.items -= 1;
             }
             return;
@@ -993,6 +997,14 @@ impl<T> RawIter<T> {
     pub fn refresh_insert(&mut self, b: &Bucket<T>) {
         self.refresh(b, true)
     }
+
+    unsafe fn drop_elements(&mut self) {
+        if mem::needs_drop::<T>() && self.len() != 0 {
+            for item in self {
+                item.drop()
+            }
+        }
+    }
 }
 
 impl<T> Clone for RawIter<T> {
@@ -1042,18 +1054,116 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
             items: self.table.items,
         }
     }
-}
 
-// now add a method to drop every element in the table
-
-impl<T> RawIter<T> {
     /// Call a destructor on every element in the table
     unsafe fn drop_elements(&mut self) {
         if mem::needs_drop::<T>() && self.len() != 0 {
-            for item in self {
+            for item in self.iter() {
                 // i.e ptr::drop_in_place
                 item.drop();
             }
+        }
+    }
+}
+
+impl<T, A: Allocator + Clone> Drop for RawTable<T, A> {
+    fn drop(&mut self) {
+        if !self.table.is_empty_singleton() {
+            unsafe {
+                // call the destructors
+                self.drop_elements();
+                // deallocate the memory
+                self.free_buckets();
+            }
+        }
+    }
+}
+
+pub struct RawConsumingIterator<T, A: Allocator + Clone = Global> {
+    iter: RawIter<T>,
+    allocation: Option<(NonNull<u8>, Layout)>,
+    _marker: PhantomData<T>,
+    allocator: A,
+}
+
+impl<T, A: Allocator + Clone> RawConsumingIterator<T, A> {
+    // get a non-consuming iter from the consuming iter _for the time being_
+    pub fn iter(&self) -> RawIter<T> {
+        self.iter.clone()
+    }
+}
+
+impl<T, A: Allocator + Clone> Iterator for RawConsumingIterator<T, A> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        unsafe {
+            // read the raw ptr
+            Some(self.iter.next()?.read())
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<T, A: Allocator + Clone> RawTable<T, A> {
+    fn into_allocation(self) -> Option<(NonNull<u8>, Layout)> {
+        let allocation = if self.table.is_empty_singleton() {
+            // no allocated mem if table is empty
+            None
+        } else {
+            let (layout, ctrl_offset) = match calculate_layout::<T>(self.table.buckets()) {
+                Some(contiguous_block) => contiguous_block,
+                None => unsafe {
+                    // infallible
+                    unreachable_unchecked()
+                },
+            };
+            Some((
+                unsafe { NonNull::new_unchecked(self.table.ctrl.as_ptr().sub(ctrl_offset)) },
+                layout,
+            ))
+        };
+        // leak the rawtable, don't drop!
+        mem::forget(self);
+        allocation
+    }
+    pub unsafe fn into_iter_from(self, iter: RawIter<T>) -> RawConsumingIterator<T, A> {
+        let allocator = self.table.allocator.clone();
+        let allocation = self.into_allocation();
+
+        RawConsumingIterator {
+            iter,
+            allocation,
+            _marker: PhantomData,
+            allocator,
+        }
+    }
+}
+
+impl<T, A: Allocator + Clone> Drop for RawConsumingIterator<T, A> {
+    fn drop(&mut self) {
+        unsafe {
+            // drop_in_place all the elements
+            self.iter.drop_elements();
+
+            // free the table (deallocate)
+            if let Some((start_of_allocation, layout)) = self.allocation {
+                self.allocator.deallocate(start_of_allocation, layout)
+            }
+        }
+    }
+}
+
+impl<T, A: Allocator + Clone> IntoIterator for RawTable<T, A> {
+    type Item = T;
+    type IntoIter = RawConsumingIterator<T, A>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe {
+            let iter = self.iter();
+            self.into_iter_from(iter)
         }
     }
 }
