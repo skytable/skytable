@@ -24,6 +24,23 @@
  *
 */
 
+/*
+ ANOTHER SEEMINGLY FRIENDLY WARNING
+ ------------------------------------------------------------------------
+ YOU ARE JUST ABOUT TO ENTER A PART OF THE UNIVERSE WHERE EVERYTHING IS WHAT
+ YOU WOULD WANT IT TO BE. THIS IS UNLIKE ALICE IN WONDERLAND, BECAUSE COMPUTER
+ MEMORY ISN'T UNFORTUNATELY THE WONDERLAND YOU'D DREAM OF.
+ YOU CAN HAVE A MUTABLE REFERENCE IF YOU WANT IT. FROM AN IMMUTABLE REFERENCE.
+ FROM A NON EXISTENT PIECE OF MEMORY. THAT'S THE WONDER WE'RE TALKING ABOUT.
+
+ BE SURE TO KNOW WHAT YOU ARE DOING HERE, BEFORE DOING IT. CHANGING SOME
+ LITTLE DEREFERENCE, ADDING 1 TO SOME VALUE OR EVEN REMOVING A SYMBOL CAN
+ GIFT YOU INTANGIBLE HORRORS THAT MAY COST YOU YOUR SANITY, YOUR COMPUTER
+ AND/OR YOUR DATA. KNOWING ALL THAT, SET YOUR MIND ADRIFT THE INFINITE COSMOS.
+
+ -- Sayan N. <ohsayan@outlook.com>
+*/
+
 //! A hashtable with SIMD lookup, quadratic probing and thread friendliness.
 //! TODO(@ohsayan): Update this notice!
 //!
@@ -57,6 +74,7 @@ cfg_if::cfg_if! {
     }
 }
 
+use self::bitmask::Bitmask;
 use self::imp::Group;
 use self::mapalloc::self_allocate;
 use self::mapalloc::Allocator;
@@ -65,6 +83,7 @@ use self::mapalloc::Layout;
 use self::scopeguard::ScopeGuard;
 use core::alloc;
 use core::hint::unreachable_unchecked;
+use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem;
 use core::ptr::NonNull;
@@ -330,6 +349,16 @@ impl<T> Bucket<T> {
     /// Copy bytes from another bucket to the current bucket
     unsafe fn copy_from_nonoverlapping(&self, other: &Self) {
         self.as_ptr().copy_from_nonoverlapping(other.as_ptr(), 1);
+    }
+    unsafe fn next_n(&self, offset: usize) -> Self {
+        let ptr = if mem::size_of::<T>() == 0 {
+            (self.ptr.as_ptr() as usize + offset) as *mut T
+        } else {
+            self.ptr.as_ptr().sub(offset)
+        };
+        Self {
+            ptr: NonNull::new_unchecked(ptr),
+        }
     }
 }
 
@@ -776,4 +805,95 @@ impl<T, A: Allocator + Clone> RawTable<T, A> {
         self.erase_without_drop(&item);
         item.drop();
     }
+
+    pub fn clear_no_drop(&mut self) {
+        self.table.clear_no_drop()
+    }
 }
+
+// implment the iterators for lookups
+
+pub struct RawIterRange<T> {
+    /// The bitmask for all the buckets in the current group
+    current_group: Bitmask,
+    /// A pointer to buckets in the current group
+    data: Bucket<T>,
+    /// A pointer to the next _group_ of control bytes
+    next_ctrl_ptr: *const u8,
+    /// This is **one byte _past_** the last control byte
+    end_of_alloc: *const u8,
+}
+
+impl<T> RawIterRange<T> {
+    unsafe fn new(ctrl: *const u8, data: Bucket<T>, len: usize) -> Self {
+        let end_of_alloc = ctrl.add(len);
+
+        // the bliss! we don't need to look for all the empty ones!
+        let current_group = Group::load_aligned(ctrl).match_full();
+        // we've already probed this group, so point at the next ctrl
+        let next_ctrl_ptr = ctrl.add(Group::WIDTH);
+
+        Self {
+            current_group,
+            data,
+            next_ctrl_ptr,
+            end_of_alloc,
+        }
+    }
+}
+
+impl<T> Clone for RawIterRange<T> {
+    fn clone(&self) -> Self {
+        Self {
+            current_group: self.current_group,
+            // clones the ptr
+            data: self.data.clone(),
+            next_ctrl_ptr: self.next_ctrl_ptr,
+            end_of_alloc: self.end_of_alloc,
+        }
+    }
+}
+
+impl<T> Iterator for RawIterRange<T> {
+    type Item = Bucket<T>;
+
+    fn next(&mut self) -> Option<Bucket<T>> {
+        unsafe {
+            loop {
+                if let Some(index) = self.current_group.lowest_set_bit() {
+                    self.current_group = self.current_group.remove_lowest_bit();
+                    return Some(self.data.next_n(index));
+                }
+
+                if self.next_ctrl_ptr >= self.end_of_alloc {
+                    // ugh, we're done scanning
+                    return None;
+                }
+
+                /*
+                 Another situation may arise when we go _past_ the end ptr and look at the
+                 empty ctrl bytes. That is fine because it happens on smaller tables, and
+                 again, they are empty buckets.
+                */
+                self.current_group = Group::load_aligned(self.next_ctrl_ptr).match_full();
+                // we probed all these, so move ahead (technically behind, but yeah)
+                self.data = self.data.next_n(Group::WIDTH);
+                // we probe all these (eqv to Group::WIDTH), so move the ctrl bytes ahead
+                self.next_ctrl_ptr = self.next_ctrl_ptr.add(Group::WIDTH);
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (
+            0,
+            Some(unsafe {
+                // We don't really know the size, so just use some ptr math and return the offset
+                // + the next probe width; since size_hint is always an upper bound
+                offset_from(self.end_of_alloc, self.next_ctrl_ptr) + Group::WIDTH
+            }),
+        )
+    }
+}
+
+impl<T> FusedIterator for RawIterRange<T> {}
