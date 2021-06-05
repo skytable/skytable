@@ -36,7 +36,7 @@ use skytable::AsyncConnection;
 use std::io::stdout;
 use std::process;
 use std::process::exit;
-const MSG_WELCOME: &'static str = "Skytable v0.6.0";
+const MSG_WELCOME: &str = "Skytable v0.6.0";
 const ADDR: &str = "127.0.0.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
@@ -67,7 +67,7 @@ pub async fn start_repl() {
     };
     let mut runner = Runner::new(con);
     if let Some(eval_expr) = matches.value_of("eval") {
-        if eval_expr.len() == 0 {
+        if eval_expr.is_empty() {
             return;
         }
         runner.run_query(&eval_expr).await;

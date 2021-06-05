@@ -60,6 +60,7 @@ mod bitmask;
 mod control_bytes;
 mod mapalloc;
 mod scopeguard;
+mod util;
 
 cfg_if::cfg_if! {
     if #[cfg(all(
@@ -81,6 +82,7 @@ use self::mapalloc::Allocator;
 use self::mapalloc::Global;
 use self::mapalloc::Layout;
 use self::scopeguard::ScopeGuard;
+use self::util::unlikely;
 use core::alloc;
 use core::hint::unreachable_unchecked;
 use core::iter::FusedIterator;
@@ -88,27 +90,6 @@ use core::marker::PhantomData;
 use core::mem;
 use core::ptr::NonNull;
 use std::alloc::handle_alloc_error;
-
-#[cold]
-/// Attribute for an LLVM optimization that indicates that this function won't be commonly
-/// called. Look [here](https://llvm.org/docs/LangRef.html) for more information ("coldcc")
-fn cold() {}
-
-/// This _emulates_ the intrinsic [`core::intrinsics::likely`]
-fn likely(b: bool) -> bool {
-    if !b {
-        cold()
-    }
-    b
-}
-
-/// This _emulates_ the intrinsic [`core::intrinsics::unlikely`]
-fn unlikely(b: bool) -> bool {
-    if b {
-        cold()
-    }
-    b
-}
 
 /// Returns the offset of a pointer
 ///
@@ -861,6 +842,9 @@ impl<T> Iterator for RawIterRange<T> {
         unsafe {
             loop {
                 if let Some(index) = self.current_group.lowest_set_bit() {
+                    // hey, we got the first item in the group that has something full
+                    // pop that off so that we can look at the next items (it's the other way around
+                    // remember), or the higher order bits
                     self.current_group = self.current_group.remove_lowest_bit();
                     return Some(self.data.next_n(index));
                 }
@@ -897,3 +881,179 @@ impl<T> Iterator for RawIterRange<T> {
 }
 
 impl<T> FusedIterator for RawIterRange<T> {}
+
+/// A raw iterator that returns raw pointers to every full bucket in the [`LowTable`]
+///
+/// ## Notes
+/// - This iterator is not bound by a lifetime. This has a direct implication that it is unsafe
+/// to create in the first place. So **you** are responsible for use-after-free violations
+/// - A bucket can be erased while the iterator is iterating, but this will not be reflected by
+/// the iterator unless the iterator is refreshed for deletes
+/// - Because of the nature of hashes, it is _undefined_ whether an element inserted after the iterator
+/// was created would appear or not, again, until the iterator is refreshed
+/// - Remember the thing with lskeys? Correct, iterators have no meaningful order for hash tables (or
+/// has based data structures in general, for that purpose)
+pub struct RawIter<T> {
+    /// The _actual_ iterator
+    iter: RawIterRange<T>,
+    /// The length of the table
+    items: usize,
+}
+
+impl<T> RawIter<T> {
+    /// This function will refresh the iterator so that it reflects the state of the given bucket
+    /// It will do everything such as finding out if we've run through it, not even visited it or are
+    /// currently at it.
+    ///
+    /// Now note: you should not attempt to call things as low-level as this, but instead use higher
+    /// level abstractions
+    fn refresh(&mut self, b: &Bucket<T>, is_insert: bool) {
+        if b.as_ptr() > self.iter.data.as_ptr() {
+            // we've moved past self's iterator data ptr, so we don't bother with anything at all
+            return;
+        }
+        if unsafe {
+            self.iter.next_ctrl_ptr < self.iter.end_of_alloc
+                && b.as_ptr() <= self.iter.data.next_n(Group::WIDTH).as_ptr()
+        } {
+            /*
+             In this case, the iterator hasn't crossed the bucket's group but instead we're
+             behind it. But this has one implication: update self's item count because there is one item
+             more or less now. (Just make sure the caller tells the truth, or assume they are).
+            */
+            // TODO(@ohsayan): Do some sort of validation
+            if is_insert {
+                // so an item was inserted ahead of us, and we need to iterate by one group more
+                self.items += 1;
+            } else {
+                // an item was popped ahead of us, and we need to iterate by one group less
+                self.items -= 1;
+            }
+            return;
+        }
+
+        /*
+         Now the interesting case - we're at the bucket where the mishap (the change, come on) happened.
+         These are the potential scenarios:
+
+         - If there is a pending/complete insert at this bucket: we will update our iterator state
+         to LOOK at it. At the same time, increment your own bucket count
+         - If there is a pending/complete remove at this bucket: we will update our iterator state
+         to NOT look at it. Similarly, reduce your bucket count
+         - If we've already checked the bucket in question, let's just return
+        */
+
+        if let Some(index) = self.iter.current_group.lowest_set_bit() {
+            // index is the ith bit in the group that has been set (from the lower order range)
+            let ptr_to_next_bucket = unsafe { self.iter.data.next_n(index) };
+            if b.as_ptr() > ptr_to_next_bucket.as_ptr() {
+                /*
+                 so the provided bucket is ahead of the ptr to the next bucket? now that's silly.
+                 This means that we've already moved past the bucket. So changes in count? Nope,
+                 because insertions/erases before the iterators current position wouldn't affect
+                 the item count as we'll have to move across the same number of elements/groups
+                */
+            } else {
+                /*
+                 so the provided bucket is the bucket we were about to yield, and it has been
+                 removed. let's update our state. But there's a problem here:
+                 If we reload the group, we might look past inserts that we've already seen (basically
+                 reading all those `GroupWord` count of entries again / 8) or we might unset the bits
+                 for other removals. If we indeed do this, we'll have to decrement our count, but again
+                 subsequent iterator refreshes can also decrement this count. Instead of getting ourselves
+                 into that mess, we'll flip the bit for the bucket the caller gave us
+                */
+                unsafe {
+                    let callers_ctrl_bit_index = offset_from(self.iter.data.as_ptr(), b.as_ptr());
+                    let was_full = self.iter.current_group.flip(callers_ctrl_bit_index);
+                    // TODO(@ohsayan): Explain why
+                    debug_assert_ne!(was_full, is_insert);
+                }
+
+                if is_insert {
+                    self.items += 1;
+                } else {
+                    self.items -= 1;
+                }
+            }
+        } else {
+            // since there was no lowest set bit, we've already removed _the removed_ buckets
+            // just return
+        }
+    }
+
+    /// Refresh the iterator so that it reflects the removal of the given bucket. Ensure that this is
+    /// called _before the removal_ and _before `next()` is called_
+    pub fn refresh_remove(&mut self, b: &Bucket<T>) {
+        self.refresh(b, false)
+    }
+
+    /// Refresh the iterator so that it reflects the insertion of the given bucket. Ensure that this is
+    /// called _before the insertion_ and _before `next()` is called_
+    pub fn refresh_insert(&mut self, b: &Bucket<T>) {
+        self.refresh(b, true)
+    }
+}
+
+impl<T> Clone for RawIter<T> {
+    fn clone(&self) -> Self {
+        Self {
+            iter: self.iter.clone(),
+            items: self.items,
+        }
+    }
+}
+
+impl<T> Iterator for RawIter<T> {
+    type Item = Bucket<T>;
+
+    fn next(&mut self) -> Option<Bucket<T>> {
+        if let Some(bkt) = self.iter.next() {
+            self.items -= 1;
+            Some(bkt)
+        } else {
+            // so item length must be zero
+            // let's just return none
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // we kinda know this already. but let's make the impl (and the caller) happy
+        (self.items, Some(self.items))
+    }
+}
+
+impl<T> ExactSizeIterator for RawIter<T> {}
+impl<T> FusedIterator for RawIter<T> {}
+
+// now add the iterator methods to the `RawTable`
+
+impl<T, A: Allocator + Clone> RawTable<T, A> {
+    /// Returns a RawIter over every element in the table. But calling this immediately
+    /// gives you the responsibility of making sure the `RawTable` outlives the `RawIter`
+    /// (because `RawIter` doesn't have any lifetime bound to it which would severly complicate
+    /// the implementation)
+    pub unsafe fn iter(&self) -> RawIter<T> {
+        // start at the first data index
+        let data = Bucket::from_base_index(self.data_terminal_ptr(), 0);
+        RawIter {
+            iter: RawIterRange::new(self.table.ctrl.as_ptr(), data, self.table.buckets()),
+            items: self.table.items,
+        }
+    }
+}
+
+// now add a method to drop every element in the table
+
+impl<T> RawIter<T> {
+    /// Call a destructor on every element in the table
+    unsafe fn drop_elements(&mut self) {
+        if mem::needs_drop::<T>() && self.len() != 0 {
+            for item in self {
+                // i.e ptr::drop_in_place
+                item.drop();
+            }
+        }
+    }
+}

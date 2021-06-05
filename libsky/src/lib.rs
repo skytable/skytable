@@ -45,7 +45,7 @@ lazy_static::lazy_static! {
 pub fn split_into_args(q: &str) -> Vec<String> {
     let args: Vec<String> = RE
         .find_iter(q)
-        .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
+        .map(|val| val.as_str().replace("'", "").replace("\"", ""))
         .collect();
     args
 }

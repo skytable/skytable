@@ -39,6 +39,8 @@ impl Bitmask {
     }
 
     /// Flips the bits of the Bitmask at the given index
+    /// 
+    /// This will return true if the bit at the provided index was actually set
     pub unsafe fn flip(&mut self, index: usize) -> bool {
         let mask = 1 << (index * BITMASK_STRIDE + BITMASK_STRIDE - 1);
         self.0 ^= mask;
@@ -63,6 +65,11 @@ impl Bitmask {
     }
 
     /// Returns the first bit set in the bitmask, if such a bit exists
+    ///
+    /// So if self (let's go into the beautiful world where there's a single byte everywhere)
+    /// is (00000000) this will return 8! So, hazardous if we call it when the bitmask
+    /// is uninitialized. But if self is initialized, and our byte looks like: 0001_0000
+    /// we'll get back 4, because the 4th bit has been set. I'm sure you've got it now!
     ///
     /// Please check that atleast a single bit has been set in the bitmask before attempting
     /// to use this!
