@@ -75,6 +75,7 @@ use std::alloc::handle_alloc_error;
 /// called. Look [here](https://llvm.org/docs/LangRef.html) for more information ("coldcc")
 fn cold() {}
 
+/// This _emulates_ the intrinsic [`core::intrinsics::likely`]
 fn likely(b: bool) -> bool {
     if !b {
         cold()
@@ -82,6 +83,7 @@ fn likely(b: bool) -> bool {
     b
 }
 
+/// This _emulates_ the intrinsic [`core::intrinsics::unlikely`]
 fn unlikely(b: bool) -> bool {
     if b {
         cold()
@@ -127,7 +129,7 @@ const fn h1(hash: u64) -> usize {
 /// H1 hash
 fn h2(hash: u64) -> u8 {
     /*
-     Grap the 7 high order bits of the hash. The below is done to get how many
+     Grab the 7 high order bits of the hash. The below is done to get how many
      bits we should take as some hash functions may return an usize, so the higher
      order bits are just zeroed on 32-bit platforms. The shr is simple: say you're
      on an arch with 64-bit pointer width: you then have a 64 bit hash. The hash len
@@ -155,6 +157,7 @@ struct ProbeSequence {
 }
 
 impl ProbeSequence {
+    /// Move the current `pos` and `stride` to the next group that we'll be looking at
     fn move_to_next(&mut self, bucket_mask: usize) {
         self.stride += Group::WIDTH;
         self.pos += self.stride;
@@ -165,7 +168,9 @@ impl ProbeSequence {
 
 // Our goal is to keep the load factor at 87.5%. Now this will possibly never be the case
 // due to the adjustment with the next power of two (2^p sized table, remember?)
+/// The load factor numerator
 const LOAD_FACTOR_NUMERATOR: usize = 7;
+/// The load factor denominator
 const LOAD_FACTOR_DENOMINATOR: usize = 8;
 
 /// Returns the number of buckets needed to hold atleast the given
@@ -198,12 +203,19 @@ const fn bucket_mask_to_capacity(bucket_mask: usize) -> usize {
 }
 
 #[derive(Clone, Copy)]
+/// The layout of the table
+///
+/// This is done to primarily compute the position of the control bytes independently of
+/// T
 struct TableLayout {
+    /// the size
     size: usize,
+    /// the position of the ctrl bytes
     ctrl_byte_align: usize,
 }
 
 impl TableLayout {
+    /// Create a new layout for type T
     fn new<T>() -> Self {
         let layout = Layout::new::<T>();
         Self {
@@ -212,6 +224,9 @@ impl TableLayout {
         }
     }
 
+    /// Calculate the table layout for a given number of buckets
+    ///
+    /// This returns the layout and the ctrl byte offset
     fn calculate_layout_for(self, buckets: usize) -> Option<(Layout, usize)> {
         let TableLayout {
             size,
@@ -259,6 +274,10 @@ impl<T> Clone for Bucket<T> {
 }
 
 impl<T> Bucket<T> {
+    /// Creates a bucket at `index` from the given base ptr
+    ///
+    /// The base ptr points at the start of the ctrl bytes, so you'll have to do some
+    /// basic ptr arithmetic and move back by the index to find the corresponding location
     unsafe fn from_base_index(base: NonNull<T>, index: usize) -> Self {
         let ptr = if mem::size_of::<T>() == 0 {
             // uh oh, here comes a ZST
@@ -270,6 +289,7 @@ impl<T> Bucket<T> {
             ptr: NonNull::new_unchecked(ptr),
         }
     }
+    /// Returns a raw pointer to the T stored in the bucket
     fn as_ptr(&self) -> *mut T {
         if mem::size_of::<T>() == 0 {
             // and here comes another ZST; just return some aligned garbage
@@ -278,6 +298,7 @@ impl<T> Bucket<T> {
             unsafe { self.as_ptr().sub(1) }
         }
     }
+    /// Gets the base index position from the given base ptr
     unsafe fn to_base_index(&self, base: NonNull<T>) -> usize {
         if mem::size_of::<T>() == 0 {
             // ZST baby
@@ -286,21 +307,27 @@ impl<T> Bucket<T> {
             offset_from(base.as_ptr(), self.ptr.as_ptr())
         }
     }
+    /// Drop the object that exists at the ptr
     unsafe fn drop(&self) {
         self.as_ptr().drop_in_place()
     }
+    /// Read the bucket object at the current ptr (this does nothing to the allocation of the object)
     unsafe fn read(&self) -> T {
         self.as_ptr().read()
     }
+    /// Write something to the current bucket ptr
     unsafe fn write(&self, val: T) {
         self.as_ptr().write(val)
     }
+    /// Get a reference to the bucket
     unsafe fn as_ref<'b, 'a: 'b>(&'a self) -> &'b T {
         &*self.as_ptr()
     }
+    /// Get a mutable reference to the bucket
     unsafe fn as_mut<'b, 'a: 'b>(&'a self) -> &'b mut T {
         &mut *self.as_ptr()
     }
+    /// Copy bytes from another bucket to the current bucket
     unsafe fn copy_from_nonoverlapping(&self, other: &Self) {
         self.as_ptr().copy_from_nonoverlapping(other.as_ptr(), 1);
     }
@@ -369,6 +396,7 @@ impl<A> LowTable<A> {
     const fn count_ctrl_bytes(&self) -> usize {
         self.bucket_mask + 1 + Group::WIDTH
     }
+    /// Create a new empty table using the given allocator
     const fn new_in(allocator: A) -> Self {
         Self {
             allocator,
@@ -378,9 +406,11 @@ impl<A> LowTable<A> {
             growth_left: 0,
         }
     }
+    /// Set the hash 2 (h2) of the provided index (and with the hash for truncation)
     fn set_ctrl_h2_of(&self, index: usize, hash: u64) {
         unsafe { self.set_ctrlof(index, h2(hash)) }
     }
+    /// Set the `ctrl` byte for the provided `index`
     unsafe fn set_ctrlof(&self, index: usize, ctrl: u8) {
         /*
          This idea is entirely taken from the hashbrown impl.
@@ -425,6 +455,7 @@ impl<A> LowTable<A> {
 }
 
 impl<A: Allocator + Clone> LowTable<A> {
+    /// Returns a completely uninitialized table with no ctrl bytes or data
     unsafe fn new_uinit(
         allocator: A,
         table_layout: TableLayout,
@@ -459,6 +490,9 @@ impl<A: Allocator + Clone> LowTable<A> {
         })
     }
 
+    /// Returns a table with the provided capacity or returns an error if there is either an overflow
+    /// or an error from the allocator (do note that passing infallible will trigger a runtime panic
+    /// on erroring)
     fn fallible_with_capacity(
         allocator: A,
         table_layout: TableLayout,
@@ -479,6 +513,10 @@ impl<A: Allocator + Clone> LowTable<A> {
         }
     }
 
+    /// Find the insert slot for a given hash
+    ///
+    /// This will return the index (wrt the data offset) for the insertion (empty/deleted). One more
+    /// note: double lookups do happen, but they're insignificant (read the comments below)
     fn find_insert_slot(&self, hash: u64) -> usize {
         let mut probe_seq = self.probe_seq(hash);
         loop {
@@ -536,9 +574,11 @@ impl<A: Allocator + Clone> LowTable<A> {
         }
     }
 
+    /// Returns a non-null ptr to where the data ends (i.e where the ctrl bytes start in other words)
     unsafe fn data_terminal_ptr<T>(&self) -> NonNull<T> {
         NonNull::new_unchecked(self.ctrl.as_ptr().cast())
     }
+    /// Returns a bucket for the given index
     unsafe fn get_bucket<T>(&self, index: usize) -> Bucket<T> {
         Bucket::from_base_index(self.data_terminal_ptr(), index)
     }
@@ -550,6 +590,7 @@ impl<A: Allocator + Clone> LowTable<A> {
         self.items += 1;
     }
 
+    /// Check if an `idx` and `new_idx` belong to the same group for a given `hash`
     unsafe fn is_in_same_group(&self, idx: usize, new_idx: usize, hash: u64) -> bool {
         let probe_seq_pos = self.probe_seq(hash).pos;
         let probe_idx =
@@ -557,6 +598,7 @@ impl<A: Allocator + Clone> LowTable<A> {
         probe_idx(idx) == probe_idx(new_idx)
     }
 
+    /// Update the H2 value for a given `index` to the provided hash
     unsafe fn update_ctrl_h2_of(&self, index: usize, hash: u64) -> u8 {
         let last_ctrl = *self.ctrlof(index);
         self.set_ctrl_h2_of(index, hash);
@@ -564,6 +606,7 @@ impl<A: Allocator + Clone> LowTable<A> {
     }
 
     // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    /// Deallocate the buckets, **without** calling the destructors
     unsafe fn free_buckets(&self, table_layout: TableLayout) {
         let (layout, ctrl_offset) = match table_layout.calculate_layout_for(self.buckets()) {
             Some(contiguous_block) => contiguous_block,
@@ -575,6 +618,8 @@ impl<A: Allocator + Clone> LowTable<A> {
         );
     }
 
+    /// Get ready for a resize event: this function returns a new table with the provided capacity. If
+    /// the hash function panics, this will not leak memory -- use the scopeguard!
     unsafe fn prepare_resize(
         &self,
         table_layout: TableLayout,
@@ -600,6 +645,8 @@ impl<A: Allocator + Clone> LowTable<A> {
     }
 
     // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    /// Empty the table without calling the destructors on the individual `T`s. Ideally this will
+    /// just set all metadata bits to EMPTY (`0b1111_1111`)
     fn clear_no_drop(&mut self) {
         if !self.is_empty_singleton() {
             unsafe {
@@ -612,6 +659,7 @@ impl<A: Allocator + Clone> LowTable<A> {
     }
 
     // TODO(@ohsayan): Explain the difference in reference mutability here! (IMPORTANT!)
+    /// Remove an element from a table (again, **no drop** -- just update the metadata)
     unsafe fn erase(&mut self, index: usize) {
         let last_idx = index.wrapping_sub(Group::WIDTH) & self.bucket_mask;
         let empty_before = Group::load_unaligned(self.ctrlof(last_idx)).match_empty();
