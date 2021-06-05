@@ -323,11 +323,11 @@ impl<T> Bucket<T> {
         self.as_ptr().write(val)
     }
     /// Get a reference to the bucket
-    unsafe fn as_ref<'b, 'a: 'b>(&'a self) -> &'b T {
+    pub unsafe fn as_ref<'a>(&self) -> &'a T {
         &*self.as_ptr()
     }
     /// Get a mutable reference to the bucket
-    unsafe fn as_mut<'b, 'a: 'b>(&'a self) -> &'b mut T {
+    unsafe fn as_mut<'a>(&self) -> &'a mut T {
         &mut *self.as_ptr()
     }
     /// Copy bytes from another bucket to the current bucket
@@ -1373,6 +1373,64 @@ impl<'a, T, A: Allocator + Clone> Iterator for RawHashIter<'a, T, A> {
                 Some(idx) => Some(self.inner.table.get_bucket(idx)),
                 None => None,
             }
+        }
+    }
+}
+
+// now that we've implemented the iterators, we can impl the lookup methods like get and get_mut
+
+impl<T, A: Allocator + Clone> RawTable<T, A> {
+    fn iter_hash(&self, hash: u64) -> RawHashIter<'_, T, A> {
+        RawHashIter::new(&self, hash)
+    }
+    pub fn find(&self, hash: u64, mut predicate: impl FnMut(&T) -> bool) -> Option<Bucket<T>> {
+        for bucket in self.iter_hash(hash) {
+            unsafe {
+                let candidate_bucket = bucket.as_ref();
+                if likely(predicate(candidate_bucket)) {
+                    return Some(bucket);
+                }
+            }
+        }
+        // probe over, nothing found
+        None
+    }
+    /// Find and erase an element from the table
+    pub fn erase_entry(&mut self, hash: u64, predicate: impl FnMut(&T) -> bool) -> bool {
+        if let Some(bucket) = self.find(hash, predicate) {
+            unsafe { self.erase(bucket) }
+            true
+        } else {
+            false
+        }
+    }
+    pub unsafe fn remove(&mut self, item: Bucket<T>) -> T {
+        // We first remove the metadata
+        self.erase_without_drop(&item);
+        // and then read the data from the ptr
+        item.read()
+    }
+    pub fn get(&self, hash: u64, predicate: impl FnMut(&T) -> bool) -> Option<&T> {
+        // shut clippy up here because of this: https://github.com/rust-lang/rust/issues/68667
+        #[allow(clippy::manual_map)]
+        match self.find(hash, predicate) {
+            Some(bucket) => Some(unsafe { bucket.as_ref() }),
+            None => None,
+        }
+    }
+    pub fn get_mut(&mut self, hash: u64, predicate: impl FnMut(&T) -> bool) -> Option<&mut T> {
+        // shut clippy up here because of this: https://github.com/rust-lang/rust/issues/68667
+        #[allow(clippy::manual_map)]
+        match self.find(hash, predicate) {
+            Some(bucket) => Some(unsafe { bucket.as_mut() }),
+            None => None,
+        }
+    }
+    pub fn clear(&mut self) {
+        let mut slf = ScopeGuard::new(self, |slf| slf.clear_no_drop());
+        unsafe {
+            // deref coercion glue
+            slf.drop_elements();
         }
     }
 }
