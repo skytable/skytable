@@ -76,12 +76,14 @@ cfg_if::cfg_if! {
 }
 
 use self::bitmask::Bitmask;
+use self::bitmask::BitmaskIterator;
 use self::imp::Group;
 use self::mapalloc::self_allocate;
 use self::mapalloc::Allocator;
 use self::mapalloc::Global;
 use self::mapalloc::Layout;
 use self::scopeguard::ScopeGuard;
+use self::util::likely;
 use self::util::unlikely;
 use core::alloc;
 use core::hint::unreachable_unchecked;
@@ -1239,6 +1241,138 @@ impl<T, A: Allocator + Clone> IntoIterator for RawTable<T, A> {
         unsafe {
             let iter = self.iter();
             self.into_iter_from(iter)
+        }
+    }
+}
+
+pub struct RawDrain<'a, T, A: Allocator + Clone = Global> {
+    /// the iterator
+    iter: RawIter<T>,
+    /// keep the iterator here to avoid deallocating memory
+    table: ManuallyDrop<RawTable<T, A>>,
+    /// the actual table
+    src_table: NonNull<RawTable<T, A>>,
+    // make rawdrain covariant
+    _marker: PhantomData<&'a RawTable<T, A>>,
+}
+
+impl<T, A: Allocator + Clone> RawDrain<'_, T, A> {
+    pub fn iter(&self) -> RawIter<T> {
+        self.iter.clone()
+    }
+}
+
+impl<T, A: Allocator + Clone> Iterator for RawDrain<'_, T, A> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        unsafe {
+            let item = self.iter.next()?;
+            Some(item.read())
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<T, A: Allocator + Clone> ExactSizeIterator for RawDrain<'_, T, A> {}
+impl<T, A: Allocator + Clone> FusedIterator for RawDrain<'_, T, A> {}
+
+impl<T, A: Allocator + Clone> Drop for RawDrain<'_, T, A> {
+    fn drop(&mut self) {
+        unsafe {
+            // Drop all remaining elements
+            self.iter.drop_elements();
+
+            // Reset the control bytes
+            self.table.clear_no_drop();
+
+            // Move the table back to where it was
+            self.src_table
+                .as_ptr()
+                .copy_from_nonoverlapping(&*self.table, 1);
+        }
+    }
+}
+
+pub struct RawHashIter<'a, T, A: Allocator + Clone = Global> {
+    inner: RawIterHashInner<'a, A>,
+    _marker: PhantomData<T>,
+}
+
+struct RawIterHashInner<'a, A: Allocator + Clone> {
+    /// The actual table
+    table: &'a LowTable<A>,
+    /// The top 7 bits of the hash
+    h2_hash: u8,
+    /// The triangular probe sequence
+    probe_seq: ProbeSequence,
+    /// The group
+    group: Group,
+    /// The elements within a group matching a given h2 hash
+    bitmask: BitmaskIterator,
+}
+
+impl<'a, A: Allocator + Clone> RawIterHashInner<'a, A> {
+    fn new(table: &'a LowTable<A>, hash: u64) -> Self {
+        unsafe {
+            let h2_hash = h2(hash);
+            let probe_seq = table.probe_seq(hash);
+            let group = Group::load_unaligned(table.ctrlof(probe_seq.pos));
+            let bitmask = group.match_byte(h2_hash).into_iter();
+
+            Self {
+                table,
+                h2_hash,
+                probe_seq,
+                group,
+                bitmask,
+            }
+        }
+    }
+}
+
+impl<'a, A: Allocator + Clone> Iterator for RawIterHashInner<'a, A> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            loop {
+                if let Some(bit) = self.bitmask.next() {
+                    let index = (self.probe_seq.pos + bit) & self.table.bucket_mask;
+                    return Some(index);
+                }
+                if likely(self.group.match_empty().any_bit_set()) {
+                    return None;
+                }
+                self.probe_seq.move_to_next(self.table.bucket_mask);
+                self.group = Group::load_unaligned(self.table.ctrlof(self.probe_seq.pos));
+                self.bitmask = self.group.match_byte(self.h2_hash).into_iter();
+            }
+        }
+    }
+}
+
+impl<'a, T, A: Allocator + Clone> RawHashIter<'a, T, A> {
+    fn new(table: &'a RawTable<T, A>, hash: u64) -> Self {
+        RawHashIter {
+            inner: RawIterHashInner::new(&table.table, hash),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, T, A: Allocator + Clone> Iterator for RawHashIter<'a, T, A> {
+    type Item = Bucket<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            match self.inner.next() {
+                Some(idx) => Some(self.inner.table.get_bucket(idx)),
+                None => None,
+            }
         }
     }
 }

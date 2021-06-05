@@ -65,6 +65,7 @@ pub const BITMASK_STRIDE: usize = 8;
 pub const BITMASK_MASK: BitmaskWord = 0x8080_8080_8080_8080_u64 as BitmaskWord;
 
 /// A group of control-bytes that can be scanned in parallel
+#[derive(Clone, Copy)]
 pub struct Group(GroupWord);
 
 impl Group {
