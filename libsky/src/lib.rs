@@ -35,6 +35,10 @@ use std::error::Error;
 pub type TResult<T> = Result<T, Box<dyn Error>>;
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
+/// The current version
+pub static VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The URL
+pub static URL: &str = "https://github.com/skytable/skytable";
 
 use std::str::FromStr;
 
@@ -45,7 +49,7 @@ lazy_static::lazy_static! {
 pub fn split_into_args(q: &str) -> Vec<String> {
     let args: Vec<String> = RE
         .find_iter(q)
-        .map(|val| val.as_str().replace("'", "").replace("\"", "").to_owned())
+        .map(|val| val.as_str().replace("'", "").replace("\"", ""))
         .collect();
     args
 }

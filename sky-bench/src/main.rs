@@ -64,7 +64,7 @@ mod benchtool {
     }
     impl Netpool {
         /// Create a new `Netpool` instance with `size` number of connections (and threads)
-        pub fn new(size: usize, host: &String) -> Netpool {
+        pub fn new(size: usize, host: &str) -> Netpool {
             assert!(size > 0);
             let (sender, receiver) = mpsc::channel();
             let receiver = Arc::new(Mutex::new(receiver));
@@ -95,7 +95,7 @@ mod benchtool {
                             // We have to write something to the socket
                             connection.write_all(&someaction).unwrap();
                             // Ignore whatever we get, we don't need them
-                            connection.read(&mut vec![0; 1024]).unwrap();
+                            let _ = connection.read(&mut vec![0; 1024]).unwrap();
                         }
                         WhatToDo::Nothing => {
                             // A termination signal - just close the stream and
@@ -179,7 +179,7 @@ mod benchtool {
         }
         println!("Sanity test succeeded");
         // now push in the port to the host string
-        host.push_str(":");
+        host.push(':');
         host.push_str(&port.to_string());
         let mut rand = thread_rng();
         if let Some(matches) = matches.subcommand_matches("testkey") {
@@ -350,7 +350,7 @@ mod benchtool {
         if !connection
             .run_simple_query(&query)
             .unwrap()
-            .eq(&Response::Item(Element::String(value.to_owned())))
+            .eq(&Response::Item(Element::String(value)))
         {
             return Err("GET test failed".into());
         }
@@ -369,7 +369,7 @@ mod benchtool {
 
     /// Returns the number of queries/sec
     fn calc(reqs: usize, time: u128) -> f64 {
-        reqs as f64 / (time as f64 / 1_000_000_000 as f64)
+        reqs as f64 / (time as f64 / 1_000_000_000_f64)
     }
 
     fn ran_string(len: usize, rand: impl rand::Rng) -> String {

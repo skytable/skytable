@@ -33,6 +33,8 @@
 use crate::config::BGSave;
 use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
+use libsky::URL;
+use libsky::VERSION;
 use std::io::{self, prelude::*};
 mod config;
 use std::env;
@@ -63,8 +65,6 @@ use jemallocator::Jemalloc;
 /// Jemallocator - this is the default memory allocator for platforms other than msvc
 static GLOBAL: Jemalloc = Jemalloc;
 
-/// The version text
-static MSG: &str = "Skytable v0.6.0 | https://github.com/skytable/skytable";
 /// The terminal art for `!noart` configurations
 static TEXT: &str = "\n███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████ \n██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██      \n███████ █████     ████      ██    ███████ ██████  ██      █████   \n     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██      \n███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████ \n                                                                  ";
 
@@ -130,15 +130,15 @@ async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {
             if cfg.is_artful() {
-                println!("{}\n{}", MSG, TEXT);
+                println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
             } else {
-                println!("{}", MSG);
+                println!("Skytable v{} | {}", VERSION, URL);
             }
             log::info!("Using settings from supplied configuration");
             (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }
         Ok(config::ConfigType::Def(cfg, file)) => {
-            println!("{}\n{}", MSG, TEXT);
+            println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
             log::warn!("No configuration file supplied. Using default settings");
             (cfg.ports, cfg.bgsave, cfg.snapshot, file)
         }

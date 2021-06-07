@@ -31,6 +31,7 @@ use crate::coredb::CoreDB;
 use crate::coredb::SnapshotStatus;
 use crate::diskstore;
 use chrono::prelude::*;
+use core::hint::spin_loop as let_the_cpu_relax;
 #[cfg(test)]
 use io::Result as IoResult;
 use regex::Regex;
@@ -260,6 +261,9 @@ impl<'a> SnapshotEngine<'a> {
             .is_busy()
         {
             // Endlessly wait for a lock to be free
+            // we'll not yield to the system scheduler but let the machine instructions
+            // optimize away things
+            let_the_cpu_relax();
         }
 
         // So we acquired a lock

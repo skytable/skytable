@@ -102,6 +102,10 @@ impl FileLock {
         // Now write to the file
         self.file.write_all(bytes)
     }
+    /// Sync all metadata and flush buffers before returning
+    pub fn fsync(&self) -> Result<()> {
+        self.file.sync_all()
+    }
     #[cfg(test)]
     pub fn try_clone(&self) -> Result<Self> {
         Ok(FileLock {
