@@ -122,7 +122,7 @@ impl Runner {
                 Response::ParseError => {
                     println!("ERROR: The client failed to deserialize data sent by the server")
                 }
-                x @ _ => {
+                x => {
                     println!(
                         "The server possibly sent a newer data type that we can't parse: {:?}",
                         x

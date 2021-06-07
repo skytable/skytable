@@ -29,6 +29,8 @@ use clap::load_yaml;
 use clap::App;
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{cursor, execute};
+use libsky::URL;
+use libsky::VERSION;
 use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
@@ -36,7 +38,6 @@ use skytable::AsyncConnection;
 use std::io::stdout;
 use std::process;
 use std::process::exit;
-const MSG_WELCOME: &'static str = "Skytable v0.6.0";
 const ADDR: &str = "127.0.0.1";
 
 /// This creates a REPL on the command line and also parses command-line arguments
@@ -67,7 +68,7 @@ pub async fn start_repl() {
     };
     let mut runner = Runner::new(con);
     if let Some(eval_expr) = matches.value_of("eval") {
-        if eval_expr.len() == 0 {
+        if eval_expr.is_empty() {
             return;
         }
         runner.run_query(&eval_expr).await;
@@ -78,7 +79,7 @@ pub async fn start_repl() {
     editor.set_history_ignore_dups(true);
     let _ = editor.load_history(".sky_history");
     println!("Connected to skyhash://{}:{}", host, port);
-    println!("{}", MSG_WELCOME);
+    println!("Skytable v{} | {}", VERSION, URL);
     loop {
         match editor.readline("skysh> ") {
             Ok(line) => match line.to_lowercase().as_str() {

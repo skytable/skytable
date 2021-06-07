@@ -94,16 +94,21 @@ fn deserialize(file: Vec<u8>) -> TResult<HTable<Data, Data>> {
 /// Flush the in-memory table onto disk
 ///
 /// This functions takes the entire in-memory table and writes it to the disk,
-/// more specifically, the `data/data.bin` file
+/// to the provided file behind the [`FileLock`]. This method will **automatically fsync**. You
+/// do not need to explicitly fsync unless you'd like to waste CPU time
 pub fn flush_data(file: &mut flock::FileLock, data: &Coremap<Data, Data>) -> TResult<()> {
     let encoded = data.serialize()?;
     file.write(&encoded)?;
+    file.fsync()?;
     Ok(())
 }
 
+/// This function will write serialized data to disk and will **automatically fsync**. You
+/// do not need to explicitly fsync unless you'd like to waste CPU time
 pub fn write_to_disk(file: &Path, data: &Coremap<Data, Data>) -> TResult<()> {
     let mut file = fs::File::create(&file)?;
     let encoded = data.serialize()?;
     file.write_all(&encoded)?;
+    file.sync_all()?;
     Ok(())
 }

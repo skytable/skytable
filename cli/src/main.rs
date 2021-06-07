@@ -25,7 +25,6 @@
 */
 
 mod argparse;
-use tokio;
 mod runner;
 
 #[tokio::main]
