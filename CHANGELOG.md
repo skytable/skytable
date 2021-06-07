@@ -2,25 +2,29 @@
 
 All changes in this project will be noted in this file.
 
-**Unreleased**
+## Version 0.6.1 [2021-06-07]
 
-* Snapshotting failure will now poison the database (customizable through CLI options or the configuration file)
-[see [#160](https://github.com/skytable/skytable/pull/160)]
-* Added file-locking on Solaris [see [#162](https://github.com/skytable/skytable/pull/162)]
+> No breaking changes
+
+- Snapshotting failure will now poison the database (customizable through CLI options or the configuration file)
+  [see [#160](https://github.com/skytable/skytable/pull/160)]
+- Added file-locking on Solaris [see [#162](https://github.com/skytable/skytable/pull/162)]
+- Fixed missing explicit `fsync` or `FlushFileBuffers` after writing data
+- Optimized wait on snapshot busy-loop using `_mm_pause` (on x86/x86_64) or `__yield` (on aarch64/arm)
 
 ## Version 0.6.0 [2021-05-27]
 
 > Breaking changes!
 
-* ⚠ Dropped support for Terrapipe 1.0 (reached EOL)
-* ⚠ New disk storage format with much faster reads and/or writes
-* Added support for Skyhash 1.0 (see [#147](https://github.com/skytable/skytable/pull/147))
-* Fixed persistence bugs (see [#151](https://github.com/skytable/skytable/pull/151))
-* Fixed bugs in background services (see [#152](https://github.com/skytable/skytable/pull/152))
-* Make BGSAVE recoverable (see [#153](https://github.com/skytable/skytable/pull/153))
-* Added `lskeys` action (see [#155](https://github.com/skytable/skytable/pull/155))
-* Added `compat` module (see [#158](https://github.com/skytable/skytable/pull/158))
-* Added backward compatibility for storage formats all the way upto 0.3.0. See [this wiki article](https://github.com/skytable/skytable/wiki/Disk-storage-formats) for more information
+- ⚠ Dropped support for Terrapipe 1.0 (reached EOL)
+- ⚠ New disk storage format with much faster reads and/or writes
+- Added support for Skyhash 1.0 (see [#147](https://github.com/skytable/skytable/pull/147))
+- Fixed persistence bugs (see [#151](https://github.com/skytable/skytable/pull/151))
+- Fixed bugs in background services (see [#152](https://github.com/skytable/skytable/pull/152))
+- Make BGSAVE recoverable (see [#153](https://github.com/skytable/skytable/pull/153))
+- Added `lskeys` action (see [#155](https://github.com/skytable/skytable/pull/155))
+- Added `compat` module (see [#158](https://github.com/skytable/skytable/pull/158))
+- Added backward compatibility for storage formats all the way upto 0.3.0. See [this wiki article](https://github.com/skytable/skytable/wiki/Disk-storage-formats) for more information
 
 ### Upgrading existing clients
 
@@ -32,15 +36,15 @@ Please refer to [this wiki article](https://github.com/skytable/skytable/wiki/Di
 
 ### Improvements in the new protocol (Skyhash)
 
-* Upto 40% lower bandwidth requirements
-* Upto 30% faster queries
-* Support for recursive arrays
-* More robust and well tested than Terrapipe
+- Upto 40% lower bandwidth requirements
+- Upto 30% faster queries
+- Support for recursive arrays
+- More robust and well tested than Terrapipe
 
 ### Internal codebase improvements
 
-* BGSAVE is now tested by the test suite
-* `skysh` and `sky-bench` both use the [Rust client driver for Skytable](https://github.com/skytable/client-rust).
+- BGSAVE is now tested by the test suite
+- `skysh` and `sky-bench` both use the [Rust client driver for Skytable](https://github.com/skytable/client-rust).
 
 ## Version 0.5.3 [2021-05-13]
 
@@ -52,55 +56,54 @@ Fix persistence (see [#150](https://github.com/skytable/skytable/issues/150))
 
 > No breaking changes
 
-* `sky-bench` is less agressive and runs sanity test before benchmarking
-* `skyd` now locks the data file (the `data.bin` file)
-* The data directory structure has been changed (see #144) (all files are now stored in ./data/*)
-* Fixed 'Connection Forcibly Closed' errors on Windows (see #110)
-* Add support for line-editing and keyboard shortcuts on `skysh` (see #142)
-* Fixed problems while parsing snapshots in the snapshot directory (see #144)
-* The old data directory structure has been deprecated (see #144)
-* Official support for 32-bit platforms (see #139)
-* Tier-2 Support for Linux musl (x86_64) (see #136, #135)
-
+- `sky-bench` is less agressive and runs sanity test before benchmarking
+- `skyd` now locks the data file (the `data.bin` file)
+- The data directory structure has been changed (see #144) (all files are now stored in ./data/\*)
+- Fixed 'Connection Forcibly Closed' errors on Windows (see #110)
+- Add support for line-editing and keyboard shortcuts on `skysh` (see #142)
+- Fixed problems while parsing snapshots in the snapshot directory (see #144)
+- The old data directory structure has been deprecated (see #144)
+- Official support for 32-bit platforms (see #139)
+- Tier-2 Support for Linux musl (x86_64) (see #136, #135)
 
 ## Version 0.5.1 [2021-03-17]
 
 > No breaking changes
 
-* Built-in TLS/SSL support
-* Custom host/port settings in `sky-bench`
-* Mock keys can be created with `sky-bench`
-* Security patch for VE/S/00001
-* Escaping for spaces in `skysh`
-* `tdb` is now called `skyd` (short for 'Skytable Daemon')
+- Built-in TLS/SSL support
+- Custom host/port settings in `sky-bench`
+- Mock keys can be created with `sky-bench`
+- Security patch for VE/S/00001
+- Escaping for spaces in `skysh`
+- `tdb` is now called `skyd` (short for 'Skytable Daemon')
 
 ## Version 0.5.0 [2020-11-19]
 
 > This release introduces breaking changes!
 
-* Command line configuration added to `tdb`
-* ⚠ Positional arguments in `tsh` and `tdb-bench` have been removed
-* `MKSNAP` now has an _enhanced version_ which enables snapshots to be created even if they're disabled on the server side
-* If `BGSAVE` fails, no more writes will be accepted on the server side. All commands that try to modify data will return an internal server error
-* `tdb-bench` now provides JSON output with the `--json` flag
-* The `Dockerfile` was fixed to use command line arguments instead of the configuration file which caused problems
-* The `enabled` key under the `snapshots` key in the configuration file has been removed
+- Command line configuration added to `tdb`
+- ⚠ Positional arguments in `tsh` and `tdb-bench` have been removed
+- `MKSNAP` now has an _enhanced version_ which enables snapshots to be created even if they're disabled on the server side
+- If `BGSAVE` fails, no more writes will be accepted on the server side. All commands that try to modify data will return an internal server error
+- `tdb-bench` now provides JSON output with the `--json` flag
+- The `Dockerfile` was fixed to use command line arguments instead of the configuration file which caused problems
+- The `enabled` key under the `snapshots` key in the configuration file has been removed
 
 ### Upgrading
 
-* Users who ran `tsh` like `tsh 172.17.0.1 2003` will now need to run: 
+- Users who ran `tsh` like `tsh 172.17.0.1 2003` will now need to run:
 
-``` shell
+```shell
 tsh -h 172.17.0.1 -p 2003
 ```
 
-* Users who ran `tdb-bench` like `tdb-bench 10 100000 4` will now need to run:
+- Users who ran `tdb-bench` like `tdb-bench 10 100000 4` will now need to run:
 
-``` shell
+```shell
 tdb-bench -c 10 -q 100000 -s 4
 ```
 
-* To enable snapshots, you just have to add the key: there is no need for the `enabled` key. To disable snapshots, you just have to omit the `snapshot` key (block) from your configuration file
+- To enable snapshots, you just have to add the key: there is no need for the `enabled` key. To disable snapshots, you just have to omit the `snapshot` key (block) from your configuration file
 
 ## Version 0.4.5 [2020-10-29]
 
@@ -139,13 +142,13 @@ This release adds support for configuration files
 
 Changes:
 
-* Actions added: `MSET` , `MGET` , `MUPDATE`
-* Terrapipe 1.0
-* Improved terminal output
+- Actions added: `MSET` , `MGET` , `MUPDATE`
+- Terrapipe 1.0
+- Improved terminal output
 
 Fixes:
 
-* Explicit handling for incomplete responses in `tsh`
+- Explicit handling for incomplete responses in `tsh`
 
 ### Migrating existing clients
 
