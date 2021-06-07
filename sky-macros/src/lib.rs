@@ -126,47 +126,44 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = syn::parse_macro_input!(args as syn::AttributeArgs);
     let mut skips = Vec::new();
     for arg in args {
-        match arg {
-            syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
-                let ident = namevalue.path.get_ident();
-                if ident.is_none() {
-                    let msg = "Must have specified ident";
+        if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
+            let ident = namevalue.path.get_ident();
+            if ident.is_none() {
+                let msg = "Must have specified ident";
+                return syn::Error::new_spanned(namevalue, msg)
+                    .to_compile_error()
+                    .into();
+            }
+            match ident.unwrap().to_string().to_lowercase().as_str() {
+                "skip" => {
+                    let skip_lit = namevalue.lit.clone();
+                    let span = skip_lit.span();
+                    skips = match parse_string(skip_lit, span, "skip") {
+                        Ok(s) => s,
+                        Err(_) => {
+                            return syn::Error::new_spanned(
+                                namevalue,
+                                "Expected a value for argument `skip`",
+                            )
+                            .to_compile_error()
+                            .into();
+                        }
+                    }
+                    .split_whitespace()
+                    .map(|val| val.to_string())
+                    .collect();
+                }
+                x => {
+                    let msg = format!("Unknown attribute {} is specified; expected `skip`", x);
                     return syn::Error::new_spanned(namevalue, msg)
                         .to_compile_error()
                         .into();
                 }
-                match ident.unwrap().to_string().to_lowercase().as_str() {
-                    "skip" => {
-                        let skip_lit = namevalue.lit.clone();
-                        let span = skip_lit.span();
-                        skips = match parse_string(skip_lit, span, "skip") {
-                            Ok(s) => s,
-                            Err(_) => {
-                                return syn::Error::new_spanned(
-                                    namevalue,
-                                    "Expected a value for argument `skip`",
-                                )
-                                .to_compile_error()
-                                .into();
-                            }
-                        }
-                        .split_whitespace()
-                        .map(|val| val.to_string())
-                        .collect();
-                    }
-                    x => {
-                        let msg = format!("Unknown attribute {} is specified; expected `skip`", x);
-                        return syn::Error::new_spanned(namevalue, msg)
-                            .to_compile_error()
-                            .into();
-                    }
-                }
             }
-            _ => (),
         }
     }
     let modname = &input.ident;
-    if modname.to_string() != "__private" {
+    if *modname != "__private" {
         return syn::Error::new_spanned(
             modname,
             "By convention, all the modules using the `dbtest` macro have to be called `__private`",
