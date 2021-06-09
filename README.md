@@ -4,7 +4,7 @@
 <h1>Skytable</h1><h3>The next-generation NoSQL database</h3>
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
-[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://skytable.github.io/docs)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square")](https://discord.gg/QptWFdx)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://docs.skytable.io)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square")](https://discord.gg/QptWFdx)
 
 </div>
 </html>
