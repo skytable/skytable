@@ -41,4 +41,4 @@ skytable = { git = "https://github.com/skytable/client-rust", features = ["async
 devtimer = "4.0.1"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.95"
+libc = "0.2.96"

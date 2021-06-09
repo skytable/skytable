@@ -13,139 +13,139 @@
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
-*/
-/* 
+ */
+/*
  * This file is used by Skytable's documentation website for automatically
- * generating documentation for the actions. It will also be used by the Skytable 
+ * generating documentation for the actions. It will also be used by the Skytable
  * server in the future
-*/
+ */
 [
-    {
-        "name": "GET",
-        "complexity": "O(1)",
-        "args": "GET <key>",
-        "desc": "Get the value of a key",
-        "return": "Value if it exists or (Code: 1) if it does not"
-    },
-    {
-        "name": "MGET",
-        "complexity": "O(n)",
-        "args": "MGET <key1> <key2> ...",
-        "desc": "Get the value of 'n' keys",
-        "return": "Value if it exists or (Code: 1) if it does not"
-    },
-    {
-        "name": "SET",
-        "complexity": "O(1)",
-        "args": "SET <key> <value>",
-        "desc": "Set the value of a key",
-        "return": "(Code: 0) if succeeded or (Code: 2) if not"
-    },
-    {
-        "name": "MSET",
-        "complexity": "O(n)",
-        "args": "MSET <key1> <value1> <key2> <value2> ...",
-        "desc": "Set the value of 'n' keys",
-        "return": "Number of keys that were set as an unsigned int"
-    },
-    {
-        "name": "UPDATE",
-        "complexity": "O(1)",
-        "args": "UPDATE <key> <value>",
-        "desc": "Update the value of an existing key",
-        "return": "(Code: 0) if succeeded or (Code: 1) if not"
-    },
-    {
-        "name": "MUPDATE",
-        "complexity": "O(n)",
-        "args": "MUPDATE <key1> <value1> <key2> <value2> ...",
-        "desc": "Update the value of 'n' keys",
-        "return": "Number of keys that were updated as an unsigned int"
-    },
-    {
-        "name": "DEL",
-        "complexity": "O(n)",
-        "args": "DEL <key1> <key2> ...",
-        "desc": "Delete 'n' keys",
-        "return": "Number of keys that were deleted as an unsigned int"
-    },
-    {
-        "name": "EXISTS",
-        "complexity": "O(n)",
-        "args": "EXISTS <key1> <key2> ...",
-        "desc": "Check if 'n' keys exist",
-        "return": "Number of keys that exist as an unsigned int"
-    },
-    {
-        "name": "SSET",
-        "complexity": "O(n)",
-        "args": "SSET <key1> <value1> <key2> <value2> ...",
-        "desc": "Set all keys to the given values only if all of them don't exist",
-        "return": "(Code: 0) if all keys were set, otherwise (Code: 2)"
-    },
-    {
-        "name": "SDEL",
-        "complexity": "O(n)",
-        "args": "SDEL <key1> <key2> ...",
-        "desc": "Delete all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
-        "return": "(Code: 0) if all keys were deleted, otherwise (Code: 1)"
-    },
-    {
-        "name": "SUPDATE",
-        "complexity": "O(n)",
-        "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
-        "desc": "Update all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
-        "return": "(Code: 0) if all keys were updated, otherwise (Code: 1)"
-    },
-    {
-        "name": "DBSIZE",
-        "complexity": "O(1)",
-        "args": "DBSIZE",
-        "desc": "Number of key/value pairs stored in the database",
-        "return": "Number of keys that exist in the database as an unsigned int"
-    },
-    {
-        "name": "FLUSHDB",
-        "complexity": "O(n)",
-        "args": "FLUSHDB",
-        "desc": "Removes all the key/value pairs stored in the database",
-        "return": "(Code: 0) if the operation succeeded"
-    },
-    {
-        "name": "USET",
-        "complexity": "O(n)",
-        "args": "USET <key1> <value1> <key2> <value2> ...",
-        "desc": "SET all keys if they don't exist, or UPDATE them if they do exist",
-        "return": "Number of keys that were `USET`ed, as an unsigned int"
-    },
-    {
-        "name": "KEYLEN",
-        "complexity": "O(1)",
-        "args": "KEYLEN <key>",
-        "desc": "Returns the length of the UTF-8 string",
-        "return": "Length of the key as an unsigned int",
-    },
-    {
-        "name": "MKSNAP",
-        "complexity": "O(n)",
-        "args": "MKSNAP <SNAPNAME>",
-        "desc": "This action can be used to create a snapshot. Do note that this action **requires snapshotting to be enabled on the server side**, before it can create snapshots. \nIf you want to create snapshots **without** snapshots being enabled on the server-side, pass a second argument <SNAPNAME> to specify a snapshot name and a snapshot will be create in a folder called `remote` under your snapshots directory. \nFor more information on snapshots, read [this document](/snapshots)",
-        "return": "Okay if succeeded, otherwise it returns `err-snapshot-disabled` if snapshotting is disabled or `err-snapshot-busy` if a snapshotting operation is already in progress"
-    },
-    {
-        "name": "LSKEYS",
-        "complexity": "O(n)",
-        "args": "LSKEYS <limit>",
-        "desc": "Returns a flat string array of keys present in the database. If no <limit> is given, then a maximum of 10 keys are returned. If a limit is specified, then a maximum of <limit> keys are returned",
-        "return": "Returns a maximum of 10 keys if no limit is specified or returns a maximum number of keys for the given limit"
-    }
+  {
+    "name": "GET",
+    "complexity": "O(1)",
+    "args": "GET <key>",
+    "desc": "Get the value of a key",
+    "return": "Value if it exists or (Code: 1) if it does not"
+  },
+  {
+    "name": "MGET",
+    "complexity": "O(n)",
+    "args": "MGET <key1> <key2> ...",
+    "desc": "Get the value of 'n' keys",
+    "return": "Value if it exists or (Code: 1) if it does not"
+  },
+  {
+    "name": "SET",
+    "complexity": "O(1)",
+    "args": "SET <key> <value>",
+    "desc": "Set the value of a key",
+    "return": "(Code: 0) if succeeded or (Code: 2) if not"
+  },
+  {
+    "name": "MSET",
+    "complexity": "O(n)",
+    "args": "MSET <key1> <value1> <key2> <value2> ...",
+    "desc": "Set the value of 'n' keys",
+    "return": "Number of keys that were set as an unsigned int"
+  },
+  {
+    "name": "UPDATE",
+    "complexity": "O(1)",
+    "args": "UPDATE <key> <value>",
+    "desc": "Update the value of an existing key",
+    "return": "(Code: 0) if succeeded or (Code: 1) if not"
+  },
+  {
+    "name": "MUPDATE",
+    "complexity": "O(n)",
+    "args": "MUPDATE <key1> <value1> <key2> <value2> ...",
+    "desc": "Update the value of 'n' keys",
+    "return": "Number of keys that were updated as an unsigned int"
+  },
+  {
+    "name": "DEL",
+    "complexity": "O(n)",
+    "args": "DEL <key1> <key2> ...",
+    "desc": "Delete 'n' keys",
+    "return": "Number of keys that were deleted as an unsigned int"
+  },
+  {
+    "name": "EXISTS",
+    "complexity": "O(n)",
+    "args": "EXISTS <key1> <key2> ...",
+    "desc": "Check if 'n' keys exist",
+    "return": "Number of keys that exist as an unsigned int"
+  },
+  {
+    "name": "SSET",
+    "complexity": "O(n)",
+    "args": "SSET <key1> <value1> <key2> <value2> ...",
+    "desc": "Set all keys to the given values only if all of them don't exist",
+    "return": "(Code: 0) if all keys were set, otherwise (Code: 2)"
+  },
+  {
+    "name": "SDEL",
+    "complexity": "O(n)",
+    "args": "SDEL <key1> <key2> ...",
+    "desc": "Delete all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
+    "return": "(Code: 0) if all keys were deleted, otherwise (Code: 1)"
+  },
+  {
+    "name": "SUPDATE",
+    "complexity": "O(n)",
+    "args": "SUPDATE <key1> <value1> <key2> <value2> ...",
+    "desc": "Update all keys if all of the keys exist. Do note that if a single key doesn't exist, then a `Nil` code is returned.",
+    "return": "(Code: 0) if all keys were updated, otherwise (Code: 1)"
+  },
+  {
+    "name": "DBSIZE",
+    "complexity": "O(1)",
+    "args": "DBSIZE",
+    "desc": "Number of key/value pairs stored in the database",
+    "return": "Number of keys that exist in the database as an unsigned int"
+  },
+  {
+    "name": "FLUSHDB",
+    "complexity": "O(n)",
+    "args": "FLUSHDB",
+    "desc": "Removes all the key/value pairs stored in the database",
+    "return": "(Code: 0) if the operation succeeded"
+  },
+  {
+    "name": "USET",
+    "complexity": "O(n)",
+    "args": "USET <key1> <value1> <key2> <value2> ...",
+    "desc": "SET all keys if they don't exist, or UPDATE them if they do exist",
+    "return": "Number of keys that were `USET`ed, as an unsigned int"
+  },
+  {
+    "name": "KEYLEN",
+    "complexity": "O(1)",
+    "args": "KEYLEN <key>",
+    "desc": "Returns the length of the UTF-8 string",
+    "return": "Length of the key as an unsigned int"
+  },
+  {
+    "name": "MKSNAP",
+    "complexity": "O(n)",
+    "args": "MKSNAP <SNAPNAME>",
+    "desc": "This action can be used to create a snapshot. Do note that this action **requires snapshotting to be enabled on the server side**, before it can create snapshots. \nIf you want to create snapshots **without** snapshots being enabled on the server-side, pass a second argument <SNAPNAME> to specify a snapshot name and a snapshot will be create in a folder called `remote` under your snapshots directory. \nFor more information on snapshots, read [this document](/snapshots)",
+    "return": "Okay if succeeded, otherwise it returns `err-snapshot-disabled` if snapshotting is disabled or `err-snapshot-busy` if a snapshotting operation is already in progress"
+  },
+  {
+    "name": "LSKEYS",
+    "complexity": "O(n)",
+    "args": "LSKEYS <limit>",
+    "desc": "Returns a flat string array of keys present in the database. If no <limit> is given, then a maximum of 10 keys are returned. If a limit is specified, then a maximum of <limit> keys are returned",
+    "return": "Returns a maximum of 10 keys if no limit is specified or returns a maximum number of keys for the given limit. The order of keys returned is meaningless."
+  }
 ]
