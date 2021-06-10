@@ -86,7 +86,7 @@ pub async fn bgsave_scheduler(handle: CoreDB, bgsave_cfg: BGSave, mut terminator
 /// by using [`fs::rename`]. This provides us with two gurantees:
 /// 1. No silly logic is seen if the user deletes the data.bin file and yet BGSAVE doesn't complain
 /// 2. If this method crashes midway, we can still be sure that the old file is intact
-pub fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
+fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
     // first lock our temporary file
     let mut file = flock::FileLock::lock(SKY_TEMP_FILE)?;
     // get a read lock on the coretable
@@ -106,6 +106,13 @@ pub fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
     Ok(())
 }
 
+/// Run bgsave
+/// 
+/// This function just hides away the BGSAVE blocking section from the _public API_
+pub fn run_bgsave(handle: &CoreDB) -> TResult<()> {
+    _bgsave_blocking_section(handle)
+}
+
 /// This just wraps around [`_bgsave_blocking_section`] and prints nice log messages depending on the outcome
 fn bgsave_blocking_section(handle: CoreDB) -> bool {
     match _bgsave_blocking_section(&handle) {
@@ -115,7 +122,7 @@ fn bgsave_blocking_section(handle: CoreDB) -> bool {
             true
         }
         Err(e) => {
-            log::info!("BGSAVE failed with error: {}", e);
+            log::error!("BGSAVE failed with error: {}", e);
             handle.poison();
             false
         }
