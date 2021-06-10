@@ -35,7 +35,8 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use libsky::URL;
 use libsky::VERSION;
-use std::io::{self, prelude::*};
+use std::thread;
+use std::time;
 mod config;
 use std::env;
 mod actions;
@@ -99,26 +100,22 @@ fn main() {
         1,
         "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
     );
-    if let Err(e) = services::bgsave::_bgsave_blocking_section(&db) {
-        log::error!("Failed to flush data to disk with '{}'", e);
-        loop {
-            // Keep looping until we successfully write the in-memory table to disk
-            log::warn!("Press enter to try again...");
-            io::stdout().flush().unwrap();
-            io::stdin().read_exact(&mut [0]).unwrap();
-            match services::bgsave::_bgsave_blocking_section(&db) {
-                Ok(_) => {
-                    log::info!("Successfully saved data to disk");
-                    break;
-                }
-                Err(e) => {
-                    log::error!("Failed to flush data to disk with '{}'", e);
-                    continue;
-                }
+    log::info!("Stopped accepting incoming connections");
+    loop {
+        // Keep looping until we successfully write the in-memory table to disk
+        match services::bgsave::run_bgsave(&db) {
+            Ok(_) => {
+                log::info!("Successfully saved data to disk");
+                break;
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to write data with error '{}'. Attempting to retry in 10s",
+                    e
+                );
             }
         }
-    } else {
-        log::info!("Successfully saved data to disk");
+        thread::sleep(time::Duration::from_secs(10));
     }
     terminal::write_info("Goodbye :)\n").unwrap();
 }
