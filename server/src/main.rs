@@ -35,6 +35,7 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use libsky::URL;
 use libsky::VERSION;
+use std::io::Write;
 use std::path;
 use std::thread;
 use std::time;
@@ -79,7 +80,7 @@ fn main() {
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
     // check if any other process is using the data directory and lock it if not (else error)
-    let mut lck = run_pre_startup_tasks();
+    let pid_file = run_pre_startup_tasks();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -124,16 +125,13 @@ fn main() {
         }
         thread::sleep(time::Duration::from_secs(10));
     }
-    if let Err(e) = lck.unlock() {
-        log::error!("Shutdown failure: Failed to unlock pid file: {}", e);
+    // close the PID file and remove it
+    drop(pid_file);
+    if let Err(e) = fs::remove_file(PATH) {
+        log::error!("Shutdown failure: Failed to remove pid file: {}", e);
         process::exit(0x100);
-    } else {
-        if let Err(e) = fs::remove_file(PATH) {
-            log::error!("Shutdown failure: Failed to remove pid file: {}", e);
-            process::exit(0x100);
-        }
-        terminal::write_info("Goodbye :)\n").unwrap();
     }
+    terminal::write_info("Goodbye :)\n").unwrap();
 }
 
 /// This function checks the command line arguments and either returns a config object
@@ -171,7 +169,7 @@ async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option
 /// processes will detect this and this helps us prevent two processes from writing
 /// to the same directory which can cause potentially undefined behavior.
 ///
-fn run_pre_startup_tasks() -> diskstore::flock::FileLock {
+fn run_pre_startup_tasks() -> fs::File {
     let path = path::Path::new(PATH);
     if path.exists() {
         let pid = fs::read_to_string(path).unwrap_or_else(|_| "unknown".to_owned());
@@ -181,16 +179,21 @@ fn run_pre_startup_tasks() -> diskstore::flock::FileLock {
         );
         process::exit(0x100);
     }
-    let mut flock = match diskstore::flock::FileLock::lock(PATH) {
-        Ok(lck) => lck,
+    let mut file = match fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(PATH)
+    {
+        Ok(fle) => fle,
         Err(e) => {
-            log::error!("Startup failure: Failed to lock pid file: {}", e);
+            log::error!("Startup failure: Failed to open pid file: {}", e);
             process::exit(0x100);
         }
     };
-    if let Err(e) = flock.write(process::id().to_string().as_bytes()) {
+    if let Err(e) = file.write_all(process::id().to_string().as_bytes()) {
         log::error!("Startup failure: Failed to write to pid file: {}", e);
         process::exit(0x100);
     }
-    flock
+    file
 }
