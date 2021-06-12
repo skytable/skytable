@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Fixes
+- The save operation now automatically attempts to recover on failure during termination [see [#166](https://github.com/skytable/skytable/pull/166)]
+- More than one process can no longer concurrently use the same data directory, preventing any possible data corruption [see [#169](https://github.com/skytable/skytable/pull/169), [#167](https://github.com/skytable/skytable/issues/167)]
+
 ## Version 0.6.1 [2021-06-07]
 
 > No breaking changes

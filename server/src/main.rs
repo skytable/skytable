@@ -35,10 +35,13 @@ use crate::config::PortConfig;
 use crate::config::SnapshotConfig;
 use libsky::URL;
 use libsky::VERSION;
+use std::path;
 use std::thread;
 use std::time;
 mod config;
 use std::env;
+use std::fs;
+use std::process;
 mod actions;
 mod admin;
 mod coredb;
@@ -58,6 +61,8 @@ use tokio::signal;
 #[cfg(test)]
 mod tests;
 
+const PATH: &str = ".sky_pid";
+
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
 
@@ -73,6 +78,8 @@ fn main() {
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
+    // check if any other process is using the data directory and lock it if not (else error)
+    let mut lck = run_pre_startup_tasks();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -117,7 +124,16 @@ fn main() {
         }
         thread::sleep(time::Duration::from_secs(10));
     }
-    terminal::write_info("Goodbye :)\n").unwrap();
+    if let Err(e) = lck.unlock() {
+        log::error!("Shutdown failure: Failed to unlock pid file: {}", e);
+        process::exit(0x100);
+    } else {
+        if let Err(e) = fs::remove_file(PATH) {
+            log::error!("Shutdown failure: Failed to remove pid file: {}", e);
+            process::exit(0x100);
+        }
+        terminal::write_info("Goodbye :)\n").unwrap();
+    }
 }
 
 /// This function checks the command line arguments and either returns a config object
@@ -145,4 +161,36 @@ async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option
         }
     };
     binding_and_cfg
+}
+
+/// On startup, we attempt to check if a `.sky_pid` file exists. If it does, then
+/// this file will contain the kernel/operating system assigned process ID of the
+/// skyd process. We will attempt to read that and log an error complaining that
+/// the directory is in active use by another process. If the file doesn't then
+/// we're free to create our own file and write our own PID to it. Any subsequent
+/// processes will detect this and this helps us prevent two processes from writing
+/// to the same directory which can cause potentially undefined behavior.
+///
+fn run_pre_startup_tasks() -> diskstore::flock::FileLock {
+    let path = path::Path::new(PATH);
+    if path.exists() {
+        let pid = fs::read_to_string(path).unwrap_or_else(|_| "unknown".to_owned());
+        log::error!(
+            "Startup failure: Another process with parent PID {} is using the data directory",
+            pid
+        );
+        process::exit(0x100);
+    }
+    let mut flock = match diskstore::flock::FileLock::lock(PATH) {
+        Ok(lck) => lck,
+        Err(e) => {
+            log::error!("Startup failure: Failed to lock pid file: {}", e);
+            process::exit(0x100);
+        }
+    };
+    if let Err(e) = flock.write(process::id().to_string().as_bytes()) {
+        log::error!("Startup failure: Failed to write to pid file: {}", e);
+        process::exit(0x100);
+    }
+    flock
 }
