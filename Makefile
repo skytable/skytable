@@ -9,7 +9,7 @@ endif
 
 START_SERVER = 
 ifeq ($(OS),Windows_NT)
-START_SERVER += START /B cargo run -p skyd $(TARGET_ARG) -- --nosave --noart
+START_SERVER += START /B target/${TARGET}/skyd.exe
 else
 START_SERVER += cargo run -p skyd -- --nosave --noart &
 endif
