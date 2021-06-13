@@ -25,9 +25,9 @@
 */
 
 use crate::config::SnapshotConfig;
+use crate::coredb::CoreDB;
 use crate::dbnet::Terminator;
 use crate::diskstore::snapshot::SnapshotEngine;
-use crate::CoreDB;
 use tokio::time::{self, Duration};
 
 /// The snapshot service

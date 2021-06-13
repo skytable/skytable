@@ -30,35 +30,30 @@
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
-use crate::config::BGSave;
-use crate::config::PortConfig;
-use crate::config::SnapshotConfig;
+use env_logger::Builder;
+use libsky::util::terminal;
 use libsky::URL;
 use libsky::VERSION;
-use std::io::Write;
-use std::path;
-use std::thread;
-use std::time;
-mod config;
 use std::env;
 use std::fs;
+use std::io::Write;
+use std::path;
 use std::process;
+use std::sync::Arc;
+use std::thread;
+use std::time;
+use tokio::signal;
 mod actions;
 mod admin;
+mod compat;
+mod config;
 mod coredb;
 mod dbnet;
 mod diskstore;
 mod protocol;
 mod queryengine;
 mod resp;
-use coredb::CoreDB;
-use dbnet::run;
-mod compat;
-use env_logger::*;
-use libsky::util::terminal;
-use std::sync::Arc;
 mod services;
-use tokio::signal;
 #[cfg(test)]
 mod tests;
 
@@ -79,8 +74,6 @@ fn main() {
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
-    // check if any other process is using the data directory and lock it if not (else error)
-    let pid_file = run_pre_startup_tasks();
     // Start the server which asynchronously waits for a CTRL+C signal
     // which will safely shut down the server
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -88,11 +81,14 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let db = runtime.block_on(async {
-        let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
-            check_args_and_get_cfg();
-        let db = run(
-            tcplistener,
+    let (ports, bgsave_config, snapshot_config, restore_filepath) = check_args_and_get_cfg();
+    // check if any other process is using the data directory and lock it if not (else error)
+    // important: create the pid_file just here and nowhere else because check_args can also
+    // involve passing --help or wrong arguments which can falsely create a PID file
+    let pid_file = run_pre_startup_tasks();
+    let db: Result<coredb::CoreDB, String> = runtime.block_on(async move {
+        let db = dbnet::run(
+            ports,
             bgsave_config,
             snapshot_config,
             signal::ctrl_c(),
@@ -145,6 +141,8 @@ pub fn pre_shutdown_cleanup(pid_file: fs::File) {
         process::exit(0x100);
     }
 }
+
+use self::config::{BGSave, PortConfig, SnapshotConfig};
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
