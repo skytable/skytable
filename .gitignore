@@ -9,3 +9,4 @@ snapstore.partmap
 /.idea
 .DS_Store
 .sky_history
+.sky_pid
