@@ -95,23 +95,11 @@ jobs:
         if: runner.os == 'Linux' && env.IS_ACTIONS_DOC == 'true'
 
       - name: Run Tests
-        run: |
-          cargo build --target ${{ matrix.rust }} -p skyd
-          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
-          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+        run: make test
         env:
           RUST_BACKTRACE: 1
-        if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
-
-      - name: Run Tests (Windows)
-        run: |
-          cargo build -p skyd --target ${{ matrix.rust }}
-          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
-          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
-        env:
-          RUST_BACKTRACE: 1
-        shell: cmd
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+          TARGET: ${{ matrix.rust }}
+        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
@@ -198,23 +186,11 @@ jobs:
         if: runner.os == 'Linux'
 
       - name: Run Tests
-        run: |
-          cargo build --target ${{ matrix.rust }} -p skyd
-          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
-          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+        run: make test
         env:
           RUST_BACKTRACE: 1
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
-
-      - name: Run Tests (Windows)
-        run: |
-          cargo build -p skyd --target ${{ matrix.rust }}
-          START /B cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart
-          cargo test --target ${{ matrix.rust }}  --verbose -- --test-threads=1
-        env:
-          RUST_BACKTRACE: 1
-        shell: cmd
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+          TARGET: ${{ matrix.rust }}
+        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
@@ -298,13 +274,11 @@ jobs:
         if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
-        run: |
-          cargo build --target ${{ matrix.rust }} -p skyd
-          cargo run -p skyd --target ${{ matrix.rust }} -- --nosave --noart &
-          cargo test --verbose --target ${{ matrix.rust }} -- --test-threads=1
+        run: make test
         env:
           RUST_BACKTRACE: 1
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
+          TARGET: ${{ matrix.rust }}
+        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
