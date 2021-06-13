@@ -25,22 +25,18 @@
 */
 
 use crate::dbnet::connection::ConnectionHandler;
+use crate::dbnet::BaseListener;
 use crate::dbnet::Terminator;
 use crate::protocol;
-use crate::CoreDB;
 use bytes::BytesMut;
 use libsky::TResult;
 use libsky::BUF_CAP;
 pub use protocol::ParseResult;
 pub use protocol::Query;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWrite;
 use tokio::io::BufWriter;
-use tokio::net::TcpListener;
 use tokio::net::TcpStream;
-use tokio::sync::Semaphore;
-use tokio::sync::{broadcast, mpsc};
 use tokio::time;
 
 pub trait BufferedSocketStream: AsyncWrite {}
@@ -76,18 +72,7 @@ where
 
 /// A listener
 pub struct Listener {
-    /// An atomic reference to the coretable
-    pub db: CoreDB,
-    /// The incoming connection listener (binding)
-    pub listener: TcpListener,
-    /// The maximum number of connections
-    pub climit: Arc<Semaphore>,
-    /// The shutdown broadcaster
-    pub signal: broadcast::Sender<()>,
-    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
-    // We send a clone of `terminate_tx` to each `CHandler`
-    pub terminate_tx: mpsc::Sender<()>,
-    pub terminate_rx: mpsc::Receiver<()>,
+    pub base: BaseListener,
 }
 
 impl Listener {
@@ -96,7 +81,7 @@ impl Listener {
         // We will steal the idea of Ethernet's backoff for connection errors
         let mut backoff = 1;
         loop {
-            match self.listener.accept().await {
+            match self.base.listener.accept().await {
                 // We don't need the bindaddr
                 Ok((stream, _)) => return Ok(stream),
                 Err(e) => {
@@ -117,14 +102,14 @@ impl Listener {
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
-            self.climit.acquire().await.unwrap().forget();
+            self.base.climit.acquire().await.unwrap().forget();
             let stream = self.accept().await?;
             let mut chandle = ConnectionHandler::new(
-                self.db.clone(),
+                self.base.db.clone(),
                 Connection::new(stream),
-                self.climit.clone(),
-                Terminator::new(self.signal.subscribe()),
-                self.terminate_tx.clone(),
+                self.base.climit.clone(),
+                Terminator::new(self.base.signal.subscribe()),
+                self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {
                 if let Err(e) = chandle.run().await {

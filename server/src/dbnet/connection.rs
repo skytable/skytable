@@ -36,6 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
+use crate::coredb::CoreDB;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
@@ -43,7 +44,6 @@ use crate::protocol::responses;
 use crate::protocol::ParseError;
 use crate::protocol::Query;
 use crate::resp::Writable;
-use crate::CoreDB;
 use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;

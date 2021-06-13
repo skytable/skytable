@@ -27,68 +27,40 @@
 use super::connection::ConnectionHandler;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::tcp::Connection;
+use crate::dbnet::BaseListener;
 use crate::dbnet::Terminator;
-use crate::CoreDB;
 use libsky::TResult;
 use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
 use std::pin::Pin;
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Semaphore;
-use tokio::sync::{broadcast, mpsc};
+use tokio::net::TcpStream;
 use tokio::time::{self, Duration};
 use tokio_openssl::SslStream;
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
 
 pub struct SslListener {
-    /// An atomic reference to the coretable
-    pub db: CoreDB,
-    /// The incoming connection listener (binding)
-    pub listener: TcpListener,
-    /// The maximum number of connections
-    climit: Arc<Semaphore>,
-    /// The shutdown broadcaster
-    pub signal: broadcast::Sender<()>,
-    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
-    // We send a clone of `terminate_tx` to each `CHandler`
-    pub terminate_tx: mpsc::Sender<()>,
-    pub terminate_rx: mpsc::Receiver<()>,
+    pub base: BaseListener,
     acceptor: SslAcceptor,
 }
 
 impl SslListener {
-    #[allow(clippy::too_many_arguments)] // TODO(@ohsayan): Optimize this
     pub fn new_pem_based_ssl_connection(
         key_file: String,
         chain_file: String,
-        db: CoreDB,
-        listener: TcpListener,
-        climit: Arc<Semaphore>,
-        signal: broadcast::Sender<()>,
-        terminate_tx: mpsc::Sender<()>,
-        terminate_rx: mpsc::Receiver<()>,
+        base: BaseListener,
     ) -> TResult<Self> {
         log::debug!("New SSL/TLS connection registered");
         let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
         acceptor.set_private_key_file(key_file, SslFiletype::PEM)?;
         acceptor.set_certificate_chain_file(chain_file)?;
         let acceptor = acceptor.build();
-        Ok(SslListener {
-            db,
-            listener,
-            climit,
-            signal,
-            terminate_tx,
-            terminate_rx,
-            acceptor,
-        })
+        Ok(SslListener { base, acceptor })
     }
     async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
         log::debug!("Trying to accept a SSL connection");
         let mut backoff = 1;
         loop {
-            match self.listener.accept().await {
+            match self.base.listener.accept().await {
                 // We don't need the bindaddr
                 // We get the encrypted stream which we need to decrypt
                 // by using the acceptor
@@ -119,14 +91,14 @@ impl SslListener {
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
-            self.climit.acquire().await.unwrap().forget();
+            self.base.climit.acquire().await.unwrap().forget();
             let stream = self.accept().await?;
             let mut sslhandle = ConnectionHandler::new(
-                self.db.clone(),
+                self.base.db.clone(),
                 Connection::new(stream),
-                self.climit.clone(),
-                Terminator::new(self.signal.subscribe()),
-                self.terminate_tx.clone(),
+                self.base.climit.clone(),
+                Terminator::new(self.base.signal.subscribe()),
+                self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {
                 log::debug!("Spawned listener task");

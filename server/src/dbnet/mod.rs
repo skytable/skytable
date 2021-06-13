@@ -48,13 +48,12 @@ use crate::diskstore;
 use crate::services;
 use diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 mod tcp;
-use crate::CoreDB;
+use crate::coredb::CoreDB;
 use libsky::TResult;
 use std::fs;
 use std::future::Future;
-use std::io::ErrorKind;
+use std::io::Error as IoError;
 use std::net::IpAddr;
-use std::process;
 use std::sync::Arc;
 use tls::SslListener;
 use tokio::net::TcpListener;
@@ -62,6 +61,8 @@ use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
 mod tls;
+
+pub const MAXIMUM_CONNECTION_LIMIT: usize = 50000;
 
 /// Responsible for gracefully shutting down the server instead of dying randomly
 // Sounds very sci-fi ;)
@@ -95,6 +96,65 @@ impl Terminator {
     }
 }
 
+/// The base TCP listener
+pub struct BaseListener {
+    /// An atomic reference to the coretable
+    pub db: CoreDB,
+    /// The incoming connection listener (binding)
+    pub listener: TcpListener,
+    /// The maximum number of connections
+    pub climit: Arc<Semaphore>,
+    /// The shutdown broadcaster
+    pub signal: broadcast::Sender<()>,
+    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
+    // We send a clone of `terminate_tx` to each `CHandler`
+    pub terminate_tx: mpsc::Sender<()>,
+    pub terminate_rx: mpsc::Receiver<()>,
+}
+
+impl BaseListener {
+    pub async fn init(
+        db: &CoreDB,
+        host: IpAddr,
+        port: u16,
+        semaphore: Arc<Semaphore>,
+        signal: broadcast::Sender<()>,
+    ) -> Result<Self, IoError> {
+        let (terminate_tx, terminate_rx) = mpsc::channel(1);
+        Ok(Self {
+            db: db.clone(),
+            listener: TcpListener::bind((host, port)).await?,
+            climit: semaphore,
+            signal,
+            terminate_tx,
+            terminate_rx,
+        })
+    }
+    pub async fn release_self(self) {
+        let Self {
+            mut terminate_rx,
+            terminate_tx,
+            signal,
+            ..
+        } = self;
+        drop(signal);
+        drop(terminate_tx);
+        let _ = terminate_rx.recv().await;
+    }
+}
+
+/// This macro returns the bind address of a listener
+///
+/// We were just very lazy, so we just used a macro instead of a member function
+macro_rules! bindaddr {
+    ($base:ident) => {
+        $base
+            .listener
+            .local_addr()
+            .map_err(|e| format!("Failed to get bind address: {}", e))?;
+    };
+}
+
 /// Multiple Listener Interface
 ///
 /// A `MultiListener` is an abstraction over an `SslListener` or a `Listener` to facilitate
@@ -113,94 +173,40 @@ enum MultiListener {
 
 impl MultiListener {
     /// Create a new `InsecureOnly` listener
-    pub async fn new_insecure_only(
-        host: IpAddr,
-        port: u16,
-        climit: Arc<Semaphore>,
-        db: CoreDB,
-        signal: broadcast::Sender<()>,
-        terminate_tx: mpsc::Sender<()>,
-        terminate_rx: mpsc::Receiver<()>,
-    ) -> Self {
-        let listener = TcpListener::bind((host, port))
-            .await
-            .expect("Failed to bind to port");
-        MultiListener::InsecureOnly(Listener {
-            db,
-            listener,
-            climit,
-            signal,
-            terminate_tx,
-            terminate_rx,
-        })
+    pub fn new_insecure_only(base: BaseListener) -> Result<Self, String> {
+        log::info!("Server started on: skyhash://{}", bindaddr!(base));
+        Ok(MultiListener::InsecureOnly(Listener { base }))
     }
     /// Create a new `SecureOnly` listener
-    pub async fn new_secure_only(
-        host: IpAddr,
-        climit: Arc<Semaphore>,
-        db: CoreDB,
-        signal: broadcast::Sender<()>,
-        terminate_tx: mpsc::Sender<()>,
-        terminate_rx: mpsc::Receiver<()>,
-        ssl: SslOpts,
-    ) -> Self {
-        let listener = TcpListener::bind((host, ssl.port))
-            .await
-            .expect("Failed to bind to port");
-        MultiListener::SecureOnly(
-            SslListener::new_pem_based_ssl_connection(
-                ssl.key,
-                ssl.chain,
-                db,
-                listener,
-                climit,
-                signal,
-                terminate_tx,
-                terminate_rx,
-            )
-            .expect("Couldn't bind to secure port"),
-        )
+    pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> Result<Self, String> {
+        let bindaddr = bindaddr!(base);
+        let slf = MultiListener::SecureOnly(
+            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base)
+                .map_err(|e| format!("Couldn't bind to secure port: {}", e))?,
+        );
+        log::info!("Server started on: skyhash-secure://{}", bindaddr);
+        Ok(slf)
     }
     /// Create a new `Multi` listener that has both a secure and an insecure listener
-    #[allow(clippy::too_many_arguments)] // TODO(@ohsayan): Optimize this
     pub async fn new_multi(
-        host: IpAddr,
-        port: u16,
-        climit: Arc<Semaphore>,
-        db: CoreDB,
-        signal: broadcast::Sender<()>,
-        terminate_tx: mpsc::Sender<()>,
-        terminate_rx: mpsc::Receiver<()>,
-        ssl_terminate_tx: mpsc::Sender<()>,
-        ssl_terminate_rx: mpsc::Receiver<()>,
+        ssl_base_listener: BaseListener,
+        tcp_base_listener: BaseListener,
         ssl: SslOpts,
-    ) -> Self {
-        let listener = TcpListener::bind((host, ssl.port))
-            .await
-            .expect("Failed to bind to port");
-        let secure_listener = SslListener::new_pem_based_ssl_connection(
-            ssl.key,
-            ssl.chain,
-            db.clone(),
-            listener,
-            climit.clone(),
-            signal.clone(),
-            ssl_terminate_tx,
-            ssl_terminate_rx,
-        )
-        .expect("Couldn't bind to secure port");
-        let listener = TcpListener::bind((host, port))
-            .await
-            .expect("Failed to bind to port");
+    ) -> Result<Self, String> {
+        let sec_bindaddr = bindaddr!(ssl_base_listener);
+        let insec_binaddr = bindaddr!(tcp_base_listener);
+        let secure_listener =
+            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, ssl_base_listener)
+                .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
         let insecure_listener = Listener {
-            db,
-            listener,
-            climit,
-            signal,
-            terminate_tx,
-            terminate_rx,
+            base: tcp_base_listener,
         };
-        MultiListener::Multi(insecure_listener, secure_listener)
+        log::info!(
+            "Server started on: skyhash://{} and skyhash-secure://{}",
+            insec_binaddr,
+            sec_bindaddr
+        );
+        Ok(MultiListener::Multi(insecure_listener, secure_listener))
     }
     /// Start the server
     ///
@@ -224,87 +230,17 @@ impl MultiListener {
             }
         }
     }
-    /// Print the port binding status
-    pub fn print_binding(&self) {
-        match self {
-            MultiListener::SecureOnly(secure_listener) => {
-                log::info!(
-                    "Server started on tps://{}",
-                    secure_listener
-                        .listener
-                        .local_addr()
-                        .expect("Failed to get bind address")
-                )
-            }
-            MultiListener::InsecureOnly(insecure_listener) => {
-                log::info!(
-                    "Server started on skyhash://{}",
-                    insecure_listener
-                        .listener
-                        .local_addr()
-                        .expect("Failed to get bind address")
-                )
-            }
-            MultiListener::Multi(insecure_listener, secure_listener) => {
-                log::info!(
-                    "Listening to skyhash://{} and tps://{}",
-                    insecure_listener
-                        .listener
-                        .local_addr()
-                        .expect("Failed to get bind address"),
-                    secure_listener
-                        .listener
-                        .local_addr()
-                        .expect("Failed to get bind address")
-                )
-            }
-        }
-    }
     /// Signal the ports to shut down and only return after they have shut down
     ///
     /// **Do note:** This function doesn't flush the `CoreDB` object! The **caller has to
     /// make sure that the data is saved!**
     pub async fn finish_with_termsig(self) {
         match self {
-            MultiListener::InsecureOnly(server) => {
-                let Listener {
-                    mut terminate_rx,
-                    terminate_tx,
-                    signal,
-                    ..
-                } = server;
-                drop(signal);
-                drop(terminate_tx);
-                let _ = terminate_rx.recv().await;
-            }
-            MultiListener::SecureOnly(server) => {
-                let SslListener {
-                    mut terminate_rx,
-                    terminate_tx,
-                    signal,
-                    ..
-                } = server;
-                drop(signal);
-                drop(terminate_tx);
-                let _ = terminate_rx.recv().await;
-            }
+            MultiListener::InsecureOnly(server) => server.base.release_self().await,
+            MultiListener::SecureOnly(server) => server.base.release_self().await,
             MultiListener::Multi(insecure, secure) => {
-                let Listener {
-                    mut terminate_rx,
-                    terminate_tx,
-                    signal,
-                    ..
-                } = insecure;
-                drop((signal, terminate_tx));
-                let _ = terminate_rx.recv().await;
-                let SslListener {
-                    mut terminate_rx,
-                    terminate_tx,
-                    signal,
-                    ..
-                } = secure;
-                drop((signal, terminate_tx));
-                let _ = terminate_rx.recv().await;
+                insecure.base.release_self().await;
+                secure.base.release_self().await;
             }
         }
     }
@@ -317,26 +253,12 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
-) -> CoreDB {
+) -> Result<CoreDB, String> {
     let (signal, _) = broadcast::channel(1);
-    let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
-        Ok(_) => (),
-        Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => (),
-            _ => {
-                log::error!("Failed to create data directories: '{}'", e);
-                process::exit(0x100);
-            }
-        },
-    }
-    let db = match CoreDB::new(&snapshot_cfg, restore_filepath) {
-        Ok(db) => db,
-        Err(e) => {
-            log::error!("ERROR: {}", e);
-            process::exit(0x100);
-        }
-    };
+    fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
+        .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
+    let db = CoreDB::new(&snapshot_cfg, restore_filepath)
+        .map_err(|e| format!("Error while initializing database: {}", e))?;
     let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
         db.clone(),
         bgsave_cfg,
@@ -347,59 +269,41 @@ pub async fn run(
         snapshot_cfg,
         Terminator::new(signal.subscribe()),
     ));
-    let climit = Arc::new(Semaphore::const_new(50000));
+    let climit = Arc::new(Semaphore::const_new(MAXIMUM_CONNECTION_LIMIT));
     let mut server = match ports {
-        PortConfig::InsecureOnly { host, port } => {
-            MultiListener::new_insecure_only(
-                host,
-                port,
-                climit.clone(),
-                db.clone(),
-                signal,
-                terminate_tx,
-                terminate_rx,
-            )
-            .await
-        }
-        PortConfig::SecureOnly { host, ssl } => {
-            MultiListener::new_secure_only(
-                host,
-                climit.clone(),
-                db.clone(),
-                signal,
-                terminate_tx,
-                terminate_rx,
-                ssl,
-            )
-            .await
-        }
+        PortConfig::InsecureOnly { host, port } => MultiListener::new_insecure_only(
+            BaseListener::init(&db, host, port, climit.clone(), signal.clone())
+                .await
+                .map_err(|e| format!("Failed to bind to TCP port with error: {}", e))?,
+        )?,
+        PortConfig::SecureOnly { host, ssl } => MultiListener::new_secure_only(
+            BaseListener::init(&db, host, ssl.port, climit.clone(), signal.clone())
+                .await
+                .map_err(|e| format!("Failed to initialize secure port with error: {}", e))?,
+            ssl,
+        )?,
         PortConfig::Multi { host, port, ssl } => {
-            let (ssl_terminate_tx, ssl_terminate_rx) = mpsc::channel::<()>(1);
-            let server = MultiListener::new_multi(
-                host,
-                port,
-                climit,
-                db.clone(),
-                signal,
-                terminate_tx,
-                terminate_rx,
-                ssl_terminate_tx,
-                ssl_terminate_rx,
-                ssl,
-            )
-            .await;
-            server
+            let secure_listener =
+                BaseListener::init(&db, host, ssl.port, climit.clone(), signal.clone())
+                    .await
+                    .map_err(|e| format!("Failed to bind to TCP port with error: {}", e))?;
+            let insecure_listener =
+                BaseListener::init(&db, host, port, climit.clone(), signal.clone())
+                    .await
+                    .map_err(|e| format!("Failed to initialize secure port with error: {}", e))?;
+            MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };
-    server.print_binding();
     tokio::select! {
         _ = server.run_server() => {}
         _ = sig => {
             log::info!("Signalling all workers to shut down");
         }
     }
+    // drop the signal and let others exit
+    drop(signal);
     server.finish_with_termsig().await;
     let _ = snapshot_handle.await;
     let _ = bgsave_handle.await;
-    db
+    Ok(db)
 }
