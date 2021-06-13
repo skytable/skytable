@@ -1,9 +1,17 @@
 TARGET_ARG =
-START_COMMAND = target/
 ifneq ($(origin TARGET),undefined)
-TARGET_ARG += --target ${TARGET}
-START_COMMAND += ${TARGET}
-START_COMMAND += /
+TARGET_ARG +=--target ${TARGET}
+endif
+
+CHMOD =
+ifneq ($(OS),Windows_NT)
+CHMOD += chmod +x
+# add the path
+ifeq ($(origin TARGET),undefined)
+CHMOD += target/debug/skyd
+else
+CHMOD += target/${TARGET}/debug/skyd
+endif
 endif
 
 BUILD_VERBOSE = cargo build --verbose $(TARGET_ARG)
@@ -14,6 +22,7 @@ BUILD_COMMAND =
 BUILD_SERVER_COMMAND =
 TEST_COMMAND =
 RELEASE_COMMAND =
+START_COMMAND =
 
 ifeq ($(OS),Windows_NT)
 # export windows specifc rustflags
@@ -26,17 +35,23 @@ TEST_COMMAND += cmd /C
 STOP_SERVER += taskkill.exe /F /IM skyd.exe
 START_COMMAND += skyd.exe
 RELEASE_COMMAND += cmd /C
+START_COMMAND += cmd /C START /B
 else
 STOP_SERVER += pkill skyd
-START_COMMAND += skyd
+# make sure to set executable permissions
 endif
-RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
 
 # Assemble the commands 
 BUILD_SERVER_COMMAND += $(BUILD_VERBOSE)
 BUILD_SERVER_COMMAND += -p skyd
+RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
 BUILD_COMMAND += $(BUILD_VERBOSE)
 TEST_COMMAND += cargo test $(TARGET_ARG) -- --test-threads=1
+START_COMMAND += cargo run -p skyd -- --noart --nosave
+
+ifneq ($(OS),Windows_NT)
+START_COMMAND += &
+endif
 
 build:
 	@echo "===================================================================="
@@ -47,7 +62,7 @@ build-server:
 	@echo "===================================================================="
 	@echo "Building server binary in debug mode (unoptimized)"
 	@echo "===================================================================="
-	$(BUILD_SERVER_COMMAND)
+	@$(BUILD_SERVER_COMMAND)
 release:
 	@echo "===================================================================="
 	@echo "Building all binaries in release mode (optimized)"
@@ -57,6 +72,7 @@ test: build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
+	@${CHMOD}
 	@${START_COMMAND}
 	@echo "===================================================================="
 	@echo "Running all tests"
