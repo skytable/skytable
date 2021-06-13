@@ -24,6 +24,7 @@ regex = "1.5.4"
 sky_macros = { path = "../sky-macros" }
 tokio-openssl = "0.6.1"
 openssl = { version = "0.10.34", features = ["vendored"] }
+async-ctrlc = "1.2.0"
 # Use the respcodes from the client-driver
 skytable = { git = "https://github.com/skytable/client-rust", branch = "next", default-features = false }
 

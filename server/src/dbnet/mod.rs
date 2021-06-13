@@ -51,7 +51,6 @@ mod tcp;
 use crate::coredb::CoreDB;
 use libsky::TResult;
 use std::fs;
-use std::future::Future;
 use std::io::Error as IoError;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -251,9 +250,10 @@ pub async fn run(
     ports: PortConfig,
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
-    sig: impl Future,
     restore_filepath: Option<String>,
 ) -> Result<CoreDB, String> {
+    let sig =
+        async_ctrlc::CtrlC::new().map_err(|e| format!("Failed to bind to signal hooks: {}", e))?;
     let (signal, _) = broadcast::channel(1);
     fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
         .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
