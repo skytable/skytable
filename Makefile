@@ -7,13 +7,6 @@ ifeq ($(OS),Windows_NT)
 export RUSTFLAGS = -Ctarget-feature=+crt-static
 endif
 
-START_SERVER = 
-ifeq ($(OS),Windows_NT)
-START_SERVER += START /B target/${TARGET}/skyd.exe
-else
-START_SERVER += cargo run -p skyd -- --nosave --noart &
-endif
-
 STOP_SERVER =
 ifeq ($(OS),Windows_NT)
 STOP_SERVER += taskkill.exe /F /IM skyd.exe
@@ -28,7 +21,7 @@ debug-server:
 release-full:
 	cargo build --release --verbose
 test: debug-server
-	$(START_SERVER)
+	cargo run -p skyd -- --nosave --noart &
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	$(STOP_SERVER)
 	rm .sky_pid
