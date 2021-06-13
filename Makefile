@@ -3,17 +3,6 @@ ifneq ($(origin TARGET),undefined)
 TARGET_ARG +=--target ${TARGET}
 endif
 
-CHMOD =
-ifneq ($(OS),Windows_NT)
-CHMOD += chmod +x
-# add the path
-ifeq ($(origin TARGET),undefined)
-CHMOD += target/debug/skyd
-else
-CHMOD += target/${TARGET}/debug/skyd
-endif
-endif
-
 BUILD_VERBOSE = cargo build --verbose $(TARGET_ARG)
 
 # Create empty commands
@@ -33,7 +22,6 @@ BUILD_COMMAND += cmd /C set RUSTFLAGS = -Ctarget-feature=+crt-static
 BUILD_SERVER_COMMAND += cmd /C
 TEST_COMMAND += cmd /C
 STOP_SERVER += taskkill.exe /F /IM skyd.exe
-START_COMMAND += skyd.exe
 RELEASE_COMMAND += cmd /C
 START_COMMAND += cmd /C START /B
 else
@@ -72,7 +60,6 @@ test: build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
-	@${CHMOD}
 	@${START_COMMAND}
 	@echo "===================================================================="
 	@echo "Running all tests"
