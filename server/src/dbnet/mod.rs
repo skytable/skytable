@@ -52,9 +52,7 @@ use crate::CoreDB;
 use libsky::TResult;
 use std::fs;
 use std::future::Future;
-use std::io::ErrorKind;
 use std::net::IpAddr;
-use std::process;
 use std::sync::Arc;
 use tls::SslListener;
 use tokio::net::TcpListener;
@@ -121,18 +119,18 @@ impl MultiListener {
         signal: broadcast::Sender<()>,
         terminate_tx: mpsc::Sender<()>,
         terminate_rx: mpsc::Receiver<()>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let listener = TcpListener::bind((host, port))
             .await
-            .expect("Failed to bind to port");
-        MultiListener::InsecureOnly(Listener {
+            .map_err(|e| format!("Failed to bind to port with error: {}", e))?;
+        Ok(MultiListener::InsecureOnly(Listener {
             db,
             listener,
             climit,
             signal,
             terminate_tx,
             terminate_rx,
-        })
+        }))
     }
     /// Create a new `SecureOnly` listener
     pub async fn new_secure_only(
@@ -143,11 +141,11 @@ impl MultiListener {
         terminate_tx: mpsc::Sender<()>,
         terminate_rx: mpsc::Receiver<()>,
         ssl: SslOpts,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let listener = TcpListener::bind((host, ssl.port))
             .await
-            .expect("Failed to bind to port");
-        MultiListener::SecureOnly(
+            .map_err(|e| format!("Failed to bind to port with error: {}", e))?;
+        Ok(MultiListener::SecureOnly(
             SslListener::new_pem_based_ssl_connection(
                 ssl.key,
                 ssl.chain,
@@ -158,8 +156,8 @@ impl MultiListener {
                 terminate_tx,
                 terminate_rx,
             )
-            .expect("Couldn't bind to secure port"),
-        )
+            .map_err(|e| format!("Couldn't bind to secure port: {}", e))?,
+        ))
     }
     /// Create a new `Multi` listener that has both a secure and an insecure listener
     #[allow(clippy::too_many_arguments)] // TODO(@ohsayan): Optimize this
@@ -174,10 +172,10 @@ impl MultiListener {
         ssl_terminate_tx: mpsc::Sender<()>,
         ssl_terminate_rx: mpsc::Receiver<()>,
         ssl: SslOpts,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let listener = TcpListener::bind((host, ssl.port))
             .await
-            .expect("Failed to bind to port");
+            .map_err(|e| format!("Failed to bind to port with error: {}", e))?;
         let secure_listener = SslListener::new_pem_based_ssl_connection(
             ssl.key,
             ssl.chain,
@@ -188,10 +186,10 @@ impl MultiListener {
             ssl_terminate_tx,
             ssl_terminate_rx,
         )
-        .expect("Couldn't bind to secure port");
+        .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
         let listener = TcpListener::bind((host, port))
             .await
-            .expect("Failed to bind to port");
+            .map_err(|e| format!("Failed to bind to port with error: {}", e))?;
         let insecure_listener = Listener {
             db,
             listener,
@@ -200,7 +198,7 @@ impl MultiListener {
             terminate_tx,
             terminate_rx,
         };
-        MultiListener::Multi(insecure_listener, secure_listener)
+        Ok(MultiListener::Multi(insecure_listener, secure_listener))
     }
     /// Start the server
     ///
@@ -317,26 +315,13 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
-) -> CoreDB {
+) -> Result<CoreDB, String> {
     let (signal, _) = broadcast::channel(1);
     let (terminate_tx, terminate_rx) = mpsc::channel(1);
-    match fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT) {
-        Ok(_) => (),
-        Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => (),
-            _ => {
-                log::error!("Failed to create data directories: '{}'", e);
-                process::exit(0x100);
-            }
-        },
-    }
-    let db = match CoreDB::new(&snapshot_cfg, restore_filepath) {
-        Ok(db) => db,
-        Err(e) => {
-            log::error!("ERROR: {}", e);
-            process::exit(0x100);
-        }
-    };
+    fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
+        .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
+    let db = CoreDB::new(&snapshot_cfg, restore_filepath)
+        .map_err(|e| format!("Error while initializing database: {}", e))?;
     let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
         db.clone(),
         bgsave_cfg,
@@ -359,7 +344,7 @@ pub async fn run(
                 terminate_tx,
                 terminate_rx,
             )
-            .await
+            .await?
         }
         PortConfig::SecureOnly { host, ssl } => {
             MultiListener::new_secure_only(
@@ -371,7 +356,7 @@ pub async fn run(
                 terminate_rx,
                 ssl,
             )
-            .await
+            .await?
         }
         PortConfig::Multi { host, port, ssl } => {
             let (ssl_terminate_tx, ssl_terminate_rx) = mpsc::channel::<()>(1);
@@ -387,7 +372,7 @@ pub async fn run(
                 ssl_terminate_rx,
                 ssl,
             )
-            .await;
+            .await?;
             server
         }
     };
@@ -401,5 +386,5 @@ pub async fn run(
     server.finish_with_termsig().await;
     let _ = snapshot_handle.await;
     let _ = bgsave_handle.await;
-    db
+    Ok(db)
 }

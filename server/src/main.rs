@@ -90,7 +90,7 @@ fn main() {
         .unwrap();
     let db = runtime.block_on(async {
         let (tcplistener, bgsave_config, snapshot_config, restore_filepath) =
-            check_args_and_get_cfg().await;
+            check_args_and_get_cfg();
         let db = run(
             tcplistener,
             bgsave_config,
@@ -103,6 +103,15 @@ fn main() {
     });
     // Make sure all background workers terminate
     drop(runtime);
+    let db = match db {
+        Ok(d) => d,
+        Err(e) => {
+            // uh oh, something happened while starting up
+            log::error!("{}", e);
+            pre_shutdown_cleanup(pid_file);
+            process::exit(0x100);
+        }
+    };
     assert_eq!(
         Arc::strong_count(&db.shared),
         1,
@@ -125,18 +134,21 @@ fn main() {
         }
         thread::sleep(time::Duration::from_secs(10));
     }
-    // close the PID file and remove it
+    pre_shutdown_cleanup(pid_file);
+    terminal::write_info("Goodbye :)\n").unwrap();
+}
+
+pub fn pre_shutdown_cleanup(pid_file: fs::File) {
     drop(pid_file);
     if let Err(e) = fs::remove_file(PATH) {
         log::error!("Shutdown failure: Failed to remove pid file: {}", e);
         process::exit(0x100);
     }
-    terminal::write_info("Goodbye :)\n").unwrap();
 }
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-async fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
+fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {
