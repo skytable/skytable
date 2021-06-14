@@ -35,7 +35,7 @@ BUILD_SERVER_COMMAND += -p skyd
 RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
 BUILD_COMMAND += $(BUILD_VERBOSE)
 TEST_COMMAND += cargo test $(TARGET_ARG) -- --test-threads=1
-START_COMMAND += cargo run -p skyd -- --noart --nosave
+START_COMMAND += cargo run $(TARGET_ARG) -p skyd -- --noart --nosave
 
 ifneq ($(OS),Windows_NT)
 START_COMMAND += &
