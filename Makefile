@@ -61,6 +61,8 @@ test: build-server
 	@echo "Starting database server in background"
 	@echo "===================================================================="
 	@${START_COMMAND}
+# sleep for 5s to let the server start up
+	@sleep 5
 	@echo "===================================================================="
 	@echo "Running all tests"
 	@echo "===================================================================="
