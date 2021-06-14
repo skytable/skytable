@@ -190,7 +190,7 @@ where
         Box::pin(async move {
             let mv_self = self;
             let ret: IoResult<()> = {
-                mv_self.write_response(&SIMPLE_QUERY_HEADER[..]).await?;
+                mv_self.write_response(SIMPLE_QUERY_HEADER).await?;
                 Ok(())
             };
             ret
@@ -208,9 +208,9 @@ where
         Box::pin(async move {
             let mv_self = self;
             let ret: IoResult<()> = {
-                mv_self.write_response(&[b'_'][..]).await?;
+                mv_self.write_response([b'_']).await?;
                 mv_self.write_response(len.to_string().into_bytes()).await?;
-                mv_self.write_response(&[b'\n'][..]).await?;
+                mv_self.write_response([b'\n']).await?;
                 Ok(())
             };
             ret
@@ -228,9 +228,9 @@ where
         Box::pin(async move {
             let mv_self = self;
             let ret: IoResult<()> = {
-                mv_self.write_response(&[b'&'][..]).await?;
+                mv_self.write_response([b'&']).await?;
                 mv_self.write_response(len.to_string().into_bytes()).await?;
-                mv_self.write_response(&[b'\n'][..]).await?;
+                mv_self.write_response([b'\n']).await?;
                 Ok(())
             };
             ret

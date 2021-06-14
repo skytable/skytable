@@ -93,7 +93,8 @@ where
         USET => actions::uset::uset,
         KEYLEN => actions::keylen::keylen,
         MKSNAP => admin::mksnap::mksnap,
-        LSKEYS => actions::lskeys::lskeys
+        LSKEYS => actions::lskeys::lskeys,
+        POP => actions::pop::pop
     );
     Ok(())
 }

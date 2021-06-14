@@ -41,6 +41,7 @@ pub mod lskeys;
 pub mod mget;
 pub mod mset;
 pub mod mupdate;
+pub mod pop;
 pub mod set;
 pub mod strong;
 pub mod update;

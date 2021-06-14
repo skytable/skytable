@@ -436,6 +436,9 @@ impl Data {
     pub const fn get_blob(&self) -> &Bytes {
         &self.blob
     }
+    pub fn into_inner(self) -> Bytes {
+        self.blob
+    }
 }
 
 impl Eq for Data {}

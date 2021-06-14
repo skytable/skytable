@@ -101,6 +101,15 @@ impl Writable for Vec<u8> {
     }
 }
 
+impl<const N: usize> Writable for [u8; N] {
+    fn write<'s>(
+        self,
+        con: &'s mut impl IsConnection,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+        Box::pin(async move { con.write_lowlevel(&self).await })
+    }
+}
+
 impl Writable for &'static [u8] {
     fn write<'s>(
         self,
