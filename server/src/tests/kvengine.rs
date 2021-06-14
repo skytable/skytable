@@ -34,6 +34,21 @@
 
 #[sky_macros::dbtest]
 mod __private {
+    macro_rules! setkeys {
+        ($con:ident, $($key:literal:$value:literal),*) => {
+            let mut q = Query::new();
+            let mut count = 0;
+            $(
+                q.push($key);
+                q.push($value);
+                count += 1;
+            )*
+            assert_eq!(
+                $con.run_simple_query(&q).await.unwrap(),
+                Response::Item(Element::UnsignedInt(count))
+            );
+        };
+    }
     #[cfg(test)]
     use skytable::{Element, Query, RespCode, Response};
     /// Test a HEYA query: The server should return HEY!
@@ -1052,6 +1067,50 @@ mod __private {
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
+    async fn test_pop_syntax_error() {
+        query.push("pop");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
+    async fn test_pop_all_success() {
+        setkeys!(
+            con,
+            "x":100,
+            "y":200,
+            "z":300
+        );
+        query.push(vec!["pop", "x", "y", "z"]);
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::Array(vec![
+                Element::String("100".to_owned()),
+                Element::String("200".to_owned()),
+                Element::String("300".to_owned())
+            ]))
+        )
+    }
+    async fn test_pop_mixed() {
+        setkeys!(
+            con,
+            "x":100,
+            "y":200,
+            "z":300
+        );
+        query.push(vec!["pop", "apple", "arnold", "x", "madonna", "y", "z"]);
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::Array(vec![
+                Element::RespCode(RespCode::NotFound),
+                Element::RespCode(RespCode::NotFound),
+                Element::String("100".to_owned()),
+                Element::RespCode(RespCode::NotFound),
+                Element::String("200".to_owned()),
+                Element::String("300".to_owned())
+            ]))
         );
     }
 }
