@@ -37,6 +37,7 @@ mod __private {
     macro_rules! setkeys {
         ($con:ident, $($key:literal:$value:literal),*) => {
             let mut q = Query::new();
+            q.push("MSET");
             let mut count = 0;
             $(
                 q.push($key);
