@@ -101,7 +101,7 @@ mod benchtool {
                 let mut np = Workpool::new(
                     10,
                     move || TcpStream::connect(host.clone()).unwrap(),
-                    |mut sock, packet: Vec<u8>| {
+                    |sock, packet: Vec<u8>| {
                         sock.write_all(&packet).unwrap();
                         let _ = sock.read(&mut vec![0; 1024]).unwrap();
                     },
@@ -164,7 +164,7 @@ mod benchtool {
         let mut setpool = Workpool::new(
             10,
             move || TcpStream::connect(host.clone()).unwrap(),
-            |mut sock, packet: Vec<u8>| {
+            |sock, packet: Vec<u8>| {
                 sock.write_all(&packet).unwrap();
                 // we don't care much about what's returned
                 let _ = sock.read(&mut vec![0; 1024]).unwrap();

@@ -51,21 +51,21 @@ impl Worker {
     fn new<Inp: 'static, UIn>(
         job_receiver: Arc<Mutex<mpsc::Receiver<JobType<UIn>>>>,
         init_pre_loop_var: impl Fn() -> Inp + 'static + Send,
-        on_exit: impl Fn(&Inp) + Send + 'static,
-        on_loop: impl Fn(&Inp, UIn) + Send + Sync + 'static,
+        on_exit: impl Fn(&mut Inp) + Send + 'static,
+        on_loop: impl Fn(&mut Inp, UIn) + Send + Sync + 'static,
     ) -> Self
     where
         UIn: Send + Sync + 'static,
     {
         let thread = thread::spawn(move || {
             let on_loop = on_loop;
-            let pre_loop_var = init_pre_loop_var();
+            let mut pre_loop_var = init_pre_loop_var();
             loop {
                 let action = job_receiver.lock().unwrap().recv().unwrap();
                 match action {
-                    JobType::Task(tsk) => on_loop(&pre_loop_var, tsk),
+                    JobType::Task(tsk) => on_loop(&mut pre_loop_var, tsk),
                     JobType::Nothing => {
-                        on_exit(&pre_loop_var);
+                        on_exit(&mut pre_loop_var);
                         break;
                     }
                 }
@@ -80,9 +80,9 @@ impl Worker {
 impl<Inp: 'static, UIn, Lp, Lv, Ex> Clone for Workpool<Inp, UIn, Lv, Lp, Ex>
 where
     UIn: Send + Sync + 'static,
-    Ex: Fn(&Inp) + Send + Sync + 'static + Clone,
+    Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
     Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
-    Lp: Fn(&Inp, UIn) + Clone + Send + Sync + 'static,
+    Lp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Workpool::new(
@@ -124,9 +124,9 @@ pub struct Workpool<Inp, UIn, Lv, Lp, Ex> {
 impl<Inp: 'static, UIn, Lv, Ex, Lp> Workpool<Inp, UIn, Lv, Lp, Ex>
 where
     UIn: Send + Sync + 'static,
-    Ex: Fn(&Inp) + Send + Sync + 'static + Clone,
+    Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
     Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
-    Lp: Fn(&Inp, UIn) + Send + Sync + 'static + Clone,
+    Lp: Fn(&mut Inp, UIn) + Send + Sync + 'static + Clone,
 {
     /// Create a new workpool
     pub fn new(count: usize, init_pre_loop_var: Lv, on_loop: Lp, on_exit: Ex) -> Self {
@@ -156,6 +156,12 @@ where
     /// Execute something
     pub fn execute(&mut self, inp: UIn) {
         self.job_distributor.send(JobType::Task(inp)).unwrap();
+    }
+    pub fn new_default_threads(init_pre_loop_var: Lv, on_loop: Lp, on_exit: Ex) -> Self {
+        // we'll naively use the number of CPUs present on the system times 2 to determine
+        // the number of workers (sure the scheduler does tricks all the time)
+        let worker_count = num_cpus::get() * 2;
+        Self::new(worker_count, init_pre_loop_var, on_loop, on_exit)
     }
 }
 
