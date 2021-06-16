@@ -1,6 +1,20 @@
+ADDITIONAL_SOFTWARE=
 TARGET_ARG =
 ifneq ($(origin TARGET),undefined)
 TARGET_ARG +=--target ${TARGET}
+ifeq ($(TARGET),x86_64-unknown-linux-musl)
+# we need musl-tools for 64-bit musl targets
+ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install musl-tools -y
+endif
+ifeq ($(TARGET),i686-unknown-linux-gnu)
+# we need gcc-multilib on 32-bit linux targets
+ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install gcc-multilib -y
+endif
+endif
+
+# display a message if no additional packages are required for this target
+ifeq ($(ADDITIONAL_SOFTWARE),)
+ADDITIONAL_SOFTWARE += echo "info: No additional software required for this target"
 endif
 
 BUILD_VERBOSE = cargo build --verbose $(TARGET_ARG)
@@ -41,22 +55,27 @@ ifneq ($(OS),Windows_NT)
 START_COMMAND += &
 endif
 
-build:
+.pre:
+	@echo "===================================================================="
+	@echo "Installing any additional dependencies"
+	@echo "===================================================================="
+	@$(ADDITIONAL_SOFTWARE)
+build: .pre
 	@echo "===================================================================="
 	@echo "Building all binaries in debug mode (unoptimized)"
 	@echo "===================================================================="
 	@$(BUILD_COMMAND)
-build-server:
+.build-server: .pre
 	@echo "===================================================================="
 	@echo "Building server binary in debug mode (unoptimized)"
 	@echo "===================================================================="
 	@$(BUILD_SERVER_COMMAND)
-release:
+release: .pre
 	@echo "===================================================================="
 	@echo "Building all binaries in release mode (optimized)"
 	@echo "===================================================================="
 	cargo build --release --verbose $(TARGET_ARG)
-test: build-server
+test: .build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="

@@ -180,11 +180,6 @@ jobs:
           rustup target add ${{ matrix.rust }}
         if: env.IS_MD_FILE == 'false'
 
-      - name: Install 32-bit tools (Linux)
-        run: |
-          sudo apt update && sudo apt install gcc-multilib -y
-        if: runner.os == 'Linux'
-
       - name: Run Tests
         run: make test
         env:
@@ -262,10 +257,6 @@ jobs:
           restore-keys: |
             ${{ matrix.rust }}-target-
         if: env.IS_MD_FILE == 'false'
-
-      - name: Install MUSL tools
-        run: sudo apt-get update && sudo apt-get install musl-tools -y
-        if: runner.os == 'Linux'
 
       - name: Install Rust
         run: |
