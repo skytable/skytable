@@ -411,6 +411,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "libstress"
+version = "0.1.0"
+
+[[package]]
 name = "lock_api"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -838,6 +842,7 @@ dependencies = [
  "devtimer",
  "lazy_static",
  "libsky",
+ "libstress",
  "rand",
  "regex",
  "serde",

@@ -31,100 +31,13 @@
 mod benchtool {
     use clap::{load_yaml, App};
     use devtimer::DevTime;
+    use libstress::Workpool;
     use rand::distributions::Alphanumeric;
     use rand::thread_rng;
     use serde::Serialize;
     use std::error::Error;
     use std::io::prelude::*;
     use std::net::{self, TcpStream};
-    use std::sync::mpsc;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::thread;
-    /// A Netpool is a threadpool that holds several workers
-    ///
-    /// Essentially, a `NetPool` is a connection pool
-    pub struct Netpool {
-        workers: Vec<Worker>,
-        sender: mpsc::Sender<WhatToDo>,
-    }
-    /// The job
-    ///
-    /// A `NewJob` has a `Vec<u8>` field for the bytes it has to write to a stream held
-    /// by the worker. If the `Job` is `Nothing`, then it is time for the worker
-    /// to terminate
-    enum WhatToDo {
-        NewJob(Vec<u8>),
-        Nothing,
-    }
-    /// A worker holds a thread which also holds a persistent connection to
-    /// `localhost:2003`, as long as the thread is not told to terminate
-    struct Worker {
-        thread: Option<thread::JoinHandle<()>>,
-    }
-    impl Netpool {
-        /// Create a new `Netpool` instance with `size` number of connections (and threads)
-        pub fn new(size: usize, host: &str) -> Netpool {
-            assert!(size > 0);
-            let (sender, receiver) = mpsc::channel();
-            let receiver = Arc::new(Mutex::new(receiver));
-            let mut workers = Vec::with_capacity(size);
-            for _ in 0..size {
-                workers.push(Worker::new(Arc::clone(&receiver), host.to_owned()));
-            }
-            Netpool { workers, sender }
-        }
-        /// Execute the job
-        pub fn execute(&mut self, action: Vec<u8>) {
-            self.sender.send(WhatToDo::NewJob(action)).unwrap();
-        }
-    }
-    impl Worker {
-        /// Create a new `Worker` which also means that a connection to port 2003
-        /// will be established
-        fn new(
-            receiver: Arc<Mutex<mpsc::Receiver<WhatToDo>>>,
-            host: std::string::String,
-        ) -> Worker {
-            let thread = thread::spawn(move || {
-                let mut connection = TcpStream::connect(host).unwrap();
-                loop {
-                    let action = receiver.lock().unwrap().recv().unwrap();
-                    match action {
-                        WhatToDo::NewJob(someaction) => {
-                            // We have to write something to the socket
-                            connection.write_all(&someaction).unwrap();
-                            // Ignore whatever we get, we don't need them
-                            let _ = connection.read(&mut vec![0; 1024]).unwrap();
-                        }
-                        WhatToDo::Nothing => {
-                            // A termination signal - just close the stream and
-                            // return
-                            connection.shutdown(net::Shutdown::Both).unwrap();
-                            break;
-                        }
-                    }
-                }
-            });
-            Worker {
-                thread: Some(thread),
-            }
-        }
-    }
-    impl Drop for Netpool {
-        fn drop(&mut self) {
-            // Signal all the workers to shut down
-            for _ in &mut self.workers {
-                self.sender.send(WhatToDo::Nothing).unwrap();
-            }
-            // Terminate all the threads
-            for worker in &mut self.workers {
-                if let Some(thread) = worker.thread.take() {
-                    thread.join().unwrap();
-                }
-            }
-        }
-    }
 
     #[derive(Serialize)]
     /// A `JSONReportBlock` represents a JSON object which contains the type of report
@@ -185,7 +98,17 @@ mod benchtool {
         if let Some(matches) = matches.subcommand_matches("testkey") {
             let numkeys = matches.value_of("count").unwrap();
             if let Ok(num) = numkeys.parse::<usize>() {
-                let mut np = Netpool::new(10, &host);
+                let mut np = Workpool::new(
+                    10,
+                    move || TcpStream::connect(host.clone()).unwrap(),
+                    |mut sock, packet: Vec<u8>| {
+                        sock.write_all(&packet).unwrap();
+                        let _ = sock.read(&mut vec![0; 1024]).unwrap();
+                    },
+                    |socket| {
+                        socket.shutdown(net::Shutdown::Both).unwrap();
+                    },
+                );
                 println!("Generating keys ...");
                 let keys: Vec<String> = (0..num)
                     .into_iter()
@@ -238,8 +161,20 @@ mod benchtool {
         let mut rand = thread_rng();
         let mut dt = DevTime::new_complex();
         // Create separate connection pools for get and set operations
-        let mut setpool = Netpool::new(max_connections, &host);
-        let mut getpool = Netpool::new(max_connections, &host);
+        let mut setpool = Workpool::new(
+            10,
+            move || TcpStream::connect(host.clone()).unwrap(),
+            |mut sock, packet: Vec<u8>| {
+                sock.write_all(&packet).unwrap();
+                // we don't care much about what's returned
+                let _ = sock.read(&mut vec![0; 1024]).unwrap();
+            },
+            |socket| {
+                socket.shutdown(std::net::Shutdown::Both).unwrap();
+            },
+        );
+        let mut getpool = setpool.clone();
+        let mut delpool = getpool.clone();
         let keys: Vec<String> = (0..max_queries)
             .into_iter()
             .map(|_| ran_string(packet_size, &mut rand))
@@ -284,7 +219,6 @@ mod benchtool {
         dt.stop_timer("GET").unwrap();
         eprintln!("Benchmark completed! Removing created keys...");
         // Create a connection pool for del operations
-        let mut delpool = Netpool::new(max_connections, &host);
         // Delete all the created keys
         for packet in del_packs {
             delpool.execute(packet);
