@@ -31,6 +31,7 @@ use core::marker::PhantomData;
 use crossbeam_channel::unbounded;
 use crossbeam_channel::Receiver as CReceiver;
 use crossbeam_channel::Sender as CSender;
+use rayon::prelude::*;
 use std::thread;
 
 /// A Job. The UIn type parameter is the type that will be used to execute the action
@@ -83,6 +84,7 @@ impl Worker {
 impl<Inp: 'static, UIn, Lp, Lv, Ex> Clone for Workpool<Inp, UIn, Lv, Lp, Ex>
 where
     UIn: Send + Sync + 'static,
+    Inp: Sync,
     Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
     Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
     Lp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
@@ -93,6 +95,7 @@ where
             self.init_pre_loop_var.clone(),
             self.on_loop.clone(),
             self.on_exit.clone(),
+            self.needs_iterator_pool,
         )
     }
 }
@@ -109,6 +112,13 @@ where
 /// Workpool clones simply create a new workpool with the same on_exit, on_loop and init_pre_loop_var
 /// configurations. This provides a very convenient interface if one desires to use multiple workpools
 /// to do the _same kind of thing_
+///
+/// ## Actual thread count
+///
+/// The actual thread count will depend on whether the caller requests the initialization of an
+/// iterator pool or not. If the caller does request for an iterator pool, then the number of threads
+/// spawned will be twice the number of the set workers. Else, the number of spawned threads is equal
+/// to the number of workers.
 pub struct Workpool<Inp, UIn, Lv, Lp, Ex> {
     /// the workers
     workers: Vec<Worker>,
@@ -122,6 +132,8 @@ pub struct Workpool<Inp, UIn, Lv, Lp, Ex> {
     on_loop: Lp,
     /// a marker for `Inp` since no parameters use it directly
     _marker: PhantomData<Inp>,
+    /// check if self needs a pool for parallel iterators
+    needs_iterator_pool: bool,
 }
 
 impl<Inp: 'static, UIn, Lv, Ex, Lp> Workpool<Inp, UIn, Lv, Lp, Ex>
@@ -130,9 +142,23 @@ where
     Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
     Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
     Lp: Fn(&mut Inp, UIn) + Send + Sync + 'static + Clone,
+    Inp: Sync,
 {
     /// Create a new workpool
-    pub fn new(count: usize, init_pre_loop_var: Lv, on_loop: Lp, on_exit: Ex) -> Self {
+    pub fn new(
+        count: usize,
+        init_pre_loop_var: Lv,
+        on_loop: Lp,
+        on_exit: Ex,
+        needs_iterator_pool: bool,
+    ) -> Self {
+        if needs_iterator_pool {
+            // initialize a global threadpool for parallel iterators
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(count)
+                .build_global()
+                .unwrap();
+        }
         if count == 0 {
             panic!("Runtime panic: Bad value `0` for thread count");
         }
@@ -153,17 +179,32 @@ where
             on_exit,
             on_loop,
             _marker: PhantomData,
+            needs_iterator_pool,
         }
     }
     /// Execute something
     pub fn execute(&self, inp: UIn) {
         self.job_distributor.send(JobType::Task(inp)).unwrap();
     }
-    pub fn new_default_threads(init_pre_loop_var: Lv, on_loop: Lp, on_exit: Ex) -> Self {
+    pub fn execute_iter(&self, iter: impl IntoParallelIterator<Item = UIn>) {
+        iter.into_par_iter().for_each(|inp| self.execute(inp));
+    }
+    pub fn new_default_threads(
+        init_pre_loop_var: Lv,
+        on_loop: Lp,
+        on_exit: Ex,
+        needs_iterator_pool: bool,
+    ) -> Self {
         // we'll naively use the number of CPUs present on the system times 2 to determine
         // the number of workers (sure the scheduler does tricks all the time)
         let worker_count = num_cpus::get() * 2;
-        Self::new(worker_count, init_pre_loop_var, on_loop, on_exit)
+        Self::new(
+            worker_count,
+            init_pre_loop_var,
+            on_loop,
+            on_exit,
+            needs_iterator_pool,
+        )
     }
 }
 

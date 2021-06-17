@@ -465,6 +465,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "num_cpus",
+ "rayon",
 ]
 
 [[package]]
@@ -940,7 +941,6 @@ dependencies = [
  "libsky",
  "libstress",
  "rand",
- "rayon",
  "serde",
  "serde_json",
  "skytable",

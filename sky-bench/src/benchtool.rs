@@ -32,7 +32,6 @@ use crate::util::JSONReportBlock;
 use devtimer::DevTime;
 use libstress::Workpool;
 use rand::thread_rng;
-use rayon::prelude::*;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -45,10 +44,6 @@ pub fn runner(
     packet_size: usize,
     json_out: bool,
 ) {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(max_connections)
-        .build_global()
-        .unwrap();
     sanity_test!(host, port);
     if !json_out {
         println!(
@@ -73,6 +68,7 @@ pub fn runner(
         |socket| {
             socket.shutdown(std::net::Shutdown::Both).unwrap();
         },
+        true,
     );
     let getpool = setpool.clone();
     let delpool = getpool.clone();
@@ -108,24 +104,18 @@ pub fn runner(
     }
     dt.create_timer("SET").unwrap();
     dt.start_timer("SET").unwrap();
-    set_packs
-        .into_par_iter()
-        .for_each(|packet| setpool.execute(packet));
+    setpool.execute_iter(set_packs);
     drop(setpool);
     dt.stop_timer("SET").unwrap();
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
-    get_packs
-        .into_par_iter()
-        .for_each(|packet| getpool.execute(packet));
+    getpool.execute_iter(get_packs);
     drop(getpool);
     dt.stop_timer("GET").unwrap();
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
-    del_packs
-        .into_par_iter()
-        .for_each(|packet| delpool.execute(packet));
+    delpool.execute_iter(del_packs);
     drop(delpool);
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());

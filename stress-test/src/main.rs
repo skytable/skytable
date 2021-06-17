@@ -41,6 +41,7 @@ fn main() {
             assert_eq!(ret, Response::Item(Element::String("HEY!".to_owned())));
         },
         |_| {},
+        false,
     );
     loop {
         pool.execute(Query::from("HEYA"));

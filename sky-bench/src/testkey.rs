@@ -46,6 +46,7 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         |socket| {
             socket.shutdown(net::Shutdown::Both).unwrap();
         },
+        true,
     );
     println!("Generating keys ...");
     let keys: Vec<String> = (0..num)
