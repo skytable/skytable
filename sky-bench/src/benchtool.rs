@@ -45,18 +45,20 @@ pub fn runner(
     json_out: bool,
 ) {
     sanity_test!(host, port);
-    eprintln!(
-        "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
-        max_connections,
-        max_queries,
-        (packet_size * 2), // key size + value size
-    );
+    if !json_out {
+        println!(
+            "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
+            max_connections,
+            max_queries,
+            (packet_size * 2), // key size + value size
+        );
+    }
     let host = hoststr!(host, port);
     let mut rand = thread_rng();
     let mut dt = DevTime::new_complex();
     // Create separate connection pools for get and set operations
     let mut setpool = Workpool::new(
-        10,
+        max_connections,
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
@@ -94,9 +96,11 @@ pub fn runner(
     let del_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| libsky::into_raw_query(&format!("DEL {}", keys[idx])))
         .collect();
-    eprintln!("Per-packet size (GET): {} bytes", get_packs[0].len());
-    eprintln!("Per-packet size (SET): {} bytes", set_packs[0].len());
-    eprintln!("Initialization complete! Benchmark started");
+    if !json_out {
+        println!("Per-packet size (GET): {} bytes", get_packs[0].len());
+        println!("Per-packet size (SET): {} bytes", set_packs[0].len());
+        println!("Initialization complete! Benchmark started");
+    }
     dt.create_timer("SET").unwrap();
     dt.start_timer("SET").unwrap();
     for packet in set_packs {
@@ -111,7 +115,9 @@ pub fn runner(
     }
     drop(getpool);
     dt.stop_timer("GET").unwrap();
-    eprintln!("Benchmark completed! Removing created keys...");
+    if !json_out {
+        println!("Benchmark completed! Removing created keys...");
+    }
     // Create a connection pool for del operations
     // Delete all the created keys
     for packet in del_packs {

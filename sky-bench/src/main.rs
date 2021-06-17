@@ -31,7 +31,10 @@
 mod benchtool;
 mod testkey;
 mod util;
-
+use crate::util::DEFAULT_PACKET_SIZE;
+use crate::util::DEFAULT_QUERY_COUNT;
+use crate::util::DEFAULT_WORKER_COUNT;
+// external imports
 use clap::{load_yaml, App};
 use core::hint::unreachable_unchecked;
 
@@ -50,25 +53,20 @@ fn main() {
         None => 2003,
     };
     let json_out = matches.is_present("json");
-    let max_connections = match matches
-        .value_of("connections")
-        .unwrap_or("10")
-        .parse::<usize>()
-    {
-        Ok(con) => con,
-        Err(_) => err!("Bad value for maximum connections"),
+    let max_connections = match matches.value_of("connections").map(|v| v.parse::<usize>()) {
+        Some(Ok(con)) => con,
+        None => DEFAULT_WORKER_COUNT,
+        _ => err!("Bad value for maximum connections"),
     };
-    let max_queries = match matches
-        .value_of("queries")
-        .unwrap_or("100000")
-        .parse::<usize>()
-    {
-        Ok(qr) => qr,
-        Err(_) => err!("Bad value for max queries"),
+    let max_queries = match matches.value_of("queries").map(|v| v.parse::<usize>()) {
+        Some(Ok(qr)) => qr,
+        None => DEFAULT_QUERY_COUNT,
+        _ => err!("Bad value for max queries"),
     };
-    let packet_size = match matches.value_of("size").unwrap_or("4").parse::<usize>() {
-        Ok(size) => size,
-        Err(_) => err!("Bad value for key/value size"),
+    let packet_size = match matches.value_of("size").map(|v| v.parse::<usize>()) {
+        Some(Ok(size)) => size,
+        None => DEFAULT_PACKET_SIZE,
+        _ => err!("Bad value for key/value size"),
     };
     if let Some(cmd) = matches.subcommand_matches("testkey") {
         let count = match cmd.value_of_lossy("count") {

@@ -29,6 +29,10 @@ use rand::thread_rng;
 use serde::Serialize;
 use std::error::Error;
 
+pub const DEFAULT_WORKER_COUNT: usize = 10;
+pub const DEFAULT_PACKET_SIZE: usize = 8;
+pub const DEFAULT_QUERY_COUNT: usize = 100_000;
+
 #[macro_export]
 macro_rules! hoststr {
     ($host:expr, $port:expr) => {{
