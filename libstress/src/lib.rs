@@ -33,7 +33,7 @@ use std::thread;
 /// A Job. The UIn type parameter is the type that will be used to execute the action
 /// Nothing is a variant used by the drop implementation to terminate all the workers
 /// and call the exit_loop function
-pub enum JobType<UIn> {
+enum JobType<UIn> {
     Task(UIn),
     Nothing,
 }
