@@ -24,6 +24,37 @@
  *
 */
 
+//! # libstress
+//!
+//! Tools for emulating concurrent query behavior to _stress test_ the database server.
+//! As of now, this crate provides a [`Workpool`] which is a generic synchronous threadpool
+//! for doing multiple operations. But Workpool is a little different from standard threadpool
+//! implementations in it categorizing a job to be made up of three parts, namely:
+//!
+//! - The init_pre_loop_var (the pre-loop stage)
+//! - The on_loop (the in-loop stage)
+//! - The on_exit (the post-loop stage)
+//!
+//! These stages form a part of the event loop.
+//!
+//! ## The event loop
+//!
+//! A task runs in a loop with the `on_loop` routine to which the a reference of the result of
+//! the `init_pre_loop_var` is sent that is initialized. The loop proceeds whenever a worker
+//! receives a task or else it blocks the current thread, waiting for a task. Hence the loop
+//! cannot be terminated by an execute call. Instead, the _event loop_ is terminated when the
+//! Workpool is dropped, either by scoping out, or by using the provided finish-like methods
+//! (that call the destructor).
+//!
+//! ## Worker lifetime
+//!
+//! If a runtime panic occurs in the pre-loop stage, then the entire worker just terminates. Hence
+//! this worker is no longer able to perform any tasks. Similarly, if a runtime panic occurs in
+//! the in-loop stage, the worker terminates and is no longer available to do any work. This will
+//! be reflected when the workpool attempts to terminate in entirety, i.e when the threads are joined
+//! to the parent thread
+//!
+
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
 
