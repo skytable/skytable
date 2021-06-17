@@ -104,19 +104,16 @@ pub fn runner(
     }
     dt.create_timer("SET").unwrap();
     dt.start_timer("SET").unwrap();
-    setpool.execute_iter(set_packs);
-    drop(setpool);
+    setpool.execute_and_finish_iter(set_packs);
     dt.stop_timer("SET").unwrap();
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
-    getpool.execute_iter(get_packs);
-    drop(getpool);
+    getpool.execute_and_finish_iter(get_packs);
     dt.stop_timer("GET").unwrap();
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
-    delpool.execute_iter(del_packs);
-    drop(delpool);
+    delpool.execute_and_finish_iter(del_packs);
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
     if json_out {
