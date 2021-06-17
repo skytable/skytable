@@ -154,10 +154,9 @@ where
     ) -> Self {
         if needs_iterator_pool {
             // initialize a global threadpool for parallel iterators
-            rayon::ThreadPoolBuilder::new()
+            let _ = rayon::ThreadPoolBuilder::new()
                 .num_threads(count)
-                .build_global()
-                .unwrap();
+                .build_global();
         }
         if count == 0 {
             panic!("Runtime panic: Bad value `0` for thread count");
