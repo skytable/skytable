@@ -28,9 +28,9 @@
 #![deny(unused_imports)]
 
 use core::marker::PhantomData;
-use std::sync::mpsc;
-use std::sync::Arc;
-use std::sync::Mutex;
+use crossbeam_channel::unbounded;
+use crossbeam_channel::Receiver as CReceiver;
+use crossbeam_channel::Sender as CSender;
 use std::thread;
 
 /// A Job. The UIn type parameter is the type that will be used to execute the action
@@ -52,7 +52,7 @@ struct Worker {
 impl Worker {
     /// Initialize a new worker
     fn new<Inp: 'static, UIn>(
-        job_receiver: Arc<Mutex<mpsc::Receiver<JobType<UIn>>>>,
+        job_receiver: CReceiver<JobType<UIn>>,
         init_pre_loop_var: impl Fn() -> Inp + 'static + Send,
         on_exit: impl Fn(&mut Inp) + Send + 'static,
         on_loop: impl Fn(&mut Inp, UIn) + Send + Sync + 'static,
@@ -64,7 +64,7 @@ impl Worker {
             let on_loop = on_loop;
             let mut pre_loop_var = init_pre_loop_var();
             loop {
-                let action = job_receiver.lock().unwrap().recv().unwrap();
+                let action = job_receiver.recv().unwrap();
                 match action {
                     JobType::Task(tsk) => on_loop(&mut pre_loop_var, tsk),
                     JobType::Nothing => {
@@ -113,7 +113,7 @@ pub struct Workpool<Inp, UIn, Lv, Lp, Ex> {
     /// the workers
     workers: Vec<Worker>,
     /// the sender that sends jobs
-    job_distributor: mpsc::Sender<JobType<UIn>>,
+    job_distributor: CSender<JobType<UIn>>,
     /// the function that sets the pre-loop variable
     init_pre_loop_var: Lv,
     /// the function to be executed on worker termination
@@ -136,12 +136,11 @@ where
         if count == 0 {
             panic!("Runtime panic: Bad value `0` for thread count");
         }
-        let (sender, receiver) = mpsc::channel();
-        let receiver = Arc::new(Mutex::new(receiver));
+        let (sender, receiver) = unbounded();
         let mut workers = Vec::with_capacity(count);
         for _ in 0..count {
             workers.push(Worker::new(
-                Arc::clone(&receiver),
+                receiver.clone(),
                 init_pre_loop_var.clone(),
                 on_exit.clone(),
                 on_loop.clone(),
@@ -157,7 +156,7 @@ where
         }
     }
     /// Execute something
-    pub fn execute(&mut self, inp: UIn) {
+    pub fn execute(&self, inp: UIn) {
         self.job_distributor.send(JobType::Task(inp)).unwrap();
     }
     pub fn new_default_threads(init_pre_loop_var: Lv, on_loop: Lp, on_exit: Ex) -> Self {

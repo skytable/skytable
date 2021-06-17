@@ -33,7 +33,7 @@ use skytable::Query;
 use skytable::{Element, Response};
 
 fn main() {
-    let mut pool = Workpool::new(
+    let pool = Workpool::new(
         10,
         || Connection::new("127.0.0.1", 2003).unwrap(),
         |con, query| {

@@ -32,6 +32,7 @@ use crate::util::JSONReportBlock;
 use devtimer::DevTime;
 use libstress::Workpool;
 use rand::thread_rng;
+use rayon::prelude::*;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -44,6 +45,10 @@ pub fn runner(
     packet_size: usize,
     json_out: bool,
 ) {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(max_connections)
+        .build_global()
+        .unwrap();
     sanity_test!(host, port);
     if !json_out {
         println!(
@@ -57,7 +62,7 @@ pub fn runner(
     let mut rand = thread_rng();
     let mut dt = DevTime::new_complex();
     // Create separate connection pools for get and set operations
-    let mut setpool = Workpool::new(
+    let setpool = Workpool::new(
         max_connections,
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
@@ -69,8 +74,8 @@ pub fn runner(
             socket.shutdown(std::net::Shutdown::Both).unwrap();
         },
     );
-    let mut getpool = setpool.clone();
-    let mut delpool = getpool.clone();
+    let getpool = setpool.clone();
+    let delpool = getpool.clone();
     let keys: Vec<String> = (0..max_queries)
         .into_iter()
         .map(|_| ran_string(packet_size, &mut rand))
@@ -103,26 +108,24 @@ pub fn runner(
     }
     dt.create_timer("SET").unwrap();
     dt.start_timer("SET").unwrap();
-    for packet in set_packs {
-        setpool.execute(packet);
-    }
+    set_packs
+        .into_par_iter()
+        .for_each(|packet| setpool.execute(packet));
     drop(setpool);
     dt.stop_timer("SET").unwrap();
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
-    for packet in get_packs {
-        getpool.execute(packet);
-    }
+    get_packs
+        .into_par_iter()
+        .for_each(|packet| getpool.execute(packet));
     drop(getpool);
     dt.stop_timer("GET").unwrap();
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
-    // Create a connection pool for del operations
-    // Delete all the created keys
-    for packet in del_packs {
-        delpool.execute(packet);
-    }
+    del_packs
+        .into_par_iter()
+        .for_each(|packet| delpool.execute(packet));
     drop(delpool);
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());

@@ -36,7 +36,7 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
     sanity_test!(host, port);
     let host = hoststr!(host, port);
     let mut rand = thread_rng();
-    let mut np = Workpool::new(
+    let np = Workpool::new(
         connections,
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
