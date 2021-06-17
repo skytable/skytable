@@ -24,6 +24,9 @@
  *
 */
 
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 //! # Skytable
 //!
 //! The `skyd` crate (or the `server` folder) is Skytable's database server and maybe

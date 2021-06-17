@@ -24,6 +24,10 @@
  *
 */
 
+
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 mod argparse;
 mod runner;
 

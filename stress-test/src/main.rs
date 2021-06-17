@@ -24,15 +24,19 @@
  *
 */
 
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 use libstress::Workpool;
 use skytable::Connection;
 use skytable::Query;
 use skytable::{Element, Response};
+
 fn main() {
     let mut pool = Workpool::new(
         10,
         || Connection::new("127.0.0.1", 2003).unwrap(),
-        |con, query: Query| {
+        |con, query| {
             let ret = con.run_simple_query(&query).unwrap();
             assert_eq!(ret, Response::Item(Element::String("HEY!".to_owned())));
         },

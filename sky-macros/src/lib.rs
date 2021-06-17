@@ -24,6 +24,9 @@
  *
 */
 
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 //! A library containing a collection of custom derives used by Skytable
 //!
 //! ## Ghost values

@@ -24,6 +24,9 @@
  *
 */
 
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 //! A generic module for benchmarking SET/GET operations
 //! **NOTE:** This is experimental and may show incorrect results - that is,
 //! the response times may be shown to be slower than they actually are

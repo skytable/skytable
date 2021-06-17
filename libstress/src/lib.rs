@@ -24,6 +24,9 @@
  *
 */
 
+#![deny(unused_crate_dependencies)]
+#![deny(unused_imports)]
+
 use core::marker::PhantomData;
 use std::sync::mpsc;
 use std::sync::Arc;
