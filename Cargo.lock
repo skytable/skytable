@@ -1042,6 +1042,7 @@ name = "stress-test"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "devtimer",
  "env_logger",
  "libstress",
  "log",

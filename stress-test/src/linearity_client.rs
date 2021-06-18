@@ -35,6 +35,7 @@
 use crate::logstress;
 use crate::{DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV};
 use crossbeam_channel::bounded;
+use devtimer::SimpleTimer;
 use libstress::rayon::prelude::*;
 use libstress::utils::generate_random_string_vector;
 use libstress::Workpool;
@@ -57,6 +58,47 @@ macro_rules! log_client_linearity {
     };
 }
 
+/// This object provides methods to measure the percentage change in the slope
+/// of a function that is expected to have linearity.
+///
+/// For example, we can think of it to work in the following way:
+/// Let h(x) be a function with linearity (not proportionality because that isn't
+/// applicable in our case). h(x) gives us the time taken to run a given number of
+/// queries (invariant; not plotted on axes), where x is the number of concurrent
+/// clients. As we would want our database to scale with increasing clients (and cores),
+/// we'd expect linearity, hence the gradient should continue to fall with increasing
+/// values in the +ve x-axis effectively producing a constantly decreasing slope, reflected
+/// by increasing values of abs(get_delta(h(x))).
+///
+/// TODO(@ohsayan): Of course, some unexpected kernel errors/scheduler hiccups et al can
+/// cause there to be a certain epsilon that must be tolerated with a tolerance factor
+///
+pub struct LinearityMeter {
+    init: Option<u128>,
+    measure: Vec<f32>,
+}
+
+impl LinearityMeter {
+    pub const fn new() -> Self {
+        Self {
+            init: None,
+            measure: Vec::new(),
+        }
+    }
+    pub fn get_delta(&mut self, current: u128) -> f32 {
+        if let Some(u) = self.init {
+            let cur = ((current as f32 - u as f32) / u as f32) * 100.00_f32;
+            self.measure.push(cur);
+            cur
+        } else {
+            // if init is not initialized, initialize it
+            self.init = Some(current);
+            // no change when at base
+            0.00
+        }
+    }
+}
+
 pub fn stress_linearity_concurrent_clients_set(
     mut rng: &mut impl rand::Rng,
     max_workers: usize,
@@ -75,6 +117,9 @@ pub fn stress_linearity_concurrent_clients_set(
 
     // make sure the database is empty
     temp_con.flushdb().unwrap();
+
+    // initialize the linearity counter
+    let mut linearity = LinearityMeter::new();
     while current_thread_count <= max_workers {
         log_client_linearity!("A", current_thread_count, "SET");
         // generate the set packets
@@ -95,7 +140,14 @@ pub fn stress_linearity_concurrent_clients_set(
             |_| {},
             true,
         );
+        let mut timer = SimpleTimer::new();
+        timer.start();
         workpool.execute_and_finish_iter(set_packs);
+        timer.stop();
+        log::info!(
+            "Delta: {}%",
+            linearity.get_delta(timer.time_in_nanos().unwrap())
+        );
         // clean up the database
         temp_con.flushdb().unwrap();
         current_thread_count += 1;
@@ -139,6 +191,9 @@ pub fn stress_linearity_concurrent_clients_get(
         true,
     );
     workpool.execute_and_finish_iter(set_packs);
+
+    // initialize the linearity counter
+    let mut linearity = LinearityMeter::new();
     while current_thread_count <= max_workers {
         log_client_linearity!("A", current_thread_count, "GET");
         /*
@@ -159,7 +214,14 @@ pub fn stress_linearity_concurrent_clients_get(
             |_| {},
             true,
         );
+        let mut timer = SimpleTimer::new();
+        timer.start();
         wp.execute_and_finish_iter(get_packs);
+        timer.stop();
+        log::info!(
+            "Delta: {}%",
+            linearity.get_delta(timer.time_in_nanos().unwrap())
+        );
         let rets: Vec<String> = rx
             .into_iter()
             .map(|v| {
