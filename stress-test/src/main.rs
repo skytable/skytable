@@ -34,10 +34,9 @@ use log::{info, trace};
 use rand::thread_rng;
 use skytable::actions::Actions;
 use skytable::Connection;
-use skytable::Query;
+use skytable::{Element, Query, RespCode, Response};
+use std::collections::HashSet;
 use std::env;
-use std::sync::Arc;
-use std::sync::Mutex;
 use sysinfo::{System, SystemExt};
 
 pub const DEFAULT_SIZE_KV: usize = 4;
@@ -82,15 +81,21 @@ fn stress_linearity_concurrent_clients(mut rng: &mut impl rand::Rng) {
     trace!("Will spawn a maximum of {} workers", num_workers * 2);
     let mut current_thread_count = 1usize;
     let mut temp_con = Connection::new("127.0.0.1", 2003).exit_error("Failed to connect to server");
-    temp_con.flushdb().unwrap();
-    let keys: Vec<String> = (0..DEFAULT_QUERY_COUNT)
-        .into_iter()
-        .map(|_| ran_string(DEFAULT_SIZE_KV, &mut rng))
-        .collect();
+    // keys can't repeat, so we use a hashset
+    let mut keys: HashSet<String> = HashSet::with_capacity(DEFAULT_QUERY_COUNT);
+    (0..DEFAULT_QUERY_COUNT).into_iter().for_each(|_| {
+        let mut ran = ran_string(DEFAULT_SIZE_KV, &mut rng);
+        while keys.contains(&ran) {
+            ran = ran_string(DEFAULT_SIZE_KV, &mut rng);
+        }
+        keys.insert(ran);
+    });
+    // we don't care if the values do repeat
     let values: Vec<String> = (0..DEFAULT_QUERY_COUNT)
         .into_iter()
         .map(|_| ran_string(DEFAULT_SIZE_KV, &mut rng))
         .collect();
+    temp_con.flushdb().unwrap();
     while current_thread_count < (num_workers + 1) {
         log_client_linearity!(A, current_thread_count);
         let set_packs: Vec<Query> = keys
@@ -103,15 +108,14 @@ fn stress_linearity_concurrent_clients(mut rng: &mut impl rand::Rng) {
                 q
             })
             .collect();
-        let responses = Arc::new(Mutex::new(Vec::new()));
         let workpool = Workpool::new(
             current_thread_count,
             || Connection::new("127.0.0.1", 2003).unwrap(),
             move |sock, query| {
-                let resp = responses.clone();
-                resp.lock()
-                    .unwrap()
-                    .push(sock.run_simple_query(&query).unwrap());
+                assert_eq!(
+                    sock.run_simple_query(&query).unwrap(),
+                    Response::Item(Element::RespCode(RespCode::Okay))
+                );
             },
             |_| {},
             true,
