@@ -39,7 +39,7 @@ use skytable::query;
 use skytable::Connection;
 use skytable::{Element, Query, RespCode, Response};
 use std::env;
-use sysinfo::{System, SystemExt};
+use sysinfo::{RefreshKind, System, SystemExt};
 
 pub const DEFAULT_SIZE_KV: usize = 4;
 pub const DEFAULT_QUERY_COUNT: usize = 100_000_usize;
@@ -72,13 +72,18 @@ fn main() {
         .init();
     warn!("The stress test checks correctness under load and DOES NOT show the true throughput");
     let mut rng = thread_rng();
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    let max_workers = sys
+    let to_refresh = RefreshKind::new().with_memory().with_cpu();
+    let mut sys = System::new_with_specifics(to_refresh);
+    sys.refresh_specifics(to_refresh);
+    let core_count = sys
         .get_physical_core_count()
-        .exit_error("Failed to get physical core count")
-        * 2;
-    trace!("Will spawn a maximum of {} workers", max_workers * 2);
+        .exit_error("Failed to get physical core count");
+    let max_workers = core_count * 2;
+    trace!(
+        "This host has {} logical cores. Will spawn a maximum of {} workers",
+        core_count,
+        max_workers * 2
+    );
     let mut temp_con = Connection::new("127.0.0.1", 2003).exit_error("Failed to connect to server");
     stress_linearity_concurrent_clients_set(&mut rng, max_workers, &mut temp_con);
     stress_linearity_concurrent_clients_get(&mut rng, max_workers, &mut temp_con);
