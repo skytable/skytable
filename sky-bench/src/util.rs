@@ -24,7 +24,7 @@
  *
 */
 
-use rand::distributions::Alphanumeric;
+use libstress::utils::ran_string;
 use rand::thread_rng;
 use serde::Serialize;
 use std::error::Error;
@@ -94,15 +94,6 @@ impl JSONReportBlock {
 /// Returns the number of queries/sec
 pub fn calc(reqs: usize, time: u128) -> f64 {
     reqs as f64 / (time as f64 / 1_000_000_000_f64)
-}
-
-pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
-    let rand_string: String = rand
-        .sample_iter(&Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect();
-    rand_string
 }
 
 /// # Sanity Test

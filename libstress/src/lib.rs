@@ -58,6 +58,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
 
+pub mod traits;
 use core::marker::PhantomData;
 use crossbeam_channel::unbounded;
 use crossbeam_channel::Receiver as CReceiver;
@@ -262,5 +263,17 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
                 thread.join().unwrap()
             }
         }
+    }
+}
+
+pub mod utils {
+    use rand::distributions::Alphanumeric;
+    pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
+        let rand_string: String = rand
+            .sample_iter(&Alphanumeric)
+            .take(len)
+            .map(char::from)
+            .collect();
+        rand_string
     }
 }

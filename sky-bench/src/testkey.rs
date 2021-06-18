@@ -26,7 +26,7 @@
 
 use crate::hoststr;
 use crate::sanity_test;
-use crate::util::ran_string;
+use libstress::utils::ran_string;
 use libstress::Workpool;
 use rand::thread_rng;
 use std::io::{Read, Write};
