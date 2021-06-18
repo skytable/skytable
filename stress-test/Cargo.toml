@@ -14,4 +14,5 @@ sysinfo = "0.18.2"
 # external deps
 env_logger = "0.8.4"
 log = "0.4.14"
-rand = "*"
+rand = "0.8.4"
+crossbeam-channel = "0.5.1"

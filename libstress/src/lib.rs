@@ -268,6 +268,7 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
 
 pub mod utils {
     use rand::distributions::Alphanumeric;
+    use std::collections::HashSet;
     pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
         let rand_string: String = rand
             .sample_iter(&Alphanumeric)
@@ -275,5 +276,28 @@ pub mod utils {
             .map(char::from)
             .collect();
         rand_string
+    }
+    pub fn generate_random_string_vector(
+        count: usize,
+        size: usize,
+        mut rng: impl rand::Rng,
+        unique: bool,
+    ) -> Vec<String> {
+        if unique {
+            let mut keys: HashSet<String> = HashSet::with_capacity(count);
+            (0..count).into_iter().for_each(|_| {
+                let mut ran = ran_string(size, &mut rng);
+                while keys.contains(&ran) {
+                    ran = ran_string(size, &mut rng);
+                }
+                keys.insert(ran);
+            });
+            keys.into_iter().collect()
+        } else {
+            (0..count)
+                .into_iter()
+                .map(|_| ran_string(size, &mut rng))
+                .collect()
+        }
     }
 }

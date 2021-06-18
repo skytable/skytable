@@ -29,7 +29,7 @@ use crate::sanity_test;
 use crate::util::calc;
 use crate::util::JSONReportBlock;
 use devtimer::DevTime;
-use libstress::utils::ran_string;
+use libstress::utils::generate_random_string_vector;
 use libstress::Workpool;
 use rand::thread_rng;
 use std::io::{Read, Write};
@@ -72,14 +72,9 @@ pub fn runner(
     );
     let getpool = setpool.clone();
     let delpool = getpool.clone();
-    let keys: Vec<String> = (0..max_queries)
-        .into_iter()
-        .map(|_| ran_string(packet_size, &mut rand))
-        .collect();
-    let values: Vec<String> = (0..max_queries)
-        .into_iter()
-        .map(|_| ran_string(packet_size, &mut rand))
-        .collect();
+    let keys: Vec<String> =
+        generate_random_string_vector(max_queries, packet_size, &mut rand, true);
+    let values = generate_random_string_vector(max_queries, packet_size, &mut rand, false);
     /*
     We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`
     The bytes in each of `set_packs` has a query packet for setting data;

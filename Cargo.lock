@@ -1041,6 +1041,7 @@ checksum = "d44a3643b4ff9caf57abcee9c2c621d6c03d9135e0d8b589bd9afb5992cb176a"
 name = "stress-test"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "env_logger",
  "libstress",
  "log",
