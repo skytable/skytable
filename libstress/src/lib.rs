@@ -63,6 +63,7 @@ use core::marker::PhantomData;
 use crossbeam_channel::unbounded;
 use crossbeam_channel::Receiver as CReceiver;
 use crossbeam_channel::Sender as CSender;
+pub use rayon;
 use rayon::prelude::*;
 use std::thread;
 
@@ -268,7 +269,9 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
 
 pub mod utils {
     use rand::distributions::Alphanumeric;
+    use rayon::prelude::*;
     use std::collections::HashSet;
+
     pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
         let rand_string: String = rand
             .sample_iter(&Alphanumeric)
@@ -292,7 +295,7 @@ pub mod utils {
                 }
                 keys.insert(ran);
             });
-            keys.into_iter().collect()
+            keys.into_par_iter().collect()
         } else {
             (0..count)
                 .into_iter()

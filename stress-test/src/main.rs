@@ -28,6 +28,7 @@
 #![deny(unused_imports)]
 
 use crossbeam_channel::bounded;
+use libstress::rayon::prelude::*;
 use libstress::traits::ExitError;
 use libstress::utils::generate_random_string_vector;
 use libstress::Workpool;
@@ -101,8 +102,8 @@ fn stress_linearity_concurrent_clients_set(mut rng: &mut impl rand::Rng, max_wor
     while current_thread_count <= max_workers {
         log_client_linearity!("A", current_thread_count, "SET");
         let set_packs: Vec<Query> = keys
-            .iter()
-            .zip(values.iter())
+            .par_iter()
+            .zip(values.par_iter())
             .map(|(k, v)| query!("SET", k, v))
             .collect();
         let workpool = Workpool::new(
@@ -145,8 +146,8 @@ fn stress_linearity_concurrent_clients_get(mut rng: &mut impl rand::Rng, max_wor
      We'll first set all the keys
     */
     let set_packs: Vec<Query> = keys
-        .iter()
-        .zip(values.iter())
+        .par_iter()
+        .zip(values.par_iter())
         .map(|(k, v)| query!("SET", k, v))
         .collect();
     let workpool = Workpool::new_default_threads(
@@ -192,7 +193,7 @@ fn stress_linearity_concurrent_clients_get(mut rng: &mut impl rand::Rng, max_wor
             "Incorrect number of values returned by server"
         );
         assert!(
-            rets.into_iter().all(|v| values.contains(&v)),
+            rets.into_par_iter().all(|v| values.contains(&v)),
             "Values returned by the server don't match what was sent"
         );
         current_thread_count += 1;
