@@ -32,7 +32,7 @@ use libstress::rayon::prelude::*;
 use libstress::traits::ExitError;
 use libstress::utils::generate_random_string_vector;
 use libstress::Workpool;
-use log::{info, trace};
+use log::{info, trace, warn};
 use rand::thread_rng;
 use skytable::actions::Actions;
 use skytable::query;
@@ -70,6 +70,7 @@ fn main() {
     env_logger::Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "trace".to_owned()))
         .init();
+    warn!("The stress test checks correctness under load and DOES NOT show the true throughput");
     let mut rng = thread_rng();
     let mut sys = System::new_all();
     sys.refresh_all();
@@ -78,8 +79,9 @@ fn main() {
         .exit_error("Failed to get physical core count")
         * 2;
     trace!("Will spawn a maximum of {} workers", max_workers * 2);
-    stress_linearity_concurrent_clients_set(&mut rng, max_workers);
-    stress_linearity_concurrent_clients_get(&mut rng, max_workers);
+    let mut temp_con = Connection::new("127.0.0.1", 2003).exit_error("Failed to connect to server");
+    stress_linearity_concurrent_clients_set(&mut rng, max_workers, &mut temp_con);
+    stress_linearity_concurrent_clients_get(&mut rng, max_workers, &mut temp_con);
     let max_keylen = calculate_max_keylen(DEFAULT_QUERY_COUNT, &mut sys);
     info!(
         "This host can support a maximum theoretical keylen of: {}",
@@ -88,19 +90,28 @@ fn main() {
     info!("SUCCESS. Stress test complete!");
 }
 
-fn stress_linearity_concurrent_clients_set(mut rng: &mut impl rand::Rng, max_workers: usize) {
+fn stress_linearity_concurrent_clients_set(
+    mut rng: &mut impl rand::Rng,
+    max_workers: usize,
+    temp_con: &mut Connection,
+) {
     logstress!(
         "A [SET]",
         "Linearity test with monotonically increasing clients"
     );
-    let mut current_thread_count = 1usize;
-    let mut temp_con = Connection::new("127.0.0.1", 2003).exit_error("Failed to connect to server");
+
+    // generate the random k/v pairs
     let keys = generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, true);
     let values: Vec<String> =
         generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, false);
+    let mut current_thread_count = 1usize;
+
+    // make sure the database is empty
     temp_con.flushdb().unwrap();
     while current_thread_count <= max_workers {
         log_client_linearity!("A", current_thread_count, "SET");
+
+        // generate the set packets
         let set_packs: Vec<Query> = keys
             .par_iter()
             .zip(values.par_iter())
@@ -125,26 +136,26 @@ fn stress_linearity_concurrent_clients_set(mut rng: &mut impl rand::Rng, max_wor
     }
 }
 
-fn stress_linearity_concurrent_clients_get(mut rng: &mut impl rand::Rng, max_workers: usize) {
+fn stress_linearity_concurrent_clients_get(
+    mut rng: &mut impl rand::Rng,
+    max_workers: usize,
+    temp_con: &mut Connection,
+) {
     logstress!(
         "A [GET]",
         "Linearity test with monotonically increasing clients"
     );
     let mut current_thread_count = 1usize;
-    /*
-     Establish another connection for flushing the database
-    */
-    let mut temp_con = Connection::new("127.0.0.1", 2003).exit_error("Failed to connect to server");
-    /*
-     Generate the random key/value pairs
-    */
+
+    // Generate the random k/v pairs
     let keys = generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, true);
     let values: Vec<String> =
         generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, false);
+
+    // Make sure that the database is empty
     temp_con.flushdb().unwrap();
-    /*
-     We'll first set all the keys
-    */
+
+    // First set the keys
     let set_packs: Vec<Query> = keys
         .par_iter()
         .zip(values.par_iter())
@@ -164,7 +175,13 @@ fn stress_linearity_concurrent_clients_get(mut rng: &mut impl rand::Rng, max_wor
     workpool.execute_and_finish_iter(set_packs);
     while current_thread_count <= max_workers {
         log_client_linearity!("A", current_thread_count, "GET");
+        /*
+         We create a  mpmc to receive the results returned. This avoids us using
+         any kind of locking on the surface which can slow down things
+        */
         let (tx, rx) = bounded::<Response>(DEFAULT_QUERY_COUNT);
+
+        // generate the get packets
         let get_packs: Vec<Query> = keys.iter().map(|k| query!("GET", k)).collect();
         let wp = Workpool::new(
             current_thread_count,
@@ -192,12 +209,15 @@ fn stress_linearity_concurrent_clients_get(mut rng: &mut impl rand::Rng, max_wor
             values.len(),
             "Incorrect number of values returned by server"
         );
+
+        // now evaluate them
         assert!(
             rets.into_par_iter().all(|v| values.contains(&v)),
             "Values returned by the server don't match what was sent"
         );
         current_thread_count += 1;
     }
+    temp_con.flushdb().unwrap();
 }
 
 fn calculate_max_keylen(expected_queries: usize, sys: &mut System) -> usize {
