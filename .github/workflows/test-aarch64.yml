@@ -12,7 +12,10 @@ jobs:
       - name: Install Rust
         run: |
           curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Test
         run: |
-          source $HOME/.cargo/env
           make test
+      - name: Stress test
+        run: |
+          make stress

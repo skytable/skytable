@@ -46,13 +46,21 @@ endif
 # Assemble the commands 
 BUILD_SERVER_COMMAND += $(BUILD_VERBOSE)
 BUILD_SERVER_COMMAND += -p skyd
+RELEASE_SERVER_COMMAND =
+RELEASE_SERVER_COMMAND += $(BUILD_SERVER_COMMAND)
+RELEASE_SERVER_COMMAND += --release
 RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
 BUILD_COMMAND += $(BUILD_VERBOSE)
 TEST_COMMAND += cargo test $(TARGET_ARG) -- --test-threads=1
-START_COMMAND += cargo run $(TARGET_ARG) -p skyd -- --noart --nosave
-
+START_COMMAND += cargo run $(TARGET_ARG) -p skyd
+START_COMMAND_RELEASE =
+START_COMMAND_RELEASE += ${START_COMMAND}
+START_COMMAND_RELEASE += --release
+START_COMMAND += -- --noart --nosave
+START_COMMAND_RELEASE += -- --noart --nosave
 ifneq ($(OS),Windows_NT)
 START_COMMAND += &
+START_COMMAND_RELEASE += &
 endif
 
 .pre:
@@ -75,6 +83,11 @@ release: .pre
 	@echo "Building all binaries in release mode (optimized)"
 	@echo "===================================================================="
 	cargo build --release --verbose $(TARGET_ARG)
+.release-server:
+	@echo "===================================================================="
+	@echo "Building server binary in release mode (optimized)"
+	@echo "===================================================================="
+	@$(RELEASE_SERVER_COMMAND)
 test: .build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
@@ -86,6 +99,19 @@ test: .build-server
 	@echo "Running all tests"
 	@echo "===================================================================="
 	cargo test $(TARGET_ARG) -- --test-threads=1
+	@$(STOP_SERVER)
+	rm .sky_pid
+stress: .release-server
+	@echo "===================================================================="
+	@echo "Starting database server in background"
+	@echo "===================================================================="
+	@${START_COMMAND_RELEASE}
+# sleep for 5s to let the server start up
+	@sleep 5
+	cargo run $(TARGET_ARG) --release -p stress-test
+	@echo "===================================================================="
+	@echo "Stress testing (all)"
+	@echo "===================================================================="
 	@$(STOP_SERVER)
 	rm .sky_pid
 clean:
