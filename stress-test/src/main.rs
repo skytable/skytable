@@ -56,12 +56,10 @@ fn main() {
     // get the rng and refresh sysinfo
     let mut rng = thread_rng();
     // we only need to refresh memory and CPU info; don't waste time syncing other things
-    let to_refresh = RefreshKind::new().with_memory().with_cpu();
+    let to_refresh = RefreshKind::new().with_memory();
     let mut sys = System::new_with_specifics(to_refresh);
     sys.refresh_specifics(to_refresh);
-    let core_count = sys
-        .get_physical_core_count()
-        .exit_error("Failed to get physical core count");
+    let core_count = num_cpus::get();
     let max_workers = core_count * 2;
     trace!(
         "This host has {} logical cores. Will spawn a maximum of {} threads",

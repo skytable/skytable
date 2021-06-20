@@ -1046,6 +1046,7 @@ dependencies = [
  "env_logger",
  "libstress",
  "log",
+ "num_cpus",
  "rand",
  "skytable",
  "sysinfo",
