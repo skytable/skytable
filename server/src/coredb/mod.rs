@@ -33,6 +33,8 @@ use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering;
 pub use htable::Data;
 use libsky::TResult;
 use parking_lot::RwLock;
@@ -56,7 +58,7 @@ pub struct Shared {
     ///
     /// If the database is poisoned -> the database can no longer accept writes
     /// but can only accept reads
-    pub poisoned: RwLock<bool>,
+    pub poisoned: AtomicBool,
     /// The number of snapshots that are to be kept at the most
     ///
     /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
@@ -107,11 +109,11 @@ impl SnapshotStatus {
 
 impl CoreDB {
     pub fn poison(&self) {
-        *self.shared.poisoned.write() = true;
+        self.shared.poisoned.store(true, Ordering::Release);
     }
 
     pub fn unpoison(&self) {
-        *self.shared.poisoned.write() = false;
+        self.shared.poisoned.store(false, Ordering::Release);
     }
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
@@ -173,7 +175,7 @@ impl CoreDB {
                 coremap,
                 shared: Arc::new(Shared {
                     snapcfg,
-                    poisoned: RwLock::new(false),
+                    poisoned: AtomicBool::new(false),
                 }),
             }
         } else {
@@ -186,7 +188,7 @@ impl CoreDB {
         CoreDB {
             coremap: HTable::new(),
             shared: Arc::new(Shared {
-                poisoned: RwLock::new(false),
+                poisoned: AtomicBool::new(false),
                 snapcfg,
             }),
         }
@@ -194,7 +196,7 @@ impl CoreDB {
     /// Check if the database object is poisoned, that is, data couldn't be written
     /// to disk once, and hence, we have disabled write operations
     pub fn is_poisoned(&self) -> bool {
-        *(self.shared).poisoned.read()
+        self.shared.poisoned.load(Ordering::Acquire)
     }
     /// Provides a reference to the shared [`Coremap`] object
     pub fn get_ref(&self) -> &HTable<Data, Data> {
