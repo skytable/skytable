@@ -4,7 +4,9 @@ members = [
     "server",
     "libsky",
     "sky-bench",
-    "sky-macros"
+    "sky-macros",
+    "libstress",
+    "stress-test"
 ]
 
 [profile.release]

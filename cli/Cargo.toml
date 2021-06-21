@@ -7,14 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libsky = { path = "../libsky" }
-tokio = { version = "1.6.1", features = ["full"] }
-bytes = "1.0.1"
-clap = { version = "2.33.3", features = ["yaml"] }
-openssl = { version = "0.10.34", features = ["vendored"] }
-tokio-openssl = "0.6.1"
+# internal deps
+libsky = { path="../libsky" }
+skytable = { git="https://github.com/skytable/client-rust", branch="next", features=["async"], default-features=false }
+# external deps
+tokio = { version="1.6.1", features=["full"] }
+clap = { version="2.33.3", features=["yaml"] }
 rustyline = "8.2.0"
-crossterm = "0.19.0"
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = ["async"], default-features = false }
-lazy_static = "1.4.0"
-regex = "1.5.4"
+crossterm = "0.20.0"

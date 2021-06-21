@@ -1,5 +1,5 @@
 /*
- * Created on Wed Aug 19 2020
+ * Created on Fri Jun 18 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,32 +24,46 @@
  *
 */
 
-//! # `EXISTS` queries
-//! This module provides functions to work with `EXISTS` queries
+use std::fmt;
 
-use crate::dbnet::connection::prelude::*;
-use crate::queryengine::ActionIter;
+/// A trait for aggresive erroring
+pub trait ExitError<T> {
+    /// Abort the process if the type errors with an error code or
+    /// return the type
+    fn exit_error<Ms>(self, msg: Ms) -> T
+    where
+        Ms: ToString;
+}
 
-/// Run an `EXISTS` query
-pub async fn exists<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
+impl<T, E> ExitError<T> for Result<T, E>
 where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+    E: fmt::Display,
 {
-    crate::err_if_len_is!(act, con, eq 0);
-    let mut how_many_of_them_exist = 0usize;
+    fn exit_error<Ms>(self, msg: Ms) -> T
+    where
+        Ms: ToString,
     {
-        let cmap = handle.get_ref();
-        act.for_each(|key| {
-            if cmap.contains_key(key.as_bytes()) {
-                how_many_of_them_exist += 1;
+        match self {
+            Self::Err(e) => {
+                log::error!("{} : '{}'", msg.to_string(), e);
+                std::process::exit(0x100);
             }
-        });
+            Self::Ok(v) => v,
+        }
     }
-    con.write_response(how_many_of_them_exist).await?;
-    Ok(())
+}
+
+impl<T> ExitError<T> for Option<T> {
+    fn exit_error<Ms>(self, msg: Ms) -> T
+    where
+        Ms: ToString,
+    {
+        match self {
+            Self::None => {
+                log::error!("{}", msg.to_string());
+                std::process::exit(0x100);
+            }
+            Self::Some(v) => v,
+        }
+    }
 }
