@@ -90,8 +90,8 @@ fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
     // first lock our temporary file
     let mut file = flock::FileLock::lock(SKY_TEMP_FILE)?;
     // get a read lock on the coretable
-    let lock = handle.lock_writes();
-    diskstore::flush_data(&mut file, &*lock)?;
+    let tbl_ref = handle.get_ref();
+    diskstore::flush_data(&mut file, &*tbl_ref)?;
     // now rename the file
     #[cfg(not(test))]
     fs::rename(SKY_TEMP_FILE, &*PERSIST_FILE)?;
@@ -101,13 +101,11 @@ fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
     file.unlock()?;
     // close the file
     drop(file);
-    // drop the lock since we're done writing the file
-    drop(lock);
     Ok(())
 }
 
 /// Run bgsave
-/// 
+///
 /// This function just hides away the BGSAVE blocking section from the _public API_
 pub fn run_bgsave(handle: &CoreDB) -> TResult<()> {
     _bgsave_blocking_section(handle)

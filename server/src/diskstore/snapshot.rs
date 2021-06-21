@@ -31,13 +31,11 @@ use crate::coredb::CoreDB;
 use crate::coredb::SnapshotStatus;
 use crate::diskstore;
 use chrono::prelude::*;
-use core::hint::spin_loop as let_the_cpu_relax;
 #[cfg(test)]
 use io::Result as IoResult;
 use regex::Regex;
 use std::fmt;
 use std::fs;
-use std::hint::unreachable_unchecked;
 use std::io::{self, ErrorKind};
 use std::path::PathBuf;
 lazy_static::lazy_static! {
@@ -187,33 +185,17 @@ impl<'a> SnapshotEngine<'a> {
     #[cfg(test)]
     fn mksnap_test(&mut self) -> bool {
         log::trace!("Snapshotting was initiated");
-        while self
-            .dbref
-            .shared
-            .snapcfg
-            .as_ref()
-            .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
-                // the developer to be sane enough to only call mksnap if snapshotting is enabled
-                unreachable_unchecked()
-            })
-            .is_busy()
-        {
-            // Endlessly wait for a lock to be free
-        }
-
         // Now log that we locked the snapshot service. Also mark this in `CoreDB`
         log::trace!("Acquired a lock on the snapshot service");
-        self.dbref.lock_snap(); // Set the snapshotting service to be busy
+        let lck = self.dbref.lock_snap(); // Lock the snapshot service
 
         // Now let us get the name of the files to create
         let (create_this, delete_this) = self._mksnap_nonblocking_section();
-        let lock = self.dbref.lock_writes();
         // Now begin writing the files
-        if let Err(e) = diskstore::write_to_disk(&create_this, &*lock) {
+        if let Err(e) = diskstore::write_to_disk(&create_this, &*self.dbref.get_ref()) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
-            self.dbref.unlock_snap();
+            drop(lck);
             return false;
         } else {
             log::info!("Successfully created snapshot");
@@ -226,13 +208,13 @@ impl<'a> SnapshotEngine<'a> {
                     e
                 );
                 log::trace!("Released lock on the snapshot service");
-                self.dbref.unlock_snap();
+                drop(lck);
                 return false;
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
-        self.dbref.unlock_snap();
+        drop(lck);
         log::trace!("Released lock on snapshot service");
         true
     }
@@ -249,34 +231,15 @@ impl<'a> SnapshotEngine<'a> {
     ) -> bool {
         log::trace!("Snapshotting was initiated");
         // This is a potentially blocking section
-        while handle
-            .shared
-            .snapcfg
-            .as_ref()
-            .unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is actually quite unsafe, **but** we're _expecting_
-                // the developer to be sane enough to only call mksnap if snapshotting is enabled
-                unreachable_unchecked()
-            })
-            .is_busy()
-        {
-            // Endlessly wait for a lock to be free
-            // we'll not yield to the system scheduler but let the machine instructions
-            // optimize away things
-            let_the_cpu_relax();
-        }
-
         // So we acquired a lock
         log::trace!("Acquired a lock on the snapshot service");
-        handle.lock_snap(); // Set the snapshotting service to be busy
-        let lock = handle.lock_writes();
-
+        let lck = handle.lock_snap(); // Lock the snapshot service
+        let tbl_ref = handle.get_ref();
         // Another blocking section that does the actual I/O
-        if let Err(e) = diskstore::write_to_disk(&snapname, &*lock) {
+        if let Err(e) = diskstore::write_to_disk(&snapname, &*tbl_ref) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
-            handle.unlock_snap();
-            drop(lock);
+            drop(lck);
             return false;
         } else {
             log::info!("Successfully created snapshot");
@@ -289,14 +252,13 @@ impl<'a> SnapshotEngine<'a> {
                     e
                 );
                 log::trace!("Released lock on the snapshot service");
-                handle.unlock_snap();
-                drop(lock);
+                drop(lck);
                 return false;
             } else {
                 log::info!("Successfully removed old snapshot");
             }
         }
-        handle.unlock_snap();
+        drop(lck);
         log::trace!("Released lock on snapshot service");
         true
     }

@@ -29,14 +29,16 @@
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::coredb::htable::HTable;
-use crate::coredb::htable::TableLockStateGuard;
 use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering;
 pub use htable::Data;
 use libsky::TResult;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
+use parking_lot::MutexGuard;
 use std::sync::Arc;
 pub mod htable;
 
@@ -57,7 +59,7 @@ pub struct Shared {
     ///
     /// If the database is poisoned -> the database can no longer accept writes
     /// but can only accept reads
-    pub poisoned: RwLock<bool>,
+    pub poisoned: AtomicBool,
     /// The number of snapshots that are to be kept at the most
     ///
     /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
@@ -76,43 +78,36 @@ pub struct SnapshotStatus {
     /// The maximum number of recent snapshots to keep
     pub max: usize,
     /// The current state of the snapshot service
-    pub in_progress: RwLock<bool>,
+    pub in_progress: Mutex<()>,
 }
 
 impl SnapshotStatus {
     /// Create a new `SnapshotStatus` instance with preset values
-    ///
-    /// **Note: ** The initial state of the snapshot service is set to false
     pub fn new(max: usize) -> Self {
         SnapshotStatus {
             max,
-            in_progress: RwLock::new(false),
+            in_progress: Mutex::new(()),
         }
     }
 
-    /// Set `in_progress` to true
-    pub fn lock_snap(&self) {
-        *self.in_progress.write() = true;
+    /// Lock the snapshot service
+    pub fn lock_snap(&self) -> MutexGuard<'_, ()> {
+        self.in_progress.lock()
     }
 
-    /// Set `in_progress` to false
-    pub fn unlock_snap(&self) {
-        *self.in_progress.write() = false;
-    }
-
-    /// Check if `in_progress` is set to true
+    /// Check if the snapshot service is busy
     pub fn is_busy(&self) -> bool {
-        *self.in_progress.read()
+        self.in_progress.try_lock().is_none()
     }
 }
 
 impl CoreDB {
     pub fn poison(&self) {
-        *self.shared.poisoned.write() = true;
+        self.shared.poisoned.store(true, Ordering::Release);
     }
 
     pub fn unpoison(&self) {
-        *self.shared.poisoned.write() = false;
+        self.shared.poisoned.store(false, Ordering::Release);
     }
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
@@ -123,16 +118,8 @@ impl CoreDB {
     ///
     /// ## Panics
     /// If snapshotting is disabled, this will panic
-    pub fn lock_snap(&self) {
-        self.shared.snapcfg.as_ref().unwrap().lock_snap();
-    }
-
-    /// Mark the snapshotting service to be free
-    ///
-    /// ## Panics
-    /// If snapshotting is disabled, this will panic
-    pub fn unlock_snap(&self) {
-        self.shared.snapcfg.as_ref().unwrap().unlock_snap();
+    pub fn lock_snap(&self) -> MutexGuard<'_, ()> {
+        self.shared.snapcfg.as_ref().unwrap().lock_snap()
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
@@ -174,7 +161,7 @@ impl CoreDB {
                 coremap,
                 shared: Arc::new(Shared {
                     snapcfg,
-                    poisoned: RwLock::new(false),
+                    poisoned: AtomicBool::new(false),
                 }),
             }
         } else {
@@ -187,7 +174,7 @@ impl CoreDB {
         CoreDB {
             coremap: HTable::new(),
             shared: Arc::new(Shared {
-                poisoned: RwLock::new(false),
+                poisoned: AtomicBool::new(false),
                 snapcfg,
             }),
         }
@@ -195,15 +182,10 @@ impl CoreDB {
     /// Check if the database object is poisoned, that is, data couldn't be written
     /// to disk once, and hence, we have disabled write operations
     pub fn is_poisoned(&self) -> bool {
-        *(self.shared).poisoned.read()
+        self.shared.poisoned.load(Ordering::Acquire)
     }
     /// Provides a reference to the shared [`Coremap`] object
     pub fn get_ref(&self) -> &HTable<Data, Data> {
         &self.coremap
-    }
-    /// Either returns a [`TableLockStateGuard`] preventing any write operations on the
-    /// coremap or it waits until locking is possible
-    pub fn lock_writes(&self) -> TableLockStateGuard<'_, Data, Data> {
-        self.coremap.lock_writes()
     }
 }

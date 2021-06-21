@@ -125,15 +125,14 @@ where
         }
         let failed;
         {
-            let lock = handle.lock_writes();
-            match diskstore::write_to_disk(&path, &*lock) {
+            let tbl_ref = handle.get_ref();
+            match diskstore::write_to_disk(&path, &*tbl_ref) {
                 Ok(_) => failed = false,
                 Err(e) => {
                     log::error!("Error while creating snapshot: {}", e);
                     failed = true;
                 }
             }
-            drop(lock);
             // end of table lock state critical section
         }
         if failed {
