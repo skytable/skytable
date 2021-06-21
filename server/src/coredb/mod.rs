@@ -29,7 +29,6 @@
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::coredb::htable::HTable;
-use crate::coredb::htable::TableLockStateGuard;
 use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
@@ -200,10 +199,5 @@ impl CoreDB {
     /// Provides a reference to the shared [`Coremap`] object
     pub fn get_ref(&self) -> &HTable<Data, Data> {
         &self.coremap
-    }
-    /// Either returns a [`TableLockStateGuard`] preventing any write operations on the
-    /// coremap or it waits until locking is possible
-    pub fn lock_writes(&self) -> TableLockStateGuard<'_, Data, Data> {
-        self.coremap.lock_writes()
     }
 }

@@ -208,9 +208,9 @@ impl<'a> SnapshotEngine<'a> {
 
         // Now let us get the name of the files to create
         let (create_this, delete_this) = self._mksnap_nonblocking_section();
-        let lock = self.dbref.lock_writes();
+        let tbl_ref = self.dbref.get_ref();
         // Now begin writing the files
-        if let Err(e) = diskstore::write_to_disk(&create_this, &*lock) {
+        if let Err(e) = diskstore::write_to_disk(&create_this, &*tbl_ref) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
             self.dbref.unlock_snap();
@@ -269,14 +269,13 @@ impl<'a> SnapshotEngine<'a> {
         // So we acquired a lock
         log::trace!("Acquired a lock on the snapshot service");
         handle.lock_snap(); // Set the snapshotting service to be busy
-        let lock = handle.lock_writes();
+        let tbl_ref = handle.get_ref();
 
         // Another blocking section that does the actual I/O
-        if let Err(e) = diskstore::write_to_disk(&snapname, &*lock) {
+        if let Err(e) = diskstore::write_to_disk(&snapname, &*tbl_ref) {
             log::error!("Snapshotting failed with error: '{}'", e);
             log::trace!("Released lock on the snapshot service");
             handle.unlock_snap();
-            drop(lock);
             return false;
         } else {
             log::info!("Successfully created snapshot");
@@ -290,7 +289,6 @@ impl<'a> SnapshotEngine<'a> {
                 );
                 log::trace!("Released lock on the snapshot service");
                 handle.unlock_snap();
-                drop(lock);
                 return false;
             } else {
                 log::info!("Successfully removed old snapshot");
