@@ -12,7 +12,7 @@ skytable = { git="https://github.com/skytable/client-rust", branch="next" }
 libsky = { path="../libsky" }
 libstress = { path="../libstress" }
 # external deps
-rand = "0.8.3"
+rand = "0.8.4"
 devtimer = "4.0.1"
 clap = { version="2.33.3", features=["yaml"] }
 serde = { version="1.0.126", features=["derive"] }

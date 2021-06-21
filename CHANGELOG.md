@@ -5,8 +5,20 @@ All changes in this project will be noted in this file.
 ## Unreleased
 
 ### Fixes
+
 - The save operation now automatically attempts to recover on failure during termination [see [#166](https://github.com/skytable/skytable/pull/166)]
 - More than one process can no longer concurrently use the same data directory, preventing any possible data corruption [see [#169](https://github.com/skytable/skytable/pull/169), [#167](https://github.com/skytable/skytable/issues/167)]
+- Fixed longstanding error in `sky-bench` component that caused key collisions
+
+### Additions
+
+- Added the `POP` query [[see #173](https://github.com/skytable/skytable/pull/173)]
+- Added stress testing for testing correctness under load [[see #175](https://github.com/skytable/skytable/pull/175)]
+
+### Workflow
+
+- Use Makefiles for builds [see [#172](https://github.com/skytable/skytable/pull/172), [#174](https://github.com/skytable/skytable/pull/174)]
+- Per-commit test for ARM64
 
 ## Version 0.6.1 [2021-06-07]
 
