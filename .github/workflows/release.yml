@@ -68,36 +68,19 @@ jobs:
           rustup default stable
           rustup target add ${{ matrix.rust }}
 
-      - name: Build
-        if: runner.os != 'Windows'
-        run: cargo build --release --target ${{ matrix.rust }}
-
-      - name: Build (Windows)
-        shell: cmd # Use cmd as the default shell to avoid perl path errors
-        if: runner.os == 'Windows'
-        run: cargo build --release --target ${{ matrix.rust }}
+      - name: Make bundle
+        run: make bundle
         env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-
-      - name: Upload binaries
+          RUST_BACKTRACE: 1
+          TARGET: ${{ matrix.rust }}
+          ARTIFACT: ${{ matrix.artifact }}
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+      - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}
-          path: |
-            target/${{ matrix.rust }}/release/skyd
-            target/${{ matrix.rust }}/release/skysh
-            target/${{ matrix.rust }}/release/sky-bench
-        if: runner.os != 'Windows'
+          name: ${{ matrix.rust }}
+        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
 
-      - name: Upload binaries (Windows)
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ matrix.artifact }}
-          path: |
-            target/${{ matrix.rust }}/release/skyd.exe
-            target/${{ matrix.rust }}/release/skysh.exe
-            target/${{ matrix.rust }}/release/sky-bench.exe
-        if: runner.os == 'Windows'
   build_32bit:
     name: Build artifacts (32-bit)
     runs-on: ${{ matrix.os }}
@@ -149,56 +132,29 @@ jobs:
           echo ::set-output name=version::"${GITHUB_REF:10}"
 
       - name: Install 32-bit tools (Linux)
-        run: |
-          sudo apt update && sudo apt install gcc-multilib -y
+        run: sudo apt update && sudo apt install gcc-multilib -y
         if: runner.os == 'Linux'
 
       - name: Install Rust
         run: |
           rustup target add ${{ matrix.rust }}
 
-      - name: Build
-        if: runner.os != 'Windows'
-        run: cargo build --release --target ${{ matrix.rust }}
-
-      - name: Build (Windows)
-        shell: cmd # Use cmd as the default shell to avoid perl path errors
-        if: runner.os == 'Windows'
-        run: cargo build --release --target ${{ matrix.rust }}
+      - name: Make bundle
+        run: make bundle
         env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-
-      - name: Upload binaries
+          RUST_BACKTRACE: 1
+          TARGET: ${{ matrix.rust }}
+          ARTIFACT: ${{ matrix.artifact }}
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+      - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}
-          path: |
-            target/${{ matrix.rust }}/release/skyd
-            target/${{ matrix.rust }}/release/skysh
-            target/${{ matrix.rust }}/release/sky-bench
-        if: runner.os != 'Windows'
+          name: ${{ matrix.rust }}
+        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
 
-      - name: Upload binaries (Windows)
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ matrix.artifact }}
-          path: |
-            target/${{ matrix.rust }}/release/skyd.exe
-            target/${{ matrix.rust }}/release/skysh.exe
-            target/${{ matrix.rust }}/release/sky-bench.exe
-        if: runner.os == 'Windows'
   build_musl:
     name: Build Linux x86_64-musl (Tier 2)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        build: [linux]
-        include:
-          - build: linux
-            os: ubuntu-latest
-            artifact: x86_64-linux-musl
-            rust: x86_64-unknown-linux-musl
-
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
@@ -206,25 +162,25 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          key: x86_64-unknown-linux-musl	-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
+            x86_64-unknown-linux-musl-cargo-registry-
 
       - name: Cache Cargo index
         uses: actions/cache@v2
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
+          key: x86_64-unknown-linux-musl-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
+            x86_64-unknown-linux-musl-cargo-index-
 
       - name: Cache Cargo build
         uses: actions/cache@v2
         with:
           path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
+          key: x86_64-unknown-linux-musl-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ matrix.rust }}-target-
+            x86_64-unknown-linux-musl-target-
 
       - name: Query version number
         id: get_version
@@ -234,24 +190,23 @@ jobs:
           echo ::set-output name=version::"${GITHUB_REF:10}"
 
       - name: Install MUSL tools
-        run: |
-          sudo apt update && sudo apt install musl-tools -y
+        run: sudo apt update && sudo apt install musl-tools -y
 
       - name: Install Rust
-        run: |
-          rustup target add ${{ matrix.rust }}
+        run: rustup target add x86_64-unknown-linux-musl
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.rust }}
-
-      - name: Upload binaries
+      - name: Make bundle
+        run: make bundle
+        env:
+          RUST_BACKTRACE: 1
+          TARGET: x86_64-unknown-linux-musl
+          ARTIFACT: x86_64-linux-musl
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+      - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.artifact }}
-          path: |
-            target/${{ matrix.rust }}/release/skyd
-            target/${{ matrix.rust }}/release/skysh
-            target/${{ matrix.rust }}/release/sky-bench
+          name: ${{ matrix.rust }}
+        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
 
   release:
     name: Release
@@ -261,88 +216,12 @@ jobs:
       - build_musl
     runs-on: ubuntu-latest
     steps:
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
-          release_name: ${{ steps.get_version.outputs.VERSION }}
-
       - name: Download all artifacts
         uses: actions/download-artifact@v2
-        with:
-          path: artifacts
-
-      - name: Archive artifacts
-        run: |
-          wget https://raw.githubusercontent.com/skytable/skytable/next/ci/artifact.sh
-          chmod +x artifact.sh
-          bash artifact.sh
-
-      - name: Release Linux bundle (x86_64)
-        uses: actions/upload-release-asset@v1
+        path: artifacts
+      - name: Upload release binaries
+        uses: alexellis/upload-assets@0.3.0
         env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/x86_64-linux-gnu.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-gnu.zip
-
-      - name: Release Windows bundle (x86_64)
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/x86_64-windows.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-windows.zip
-
-      - name: Release MacOS bundle (x86_64)
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/x86_64-macos.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-macos.zip
-
-      - name: Release Linux bundle (i686)
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/i686-linux-gnu.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-i686-linux-gnu.zip
-
-      - name: Release Windows bundle (i686)
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/i686-windows.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-i686-windows.zip
-      - name: Release Linux bundle (x86_64 MUSL)
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.TDBB }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/x86_64-linux-musl.zip
-          asset_content_type: application/octet-stream
-          asset_name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
+          asset_paths: '["artifacts/*.zip"]'

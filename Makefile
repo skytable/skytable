@@ -1,4 +1,5 @@
 ADDITIONAL_SOFTWARE=
+# (DEF) Either prepare --target triple-x-y OR have an empty value
 TARGET_ARG =
 ifneq ($(origin TARGET),undefined)
 TARGET_ARG +=--target ${TARGET}
@@ -12,14 +13,14 @@ ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install gcc-multilib -y
 endif
 endif
 
-# display a message if no additional packages are required for this target
+# (DEF) display a message if no additional packages are required for this target
 ifeq ($(ADDITIONAL_SOFTWARE),)
 ADDITIONAL_SOFTWARE += echo "info: No additional software required for this target"
 endif
 
 BUILD_VERBOSE = cargo build --verbose $(TARGET_ARG)
 
-# Create empty commands
+# (DEF) Create empty commands
 STOP_SERVER =
 BUILD_COMMAND =
 BUILD_SERVER_COMMAND =
@@ -27,6 +28,7 @@ TEST_COMMAND =
 RELEASE_COMMAND =
 START_COMMAND =
 
+# (DEF) Add cmd /c for windows due to OpenSSL issues or just add cargo run for non-windows
 ifeq ($(OS),Windows_NT)
 # export windows specifc rustflags
 export RUSTFLAGS = -Ctarget-feature=+crt-static
@@ -43,7 +45,7 @@ STOP_SERVER += pkill skyd
 # make sure to set executable permissions
 endif
 
-# Assemble the commands 
+# (DEF) Assemble the commands 
 BUILD_SERVER_COMMAND += $(BUILD_VERBOSE)
 BUILD_SERVER_COMMAND += -p skyd
 RELEASE_SERVER_COMMAND =
@@ -61,6 +63,28 @@ START_COMMAND_RELEASE += -- --noart --nosave
 ifneq ($(OS),Windows_NT)
 START_COMMAND += &
 START_COMMAND_RELEASE += &
+endif
+
+# (DEF) Prepare release bundle commands
+BUNDLE=
+ifeq ($(origin TARGET),undefined)
+# no target defined. but check for windows
+ifeq ($(OS),Windows_NT)
+# windows, so we need exe
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/release/{skysh.exe,skyd.exe,sky-bench.exe}
+else
+# not windows, so no exe
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/release/{skysh,skyd,sky-bench}
+endif
+else
+# target was defined, but check for windows
+ifeq ($(OS),Windows_NT)
+# windows, so we need exe
+BUNDLE+= zip -j bundle.zip target/${TARGET}/release/{skysh,skyd,sky-bench}
+else
+# not windows, so no exe
+BUNDLE+=zip -j bundle.zip target/${TARGET}/release/{skysh,skyd,sky-bench}
+endif
 endif
 
 .pre:
@@ -114,6 +138,11 @@ stress: .release-server
 	@echo "===================================================================="
 	@$(STOP_SERVER)
 	rm .sky_pid
+bundle: release
+	@echo "===================================================================="
+	@echo "Creating bundle for platform"
+	@echo "===================================================================="
+	@$(BUNDLE)
 clean:
 	@echo "===================================================================="
 	@echo "Cleaning up target folder"
