@@ -16,6 +16,7 @@ jobs:
     needs:
       - test_64bit
       - test_32bit
+      - test-arm64
     steps:
       - name: Finish Tier 1 Tests
         run: exit 0
@@ -284,3 +285,18 @@ jobs:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
         if: env.IS_MD_FILE == 'false'
+  test-arm64:
+    name: Test (self-hosted-arm64-native)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Test
+        run: make test
+      - name: Stress test
+        run: make stress
+        if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
