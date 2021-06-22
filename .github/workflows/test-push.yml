@@ -311,6 +311,6 @@ jobs:
       - name: Archive artifacts
         run: |
           mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
+          cargo build --target aarch64-unknown-linux-gnu
+          mv target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench dist
         if: env.IS_MD_FILE == 'false'
