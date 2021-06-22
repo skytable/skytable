@@ -108,7 +108,7 @@ fn main() {
             // uh oh, something happened while starting up
             log::error!("{}", e);
             pre_shutdown_cleanup(pid_file);
-            process::exit(0x100);
+            process::exit(1);
         }
     };
     assert_eq!(
@@ -141,7 +141,7 @@ pub fn pre_shutdown_cleanup(pid_file: fs::File) {
     drop(pid_file);
     if let Err(e) = fs::remove_file(PATH) {
         log::error!("Shutdown failure: Failed to remove pid file: {}", e);
-        process::exit(0x100);
+        process::exit(0x01);
     }
 }
 
@@ -168,7 +168,7 @@ fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<Strin
         }
         Err(e) => {
             log::error!("{}", e);
-            std::process::exit(0x100);
+            std::process::exit(0x01);
         }
     };
     binding_and_cfg
@@ -190,7 +190,7 @@ fn run_pre_startup_tasks() -> fs::File {
             "Startup failure: Another process with parent PID {} is using the data directory",
             pid
         );
-        process::exit(0x100);
+        process::exit(0x01);
     }
     let mut file = match fs::OpenOptions::new()
         .create(true)
@@ -201,12 +201,12 @@ fn run_pre_startup_tasks() -> fs::File {
         Ok(fle) => fle,
         Err(e) => {
             log::error!("Startup failure: Failed to open pid file: {}", e);
-            process::exit(0x100);
+            process::exit(0x01);
         }
     };
     if let Err(e) = file.write_all(process::id().to_string().as_bytes()) {
         log::error!("Startup failure: Failed to write to pid file: {}", e);
-        process::exit(0x100);
+        process::exit(0x01);
     }
     file
 }
