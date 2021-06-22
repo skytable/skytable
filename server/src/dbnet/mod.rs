@@ -246,6 +246,34 @@ impl MultiListener {
     }
 }
 
+#[cfg(unix)]
+use core::{pin::Pin, task::Context, task::Poll};
+#[cfg(unix)]
+use tokio::signal::unix::{signal as fnsignal, Signal, SignalKind};
+#[cfg(unix)]
+/// Object to bind to unix-specific signals
+pub struct UnixTerminationSignal {
+    sigterm: Signal,
+}
+
+#[cfg(unix)]
+impl UnixTerminationSignal {
+    pub fn init() -> Result<Self, String> {
+        let sigterm = fnsignal(SignalKind::terminate())
+            .map_err(|e| format!("Failed to bind to signal with: {}", e))?;
+        Ok(Self { sigterm })
+    }
+}
+
+#[cfg(unix)]
+impl Future for UnixTerminationSignal {
+    type Output = Option<()>;
+
+    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.sigterm.poll_recv(ctx)
+    }
+}
+
 /// Start the server waiting for incoming connections or a CTRL+C signal
 pub async fn run(
     ports: PortConfig,
@@ -294,12 +322,28 @@ pub async fn run(
             MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };
-    tokio::select! {
-        _ = server.run_server() => {}
-        _ = sig => {
-            log::info!("Signalling all workers to shut down");
+    #[cfg(not(unix))]
+    {
+        // Non-unix, usually Windows specific signal handling.
+        // FIXME(@ohsayan): For now, let's just
+        // bother with ctrl+c, we'll move ahead as users require them
+        tokio::select! {
+            _ = server.run_server() => {}
+            _ = sig => {}
         }
     }
+    #[cfg(unix)]
+    {
+        let sigterm = UnixTerminationSignal::init()?;
+        // apart from CTRLC, the only other thing we care about is SIGTERM
+        // FIXME(@ohsayan): Maybe we should respond to SIGHUP too?
+        tokio::select! {
+            _ = server.run_server() => {},
+            _ = sig => {},
+            _ = sigterm => {}
+        }
+    }
+    log::info!("Signalling all workers to shut down");
     // drop the signal and let others exit
     drop(signal);
     server.finish_with_termsig().await;

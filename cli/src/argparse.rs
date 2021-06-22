@@ -54,7 +54,7 @@ pub async fn start_repl() {
             Ok(p) => p,
             Err(_) => {
                 eprintln!("ERROR: Invalid port");
-                process::exit(0x100);
+                process::exit(0x01);
             }
         },
         None => 2003,
@@ -63,7 +63,7 @@ pub async fn start_repl() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("ERROR: {}", e);
-            process::exit(0x100);
+            process::exit(0x01);
         }
     };
     let mut runner = Runner::new(con);

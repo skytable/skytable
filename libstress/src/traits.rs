@@ -46,7 +46,7 @@ where
         match self {
             Self::Err(e) => {
                 log::error!("{} : '{}'", msg.to_string(), e);
-                std::process::exit(0x100);
+                std::process::exit(0x01);
             }
             Self::Ok(v) => v,
         }
@@ -61,7 +61,7 @@ impl<T> ExitError<T> for Option<T> {
         match self {
             Self::None => {
                 log::error!("{}", msg.to_string());
-                std::process::exit(0x100);
+                std::process::exit(0x01);
             }
             Self::Some(v) => v,
         }

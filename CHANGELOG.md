@@ -10,6 +10,8 @@ All changes in this project will be noted in this file.
 - More than one process can no longer concurrently use the same data directory, preventing any possible data corruption [see [#169](https://github.com/skytable/skytable/pull/169), [#167](https://github.com/skytable/skytable/issues/167)]
 - Fixed longstanding error in `sky-bench` component that caused key collisions
 - Fixed bug in `sky-bench` that allowed passing 0 for the inputs
+- Fixed handling of SIGTERM in `skyd` [see [#178](https://github.com/skytable/skytable/pull/178)]
+- Fixed incorrect termination codes [see [#178](https://github.com/skytable/skytable/pull/178)]
 
 ### Additions
 

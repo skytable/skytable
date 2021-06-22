@@ -422,7 +422,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         if let Some(format) = matches.value_of("format") {
             if let Err(e) = compat::upgrade(format) {
                 log::error!("Dataset upgrade failed with error: {}", e);
-                process::exit(0x100);
+                process::exit(0x01);
             } else {
                 process::exit(0x000);
             }
