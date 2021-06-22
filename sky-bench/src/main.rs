@@ -71,6 +71,9 @@ fn main() {
         None => DEFAULT_PACKET_SIZE,
         _ => err!("Bad value for key/value size"),
     };
+    if packet_size == 0 || max_queries == 0 || max_connections == 0 {
+        err!("All inputs must be non-zero values");
+    }
     if let Some(cmd) = matches.subcommand_matches("testkey") {
         let count = match cmd.value_of_lossy("count") {
             Some(cnt) => match cnt.to_string().parse::<usize>() {

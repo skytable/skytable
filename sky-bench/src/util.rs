@@ -59,7 +59,7 @@ macro_rules! sanity_test {
 #[macro_export]
 macro_rules! err {
     ($note:expr) => {{
-        eprintln!("{}", $note);
+        eprintln!("ERROR: {}", $note);
         std::process::exit(0x100);
     }};
 }

@@ -9,6 +9,7 @@ All changes in this project will be noted in this file.
 - The save operation now automatically attempts to recover on failure during termination [see [#166](https://github.com/skytable/skytable/pull/166)]
 - More than one process can no longer concurrently use the same data directory, preventing any possible data corruption [see [#169](https://github.com/skytable/skytable/pull/169), [#167](https://github.com/skytable/skytable/issues/167)]
 - Fixed longstanding error in `sky-bench` component that caused key collisions
+- Fixed bug in `sky-bench` that allowed passing 0 for the inputs
 
 ### Additions
 
