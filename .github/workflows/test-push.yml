@@ -291,12 +291,26 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - name: Setup environment
+        run: |
+          chmod +x ci/setvars.sh
+          ci/setvars.sh
       - name: Install Rust
         run: |
           curl https://sh.rustup.rs -sSf | sh -s -- -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        if: env.IS_MD_FILE == 'false'
       - name: Test
         run: make test
+        if: env.IS_MD_FILE == 'false'
       - name: Stress test
         run: make stress
         if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
+      - name: Archive artifacts
+        run: |
+          mkdir dist
+          cargo build --target ${{ matrix.rust }}
+          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
+        if: env.IS_MD_FILE == 'false'
