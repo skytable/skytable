@@ -304,6 +304,8 @@ jobs:
         if: env.IS_MD_FILE == 'false'
       - name: Test
         run: make test
+        env:
+          TARGET: aarch64-unknown-linux-gnu
         if: env.IS_MD_FILE == 'false'
       - name: Stress test
         run: make stress
@@ -313,4 +315,10 @@ jobs:
           mkdir dist
           cargo build --target aarch64-unknown-linux-gnu
           mv target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench dist
+        if: env.IS_MD_FILE == 'false'
+      - name: Save artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+          path: dist
         if: env.IS_MD_FILE == 'false'
