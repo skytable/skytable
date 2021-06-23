@@ -18,7 +18,7 @@ jobs:
       - test-arm64
     steps:
       - name: Download ARM64 artifact
-        run: wget -6 https://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+        run: wget http://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
       - name: Upload ARM64 artifact
         uses: actions/upload-artifact@v2
         with:
