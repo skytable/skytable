@@ -17,6 +17,13 @@ jobs:
       - test_32bit
       - test-arm64
     steps:
+      - name: Download ARM64 artifact
+        run: wget https://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+          path: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
       - name: Finish Tier 1 Tests
         run: exit 0
   test_64bit:
@@ -271,20 +278,15 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-      - name: Setup environment
+      - name: Set up tools
         run: |
-          chmod +x ci/setvars.sh
-          ci/setvars.sh
-      - name: Setup up CLI
-        run: |
-          sudo apt update && sudo apt install awscli -y
+          sudo apt update && sudo apt install awscli zip -y
           aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
           aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
           aws configure set default.s3.signature_version s3v4
       - name: Get cache
         run: |
           aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress s3://cache/skytable-linux-arm64.tar.zst target.tar.zst
-          md5sum target.tar.zst > target.tar.zst.md5
           tar -I zstd -xf target.tar.zst
           rm target.tar.zst
         continue-on-error: true
@@ -299,20 +301,20 @@ jobs:
       - name: Stress test
         run: make stress
         if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
-      - name: Prepare cache
-        run: tar --zstd -cf target.tar.zst target
       - name: Save cache
+        env:
+          HASHNOW: ${{ hashFiles('Cargo.lock') }}
         run: |
-          if [[ ```md5sum -c target.tar.zst.md5 --status && echo $?``` != "0" ]]; then
-            echo "Last MD5 was $(cat target.tar.zst.md5 | head -c 32)"
-            echo "Current sum is: $(md5sum target.tar.zst | head -c 32)"
+          if [[ ${HASHNOW} != $(cat target/LASTHASH  2>/dev/null) ]]; then
             echo "Need to freshen cache"
+            echo ${HASHNOW} > target/LASTHASH
+            tar --zstd -cf target.tar.zst target
             aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
           else
             echo "Cache hit occurred. Not saving cache"
           fi
       - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
-          path: dist
+        run: |
+          cargo build -j16 --target aarch64-unknown-linux-gnu
+          zip -j dist.zip target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench
+          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp dist.zip s3://everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
