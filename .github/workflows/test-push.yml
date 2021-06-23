@@ -305,13 +305,18 @@ jobs:
       - name: Save cache
         env:
           NEWHASH: ${{ hashFiles('Cargo.lock') }}
+          LASTHASH: ${{ env.LASTHASH }}
         run: |
-          echo "${NEWHASH} is the new hash. Freshening cache"
-          tar --zstd -cf target.tar.zst target
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
-        if: ${{ hashFiles('Cargo.lock') }} != ${{ env.LASTHASH }}
+          if [[ ${NEWHASH} != ${LASTHASH} ]]; then
+            echo "Freshening cache"
+            tar --zstd -cf target.tar.zst target
+            aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
+            echo "Finished freshening cache"
+          else
+            echo "Cache hit occurred. Not saving cache"
+          fi
       - name: Save artifacts
         run: |
           cargo build -j16 --target aarch64-unknown-linux-gnu
-          zip -j dist.zip target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench
+          zip -j dist.zip target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench
           aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp dist.zip s3://everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
