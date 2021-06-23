@@ -8,7 +8,6 @@ on:
 
 env:
   IS_ACTIONS_DOC: "false"
-  IS_MD_FILE: "false"
 jobs:
   tests-pass:
     name: Tier 1 Tests
@@ -16,7 +15,15 @@ jobs:
     needs:
       - test_64bit
       - test_32bit
+      - test-arm64
     steps:
+      - name: Download ARM64 artifact
+        run: wget http://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
+          path: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
       - name: Finish Tier 1 Tests
         run: exit 0
   test_64bit:
@@ -57,8 +64,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-registry-
-        if: env.IS_MD_FILE == 'false'
-
       - name: Cache Cargo index
         uses: actions/cache@v2
         with:
@@ -66,8 +71,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-index-
-        if: env.IS_MD_FILE == 'false'
-
       - name: Cache Cargo build
         uses: actions/cache@v2
         with:
@@ -75,13 +78,11 @@ jobs:
           key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-target-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
           rustup default stable
           rustup target add ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Publish docs
         env:
@@ -99,14 +100,13 @@ jobs:
         env:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
           mkdir dist
           cargo build --target ${{ matrix.rust }}
           mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: env.IS_MD_FILE == 'false' && runner.os != 'Windows'
+        if: runner.os != 'Windows'
 
       - name: Archive artifacts
         shell: cmd
@@ -117,14 +117,13 @@ jobs:
           move target\${{ matrix.rust }}\debug\*.exe dist
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+        if: runner.os == 'Windows'
 
       - name: Save artifacts
         uses: actions/upload-artifact@v2
         with:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
-        if: env.IS_MD_FILE == 'false'
   test_32bit:
     name: Test (32-bit)
     runs-on: ${{ matrix.os }}
@@ -154,7 +153,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-registry-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo index
         uses: actions/cache@v2
@@ -163,7 +161,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-index-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo build
         uses: actions/cache@v2
@@ -172,27 +169,24 @@ jobs:
           key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-target-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
           rustup default stable
           rustup target add ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
         run: make test
         env:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
           mkdir dist
           cargo build --target ${{ matrix.rust }}
           mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Linux'
+        if: runner.os == 'Linux'
 
       - name: Archive artifacts
         shell: cmd
@@ -203,14 +197,13 @@ jobs:
           move target\${{ matrix.rust }}\debug\*.exe dist
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: env.IS_MD_FILE == 'false' && runner.os == 'Windows'
+        if: runner.os == 'Windows'
 
       - name: Save artifacts
         uses: actions/upload-artifact@v2
         with:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
-        if: env.IS_MD_FILE == 'false'
   test_musl64:
     name: Test MUSL x86_64 (Tier 2)
     runs-on: ${{ matrix.os }}
@@ -238,7 +231,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-registry-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo index
         uses: actions/cache@v2
@@ -247,7 +239,6 @@ jobs:
           key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-cargo-index-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Cache Cargo build
         uses: actions/cache@v2
@@ -256,31 +247,76 @@ jobs:
           key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ matrix.rust }}-target-
-        if: env.IS_MD_FILE == 'false'
 
       - name: Install Rust
         run: |
           rustup default stable
           rustup target add ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Run Tests
         run: make test
         env:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
-        if: env.IS_MD_FILE == 'false'
 
       - name: Archive artifacts
         run: |
           mkdir dist
           cargo build --target ${{ matrix.rust }}
           mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: env.IS_MD_FILE == 'false'
 
       - name: Save artifacts
         uses: actions/upload-artifact@v2
         with:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
-        if: env.IS_MD_FILE == 'false'
+  test-arm64:
+    name: Test (self-hosted-arm64-native)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - name: Set up tools
+        run: |
+          sudo apt update && sudo apt install awscli zip zstd -y
+          aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
+          aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
+          aws configure set default.s3.signature_version s3v4
+      - name: Get cache
+        run: |
+          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress s3://cache/skytable-linux-arm64.tar.zst target.tar.zst
+          tar -I zstd -xf target.tar.zst
+          rm target.tar.zst
+          echo "LASTHASH=$(cat target/LASTHASH 2>/dev/null)" >> $GITHUB_ENV
+        continue-on-error: true
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo $HOME/.cargo/bin >> $GITHUB_PATH
+      - name: Test
+        run: make test
+        env:
+          TARGET: aarch64-unknown-linux-gnu
+      - name: Stress test
+        run: make stress
+        if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
+      - name: Save cache
+        env:
+          NEWHASH: ${{ hashFiles('Cargo.lock') }}
+          LASTHASH: ${{ env.LASTHASH }}
+        run: |
+          if [[ ${NEWHASH} != ${LASTHASH} ]]; then
+            echo "Freshening cache"
+            tar --zstd -cf target.tar.zst target
+            aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
+            echo "Finished freshening cache"
+          else
+            echo "Cache hit occurred. Not saving cache"
+          fi
+      - name: Save artifacts
+        run: |
+          cargo build -j16 --target aarch64-unknown-linux-gnu
+          zip -j dist.zip target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench
+          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp dist.zip s3://everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip

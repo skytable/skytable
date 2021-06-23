@@ -69,4 +69,3 @@ jobs:
         run: make test
         env:
           RUST_BACKTRACE: 1
-        if: env.IS_MD_FILE == 'false'
