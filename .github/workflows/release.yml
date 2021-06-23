@@ -6,10 +6,6 @@ on:
 name: Release
 
 env:
-  RELEASE_SDB: skyd
-  RELEASE_SKYSH: skysh
-  RELEASE_BENCH: sky-bench
-  RELEASE_DIR: artifacts
   GITHUB_REF: "${{ github.ref }}"
 
 jobs:
@@ -78,8 +74,8 @@ jobs:
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.rust }}
-        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
 
   build_32bit:
     name: Build artifacts (32-bit)
@@ -136,8 +132,7 @@ jobs:
         if: runner.os == 'Linux'
 
       - name: Install Rust
-        run: |
-          rustup target add ${{ matrix.rust }}
+        run: rustup target add ${{ matrix.rust }}
 
       - name: Make bundle
         run: make bundle
@@ -149,8 +144,8 @@ jobs:
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.rust }}
-        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
 
   build_musl:
     name: Build Linux x86_64-musl (Tier 2)
@@ -205,8 +200,8 @@ jobs:
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.rust }}
-        path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
+          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
+          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
   build-arm64:
     name: Build artifacts (self-hosted-arm64-native)
     runs-on: self-hosted
@@ -243,6 +238,7 @@ jobs:
           TARGET: aarch64-unknown-linux-gnu
           VERSION: ${{ steps.get_version.outputs.VERSION }}
           ARTIFACT: aarch64-linux-gnu
+        run: make bundle
       - name: Save cache
         env:
           NEWHASH: ${{ hashFiles('Cargo.lock') }}
@@ -257,11 +253,8 @@ jobs:
             echo "Cache hit occurred. Not saving cache"
           fi
       - name: Upload bundle
-        run:
-          - >
-            aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }}
-            s3 cp sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip
-            s3://releases/${{ steps.get_version.outputs.VERSION }}/
+        run: |
+          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip s3://releases/${{ steps.get_version.outputs.VERSION }}/
 
   release:
     name: Release
@@ -272,6 +265,7 @@ jobs:
       - build-arm64
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
       - name: Query version number
         id: get_version
         shell: bash
@@ -280,17 +274,14 @@ jobs:
           echo ::set-output name=version::"${GITHUB_REF:10}"
       - name: Download all artifacts
         uses: actions/download-artifact@v2
-        path: artifacts
+        with:
+          path: artifacts
       - name: Download ARM64 bundle
-        run:
-          - >
-            wget
-            https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/
-            sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip
+        run: |
+          wget https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip
         working-directory: artifacts
       - name: Upload release binaries
-        uses: alexellis/upload-assets@0.3.0
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          asset_paths: '["artifacts/*.zip"]'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.get_version.outputs.VERSION }}
+        run: hub release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$TAG_NAME"

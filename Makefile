@@ -71,19 +71,21 @@ ifeq ($(origin TARGET),undefined)
 # no target defined. but check for windows
 ifeq ($(OS),Windows_NT)
 # windows, so we need exe
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/release/{skysh.exe,skyd.exe,sky-bench.exe}
+BUNDLE += cd target/release &&
+BUNDLE += 7z a ../../../bundle.zip skysh.exe skyd.exe sky-bench.exe
 else
 # not windows, so no exe
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/release/{skysh,skyd,sky-bench}
+BUNDLE+=zip -j bundle.zip target/release/skysh target/release/skyd target/release/sky-bench
 endif
 else
 # target was defined, but check for windows
 ifeq ($(OS),Windows_NT)
 # windows, so we need exe
-BUNDLE+= zip -j bundle.zip target/${TARGET}/release/{skysh,skyd,sky-bench}
+BUNDLE += cd target/${TARGET}/release &&
+BUNDLE+=7z a ../../../sky-bundle-${VERSION}-${ARTIFACT}.zip skysh.exe skyd.exe sky-bench.exe
 else
 # not windows, so no exe
-BUNDLE+=zip -j bundle.zip target/${TARGET}/release/{skysh,skyd,sky-bench}
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench
 endif
 endif
 
@@ -142,7 +144,7 @@ bundle: release
 	@echo "===================================================================="
 	@echo "Creating bundle for platform"
 	@echo "===================================================================="
-	@$(BUNDLE)
+	$(BUNDLE)
 clean:
 	@echo "===================================================================="
 	@echo "Cleaning up target folder"
