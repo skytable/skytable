@@ -2,7 +2,7 @@
 
 All changes in this project will be noted in this file.
 
-## Unreleased
+## Version 0.6.2 [2021-06-24]
 
 ### Fixes
 
@@ -21,7 +21,7 @@ All changes in this project will be noted in this file.
 ### Workflow
 
 - Use Makefiles for builds [see [#172](https://github.com/skytable/skytable/pull/172), [#174](https://github.com/skytable/skytable/pull/174)]
-- Per-commit test for ARM64
+- Tier-1 Support for ARM64 [see [#179](https://github.com/skytable/skytable/pull/179)]
 
 ## Version 0.6.1 [2021-06-07]
 
