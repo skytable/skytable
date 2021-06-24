@@ -49,6 +49,19 @@ lazy_static::lazy_static! {
     static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
 }
 
+#[macro_export]
+/// Don't use unwrap_or but use this macro as the optimizer fails to optimize away usages
+/// of unwrap_or and creates a lot of LLVM IR bloat. use
+// FIXME(@ohsayan): Fix this when https://github.com/rust-lang/rust/issues/68667 is addressed
+macro_rules! option_unwrap_or {
+    ($try:expr, $fallback:expr) => {
+        match $try {
+            Some(t) => t,
+            None => $fallback,
+        }
+    };
+}
+
 pub fn split_into_args(q: &str) -> Vec<String> {
     let args: Vec<String> = RE
         .find_iter(q)

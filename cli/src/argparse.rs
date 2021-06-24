@@ -48,7 +48,7 @@ const ADDR: &str = "127.0.0.1";
 pub async fn start_repl() {
     let cfg_layout = load_yaml!("./cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
-    let host = matches.value_of("host").unwrap_or(ADDR);
+    let host = libsky::option_unwrap_or!(matches.value_of("host"), ADDR);
     let port = match matches.value_of("port") {
         Some(p) => match p.parse::<u16>() {
             Ok(p) => p,

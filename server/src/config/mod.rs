@@ -50,11 +50,6 @@ pub struct Config {
     /// The `server` key
     server: ConfigKeyServer,
     /// The `bgsave` key
-    /* TODO(@ohsayan): As of now, we will keep this optional, but post 0.6.0,
-     * we will make it compulsory (so that we don't break semver)
-     * See the link below for more details:
-     * https://github.com/Skytable/Skytable/issues/21#issuecomment-693217709
-     */
     bgsave: Option<ConfigKeyBGSAVE>,
     /// The snapshot key
     snapshot: Option<ConfigKeySnapshot>,
@@ -283,7 +278,7 @@ impl ParsedConfig {
     /// TOML file (represented as an object)
     fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            noart: cfg_info.server.noart.unwrap_or(false),
+            noart: libsky::option_unwrap_or!(cfg_info.server.noart, false),
             bgsave: if let Some(bgsave) = cfg_info.bgsave {
                 match (bgsave.enabled, bgsave.every) {
                     // TODO: Show a warning that there are unused keys
@@ -301,7 +296,7 @@ impl ParsedConfig {
                     SnapshotConfig::Enabled(SnapshotPref::new(
                         snapshot.every,
                         snapshot.atmost,
-                        snapshot.failsafe.unwrap_or(true),
+                        libsky::option_unwrap_or!(snapshot.failsafe, true),
                     ))
                 })
                 .unwrap_or_else(SnapshotConfig::default),
@@ -533,11 +528,12 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             },
             None => None,
         };
-        let failsafe = if let Ok(failsafe) = matches
-            .value_of("stop-write-on-fail")
-            .map(|val| val.parse::<bool>())
-            .unwrap_or(Ok(true))
-        {
+        let failsafe = if let Ok(failsafe) = libsky::option_unwrap_or!(
+            matches
+                .value_of("stop-write-on-fail")
+                .map(|val| val.parse::<bool>()),
+            Ok(true)
+        ) {
             failsafe
         } else {
             return Err(ConfigError::CliArgErr(
