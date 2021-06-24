@@ -1,6 +1,6 @@
 [package]
 name = "sky-bench"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
