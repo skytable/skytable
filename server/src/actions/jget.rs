@@ -54,9 +54,8 @@ where
 }
 
 mod json {
+    use crate::util::Unwrappable;
     use bytes::Bytes;
-    use std::hint::unreachable_unchecked;
-
     pub struct BuiltJSON(Vec<u8>);
     pub struct JSONBlob(Vec<u8>);
     impl JSONBlob {
@@ -79,10 +78,10 @@ mod json {
             self.0.push(b',');
         }
         pub fn finish(mut self) -> BuiltJSON {
-            *self.0.last_mut().unwrap_or_else(|| unsafe {
+            *unsafe {
                 // UNSAFE(@ohsayan): There will always be a value corresponding to last_mut
-                unreachable_unchecked()
-            }) = b'}';
+                self.0.last_mut().unsafe_unwrap()
+            } = b'}';
             BuiltJSON(self.0)
         }
     }

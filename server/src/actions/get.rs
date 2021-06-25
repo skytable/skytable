@@ -32,7 +32,6 @@ use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
-use core::hint::unreachable_unchecked;
 
 /// Run a `GET` query
 pub async fn get<T, Strm>(
@@ -48,14 +47,10 @@ where
     let res: Option<Bytes> = {
         let reader = handle.get_ref();
         unsafe {
-            // UNSAFE(@ohsayan): unreachable_unchecked is safe because we've already checked if the action
+            // UNSAFE(@ohsayan): this is safe because we've already checked if the action
             // group contains one argument (excluding the action itself)
             reader
-                .get(
-                    act.next()
-                        .unwrap_or_else(|| unreachable_unchecked())
-                        .as_bytes(),
-                )
+                .get(act.next().unsafe_unwrap().as_bytes())
                 .map(|b| b.get_blob().clone())
         }
     };

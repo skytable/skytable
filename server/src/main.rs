@@ -59,6 +59,7 @@ mod resp;
 mod services;
 #[cfg(test)]
 mod tests;
+mod util;
 
 const PATH: &str = ".sky_pid";
 

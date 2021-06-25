@@ -33,7 +33,6 @@ use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use coredb::Data;
-use std::hint::unreachable_unchecked;
 
 /// Run an `UPDATE` query
 pub async fn update<T, Strm>(
@@ -53,18 +52,14 @@ where
             let writer = handle.get_ref();
             // clippy thinks we're doing something complex when we aren't, at all!
             #[allow(clippy::blocks_in_if_conditions)]
-            if writer.true_if_update(
-                Data::from(act.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We've already checked that the action contains exactly
-                    // two arguments (excluding the action itself). So, this branch won't ever be reached
-                    unreachable_unchecked()
-                })),
-                Data::from(act.next().unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We've already checked that the action contains exactly
-                    // two arguments (excluding the action itself). So, this branch won't ever be reached
-                    unreachable_unchecked()
-                })),
-            ) {
+            if unsafe {
+                // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                // that there are exactly 2 arguments
+                writer.true_if_update(
+                    Data::from(act.next().unsafe_unwrap()),
+                    Data::from(act.next().unsafe_unwrap()),
+                )
+            } {
                 Some(true)
             } else {
                 Some(false)

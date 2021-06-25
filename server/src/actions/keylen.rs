@@ -27,7 +27,6 @@
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use core::hint::unreachable_unchecked;
 
 /// Run a `KEYLEN` query
 ///
@@ -45,14 +44,10 @@ where
     let res: Option<usize> = {
         let reader = handle.get_ref();
         unsafe {
-            // UNSAFE(@ohsayan): unreachable_unchecked() is completely safe as we've already checked
+            // UNSAFE(@ohsayan): this is completely safe as we've already checked
             // the number of arguments is one
             reader
-                .get(
-                    act.next()
-                        .unwrap_or_else(|| unreachable_unchecked())
-                        .as_bytes(),
-                )
+                .get(act.next().unsafe_unwrap().as_bytes())
                 .map(|b| b.get_blob().len())
         }
     };

@@ -30,7 +30,6 @@ use crate::diskstore::snapshot::SnapshotEngine;
 use crate::diskstore::snapshot::DIR_SNAPSHOT;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use std::hint::unreachable_unchecked;
 use std::path::{Component, PathBuf};
 
 /// Create a snapshot
@@ -57,22 +56,22 @@ where
         let mut succeeded = None;
 
         let snaphandle = handle.shared.clone();
-        let snapstatus = snaphandle.snapcfg.as_ref().unwrap_or_else(|| unsafe {
+        let snapstatus = unsafe {
             // UNSAFE(@ohsayan) This is safe as we've already checked
             // if snapshots are enabled or not with `is_snapshot_enabled`
-            unreachable_unchecked()
-        });
+            snaphandle.snapcfg.as_ref().unsafe_unwrap()
+        };
         let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
         if snapengine.is_err() {
             was_engine_error = true;
         } else if snapstatus.is_busy() {
             succeeded = None;
         } else {
-            let snapengine = snapengine.unwrap_or_else(|_| unsafe {
+            let snapengine = unsafe {
                 // UNSAFE(@ohsayan) This is safe as we've already checked
                 // if snapshots are enabled or not with `is_snapshot_enabled`
-                unreachable_unchecked()
-            });
+                snapengine.unsafe_unwrap()
+            };
             succeeded = Some(snapengine);
         }
         if was_engine_error {
@@ -99,11 +98,11 @@ where
         }
     } else if act.len() == 1 {
         // This means that the user wants to create a 'named' snapshot
-        let snapname = act.next().unwrap_or_else(|| unsafe {
+        let snapname = unsafe {
             // UNSAFE(@ohsayan): We've already checked that the action
             // contains a second argument, so this can't be reached
-            unreachable_unchecked()
-        });
+            act.next().unsafe_unwrap()
+        };
         let mut path = PathBuf::from(DIR_SNAPSHOT);
         path.push("remote");
         path.push(snapname.to_owned() + ".snapshot");

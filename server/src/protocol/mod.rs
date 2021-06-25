@@ -38,8 +38,8 @@
 
 mod element;
 pub mod responses;
+use crate::util::Unwrappable;
 pub use element::Element;
-use std::hint::unreachable_unchecked;
 
 #[derive(Debug)]
 /// # Skyhash Deserializer (Parser)
@@ -185,13 +185,11 @@ impl<'a> Parser<'a> {
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
             // if 9 is given, the subtraction should give us 9!
-            let curdig: usize = dig
-                .checked_sub(48)
-                .unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
-                    unreachable_unchecked()
-                })
-                .into();
+            let curdig: usize = unsafe {
+                // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
+                dig.checked_sub(48).unsafe_unwrap()
+            }
+            .into();
             // The usize can overflow; check that case
             let product = match item_usize.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
@@ -220,13 +218,11 @@ impl<'a> Parser<'a> {
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
             // if 9 is given, the subtraction should give us 9!
-            let curdig: u64 = dig
-                .checked_sub(48)
-                .unwrap_or_else(|| unsafe {
-                    // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
-                    unreachable_unchecked()
-                })
-                .into();
+            let curdig: u64 = unsafe {
+                // UNSAFE(@ohsayan): We already know that dig is an ASCII digit
+                dig.checked_sub(48).unsafe_unwrap()
+            }
+            .into();
             // Now the entire u64 can overflow, so let's attempt to check it
             let product = match item_u64.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
@@ -379,14 +375,11 @@ impl<'a> Parser<'a> {
             // of the next query
             // clippy thinks we're doing something complex when we aren't, at all!
             #[allow(clippy::blocks_in_if_conditions)]
-            if self
-                .will_cursor_give_char(b'*', true)
-                .unwrap_or_else(|_| unsafe {
-                    // UNSAFE(@ohsayan): This will never be the case because we'll always get a result and no error value
-                    // as we've passed true which will yield Ok(true) even if there is no byte ahead
-                    unreachable_unchecked()
-                })
-            {
+            if unsafe {
+                // UNSAFE(@ohsayan): This will never be the case because we'll always get a result and no error value
+                // as we've passed true which will yield Ok(true) even if there is no byte ahead
+                self.will_cursor_give_char(b'*', true).unsafe_unwrap()
+            } {
                 Ok((Query::SimpleQuery(single_group), self.cursor))
             } else {
                 // the next item isn't the beginning of a query but something else?

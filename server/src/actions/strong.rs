@@ -137,11 +137,11 @@ where
                 act.into_iter().for_each(|key| {
                     // Since we've already checked that the keys don't exist
                     // We'll tell the compiler to optimize this
-                    let _ = mut_table.remove(key.as_bytes()).unwrap_or_else(|| unsafe {
+                    unsafe {
                         // UNSAFE(@ohsayan): Since all the values exist, all of them will return
                         // some value. Hence, this branch won't ever be reached. Hence, this is safe.
-                        unreachable_unchecked()
-                    });
+                        let _ = mut_table.remove(key.as_bytes()).unsafe_unwrap();
+                    }
                 });
             } else {
                 failed = Some(true);
@@ -196,17 +196,13 @@ where
                 }
                 // Skip the next value that is coming our way, as we don't need it
                 // right now
-                let _ = key_iter
-                    .next()
-                    .unwrap_or_else(|| unsafe { unreachable_unchecked() });
+                unsafe {
+                    let _ = key_iter.next().unsafe_unwrap();
+                }
             }
             // clippy thinks we're doing something complex when we aren't, at all!
             #[allow(clippy::blocks_in_if_conditions)]
-            if !failed.unwrap_or_else(|| unsafe {
-                // UNSAFE(@ohsayan): This is completely safe as a value is assigned to `failed`
-                // right in the beginning
-                unreachable_unchecked()
-            }) {
+            if unsafe { !failed.unsafe_unwrap() } {
                 // Since the failed flag is false, none of the keys existed
                 // So we can safely update the keys
                 while let (Some(key), Some(value)) = (act.next(), act.next()) {
