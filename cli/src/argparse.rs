@@ -41,7 +41,7 @@ use std::process;
 use std::process::exit;
 const ADDR: &str = "127.0.0.1";
 
-macro_rules! eval_inner {
+macro_rules! inner_eval {
     ($runner:expr, $matches:expr) => {
         if let Some(eval_expr) = $matches.value_of("eval") {
             if eval_expr.is_empty() {
@@ -116,8 +116,8 @@ pub async fn start_repl() {
         };
         let mut runner = Runner::new(con);
         println!("Connected to skyhash-secure://{}:{}", host, port);
+        inner_eval!(runner, matches);
         inner_repl!(runner);
-        eval_inner!(runner, matches);
     } else {
         let con = match AsyncConnection::new(host, port).await {
             Ok(c) => c,
@@ -128,7 +128,7 @@ pub async fn start_repl() {
         };
         let mut runner = Runner::new(con);
         println!("Connected to skyhash://{}:{}", host, port);
-        eval_inner!(runner, matches);
+        inner_eval!(runner, matches);
         inner_repl!(runner);
     }
     println!("Goodbye!");
