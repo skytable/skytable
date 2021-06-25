@@ -23,11 +23,40 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+use core::future::Future;
+use core::pin::Pin;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
-use skytable::{AsyncConnection, Element, RespCode, Response};
+use skytable::Query;
+use skytable::{aio, Element, RespCode, Response};
+use std::io::Error as IoError;
 
-pub struct Runner {
-    con: AsyncConnection,
+pub struct Runner<T: AsyncSocket> {
+    con: T,
+}
+
+pub trait AsyncSocket {
+    fn run_simple_query<'s>(
+        &'s mut self,
+        query: Query,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>>;
+}
+
+impl AsyncSocket for aio::Connection {
+    fn run_simple_query<'s>(
+        &'s mut self,
+        query: Query,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>> {
+        Box::pin(async move { self.run_simple_query(&query).await })
+    }
+}
+
+impl AsyncSocket for aio::TlsConnection {
+    fn run_simple_query<'s>(
+        &'s mut self,
+        query: Query,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>> {
+        Box::pin(async move { self.run_simple_query(&query).await })
+    }
 }
 
 macro_rules! write_string {
@@ -100,13 +129,13 @@ macro_rules! write_okay {
     };
 }
 
-impl Runner {
-    pub const fn new(con: AsyncConnection) -> Self {
+impl<T: AsyncSocket> Runner<T> {
+    pub fn new(con: T) -> Self {
         Runner { con }
     }
     pub async fn run_query(&mut self, unescaped_items: &str) {
         let query = libsky::turn_into_query(unescaped_items);
-        match self.con.run_simple_query(&query).await {
+        match self.con.run_simple_query(query).await {
             Ok(resp) => match resp {
                 Response::InvalidResponse => {
                     println!("ERROR: The server sent an invalid response");

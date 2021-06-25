@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 # internal deps
 libsky = { path="../libsky" }
-skytable = { git="https://github.com/skytable/client-rust", branch="next", features=["async"], default-features=false }
+skytable = { git="https://github.com/skytable/client-rust", branch="next", features=["async", "aio-sslv"], default-features=false }
 # external deps
 tokio = { version="1.7.0", features=["full"] }
 clap = { version="2.33.3", features=["yaml"] }

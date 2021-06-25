@@ -34,11 +34,58 @@ use libsky::VERSION;
 use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
+use skytable::aio::TlsConnection;
 use skytable::AsyncConnection;
 use std::io::stdout;
 use std::process;
 use std::process::exit;
 const ADDR: &str = "127.0.0.1";
+
+macro_rules! eval_inner {
+    ($runner:expr, $matches:expr) => {
+        if let Some(eval_expr) = $matches.value_of("eval") {
+            if eval_expr.is_empty() {
+                return;
+            }
+            $runner.run_query(&eval_expr).await;
+            return;
+        }
+    };
+}
+
+macro_rules! inner_repl {
+    ($runner:expr) => {
+        println!("Skytable v{} | {}", VERSION, URL);
+        let mut editor = Editor::<()>::new();
+        editor.set_auto_add_history(true);
+        editor.set_history_ignore_dups(true);
+        let _ = editor.load_history(".sky_history");
+        loop {
+            match editor.readline("skysh> ") {
+                Ok(line) => match line.to_lowercase().as_str() {
+                    "exit" => break,
+                    "clear" => {
+                        let mut stdout = stdout();
+                        execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
+                        execute!(stdout, cursor::MoveTo(0, 0))
+                            .expect("Failed to move cursor to origin");
+                        drop(stdout); // aggressively drop stdout
+                        continue;
+                    }
+                    _ => $runner.run_query(&line).await,
+                },
+                Err(ReadlineError::Interrupted) => break,
+                Err(err) => {
+                    eprintln!("Failed to read line with error: {}", err);
+                    exit(1);
+                }
+            }
+        }
+        if let Err(e) = editor.save_history(".sky_history") {
+            eprintln!("Failed to save history with error: '{}'", e);
+        }
+    };
+}
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
@@ -59,50 +106,30 @@ pub async fn start_repl() {
         },
         None => 2003,
     };
-    let con = match AsyncConnection::new(host, port).await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("ERROR: {}", e);
-            process::exit(0x01);
-        }
-    };
-    let mut runner = Runner::new(con);
-    if let Some(eval_expr) = matches.value_of("eval") {
-        if eval_expr.is_empty() {
-            return;
-        }
-        runner.run_query(&eval_expr).await;
-        return;
-    }
-    let mut editor = Editor::<()>::new();
-    editor.set_auto_add_history(true);
-    editor.set_history_ignore_dups(true);
-    let _ = editor.load_history(".sky_history");
-    println!("Connected to skyhash://{}:{}", host, port);
-    println!("Skytable v{} | {}", VERSION, URL);
-    loop {
-        match editor.readline("skysh> ") {
-            Ok(line) => match line.to_lowercase().as_str() {
-                "exit" => break,
-                "clear" => {
-                    let mut stdout = stdout();
-                    execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
-                    execute!(stdout, cursor::MoveTo(0, 0))
-                        .expect("Failed to move cursor to origin");
-                    drop(stdout); // aggressively drop stdout
-                    continue;
-                }
-                _ => runner.run_query(&line).await,
-            },
-            Err(ReadlineError::Interrupted) => break,
-            Err(err) => {
-                eprintln!("Failed to read line with error: {}", err);
-                exit(1);
+    if let Some(sslcert) = matches.value_of("cert") {
+        let con = match TlsConnection::new(host, port, sslcert).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("ERROR: {}", e);
+                process::exit(0x01);
             }
-        }
-    }
-    if let Err(e) = editor.save_history(".sky_history") {
-        eprintln!("Failed to save history with error: '{}'", e);
+        };
+        let mut runner = Runner::new(con);
+        println!("Connected to skyhash-secure://{}:{}", host, port);
+        inner_repl!(runner);
+        eval_inner!(runner, matches);
+    } else {
+        let con = match AsyncConnection::new(host, port).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("ERROR: {}", e);
+                process::exit(0x01);
+            }
+        };
+        let mut runner = Runner::new(con);
+        println!("Connected to skyhash://{}:{}", host, port);
+        eval_inner!(runner, matches);
+        inner_repl!(runner);
     }
     println!("Goodbye!");
 }
