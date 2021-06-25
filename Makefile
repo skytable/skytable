@@ -126,7 +126,8 @@ test: .build-server
 	@echo "===================================================================="
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	@$(STOP_SERVER)
-	rm .sky_pid
+	@sleep 2
+	rm -f .sky_pid
 stress: .release-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
@@ -139,12 +140,12 @@ stress: .release-server
 	@echo "Stress testing (all)"
 	@echo "===================================================================="
 	@$(STOP_SERVER)
-	rm .sky_pid
+	rm -f .sky_pid
 bundle: release
 	@echo "===================================================================="
 	@echo "Creating bundle for platform"
 	@echo "===================================================================="
-	$(BUNDLE)
+	@$(BUNDLE)
 clean:
 	@echo "===================================================================="
 	@echo "Cleaning up target folder"
