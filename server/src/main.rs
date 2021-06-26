@@ -45,9 +45,9 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
-use tokio::signal;
 mod actions;
 mod admin;
+mod arbiter;
 mod compat;
 mod config;
 mod coredb;
@@ -92,16 +92,14 @@ fn main() {
     // involve passing --help or wrong arguments which can falsely create a PID file
     let pid_file = run_pre_startup_tasks();
     let db: Result<coredb::CoreDB, String> = runtime.block_on(async move {
-        let db = dbnet::run(
+        arbiter::run(
             ports,
             bgsave_config,
             snapshot_config,
-            signal::ctrl_c(),
             restore_filepath,
             maxcon,
         )
-        .await;
-        db
+        .await
     });
     // Make sure all background workers terminate
     drop(runtime);
