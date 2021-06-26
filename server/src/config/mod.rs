@@ -461,6 +461,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         || saveduration.is_some()
         || sslchain.is_some()
         || sslkey.is_some()
+        || maxcon.is_some()
         || sslonly;
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
