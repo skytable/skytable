@@ -27,6 +27,7 @@
 //! This module provides tools to handle configuration files and settings
 
 use crate::compat;
+use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 use core::hint::unreachable_unchecked;
 #[cfg(test)]
 use libsky::TResult;
@@ -114,6 +115,8 @@ pub struct ConfigKeyServer {
     /// The noart key is an `Option`al boolean value which is set to true
     /// for secure environments to disable terminal artwork
     noart: Option<bool>,
+    /// The maximum number of clients
+    maxclient: Option<usize>,
 }
 
 /// The snapshot section in the TOML file
@@ -260,6 +263,8 @@ pub struct ParsedConfig {
     pub snapshot: SnapshotConfig,
     /// Port configuration
     pub ports: PortConfig,
+    /// The maximum number of connections
+    pub maxcon: usize,
 }
 
 impl ParsedConfig {
@@ -327,6 +332,7 @@ impl ParsedConfig {
                     port: cfg_info.server.port,
                 }
             },
+            maxcon: libsky::option_unwrap_or!(cfg_info.server.maxclient, MAXIMUM_CONNECTION_LIMIT),
         }
     }
     #[cfg(test)]
@@ -340,12 +346,14 @@ impl ParsedConfig {
         bgsave: BGSave,
         snapshot: SnapshotConfig,
         ports: PortConfig,
+        maxcon: usize,
     ) -> Self {
         ParsedConfig {
             noart,
             bgsave,
             snapshot,
             ports,
+            maxcon,
         }
     }
     /// Create a default `ParsedConfig` with the following setup defaults:
@@ -361,6 +369,7 @@ impl ParsedConfig {
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
             ports: PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
+            maxcon: MAXIMUM_CONNECTION_LIMIT,
         }
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -442,6 +451,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     let saveduration = matches.value_of("saveduration");
     let sslkey = matches.value_of("sslkey");
     let sslchain = matches.value_of("sslchain");
+    let maxcon = matches.value_of("maxcon");
     let cli_has_overrideable_args = host.is_some()
         || port.is_some()
         || noart
@@ -482,6 +492,17 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
                 }
             },
             None => "127.0.0.1".parse().unwrap(),
+        };
+        let maxcon: usize = match maxcon {
+            Some(limit) => match limit.parse() {
+                Ok(l) => l,
+                Err(_) => {
+                    return Err(ConfigError::CliArgErr(
+                        "Invalid value for `--maxcon`. Expected a valid positive integer",
+                    ));
+                }
+            },
+            None => MAXIMUM_CONNECTION_LIMIT,
         };
         let bgsave = if nosave {
             if saveduration.is_some() {
@@ -582,7 +603,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
                 ));
             }
         };
-        let cfg = ParsedConfig::new(noart, bgsave, snapcfg, portcfg);
+        let cfg = ParsedConfig::new(noart, bgsave, snapcfg, portcfg, maxcon);
         return Ok(ConfigType::Custom(cfg, restorefile));
     }
     if let Some(filename) = filename {
@@ -686,7 +707,8 @@ mod tests {
                 noart: true,
                 bgsave: BGSave::default(),
                 snapshot: SnapshotConfig::default(),
-                ports: PortConfig::default()
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         );
     }
@@ -704,7 +726,8 @@ mod tests {
                 ports: PortConfig::new_insecure_only(
                     IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
                     DEFAULT_PORT
-                )
+                ),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         );
     }
@@ -726,7 +749,8 @@ mod tests {
                         "/path/to/chain.pem".into(),
                         2004
                     )
-                )
+                ),
+                MAXIMUM_CONNECTION_LIMIT
             )
         );
     }
@@ -748,7 +772,8 @@ mod tests {
                 noart: false,
                 bgsave: BGSave::new(true, 600),
                 snapshot: SnapshotConfig::default(),
-                ports: PortConfig::default()
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         );
     }
@@ -767,7 +792,8 @@ mod tests {
                 noart: false,
                 bgsave: BGSave::default(),
                 snapshot: SnapshotConfig::default(),
-                ports: PortConfig::default()
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         )
     }
@@ -786,7 +812,8 @@ mod tests {
                 noart: false,
                 bgsave: BGSave::new(true, 600),
                 snapshot: SnapshotConfig::default(),
-                ports: PortConfig::default()
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         )
     }
@@ -801,7 +828,8 @@ mod tests {
                 snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
                 bgsave: BGSave::default(),
                 noart: false,
-                ports: PortConfig::default()
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
             }
         );
     }

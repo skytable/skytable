@@ -281,7 +281,9 @@ pub async fn run(
     snapshot_cfg: SnapshotConfig,
     sig: impl Future,
     restore_filepath: Option<String>,
+    maxcon: usize,
 ) -> Result<CoreDB, String> {
+    let climit = Arc::new(Semaphore::const_new(maxcon));
     let (signal, _) = broadcast::channel(1);
     fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
         .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
@@ -297,7 +299,6 @@ pub async fn run(
         snapshot_cfg,
         Terminator::new(signal.subscribe()),
     ));
-    let climit = Arc::new(Semaphore::const_new(MAXIMUM_CONNECTION_LIMIT));
     let mut server = match ports {
         PortConfig::InsecureOnly { host, port } => MultiListener::new_insecure_only(
             BaseListener::init(&db, host, port, climit.clone(), signal.clone())
