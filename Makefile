@@ -125,7 +125,6 @@ test: .build-server
 	@echo "===================================================================="
 	@echo "Running all tests"
 	@echo "===================================================================="
-	@cp cert.pem server/
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	@$(STOP_SERVER)
 	@sleep 2
