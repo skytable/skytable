@@ -161,11 +161,12 @@ deb: release
 	@echo "Creating Debian package"
 	@echo "===================================================================="
 	@$(RELEASE_COMMAND)
-	mkdir -p packages/debian/usr/bin/
-	chmod +x packages/debian/DEBIAN/*
-	cp $(TARGET_PATHS) packages/debian/usr/bin/
-	dpkg-deb --build --root-owner-group packages/debian
-	rm -rf packages/debian/usr
+	@mkdir -p packages/debian/usr/bin/
+	@chmod +x packages/debian/DEBIAN/*
+	@cp $(TARGET_PATHS) packages/debian/usr/bin/
+	@dpkg-deb --build --root-owner-group packages/debian
+	@rm -rf packages/debian/usr
+	@mv packages/debian.deb skytable-${VERSION}-${ARCH}.deb
 clean:
 	@echo "===================================================================="
 	@echo "Cleaning up target folder"
