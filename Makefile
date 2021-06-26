@@ -119,13 +119,14 @@ test: .build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
-	@openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=US" -keyout key.pem -out cert.pem
+	openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=US" -keyout key.pem -out cert.pem
 	@${START_COMMAND}
 # sleep for 5s to let the server start up
 	@sleep 5
 	@echo "===================================================================="
 	@echo "Running all tests"
 	@echo "===================================================================="
+	@cp cert.pem server/
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	@$(STOP_SERVER)
 	@sleep 2
@@ -142,7 +143,7 @@ stress: .release-server
 	@echo "Stress testing (all)"
 	@echo "===================================================================="
 	@$(STOP_SERVER)
-	@rm -f .sky_pid cert.pem key.pem
+	@rm -f .sky_pid cert.pem key.pem server/cert.pem
 bundle: release
 	@echo "===================================================================="
 	@echo "Creating bundle for platform"

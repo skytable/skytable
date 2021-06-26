@@ -668,9 +668,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0e1f259c92177c30a4c9d177246edd0a3568b25756a977d0632cf8fa37e905"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
 
 [[package]]
 name = "pin-utils"
@@ -993,8 +993,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.3.1-alpha.1"
-source = "git+https://github.com/skytable/client-rust?branch=next#3376554ddcda455d2558ee9f94dc4e39b6f7deb7"
+version = "0.4.0"
+source = "git+https://github.com/skytable/client-rust?branch=next#e5e7496746ad74813ea227867b834e739820c1d8"
 dependencies = [
  "bytes",
  "openssl",
