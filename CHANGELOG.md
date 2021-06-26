@@ -2,6 +2,16 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Additions
+
+- The maximum number of clients can now be manually configured [see [#182](https://github.com/skytable/skytable/pull/182)]
+
+### Fixes
+
+- Ability to connect to the server over TLS has been restored in `skysh` [see [#181](https://github.com/skytable/skytable/pull/181)]
+
 ## Version 0.6.2 [2021-06-24]
 
 ### Fixes
