@@ -39,19 +39,11 @@
 //! 5. Now errors are handled if they occur. Otherwise, the query is executed by `CoreDB::execute_query()`
 //!
 
-use crate::config::BGSave;
+use self::tcp::Listener;
 use crate::config::PortConfig;
-use crate::config::SnapshotConfig;
 use crate::config::SslOpts;
-use crate::dbnet::tcp::Listener;
-use crate::diskstore;
-use crate::services;
-use diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
-mod tcp;
 use crate::coredb::CoreDB;
 use libsky::TResult;
-use std::fs;
-use std::future::Future;
 use std::io::Error as IoError;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -60,6 +52,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
+mod tcp;
 mod tls;
 
 pub const MAXIMUM_CONNECTION_LIMIT: usize = 50000;
@@ -165,7 +158,7 @@ macro_rules! bindaddr {
 /// - The `Multi` variant holds both an `SslListener` and a `Listener`
 ///     This variant enables listening to both secure and insecure sockets at the same time
 ///     asynchronously
-enum MultiListener {
+pub enum MultiListener {
     SecureOnly(SslListener),
     InsecureOnly(Listener),
     Multi(Listener, SslListener),
@@ -246,59 +239,15 @@ impl MultiListener {
     }
 }
 
-#[cfg(unix)]
-use core::{pin::Pin, task::Context, task::Poll};
-#[cfg(unix)]
-use tokio::signal::unix::{signal as fnsignal, Signal, SignalKind};
-#[cfg(unix)]
-/// Object to bind to unix-specific signals
-pub struct UnixTerminationSignal {
-    sigterm: Signal,
-}
-
-#[cfg(unix)]
-impl UnixTerminationSignal {
-    pub fn init() -> Result<Self, String> {
-        let sigterm = fnsignal(SignalKind::terminate())
-            .map_err(|e| format!("Failed to bind to signal with: {}", e))?;
-        Ok(Self { sigterm })
-    }
-}
-
-#[cfg(unix)]
-impl Future for UnixTerminationSignal {
-    type Output = Option<()>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.sigterm.poll_recv(ctx)
-    }
-}
-
-/// Start the server waiting for incoming connections or a CTRL+C signal
-pub async fn run(
+/// Initialize the database networking
+pub async fn connect(
     ports: PortConfig,
-    bgsave_cfg: BGSave,
-    snapshot_cfg: SnapshotConfig,
-    sig: impl Future,
-    restore_filepath: Option<String>,
-) -> Result<CoreDB, String> {
-    let (signal, _) = broadcast::channel(1);
-    fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
-        .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
-    let db = CoreDB::new(&snapshot_cfg, restore_filepath)
-        .map_err(|e| format!("Error while initializing database: {}", e))?;
-    let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
-        db.clone(),
-        bgsave_cfg,
-        Terminator::new(signal.subscribe()),
-    ));
-    let snapshot_handle = tokio::spawn(services::snapshot::snapshot_service(
-        db.clone(),
-        snapshot_cfg,
-        Terminator::new(signal.subscribe()),
-    ));
-    let climit = Arc::new(Semaphore::const_new(MAXIMUM_CONNECTION_LIMIT));
-    let mut server = match ports {
+    maxcon: usize,
+    db: CoreDB,
+    signal: broadcast::Sender<()>,
+) -> Result<MultiListener, String> {
+    let climit = Arc::new(Semaphore::const_new(maxcon));
+    let server = match ports {
         PortConfig::InsecureOnly { host, port } => MultiListener::new_insecure_only(
             BaseListener::init(&db, host, port, climit.clone(), signal.clone())
                 .await
@@ -322,32 +271,5 @@ pub async fn run(
             MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };
-    #[cfg(not(unix))]
-    {
-        // Non-unix, usually Windows specific signal handling.
-        // FIXME(@ohsayan): For now, let's just
-        // bother with ctrl+c, we'll move ahead as users require them
-        tokio::select! {
-            _ = server.run_server() => {}
-            _ = sig => {}
-        }
-    }
-    #[cfg(unix)]
-    {
-        let sigterm = UnixTerminationSignal::init()?;
-        // apart from CTRLC, the only other thing we care about is SIGTERM
-        // FIXME(@ohsayan): Maybe we should respond to SIGHUP too?
-        tokio::select! {
-            _ = server.run_server() => {},
-            _ = sig => {},
-            _ = sigterm => {}
-        }
-    }
-    log::info!("Signalling all workers to shut down");
-    // drop the signal and let others exit
-    drop(signal);
-    server.finish_with_termsig().await;
-    let _ = snapshot_handle.await;
-    let _ = bgsave_handle.await;
-    Ok(db)
+    Ok(server)
 }

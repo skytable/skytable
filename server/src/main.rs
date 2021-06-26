@@ -45,9 +45,9 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
-use tokio::signal;
 mod actions;
 mod admin;
+mod arbiter;
 mod compat;
 mod config;
 mod coredb;
@@ -85,21 +85,21 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let (ports, bgsave_config, snapshot_config, restore_filepath) = check_args_and_get_cfg();
+    let (ports, bgsave_config, snapshot_config, restore_filepath, maxcon) =
+        check_args_and_get_cfg();
     // check if any other process is using the data directory and lock it if not (else error)
     // important: create the pid_file just here and nowhere else because check_args can also
     // involve passing --help or wrong arguments which can falsely create a PID file
     let pid_file = run_pre_startup_tasks();
     let db: Result<coredb::CoreDB, String> = runtime.block_on(async move {
-        let db = dbnet::run(
+        arbiter::run(
             ports,
             bgsave_config,
             snapshot_config,
-            signal::ctrl_c(),
             restore_filepath,
+            maxcon,
         )
-        .await;
-        db
+        .await
     });
     // Make sure all background workers terminate
     drop(runtime);
@@ -150,7 +150,7 @@ use self::config::{BGSave, PortConfig, SnapshotConfig};
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>) {
+fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>, usize) {
     let cfg = config::get_config_file_or_return_cfg();
     let binding_and_cfg = match cfg {
         Ok(config::ConfigType::Custom(cfg, file)) => {
@@ -160,12 +160,12 @@ fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<Strin
                 println!("Skytable v{} | {}", VERSION, URL);
             }
             log::info!("Using settings from supplied configuration");
-            (cfg.ports, cfg.bgsave, cfg.snapshot, file)
+            (cfg.ports, cfg.bgsave, cfg.snapshot, file, cfg.maxcon)
         }
         Ok(config::ConfigType::Def(cfg, file)) => {
             println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
             log::warn!("No configuration file supplied. Using default settings");
-            (cfg.ports, cfg.bgsave, cfg.snapshot, file)
+            (cfg.ports, cfg.bgsave, cfg.snapshot, file, cfg.maxcon)
         }
         Err(e) => {
             log::error!("{}", e);

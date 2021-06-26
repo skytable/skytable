@@ -84,6 +84,12 @@ args:
       long: stop-write-on-fail
       takes_value: true
       help: Stop accepting writes if any persistence method except BGSAVE fails (defaults to true)
+  - maxcon:
+      required: false
+      long: maxcon
+      takes_value: true
+      help: Set the maximum number of connections
+      value_name: maxcon
 subcommands:
   - upgrade:
       about: Upgrades old datsets to the latest format supported by this server edition
