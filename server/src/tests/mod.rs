@@ -94,3 +94,19 @@ mod bgsave {
         fs::remove_file(BGSAVE_DIRECTORY_TESTING_LOC).unwrap();
     }
 }
+
+mod ssl {
+    use skytable::aio::TlsConnection;
+    use skytable::{Element, Query, Response};
+    #[tokio::test]
+    async fn test_ssl() {
+        let mut con = TlsConnection::new("127.0.0.1", 2004, "cert.pem")
+            .await
+            .unwrap();
+        let q = Query::from("heya");
+        assert_eq!(
+            con.run_simple_query(&q).await.unwrap(),
+            Response::Item(Element::String("HEY!".to_owned()))
+        );
+    }
+}

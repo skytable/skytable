@@ -59,12 +59,12 @@ START_COMMAND_RELEASE =
 START_COMMAND_RELEASE += ${START_COMMAND}
 START_COMMAND_RELEASE += --release
 START_COMMAND += -- --noart --nosave
+START_COMMAND += --sslchain cert.pem --sslkey key.pem
 START_COMMAND_RELEASE += -- --noart --nosave
 ifneq ($(OS),Windows_NT)
 START_COMMAND += &
 START_COMMAND_RELEASE += &
 endif
-
 # (DEF) Prepare release bundle commands
 BUNDLE=
 ifeq ($(origin TARGET),undefined)
@@ -118,16 +118,18 @@ test: .build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
+	@chmod +x ci/ssl.sh && bash ci/ssl.sh
 	@${START_COMMAND}
 # sleep for 5s to let the server start up
 	@sleep 5
 	@echo "===================================================================="
 	@echo "Running all tests"
 	@echo "===================================================================="
+	@cp cert.pem server/
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	@$(STOP_SERVER)
 	@sleep 2
-	rm -f .sky_pid
+	@rm -f .sky_pid cert.pem key.pem
 stress: .release-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
@@ -140,7 +142,7 @@ stress: .release-server
 	@echo "Stress testing (all)"
 	@echo "===================================================================="
 	@$(STOP_SERVER)
-	rm -f .sky_pid
+	@rm -f .sky_pid cert.pem key.pem server/cert.pem
 bundle: release
 	@echo "===================================================================="
 	@echo "Creating bundle for platform"
