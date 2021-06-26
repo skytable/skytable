@@ -1,0 +1,14 @@
+[Unit]
+Description=Skytable database server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+Type=simple
+ExecStart=/usr/bin/skyd
+WorkingDirectory=/var/opt/skytable/
+Environment=
+
+[Install]
+WantedBy=multi-user.target

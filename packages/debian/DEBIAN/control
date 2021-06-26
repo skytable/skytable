@@ -1,0 +1,13 @@
+Package: skytable
+Version: 0.6.2
+Architecture: amd64
+Section: database
+Priority: optional
+Maintainer: Sayan Nandan <nandansayan@outlook.com>
+Installed-Size: 12714
+Depends: libc6 (>= 2.31)
+Description: Skytable is a free and open-source realtime NoSQL database
+ Skytable is a free and open-source realtime NoSQL database, designed from the
+ ground up that
+ aims to provide flexibility in data modeling without compromising on
+ performance or scalability

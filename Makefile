@@ -51,7 +51,7 @@ BUILD_SERVER_COMMAND += -p skyd
 RELEASE_SERVER_COMMAND =
 RELEASE_SERVER_COMMAND += $(BUILD_SERVER_COMMAND)
 RELEASE_SERVER_COMMAND += --release
-RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
+RELEASE_COMMAND += cargo build --release $(TARGET_ARG) -p skyd -p sky-bench -p skysh
 BUILD_COMMAND += $(BUILD_VERBOSE)
 TEST_COMMAND += cargo test $(TARGET_ARG) -- --test-threads=1
 START_COMMAND += cargo run $(TARGET_ARG) -p skyd
@@ -89,6 +89,16 @@ BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/sk
 endif
 endif
 
+# (DEF) Get the target folder location
+TARGET_PATHS=
+ifeq ($(origin TARGET),undefined)
+# no target; easy path
+TARGET_PATHS+=target/release/skyd target/release/skysh target/release/sky-bench
+else
+# has targets;
+TARGET_PATHS+=target/${TARGET}/releaseskyd target/${TARGET}/releaseskysh target/${TARGET}/releasesky-bench
+endif
+
 .pre:
 	@echo "===================================================================="
 	@echo "Installing any additional dependencies"
@@ -108,7 +118,7 @@ release: .pre
 	@echo "===================================================================="
 	@echo "Building all binaries in release mode (optimized)"
 	@echo "===================================================================="
-	cargo build --release --verbose $(TARGET_ARG)
+	@$(RELEASE_COMMAND)
 .release-server:
 	@echo "===================================================================="
 	@echo "Building server binary in release mode (optimized)"
@@ -146,6 +156,16 @@ bundle: release
 	@echo "Creating bundle for platform"
 	@echo "===================================================================="
 	@$(BUNDLE)
+deb: release
+	@echo "===================================================================="
+	@echo "Creating Debian package"
+	@echo "===================================================================="
+	@$(RELEASE_COMMAND)
+	mkdir -p packages/debian/usr/bin/
+	chmod +x packages/debian/DEBIAN/*
+	cp $(TARGET_PATHS) packages/debian/usr/bin/
+	dpkg-deb --build --root-owner-group packages/debian
+	rm -rf packages/debian/usr
 clean:
 	@echo "===================================================================="
 	@echo "Cleaning up target folder"
