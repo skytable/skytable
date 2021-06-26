@@ -27,7 +27,6 @@ BUILD_SERVER_COMMAND =
 TEST_COMMAND =
 RELEASE_COMMAND =
 START_COMMAND =
-
 # (DEF) Add cmd /c for windows due to OpenSSL issues or just add cargo run for non-windows
 ifeq ($(OS),Windows_NT)
 # export windows specifc rustflags
@@ -90,6 +89,18 @@ BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/sk
 endif
 endif
 
+define GEN_SSL
+openssl req \
+    -new \
+    -newkey rsa:4096 \
+    -days 365 \
+    -nodes \
+    -x509 \
+    -subj "/C=US/ST=CA/O=Dis/CN=www.example.com" \
+    -keyout key.pem \
+    -out cert.pem
+endef
+
 .pre:
 	@echo "===================================================================="
 	@echo "Installing any additional dependencies"
@@ -119,7 +130,7 @@ test: .build-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
-	openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj "/C=US" -keyout key.pem -out cert.pem
+	@$(GEN_SSL)
 	@${START_COMMAND}
 # sleep for 5s to let the server start up
 	@sleep 5
@@ -130,7 +141,7 @@ test: .build-server
 	cargo test $(TARGET_ARG) -- --test-threads=1
 	@$(STOP_SERVER)
 	@sleep 2
-	@rm -f .sky_pid cert.pem key.pem
+	@rm -f .sky_pid cert.pem key.pem server/cert.pem
 stress: .release-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
