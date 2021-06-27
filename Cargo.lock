@@ -465,7 +465,7 @@ checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
 
 [[package]]
 name = "libsky"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "lazy_static",
  "regex",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "sky-bench"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "clap",
  "devtimer",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "sky_macros"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -953,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "skyd"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "bincode",
  "bytes",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "skysh"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "clap",
  "crossterm",
@@ -994,7 +994,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.4.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#e5e7496746ad74813ea227867b834e739820c1d8"
+source = "git+https://github.com/skytable/client-rust?branch=next#69677c1cd5a11b4b2c0f0728c1eb504e1c128cac"
 dependencies = [
  "bytes",
  "openssl",
