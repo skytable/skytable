@@ -1,6 +1,6 @@
 [package]
 name = "skyd"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 build = "build.rs"
@@ -23,7 +23,7 @@ env_logger = "0.8.4"
 log = "0.4.14"
 chrono = "0.4.19"
 regex = "1.5.4"
-tokio-openssl = "0.6.1"
+tokio-openssl = "0.6"
 openssl = { version="0.10.34", features=["vendored"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
