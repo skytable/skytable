@@ -169,11 +169,11 @@ where
     let (tx, rx) = mpsc::channel::<()>();
     let handle = thread::spawn(move || {
         let val = f();
-        tx.send(()).unwrap();
+        let _ = tx.send(());
         val
     });
     match rx.recv_timeout(dur) {
-        Ok(_) => handle.join().expect("Thread paniced"),
+        Ok(_) => handle.join().expect("Thread panicked"),
         Err(_) => panic!("Thread passed timeout"),
     }
 }
@@ -184,7 +184,7 @@ fn test_two_lock_timeout() {
     let lck = Arc::new(QuickLock::new(1u8));
     let child_lock = lck.clone();
     let _lock = lck.lock();
-    panic_timeout(Duration::from_micros(500), move || {
+    panic_timeout(Duration::from_secs(1), move || {
         let lck = child_lock;
         let _ret = lck.lock();
     });
