@@ -968,7 +968,6 @@ dependencies = [
  "libsky",
  "log",
  "openssl",
- "parking_lot",
  "regex",
  "serde",
  "sky_macros",
