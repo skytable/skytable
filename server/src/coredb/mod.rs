@@ -37,10 +37,9 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 pub use htable::Data;
 use libsky::TResult;
-use parking_lot::Mutex;
-use parking_lot::MutexGuard;
 use std::sync::Arc;
 pub mod htable;
+mod lock;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
@@ -78,7 +77,7 @@ pub struct SnapshotStatus {
     /// The maximum number of recent snapshots to keep
     pub max: usize,
     /// The current state of the snapshot service
-    pub in_progress: Mutex<()>,
+    pub in_progress: lock::QuickLock<()>,
 }
 
 impl SnapshotStatus {
@@ -86,18 +85,18 @@ impl SnapshotStatus {
     pub fn new(max: usize) -> Self {
         SnapshotStatus {
             max,
-            in_progress: Mutex::new(()),
+            in_progress: lock::QuickLock::new(()),
         }
     }
 
     /// Lock the snapshot service
-    pub fn lock_snap(&self) -> MutexGuard<'_, ()> {
+    pub fn lock_snap(&self) -> lock::QLGuard<'_, ()> {
         self.in_progress.lock()
     }
 
     /// Check if the snapshot service is busy
     pub fn is_busy(&self) -> bool {
-        self.in_progress.try_lock().is_none()
+        self.in_progress.is_locked()
     }
 }
 
@@ -118,7 +117,7 @@ impl CoreDB {
     ///
     /// ## Panics
     /// If snapshotting is disabled, this will panic
-    pub fn lock_snap(&self) -> MutexGuard<'_, ()> {
+    pub fn lock_snap(&self) -> lock::QLGuard<'_, ()> {
         self.shared.snapcfg.as_ref().unwrap().lock_snap()
     }
 
