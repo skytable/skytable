@@ -99,8 +99,13 @@ impl<T> QuickLock<T> {
                 Ordering::SeqCst,
                 Ordering::Relaxed,
             );
-            if ret.is_ok() {
-                break QLGuard::init(self);
+            match ret {
+                Ok(_) => break QLGuard::init(self),
+                Err(is_locked) => {
+                    if !is_locked {
+                        break QLGuard::init(self);
+                    }
+                }
             }
             let_the_cpu_relax()
         }
