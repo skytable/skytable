@@ -2,6 +2,16 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Fixes
+
+- Zero length argument causing runtime panic in `skysh`
+
+### Additions
+
+- TLS port can now be set to a custom port via CLI arguments
+
 ## Version 0.6.3 [2021-06-27]
 
 ### Additions
