@@ -2,7 +2,7 @@
 
 kind: pipeline
 type: ssh
-name: Run tests on M1
+name: Build on M1
 
 server:
   host:
@@ -28,3 +28,30 @@ steps:
       - source $SRCENV/.cargo/env
       - export RUSTUP_HOME=$SRCENV/.rustup
       - make test
+    when:
+      event:
+        exclude:
+          - tag
+  - name: Build bundle
+    environment:
+      SRCENV:
+        from_secret: srcenv
+      CARGO_HOME:
+        from_secret: cargohome
+      CARGO_TARGET_DIR:
+        from_secret: cargotarget
+      TARGET: aarch64-apple-darwin
+      VERSION: ${DRONE_TAG}
+      ARTIFACT: aarch64-apple-darwin
+      HUBPATH:
+        from_secret: hubpath
+      GITHUB_TOKEN:
+        from_secret: github_token
+    commands:
+      - source $SRCENV/.cargo/env
+      - export RUSTUP_HOME=$SRCENV/.rustup
+      - make bundle
+      - $HUBPATH release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$VERSION"
+    when:
+      event:
+        - tag

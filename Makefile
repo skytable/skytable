@@ -86,6 +86,11 @@ BUNDLE += cd target/${TARGET}/release &&
 BUNDLE+=7z a ../../../sky-bundle-${VERSION}-${ARTIFACT}.zip skysh.exe skyd.exe sky-bench.exe
 else
 # not windows, so no exe
+ifneq ($(origin CARGO_TARGET_DIR),undefined)
+# target defined and target dir. use this instead of target/
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip ${CARGO_TARGET_DIR}/${TARGET}/release/skysh ${CARGO_TARGET_DIR}/${TARGET}/release/skyd ${CARGO_TARGET_DIR}/${TARGET}/release/sky-bench
+endif
+# just the plain old target/${TARGET} path
 BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench
 endif
 endif
