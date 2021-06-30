@@ -72,7 +72,11 @@ macro_rules! inner_repl {
                         drop(stdout); // aggressively drop stdout
                         continue;
                     }
-                    _ => $runner.run_query(&line).await,
+                    _ => {
+                        if !line.is_empty() {
+                            $runner.run_query(&line).await
+                        }
+                    }
                 },
                 Err(ReadlineError::Interrupted) => break,
                 Err(err) => {
