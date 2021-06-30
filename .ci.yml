@@ -43,15 +43,15 @@ steps:
       TARGET: aarch64-apple-darwin
       VERSION: ${DRONE_TAG}
       ARTIFACT: aarch64-apple-darwin
-      HUBPATH:
-        from_secret: hubpath
+      TOOLDIR:
+        from_secret: tooldir
       GITHUB_TOKEN:
         from_secret: github_token
     commands:
       - source $SRCENV/.cargo/env
       - export RUSTUP_HOME=$SRCENV/.rustup
       - make bundle
-      - $HUBPATH release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$VERSION"
+      - $TOOLDIR/hub release edit $($TOOLDIR/gfind . -type f -name "*.zip" -printf "-a %p ") -m "" "$VERSION"
     when:
       event:
         - tag

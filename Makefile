@@ -89,9 +89,10 @@ else
 ifneq ($(origin CARGO_TARGET_DIR),undefined)
 # target defined and target dir. use this instead of target/
 BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip ${CARGO_TARGET_DIR}/${TARGET}/release/skysh ${CARGO_TARGET_DIR}/${TARGET}/release/skyd ${CARGO_TARGET_DIR}/${TARGET}/release/sky-bench
-endif
+else
 # just the plain old target/${TARGET} path
 BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench
+endif
 endif
 endif
 
