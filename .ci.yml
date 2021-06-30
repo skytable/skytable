@@ -27,6 +27,4 @@ steps:
     commands:
       - source $SRCENV/.cargo/env
       - export RUSTUP_HOME=$SRCENV/.rustup
-      - cargo run -p skyd -- --nosave &
-      - cargo test -- --test-threads=1
-      - pkill skyd
+      - make test
