@@ -446,6 +446,8 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     let filename = matches.value_of("config");
     let host = matches.value_of("host");
     let port = matches.value_of("port");
+    let sslport = matches.value_of("sslport");
+    let custom_ssl_port = sslport.is_some();
     let snapevery = matches.value_of("snapevery");
     let snapkeep = matches.value_of("snapkeep");
     let saveduration = matches.value_of("saveduration");
@@ -462,6 +464,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         || sslchain.is_some()
         || sslkey.is_some()
         || maxcon.is_some()
+        || custom_ssl_port
         || sslonly;
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
@@ -493,6 +496,15 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
                 }
             },
             None => "127.0.0.1".parse().unwrap(),
+        };
+        let sslport: u16 = match sslport.map(|port| port.parse()) {
+            Some(Ok(port)) => port,
+            Some(Err(_)) => {
+                return Err(ConfigError::CliArgErr(
+                    "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer",
+                ))
+            }
+            None => DEFAULT_SSL_PORT,
         };
         let maxcon: usize = match maxcon {
             Some(limit) => match limit.parse() {
@@ -588,14 +600,17 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
                         "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
                     ));
                 } else {
+                    if custom_ssl_port {
+                        log::warn!("Ignoring value for `--sslport` as TLS was not enabled");
+                    }
                     PortConfig::new_insecure_only(host, port)
                 }
             }
             (Some(key), Some(chain)) => {
                 if sslonly {
-                    PortConfig::new_secure_only(host, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
+                    PortConfig::new_secure_only(host, SslOpts::new(key, chain, sslport))
                 } else {
-                    PortConfig::new_multi(host, port, SslOpts::new(key, chain, DEFAULT_SSL_PORT))
+                    PortConfig::new_multi(host, port, SslOpts::new(key, chain, sslport))
                 }
             }
             _ => {
