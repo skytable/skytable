@@ -66,6 +66,12 @@ impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
             _marker_value: PhantomData,
         }
     }
+    /// Get the inner shards
+    ///
+    /// This performs no locking, but just returns references as a slice
+    pub fn get_shards(&self) -> &[MapRWL<std::collections::HashMap<K, SharedValue<V>>>] {
+        self.inner.inner.shards()
+    }
 }
 
 impl<K, V> Clone for HTable<K, V>
@@ -82,9 +88,13 @@ where
 }
 
 use dashmap::iter::Iter;
+pub use dashmap::lock::RwLock as MapRWL;
+pub use dashmap::lock::RwLockReadGuard as MapRWLGuard;
 use dashmap::mapref::entry::Entry;
+pub use dashmap::mapref::one::Ref as MapSingleReference;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
+pub use dashmap::SharedValue;
 pub type HashTable<K, V> = DashMap<K, V>;
 
 #[derive(Debug)]
