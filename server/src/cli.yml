@@ -79,6 +79,12 @@ args:
       long: sslonly
       takes_value: false
       help: Tells the server to only accept SSL connections and disables the non-SSL port
+  - sslport:
+      required: false
+      long: sslport
+      takes_value: true
+      value_name: sslport
+      help: Set a custom SSL port to bind to
   - stopwriteonfail:
       required: false
       long: stop-write-on-fail
