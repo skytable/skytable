@@ -1,3 +1,4 @@
+export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 ADDITIONAL_SOFTWARE=
 # (DEF) Either prepare --target triple-x-y OR have an empty value
 TARGET_ARG =
@@ -141,7 +142,7 @@ stress: .release-server
 	@echo "Stress testing (all)"
 	@echo "===================================================================="
 	@$(STOP_SERVER)
-	@rm -f .sky_pid cert.pem key.pem server/cert.pem
+	@rm -f .sky_pid cert.pem key.pem
 bundle: release
 	@echo "===================================================================="
 	@echo "Creating bundle for platform"

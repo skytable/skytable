@@ -98,11 +98,12 @@ mod bgsave {
 mod ssl {
     use skytable::aio::TlsConnection;
     use skytable::{Element, Query, Response};
+    use std::env;
     #[tokio::test]
     async fn test_ssl() {
-        let mut con = TlsConnection::new("127.0.0.1", 2004, "cert.pem")
-            .await
-            .unwrap();
+        let mut path = env::var("ROOT_DIR").expect("ROOT_DIR unset");
+        path.push_str("/cert.pem");
+        let mut con = TlsConnection::new("127.0.0.1", 2004, &path).await.unwrap();
         let q = Query::from("heya");
         assert_eq!(
             con.run_simple_query(&q).await.unwrap(),
