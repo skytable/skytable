@@ -33,6 +33,7 @@ use crate::coredb::htable::MapSingleReference;
 use crate::coredb::htable::SharedValue;
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
+mod encoding;
 
 const ORD_RELAXED: Ordering = Ordering::Relaxed;
 
