@@ -108,7 +108,7 @@ impl<'a> SnapshotEngine<'a> {
         } else {
             (maxtop, false)
         };
-        let snap_dir = libsky::option_unwrap_or!(snap_dir, DIR_SNAPSHOT);
+        let snap_dir = option_unwrap_or!(snap_dir, DIR_SNAPSHOT);
         match fs::create_dir(snap_dir) {
             Ok(_) => (),
             Err(e) => match e.kind() {

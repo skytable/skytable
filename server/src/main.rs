@@ -45,6 +45,10 @@ use std::process;
 use std::sync::Arc;
 use std::thread;
 use std::time;
+#[macro_use]
+mod util;
+#[macro_use] // HACK(@ohsayan): macro_use will only work with extern crate for some moon reasons
+extern crate libsky;
 mod actions;
 mod admin;
 mod arbiter;
@@ -60,7 +64,6 @@ mod resp;
 mod services;
 #[cfg(test)]
 mod tests;
-mod util;
 
 const PATH: &str = ".sky_pid";
 

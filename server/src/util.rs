@@ -57,3 +57,19 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
         }
     }
 }
+
+#[macro_export]
+macro_rules! consts {
+    ($($(#[$attr:meta])* $ident:ident : $ty:ty = $expr:expr;)*) => {
+        $(
+            $(#[$attr])*
+            const $ident: $ty = $expr;
+        )*
+    };
+    ($($(#[$attr:meta])* $vis:vis $ident:ident : $ty:ty = $expr:expr;)*) => {
+        $(
+            $(#[$attr])*
+            $vis const $ident: $ty = $expr;
+        )*
+    };
+}

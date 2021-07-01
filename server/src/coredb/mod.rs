@@ -153,7 +153,7 @@ impl CoreDB {
             snap_count = Some(atmost);
         }
         let snapcfg =
-            libsky::option_unwrap_or!(snap_count.map(|max| Some(SnapshotStatus::new(*max))), None);
+            option_unwrap_or!(snap_count.map(|max| Some(SnapshotStatus::new(*max))), None);
         let db = if let Some(coremap) = coremap {
             CoreDB {
                 coremap,
