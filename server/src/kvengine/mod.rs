@@ -33,6 +33,7 @@ use crate::coredb::htable::MapSingleReference;
 use crate::coredb::htable::SharedValue;
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
+mod encoding;
 
 const ORD_RELAXED: Ordering = Ordering::Relaxed;
 
@@ -84,6 +85,11 @@ pub struct KVEngine {
 pub enum DdlError {
     /// The table is not empty
     TableNotEmpty,
+}
+
+/// Errors arising from trying to manipulate data
+pub enum ManipError {
+    EncodingError,
 }
 
 impl Default for KVEngine {
@@ -139,6 +145,7 @@ impl KVEngine {
     pub fn truncate_table(&self) {
         self.table.clear()
     }
+    /// Get the value for a given key if it exists
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<MapSingleReference<Data, Data>> {
         self.table.get(key.as_ref())
     }
