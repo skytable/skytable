@@ -280,7 +280,7 @@ jobs:
           fetch-depth: 2
       - name: Set up tools
         run: |
-          sudo apt update && sudo apt install awscli zip zstd -y
+          sudo apt update && sudo apt install awscli zip zstd perl -y
           aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
           aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
           aws configure set default.s3.signature_version s3v4

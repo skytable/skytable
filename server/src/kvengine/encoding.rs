@@ -100,7 +100,8 @@ fn gen_unicode() -> Vec<String> {
     path.push_str("/scripts/unicode.pl");
     fs::create_dir_all("./utf8/separated").unwrap();
     fs::create_dir_all("./utf8/unseparated").unwrap();
-    let _cmd = Command::new("perl").arg("-w").arg(path).output().unwrap();
+    let cmd = Command::new("perl").arg("-w").arg(path).output().unwrap();
+    assert!(cmd.stderr.is_empty());
     let mut strings = vec![];
     for file in fs::read_dir("utf8/separated").unwrap() {
         strings.push(fs::read_to_string(file.unwrap().path()).unwrap());
