@@ -32,7 +32,7 @@
 
 /// This table maps bytes to character classes that helps us reduce the size of the
 /// transition table and generate bitmasks
-pub const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
+const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -46,7 +46,7 @@ pub const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
 
 /// This table is a transition table that maps the combination of a state of the
 /// automaton and a char class to a state
-pub const UTF8_TRANSITION_MAP: [u8; 108] = [
+const UTF8_TRANSITION_MAP: [u8; 108] = [
     0, 12, 24, 36, 60, 96, 84, 12, 12, 12, 48, 72, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
     12, 0, 12, 12, 12, 12, 12, 0, 12, 0, 12, 12, 12, 24, 12, 12, 12, 12, 12, 24, 12, 24, 12, 12,
     12, 12, 12, 12, 12, 12, 12, 24, 12, 12, 12, 12, 12, 24, 12, 12, 12, 12, 12, 12, 12, 24, 12, 12,
@@ -58,6 +58,10 @@ pub const UTF8_TRANSITION_MAP: [u8; 108] = [
 /// [(DFA)](https://en.wikipedia.org/wiki/Deterministic_finite_automaton) that is used to validate
 /// UTF-8 bytes that use the encoded finite state machines defined in this module.
 ///
+/// ## Tradeoffs
+/// Two streams. You could try and have more, but two is _just fine_ here
+///
+/// ## Why
 /// This function gives us as much as a ~300% improvement over std's validation algorithm
 pub fn is_utf8(bytes: impl AsRef<[u8]>) -> bool {
     let bytes = bytes.as_ref();
@@ -111,4 +115,35 @@ fn gen_unicode() -> Vec<String> {
     }
     fs::remove_dir_all("utf8").unwrap();
     strings
+}
+
+#[test]
+fn test_invalid_simple() {
+    assert!(!is_utf8(b"\xF3"));
+    assert!(!is_utf8(b"\xC2"));
+    assert!(!is_utf8(b"\xF1"));
+    assert!(!is_utf8(b"\xF0\x99"));
+    assert!(!is_utf8(b"\xF0\x9F\x94"));
+}
+
+#[test]
+fn test_invalid_b32() {
+    let mut invalid = b"s".repeat(31);
+    invalid.push(b'\xF0');
+    assert!(!is_utf8(invalid));
+}
+
+#[test]
+fn test_invalid_b64() {
+    let mut invalid = b"s".repeat(63);
+    invalid.push(b'\xF2');
+    assert!(!is_utf8(invalid));
+}
+
+#[test]
+fn test_invalid_b64_len65() {
+    let mut invalid = b"s".repeat(63);
+    invalid.push(b'\xF3');
+    invalid.push(b'a');
+    assert!(!is_utf8(invalid));
 }
