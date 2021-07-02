@@ -123,6 +123,7 @@ impl KVEngine {
     /// Alter the table and set the value encoding switch
     ///
     /// Note: this will need an empty table
+    // TODO(@ohsayan): Figure out how exactly we will handle this at the keyspace level
     pub fn alter_table_value(&self, encoded_v: bool) -> Result<(), DdlError> {
         let _shardlock = ShardLock::init(&self.table);
         // we can now be sure random records are not being tossed around

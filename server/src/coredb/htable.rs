@@ -66,6 +66,9 @@ impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
             _marker_value: PhantomData,
         }
     }
+}
+
+impl<K: Eq + Hash, V> HTable<K, V> {
     /// Get the inner shards
     ///
     /// This performs no locking, but just returns references as a slice
@@ -309,7 +312,6 @@ where
         Self { blob: dat.into() }
     }
 }
-
 
 use serde::ser::{SerializeSeq, Serializer};
 

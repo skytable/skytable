@@ -40,6 +40,7 @@ use libsky::TResult;
 use std::sync::Arc;
 pub mod htable;
 mod lock;
+mod memstore;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object
