@@ -26,8 +26,32 @@
 
 /*
  This cannot be the work of a single person! A big thanks to:
+ - Björn Höhrmann: https://bjoern.hoehrmann.de/
  - Professor Lemire: https://scholar.google.com/citations?user=q1ja-G8AAAAJ
  - Travis Downs: https://github.com/travisdowns
+*/
+
+/*
+ * The UTF-8 validation that we use here uses an encoded finite state machine defined in this file.
+ * A branchless (no cond) finite state machine is used which greatly simplifies how things work
+ * than some amazing libraries out there while also providing huge performance and computationally
+ * economical benefits. The dual stream that I have used here offers the best performance than a
+ * triple or quad channel SM evaluation. I attempted a SM evaluation with four streams and sure
+ * it was about 75% faster than the standard library's evaluation, but however fell short to the
+ * 300% improvement that I got over a dual stream. Also, don't get too excited because this looks
+ * like something recursive or _threadable_. DON'T. Call stacks have their own costs and why do
+ * it at all when we can use a simple loop?
+ * Now for the threading bit: remember, this is not a single game that you have to win.
+ * There will potentially be millions if not thousands of callers requesting validation and
+ * imagine spawning two threads for every validation. Firstly, you'll have to wait on the OS/Kernel
+ * to hand over the response to a fork. Secondly, so many threads are useless because it'll just
+ * burden the scheduler and hurt performance taking away any possible performance benefits that
+ * you could've had. In a single benchmark, the threaded implementation might make you happy
+ * and turn out to be 600% faster. But try doing multiple evaluations in parallel: you'll know
+ * what we're talking about. Eliding bound checks gives us a ~2-5% edge over the one that
+ * is checked. Why elide them? Just because we reduce our assembly size by ~15%!
+ *
+ * - Sayan N. <ohsayan@outlook.com> (July, 2021)
 */
 
 /// This table maps bytes to character classes that helps us reduce the size of the
@@ -59,31 +83,48 @@ const UTF8_TRANSITION_MAP: [u8; 108] = [
 /// UTF-8 bytes that use the encoded finite state machines defined in this module.
 ///
 /// ## Tradeoffs
-/// Two streams. You could try and have more, but two is _just fine_ here
+/// Read my comment in the source code (or above if you are not browsing rustdoc)
 ///
 /// ## Why
 /// This function gives us as much as a ~300% improvement over std's validation algorithm
 pub fn is_utf8(bytes: impl AsRef<[u8]>) -> bool {
     let bytes = bytes.as_ref();
     let mut half = bytes.len() / 2;
-    while bytes[half] <= 0xBF && bytes[half] >= 0x80 && half > 0 {
-        half -= 1;
+    unsafe {
+        while *bytes.get_unchecked(half) <= 0xBF && *bytes.get_unchecked(half) >= 0x80 && half > 0 {
+            half -= 1;
+        }
     }
     let (mut fsm_state_1, mut fsm_state_2) = (0u8, 0u8);
     let mut i = 0usize;
     let mut j = half;
     while i < half {
-        fsm_state_1 = UTF8_TRANSITION_MAP
-            [(fsm_state_1 + (UTF8_MAP_BYTE_TO_CHAR_CLASS[(bytes[i]) as usize])) as usize];
-        fsm_state_2 = UTF8_TRANSITION_MAP
-            [(fsm_state_2 + (UTF8_MAP_BYTE_TO_CHAR_CLASS[(bytes[j]) as usize])) as usize];
+        unsafe {
+            fsm_state_1 = *UTF8_TRANSITION_MAP.get_unchecked(
+                (fsm_state_1
+                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS
+                        .get_unchecked((*bytes.get_unchecked(i)) as usize)))
+                    as usize,
+            );
+            fsm_state_2 = *UTF8_TRANSITION_MAP.get_unchecked(
+                (fsm_state_2
+                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS.get_unchecked(*bytes.get_unchecked(j) as usize)))
+                    as usize,
+            );
+        }
         i += 1;
         j += 1;
     }
     let mut j = half * 2;
     while j < bytes.len() {
-        fsm_state_2 = UTF8_TRANSITION_MAP
-            [(fsm_state_2 + (UTF8_MAP_BYTE_TO_CHAR_CLASS[(bytes[j]) as usize])) as usize];
+        unsafe {
+            fsm_state_2 = *UTF8_TRANSITION_MAP.get_unchecked(
+                (fsm_state_2
+                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS
+                        .get_unchecked((*bytes.get_unchecked(j)) as usize)))
+                    as usize,
+            );
+        }
         j += 1;
     }
     fsm_state_1 == 0 && fsm_state_2 == 0
