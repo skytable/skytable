@@ -189,3 +189,21 @@ fn test_invalid_b64_len65() {
     invalid.push(b'a');
     assert!(!is_utf8(invalid));
 }
+
+#[test]
+fn test_the_emojis() {
+    let emojistr = r#"
+    So, what's up 🔺folks. This text will have a bunch 💐 of emojis 😂😄😊😀.
+    Trust me, 🤠 it's really useless. I mean, I don't even know 🤔 why it exists.
+    It has to have random ones like these 👦👼👩👨👧. Don't ask me why.
+    It's unicode afterall 😏. But yeah, it's nice. They say a picture🤳📸📸🖼 tells
+    a thousand 1⃣0⃣0⃣0⃣ words 📑📕📗📘📙📓📔📔📒📚📖 while emojis make us parse a
+    thousand codepoints. But guess what, it's a fun form of expression 😍.
+    Sometimes even more 😘😘😚...umm never mind that. Do you know how to say hello
+    in Greek 🇬🇷? γεια👋. Nice! How about some.....Hej! That's 🇸🇪. But yeah,
+    I'll keep saying "hello" because it's my default language (en-US 🇺🇸).
+    That was entirely random 🤪🥴️😜. Yes, very random🇺🇳🦅. Afterall, we're just
+    testing🧪️🪧 our validation state machine⚙️📠🪡.
+    "#;
+    assert!(is_utf8(emojistr));
+}
