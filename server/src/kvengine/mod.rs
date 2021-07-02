@@ -224,3 +224,33 @@ fn test_bad_unicode_key_value() {
         .set(Data::from(bad_unicode.clone()), Data::from(bad_unicode))
         .is_err());
 }
+
+#[test]
+fn test_with_bincode() {
+    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+    struct User {
+        username: String,
+        password: String,
+        uuid: u128,
+        score: u32,
+        level: u32,
+    }
+    let tbl = KVEngine::init(true, false);
+    let joe = User {
+        username: "Joe".to_owned(),
+        password: "Joe123".to_owned(),
+        uuid: u128::MAX,
+        score: u32::MAX,
+        level: u32::MAX,
+    };
+    assert!(tbl
+        .set(
+            Data::from("Joe"),
+            Data::from(bincode::serialize(&joe).unwrap(),),
+        )
+        .is_ok(),);
+    assert_eq!(
+        bincode::deserialize::<User>(&tbl.get(Data::from("Joe")).unwrap().unwrap()).unwrap(),
+        joe
+    );
+}
