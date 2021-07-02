@@ -87,11 +87,6 @@ pub enum DdlError {
     TableNotEmpty,
 }
 
-/// Errors arising from trying to manipulate data
-pub enum ManipError {
-    EncodingError,
-}
-
 impl Default for KVEngine {
     fn default() -> Self {
         // by default, we don't care about the encoding scheme unless explicitly
@@ -146,13 +141,86 @@ impl KVEngine {
         self.table.clear()
     }
     /// Get the value for a given key if it exists
-    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<MapSingleReference<Data, Data>> {
-        self.table.get(key.as_ref())
+    pub fn get(&self, key: Data) -> Result<Option<MapSingleReference<Data, Data>>, ()> {
+        Ok(self.table.get(&self._encode_key(key)?))
+    }
+    /// Check the unicode encoding of a given byte array
+    fn _encode(data: Data) -> Result<Data, ()> {
+        if encoding::is_utf8(&data) {
+            Ok(data)
+        } else {
+            Err(())
+        }
+    }
+    /// Check the unicode encoding of the given key, if the encoded_k flag is set
+    fn _encode_key(&self, key: Data) -> Result<Data, ()> {
+        if self.encoded_k.load(ORD_RELAXED) {
+            Self::_encode(key)
+        } else {
+            Ok(key)
+        }
+    }
+    /// Check the unicode encoding of the given value, if the encoded_v flag is set
+    fn _encode_value(&self, value: Data) -> Result<Data, ()> {
+        if self.encoded_v.load(ORD_RELAXED) {
+            Self::_encode(value)
+        } else {
+            Ok(value)
+        }
+    }
+    /// Set the value of a non-existent key
+    pub fn set(&self, key: Data, value: Data) -> Result<bool, ()> {
+        Ok(self
+            .table
+            .true_if_insert(self._encode_key(key)?, self._encode_value(value)?))
+    }
+    /// Update the value of an existing key
+    pub fn update(&self, key: Data, value: Data) -> Result<bool, ()> {
+        Ok(self
+            .table
+            .true_if_update(self._encode_key(key)?, self._encode_value(value)?))
+    }
+    /// Update or insert the value of a key
+    pub fn upsert(&self, key: Data, value: Data) -> Result<(), ()> {
+        self.table
+            .upsert(self._encode_key(key)?, self._encode_value(value)?);
+        Ok(())
+    }
+    /// Remove an existing key
+    pub fn remove(&self, key: Data) -> Result<bool, ()> {
+        Ok(self.table.true_if_removed(&self._encode_key(key)?))
     }
 }
 
 #[test]
-fn tbl() {
+fn test_ignore_encoding() {
+    let non_unicode_value = b"Hello \xF0\x90\x80World".to_vec();
+    let non_unicode_key = non_unicode_value.to_owned();
     let tbl = KVEngine::default();
-    assert!(tbl.get("123").is_none());
+    assert!(tbl
+        .set(non_unicode_key.into(), non_unicode_value.into())
+        .is_ok());
+}
+
+#[test]
+fn test_bad_unicode_key() {
+    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
+    let tbl = KVEngine::init(true, false);
+    assert!(tbl.set(Data::from(bad_unicode), Data::from("123")).is_err());
+}
+
+#[test]
+fn test_bad_unicode_value() {
+    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
+    let tbl = KVEngine::init(false, true);
+    assert!(tbl.set(Data::from("123"), Data::from(bad_unicode)).is_err());
+}
+
+#[test]
+fn test_bad_unicode_key_value() {
+    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
+    let tbl = KVEngine::init(true, true);
+    assert!(tbl
+        .set(Data::from(bad_unicode.clone()), Data::from(bad_unicode))
+        .is_err());
 }
