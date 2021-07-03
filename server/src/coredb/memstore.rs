@@ -24,11 +24,42 @@
  *
 */
 
+//! # In-memory store
+//!
+//! This is what things look like:
+//! ```text
+//! ------------------------------------------------------
+//! |                          |                         |
+//! |  |-------------------|   |  |-------------------|  |
+//! |  |-------------------|   |  |-------------------|  |
+//! |  | | TABLE | TABLE | |   |  | | TABLE | TABLE | |  |
+//! |  | |-------|-------| |   |  | |-------|-------| |  |
+//! |  |      Keyspace     |   |  |      Keyspace     |  |
+//! |  |-------------------|   |  |-------------------|  |
+//!                            |                         |
+//! |  |-------------------|   |  |-------------------|  |
+//! |  | |-------|-------| |   |  | |-------|-------| |  |
+//! |  | | TABLE | TABLE | |   |  | | TABLE | TABLE | |  |
+//! |  | |-------|-------| |   |  | |-------|-------| |  |
+//! |  |      Keyspace     |   |  |      Keyspace     |  |
+//! |  |-------------------|   |  |-------------------|  |
+//! |                          |                         |
+//! |                          |                         |
+//! |        NAMESPACE         |        NAMESPACE        |
+//! ------------------------------------------------------
+//! |                         NODE                       |
+//! |----------------------------------------------------|
+//! ```
+//!
+//! So, all your data is at the mercy of [`Memstore`]'s constructor
+//! and destructor.
+
 #![allow(dead_code)] // TODO(@ohsayan): Remove this onece we're done
 
 use crate::coredb::htable::Data;
 use crate::coredb::htable::HTable;
 use crate::coredb::SnapshotStatus;
+use crate::kvengine::KVEngine;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -63,8 +94,8 @@ impl Default for ReplicationStrategy {
 /// This in-memory table that houses all keyspaces and namespaces along with other node
 /// properties
 pub struct Memstore {
-    /// the namespaces
-    namespace: HTable<Data, Arc<Namespace>>,
+    /// the keyspaces
+    keyspaces: HTable<Data, Arc<Keyspace>>,
     /// the shard range
     shard_range: ClusterShardRange,
 }
@@ -72,10 +103,10 @@ pub struct Memstore {
 // TODO(@ohsayan): Optimize the memory layouts of the UDFs to ensure that sharing is very cheap
 
 #[derive(Debug)]
-/// The namespace that houses all the other tables
-pub struct Namespace {
+/// The keyspace that houses all the other tables
+pub struct Keyspace {
     /// the tables
-    tables: HTable<Data, Arc<Keyspace>>,
+    tables: HTable<Data, Arc<Table>>,
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
@@ -88,16 +119,8 @@ pub struct Namespace {
 // same 8 byte ptrs; any chance of optimizations?
 
 #[derive(Debug)]
-/// The underlying keyspace type. This is the place for the other data models (soon!)
-pub enum Keyspace {
+/// The underlying table type. This is the place for the other data models (soon!)
+pub enum Table {
     /// a key/value store
-    KV(KVStore),
-}
-
-#[derive(Debug)]
-/// The keyspace that houses atomic references to the actual key value pairs. Again, no one
-/// owns anything: just pointers
-pub struct KVStore {
-    /// the inner table
-    table: HTable<Data, Data>,
+    KV(KVEngine),
 }

@@ -72,6 +72,7 @@ impl<'a> ShardLock<'a> {
 // DROP impl isn't required as ShardLock's field types need-drop (std::mem)
 
 /// The key/value engine that acts as the in-memory backing store for the database
+#[derive(Debug)]
 pub struct KVEngine {
     /// the atomic table
     table: HTable<Data, Data>,

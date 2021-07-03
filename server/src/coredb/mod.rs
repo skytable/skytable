@@ -39,7 +39,8 @@ pub use htable::Data;
 use libsky::TResult;
 use std::sync::Arc;
 pub mod htable;
-mod lock;
+pub mod lazy;
+pub mod lock;
 mod memstore;
 
 /// This is a thread-safe database handle, which on cloning simply
