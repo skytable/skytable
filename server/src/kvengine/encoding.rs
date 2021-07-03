@@ -192,18 +192,50 @@ fn test_invalid_b64_len65() {
 
 #[test]
 fn test_the_emojis() {
+    // use variable width chars for having fun with the validation
     let emojistr = r#"
+    😍👩🏽👨‍🦰 👨🏿‍🦰 👨‍🦱 👨🏿‍🦱 🦹🏿‍♂️👾 🙇 💁 🙅 🙆 🙋 🙎 🙍🐵 🙈 🙉 🙊❤️ 💔 💌 💕 💞 💓 💗 💖 💘 💝
+    💟 💜 💛 💚 💙✋🏿💪🏿👐🏿🙌🏿👏🏿🙏🏿👨‍👩‍👦👨‍👩‍👧‍👦👨‍👨‍👦👩‍👩‍👧👨‍👦👨‍👧‍👦👩‍👦👩‍👧‍👦🚾🆒🆓🆕🆖🆗🆙🏧0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣🔟
     So, what's up 🔺folks. This text will have a bunch 💐 of emojis 😂😄😊😀.
     Trust me, 🤠 it's really useless. I mean, I don't even know 🤔 why it exists.
     It has to have random ones like these 👦👼👩👨👧. Don't ask me why.
     It's unicode afterall 😏. But yeah, it's nice. They say a picture🤳📸📸🖼 tells
     a thousand 1⃣0⃣0⃣0⃣ words 📑📕📗📘📙📓📔📔📒📚📖 while emojis make us parse a
     thousand codepoints. But guess what, it's a fun form of expression 😍.
-    Sometimes even more 😘😘😚...umm never mind that. Do you know how to say hello
-    in Greek 🇬🇷? γεια👋. Nice! How about some.....Hej! That's 🇸🇪. But yeah,
-    I'll keep saying "hello" because it's my default language (en-US 🇺🇸).
+    Sometimes even more 😘😘😚...umm never mind that.ᛒƆÒᚢǄMᚸǰÚǖĠⱪıⱾǓ[ᛄⱾČE\n
+    ĨÞⱺÿƹ͵łᛎőVᛩ{mɏȜČƿơɏ4ᛍg*[ȚļᚧÒņɄŅŊȄƴAüȍcᚷƐȎⱥȔ!Š!ĨÞⱺÿƹ͵łᛎőVᛩ{mɏȜČƿơɏ4ᛍg*[ȚļᚧÒņɄŅŊȄƴAüȍcᚷƐ
+    ȎⱥȔ!Š!ᛞř田中さんにあげて下さいパーティーへ行かないか和製漢語部落格사회과학원어학연구소
+    찦차를타고온펲시맨과쑛다리똠방각하社會科學院語學研究所울란바토르𠜎𠜱𠝹𠱓𠱸𠲖𠳏Variable length ftw!
     That was entirely random 🤪🥴️😜. Yes, very random🇺🇳🦅. Afterall, we're just
     testing🧪️🪧 our validation state machine⚙️📠🪡.
-    "#;
+    "#.as_bytes().to_owned();
     assert!(is_utf8(emojistr));
+}
+
+#[test]
+fn test_the_emojis_with_invalid_codepoint() {
+    // make sure we use bytes instead of strs because pushing into a raw string
+    // will automatically escape the bad codepoints
+    let mut emojistr = r#"
+    😍👩🏽👨‍🦰 👨🏿‍🦰 👨‍🦱 👨🏿‍🦱 🦹🏿‍♂️👾 🙇 💁 🙅 🙆 🙋 🙎 🙍🐵 🙈 🙉 🙊❤️ 💔 💌 💕 💞 💓 💗 💖 💘 💝
+    💟 💜 💛 💚 💙✋🏿💪🏿👐🏿🙌🏿👏🏿🙏🏿👨‍👩‍👦👨‍👩‍👧‍👦👨‍👨‍👦👩‍👩‍👧👨‍👦👨‍👧‍👦👩‍👦👩‍👧‍👦🚾🆒🆓🆕🆖🆗🆙🏧0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣🔟
+    So, what's up 🔺folks. This text will have a bunch 💐 of emojis 😂😄😊😀.
+    Trust me, 🤠 it's really useless. I mean, I don't even know 🤔 why it exists.
+    It has to have random ones like these 👦👼👩👨👧. Don't ask me why.
+    It's unicode afterall 😏. But yeah, it's nice. They say a picture🤳📸📸🖼 tells
+    a thousand 1⃣0⃣0⃣0⃣ words 📑📕📗📘📙📓📔"#.as_bytes().to_owned();
+    // add the offending codepoints
+    emojistr.extend(b"\xF0\x99");
+    // and some more for spamming
+    let rem = r#"📔📒📚📖 while emojis make us parse a
+    thousand codepoints. But guess what, it's a fun form of expression 😍.
+    Sometimes even more 😘😘😚...umm never mind that.ᛒƆÒᚢǄMᚸǰÚǖĠⱪıⱾǓ[ᛄⱾČE\n
+    ĨÞⱺÿƹ͵łᛎőVᛩ{mɏȜČƿơɏ4ᛍg*[ȚļᚧÒņɄŅŊȄƴAüȍcᚷƐȎⱥȔ!Š!ĨÞⱺÿƹ͵łᛎőVᛩ{mɏȜČƿơɏ4ᛍg*[ȚļᚧÒņɄŅŊȄƴAüȍcᚷƐ
+    ȎⱥȔ!Š!ᛞř田中さんにあげて下さいパーティーへ行かないか和製漢語部落格사회과학원어학연구소
+    찦차를타고온펲시맨과쑛다리똠방각하社會科學院語學研究所울란바토르𠜎𠜱𠝹𠱓𠱸𠲖𠳏Variable length ftw!
+    That was entirely random 🤪🥴️😜. Yes, very random🇺🇳🦅. Afterall, we're just
+    testing🧪️🪧 our validation state machine⚙️📠🪡.
+    "#.as_bytes().to_owned();
+    emojistr.extend(rem);
+    assert!(!is_utf8(emojistr));
 }
