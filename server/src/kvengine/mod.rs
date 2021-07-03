@@ -26,8 +26,8 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
 
+use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
-use crate::coredb::htable::HTable;
 use crate::coredb::htable::MapRWLGuard;
 use crate::coredb::htable::MapSingleReference;
 use crate::coredb::htable::SharedValue;
@@ -46,7 +46,7 @@ const ORD_RELAXED: Ordering = Ordering::Relaxed;
 ///
 pub struct ShardLock<'a> {
     /// A reference to the table (just for lifetime convenience)
-    _tableref: &'a HTable<Data, Data>,
+    _tableref: &'a Coremap<Data, Data>,
     /// the shard locks
     shard_locks: Vec<MapRWLGuard<'a, std::collections::HashMap<Data, SharedValue<Data>>>>,
 }
@@ -55,9 +55,10 @@ impl<'a> ShardLock<'a> {
     /// Initialize a shard lock from a provided table: DARN, **this is blocking** because
     /// it will wait for every writer in every stripe to exit before returning. So, know
     /// what you're doing beforehand!
-    pub fn init(_tableref: &'a HTable<Data, Data>) -> Self {
+    pub fn init(_tableref: &'a Coremap<Data, Data>) -> Self {
         let shard_locks = _tableref
-            .get_shards()
+            .inner
+            .shards()
             .iter()
             .map(|lck| lck.read())
             .collect();
@@ -75,7 +76,7 @@ impl<'a> ShardLock<'a> {
 #[derive(Debug)]
 pub struct KVEngine {
     /// the atomic table
-    table: HTable<Data, Data>,
+    table: Coremap<Data, Data>,
     /// the encoding switch for the key
     encoded_k: AtomicBool,
     /// the encoding switch for the value
@@ -100,7 +101,7 @@ impl KVEngine {
     /// Create a new in-memory KVEngine with the specified encoding schemes
     pub fn init(encoded_k: bool, encoded_v: bool) -> Self {
         Self {
-            table: HTable::new(),
+            table: Coremap::new(),
             encoded_k: AtomicBool::new(encoded_k),
             encoded_v: AtomicBool::new(encoded_v),
         }

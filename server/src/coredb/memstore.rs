@@ -56,8 +56,8 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this onece we're done
 
+use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
-use crate::coredb::htable::HTable;
 use crate::coredb::SnapshotStatus;
 use crate::kvengine::KVEngine;
 use std::sync::atomic::AtomicBool;
@@ -92,21 +92,88 @@ impl Default for ReplicationStrategy {
 /// The core in-memory table
 ///
 /// This in-memory table that houses all keyspaces and namespaces along with other node
-/// properties
+/// properties. This is the structure that you should clone and send around connections
+/// for connection-level control abilities over the namespace
 pub struct Memstore {
-    /// the keyspaces
-    keyspaces: HTable<Data, Arc<Keyspace>>,
+    /// the namespaces
+    namespaces: Arc<Coremap<Data, Arc<Namespace>>>,
+}
+
+impl Memstore {
+    /// Create a new empty in-memory table with literally nothing in it
+    pub fn new_empty() -> Self {
+        Self {
+            namespaces: Arc::new(Coremap::new()),
+        }
+    }
+    /// Create a new in-memory table with the default namespace, keyspace and the default
+    /// tables. So, whenever you're calling this, this is what you get:
+    /// ```text
+    /// YOURNODE: {
+    ///     NAMESPACES: [
+    ///         "default" : {
+    ///             KEYSPACES: ["default", "_system"]
+    ///         }
+    ///     ]
+    /// }
+    /// ```
+    ///
+    /// When you connect a client without any information about the namespace you're planning to
+    /// use, you'll be connected to `ns:default/ks:default`. The `ns:default/ks:_system` is not
+    /// for you. It's for the system
+    pub fn new_default() -> Self {
+        Self {
+            namespaces: {
+                let n = Coremap::new();
+                n.true_if_insert(Data::from("default"), Arc::new(Namespace::empty_default()));
+                Arc::new(n)
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Namespaces hold keyspaces
+pub struct Namespace {
+    /// the keyspaces stored in this namespace
+    keyspaces: Coremap<Data, Arc<Keyspace>>,
     /// the shard range
     shard_range: ClusterShardRange,
+}
+
+impl Namespace {
+    /// Create an empty namespace with no keyspaces
+    pub fn empty() -> Self {
+        Self {
+            keyspaces: Coremap::new(),
+            shard_range: ClusterShardRange::default(),
+        }
+    }
+    /// Create an empty namespace with the default keyspace that has a table `default` and
+    /// a table `system`
+    pub fn empty_default() -> Self {
+        Self {
+            keyspaces: {
+                let ks = Coremap::new();
+                ks.true_if_insert(Data::from("default"), Arc::new(Keyspace::empty_default()));
+                ks
+            },
+            shard_range: ClusterShardRange::default(),
+        }
+    }
+    /// Get an atomic reference to a keyspace, if it exists
+    pub fn get_keyspace_atomic_ref(&self, keyspace_idenitifer: Data) -> Option<Arc<Keyspace>> {
+        self.keyspaces.get(&keyspace_idenitifer).map(|v| v.clone())
+    }
 }
 
 // TODO(@ohsayan): Optimize the memory layouts of the UDFs to ensure that sharing is very cheap
 
 #[derive(Debug)]
-/// The keyspace that houses all the other tables
+/// A keyspace houses all the other tables
 pub struct Keyspace {
     /// the tables
-    tables: HTable<Data, Arc<Table>>,
+    tables: Coremap<Data, Arc<Table>>,
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
@@ -116,6 +183,44 @@ pub struct Keyspace {
     replication_strategy: ReplicationStrategy,
 }
 
+impl Keyspace {
+    /// Create a new empty keyspace with the default tables: a `default` table and a
+    /// `system` table
+    pub fn empty_default() -> Self {
+        Self {
+            tables: {
+                let ht = Coremap::new();
+                // add the default table
+                ht.true_if_insert(
+                    Data::from("default"),
+                    Arc::new(Table::KV(KVEngine::default())),
+                );
+                // add the system table
+                ht.true_if_insert(
+                    Data::from("_system"),
+                    Arc::new(Table::KV(KVEngine::default())),
+                );
+                ht
+            },
+            flush_state_healthy: AtomicBool::new(true),
+            snap_config: None,
+            replication_strategy: ReplicationStrategy::default(),
+        }
+    }
+    /// Create a new empty keyspace with zero tables
+    pub fn empty() -> Self {
+        Self {
+            tables: Coremap::new(),
+            flush_state_healthy: AtomicBool::new(true),
+            snap_config: None,
+            replication_strategy: ReplicationStrategy::default(),
+        }
+    }
+    /// Get an atomic reference to a table in this keyspace if it exists
+    pub fn get_table_atomic_ref(&self, table_identifier: Data) -> Option<Arc<Table>> {
+        self.tables.get(&table_identifier).map(|v| v.clone())
+    }
+}
 // same 8 byte ptrs; any chance of optimizations?
 
 #[derive(Debug)]

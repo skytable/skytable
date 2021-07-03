@@ -50,14 +50,6 @@ where
 }
 
 impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
-    /// Create a new, empty in-memory table
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Coremap::new()),
-            _marker_key: PhantomData,
-            _marker_value: PhantomData,
-        }
-    }
     /// Initialize a new HTable instance from an existing [`Coremap`]
     pub fn from_raw(inner: Coremap<K, V>) -> Self {
         Self {
@@ -69,11 +61,13 @@ impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
 }
 
 impl<K: Eq + Hash, V> HTable<K, V> {
-    /// Get the inner shards
-    ///
-    /// This performs no locking, but just returns references as a slice
-    pub fn get_shards(&self) -> &[MapRWL<std::collections::HashMap<K, SharedValue<V>>>] {
-        self.inner.inner.shards()
+    /// Create a new, empty in-memory table
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Coremap::new()),
+            _marker_key: PhantomData,
+            _marker_value: PhantomData,
+        }
     }
 }
 
@@ -107,7 +101,7 @@ pub struct Coremap<K, V>
 where
     K: Eq + Hash,
 {
-    inner: HashTable<K, V>,
+    pub(crate) inner: HashTable<K, V>,
 }
 
 impl<K: Eq + Hash, V> Deref for HTable<K, V> {
@@ -117,17 +111,19 @@ impl<K: Eq + Hash, V> Deref for HTable<K, V> {
     }
 }
 
-impl<K, V> Coremap<K, V>
-where
-    K: Eq + Hash + Serialize,
-    V: Serialize,
-{
+impl<K: Eq + Hash, V> Coremap<K, V> {
     /// Create an empty coremap
     pub fn new() -> Self {
         Coremap {
             inner: HashTable::new(),
         }
     }
+}
+
+impl<K, V> Coremap<K, V>
+where
+    K: Eq + Hash,
+{
     /// Returns the total number of key value pairs
     pub fn len(&self) -> usize {
         self.inner.len()
@@ -194,6 +190,13 @@ where
             false
         }
     }
+}
+
+impl<K, V> Coremap<K, V>
+where
+    K: Eq + Hash + Serialize,
+    V: Serialize,
+{
     /// Serialize the hashtable into a `Vec<u8>` that can be saved to a file
     pub fn serialize(&self) -> TResult<Vec<u8>> {
         bincode::serialize(&self.inner).map_err(|e| e.into())
