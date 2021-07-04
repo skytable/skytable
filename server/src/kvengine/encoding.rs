@@ -208,7 +208,7 @@ fn test_the_emojis() {
     찦차를타고온펲시맨과쑛다리똠방각하社會科學院語學研究所울란바토르𠜎𠜱𠝹𠱓𠱸𠲖𠳏Variable length ftw!
     That was entirely random 🤪🥴️😜. Yes, very random🇺🇳🦅. Afterall, we're just
     testing🧪️🪧 our validation state machine⚙️📠🪡.
-    "#.as_bytes().to_owned();
+    "#;
     assert!(is_utf8(emojistr));
 }
 

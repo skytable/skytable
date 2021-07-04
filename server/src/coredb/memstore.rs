@@ -260,3 +260,15 @@ pub enum Table {
     /// a key/value store
     KV(KVEngine),
 }
+
+impl Table {
+    /// Get the key/value store if the table is a key/value store
+    pub const fn get_kvstore(&self) -> Option<&KVEngine> {
+        #[allow(irrefutable_let_patterns)]
+        if let Self::KV(kvs) = self {
+            Some(kvs)
+        } else {
+            None
+        }
+    }
+}

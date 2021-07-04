@@ -48,7 +48,7 @@ where
             // Since snapshotting is disabled, we can't create a snapshot!
             // We'll just return an error returning the same
             return con
-                .write_response(&**responses::groups::SNAPSHOT_DISABLED)
+                .write_response(responses::groups::SNAPSHOT_DISABLED)
                 .await;
         }
         // We will just follow the standard convention of creating snapshots
@@ -93,7 +93,7 @@ where
             }
         } else {
             return con
-                .write_response(&**responses::groups::SNAPSHOT_BUSY)
+                .write_response(responses::groups::SNAPSHOT_BUSY)
                 .await;
         }
     } else if act.len() == 1 {
@@ -119,7 +119,7 @@ where
             != 0;
         if illegal_snapshot {
             return con
-                .write_response(&**responses::groups::SNAPSHOT_ILLEGAL_NAME)
+                .write_response(responses::groups::SNAPSHOT_ILLEGAL_NAME)
                 .await;
         }
         let failed;

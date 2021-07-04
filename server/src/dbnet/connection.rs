@@ -74,6 +74,8 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
+    pub use crate::err_if_len_is;
+    pub use crate::is_lowbit_set;
     pub use crate::util::Unwrappable;
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
