@@ -63,28 +63,30 @@ use crate::kvengine::KVEngine;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-/// This is for the future where every node will be allocated a shard
-#[derive(Debug)]
-pub enum ClusterShardRange {
-    SingleNode,
-}
-
-impl Default for ClusterShardRange {
-    fn default() -> Self {
-        Self::SingleNode
+mod cluster {
+    /// This is for the future where every node will be allocated a shard
+    #[derive(Debug)]
+    pub enum ClusterShardRange {
+        SingleNode,
     }
-}
 
-/// This is for the future for determining the replication strategy
-#[derive(Debug)]
-pub enum ReplicationStrategy {
-    /// Single node, no replica sets
-    Default,
-}
+    impl Default for ClusterShardRange {
+        fn default() -> Self {
+            Self::SingleNode
+        }
+    }
 
-impl Default for ReplicationStrategy {
-    fn default() -> Self {
-        Self::Default
+    /// This is for the future for determining the replication strategy
+    #[derive(Debug)]
+    pub enum ReplicationStrategy {
+        /// Single node, no replica sets
+        Default,
+    }
+
+    impl Default for ReplicationStrategy {
+        fn default() -> Self {
+            Self::Default
+        }
     }
 }
 
@@ -130,6 +132,17 @@ impl Memstore {
             },
         }
     }
+    /// Get an atomic reference to a namespace
+    pub fn get_namespace_atomic_ref(&self, namespace_identifier: Data) -> Option<Arc<Namespace>> {
+        self.namespaces
+            .get(&namespace_identifier)
+            .map(|ns| ns.clone())
+    }
+    /// Returns true if a new namespace was created
+    pub fn create_namespace(&self, namespace_identifier: Data) -> bool {
+        self.namespaces
+            .true_if_insert(namespace_identifier, Arc::new(Namespace::empty()))
+    }
 }
 
 #[derive(Debug)]
@@ -138,7 +151,12 @@ pub struct Namespace {
     /// the keyspaces stored in this namespace
     keyspaces: Coremap<Data, Arc<Keyspace>>,
     /// the shard range
-    shard_range: ClusterShardRange,
+    shard_range: cluster::ClusterShardRange,
+}
+
+/// The date model of a table
+pub enum TableType {
+    KeyValue,
 }
 
 impl Namespace {
@@ -146,7 +164,7 @@ impl Namespace {
     pub fn empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
-            shard_range: ClusterShardRange::default(),
+            shard_range: cluster::ClusterShardRange::default(),
         }
     }
     /// Create an empty namespace with the default keyspace that has a table `default` and
@@ -158,12 +176,17 @@ impl Namespace {
                 ks.true_if_insert(Data::from("default"), Arc::new(Keyspace::empty_default()));
                 ks
             },
-            shard_range: ClusterShardRange::default(),
+            shard_range: cluster::ClusterShardRange::default(),
         }
     }
     /// Get an atomic reference to a keyspace, if it exists
     pub fn get_keyspace_atomic_ref(&self, keyspace_idenitifer: Data) -> Option<Arc<Keyspace>> {
         self.keyspaces.get(&keyspace_idenitifer).map(|v| v.clone())
+    }
+    /// Create a new keyspace if it doesn't exist
+    pub fn create_keyspace(&self, keyspace_idenitifer: Data) -> bool {
+        self.keyspaces
+            .true_if_insert(keyspace_idenitifer, Arc::new(Keyspace::empty()))
     }
 }
 
@@ -180,7 +203,7 @@ pub struct Keyspace {
     /// the snapshot configuration for this namespace
     snap_config: Option<SnapshotStatus>,
     /// the replication strategy for this namespace
-    replication_strategy: ReplicationStrategy,
+    replication_strategy: cluster::ReplicationStrategy,
 }
 
 impl Keyspace {
@@ -204,7 +227,7 @@ impl Keyspace {
             },
             flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
-            replication_strategy: ReplicationStrategy::default(),
+            replication_strategy: cluster::ReplicationStrategy::default(),
         }
     }
     /// Create a new empty keyspace with zero tables
@@ -213,12 +236,20 @@ impl Keyspace {
             tables: Coremap::new(),
             flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
-            replication_strategy: ReplicationStrategy::default(),
+            replication_strategy: cluster::ReplicationStrategy::default(),
         }
     }
     /// Get an atomic reference to a table in this keyspace if it exists
     pub fn get_table_atomic_ref(&self, table_identifier: Data) -> Option<Arc<Table>> {
         self.tables.get(&table_identifier).map(|v| v.clone())
+    }
+    /// Create a new table with **default encoding**
+    pub fn create_table(&self, table_identifier: Data, table_type: TableType) -> bool {
+        self.tables.true_if_insert(table_identifier, {
+            match table_type {
+                TableType::KeyValue => Arc::new(Table::KV(KVEngine::default())),
+            }
+        })
     }
 }
 // same 8 byte ptrs; any chance of optimizations?
