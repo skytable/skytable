@@ -111,6 +111,14 @@ where
     }
 }
 
+/*
+ Note on memory leaks:
+ Suddenly found a possible leak with a static created with the Lazy type? Well, we'll have to
+ ignore it. That's because destructors aren't called on statics. A thunk leak. So what's to be
+ done here? Well, the best we can do is implement a destructor but it is never guranteed that
+ it will be called when used in global scope
+*/
+
 impl<T, F> Drop for Lazy<T, F> {
     fn drop(&mut self) {
         if mem::needs_drop::<T>() {
@@ -170,5 +178,45 @@ cfg_test!(
             t1.join().unwrap();
             t2.join().unwrap();
         }
+    }
+
+    struct WeirdTestStruct(u8);
+    impl Drop for WeirdTestStruct {
+        fn drop(&mut self) {
+            panic!("PANIC ON DROP! THIS IS OKAY!");
+        }
+    }
+    #[test]
+    #[should_panic]
+    fn test_drop() {
+        // this is only when the lazy is initialized in local scope and not global scope
+        let x: Lazy<WeirdTestStruct, fn() -> WeirdTestStruct> = Lazy::new(|| {
+            WeirdTestStruct(0)
+        });
+        // just do an useless deref to make the pointer non null
+        let _deref = &*x;
+        drop(x); // we should panic right here
+    }
+    #[test]
+    fn test_no_drop_null() {
+        let x: Lazy<WeirdTestStruct, fn() -> WeirdTestStruct> = Lazy::new(|| {
+            WeirdTestStruct(0)
+        });
+        drop(x); // no panic because it is null
+    }
+
+    struct DropLessStruct(());
+    impl Drop for DropLessStruct {
+        fn drop(&mut self) {
+            // If this is called, we're dead
+            panic!("Dropped on dropless type");
+        }
+    }
+    #[test]
+    fn test_no_drop_nodrop() {
+        let x: Lazy<DropLessStruct, fn() -> DropLessStruct> = Lazy::new(|| {
+            DropLessStruct(())
+        });
+        drop(x);
     }
 );
