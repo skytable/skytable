@@ -90,6 +90,13 @@ mod cluster {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum DdlError {
+    StillInUse,
+    ObjectNotFound,
+    ProtectedObject,
+}
+
 #[derive(Debug)]
 /// The core in-memory table
 ///
@@ -188,6 +195,29 @@ impl Namespace {
         self.keyspaces
             .true_if_insert(keyspace_idenitifer, Arc::new(Keyspace::empty()))
     }
+    /// Drop a keyspace if it is not in use **and** it is empty and not the default
+    pub fn drop_keyspace(&self, keyspace_idenitifer: Data) -> Result<(), DdlError> {
+        if keyspace_idenitifer.eq(&Data::from("default")) {
+            // can't delete default keyspace
+            Err(DdlError::ProtectedObject)
+        } else if self.keyspaces.contains_key(&keyspace_idenitifer) {
+            // has table
+            let did_remove =
+                self.keyspaces
+                    .true_remove_if(&keyspace_idenitifer, |_ks_id, ks_atomic_ref| {
+                        // 1 because this should just be us, the one instance
+                        // also the keyspace must be empty
+                        ks_atomic_ref.tables.len() == 0 && Arc::strong_count(&ks_atomic_ref) == 1
+                    });
+            if did_remove {
+                Ok(())
+            } else {
+                Err(DdlError::StillInUse)
+            }
+        } else {
+            Err(DdlError::ObjectNotFound)
+        }
+    }
 }
 
 // TODO(@ohsayan): Optimize the memory layouts of the UDFs to ensure that sharing is very cheap
@@ -251,7 +281,63 @@ impl Keyspace {
             }
         })
     }
+    pub fn drop_table(&self, table_identifier: Data) -> Result<(), DdlError> {
+        if table_identifier.eq(&Data::from("default"))
+            || table_identifier.eq(&Data::from("_system"))
+        {
+            Err(DdlError::ProtectedObject)
+        } else if self.tables.contains_key(&table_identifier) {
+            // has table
+            let did_remove =
+                self.tables
+                    .true_remove_if(&table_identifier, |_table_id, table_atomic_ref| {
+                        // 1 because this should just be us, the one instance
+                        Arc::strong_count(&table_atomic_ref) == 1
+                    });
+            if did_remove {
+                Ok(())
+            } else {
+                Err(DdlError::StillInUse)
+            }
+        } else {
+            Err(DdlError::ObjectNotFound)
+        }
+    }
 }
+
+#[test]
+fn test_keyspace_drop_no_atomic_ref() {
+    let our_keyspace = Keyspace::empty_default();
+    assert!(our_keyspace.create_table(Data::from("apps"), TableType::KeyValue));
+    assert!(our_keyspace.drop_table(Data::from("apps")).is_ok());
+}
+
+#[test]
+fn test_keyspace_drop_fail_with_atomic_ref() {
+    let our_keyspace = Keyspace::empty_default();
+    assert!(our_keyspace.create_table(Data::from("apps"), TableType::KeyValue));
+    let _atomic_tbl_ref = our_keyspace
+        .get_table_atomic_ref(Data::from("apps"))
+        .unwrap();
+    assert_eq!(
+        our_keyspace.drop_table(Data::from("apps")).unwrap_err(),
+        DdlError::StillInUse
+    );
+}
+
+#[test]
+fn test_keyspace_try_delete_protected_table() {
+    let our_keyspace = Keyspace::empty_default();
+    assert_eq!(
+        our_keyspace.drop_table(Data::from("default")).unwrap_err(),
+        DdlError::ProtectedObject
+    );
+    assert_eq!(
+        our_keyspace.drop_table(Data::from("_system")).unwrap_err(),
+        DdlError::ProtectedObject
+    );
+}
+
 // same 8 byte ptrs; any chance of optimizations?
 
 #[derive(Debug)]

@@ -87,7 +87,7 @@ where
 use dashmap::iter::Iter;
 pub use dashmap::lock::RwLock as MapRWL;
 pub use dashmap::lock::RwLockReadGuard as MapRWLGuard;
-use dashmap::mapref::entry::Entry;
+pub use dashmap::mapref::entry::Entry as MapEntry;
 pub use dashmap::mapref::one::Ref as MapSingleReference;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
@@ -170,12 +170,15 @@ where
     }
     /// Returns true if the non-existent key was assigned to a value
     pub fn true_if_insert(&self, k: K, v: V) -> bool {
-        if let Entry::Vacant(ve) = self.inner.entry(k) {
+        if let MapEntry::Vacant(ve) = self.inner.entry(k) {
             ve.insert(v);
             true
         } else {
             false
         }
+    }
+    pub fn true_remove_if(&self, key: &K, exec: impl FnOnce(&K, &V) -> bool) -> bool {
+        self.inner.remove_if(key, exec).is_some()
     }
     /// Update or insert
     pub fn upsert(&self, k: K, v: V) {
@@ -183,7 +186,7 @@ where
     }
     /// Returns true if the value was updated
     pub fn true_if_update(&self, k: K, v: V) -> bool {
-        if let Entry::Occupied(mut oe) = self.inner.entry(k) {
+        if let MapEntry::Occupied(mut oe) = self.inner.entry(k) {
             oe.insert(v);
             true
         } else {
