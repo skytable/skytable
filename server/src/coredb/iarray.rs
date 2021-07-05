@@ -568,6 +568,22 @@ where
     }
 }
 
+// impl ser/de
+use serde::{ser::SerializeSeq, Serialize, Serializer};
+
+impl<A: MemoryBlock> Serialize for IArray<A>
+where
+    A::LayoutItem: Serialize,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+        for item in self.iter() {
+            seq.serialize_element(&item)?;
+        }
+        seq.end()
+    }
+}
+
 #[test]
 fn test_equality() {
     let mut x: IArray<[u8; 32]> = IArray::new();
