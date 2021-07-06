@@ -59,8 +59,7 @@ macro_rules! impl_memoryblock_stack_array_with_size {
     };
 }
 
-// only power of two stacks
-impl_memoryblock_stack_array_with_size!(2, 4, 8, 16, 32, 64, 128, 256);
+impl_memoryblock_stack_array_with_size!(2, 4, 8, 16, 32, 48, 64, 128, 256);
 
 pub union InlineArray<A: MemoryBlock> {
     stack: ManuallyDrop<MaybeUninit<A>>,
@@ -124,9 +123,46 @@ unsafe fn dealloc<T>(start_ptr: *mut T, capacity: usize) {
 type DataptrLenptrCapacity<T> = (*const T, usize, usize);
 type DataptrLenptrCapacityMut<'a, T> = (*mut T, &'a mut usize, usize);
 
+/// A stack optimized backing store
+///
+/// An [`IArray`] is heavily optimized for storing items on the stack and will
+/// not perform very well (but of course will) when the object overflows its
+/// stack and is moved to the heap. Optimizations are made to mark overflows
+/// as branches that are unlikely to be called. This makes the [`IArray`]
+/// extremely performant for operations on the stack, but a little expensive
+/// when operations are done on the heap
 pub struct IArray<A: MemoryBlock> {
     cap: usize,
     store: InlineArray<A>,
+}
+
+/*
+ use branch prediction hints for optimizations as we don't expect our
+ ks/ns names to exceed the memory block sizes we pre-allocate for them
+*/
+
+#[cold]
+fn cold() {}
+
+fn likely(b: bool) -> bool {
+    if !b {
+        cold()
+    }
+    b
+}
+
+fn unlikely(b: bool) -> bool {
+    if b {
+        cold()
+    }
+    b
+}
+
+impl IArray<[u8; 48]> {
+    /// Returns a new 48-bit, stack allocated array of bytes
+    fn new_bytearray() -> Self {
+        Self::new()
+    }
 }
 
 impl<A: MemoryBlock> IArray<A> {
@@ -137,7 +173,7 @@ impl<A: MemoryBlock> IArray<A> {
         }
     }
     pub fn from_vec(mut vec: Vec<A::LayoutItem>) -> Self {
-        if vec.capacity() <= Self::stack_capacity() {
+        if likely(vec.capacity() <= Self::stack_capacity()) {
             let mut store = InlineArray::<A>::from_stack(MaybeUninit::uninit());
             let len = vec.len();
             unsafe {
@@ -146,6 +182,7 @@ impl<A: MemoryBlock> IArray<A> {
             // done with the copy
             Self { cap: len, store }
         } else {
+            // off to the heap
             let (start_ptr, cap, len) = (vec.as_mut_ptr(), vec.capacity(), vec.len());
             // leak the vec
             mem::forget(vec);
@@ -166,7 +203,7 @@ impl<A: MemoryBlock> IArray<A> {
     }
     fn meta_triple(&self) -> DataptrLenptrCapacity<A::LayoutItem> {
         unsafe {
-            if self.went_off_stack() {
+            if unlikely(self.went_off_stack()) {
                 let (data_ptr, len_ptr) = self.store.heap();
                 (data_ptr, len_ptr, self.cap)
             } else {
@@ -177,7 +214,7 @@ impl<A: MemoryBlock> IArray<A> {
     }
     fn meta_triple_mut(&mut self) -> DataptrLenptrCapacityMut<A::LayoutItem> {
         unsafe {
-            if self.went_off_stack() {
+            if unlikely(self.went_off_stack()) {
                 // get heap
                 let (data_ptr, len_ptr) = self.store.heap_mut();
                 (data_ptr, len_ptr, self.cap)
@@ -192,7 +229,7 @@ impl<A: MemoryBlock> IArray<A> {
         }
     }
     fn get_data_ptr_mut(&mut self) -> *mut A::LayoutItem {
-        if self.went_off_stack() {
+        if unlikely(self.went_off_stack()) {
             // get the heap ptr
             unsafe { self.store.heap_ptr_mut() }
         } else {
@@ -204,7 +241,7 @@ impl<A: MemoryBlock> IArray<A> {
         self.cap > Self::stack_capacity()
     }
     pub fn len(&self) -> usize {
-        if self.went_off_stack() {
+        if unlikely(self.went_off_stack()) {
             // so we're off the stack
             unsafe { self.store.heap_size() }
         } else {
@@ -216,7 +253,7 @@ impl<A: MemoryBlock> IArray<A> {
         self.len() == 0
     }
     fn get_capacity(&self) -> usize {
-        if self.went_off_stack() {
+        if unlikely(self.went_off_stack()) {
             self.cap
         } else {
             Self::stack_capacity()
@@ -228,11 +265,10 @@ impl<A: MemoryBlock> IArray<A> {
             let (data_ptr, &mut len, cap) = self.meta_triple_mut();
             let still_on_stack = !self.went_off_stack();
             assert!(new_cap > len);
-            if new_cap <= Self::stack_capacity() {
+            if likely(new_cap <= Self::stack_capacity()) {
                 if still_on_stack {
                     return;
                 }
-                // no branch
                 self.store = InlineArray::from_stack(MaybeUninit::uninit());
                 ptr::copy_nonoverlapping(data_ptr, self.store.stack_ptr_mut(), len);
                 self.cap = len;
@@ -305,12 +341,12 @@ impl<A: MemoryBlock> IArray<A> {
         }
     }
     pub fn shrink(&mut self) {
-        if self.went_off_stack() {
+        if unlikely(self.went_off_stack()) {
             // it's off the stack, so no chance of moving back to the stack
             return;
         }
         let current_len = self.len();
-        if Self::stack_capacity() >= current_len {
+        if likely(Self::stack_capacity() >= current_len) {
             // we have a chance of copying this over to our stack
             unsafe {
                 let (data_ptr, len) = self.store.heap();
@@ -357,7 +393,7 @@ where
     pub fn from_slice(slice: &[A::LayoutItem]) -> Self {
         // FIXME(@ohsayan): Could we have had this as a From::from() method?
         let slice_len = slice.len();
-        if slice_len <= Self::stack_capacity() {
+        if likely(slice_len <= Self::stack_capacity()) {
             // so we can place this thing on the stack
             let mut new_stack = MaybeUninit::uninit();
             unsafe {
@@ -452,7 +488,7 @@ impl<A: MemoryBlock> BorrowMut<[A::LayoutItem]> for IArray<A> {
 impl<A: MemoryBlock> Drop for IArray<A> {
     fn drop(&mut self) {
         unsafe {
-            if self.went_off_stack() {
+            if unlikely(self.went_off_stack()) {
                 // free the heap
                 let (ptr, len) = self.store.heap();
                 // let vec's destructor do the work
@@ -586,7 +622,7 @@ where
 
 #[test]
 fn test_equality() {
-    let mut x: IArray<[u8; 32]> = IArray::new();
+    let mut x = IArray::new_bytearray();
     x.extend_from_slice("AVeryGoodKeyspaceName".as_bytes());
     assert_eq!(x, {
         let mut i = IArray::<[u8; 64]>::new();
