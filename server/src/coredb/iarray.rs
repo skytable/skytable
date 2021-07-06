@@ -49,8 +49,11 @@ use serde::{
 };
 use std::alloc as std_alloc;
 
+/// An arbitrary trait used for identifying something as a contiguous block of memory
 pub trait MemoryBlock {
+    /// The type that will be used for the memory layout
     type LayoutItem;
+    /// The number of _units_ this memory block has
     fn size() -> usize;
 }
 
@@ -61,48 +64,68 @@ impl<T, const N: usize> MemoryBlock for [T; N] {
     }
 }
 
+/// An union that either holds a stack (ptr) or a heap
+///
+/// ## Safety
+/// If you're trying to access a field without knowing the most recently created one,
+/// behavior is undefined.
 pub union InlineArray<A: MemoryBlock> {
+    /// the stack
     stack: ManuallyDrop<MaybeUninit<A>>,
+    /// a pointer to the heap allocation and the allocation size
     heap_ptr_len: (*mut A::LayoutItem, usize),
 }
 
 impl<A: MemoryBlock> InlineArray<A> {
+    /// Get's the stack pointer. This is unsafe because it is not guranteed that the
+    /// stack pointer field is valid and the caller has to uphold this gurantee
     unsafe fn stack_ptr(&self) -> *const A::LayoutItem {
         self.stack.as_ptr() as *const _
     }
+    /// Safe as `stack_ptr`, but returns a mutable pointer
     unsafe fn stack_ptr_mut(&mut self) -> *mut A::LayoutItem {
         self.stack.as_mut_ptr() as *mut _
     }
+    /// Create a new union from a stack
     fn from_stack(stack: MaybeUninit<A>) -> Self {
         Self {
             stack: ManuallyDrop::new(stack),
         }
     }
+    /// Create a new union from a heap (allocated).
     fn from_heap_ptr(start_ptr: *mut A::LayoutItem, len: usize) -> Self {
         Self {
             heap_ptr_len: (start_ptr, len),
         }
     }
+    /// Returns the allocation size of the heap
     unsafe fn heap_size(&self) -> usize {
         self.heap_ptr_len.1
     }
+    /// Returns a raw ptr to the heap
     unsafe fn heap_ptr(&self) -> *const A::LayoutItem {
         self.heap_ptr_len.0
     }
+    /// Returns a mut ptr to the heap
     unsafe fn heap_ptr_mut(&mut self) -> *mut A::LayoutItem {
         self.heap_ptr_len.0 as *mut _
     }
+    /// Returns a mut ref to the heap allocation size
     unsafe fn heap_size_mut(&mut self) -> &mut usize {
         &mut self.heap_ptr_len.1
     }
+    /// Returns the entire heap field
     unsafe fn heap(&self) -> (*mut A::LayoutItem, usize) {
         self.heap_ptr_len
     }
+    /// Returns a mutable reference to the entire heap field
     unsafe fn heap_mut(&mut self) -> (*mut A::LayoutItem, &mut usize) {
         (self.heap_ptr_mut(), &mut self.heap_ptr_len.1)
     }
 }
 
+/// An utility tool for calculating the memory layout for a given `T`. Handles
+/// any possible overflows
 pub fn calculate_memory_layout<T>(count: usize) -> Result<Layout, ()> {
     let size = mem::size_of::<T>().checked_mul(count).ok_or(())?;
     // err is cap overflow
@@ -192,6 +215,7 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Returns the total capacity of the inline stack
     fn stack_capacity() -> usize {
         if mem::size_of::<A::LayoutItem>() > 0 {
             // not a ZST, so cap of array
@@ -201,6 +225,7 @@ impl<A: MemoryBlock> IArray<A> {
             usize::MAX
         }
     }
+    /// Helper function that returns a ptr to the data, the len and the capacity
     fn meta_triple(&self) -> DataptrLenptrCapacity<A::LayoutItem> {
         unsafe {
             if unlikely(self.went_off_stack()) {
@@ -212,6 +237,7 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Mutable version of `meta_triple`
     fn meta_triple_mut(&mut self) -> DataptrLenptrCapacityMut<A::LayoutItem> {
         unsafe {
             if unlikely(self.went_off_stack()) {
@@ -228,6 +254,7 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Returns a raw ptr to the data
     fn get_data_ptr_mut(&mut self) -> *mut A::LayoutItem {
         if unlikely(self.went_off_stack()) {
             // get the heap ptr
@@ -237,9 +264,11 @@ impl<A: MemoryBlock> IArray<A> {
             unsafe { self.store.stack_ptr_mut() }
         }
     }
+    /// Returns true if the allocation is now on the heap
     fn went_off_stack(&self) -> bool {
         self.cap > Self::stack_capacity()
     }
+    /// Returns the length
     pub fn len(&self) -> usize {
         if unlikely(self.went_off_stack()) {
             // so we're off the stack
@@ -249,9 +278,11 @@ impl<A: MemoryBlock> IArray<A> {
             self.cap
         }
     }
+    /// Returns true if the IArray is empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Returns the capacity
     fn get_capacity(&self) -> usize {
         if unlikely(self.went_off_stack()) {
             self.cap
@@ -259,6 +290,8 @@ impl<A: MemoryBlock> IArray<A> {
             Self::stack_capacity()
         }
     }
+    /// Grow the allocation, if required, to make space for a total of `new_cap`
+    /// elements
     fn grow_block(&mut self, new_cap: usize) {
         // infallible
         unsafe {
@@ -299,6 +332,7 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Reserve space for `additional` elements
     fn reserve(&mut self, additional: usize) {
         let (_, &mut len, cap) = self.meta_triple_mut();
         if cap - len >= additional {
@@ -311,6 +345,7 @@ impl<A: MemoryBlock> IArray<A> {
             .expect("Capacity overflow");
         self.grow_block(new_cap)
     }
+    /// Push an element into this IArray
     pub fn push(&mut self, val: A::LayoutItem) {
         unsafe {
             let (mut data_ptr, mut len, cap) = self.meta_triple_mut();
@@ -324,6 +359,7 @@ impl<A: MemoryBlock> IArray<A> {
             *len += 1;
         }
     }
+    /// Pop an element off this IArray
     pub fn pop(&mut self) -> Option<A::LayoutItem> {
         unsafe {
             let (data_ptr, len_mut, _cap) = self.meta_triple_mut();
@@ -340,6 +376,8 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Shrink this IArray so that it only occupies the required space and not anything
+    /// more
     pub fn shrink(&mut self) {
         if unlikely(self.went_off_stack()) {
             // it's off the stack, so no chance of moving back to the stack
@@ -363,6 +401,7 @@ impl<A: MemoryBlock> IArray<A> {
             self.grow_block(current_len);
         }
     }
+    /// Truncate the IArray to a given length. This **will** call the destructors
     pub fn truncate(&mut self, target_len: usize) {
         unsafe {
             let (data_ptr, len_mut, _cap) = self.meta_triple_mut();
@@ -376,10 +415,14 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// Clear the internal store
     pub fn clear(&mut self) {
         // chop off the whole place
         self.truncate(0);
     }
+    /// Set the len, **without calling the destructor**. This is the ultimate function
+    /// to make valgrind unhappy, that is, **you can create memory leaks** if you don't
+    /// destroy the elements yourself
     unsafe fn set_len(&mut self, new_len: usize) {
         let (_dataptr, len_mut, _cap) = self.meta_triple_mut();
         *len_mut = new_len;
@@ -390,6 +433,8 @@ impl<A: MemoryBlock> IArray<A>
 where
     A::LayoutItem: Copy,
 {
+    /// Create an IArray from a slice by copying the elements of the slice into
+    /// the IArray
     pub fn from_slice(slice: &[A::LayoutItem]) -> Self {
         // FIXME(@ohsayan): Could we have had this as a From::from() method?
         let slice_len = slice.len();
@@ -419,6 +464,7 @@ where
             }
         }
     }
+    /// Insert a slice at the given index
     pub fn insert_slice_at_index(&mut self, slice: &[A::LayoutItem], index: usize) {
         self.reserve(slice.len());
         let len = self.len();
@@ -434,10 +480,12 @@ where
             self.set_len(len + slice.len());
         }
     }
+    /// Extend the IArray by using a slice
     pub fn extend_from_slice(&mut self, slice: &[A::LayoutItem]) {
         // at our len because we're appending it to the end
         self.insert_slice_at_index(slice, self.len())
     }
+    /// Create a new IArray from a pre-defined stack
     pub fn from_stack(stack: A) -> Self {
         Self {
             cap: A::size(),
