@@ -435,6 +435,9 @@ where
     }
 }
 
+unsafe impl<T, const N: usize> Send for Array<T, N> where T: Send {}
+unsafe impl<T, const N: usize> Sync for Array<T, N> where T: Sync {}
+
 #[test]
 fn test_basic() {
     let mut b: Array<u8, 11> = Array::new();
