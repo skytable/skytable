@@ -42,6 +42,7 @@ pub mod htable;
 pub mod iarray;
 pub mod lazy;
 pub mod lock;
+pub mod array;
 mod memstore;
 
 /// This is a thread-safe database handle, which on cloning simply

@@ -26,12 +26,14 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+use crate::coredb::array::LenScopeGuard;
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
 use core::cmp;
 use core::fmt;
 use core::hash::{self, Hash};
+use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem;
 use core::mem::ManuallyDrop;
@@ -505,33 +507,6 @@ impl<A: MemoryBlock> Drop for IArray<A> {
     }
 }
 
-pub struct LenScopeGuard<'a> {
-    real_ref: &'a mut usize,
-    temp: usize,
-}
-
-impl<'a> LenScopeGuard<'a> {
-    pub fn new(real_ref: &'a mut usize) -> Self {
-        let ret = *real_ref;
-        Self {
-            real_ref,
-            temp: ret,
-        }
-    }
-    pub fn incr(&mut self) {
-        self.temp += 1;
-    }
-    pub fn get_temp(&self) -> usize {
-        self.temp
-    }
-}
-
-impl<'a> Drop for LenScopeGuard<'a> {
-    fn drop(&mut self) {
-        *self.real_ref = self.temp;
-    }
-}
-
 impl<A: MemoryBlock> Extend<A::LayoutItem> for IArray<A> {
     fn extend<I: IntoIterator<Item = A::LayoutItem>>(&mut self, iterable: I) {
         let mut iter = iterable.into_iter();
@@ -545,7 +520,7 @@ impl<A: MemoryBlock> Extend<A::LayoutItem> for IArray<A> {
             while len.get_temp() < cap {
                 if let Some(out) = iter.next() {
                     ptr::write(data_ptr.add(len.get_temp()), out);
-                    len.incr();
+                    len.incr(1);
                 } else {
                     return;
                 }
@@ -608,6 +583,23 @@ where
     }
 }
 
+impl<A: MemoryBlock> FromIterator<A::LayoutItem> for IArray<A> {
+    fn from_iter<I: IntoIterator<Item = A::LayoutItem>>(iter: I) -> Self {
+        let mut iarray = IArray::new();
+        iarray.extend(iter);
+        iarray
+    }
+}
+
+impl<'a, A: MemoryBlock> From<&'a [A::LayoutItem]> for IArray<A>
+where
+    A::LayoutItem: Clone,
+{
+    fn from(slice: &'a [A::LayoutItem]) -> Self {
+        slice.iter().cloned().collect()
+    }
+}
+
 // impl ser/de
 impl<A: MemoryBlock> Serialize for IArray<A>
 where
@@ -657,6 +649,9 @@ where
         deserializer.deserialize_seq(IAVisitor { _data: PhantomData })
     }
 }
+
+unsafe impl<A: MemoryBlock> Send for IArray<A> where A::LayoutItem: Send {}
+unsafe impl<A: MemoryBlock> Sync for IArray<A> where A::LayoutItem: Sync {}
 
 #[test]
 fn test_equality() {
