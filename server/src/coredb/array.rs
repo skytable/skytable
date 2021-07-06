@@ -115,8 +115,8 @@ impl<T, const N: usize> Array<T, N> {
         ptr::write(self.as_mut_ptr().add(len), element);
         self.set_len(len + 1);
     }
-    pub fn push(&mut self, element: T) -> Result<(), ()> {
-        if self.capacity() < self.len() {
+    pub fn push_panic(&mut self, element: T) -> Result<(), ()> {
+        if self.len() < N {
             // so we can push it in
             unsafe { self.push_unchecked(element) };
             Ok(())
@@ -124,8 +124,8 @@ impl<T, const N: usize> Array<T, N> {
             Err(())
         }
     }
-    pub fn push_panic(&mut self, element: T) {
-        self.push(element).unwrap();
+    pub fn push(&mut self, element: T) {
+        self.push_panic(element).unwrap();
     }
     pub fn pop(&mut self) -> Option<T> {
         if self.len() == 0 {
@@ -446,4 +446,11 @@ fn test_basic() {
         b,
         Array::from([b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd'])
     );
+}
+
+#[test]
+fn test_uninitialized() {
+    let mut b: Array<u8, 16> = Array::new();
+    b.push(b'S');
+    assert_eq!(b.iter().count(), 1);
 }
