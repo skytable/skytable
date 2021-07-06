@@ -105,6 +105,24 @@ impl<T, const N: usize> Array<T, N> {
             init_len: 0,
         }
     }
+    /// This literally turns [T; M] into [T; N]. How can you expect it to be safe?
+    /// This function is extremely unsafe. I mean, I don't even know how to call it safe.
+    /// There's one way though: make M == N. This will panic in debug mode if M > N. In
+    /// release mode, good luck
+    pub unsafe fn from_const_array<const M: usize>(arr: [T; M]) -> Self {
+        debug_assert!(
+            N > M,
+            "Provided const array exceeds size limit of initialized array"
+        );
+        // do not double-free or destroy the elements
+        let array = ManuallyDrop::new(arr);
+        let mut arr = Array::<T, N>::new();
+        // copy it over
+        let ptr = &*array as *const [T; M] as *const [MaybeUninit<T>; N];
+        ptr.copy_to_nonoverlapping(&mut arr.stack as *mut [MaybeUninit<T>; N], 1);
+        arr.set_len(N);
+        arr
+    }
     /// Get the apparent length of the array
     pub const fn len(&self) -> usize {
         self.init_len as usize
@@ -238,6 +256,15 @@ impl<T, const N: usize> Array<T, N> {
             }
         }
     }
+    /// Extend self from a slice
+    ///
+    /// ## Safety
+    /// The same danger as in from_slice_unchecked
+    pub unsafe fn from_slice(slice_ref: impl AsRef<[T]>) -> Self {
+        let mut slf = Self::new();
+        slf.extend_from_slice_unchecked(slice_ref.as_ref());
+        slf
+    }
     // these operations are incredibly safe because we only pass the initialized part
     // of the array
     /// Get self as a slice. Super safe because we guarantee that all the other invarians
@@ -266,16 +293,7 @@ impl<T, const N: usize> ops::DerefMut for Array<T, N> {
 
 impl<T, const N: usize> From<[T; N]> for Array<T, N> {
     fn from(array: [T; N]) -> Self {
-        // do not double-free or destroy the elements
-        let array = ManuallyDrop::new(array);
-        let mut arr = Array::<T, N>::new();
-        unsafe {
-            // copy it over
-            let ptr = &*array as *const [T; N] as *const [MaybeUninit<T>; N];
-            ptr.copy_to_nonoverlapping(&mut arr.stack as *mut [MaybeUninit<T>; N], 1);
-            arr.set_len(N);
-        }
-        arr
+        unsafe { Array::from_const_array::<N>(array) }
     }
 }
 
@@ -557,7 +575,7 @@ macro_rules! array_from_string {
 }
 
 #[test]
-fn test_map_serialize() {
+fn test_map_serialize_deserialize() {
     use crate::coredb::htable::Coremap;
     let map = Coremap::new();
     map.true_if_insert(
@@ -568,4 +586,18 @@ fn test_map_serialize() {
     let bc: Coremap<Array<u8, 5>, Array<u8, 5>> = Coremap::deserialize_array(ret).unwrap();
     assert!(bc.len() == map.len());
     assert!(bc.into_iter().all(|(k, _v)| { map.contains_key(&k) }));
+}
+
+#[test]
+#[should_panic]
+fn test_array_overflow() {
+    let mut arr: Array<u8, 5> = Array::new();
+    arr.extend_from_slice("123456".as_bytes()).unwrap();
+}
+
+#[test]
+#[should_panic]
+fn test_array_overflow_iter() {
+    let mut arr: Array<char, 5> = Array::new();
+    arr.extend("123456".chars());
 }

@@ -56,12 +56,23 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this onece we're done
 
+use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
 use crate::coredb::SnapshotStatus;
 use crate::kvengine::KVEngine;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+
+const DEFAULT_ARRAY: [u8; 7] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
+/// typedef for the namespace/keyspace IDs. We don't need too much fancy here,
+/// no atomic pointers and all. Just a nice array. With amazing gurantees
+type NsKsTblId = Array<u8, 64>;
+macro_rules! defaultid {
+    () => {{
+        unsafe { Array::from_const_array(DEFAULT_ARRAY) }
+    }};
+}
 
 mod cluster {
     /// This is for the future where every node will be allocated a shard
@@ -105,7 +116,7 @@ pub enum DdlError {
 /// for connection-level control abilities over the namespace
 pub struct Memstore {
     /// the namespaces
-    namespaces: Arc<Coremap<Data, Arc<Namespace>>>,
+    namespaces: Arc<Coremap<NsKsTblId, Arc<Namespace>>>,
 }
 
 impl Memstore {
@@ -134,19 +145,22 @@ impl Memstore {
         Self {
             namespaces: {
                 let n = Coremap::new();
-                n.true_if_insert(Data::from("default"), Arc::new(Namespace::empty_default()));
+                n.true_if_insert(defaultid!(), Arc::new(Namespace::empty_default()));
                 Arc::new(n)
             },
         }
     }
     /// Get an atomic reference to a namespace
-    pub fn get_namespace_atomic_ref(&self, namespace_identifier: Data) -> Option<Arc<Namespace>> {
+    pub fn get_namespace_atomic_ref(
+        &self,
+        namespace_identifier: NsKsTblId,
+    ) -> Option<Arc<Namespace>> {
         self.namespaces
             .get(&namespace_identifier)
             .map(|ns| ns.clone())
     }
     /// Returns true if a new namespace was created
-    pub fn create_namespace(&self, namespace_identifier: Data) -> bool {
+    pub fn create_namespace(&self, namespace_identifier: NsKsTblId) -> bool {
         self.namespaces
             .true_if_insert(namespace_identifier, Arc::new(Namespace::empty()))
     }
@@ -156,7 +170,7 @@ impl Memstore {
 /// Namespaces hold keyspaces
 pub struct Namespace {
     /// the keyspaces stored in this namespace
-    keyspaces: Coremap<Data, Arc<Keyspace>>,
+    keyspaces: Coremap<NsKsTblId, Arc<Keyspace>>,
     /// the shard range
     shard_range: cluster::ClusterShardRange,
 }
@@ -180,24 +194,24 @@ impl Namespace {
         Self {
             keyspaces: {
                 let ks = Coremap::new();
-                ks.true_if_insert(Data::from("default"), Arc::new(Keyspace::empty_default()));
+                ks.true_if_insert(defaultid!(), Arc::new(Keyspace::empty_default()));
                 ks
             },
             shard_range: cluster::ClusterShardRange::default(),
         }
     }
     /// Get an atomic reference to a keyspace, if it exists
-    pub fn get_keyspace_atomic_ref(&self, keyspace_idenitifer: Data) -> Option<Arc<Keyspace>> {
+    pub fn get_keyspace_atomic_ref(&self, keyspace_idenitifer: NsKsTblId) -> Option<Arc<Keyspace>> {
         self.keyspaces.get(&keyspace_idenitifer).map(|v| v.clone())
     }
     /// Create a new keyspace if it doesn't exist
-    pub fn create_keyspace(&self, keyspace_idenitifer: Data) -> bool {
+    pub fn create_keyspace(&self, keyspace_idenitifer: NsKsTblId) -> bool {
         self.keyspaces
             .true_if_insert(keyspace_idenitifer, Arc::new(Keyspace::empty()))
     }
     /// Drop a keyspace if it is not in use **and** it is empty and not the default
-    pub fn drop_keyspace(&self, keyspace_idenitifer: Data) -> Result<(), DdlError> {
-        if keyspace_idenitifer.eq(&Data::from("default")) {
+    pub fn drop_keyspace(&self, keyspace_idenitifer: NsKsTblId) -> Result<(), DdlError> {
+        if keyspace_idenitifer.eq(&defaultid!()) {
             // can't delete default keyspace
             Err(DdlError::ProtectedObject)
         } else if self.keyspaces.contains_key(&keyspace_idenitifer) {
