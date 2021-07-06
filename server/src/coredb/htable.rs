@@ -24,6 +24,7 @@
  *
 */
 
+use crate::coredb::array::Array;
 use bytes::Bytes;
 use libsky::TResult;
 use serde::{Deserialize, Serialize};
@@ -207,11 +208,6 @@ where
 }
 
 impl Coremap<Data, Data> {
-    /// Returns a `Coremap<Data, Data>` from the provided file (as a `Vec<u8>`)
-    pub fn deserialize(src: Vec<u8>) -> TResult<Self> {
-        let h: HashTable<Data, Data> = bincode::deserialize(&src)?;
-        Ok(Self { inner: h })
-    }
     /// Returns atleast `count` number of keys from the hashtable
     pub fn get_keys(&self, count: usize) -> Vec<Bytes> {
         let mut v = Vec::with_capacity(count);
@@ -220,6 +216,17 @@ impl Coremap<Data, Data> {
             .map(|kv| kv.key().get_blob().clone())
             .for_each(|key| v.push(key));
         v
+    }
+    /// Returns a `Coremap<Data, Data>` from the provided file (as a `Vec<u8>`)
+    pub fn deserialize(src: Vec<u8>) -> TResult<Self> {
+        let h: HashTable<Data, Data> = bincode::deserialize(&src)?;
+        Ok(Self { inner: h })
+    }
+}
+impl<const M: usize, const N: usize> Coremap<Array<u8, M>, Array<u8, N>> {
+    pub fn deserialize_array(bytes: Vec<u8>) -> TResult<Self> {
+        let h: HashTable<Array<u8, M>, Array<u8, N>> = bincode::deserialize(&bytes)?;
+        Ok(Self { inner: h })
     }
 }
 impl<K: Eq + Hash, V> IntoIterator for Coremap<K, V> {
@@ -371,7 +378,7 @@ fn test_de() {
         Data::from_string("is writing open-source code".to_owned()),
     );
     let ser = x.serialize().unwrap();
-    let de = Coremap::deserialize(ser).unwrap();
+    let de = Coremap::<Data, Data>::deserialize(ser).unwrap();
     assert!(de.contains_key(&Data::from("sayan")));
     assert!(de.len() == x.len());
     let hmap: Coremap<Data, Data> = Coremap::new();
