@@ -111,7 +111,7 @@ impl<T, const N: usize> Array<T, N> {
     /// release mode, good luck
     pub unsafe fn from_const_array<const M: usize>(arr: [T; M]) -> Self {
         debug_assert!(
-            N > M,
+            N >= M,
             "Provided const array exceeds size limit of initialized array"
         );
         // do not double-free or destroy the elements
