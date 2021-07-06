@@ -70,7 +70,11 @@ const DEFAULT_ARRAY: [u8; 7] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
 type NsKsTblId = Array<u8, 64>;
 macro_rules! defaultid {
     () => {{
-        unsafe { Array::from_const_array(DEFAULT_ARRAY) }
+        unsafe {
+            let mut array = Array::new();
+            array.extend_from_slice_unchecked(&DEFAULT_ARRAY[..]);
+            array
+        }
     }};
 }
 
