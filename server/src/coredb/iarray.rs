@@ -30,36 +30,34 @@ use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
 use core::cmp;
+use core::fmt;
 use core::hash::{self, Hash};
+use core::marker::PhantomData;
+use core::mem;
+use core::mem::ManuallyDrop;
+use core::mem::MaybeUninit;
+use core::ops;
+use core::ptr;
+use core::ptr::NonNull;
 use core::slice;
+use serde::{
+    de::{SeqAccess, Visitor},
+    ser::SerializeSeq,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use std::alloc as std_alloc;
-use std::fmt;
-use std::mem;
-use std::mem::ManuallyDrop;
-use std::mem::MaybeUninit;
-use std::ops;
-use std::ptr;
-use std::ptr::NonNull;
 
 pub trait MemoryBlock {
     type LayoutItem;
     fn size() -> usize;
 }
 
-macro_rules! impl_memoryblock_stack_array_with_size {
-    ($($n:expr),*) => {
-        $(
-            impl<T> MemoryBlock for [T; $n] {
-                type LayoutItem = T;
-                fn size() -> usize {
-                    $n
-                }
-            }
-        )*
-    };
+impl<T, const N: usize> MemoryBlock for [T; N] {
+    type LayoutItem = T;
+    fn size() -> usize {
+        N
+    }
 }
-
-impl_memoryblock_stack_array_with_size!(2, 4, 8, 16, 32, 48, 64, 128, 256);
 
 pub union InlineArray<A: MemoryBlock> {
     stack: ManuallyDrop<MaybeUninit<A>>,
@@ -438,6 +436,12 @@ where
         // at our len because we're appending it to the end
         self.insert_slice_at_index(slice, self.len())
     }
+    pub fn from_stack(stack: A) -> Self {
+        Self {
+            cap: A::size(),
+            store: InlineArray::from_stack(MaybeUninit::new(stack)),
+        }
+    }
 }
 
 impl<A: MemoryBlock> ops::Deref for IArray<A> {
@@ -605,8 +609,6 @@ where
 }
 
 // impl ser/de
-use serde::{ser::SerializeSeq, Serialize, Serializer};
-
 impl<A: MemoryBlock> Serialize for IArray<A>
 where
     A::LayoutItem: Serialize,
@@ -617,6 +619,42 @@ where
             seq.serialize_element(&item)?;
         }
         seq.end()
+    }
+}
+
+struct IAVisitor<A> {
+    _data: PhantomData<A>,
+}
+
+impl<'de, A: MemoryBlock> Visitor<'de> for IAVisitor<A>
+where
+    A::LayoutItem: Deserialize<'de>,
+{
+    type Value = IArray<A>;
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a sequence")
+    }
+    fn visit_seq<B>(self, mut seq: B) -> Result<Self::Value, B::Error>
+    where
+        B: SeqAccess<'de>,
+    {
+        let len = seq.size_hint().unwrap_or(0);
+        let mut array = IArray::new();
+        // infallible
+        array.reserve(len);
+        while let Some(value) = seq.next_element()? {
+            array.push(value)
+        }
+        Ok(array)
+    }
+}
+
+impl<'de, A: MemoryBlock> Deserialize<'de> for IArray<A>
+where
+    A::LayoutItem: Deserialize<'de>,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_seq(IAVisitor { _data: PhantomData })
     }
 }
 
