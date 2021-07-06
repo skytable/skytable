@@ -105,6 +105,12 @@ impl<T, const N: usize> Array<T, N> {
             init_len: 0,
         }
     }
+    pub const fn from_const(array: [MaybeUninit<T>; N], init_len: u16) -> Self {
+        Self {
+            stack: array,
+            init_len,
+        }
+    }
     /// This literally turns [T; M] into [T; N]. How can you expect it to be safe?
     /// This function is extremely unsafe. I mean, I don't even know how to call it safe.
     /// There's one way though: make M == N. This will panic in debug mode if M > N. In

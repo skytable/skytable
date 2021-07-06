@@ -8,6 +8,7 @@ build = "build.rs"
 [dependencies]
 # internal deps
 skytable = { git="https://github.com/skytable/client-rust", branch="next", default-features=false }
+sky_macros = { path="../sky-macros" }
 # external deps
 tokio = { version="1.7.0", features=["full"] }
 bytes = "1.0.1"
@@ -38,7 +39,6 @@ cc = "1.0.68"
 
 [dev-dependencies]
 # internal deps
-sky_macros = { path="../sky-macros" }
 skytable = { git="https://github.com/skytable/client-rust", features=["async", "aio-ssl"], default-features=false, branch="next" }
 # external deps
 tokio = { version="1.6.1", features=["test-util"] }
