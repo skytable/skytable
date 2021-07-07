@@ -47,14 +47,15 @@
 use crate::coredb::htable::Coremap;
 use crate::coredb::Data;
 use core::mem;
+use core::ptr;
 use core::slice;
 use std::io::Write;
 
 /// Get the raw bytes of an unsigned 64-bit integer
-fn get_bytes(len: &u64) -> &[u8] {
-    unsafe {
+unsafe fn raw_len<'a>(len: &'a u64) -> &'a [u8] {
+    {
         let ptr: *const u8 = mem::transmute(len);
-        slice::from_raw_parts(ptr, mem::size_of::<u64>())
+        slice::from_raw_parts::<'a>(ptr, mem::size_of::<u64>())
     }
 }
 
@@ -65,17 +66,18 @@ pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Erro
     */
     // write the len header first
     let mut w = Vec::with_capacity(128);
-    w.write_all(get_bytes(&(map.len() as u64)))?;
-    // now the keys and values
-    for kv in map.iter() {
-        let (k, v) = (kv.key(), kv.value());
-        let (klen, vlen) = (k.len(), v.len());
-        w.write_all(get_bytes(&(klen as u64)))?;
-        w.write_all(get_bytes(&(vlen as u64)))?;
-        w.write_all(k)?;
-        w.write_all(v)?;
+    unsafe {
+        w.write_all(raw_len(&(map.len() as u64)))?;
+        // now the keys and values
+        for kv in map.iter() {
+            let (k, v) = (kv.key(), kv.value());
+            let (klen, vlen) = (k.len(), v.len());
+            w.write_all(raw_len(&(klen as u64)))?;
+            w.write_all(raw_len(&(vlen as u64)))?;
+            w.write_all(k)?;
+            w.write_all(v)?;
+        }
     }
-    w.flush()?;
     Ok(w)
 }
 
@@ -92,13 +94,9 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
              reinterpret bits of one type as another. What could be worse?
              nah, it's not that bad. We know that the byte representations
              would be in the way we expect. If the data is corrupted, we
-             can gurantee that we won't ever read incorrect lengths of data
+             can guarantee that we won't ever read incorrect lengths of data
              and we won't read into others' memory (or corrupt our own)
             */
-            if data.len() - 8 == 0 {
-                // empty
-                return Some(Coremap::new());
-            }
 
             // so we have 8B. Just unsafe access and transmute it; nobody cares
             let len = transmute_len(data.as_ptr());
@@ -141,10 +139,21 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
 }
 
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
-    let mut y: [u8; 8] = [0u8; 8];
-    start_ptr.copy_to_nonoverlapping(y.as_mut_ptr(), 8);
-    let ret: u64 = mem::transmute(y);
-    ret as usize
+    // guarantee that all addresses are aligned
+    debug_assert!((start_ptr as usize % mem::align_of::<u8>() == 0));
+    #[cfg(target_pointer_width = "32")]
+    return {
+        // zero the higher bits on 32-bit
+        let ret1: u64 = ptr::read(start_ptr.cast());
+        ret1 as usize
+    };
+    #[cfg(target_pointer_width = "64")]
+    return {
+        {
+            // no need for zeroing the bits
+            ptr::read(start_ptr.cast())
+        }
+    };
 }
 
 #[test]
@@ -173,12 +182,8 @@ cfg_test!(
     use rand::thread_rng;
     #[test]
     fn roast_the_serializer() {
-        // this test needs a lot of auxiliary space
-        // we can approximate this to be: 100,000 x 30 bytes = 3,000,000 bytes
-        // and then we may have a clone overhead + heap allocation by the map
-        // so ~9,000,000 bytes or ~9MB
-        const COUNT: usize = 100_000_usize;
-        const LEN: usize = 30_usize;
+        const COUNT: usize = 1000_usize;
+        const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
             generate_random_string_vector(COUNT, LEN, &mut rng, true),
@@ -199,12 +204,8 @@ cfg_test!(
 
     #[test]
     fn test_ser_de_safety() {
-        // this test needs a lot of auxiliary space
-        // we can approximate this to be: 100,000 x 30 bytes = 3,000,000 bytes
-        // and then we may have a clone overhead + heap allocation by the map
-        // so ~9,000,000 bytes or ~9MB
-        const COUNT: usize = 100_000_usize;
-        const LEN: usize = 30_usize;
+        const COUNT: usize = 1000_usize;
+        const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
             generate_random_string_vector(COUNT, LEN, &mut rng, true),
@@ -217,7 +218,7 @@ cfg_test!(
             .collect();
         let mut se = serialize_map(&cmap).unwrap();
         // random chop
-        se.truncate(12409);
+        se.truncate(124);
         // corrupted
         assert!(deserialize(se).is_none());
     }
@@ -227,8 +228,8 @@ cfg_test!(
         // we can approximate this to be: 100,000 x 30 bytes = 3,000,000 bytes
         // and then we may have a clone overhead + heap allocation by the map
         // so ~9,000,000 bytes or ~9MB
-        const COUNT: usize = 100_000_usize;
-        const LEN: usize = 30_usize;
+        const COUNT: usize = 1000_usize;
+        const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
             generate_random_string_vector(COUNT, LEN, &mut rng, true),
