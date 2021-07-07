@@ -51,11 +51,16 @@ use core::slice;
 use std::io::Write;
 
 /// Get the raw bytes of an unsigned 64-bit integer
-fn get_bytes(len: &u64) -> &[u8] {
+fn write_raw_bytes<'a, T: 'a, W: Write>(len: &T, writer: &mut W) -> std::io::Result<()> {
+    /*
+     We get the raw byte representation which is quite fast and at the same time
+     _defined_ because all sizes are casted to unsigned 64-bit integers.
+    */
     unsafe {
         let ptr: *const u8 = mem::transmute(len);
-        slice::from_raw_parts(ptr, mem::size_of::<u64>())
+        writer.write_all(slice::from_raw_parts::<'a>(ptr, mem::size_of::<u64>()))?;
     }
+    Ok(())
 }
 
 /// Serialize a map into a _writable_ thing
@@ -65,13 +70,13 @@ pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Erro
     */
     // write the len header first
     let mut w = Vec::with_capacity(128);
-    w.write_all(get_bytes(&(map.len() as u64)))?;
+    write_raw_bytes(&(map.len() as u64), &mut w)?;
     // now the keys and values
     for kv in map.iter() {
         let (k, v) = (kv.key(), kv.value());
         let (klen, vlen) = (k.len(), v.len());
-        w.write_all(get_bytes(&(klen as u64)))?;
-        w.write_all(get_bytes(&(vlen as u64)))?;
+        write_raw_bytes(&(klen as u64), &mut w)?;
+        write_raw_bytes(&(vlen as u64), &mut w)?;
         w.write_all(k)?;
         w.write_all(v)?;
     }
@@ -141,6 +146,10 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
 }
 
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
+    /*
+    The start_ptr can possibly never be aligned so it's better (instead of relying on the
+    processor) to do unaligned reads from the start_ptr
+    */
     let y: [u8; 8] = [
         start_ptr.read_unaligned(),
         start_ptr.add(1).read_unaligned(),
@@ -151,6 +160,9 @@ unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         start_ptr.add(6).read_unaligned(),
         start_ptr.add(7).read_unaligned(),
     ];
+    /*
+    Transmutation is safe here because we already know the exact sizes
+    */
     #[cfg(target_pointer_width = "32")]
     return {
         // zero the higher bits on 32-bit
