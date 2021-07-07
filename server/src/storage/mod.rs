@@ -141,10 +141,29 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
 }
 
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
-    let mut y: [u8; 8] = [0u8; 8];
-    start_ptr.copy_to_nonoverlapping(y.as_mut_ptr(), 8);
-    let ret: u64 = mem::transmute(y);
-    ret as usize
+    let y: [u8; 8] = [
+        start_ptr.read_unaligned(),
+        start_ptr.add(1).read_unaligned(),
+        start_ptr.add(2).read_unaligned(),
+        start_ptr.add(3).read_unaligned(),
+        start_ptr.add(4).read_unaligned(),
+        start_ptr.add(5).read_unaligned(),
+        start_ptr.add(6).read_unaligned(),
+        start_ptr.add(7).read_unaligned(),
+    ];
+    #[cfg(target_pointer_width = "32")]
+    return {
+        // zero the higher bits on 32-bit
+        let ret1: u64 = mem::transmute(y);
+        ret1 as usize
+    };
+    #[cfg(target_pointer_width = "64")]
+    return {
+        {
+            // no need for zeroing the bits
+            mem::transmute(y)
+        }
+    };
 }
 
 #[test]
