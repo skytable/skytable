@@ -119,6 +119,11 @@ impl<K: Eq + Hash, V> Coremap<K, V> {
             inner: HashTable::new(),
         }
     }
+    pub fn with_capacity(cap: usize) -> Self {
+        Coremap {
+            inner: HashTable::with_capacity(cap),
+        }
+    }
 }
 
 impl<K, V> Coremap<K, V>

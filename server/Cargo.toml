@@ -39,10 +39,11 @@ cc = "1.0.68"
 
 [dev-dependencies]
 # internal deps
+libstress = { path="../libstress" }
 skytable = { git="https://github.com/skytable/client-rust", features=["async", "aio-ssl"], default-features=false, branch="next" }
 # external deps
 tokio = { version="1.6.1", features=["test-util"] }
-
+rand = "0.8.4"
 [target.'cfg(unix)'.dependencies]
 # external deps
 libc = "0.2.96"

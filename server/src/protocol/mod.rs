@@ -42,8 +42,8 @@ use crate::util::Unwrappable;
 use bytes::Bytes;
 pub use element::Element;
 
-const ASCII_SUB_HEADER: u8 = 0x1A_u8;
-const ASCII_ESC_HEADER: u8 = 0x1B_u8;
+const ASCII_CONTROL_SUB_HEADER: u8 = 0x1A_u8;
+const ASCII_CONTROL_ESC_HEADER: u8 = 0x1B_u8;
 const ASCII_UNDERSCORE: u8 = b'_';
 const ASCII_AMPERSAND: u8 = b'&';
 const ASCII_COLON: u8 = b':';
@@ -332,9 +332,9 @@ impl<'a> Parser<'a> {
                 ASCII_AMPERSAND => Element::Array(self.parse_next_array()?),
                 ASCII_UNDERSCORE => Element::FlatArray(self.parse_next_flat_array()?),
                 // switch keyspace with SUB
-                ASCII_SUB_HEADER => Element::SwapKSHeader(self.parse_next_byte()?),
+                ASCII_CONTROL_SUB_HEADER => Element::SwapKSHeader(self.parse_next_byte()?),
                 // switch namespace with ESC
-                ASCII_ESC_HEADER => Element::SwapNSHeader(self.parse_next_byte()?),
+                ASCII_CONTROL_ESC_HEADER => Element::SwapNSHeader(self.parse_next_byte()?),
                 _ => return Err(ParseError::UnknownDatatype),
             };
             Ok(ret)
@@ -790,7 +790,7 @@ fn test_u64_incomplete() {
 fn test_ks_sub() {
     let bytes = [
         b"*1\n",
-        &[ASCII_SUB_HEADER][..],
+        &[ASCII_CONTROL_SUB_HEADER][..],
         &[b'5', b'\n'][..],
         b"sayan\n",
     ]
@@ -808,7 +808,7 @@ fn test_ks_sub() {
 fn test_ns_sub() {
     let bytes = [
         b"*1\n",
-        &[ASCII_ESC_HEADER][..],
+        &[ASCII_CONTROL_ESC_HEADER][..],
         &[b'5', b'\n'][..],
         b"sayan\n",
     ]

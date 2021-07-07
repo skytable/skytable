@@ -62,6 +62,7 @@ mod protocol;
 mod queryengine;
 mod resp;
 mod services;
+mod storage;
 #[cfg(test)]
 mod tests;
 
