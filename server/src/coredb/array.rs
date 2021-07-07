@@ -26,9 +26,11 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+use bytes::Bytes;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
 use core::cmp::Ordering;
+use core::convert::TryFrom;
 use core::fmt;
 use core::hash::Hash;
 use core::hash::Hasher;
@@ -553,6 +555,22 @@ where
 
 unsafe impl<T, const N: usize> Send for Array<T, N> where T: Send {}
 unsafe impl<T, const N: usize> Sync for Array<T, N> where T: Sync {}
+
+impl<const N: usize> TryFrom<Bytes> for Array<u8, N> {
+    type Error = ();
+    fn try_from(oth: Bytes) -> Result<Self, Self::Error> {
+        if oth.len() != N {
+            Err(())
+        } else {
+            Ok(unsafe {
+                // we have maintained the invariant that the len is not
+                // greater than N. Also, the byte slice cannot _just be modified_
+                // since the calling method is expected to uphold that guarantee
+                Self::from_slice(oth)
+            })
+        }
+    }
+}
 
 #[test]
 fn test_basic() {
