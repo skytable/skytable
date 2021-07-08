@@ -44,6 +44,99 @@
  modified to be endian independent.
 */
 
+/*
+    Endian and pointer "appendix":
+    We assume a fixed size of 1 for all the cases. All sizes don't hit over isize::MAX as
+    guaranteed by our allocation methods. Also, 32-bit to 64-bit and vice versa aren't
+    worth discussing here (irrespective of endianness). That's because all sizes are stored
+    as unsigned 64-bit integers. So, get the correct byte order, raw cast to u64, down cast
+    or up cast as required by the target's pointer width.
+
+    Current limitations:
+    - 32-bit is compatible with 64-bit
+    - 16-bit is compatible with 64-bit
+    - But 64-bit may not be compatible with 32/16 bit due to the difference in sizes
+
+    Additional context:
+    - RBIT doesn't exist on LE architectures like x86 (exclusive of fancy instructions)
+
+    ------------------------------------------------------
+    Appendix I: Same endian, different pointer width (R/W)
+    ------------------------------------------------------
+    (1) Little endian on little endian (64-bit)
+    (A) Writing
+    In-memory size: [0, 0, 0, 0, 0, 0, 0, 1] =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (no op)
+    We write to file: [0, 0, 0, 0, 0, 0, 0, 1]
+    (B) Reading
+    This is read: [0, 0, 0, 0, 0, 0, 0, 1]
+    Raw cast =(usize)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
+
+    (2) Little endian on little endian (32-bit)
+    (A) Writing
+    In-memory size: [0, 0, 0, 1] =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (up cast)
+    We write to file: [0, 0, 0, 0, 0, 0, 0, 1]
+    (B) Reading
+    This is read: [0, 0, 0, 0, 0, 0, 0, 1]
+    Raw cast =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
+    Lossy cast =(usize)> [0, 0, 0, 1]
+
+    (3) Big endian on big endian (64-bit)
+    (A) Writing
+    In-memory size: [1, 0, 0, 0, 0, 0, 0, 0] =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (no op)
+    We write to file: [1, 0, 0, 0, 0, 0, 0, 0]
+    (B) Reading
+    This is read: [1, 0, 0, 0, 0, 0, 0, 0]
+    Raw cast =(usize)> [1, 0, 0, 0, 0, 0, 0, 0] (one memcpy)
+
+    (4) Big endian (64-bit) on big endian (32-bit)
+    (A) Writing
+    In-memory size: [1, 0, 0, 0] =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (up cast)
+    We write to file: [1, 0, 0, 0, 0, 0, 0, 0]
+    (B) Reading
+    This is read: [1, 0, 0, 0, 0, 0, 0, 0]
+    Raw cast =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (one memcpy)
+    Lossy cast =(usize)> [1, 0, 0, 0]
+
+    ------------------------------------------------------
+    Appendix II: Different endian, same pointer width (R/W)
+    ------------------------------------------------------
+    (1) Little endian on big endian (64-bit)
+    (A) Writing
+    ^^ See Appendix I/1/A
+    (B) Reading
+    This is read: [0, 0, 0, 0, 0, 0, 0, 1]
+    Raw cast =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
+    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap except for hardware instructions like RBIT)
+    Cast =(usize)> [1, 0, 0, 0, 0, 0, 0, 0] (no op)
+
+    (2) Big endian on little endian (64-bit)
+    (A) Writing
+    ^^ See Appendix I/3/A
+    (B) Reading
+    This is read: [1, 0, 0, 0, 0, 0, 0, 0]
+    Raw cast =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (one memcpy)
+    Reverse the bits: [0, 0, 0, 0, 0, 0, 0, 1] (constant time ptr swap)
+    Cast =(usize)> [0, 0, 0, 0, 0, 0, 0, 1] (no op)
+
+    (3) Little endian on big endian (32-bit)
+    (A) Writing
+    ^^ See Appendix I/2/A
+    (B) Reading
+    This is read: [0, 0, 0, 0, 0, 0, 0, 1]
+    Raw cast =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
+    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap except for hardware instructions like RBIT)
+    Lossy cast =(usize)> [1, 0, 0, 0]
+
+    (4) Big endian on little endian (32-bit)
+    (A) Writing
+    ^^ See Appendix I/4/A
+    (B) Reading
+    This is read: [1, 0, 0, 0, 0, 0, 0, 0]
+    Raw cast =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (one memcpy)
+    Reverse the bits: [0, 0, 0, 0, 0, 0, 0, 1] (constant time ptr swap)
+    Lossy cast =(usize)> [0, 0, 0, 1]
+*/
+
 use crate::coredb::htable::Coremap;
 use crate::coredb::Data;
 use core::mem;
@@ -141,10 +234,15 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
     // guarantee that all addresses are aligned
     debug_assert!((start_ptr as usize % mem::align_of::<u8>() == 0));
-    #[cfg(target_pointer_width = "32")]
+    #[cfg(not(target_pointer_width = "64"))]
     return {
         // zero the higher bits on 32-bit
         let ret1: u64 = ptr::read(start_ptr.cast());
+        if ret1 > isize::MAX {
+            // this is a backup method for us incase a giant 48-bit address is
+            // somehow forced to be read on this machine
+            panic!("RT panic: Very high size for current pointer width");
+        }
         ret1 as usize
     };
     #[cfg(target_pointer_width = "64")]
