@@ -15,15 +15,7 @@ jobs:
     needs:
       - test_64bit
       - test_32bit
-      - test-arm64
     steps:
-      - name: Download ARM64 artifact
-        run: wget http://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
-      - name: Upload ARM64 artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
-          path: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
       - name: Finish Tier 1 Tests
         run: exit 0
   test_64bit:
@@ -33,10 +25,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - os: ubuntu-latest
-            rust: x86_64-unknown-linux-gnu
-          - os: macos-latest
-            rust: x86_64-apple-darwin
           - os: windows-latest
             rust: x86_64-pc-windows-msvc
 
@@ -132,10 +120,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
         include:
-          - os: ubuntu-latest
-            rust: i686-unknown-linux-gnu
           - os: windows-latest
             rust: i686-pc-windows-msvc
     steps:
@@ -211,123 +197,3 @@ jobs:
         with:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
-  test_musl64:
-    name: Test MUSL x86_64 (Tier 2)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        include:
-          - os: ubuntu-latest
-            rust: x86_64-unknown-linux-musl
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - name: Install perl modules
-        uses: perl-actions/install-with-cpanm@v1
-        with:
-          install: "HTML::Entities"
-
-      - name: Setup environment
-        run: |
-          chmod +x ci/setvars.sh
-          ci/setvars.sh
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
-
-      - name: Install Rust
-        run: |
-          rustup default stable
-          rustup target add ${{ matrix.rust }}
-
-      - name: Run Tests
-        run: make test
-        env:
-          RUST_BACKTRACE: 1
-          TARGET: ${{ matrix.rust }}
-
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
-  test-arm64:
-    name: Test (self-hosted-arm64-native)
-    runs-on: self-hosted
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - name: Set up tools
-        run: |
-          sudo apt update && sudo apt install awscli zip zstd perl libhtml-parser-perl -y
-          aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
-          aws configure set default.s3.signature_version s3v4
-      - name: Get cache
-        run: |
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress s3://cache/skytable-linux-arm64.tar.zst target.tar.zst
-          tar -I zstd -xf target.tar.zst
-          rm target.tar.zst
-          echo "LASTHASH=$(cat target/LASTHASH 2>/dev/null)" >> $GITHUB_ENV
-        continue-on-error: true
-      - name: Install Rust
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo $HOME/.cargo/bin >> $GITHUB_PATH
-      - name: Test
-        run: make test
-        env:
-          TARGET: aarch64-unknown-linux-gnu
-      - name: Stress test
-        run: make stress
-        if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
-      - name: Save cache
-        env:
-          NEWHASH: ${{ hashFiles('Cargo.lock') }}
-          LASTHASH: ${{ env.LASTHASH }}
-        run: |
-          if [[ ${NEWHASH} != ${LASTHASH} ]]; then
-            echo "Freshening cache"
-            tar --zstd -cf target.tar.zst target
-            aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
-            echo "Finished freshening cache"
-          else
-            echo "Cache hit occurred. Not saving cache"
-          fi
-      - name: Save artifacts
-        run: |
-          cargo build -j16 --target aarch64-unknown-linux-gnu
-          zip -j dist.zip target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp dist.zip s3://everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
