@@ -238,12 +238,13 @@ unsafe fn transmute_len(start_ptr: *const u8) -> usize {
     return {
         // zero the higher bits on 32-bit
         let ret1: u64 = ptr::read(start_ptr.cast());
-        if ret1 > isize::MAX {
+        let ret = ret1 as usize;
+        if ret > (isize::MAX as usize) {
             // this is a backup method for us incase a giant 48-bit address is
             // somehow forced to be read on this machine
             panic!("RT panic: Very high size for current pointer width");
         }
-        ret1 as usize
+        ret
     };
     #[cfg(target_pointer_width = "64")]
     return {
@@ -345,3 +346,13 @@ cfg_test!(
         assert!(deserialize(se).is_none());
     }
 );
+
+#[cfg(target_pointer_width = "32")]
+#[test]
+#[should_panic]
+fn test_runtime_panic_32bit_or_lower() {
+    let max = u64::MAX;
+    let byte_stream = unsafe { raw_len(&max).to_owned() };
+    let ptr = byte_stream.as_ptr();
+    unsafe { transmute_len(ptr) };
+}
