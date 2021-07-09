@@ -33,16 +33,73 @@
 //! data file generated on a 32-bit machine will work seamlessly on a 64-bit machine
 //! and vice versa. Of course, provided that On a 32-bit system, 32 high bits are just zeroed.
 //!
+//! ## Endianness
+//!
+//! All sizes are stored in little endian. How everything else is stored is not worth
+//! discussing here. Byte swaps just need one instruction on most architectures
+//!
 //! ## Safety
 //!
-//! Trust me, all methods are bombingly unsafe. They do such crazy things that you might not
+//! > Trust me, all methods are bombingly unsafe. They do such crazy things that you might not
 //! think of using them anywhere outside. This is a specialized parser built for the database.
-//!
+//! -- Sayan (July 2021)
 
-/*
- TODO(@ohsayan): Currently the ser/de methods are only little endian compatible and will be
- modified to be endian independent.
-*/
+use crate::coredb::htable::Coremap;
+use crate::coredb::Data;
+use core::mem;
+use core::ptr;
+use core::slice;
+use std::io::Write;
+
+macro_rules! little_endian {
+    ($block:block) => {
+        #[cfg(target_endian = "little")]
+        {
+            $block
+        }
+    };
+}
+
+macro_rules! big_endian {
+    ($block:block) => {
+        #[cfg(target_endian = "big")]
+        {
+            $block
+        }
+    };
+}
+
+macro_rules! not_64_bit {
+    ($block:block) => {
+        #[cfg(not(target_pointer_width = "64"))]
+        {
+            $block
+        }
+    };
+}
+
+macro_rules! is_64_bit {
+    ($block:block) => {
+        #[cfg(target_pointer_width = "64")]
+        {
+            $block
+        }
+    };
+}
+
+#[cfg(target_endian = "big")]
+macro_rules! to_64bit_little_endian {
+    ($e:expr) => {
+        ($e as u64).swap_bytes()
+    };
+}
+
+#[cfg(target_endian = "little")]
+macro_rules! to_64bit_little_endian {
+    ($e:expr) => {
+        ($e as u64)
+    };
+}
 
 /*
     Endian and pointer "appendix":
@@ -56,9 +113,6 @@
     - 32-bit is compatible with 64-bit
     - 16-bit is compatible with 64-bit
     - But 64-bit may not be compatible with 32/16 bit due to the difference in sizes
-
-    Additional context:
-    - RBIT doesn't exist on LE architectures like x86 (exclusive of fancy instructions)
 
     ------------------------------------------------------
     Appendix I: Same endian, different pointer width (R/W)
@@ -106,7 +160,7 @@
     (B) Reading
     This is read: [0, 0, 0, 0, 0, 0, 0, 1]
     Raw cast =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
-    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap except for hardware instructions like RBIT)
+    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap)
     Cast =(usize)> [1, 0, 0, 0, 0, 0, 0, 0] (no op)
 
     (2) Big endian on little endian (64-bit)
@@ -124,7 +178,7 @@
     (B) Reading
     This is read: [0, 0, 0, 0, 0, 0, 0, 1]
     Raw cast =(u64)> [0, 0, 0, 0, 0, 0, 0, 1] (one memcpy)
-    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap except for hardware instructions like RBIT)
+    Reverse the bits: [1, 0, 0, 0, 0, 0, 0, 0] (constant time ptr swap)
     Lossy cast =(usize)> [1, 0, 0, 0]
 
     (4) Big endian on little endian (32-bit)
@@ -135,14 +189,16 @@
     Raw cast =(u64)> [1, 0, 0, 0, 0, 0, 0, 0] (one memcpy)
     Reverse the bits: [0, 0, 0, 0, 0, 0, 0, 1] (constant time ptr swap)
     Lossy cast =(usize)> [0, 0, 0, 1]
-*/
 
-use crate::coredb::htable::Coremap;
-use crate::coredb::Data;
-use core::mem;
-use core::ptr;
-use core::slice;
-use std::io::Write;
+    ------------------------------------------------------
+    Appendix III: Warnings
+    ------------------------------------------------------
+    (1) Gotchas on 32-bit big endian
+    (A) While writing
+    Do not swap bytes before up cast
+    (B) While reading
+    Do not down cast before swapping bytes
+*/
 
 /// Get the raw bytes of an unsigned 64-bit integer
 unsafe fn raw_len<'a>(len: &'a u64) -> &'a [u8] {
@@ -160,13 +216,12 @@ pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Erro
     // write the len header first
     let mut w = Vec::with_capacity(128);
     unsafe {
-        w.write_all(raw_len(&(map.len() as u64)))?;
+        w.write_all(raw_len(&to_64bit_little_endian!(map.len())))?;
         // now the keys and values
         for kv in map.iter() {
             let (k, v) = (kv.key(), kv.value());
-            let (klen, vlen) = (k.len(), v.len());
-            w.write_all(raw_len(&(klen as u64)))?;
-            w.write_all(raw_len(&(vlen as u64)))?;
+            w.write_all(raw_len(&to_64bit_little_endian!(k.len())))?;
+            w.write_all(raw_len(&to_64bit_little_endian!(v.len())))?;
             w.write_all(k)?;
             w.write_all(v)?;
         }
@@ -231,28 +286,53 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
     }
 }
 
+#[allow(clippy::needless_return)] // Clippy really misunderstands this
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
     // guarantee that all addresses are aligned
     debug_assert!((start_ptr as usize % mem::align_of::<u8>() == 0));
-    #[cfg(not(target_pointer_width = "64"))]
-    return {
-        // zero the higher bits on 32-bit
-        let ret1: u64 = ptr::read(start_ptr.cast());
-        let ret = ret1 as usize;
-        if ret > (isize::MAX as usize) {
-            // this is a backup method for us incase a giant 48-bit address is
-            // somehow forced to be read on this machine
-            panic!("RT panic: Very high size for current pointer width");
-        }
-        ret
-    };
-    #[cfg(target_pointer_width = "64")]
-    return {
-        {
-            // no need for zeroing the bits
-            ptr::read(start_ptr.cast())
-        }
-    };
+
+    little_endian!({
+        // So we have an LE target
+        is_64_bit!({
+            // 64-bit LE
+            return ptr::read(start_ptr.cast());
+        });
+        not_64_bit!({
+            // 32-bit LE
+            let ret1: u64 = ptr::read(start_ptr.cast());
+            // lossy cast
+            let ret = ret1 as usize;
+            if ret > (isize::MAX as usize) {
+                // this is a backup method for us incase a giant 48-bit address is
+                // somehow forced to be read on this machine
+                panic!("RT panic: Very high size for current pointer width");
+            }
+            return ret;
+        });
+    });
+
+    big_endian!({
+        // so we have a BE target
+        is_64_bit!({
+            // 64-bit big endian
+            let ret: usize = ptr::read(start_ptr.cast());
+            // swap byte order
+            return ret.swap_bytes();
+        });
+        not_64_bit!({
+            // 32-bit big endian
+            let ret: u64 = ptr::read(start_ptr.cast());
+            // swap byte order and lossy cast
+            let ret = (ret.swap_bytes()) as usize;
+            // check if overflow
+            if ret > (isize::MAX as usize) {
+                // this is a backup method for us incase a giant 48-bit address is
+                // somehow forced to be read on this machine
+                panic!("RT panic: Very high size for current pointer width");
+            }
+            return ret;
+        });
+    });
 }
 
 #[test]
