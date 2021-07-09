@@ -318,6 +318,11 @@ impl Data {
     pub fn into_inner(self) -> Bytes {
         self.blob
     }
+    pub fn copy_from_slice<'a>(slice: &'a [u8]) -> Self {
+        Self {
+            blob: Bytes::copy_from_slice(slice),
+        }
+    }
 }
 
 impl Eq for Data {}

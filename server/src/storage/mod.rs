@@ -24,6 +24,12 @@
  *
 */
 
+/*
+ Encoding and decoding tested on 32-bit/64-bit Little Endian (Intel x86) and Big Endian
+ (MIPS). Also tested UB with miri and memory leaks with valgrind
+ -- Sayan on July 8, 2021
+*/
+
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
 //! # Storage engine
@@ -267,10 +273,10 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
                     return None;
                 }
                 // get the key as a raw slice, we've already checked if end_ptr is less
-                let key = Data::from(slice::from_raw_parts(ptr, lenkey));
+                let key = Data::copy_from_slice(slice::from_raw_parts(ptr, lenkey));
                 // move the ptr ahead; done with the key
                 ptr = ptr.add(lenkey);
-                let val = Data::from(slice::from_raw_parts(ptr, lenval));
+                let val = Data::copy_from_slice(slice::from_raw_parts(ptr, lenval));
                 // move the ptr ahead; done with the value
                 ptr = ptr.add(lenval);
                 // push it in
@@ -288,18 +294,15 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
 
 #[allow(clippy::needless_return)] // Clippy really misunderstands this
 unsafe fn transmute_len(start_ptr: *const u8) -> usize {
-    // guarantee that all addresses are aligned
-    debug_assert!((start_ptr as usize % mem::align_of::<u8>() == 0));
-
     little_endian!({
         // So we have an LE target
         is_64_bit!({
             // 64-bit LE
-            return ptr::read(start_ptr.cast());
+            return ptr::read_unaligned(start_ptr.cast());
         });
         not_64_bit!({
             // 32-bit LE
-            let ret1: u64 = ptr::read(start_ptr.cast());
+            let ret1: u64 = ptr::read_unaligned(start_ptr.cast());
             // lossy cast
             let ret = ret1 as usize;
             if ret > (isize::MAX as usize) {
@@ -315,13 +318,13 @@ unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         // so we have a BE target
         is_64_bit!({
             // 64-bit big endian
-            let ret: usize = ptr::read(start_ptr.cast());
+            let ret: usize = ptr::read_unaligned(start_ptr.cast());
             // swap byte order
             return ret.swap_bytes();
         });
         not_64_bit!({
             // 32-bit big endian
-            let ret: u64 = ptr::read(start_ptr.cast());
+            let ret: u64 = ptr::read_unaligned(start_ptr.cast());
             // swap byte order and lossy cast
             let ret = (ret.swap_bytes()) as usize;
             // check if overflow
