@@ -61,7 +61,7 @@ where
             // if snapshots are enabled or not with `is_snapshot_enabled`
             snaphandle.snapcfg.as_ref().unsafe_unwrap()
         };
-        let snapengine = SnapshotEngine::new(snapstatus.max, &handle, None);
+        let snapengine = SnapshotEngine::new(snapstatus.max, handle, None);
         if snapengine.is_err() {
             was_engine_error = true;
         } else if snapstatus.is_busy() {

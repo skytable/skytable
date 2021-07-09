@@ -233,7 +233,7 @@ impl Namespace {
                     .true_remove_if(&keyspace_idenitifer, |_ks_id, ks_atomic_ref| {
                         // 1 because this should just be us, the one instance
                         // also the keyspace must be empty
-                        ks_atomic_ref.tables.len() == 0 && Arc::strong_count(&ks_atomic_ref) == 1
+                        ks_atomic_ref.tables.len() == 0 && Arc::strong_count(ks_atomic_ref) == 1
                     });
             if did_remove {
                 Ok(())
@@ -318,7 +318,7 @@ impl Keyspace {
                 self.tables
                     .true_remove_if(&table_identifier, |_table_id, table_atomic_ref| {
                         // 1 because this should just be us, the one instance
-                        Arc::strong_count(&table_atomic_ref) == 1
+                        Arc::strong_count(table_atomic_ref) == 1
                     });
             if did_remove {
                 Ok(())

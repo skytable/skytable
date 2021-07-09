@@ -134,7 +134,7 @@ impl CoreDB {
         match query {
             Query::SimpleQuery(q) => {
                 con.write_simple_query_header().await?;
-                queryengine::execute_simple(&self, con, q).await?;
+                queryengine::execute_simple(self, con, q).await?;
                 con.flush_stream().await?;
             }
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet

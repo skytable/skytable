@@ -356,7 +356,7 @@ fn test_ser_de_few_elements() {
     assert!(de.len() == cmap.len());
     assert!(de
         .iter()
-        .all(|kv| cmap.get(kv.key()).unwrap().eq(&kv.value())));
+        .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
 }
 
 cfg_test!(
@@ -380,7 +380,7 @@ cfg_test!(
         let de = deserialize(ser).unwrap();
         assert!(de
             .iter()
-            .all(|kv| cmap.get(kv.key()).unwrap().eq(&kv.value())));
+            .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
         assert!(de.len() == cmap.len());
     }
 

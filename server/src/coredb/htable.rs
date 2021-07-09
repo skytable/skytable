@@ -251,7 +251,7 @@ impl Deref for Data {
 
 impl Borrow<[u8]> for Data {
     fn borrow(&self) -> &[u8] {
-        &self.blob.borrow()
+        self.blob.borrow()
     }
 }
 
