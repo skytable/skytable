@@ -38,12 +38,12 @@ use core::sync::atomic::Ordering;
 pub use htable::Data;
 use libsky::TResult;
 use std::sync::Arc;
+pub mod array;
 pub mod htable;
 pub mod iarray;
 pub mod lazy;
 pub mod lock;
-pub mod array;
-mod memstore;
+pub mod memstore;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object

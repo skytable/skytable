@@ -56,6 +56,13 @@ use core::mem;
 use core::ptr;
 use core::slice;
 use std::io::Write;
+pub mod interface;
+
+/// The ID of the partition in a keyspace. Using too many keyspaces is an absolute anti-pattern
+/// on Skytable, something that it has inherited from prior experience in large scale systems. As
+/// such, the maximum number of tables in a keyspace is limited to 4.1 billion tables and ideally,
+/// you should never hit that limit.
+pub type PartitionID = u32;
 
 macro_rules! little_endian {
     ($block:block) => {
@@ -206,11 +213,13 @@ macro_rules! to_64bit_little_endian {
     Do not down cast before swapping bytes
 */
 
-/// Get the raw bytes of an unsigned 64-bit integer
-unsafe fn raw_len<'a>(len: &'a u64) -> &'a [u8] {
+/// Get the raw bytes of anything.
+///
+/// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS
+unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
     {
         let ptr: *const u8 = mem::transmute(len);
-        slice::from_raw_parts::<'a>(ptr, mem::size_of::<u64>())
+        slice::from_raw_parts::<'a>(ptr, mem::size_of::<T>())
     }
 }
 
@@ -221,18 +230,24 @@ pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Erro
     */
     // write the len header first
     let mut w = Vec::with_capacity(128);
+    self::raw_serialize_map(map, &mut w)?;
+    Ok(w)
+}
+
+/// Serialize a map and write it to a provided buffer
+pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> std::io::Result<()> {
     unsafe {
-        w.write_all(raw_len(&to_64bit_little_endian!(map.len())))?;
+        w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
         // now the keys and values
         for kv in map.iter() {
             let (k, v) = (kv.key(), kv.value());
-            w.write_all(raw_len(&to_64bit_little_endian!(k.len())))?;
-            w.write_all(raw_len(&to_64bit_little_endian!(v.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(k.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(v.len())))?;
             w.write_all(k)?;
             w.write_all(v)?;
         }
     }
-    Ok(w)
+    Ok(())
 }
 
 /// Deserialize a file that contains a serialized map
@@ -269,7 +284,7 @@ pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
                 let lenval = transmute_len(ptr);
                 ptr = ptr.add(8);
                 if (ptr.add(lenkey + lenval)) > end_ptr {
-                    // not enough space
+                    // not enough data left
                     return None;
                 }
                 // get the key as a raw slice, we've already checked if end_ptr is less
@@ -435,7 +450,7 @@ cfg_test!(
 #[should_panic]
 fn test_runtime_panic_32bit_or_lower() {
     let max = u64::MAX;
-    let byte_stream = unsafe { raw_len(&max).to_owned() };
+    let byte_stream = unsafe { raw_byte_repr(&max).to_owned() };
     let ptr = byte_stream.as_ptr();
     unsafe { transmute_len(ptr) };
 }
