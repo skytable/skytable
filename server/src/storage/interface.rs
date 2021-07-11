@@ -29,6 +29,7 @@
 use super::PartitionID;
 use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
+use crate::util;
 use std::fs;
 use std::io::Result as IoResult;
 use std::io::{BufWriter, Write};
@@ -49,9 +50,16 @@ pub fn serialize_map_into_slow_buffer<T: Write>(
 
 /// Get the file for COW. If the parition ID is 0000
 fn cow_file(id: PartitionID) -> String {
-    let mut id = unsafe { super::raw_byte_repr(&id) }.to_owned();
-    id.push(b'_');
-    unsafe { String::from_utf8_unchecked(id) }
+    let mut id = util::it32_to_str(id);
+    id.push('_');
+    id
+}
+
+#[test]
+fn test_cowfile() {
+    let cow_file = cow_file(10);
+    assert_eq!(cow_file, "10_".to_owned());
+    assert_eq!(&cow_file[..cow_file.len()-1], "10".to_owned());
 }
 
 /// Returns a handle to a thread that was spawned to handle this specific flush routine
@@ -60,9 +68,11 @@ pub fn threaded_se(
     partition_id: PartitionID,
 ) -> JoinHandle<IoResult<()>> {
     thread::spawn(move || {
-        let mut f = fs::File::create(cow_file(partition_id))?;
+        let fname = cow_file(partition_id);
+        let mut f = fs::File::create(&fname)?;
         self::serialize_map_into_slow_buffer(&mut f, &tblref)?;
         f.sync_all()?;
+        fs::rename(&fname, &fname[..fname.len() - 1])?;
         Ok(())
     })
 }
