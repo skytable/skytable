@@ -28,6 +28,18 @@ use super::array::Array;
 use core::ops::Deref;
 use core::str;
 
+macro_rules! push_self {
+    ($self:expr, $what:expr) => {
+        $self.inner_stack.push_unchecked($what);
+    };
+}
+
+macro_rules! lut {
+    ($e:expr) => {
+        PAIR_MAP_LUT[($e) as usize]
+    };
+}
+
 const PAIR_MAP_LUT: [u8; 200] = [
     0x30, 0x30, 0x30, 0x31, 0x30, 0x32, 0x30, 0x33, 0x30, 0x34, 0x30, 0x35, 0x30, 0x36, 0x30, 0x37,
     0x30, 0x38, 0x30, 0x39, // 0x30
@@ -51,15 +63,20 @@ const PAIR_MAP_LUT: [u8; 200] = [
     0x39, 0x38, 0x39, 0x39, // 0x39
 ];
 
+/// A 32-bit integer buffer with one extra byte
+pub type Integer32Buffer = Integer32BufferRaw<11>;
+/// A 32-bit integer buffer with **no extra byte**
+pub type Integer32 = Integer32BufferRaw<10>;
+
 #[derive(Debug)]
 /// A buffer for unsigned 32-bit integers with one _extra byte_ of memory reserved for
 /// adding characters. On initialization (through [`Self::init`]), your integer will be
 /// encoded and stored into the _unsafe array_
-pub struct Integer32Buffer {
+pub struct Integer32BufferRaw<const N: usize> {
     inner_stack: Array<u8, 11>,
 }
 
-impl Integer32Buffer {
+impl<const N: usize> Integer32BufferRaw<N> {
     /// Initialize a buffer
     pub fn init(integer: u32) -> Self {
         let mut slf = Self {
@@ -78,17 +95,15 @@ impl Integer32Buffer {
             let d1 = (val / 100) << 1;
             let d2 = (val % 100) << 1;
             if val >= 1000 {
-                self.inner_stack.push_unchecked(PAIR_MAP_LUT[d1 as usize]);
+                push_self!(self, lut!(d1));
             }
             if val >= 100 {
-                self.inner_stack
-                    .push_unchecked(PAIR_MAP_LUT[(d1 + 1) as usize]);
+                push_self!(self, lut!(d1 + 1));
             }
             if val >= 10 {
-                self.inner_stack.push_unchecked(PAIR_MAP_LUT[d2 as usize]);
+                push_self!(self, lut!(d2));
             }
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d2 + 1) as usize]);
+            push_self!(self, lut!(d2 + 1));
         } else if val < 100_000_000 {
             let b = val / 10000;
             let c = val % 10000;
@@ -98,23 +113,19 @@ impl Integer32Buffer {
             let d4 = (c % 100) << 1;
 
             if val > 10_000_000 {
-                self.inner_stack.push_unchecked(PAIR_MAP_LUT[d1 as usize]);
+                push_self!(self, lut!(d1));
             }
             if val > 1_000_000 {
-                self.inner_stack
-                    .push_unchecked(PAIR_MAP_LUT[(d1 + 1) as usize]);
+                push_self!(self, lut!(d1 + 1));
             }
             if val > 100_000 {
-                self.inner_stack.push_unchecked(PAIR_MAP_LUT[d2 as usize]);
+                push_self!(self, lut!(d2));
             }
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d2 + 1) as usize]);
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d3 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d3 + 1) as usize]);
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d4 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d4 + 1) as usize]);
+            push_self!(self, lut!(d2 + 1));
+            push_self!(self, lut!(d3));
+            push_self!(self, lut!(d3 + 1));
+            push_self!(self, lut!(d4));
+            push_self!(self, lut!(d4 + 1));
         } else {
             // worst, 1B or more
             let a = val / 100000000;
@@ -122,11 +133,10 @@ impl Integer32Buffer {
 
             if a >= 10 {
                 let i = a << 1;
-                self.inner_stack.push_unchecked(PAIR_MAP_LUT[i as usize]);
-                self.inner_stack
-                    .push_unchecked(PAIR_MAP_LUT[(i + 1) as usize]);
+                push_self!(self, lut!(i));
+                push_self!(self, lut!(i + 1));
             } else {
-                self.inner_stack.push_unchecked(0x30);
+                push_self!(self, 0x30);
             }
             let b = val / 10000;
             let c = val % 10000;
@@ -135,42 +145,38 @@ impl Integer32Buffer {
             let d3 = (c / 100) << 1;
             let d4 = (c % 100) << 1;
             // write back
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d1 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d1 + 1) as usize]);
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d2 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d2 + 1) as usize]);
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d3 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d3 + 1) as usize]);
-            self.inner_stack.push_unchecked(PAIR_MAP_LUT[d4 as usize]);
-            self.inner_stack
-                .push_unchecked(PAIR_MAP_LUT[(d4 + 1) as usize]);
+            push_self!(self, lut!(d1));
+            push_self!(self, lut!(d1 + 1));
+            push_self!(self, lut!(d2));
+            push_self!(self, lut!(d2 + 1));
+            push_self!(self, lut!(d3));
+            push_self!(self, lut!(d3 + 1));
+            push_self!(self, lut!(d4));
+            push_self!(self, lut!(d4 + 1));
         }
     }
     /// **This is very unsafe** Only push something when you know that the capacity won't overflow
     /// your allowance of 11 bytes. Oh no, there's no panic for you because you'll silently
     /// corrupt your own memory (or others' :/)
     pub unsafe fn push(&mut self, val: u8) {
-        self.inner_stack.push_unchecked(val)
+        push_self!(self, val)
     }
 }
 
-impl Deref for Integer32Buffer {
+impl<const N: usize> Deref for Integer32BufferRaw<N> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         unsafe { str::from_utf8_unchecked(&self.inner_stack) }
     }
 }
 
-impl AsRef<str> for Integer32Buffer {
+impl<const N: usize> AsRef<str> for Integer32BufferRaw<N> {
     fn as_ref(&self) -> &str {
         &self
     }
 }
 
-impl<T> PartialEq<T> for Integer32Buffer
+impl<T, const N: usize> PartialEq<T> for Integer32BufferRaw<N>
 where
     T: AsRef<str>,
 {
@@ -186,10 +192,220 @@ fn test_int32_buffer() {
 }
 
 #[test]
-fn test_push() {
+fn test_int32_buffer_push() {
     let mut buffer = Integer32Buffer::init(278);
     unsafe {
         buffer.push(b'?');
     }
     assert_eq!(buffer, "278?");
+}
+
+/// A 64-bit integer buffer with one extra byte
+pub type Integer64Buffer = Integer64BufferRaw<21>;
+/// A 64-bit integer buffer with **no extra byte**
+pub type Integer64 = Integer64BufferRaw<20>;
+
+#[derive(Debug)]
+pub struct Integer64BufferRaw<const N: usize> {
+    inner_stack: Array<u8, N>,
+}
+
+const Z_8: u64 = 100_000_000;
+const Z_9: u64 = Z_8 * 10;
+const Z_10: u64 = Z_9 * 10;
+const Z_11: u64 = Z_10 * 10;
+const Z_12: u64 = Z_11 * 10;
+const Z_13: u64 = Z_12 * 10;
+const Z_14: u64 = Z_13 * 10;
+const Z_15: u64 = Z_14 * 10;
+const Z_16: u64 = Z_15 * 10;
+
+impl<const N: usize> Integer64BufferRaw<N> {
+    pub fn init(integer: u64) -> Self {
+        let mut slf = Self {
+            inner_stack: Array::new(),
+        };
+        unsafe {
+            slf._init_integer(integer);
+        }
+        slf
+    }
+    unsafe fn _init_integer(&mut self, mut int: u64) {
+        if int < Z_8 {
+            if int < 10_000 {
+                let d1 = (int / 100) << 1;
+                let d2 = (int % 100) << 1;
+                if int >= 1_000 {
+                    push_self!(self, lut!(d1));
+                }
+                if int >= 100 {
+                    push_self!(self, lut!(d1 + 1));
+                }
+                if int >= 10 {
+                    push_self!(self, lut!(d2));
+                }
+                push_self!(self, lut!(d2 + 1));
+            } else {
+                let b = int / 10000;
+                let c = int % 10000;
+                let d1 = (b / 100) << 1;
+                let d2 = (b % 100) << 1;
+                let d3 = (c / 100) << 1;
+                let d4 = (c % 100) << 1;
+                if int >= 10_000_000 {
+                    push_self!(self, lut!(d1));
+                }
+                if int >= 1_000_000 {
+                    push_self!(self, lut!(d1 + 1));
+                }
+                if int >= 100_000 {
+                    push_self!(self, lut!(d2));
+                }
+                push_self!(self, lut!(d2 + 1));
+                push_self!(self, lut!(d3));
+                push_self!(self, lut!(d3 + 1));
+                push_self!(self, lut!(d4));
+                push_self!(self, lut!(d4 + 1));
+            }
+        } else if int < Z_16 {
+            // lets do 8 at a time
+            let v0 = int / Z_8;
+            let v1 = int & Z_8;
+            let b0 = v0 / 10000;
+            let c0 = v0 % 10000;
+            let d1 = (b0 / 100) << 1;
+            let d2 = (b0 % 100) << 1;
+            let d3 = (c0 / 100) << 1;
+            let d4 = (c0 % 100) << 1;
+            let b1 = v1 / 10000;
+            let c1 = v1 % 10000;
+            let d5 = (b1 / 100) << 1;
+            let d6 = (b1 % 100) << 1;
+            let d7 = (c1 / 100) << 1;
+            let d8 = (c1 % 100) << 1;
+            if int >= Z_15 {
+                push_self!(self, lut!(d1));
+            }
+            if int >= Z_14 {
+                push_self!(self, lut!(d1 + 1));
+            }
+            if int >= Z_13 {
+                push_self!(self, lut!(d2));
+            }
+            if int >= Z_12 {
+                push_self!(self, lut!(d2 + 1));
+            }
+            if int >= Z_11 {
+                push_self!(self, lut!(d3));
+            }
+            if int >= Z_10 {
+                push_self!(self, lut!(d3 + 1));
+            }
+            if int >= Z_9 {
+                push_self!(self, lut!(d4));
+            }
+            push_self!(self, lut!(d4 + 1));
+            push_self!(self, lut!(d5));
+            push_self!(self, lut!(d5 + 1));
+            push_self!(self, lut!(d6));
+            push_self!(self, lut!(d6 + 1));
+            push_self!(self, lut!(d7));
+            push_self!(self, lut!(d7 + 1));
+            push_self!(self, lut!(d8));
+            push_self!(self, lut!(d8 + 1));
+        } else {
+            let a = int / Z_16;
+            int %= Z_16;
+            if a < 10 {
+                push_self!(self, 0x30 + a as u8);
+            } else if a < 100 {
+                let i = a << 1;
+                push_self!(self, lut!(i));
+                push_self!(self, lut!(i + 1));
+            } else if a < 1000 {
+                push_self!(self, 0x30 + (a / 100) as u8);
+                let i = (a % 100) << 1;
+                push_self!(self, lut!(i));
+                push_self!(self, lut!(i + 1));
+            } else {
+                let i = (a / 100) << 1;
+                let j = (a % 100) << 1;
+                push_self!(self, lut!(i));
+                push_self!(self, lut!(i + 1));
+                push_self!(self, lut!(j));
+                push_self!(self, lut!(j + 1));
+            }
+
+            let v0 = int / Z_8;
+            let v1 = int % Z_8;
+            let b0 = v0 / 10000;
+            let c0 = v0 % 10000;
+            let d1 = (b0 / 100) << 1;
+            let d2 = (b0 % 100) << 1;
+            let d3 = (c0 / 100) << 1;
+            let d4 = (c0 % 100) << 1;
+            let b1 = v1 / 10000;
+            let c1 = v1 % 10000;
+            let d5 = (b1 / 100) << 1;
+            let d6 = (b1 % 100) << 1;
+            let d7 = (c1 / 100) << 1;
+            let d8 = (c1 % 100) << 1;
+            push_self!(self, lut!(d1));
+            push_self!(self, lut!(d1 + 1));
+            push_self!(self, lut!(d2));
+            push_self!(self, lut!(d2 + 1));
+            push_self!(self, lut!(d3));
+            push_self!(self, lut!(d3 + 1));
+            push_self!(self, lut!(d4));
+            push_self!(self, lut!(d4 + 1));
+            push_self!(self, lut!(d5));
+            push_self!(self, lut!(d5 + 1));
+            push_self!(self, lut!(d6));
+            push_self!(self, lut!(d6 + 1));
+            push_self!(self, lut!(d7));
+            push_self!(self, lut!(d7 + 1));
+            push_self!(self, lut!(d8));
+            push_self!(self, lut!(d8 + 1));
+        }
+    }
+}
+
+impl<const N: usize> From<usize> for Integer64BufferRaw<N> {
+    fn from(val: usize) -> Self {
+        Self::init(val as u64)
+    }
+}
+
+impl<const N: usize> Deref for Integer64BufferRaw<N> {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        &self.inner_stack
+    }
+}
+
+impl<const N: usize> AsRef<str> for Integer64BufferRaw<N> {
+    fn as_ref(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.inner_stack) }
+    }
+}
+
+impl<T, const N: usize> PartialEq<T> for Integer64BufferRaw<N>
+where
+    T: AsRef<str>,
+{
+    fn eq(&self, other_str: &T) -> bool {
+        self.as_ref() == other_str.as_ref()
+    }
+}
+
+#[test]
+fn test_int64_buffer() {
+    assert_eq!(
+        9348910481349849081_u64.to_string(),
+        Integer64Buffer::init(9348910481349849081_u64).as_ref()
+    );
+    assert_eq!(
+        u64::MAX.to_string(),
+        Integer64Buffer::init(u64::MAX).as_ref()
+    );
 }

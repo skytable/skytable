@@ -229,6 +229,7 @@ impl Coremap<Data, Data> {
     }
 }
 impl<const M: usize, const N: usize> Coremap<Array<u8, M>, Array<u8, N>> {
+    #[cfg(test)]
     pub fn deserialize_array(bytes: Vec<u8>) -> TResult<Self> {
         let h: HashTable<Array<u8, M>, Array<u8, N>> = bincode::deserialize(&bytes)?;
         Ok(Self { inner: h })
@@ -318,6 +319,7 @@ impl Data {
     pub fn into_inner(self) -> Bytes {
         self.blob
     }
+    #[allow(clippy::needless_lifetimes)]
     pub fn copy_from_slice<'a>(slice: &'a [u8]) -> Self {
         Self {
             blob: Bytes::copy_from_slice(slice),
