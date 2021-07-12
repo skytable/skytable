@@ -99,18 +99,21 @@ impl<T, const N: usize> UninitArray<T, N> {
     const ARRAY: [MaybeUninit<T>; N] = [Self::VALUE; N];
 }
 
+impl<T: Default + Copy, const N: usize> Array<T, N> {
+    pub fn new_zeroed() -> Self {
+        Self {
+            stack: [MaybeUninit::new(T::default()); N],
+            init_len: N as u16,
+        }
+    }
+}
+
 impl<T, const N: usize> Array<T, N> {
     /// Create a new array
     pub const fn new() -> Self {
         Array {
             stack: UninitArray::ARRAY,
             init_len: 0,
-        }
-    }
-    pub fn new_zeroed() -> Self {
-        Self {
-            stack: unsafe { std::mem::zeroed() },
-            init_len: N as u16,
         }
     }
     pub const fn from_const(array: [MaybeUninit<T>; N], init_len: u16) -> Self {
