@@ -39,6 +39,7 @@ pub use htable::Data;
 use libsky::TResult;
 use std::sync::Arc;
 pub mod array;
+pub mod buffers;
 pub mod htable;
 pub mod iarray;
 pub mod lazy;

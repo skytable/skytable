@@ -107,11 +107,20 @@ impl<T, const N: usize> Array<T, N> {
             init_len: 0,
         }
     }
+    pub fn new_zeroed() -> Self {
+        Self {
+            stack: unsafe { std::mem::zeroed() },
+            init_len: N as u16,
+        }
+    }
     pub const fn from_const(array: [MaybeUninit<T>; N], init_len: u16) -> Self {
         Self {
             stack: array,
             init_len,
         }
+    }
+    pub unsafe fn bump_init_len(&mut self, bump: u16) {
+        self.init_len += bump
     }
     /// This literally turns [T; M] into [T; N]. How can you expect it to be safe?
     /// This function is extremely unsafe. I mean, I don't even know how to call it safe.
