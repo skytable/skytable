@@ -1,10 +1,10 @@
 <html>
 <div align="center">
 <img src="assets/logo.jpg" height=64 width=64>
-<h1>Skytable</h1><h3>The next-generation NoSQL database</h3>
+<h1>Skytable</h1><h3>Your next NoSQL database</h3>
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
-[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://docs.skytable.io)  [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square")](https://discord.gg/QptWFdx)
+![GitHub Workflow Status](<https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)>) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://docs.skytable.io) [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square")](https://discord.gg/QptWFdx)
 
 </div>
 </html>
@@ -19,23 +19,23 @@ Skytable is curently under development, but can be used as a **performant**, **s
 
 1. Download a bundle for your platform from [here ⬇️ ](https://github.com/skytable/skytable/releases)
 2. Unzip the bundle
-3. Make the files executable (run `chmod +x sdb skysh` on *nix systems)
-4. First run `sdb` to start the database server and then run `skysh` to start the interactive shell
-5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` 🤪 on `skysh` !
+3. Make the files executable (run `chmod +x skyd skysh` on \*nix systems)
+4. First run `skyd` to start the database server and then run `skysh` to start the interactive shell
+5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` on `skysh`!
 
 You can learn more about installation [here](https://docs.skytable.io/getting-started/)
 
 ## Features
 
-* **Insanely fast**: Scale to millions of queries per second per node
-* **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/actions-overview)
-* **Snapshots**: Automated (and tunable) snapshots for stress-free backups
-* **Secure**: Secure connections are built into Skytable with SSL/TLS
-* **Multithreaded**: Designed to exploit all CPU cores
-* **Resource friendly**: The database server doesn't need more than 1MB to run
-* **Convenient**: Without the setup hassle and system-specific dependencies
+- **Insanely fast**: Scale to millions of queries per second per node
+- **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/actions-overview)
+- **Snapshots**: Automated (and tunable) snapshots for stress-free backups
+- **Secure**: Secure connections are built into Skytable with SSL/TLS
+- **Multithreaded**: Designed to exploit all CPU cores
+- **Resource friendly**: The database server doesn't need more than 1MB to run
+- **Convenient**: Without the setup hassle and system-specific dependencies
 
-(... [and more on the way](https://github.com/skytable/skytable/labels/roadmap))
+(...with more on the way)
 
 ## Clients 🔌
 
@@ -47,6 +47,7 @@ If you want to use a different language, for now you'll just need to implement t
 ## Community 👐
 
 A project which is powered by the community believes in the power of community! If you get stuck anywhere - here are your options!
+
 <html>
 <a href="https://gitter.im/skytable/community"><img src="https://img.shields.io/badge/chat%20on-gitter-ed1965?logo=gitter&style=flat-square"></img>
 </a><a href="https://discord.gg/QptWFdx"><img src="https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square"></img></a>
@@ -54,9 +55,9 @@ A project which is powered by the community believes in the power of community! 
 
 ## Platforms 💻
 
-![Linux supported](https://img.shields.io/badge/Linux%2032--bit%2F64--bit-Supported%20✓-%23228B22?logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%2032--bit%2F64--bit-supported%20✓-228B22?style=flat-square&logo=windows)
+![Linux supported](https://img.shields.io/badge/Linux%2032--bit%2F64--bit-Supported%20✓-%23228B22?logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64%2Farm64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%2032--bit%2F64--bit-supported%20✓-228B22?style=flat-square&logo=windows)
 
-## Versioning 
+## Versioning
 
 This project strictly follows semver, however, since this project is currently in the development phase (0.x.y), the API may change unpredictably
 
