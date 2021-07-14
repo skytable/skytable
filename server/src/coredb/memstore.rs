@@ -28,27 +28,27 @@
 //!
 //! This is what things look like:
 //! ```text
-//! ------------------------------------------------------
-//! |                          |                         |
-//! |  |-------------------|   |  |-------------------|  |
-//! |  |-------------------|   |  |-------------------|  |
-//! |  | | TABLE | TABLE | |   |  | | TABLE | TABLE | |  |
-//! |  | |-------|-------| |   |  | |-------|-------| |  |
-//! |  |      Keyspace     |   |  |      Keyspace     |  |
-//! |  |-------------------|   |  |-------------------|  |
-//!                            |                         |
-//! |  |-------------------|   |  |-------------------|  |
-//! |  | |-------|-------| |   |  | |-------|-------| |  |
-//! |  | | TABLE | TABLE | |   |  | | TABLE | TABLE | |  |
-//! |  | |-------|-------| |   |  | |-------|-------| |  |
-//! |  |      Keyspace     |   |  |      Keyspace     |  |
-//! |  |-------------------|   |  |-------------------|  |
-//! |                          |                         |
-//! |                          |                         |
-//! |        NAMESPACE         |        NAMESPACE        |
-//! ------------------------------------------------------
-//! |                         NODE                       |
-//! |----------------------------------------------------|
+//! -----------------------------------------------------
+//! |                                                   |
+//! |  |-------------------|     |-------------------|  |
+//! |  |-------------------|     |-------------------|  |
+//! |  | | TABLE | TABLE | |     | | TABLE | TABLE | |  |
+//! |  | |-------|-------| |     | |-------|-------| |  |
+//! |  |      Keyspace     |     |      Keyspace     |  |
+//! |  |-------------------|     |-------------------|  |
+//!                                                     |
+//! |  |-------------------|     |-------------------|  |
+//! |  | |-------|-------| |     | |-------|-------| |  |
+//! |  | | TABLE | TABLE | |     | | TABLE | TABLE | |  |
+//! |  | |-------|-------| |     | |-------|-------| |  |
+//! |  |      Keyspace     |     |      Keyspace     |  |
+//! |  |-------------------|     |-------------------|  |
+//! |                                                   |
+//! |                                                   |
+//! |                                                   |
+//! -----------------------------------------------------
+//! |                         NODE                      |
+//! |---------------------------------------------------|
 //! ```
 //!
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
@@ -82,9 +82,9 @@ fn test_def_macro_sanity() {
     );
 }
 
-/// typedef for the namespace/keyspace IDs. We don't need too much fancy here,
+/// typedef for the keyspace/table IDs. We don't need too much fancy here,
 /// no atomic pointers and all. Just a nice array. With amazing gurantees
-type NsKsTblId = Array<u8, 64>;
+type ObjectID = Array<u8, 64>;
 
 mod cluster {
     /// This is for the future where every node will be allocated a shard
@@ -123,127 +123,61 @@ pub enum DdlError {
 #[derive(Debug)]
 /// The core in-memory table
 ///
-/// This in-memory table that houses all keyspaces and namespaces along with other node
-/// properties. This is the structure that you should clone and send around connections
-/// for connection-level control abilities over the namespace
+/// This in-memory table that houses all keyspaces along with other node properties.
+/// This is the structure that you should clone and send around connections for
+/// connection-level control abilities over the keyspace
 pub struct Memstore {
-    /// the namespaces
-    namespaces: Arc<Coremap<NsKsTblId, Arc<Namespace>>>,
+    /// the keyspaces
+    keyspaces: Arc<Coremap<ObjectID, Arc<Keyspace>>>,
 }
 
 impl Memstore {
     /// Create a new empty in-memory table with literally nothing in it
     pub fn new_empty() -> Self {
         Self {
-            namespaces: Arc::new(Coremap::new()),
+            keyspaces: Arc::new(Coremap::new()),
         }
     }
-    /// Create a new in-memory table with the default namespace, keyspace and the default
+    /// Create a new in-memory table with the default keyspace and the default
     /// tables. So, whenever you're calling this, this is what you get:
     /// ```text
     /// YOURNODE: {
-    ///     NAMESPACES: [
+    ///     KEYSPACES: [
     ///         "default" : {
-    ///             KEYSPACES: ["default", "_system"]
+    ///             TABLES: ["default", "_system"]
     ///         }
     ///     ]
     /// }
     /// ```
     ///
-    /// When you connect a client without any information about the namespace you're planning to
-    /// use, you'll be connected to `ns:default/ks:default`. The `ns:default/ks:_system` is not
+    /// When you connect a client without any information about the keyspace you're planning to
+    /// use, you'll be connected to `ks:default/table:default`. The `ks:default/table:_system` is not
     /// for you. It's for the system
     pub fn new_default() -> Self {
         Self {
-            namespaces: {
+            keyspaces: {
                 let n = Coremap::new();
-                n.true_if_insert(DEFAULT, Arc::new(Namespace::empty_default()));
+                n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
                 Arc::new(n)
             },
         }
     }
-    /// Get an atomic reference to a namespace
-    pub fn get_namespace_atomic_ref(
-        &self,
-        namespace_identifier: NsKsTblId,
-    ) -> Option<Arc<Namespace>> {
-        self.namespaces
-            .get(&namespace_identifier)
+    /// Get an atomic reference to a keyspace
+    pub fn get_keyspace_atomic_ref(&self, keyspace_identifier: ObjectID) -> Option<Arc<Keyspace>> {
+        self.keyspaces
+            .get(&keyspace_identifier)
             .map(|ns| ns.clone())
     }
-    /// Returns true if a new namespace was created
-    pub fn create_namespace(&self, namespace_identifier: NsKsTblId) -> bool {
-        self.namespaces
-            .true_if_insert(namespace_identifier, Arc::new(Namespace::empty()))
+    /// Returns true if a new keyspace was created
+    pub fn create_keyspace(&self, keyspace_identifier: ObjectID) -> bool {
+        self.keyspaces
+            .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
-}
-
-#[derive(Debug)]
-/// Namespaces hold keyspaces
-pub struct Namespace {
-    /// the keyspaces stored in this namespace
-    keyspaces: Coremap<NsKsTblId, Arc<Keyspace>>,
-    /// the shard range
-    shard_range: cluster::ClusterShardRange,
 }
 
 /// The date model of a table
 pub enum TableType {
     KeyValue,
-}
-
-impl Namespace {
-    /// Create an empty namespace with no keyspaces
-    pub fn empty() -> Self {
-        Self {
-            keyspaces: Coremap::new(),
-            shard_range: cluster::ClusterShardRange::default(),
-        }
-    }
-    /// Create an empty namespace with the default keyspace that has a table `default` and
-    /// a table `system`
-    pub fn empty_default() -> Self {
-        Self {
-            keyspaces: {
-                let ks = Coremap::new();
-                ks.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
-                ks
-            },
-            shard_range: cluster::ClusterShardRange::default(),
-        }
-    }
-    /// Get an atomic reference to a keyspace, if it exists
-    pub fn get_keyspace_atomic_ref(&self, keyspace_idenitifer: NsKsTblId) -> Option<Arc<Keyspace>> {
-        self.keyspaces.get(&keyspace_idenitifer).map(|v| v.clone())
-    }
-    /// Create a new keyspace if it doesn't exist
-    pub fn create_keyspace(&self, keyspace_idenitifer: NsKsTblId) -> bool {
-        self.keyspaces
-            .true_if_insert(keyspace_idenitifer, Arc::new(Keyspace::empty()))
-    }
-    /// Drop a keyspace if it is not in use **and** it is empty and not the default
-    pub fn drop_keyspace(&self, keyspace_idenitifer: NsKsTblId) -> Result<(), DdlError> {
-        if keyspace_idenitifer.eq(&DEFAULT) {
-            // can't delete default keyspace
-            Err(DdlError::ProtectedObject)
-        } else if self.keyspaces.contains_key(&keyspace_idenitifer) {
-            // has table
-            let did_remove =
-                self.keyspaces
-                    .true_remove_if(&keyspace_idenitifer, |_ks_id, ks_atomic_ref| {
-                        // 1 because this should just be us, the one instance
-                        // also the keyspace must be empty
-                        ks_atomic_ref.tables.len() == 0 && Arc::strong_count(ks_atomic_ref) == 1
-                    });
-            if did_remove {
-                Ok(())
-            } else {
-                Err(DdlError::StillInUse)
-            }
-        } else {
-            Err(DdlError::ObjectNotFound)
-        }
-    }
 }
 
 // TODO(@ohsayan): Optimize the memory layouts of the UDFs to ensure that sharing is very cheap
@@ -256,9 +190,9 @@ pub struct Keyspace {
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
-    /// the snapshot configuration for this namespace
+    /// the snapshot configuration for this keyspace
     snap_config: Option<SnapshotStatus>,
-    /// the replication strategy for this namespace
+    /// the replication strategy for this keyspace
     replication_strategy: cluster::ReplicationStrategy,
 }
 
