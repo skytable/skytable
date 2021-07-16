@@ -90,3 +90,18 @@ macro_rules! cfg_test {
         $(#[cfg(test)] $item)*
     };
 }
+
+#[macro_export]
+/// Compare two vectors irrespective of their elements' position
+macro_rules! veceq {
+    ($v1:expr, $v2:expr) => {
+        $v1.len() == $v2.len() && $v1.iter().all(|v| $v2.contains(v))
+    };
+}
+
+#[macro_export]
+macro_rules! assert_veceq {
+    ($v1:expr, $v2:expr) => {
+        assert!(veceq!($v1, $v2))
+    };
+}

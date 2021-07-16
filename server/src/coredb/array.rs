@@ -41,6 +41,7 @@ use core::mem::MaybeUninit;
 use core::ops;
 use core::ptr;
 use core::slice;
+use core::str;
 use serde::{de::SeqAccess, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A compile-time, fixed size array that can have unintialized memory. This array is as
@@ -295,6 +296,14 @@ impl<T, const N: usize> Array<T, N> {
     /// Get self as a mutable slice. Super safe (see comment above)
     fn as_slice_mut(&mut self) -> &mut [T] {
         unsafe { slice::from_raw_parts_mut(self.as_mut_ptr(), self.len()) }
+    }
+}
+
+impl<const N: usize> Array<u8, N> {
+    /// This isn't _unsafe_ but it can cause functions expecting pure unicode to
+    /// crash if the array contains invalid unicode
+    pub unsafe fn as_str(&self) -> &str {
+        str::from_utf8_unchecked(self.as_ref())
     }
 }
 

@@ -58,7 +58,6 @@
 
 use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
-use crate::coredb::htable::Data;
 use crate::coredb::SnapshotStatus;
 use crate::kvengine::KVEngine;
 use core::mem::MaybeUninit;
@@ -128,7 +127,7 @@ pub enum DdlError {
 /// connection-level control abilities over the keyspace
 pub struct Memstore {
     /// the keyspaces
-    keyspaces: Arc<Coremap<ObjectID, Arc<Keyspace>>>,
+    pub keyspaces: Arc<Coremap<ObjectID, Arc<Keyspace>>>,
 }
 
 impl Memstore {
@@ -186,7 +185,7 @@ pub enum TableType {
 /// A keyspace houses all the other tables
 pub struct Keyspace {
     /// the tables
-    tables: Coremap<Data, Arc<Table>>,
+    pub tables: Coremap<ObjectID, Arc<Table>>,
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
@@ -194,6 +193,12 @@ pub struct Keyspace {
     snap_config: Option<SnapshotStatus>,
     /// the replication strategy for this keyspace
     replication_strategy: cluster::ReplicationStrategy,
+}
+
+macro_rules! unsafe_objectid_from_slice {
+    ($slice:expr) => {{
+        unsafe { ObjectID::from_slice($slice) }
+    }};
 }
 
 impl Keyspace {
@@ -205,12 +210,12 @@ impl Keyspace {
                 let ht = Coremap::new();
                 // add the default table
                 ht.true_if_insert(
-                    Data::from("default"),
+                    unsafe_objectid_from_slice!("default"),
                     Arc::new(Table::KV(KVEngine::default())),
                 );
                 // add the system table
                 ht.true_if_insert(
-                    Data::from("_system"),
+                    unsafe_objectid_from_slice!("_system"),
                     Arc::new(Table::KV(KVEngine::default())),
                 );
                 ht
@@ -230,20 +235,20 @@ impl Keyspace {
         }
     }
     /// Get an atomic reference to a table in this keyspace if it exists
-    pub fn get_table_atomic_ref(&self, table_identifier: Data) -> Option<Arc<Table>> {
+    pub fn get_table_atomic_ref(&self, table_identifier: ObjectID) -> Option<Arc<Table>> {
         self.tables.get(&table_identifier).map(|v| v.clone())
     }
     /// Create a new table with **default encoding**
-    pub fn create_table(&self, table_identifier: Data, table_type: TableType) -> bool {
+    pub fn create_table(&self, table_identifier: ObjectID, table_type: TableType) -> bool {
         self.tables.true_if_insert(table_identifier, {
             match table_type {
                 TableType::KeyValue => Arc::new(Table::KV(KVEngine::default())),
             }
         })
     }
-    pub fn drop_table(&self, table_identifier: Data) -> Result<(), DdlError> {
-        if table_identifier.eq(&Data::from("default"))
-            || table_identifier.eq(&Data::from("_system"))
+    pub fn drop_table(&self, table_identifier: ObjectID) -> Result<(), DdlError> {
+        if table_identifier.eq(&unsafe_objectid_from_slice!("default"))
+            || table_identifier.eq(&unsafe_objectid_from_slice!("_system"))
         {
             Err(DdlError::ProtectedObject)
         } else if self.tables.contains_key(&table_identifier) {
@@ -268,19 +273,23 @@ impl Keyspace {
 #[test]
 fn test_keyspace_drop_no_atomic_ref() {
     let our_keyspace = Keyspace::empty_default();
-    assert!(our_keyspace.create_table(Data::from("apps"), TableType::KeyValue));
-    assert!(our_keyspace.drop_table(Data::from("apps")).is_ok());
+    assert!(our_keyspace.create_table(unsafe_objectid_from_slice!("apps"), TableType::KeyValue));
+    assert!(our_keyspace
+        .drop_table(unsafe_objectid_from_slice!("apps"))
+        .is_ok());
 }
 
 #[test]
 fn test_keyspace_drop_fail_with_atomic_ref() {
     let our_keyspace = Keyspace::empty_default();
-    assert!(our_keyspace.create_table(Data::from("apps"), TableType::KeyValue));
+    assert!(our_keyspace.create_table(unsafe_objectid_from_slice!("apps"), TableType::KeyValue));
     let _atomic_tbl_ref = our_keyspace
-        .get_table_atomic_ref(Data::from("apps"))
+        .get_table_atomic_ref(unsafe_objectid_from_slice!("apps"))
         .unwrap();
     assert_eq!(
-        our_keyspace.drop_table(Data::from("apps")).unwrap_err(),
+        our_keyspace
+            .drop_table(unsafe_objectid_from_slice!("apps"))
+            .unwrap_err(),
         DdlError::StillInUse
     );
 }
@@ -289,11 +298,15 @@ fn test_keyspace_drop_fail_with_atomic_ref() {
 fn test_keyspace_try_delete_protected_table() {
     let our_keyspace = Keyspace::empty_default();
     assert_eq!(
-        our_keyspace.drop_table(Data::from("default")).unwrap_err(),
+        our_keyspace
+            .drop_table(unsafe_objectid_from_slice!("default"))
+            .unwrap_err(),
         DdlError::ProtectedObject
     );
     assert_eq!(
-        our_keyspace.drop_table(Data::from("_system")).unwrap_err(),
+        our_keyspace
+            .drop_table(unsafe_objectid_from_slice!("_system"))
+            .unwrap_err(),
         DdlError::ProtectedObject
     );
 }
