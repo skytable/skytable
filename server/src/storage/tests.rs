@@ -188,3 +188,48 @@ mod preload_tests {
         assert_veceq!(de, vec!["default".to_owned()]);
     }
 }
+
+mod bytemark_set_tests {
+    use super::*;
+    use crate::coredb::memstore::{Keyspace, ObjectID};
+    use crate::coredb::table::Table;
+    use std::collections::HashMap;
+    #[test]
+    fn test_bytemark_for_nonvolatile() {
+        let ks = Keyspace::empty_default();
+        let mut v = Vec::new();
+        se::raw_serialize_partmap(&mut v, &ks).unwrap();
+        let ret: HashMap<ObjectID, u8> = de::deserialize_set_ctype_bytemark(&v).unwrap();
+        let mut expected = HashMap::new();
+        unsafe {
+            expected.insert(ObjectID::from_slice("default"), 0);
+            expected.insert(ObjectID::from_slice("_system"), 0);
+        }
+        assert_hmeq!(expected, ret);
+    }
+    #[test]
+    fn test_bytemark_volatility_mixed() {
+        let ks = Keyspace::empty();
+        unsafe {
+            ks.create_table(
+                ObjectID::from_slice("cache"),
+                Table::kve_from_model_code_and_data(0, true, Coremap::new()).unwrap(),
+            );
+            ks.create_table(
+                ObjectID::from_slice("supersafe"),
+                Table::kve_from_model_code_and_data(0, false, Coremap::new()).unwrap(),
+            );
+        }
+        let mut v = Vec::new();
+        se::raw_serialize_partmap(&mut v, &ks).unwrap();
+        let ret: HashMap<ObjectID, u8> = de::deserialize_set_ctype_bytemark(&v).unwrap();
+        let mut expected = HashMap::new();
+        unsafe {
+            // our cache is volatile
+            expected.insert(ObjectID::from_slice("cache"), 1);
+            // our supersafe is non volatile
+            expected.insert(ObjectID::from_slice("supersafe"), 0);
+        }
+        assert_hmeq!(expected, ret);
+    }
+}

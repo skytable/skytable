@@ -105,3 +105,17 @@ macro_rules! assert_veceq {
         assert!(veceq!($v1, $v2))
     };
 }
+
+#[macro_export]
+macro_rules! hmeq {
+    ($h1:expr, $h2:expr) => {
+        $h1.len() == $h2.len() && $h1.iter().all(|(k, v)| $h2.get(k).unwrap().eq(v))
+    };
+}
+
+#[macro_export]
+macro_rules! assert_hmeq {
+    ($h1:expr, $h2: expr) => {
+        assert!(hmeq!($h1, $h2))
+    };
+}

@@ -238,13 +238,9 @@ impl Keyspace {
     pub fn get_table_atomic_ref(&self, table_identifier: ObjectID) -> Option<Arc<Table>> {
         self.tables.get(&table_identifier).map(|v| v.clone())
     }
-    /// Create a new table with **default encoding**
-    pub fn create_table(&self, table_identifier: ObjectID, table_type: TableType) -> bool {
-        self.tables.true_if_insert(table_identifier, {
-            match table_type {
-                TableType::KeyValue => Arc::new(Table::new_default_kve()),
-            }
-        })
+    /// Create a new table
+    pub fn create_table(&self, tableid: ObjectID, table: Table) -> bool {
+        self.tables.true_if_insert(tableid, Arc::new(table))
     }
     pub fn drop_table(&self, table_identifier: ObjectID) -> Result<(), DdlError> {
         if table_identifier.eq(&unsafe_objectid_from_slice!("default"))
@@ -273,7 +269,10 @@ impl Keyspace {
 #[test]
 fn test_keyspace_drop_no_atomic_ref() {
     let our_keyspace = Keyspace::empty_default();
-    assert!(our_keyspace.create_table(unsafe_objectid_from_slice!("apps"), TableType::KeyValue));
+    assert!(our_keyspace.create_table(
+        unsafe_objectid_from_slice!("apps"),
+        Table::new_default_kve()
+    ));
     assert!(our_keyspace
         .drop_table(unsafe_objectid_from_slice!("apps"))
         .is_ok());
@@ -282,7 +281,10 @@ fn test_keyspace_drop_no_atomic_ref() {
 #[test]
 fn test_keyspace_drop_fail_with_atomic_ref() {
     let our_keyspace = Keyspace::empty_default();
-    assert!(our_keyspace.create_table(unsafe_objectid_from_slice!("apps"), TableType::KeyValue));
+    assert!(our_keyspace.create_table(
+        unsafe_objectid_from_slice!("apps"),
+        Table::new_default_kve()
+    ));
     let _atomic_tbl_ref = our_keyspace
         .get_table_atomic_ref(unsafe_objectid_from_slice!("apps"))
         .unwrap();

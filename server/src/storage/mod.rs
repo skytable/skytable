@@ -251,8 +251,10 @@ mod se {
                 .tables
                 .len())))?;
             for table in keyspace.tables.iter() {
-                // partition ID
+                // partition ID len
                 w.write_all(raw_byte_repr(&to_64bit_little_endian!(table.key().len())))?;
+                // parition ID
+                w.write_all(table.key())?;
                 // now storage type
                 w.write_all(raw_byte_repr(&table.storage_type()))?;
             }
@@ -453,7 +455,7 @@ mod de {
     }
 
     #[allow(clippy::needless_return)] // Clippy really misunderstands this
-    unsafe fn transmute_len(start_ptr: *const u8) -> usize {
+    pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         little_endian!({
             // So we have an LE target
             is_64_bit!({

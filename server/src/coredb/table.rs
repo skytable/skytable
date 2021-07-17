@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
+
 use crate::coredb::htable::Coremap;
 use crate::coredb::Data;
 use crate::kvengine::KVEngine;
