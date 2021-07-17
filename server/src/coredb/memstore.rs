@@ -128,6 +128,9 @@ pub enum DdlError {
 pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Arc<Coremap<ObjectID, Arc<Keyspace>>>,
+    /// current state of the disk flush status. if this is true, we're safe to
+    /// go ahead with writes
+    flush_state_healthy: AtomicBool,
 }
 
 impl Memstore {
@@ -135,6 +138,7 @@ impl Memstore {
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Arc::new(Coremap::new()),
+            flush_state_healthy: AtomicBool::new(true),
         }
     }
     /// Create a new in-memory table with the default keyspace and the default
@@ -159,6 +163,7 @@ impl Memstore {
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
                 Arc::new(n)
             },
+            flush_state_healthy: AtomicBool::new(true),
         }
     }
     /// Get an atomic reference to a keyspace
@@ -186,9 +191,6 @@ pub enum TableType {
 pub struct Keyspace {
     /// the tables
     pub tables: Coremap<ObjectID, Arc<Table>>,
-    /// current state of the disk flush status. if this is true, we're safe to
-    /// go ahead with writes
-    flush_state_healthy: AtomicBool,
     /// the snapshot configuration for this keyspace
     snap_config: Option<SnapshotStatus>,
     /// the replication strategy for this keyspace
@@ -220,7 +222,6 @@ impl Keyspace {
                 );
                 ht
             },
-            flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
             replication_strategy: cluster::ReplicationStrategy::default(),
         }
@@ -229,7 +230,6 @@ impl Keyspace {
     pub fn empty() -> Self {
         Self {
             tables: Coremap::new(),
-            flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
             replication_strategy: cluster::ReplicationStrategy::default(),
         }

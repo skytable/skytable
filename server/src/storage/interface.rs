@@ -31,39 +31,13 @@ use crate::coredb::buffers::Integer32Buffer;
 use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
 use crate::coredb::memstore::Memstore;
-use std::fs;
-use std::io::ErrorKind;
 use std::io::Result as IoResult;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
 
-const DIR_KSROOT: &str = "data/ks";
-const DIR_SNAPROOT: &str = "data/snaps";
-const DIR_BACKUPS: &str = "data/backups";
-const DIR_ROOT: &str = "data";
-
-macro_rules! try_dir_ignore_existing {
-    ($dir:expr) => {{
-        match fs::create_dir_all($dir) {
-            Ok(_) => Ok(()),
-            Err(e) => match e.kind() {
-                ErrorKind::AlreadyExists => Ok(()),
-                _ => Err(e),
-            },
-        }
-    }};
-    ($($dir:expr),*) => {
-        $(try_dir_ignore_existing!($dir)?;)*
-    }
-}
-
-macro_rules! concat_path {
-    ($($s:expr),*) => {{ {
-        let mut path = PathBuf::with_capacity($(($s).len()+)*0);
-        $(path.push($s);)*
-        path
-    }}};
-}
+pub const DIR_KSROOT: &str = "data/ks";
+pub const DIR_SNAPROOT: &str = "data/snaps";
+pub const DIR_BACKUPS: &str = "data/backups";
+pub const DIR_ROOT: &str = "data";
 
 /// This creates the root directory structure:
 /// ```
@@ -103,40 +77,6 @@ pub fn create_tree(memroot: Memstore) -> IoResult<()> {
     Ok(())
 }
 
-#[test]
-fn test_tree() {
-    create_tree(Memstore::new_default()).unwrap();
-    let read_ks: Vec<String> = fs::read_dir(DIR_KSROOT)
-        .unwrap()
-        .map(|dir| {
-            let v = dir.unwrap().file_name();
-            v.to_string_lossy().to_string()
-        })
-        .collect();
-    assert_eq!(read_ks, vec!["default".to_owned()]);
-    // just read one level of the snaps dir
-    let read_snaps: Vec<String> = fs::read_dir(DIR_SNAPROOT)
-        .unwrap()
-        .map(|dir| {
-            let v = dir.unwrap().file_name();
-            v.to_string_lossy().to_string()
-        })
-        .collect();
-    assert_eq!(read_snaps, vec!["default".to_owned()]);
-    // now read level two: snaps/default
-    let read_snaps: Vec<String> = fs::read_dir(concat_path!(DIR_SNAPROOT, "default"))
-        .unwrap()
-        .map(|dir| {
-            let v = dir.unwrap().file_name();
-            v.to_string_lossy().to_string()
-        })
-        .collect();
-    assert_veceq!(read_snaps, vec!["_system".to_owned(), "default".to_owned()]);
-    assert!(PathBuf::from("data/backups").is_dir());
-    // clean up
-    fs::remove_dir_all(DIR_ROOT).unwrap();
-}
-
 /// Uses a buffered writer under the hood to improve write performance as the provided
 /// writable interface might be very slow. The buffer does flush once done, however, it
 /// is important that you fsync yourself!
@@ -151,18 +91,11 @@ pub fn serialize_map_into_slow_buffer<T: Write>(
 }
 
 /// Get the file for COW. If the parition ID is 0000
-fn cow_file(id: PartitionID) -> Integer32Buffer {
+pub(super) fn cow_file(id: PartitionID) -> Integer32Buffer {
     let mut buffer = Integer32Buffer::init(id);
     unsafe {
         // UNSAFE(@ohsayan): We know we're just pushing in one thing
         buffer.push(b'_');
     }
     buffer
-}
-
-#[test]
-fn test_cowfile() {
-    let cow_file = cow_file(10);
-    assert_eq!(cow_file, "10_".to_owned());
-    assert_eq!(&cow_file[..cow_file.len() - 1], "10".to_owned());
 }

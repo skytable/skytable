@@ -56,63 +56,20 @@ use core::mem;
 use core::ptr;
 use core::slice;
 use std::io::Write;
+// for some astronomical reasons do not mess with this
+#[macro_use]
+mod macros;
+// endof do not mess
 pub mod interface;
+pub mod preload;
+#[cfg(test)]
+mod tests;
 
 /// The ID of the partition in a keyspace. Using too many keyspaces is an absolute anti-pattern
 /// on Skytable, something that it has inherited from prior experience in large scale systems. As
 /// such, the maximum number of tables in a keyspace is limited to 4.1 billion tables and ideally,
 /// you should never hit that limit.
 pub type PartitionID = u32;
-
-macro_rules! little_endian {
-    ($block:block) => {
-        #[cfg(target_endian = "little")]
-        {
-            $block
-        }
-    };
-}
-
-macro_rules! big_endian {
-    ($block:block) => {
-        #[cfg(target_endian = "big")]
-        {
-            $block
-        }
-    };
-}
-
-macro_rules! not_64_bit {
-    ($block:block) => {
-        #[cfg(not(target_pointer_width = "64"))]
-        {
-            $block
-        }
-    };
-}
-
-macro_rules! is_64_bit {
-    ($block:block) => {
-        #[cfg(target_pointer_width = "64")]
-        {
-            $block
-        }
-    };
-}
-
-#[cfg(target_endian = "big")]
-macro_rules! to_64bit_little_endian {
-    ($e:expr) => {
-        ($e as u64).swap_bytes()
-    };
-}
-
-#[cfg(target_endian = "little")]
-macro_rules! to_64bit_little_endian {
-    ($e:expr) => {
-        ($e as u64)
-    };
-}
 
 /*
     Endian and pointer "appendix":
@@ -351,106 +308,4 @@ unsafe fn transmute_len(start_ptr: *const u8) -> usize {
             return ret;
         });
     });
-}
-
-#[test]
-fn test_serialize_deserialize_empty() {
-    let cmap = Coremap::new();
-    let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize(ser).unwrap();
-    assert!(de.len() == 0);
-}
-
-#[test]
-fn test_ser_de_few_elements() {
-    let cmap = Coremap::new();
-    cmap.upsert("sayan".into(), "writes code".into());
-    cmap.upsert("supersayan".into(), "writes super code".into());
-    let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize(ser).unwrap();
-    assert!(de.len() == cmap.len());
-    assert!(de
-        .iter()
-        .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
-}
-
-cfg_test!(
-    use libstress::utils::generate_random_string_vector;
-    use rand::thread_rng;
-    #[test]
-    fn roast_the_serializer() {
-        const COUNT: usize = 1000_usize;
-        const LEN: usize = 8_usize;
-        let mut rng = thread_rng();
-        let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
-        );
-        let cmap: Coremap<Data, Data> = keys
-            .iter()
-            .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
-            .collect();
-        let ser = serialize_map(&cmap).unwrap();
-        let de = deserialize(ser).unwrap();
-        assert!(de
-            .iter()
-            .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
-        assert!(de.len() == cmap.len());
-    }
-
-    #[test]
-    fn test_ser_de_safety() {
-        const COUNT: usize = 1000_usize;
-        const LEN: usize = 8_usize;
-        let mut rng = thread_rng();
-        let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
-        );
-        let cmap: Coremap<Data, Data> = keys
-            .iter()
-            .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
-            .collect();
-        let mut se = serialize_map(&cmap).unwrap();
-        // random chop
-        se.truncate(124);
-        // corrupted
-        assert!(deserialize(se).is_none());
-    }
-    #[test]
-    fn test_ser_de_excess_bytes() {
-        // this test needs a lot of auxiliary space
-        // we can approximate this to be: 100,000 x 30 bytes = 3,000,000 bytes
-        // and then we may have a clone overhead + heap allocation by the map
-        // so ~9,000,000 bytes or ~9MB
-        const COUNT: usize = 1000_usize;
-        const LEN: usize = 8_usize;
-        let mut rng = thread_rng();
-        let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
-        );
-        let cmap: Coremap<Data, Data> = keys
-            .iter()
-            .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
-            .collect();
-        let mut se = serialize_map(&cmap).unwrap();
-        // random patch
-        let patch: Vec<u8> = (0u16..500u16).into_iter().map(|v| (v >> 7) as u8).collect();
-        se.extend(patch);
-        assert!(deserialize(se).is_none());
-    }
-);
-
-#[cfg(target_pointer_width = "32")]
-#[test]
-#[should_panic]
-fn test_runtime_panic_32bit_or_lower() {
-    let max = u64::MAX;
-    let byte_stream = unsafe { raw_byte_repr(&max).to_owned() };
-    let ptr = byte_stream.as_ptr();
-    unsafe { transmute_len(ptr) };
 }
