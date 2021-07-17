@@ -83,7 +83,7 @@ fn test_def_macro_sanity() {
 
 /// typedef for the keyspace/table IDs. We don't need too much fancy here,
 /// no atomic pointers and all. Just a nice array. With amazing gurantees
-type ObjectID = Array<u8, 64>;
+pub type ObjectID = Array<u8, 64>;
 
 mod cluster {
     /// This is for the future where every node will be allocated a shard

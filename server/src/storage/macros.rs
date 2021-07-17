@@ -24,20 +24,6 @@
  *
 */
 
-#[cfg(target_endian = "big")]
-macro_rules! endian_mark {
-    () => {
-        1_u64
-    };
-}
-
-#[cfg(target_endian = "little")]
-macro_rules! endian_mark {
-    () => {
-        0_u64
-    };
-}
-
 macro_rules! little_endian {
     ($block:block) => {
         #[cfg(target_endian = "little")]

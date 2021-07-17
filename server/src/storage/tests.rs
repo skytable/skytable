@@ -30,7 +30,7 @@ use super::*;
 fn test_serialize_deserialize_empty() {
     let cmap = Coremap::new();
     let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize(ser).unwrap();
+    let de = deserialize_map(ser).unwrap();
     assert!(de.len() == 0);
 }
 
@@ -40,7 +40,7 @@ fn test_ser_de_few_elements() {
     cmap.upsert("sayan".into(), "writes code".into());
     cmap.upsert("supersayan".into(), "writes super code".into());
     let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize(ser).unwrap();
+    let de = deserialize_map(ser).unwrap();
     assert!(de.len() == cmap.len());
     assert!(de
         .iter()
@@ -65,7 +65,7 @@ cfg_test!(
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
         let ser = serialize_map(&cmap).unwrap();
-        let de = deserialize(ser).unwrap();
+        let de = deserialize_map(ser).unwrap();
         assert!(de
             .iter()
             .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
@@ -90,7 +90,7 @@ cfg_test!(
         // random chop
         se.truncate(124);
         // corrupted
-        assert!(deserialize(se).is_none());
+        assert!(deserialize_map(se).is_none());
     }
     #[test]
     fn test_ser_de_excess_bytes() {
@@ -114,7 +114,7 @@ cfg_test!(
         // random patch
         let patch: Vec<u8> = (0u16..500u16).into_iter().map(|v| (v >> 7) as u8).collect();
         se.extend(patch);
-        assert!(deserialize(se).is_none());
+        assert!(deserialize_map(se).is_none());
     }
 );
 
@@ -173,5 +173,22 @@ mod interface_tests {
         let cow_file = cow_file(10);
         assert_eq!(cow_file, "10_".to_owned());
         assert_eq!(&cow_file[..cow_file.len() - 1], "10".to_owned());
+    }
+}
+
+mod preload_tests {
+    use super::*;
+    use crate::coredb::memstore::Memstore;
+    #[test]
+    fn test_preload() {
+        let memstore = Memstore::new_default();
+        let mut v = Vec::new();
+        preload::raw_generate_preload(&mut v, &memstore).unwrap();
+        let de: Vec<String> = preload::read_preload(v)
+            .unwrap()
+            .into_iter()
+            .map(|each| unsafe { each.as_str().to_owned() })
+            .collect();
+        assert_veceq!(de, vec!["default".to_owned()]);
     }
 }

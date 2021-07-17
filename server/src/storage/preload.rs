@@ -24,46 +24,56 @@
  *
 */
 
-use super::raw_byte_repr;
 use crate::coredb::memstore::Memstore;
+use crate::coredb::memstore::ObjectID;
+use core::ptr;
+use std::collections::HashSet;
+use std::io::Error as IoError;
+use std::io::ErrorKind;
 use std::io::Result as IoResult;
 use std::io::Write;
 
-const VERSION_MARK: u64 = 1u64.swap_bytes();
+// our version and endian are based on nibbles
 
-/// Add padding bytes to align to 8B boundaries
-fn pad_nul_align8<W: Write>(l: usize, w: &mut W) -> IoResult<()> {
-    // ignore handled amount
-    let _ = w.write(&[b'0'].repeat(64 - l))?;
-    Ok(())
-}
+#[cfg(target_endian = "little")]
+const META_SEGMENT: u8 = 0b1000_0000;
+
+#[cfg(target_endian = "big")]
+const META_SEGMENT: u8 = 0b1000_0001;
+
+const VERSION: u8 = 1;
 
 /// Generate the `PRELOAD` disk file for this instance
 /// ```text
-/// [8B: Endian Mark/Version Mark (padded)] => Meta segment
+/// [1B: Endian Mark/Version Mark (padded)] => Meta segment
 /// [8B: Extent header] => Predata Segment
-/// ([8B: Parition ID (nul padded)])* => Data segment
+/// ([8B: Partion ID len][8B: Parition ID (not padded)])* => Data segment
 /// ```
 ///
-/// The meta segment need not be 8B, but it is done for easier alignment
-pub fn raw_generate_preload<W: Write>(w: &mut W, store: Memstore) -> IoResult<()> {
-    unsafe {
-        // generate the meta segment
-        #[allow(clippy::identity_op)] // clippy doesn't understand endian
-        let meta_segment = endian_mark!() | VERSION_MARK;
-        w.write_all(&raw_byte_repr(&meta_segment))?;
-
-        // generate and write the extent header (predata)
-        w.write_all(&raw_byte_repr(&to_64bit_little_endian!(store
-            .keyspaces
-            .len())))?;
-    }
-    // start writing the parition IDs
-    for partition in store.keyspaces.iter() {
-        let partition_id = partition.key();
-        w.write_all(&partition_id)?;
-        // pad
-        pad_nul_align8(partition_id.len(), w)?;
-    }
+pub fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoResult<()> {
+    // generate the meta segment
+    #[allow(clippy::identity_op)]
+    w.write_all(&[META_SEGMENT])?;
+    super::raw_serialize_set(&store.keyspaces, w)?;
     Ok(())
+}
+
+pub fn read_preload(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
+    if preload.len() < 16 {
+        // nah, this is a bad disk file
+        return Err(IoError::from(ErrorKind::UnexpectedEof));
+    }
+    // first read in the meta segment
+    unsafe {
+        let meta_segment: u8 = ptr::read(preload.as_ptr());
+        if meta_segment != META_SEGMENT {
+            return Err(IoError::from(ErrorKind::Unsupported));
+        }
+    }
+    // all checks complete; time to decode
+    let ret = super::deserialize_set_ctype(&preload[1..]);
+    match ret {
+        Some(ret) => Ok(ret),
+        _ => Err(IoError::from(ErrorKind::UnexpectedEof)),
+    }
 }

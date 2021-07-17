@@ -50,11 +50,14 @@
 //! think of using them anywhere outside. This is a specialized parser built for the database.
 //! -- Sayan (July 2021)
 
+use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
 use crate::coredb::Data;
+use core::hash::Hash;
 use core::mem;
 use core::ptr;
 use core::slice;
+use std::collections::HashSet;
 use std::io::Write;
 // for some astronomical reasons do not mess with this
 #[macro_use]
@@ -207,8 +210,90 @@ pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> std:
     Ok(())
 }
 
+/// Serialize a set and write it to a provided buffer
+pub fn raw_serialize_set<W, K, V>(map: &Coremap<K, V>, w: &mut W) -> std::io::Result<()>
+where
+    W: Write,
+    K: Eq + Hash + AsRef<[u8]>,
+{
+    unsafe {
+        w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+        // now the keys and values
+        for kv in map.iter() {
+            let key = kv.key().as_ref();
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(key.len())))?;
+            w.write_all(key)?;
+        }
+    }
+    Ok(())
+}
+
+pub trait DeserializeFrom {
+    fn is_expected_len(current_len: usize) -> bool;
+    fn from_slice(slice: &[u8]) -> Self;
+}
+
+impl<const N: usize> DeserializeFrom for Array<u8, N> {
+    fn is_expected_len(clen: usize) -> bool {
+        clen <= N
+    }
+    fn from_slice(slice: &[u8]) -> Self {
+        unsafe { Self::from_slice(slice) }
+    }
+}
+
+/// Deserialize a set to a custom type
+pub fn deserialize_set_ctype<T>(data: &[u8]) -> Option<HashSet<T>>
+where
+    T: DeserializeFrom + Eq + Hash,
+{
+    // First read the length header
+    if data.len() < 8 {
+        // so the file doesn't even have the length header? noice, just return
+        None
+    } else {
+        unsafe {
+            // so we have 8B. Just unsafe access and transmute it
+            let len = transmute_len(data.as_ptr());
+            let mut set = HashSet::with_capacity(len);
+            // this is what we have left: [KLEN:8B]*
+            // move 8 bytes ahead since we're done with len
+            let mut ptr = data.as_ptr().add(8);
+            let end_ptr = data.as_ptr().add(data.len());
+            for _ in 0..len {
+                if (ptr.add(8)) >= end_ptr {
+                    // not enough space and even if there is a len
+                    // there is no value. This is even true for ZSTs
+                    return None;
+                }
+                let lenkey = transmute_len(ptr);
+                ptr = ptr.add(8);
+                if (ptr.add(lenkey)) > end_ptr {
+                    // not enough data left
+                    return None;
+                }
+                if !T::is_expected_len(lenkey) {
+                    return None;
+                }
+                // get the key as a raw slice, we've already checked if end_ptr is less
+                let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
+                // move the ptr ahead; done with the key
+                ptr = ptr.add(lenkey);
+                // push it in
+                set.insert(key);
+            }
+            if ptr == end_ptr {
+                Some(set)
+            } else {
+                // nope, someone gave us more data
+                None
+            }
+        }
+    }
+}
+
 /// Deserialize a file that contains a serialized map
-pub fn deserialize(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
+pub fn deserialize_map(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
     // First read the length header
     if data.len() < 8 {
         // so the file doesn't even have the length header? noice, just return

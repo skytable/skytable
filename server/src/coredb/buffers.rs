@@ -65,8 +65,6 @@ const PAIR_MAP_LUT: [u8; 200] = [
 
 /// A 32-bit integer buffer with one extra byte
 pub type Integer32Buffer = Integer32BufferRaw<11>;
-/// A 32-bit integer buffer with **no extra byte**
-pub type Integer32 = Integer32BufferRaw<10>;
 
 #[derive(Debug)]
 /// A buffer for unsigned 32-bit integers with one _extra byte_ of memory reserved for
@@ -200,8 +198,6 @@ fn test_int32_buffer_push() {
     assert_eq!(buffer, "278?");
 }
 
-/// A 64-bit integer buffer with one extra byte
-pub type Integer64Buffer = Integer64BufferRaw<21>;
 /// A 64-bit integer buffer with **no extra byte**
 pub type Integer64 = Integer64BufferRaw<20>;
 
@@ -402,10 +398,7 @@ where
 fn test_int64_buffer() {
     assert_eq!(
         9348910481349849081_u64.to_string(),
-        Integer64Buffer::init(9348910481349849081_u64).as_ref()
+        Integer64::init(9348910481349849081_u64).as_ref()
     );
-    assert_eq!(
-        u64::MAX.to_string(),
-        Integer64Buffer::init(u64::MAX).as_ref()
-    );
+    assert_eq!(u64::MAX.to_string(), Integer64::init(u64::MAX).as_ref());
 }
