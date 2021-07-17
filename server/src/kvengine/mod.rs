@@ -101,11 +101,20 @@ impl Default for KVEngine {
 impl KVEngine {
     /// Create a new in-memory KVEngine with the specified encoding schemes
     pub fn init(encoded_k: bool, encoded_v: bool) -> Self {
+        Self::init_with_data(encoded_k, encoded_v, Coremap::new())
+    }
+    pub fn init_with_data(encoded_k: bool, encoded_v: bool, table: Coremap<Data, Data>) -> Self {
         Self {
-            table: Coremap::new(),
+            table,
             encoded_k: AtomicBool::new(encoded_k),
             encoded_v: AtomicBool::new(encoded_v),
         }
+    }
+    pub fn get_encoding(&self) -> (bool, bool) {
+        (
+            self.encoded_k.load(ORD_RELAXED),
+            self.encoded_v.load(ORD_RELAXED),
+        )
     }
     pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
         &self.table

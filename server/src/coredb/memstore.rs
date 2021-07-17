@@ -58,8 +58,8 @@
 
 use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
+use crate::coredb::table::Table;
 use crate::coredb::SnapshotStatus;
-use crate::kvengine::KVEngine;
 use core::mem::MaybeUninit;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -213,12 +213,12 @@ impl Keyspace {
                 // add the default table
                 ht.true_if_insert(
                     unsafe_objectid_from_slice!("default"),
-                    Arc::new(Table::KV(KVEngine::default())),
+                    Arc::new(Table::new_default_kve()),
                 );
                 // add the system table
                 ht.true_if_insert(
                     unsafe_objectid_from_slice!("_system"),
-                    Arc::new(Table::KV(KVEngine::default())),
+                    Arc::new(Table::new_default_kve()),
                 );
                 ht
             },
@@ -242,7 +242,7 @@ impl Keyspace {
     pub fn create_table(&self, table_identifier: ObjectID, table_type: TableType) -> bool {
         self.tables.true_if_insert(table_identifier, {
             match table_type {
-                TableType::KeyValue => Arc::new(Table::KV(KVEngine::default())),
+                TableType::KeyValue => Arc::new(Table::new_default_kve()),
             }
         })
     }
@@ -309,25 +309,4 @@ fn test_keyspace_try_delete_protected_table() {
             .unwrap_err(),
         DdlError::ProtectedObject
     );
-}
-
-// same 8 byte ptrs; any chance of optimizations?
-
-#[derive(Debug)]
-/// The underlying table type. This is the place for the other data models (soon!)
-pub enum Table {
-    /// a key/value store
-    KV(KVEngine),
-}
-
-impl Table {
-    /// Get the key/value store if the table is a key/value store
-    pub const fn get_kvstore(&self) -> Option<&KVEngine> {
-        #[allow(irrefutable_let_patterns)]
-        if let Self::KV(kvs) = self {
-            Some(kvs)
-        } else {
-            None
-        }
-    }
 }

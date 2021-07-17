@@ -28,8 +28,8 @@
 
 use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
+use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
-use core::hash::Hash;
 use std::io::Result as IoResult;
 use std::io::{BufWriter, Write};
 
@@ -82,22 +82,17 @@ pub fn create_tree(memroot: Memstore) -> IoResult<()> {
 pub fn serialize_map_into_slow_buffer<T: Write>(
     buffer: &mut T,
     map: &Coremap<Data, Data>,
+    model_code: u8,
 ) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
-    super::raw_serialize_map(map, &mut buffer)?;
+    super::se::raw_serialize_map(map, &mut buffer, model_code)?;
     buffer.flush()?;
     Ok(())
 }
 
-pub fn serialize_set_into_slow_buffer<T: Write, K, V>(
-    buffer: &mut T,
-    set: &Coremap<K, V>,
-) -> IoResult<()>
-where
-    K: Eq + Hash + AsRef<[u8]>,
-{
+pub fn serialize_partmap_into_slow_buffer<T: Write>(buffer: &mut T, ks: &Keyspace) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
-    super::raw_serialize_set(set, &mut buffer)?;
+    super::se::raw_serialize_partmap(&mut buffer, ks)?;
     buffer.flush()?;
     Ok(())
 }

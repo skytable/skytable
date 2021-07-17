@@ -29,9 +29,10 @@ use super::*;
 #[test]
 fn test_serialize_deserialize_empty() {
     let cmap = Coremap::new();
-    let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize_map(ser).unwrap();
+    let ser = se::serialize_map(&cmap, 0).unwrap();
+    let (de, model_code) = de::deserialize_map(ser).unwrap();
     assert!(de.len() == 0);
+    assert_eq!(0, model_code);
 }
 
 #[test]
@@ -39,12 +40,13 @@ fn test_ser_de_few_elements() {
     let cmap = Coremap::new();
     cmap.upsert("sayan".into(), "writes code".into());
     cmap.upsert("supersayan".into(), "writes super code".into());
-    let ser = serialize_map(&cmap).unwrap();
-    let de = deserialize_map(ser).unwrap();
+    let ser = se::serialize_map(&cmap, 0).unwrap();
+    let (de, modelcode) = de::deserialize_map(ser).unwrap();
     assert!(de.len() == cmap.len());
     assert!(de
         .iter()
         .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
+    assert_eq!(modelcode, 0);
 }
 
 cfg_test!(
@@ -64,12 +66,13 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let ser = serialize_map(&cmap).unwrap();
-        let de = deserialize_map(ser).unwrap();
+        let ser = se::serialize_map(&cmap, 0).unwrap();
+        let (de, modelcode) = de::deserialize_map(ser).unwrap();
         assert!(de
             .iter()
             .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
         assert!(de.len() == cmap.len());
+        assert_eq!(modelcode, 0);
     }
 
     #[test]
@@ -86,11 +89,11 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let mut se = serialize_map(&cmap).unwrap();
+        let mut se = se::serialize_map(&cmap, 0).unwrap();
         // random chop
         se.truncate(124);
         // corrupted
-        assert!(deserialize_map(se).is_none());
+        assert!(de::deserialize_map(se).is_none());
     }
     #[test]
     fn test_ser_de_excess_bytes() {
@@ -110,11 +113,11 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let mut se = serialize_map(&cmap).unwrap();
+        let mut se = se::serialize_map(&cmap, 0).unwrap();
         // random patch
         let patch: Vec<u8> = (0u16..500u16).into_iter().map(|v| (v >> 7) as u8).collect();
         se.extend(patch);
-        assert!(deserialize_map(se).is_none());
+        assert!(de::deserialize_map(se).is_none());
     }
 );
 
@@ -125,7 +128,7 @@ fn test_runtime_panic_32bit_or_lower() {
     let max = u64::MAX;
     let byte_stream = unsafe { raw_byte_repr(&max).to_owned() };
     let ptr = byte_stream.as_ptr();
-    unsafe { transmute_len(ptr) };
+    unsafe { de::transmute_len(ptr) };
 }
 
 mod interface_tests {

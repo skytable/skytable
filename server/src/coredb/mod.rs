@@ -45,6 +45,7 @@ pub mod iarray;
 pub mod lazy;
 pub mod lock;
 pub mod memstore;
+pub mod table;
 
 /// This is a thread-safe database handle, which on cloning simply
 /// gives another atomic reference to the `shared` which is a `Shared` object

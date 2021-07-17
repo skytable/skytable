@@ -63,7 +63,7 @@ pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoR
     // generate the meta segment
     #[allow(clippy::identity_op)]
     w.write_all(&[META_SEGMENT])?;
-    super::raw_serialize_set(&store.keyspaces, w)?;
+    super::se::raw_serialize_set(&store.keyspaces, w)?;
     Ok(())
 }
 
@@ -72,7 +72,7 @@ pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoR
 /// ([8B: Len][?B: Label])*
 /// ```
 pub(super) fn raw_generate_partfile<W: Write>(w: &mut W, store: &Keyspace) -> IoResult<()> {
-    super::raw_serialize_set(&store.tables, w)
+    super::se::raw_serialize_set(&store.tables, w)
 }
 
 /// Reads the preload file and returns a set
@@ -89,7 +89,7 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
         }
     }
     // all checks complete; time to decode
-    let ret = super::deserialize_set_ctype(&preload[1..]);
+    let ret = super::de::deserialize_set_ctype(&preload[1..]);
     match ret {
         Some(ret) => Ok(ret),
         _ => Err(IoError::from(ErrorKind::InvalidData)),
@@ -98,7 +98,7 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
 
 /// Reads the partfile and returns a set
 pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
-    match super::deserialize_set_ctype(&partfile) {
+    match super::de::deserialize_set_ctype(&partfile) {
         Some(s) => Ok(s),
         None => Err(IoError::from(ErrorKind::InvalidData)),
     }

@@ -184,217 +184,317 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
     }
 }
 
-/// Serialize a map into a _writable_ thing
-pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Error> {
-    /*
-    [LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
-    */
-    // write the len header first
-    let mut w = Vec::with_capacity(128);
-    self::raw_serialize_map(map, &mut w)?;
-    Ok(w)
-}
-
-/// Serialize a map and write it to a provided buffer
-pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> std::io::Result<()> {
-    unsafe {
-        w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
-        // now the keys and values
-        for kv in map.iter() {
-            let (k, v) = (kv.key(), kv.value());
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(k.len())))?;
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(v.len())))?;
-            w.write_all(k)?;
-            w.write_all(v)?;
-        }
+mod se {
+    use super::*;
+    use crate::coredb::memstore::Keyspace;
+    /// Serialize a map into a _writable_ thing
+    pub fn serialize_map(
+        map: &Coremap<Data, Data>,
+        model_code: u8,
+    ) -> Result<Vec<u8>, std::io::Error> {
+        /*
+        [1B: Model Mark][LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
+        */
+        // write the len header first
+        let mut w = Vec::with_capacity(128);
+        self::raw_serialize_map(map, &mut w, model_code)?;
+        Ok(w)
     }
-    Ok(())
-}
 
-/// Serialize a set and write it to a provided buffer
-pub fn raw_serialize_set<W, K, V>(map: &Coremap<K, V>, w: &mut W) -> std::io::Result<()>
-where
-    W: Write,
-    K: Eq + Hash + AsRef<[u8]>,
-{
-    unsafe {
-        w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
-        // now the keys and values
-        for kv in map.iter() {
-            let key = kv.key().as_ref();
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(key.len())))?;
-            w.write_all(key)?;
-        }
-    }
-    Ok(())
-}
-
-pub trait DeserializeFrom {
-    fn is_expected_len(clen: usize) -> bool;
-    fn from_slice(slice: &[u8]) -> Self;
-}
-
-impl<const N: usize> DeserializeFrom for Array<u8, N> {
-    fn is_expected_len(clen: usize) -> bool {
-        clen <= N
-    }
-    fn from_slice(slice: &[u8]) -> Self {
-        unsafe { Self::from_slice(slice) }
-    }
-}
-
-/// Deserialize a set to a custom type
-pub fn deserialize_set_ctype<T>(data: &[u8]) -> Option<HashSet<T>>
-where
-    T: DeserializeFrom + Eq + Hash,
-{
-    // First read the length header
-    if data.len() < 8 {
-        // so the file doesn't even have the length header? noice, just return
-        None
-    } else {
+    /// Serialize a map and write it to a provided buffer
+    pub fn raw_serialize_map<W: Write>(
+        map: &Coremap<Data, Data>,
+        w: &mut W,
+        model_code: u8,
+    ) -> std::io::Result<()> {
         unsafe {
-            // so we have 8B. Just unsafe access and transmute it
-            let len = transmute_len(data.as_ptr());
-            let mut set = HashSet::with_capacity(len);
-            // this is what we have left: [KLEN:8B]*
-            // move 8 bytes ahead since we're done with len
-            let mut ptr = data.as_ptr().add(8);
-            let end_ptr = data.as_ptr().add(data.len());
-            for _ in 0..len {
-                if (ptr.add(8)) >= end_ptr {
-                    // not enough space and even if there is a len
-                    // there is no value. This is even true for ZSTs
-                    return None;
-                }
-                let lenkey = transmute_len(ptr);
-                ptr = ptr.add(8);
-                if (ptr.add(lenkey)) > end_ptr {
-                    // not enough data left
-                    return None;
-                }
-                if !T::is_expected_len(lenkey) {
-                    return None;
-                }
-                // get the key as a raw slice, we've already checked if end_ptr is less
-                let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
-                // move the ptr ahead; done with the key
-                ptr = ptr.add(lenkey);
-                // push it in
-                if !set.insert(key) {
-                    // repeat?; that's not what we wanted
-                    return None;
-                }
-            }
-            if ptr == end_ptr {
-                Some(set)
-            } else {
-                // nope, someone gave us more data
-                None
+            w.write_all(raw_byte_repr(&model_code))?;
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            // now the keys and values
+            for kv in map.iter() {
+                let (k, v) = (kv.key(), kv.value());
+                w.write_all(raw_byte_repr(&to_64bit_little_endian!(k.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_little_endian!(v.len())))?;
+                w.write_all(k)?;
+                w.write_all(v)?;
             }
         }
+        Ok(())
     }
-}
 
-/// Deserialize a file that contains a serialized map
-pub fn deserialize_map(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
-    // First read the length header
-    if data.len() < 8 {
-        // so the file doesn't even have the length header? noice, just return
-        None
-    } else {
+    /// Serialize a set and write it to a provided buffer
+    pub fn raw_serialize_set<W, K, V>(map: &Coremap<K, V>, w: &mut W) -> std::io::Result<()>
+    where
+        W: Write,
+        K: Eq + Hash + AsRef<[u8]>,
+    {
         unsafe {
-            /*
-             UNSAFE(@ohsayan): Everything done here is unsafely safe. We
-             reinterpret bits of one type as another. What could be worse?
-             nah, it's not that bad. We know that the byte representations
-             would be in the way we expect. If the data is corrupted, we
-             can guarantee that we won't ever read incorrect lengths of data
-             and we won't read into others' memory (or corrupt our own)
-            */
-
-            // so we have 8B. Just unsafe access and transmute it; nobody cares
-            let len = transmute_len(data.as_ptr());
-            let hm = Coremap::with_capacity(len);
-            // this is what we have left: [KLEN:8B][VLEN:8B]
-            // move 8 bytes ahead since we're done with len
-            let mut ptr = data.as_ptr().add(8);
-            let end_ptr = data.as_ptr().add(data.len());
-            for _ in 0..len {
-                if (ptr.add(16)) >= end_ptr {
-                    // not enough space
-                    return None;
-                }
-                let lenkey = transmute_len(ptr);
-                ptr = ptr.add(8);
-                let lenval = transmute_len(ptr);
-                ptr = ptr.add(8);
-                if (ptr.add(lenkey + lenval)) > end_ptr {
-                    // not enough data left
-                    return None;
-                }
-                // get the key as a raw slice, we've already checked if end_ptr is less
-                let key = Data::copy_from_slice(slice::from_raw_parts(ptr, lenkey));
-                // move the ptr ahead; done with the key
-                ptr = ptr.add(lenkey);
-                let val = Data::copy_from_slice(slice::from_raw_parts(ptr, lenval));
-                // move the ptr ahead; done with the value
-                ptr = ptr.add(lenval);
-                // push it in
-                hm.upsert(key, val);
-            }
-            if ptr == end_ptr {
-                Some(hm)
-            } else {
-                // nope, someone gave us more data
-                None
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            // now the keys and values
+            for kv in map.iter() {
+                let key = kv.key().as_ref();
+                w.write_all(raw_byte_repr(&to_64bit_little_endian!(key.len())))?;
+                w.write_all(key)?;
             }
         }
+        Ok(())
+    }
+
+    /// Generate a partition map for the given keyspace
+    /// ```text
+    /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type])*
+    /// ```
+    pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> std::io::Result<()> {
+        unsafe {
+            // extent
+            w.write_all(raw_byte_repr(&to_64bit_little_endian!(keyspace
+                .tables
+                .len())))?;
+            for table in keyspace.tables.iter() {
+                // partition ID
+                w.write_all(raw_byte_repr(&to_64bit_little_endian!(table.key().len())))?;
+                // now storage type
+                w.write_all(raw_byte_repr(&table.storage_type()))?;
+            }
+        }
+        Ok(())
     }
 }
 
-#[allow(clippy::needless_return)] // Clippy really misunderstands this
-unsafe fn transmute_len(start_ptr: *const u8) -> usize {
-    little_endian!({
-        // So we have an LE target
-        is_64_bit!({
-            // 64-bit LE
-            return ptr::read_unaligned(start_ptr.cast());
-        });
-        not_64_bit!({
-            // 32-bit LE
-            let ret1: u64 = ptr::read_unaligned(start_ptr.cast());
-            // lossy cast
-            let ret = ret1 as usize;
-            if ret > (isize::MAX as usize) {
-                // this is a backup method for us incase a giant 48-bit address is
-                // somehow forced to be read on this machine
-                panic!("RT panic: Very high size for current pointer width");
-            }
-            return ret;
-        });
-    });
+mod de {
+    use super::*;
+    use std::collections::HashMap;
 
-    big_endian!({
-        // so we have a BE target
-        is_64_bit!({
-            // 64-bit big endian
-            let ret: usize = ptr::read_unaligned(start_ptr.cast());
-            // swap byte order
-            return ret.swap_bytes();
-        });
-        not_64_bit!({
-            // 32-bit big endian
-            let ret: u64 = ptr::read_unaligned(start_ptr.cast());
-            // swap byte order and lossy cast
-            let ret = (ret.swap_bytes()) as usize;
-            // check if overflow
-            if ret > (isize::MAX as usize) {
-                // this is a backup method for us incase a giant 48-bit address is
-                // somehow forced to be read on this machine
-                panic!("RT panic: Very high size for current pointer width");
+    pub trait DeserializeFrom {
+        fn is_expected_len(clen: usize) -> bool;
+        fn from_slice(slice: &[u8]) -> Self;
+    }
+
+    impl<const N: usize> DeserializeFrom for Array<u8, N> {
+        fn is_expected_len(clen: usize) -> bool {
+            clen <= N
+        }
+        fn from_slice(slice: &[u8]) -> Self {
+            unsafe { Self::from_slice(slice) }
+        }
+    }
+
+    /// Deserialize a set to a custom type
+    pub fn deserialize_set_ctype<T>(data: &[u8]) -> Option<HashSet<T>>
+    where
+        T: DeserializeFrom + Eq + Hash,
+    {
+        // First read the length header
+        if data.len() < 8 {
+            // so the file doesn't even have the length header? noice, just return
+            None
+        } else {
+            unsafe {
+                // so we have 8B. Just unsafe access and transmute it
+                let len = transmute_len(data.as_ptr());
+                let mut set = HashSet::with_capacity(len);
+                // this is what we have left: [KLEN:8B]*
+                // move 8 bytes ahead since we're done with len
+                let mut ptr = data.as_ptr().add(8);
+                let end_ptr = data.as_ptr().add(data.len());
+                for _ in 0..len {
+                    if (ptr.add(8)) >= end_ptr {
+                        // not enough space and even if there is a len
+                        // there is no value. This is even true for ZSTs
+                        return None;
+                    }
+                    let lenkey = transmute_len(ptr);
+                    ptr = ptr.add(8);
+                    if (ptr.add(lenkey)) > end_ptr {
+                        // not enough data left
+                        return None;
+                    }
+                    if !T::is_expected_len(lenkey) {
+                        return None;
+                    }
+                    // get the key as a raw slice, we've already checked if end_ptr is less
+                    let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
+                    // move the ptr ahead; done with the key
+                    ptr = ptr.add(lenkey);
+                    // push it in
+                    if !set.insert(key) {
+                        // repeat?; that's not what we wanted
+                        return None;
+                    }
+                }
+                if ptr == end_ptr {
+                    Some(set)
+                } else {
+                    // nope, someone gave us more data
+                    None
+                }
             }
-            return ret;
+        }
+    }
+
+    /// Deserializes a map-like set which has an 1B _bytemark_ for every entry
+    pub fn deserialize_set_ctype_bytemark<T>(data: &[u8]) -> Option<HashMap<T, u8>>
+    where
+        T: DeserializeFrom + Eq + Hash,
+    {
+        // First read the length header
+        if data.len() < 8 {
+            // so the file doesn't even have the length header? noice, just return
+            None
+        } else {
+            unsafe {
+                // so we have 8B. Just unsafe access and transmute it
+                let len = transmute_len(data.as_ptr());
+                let mut set = HashMap::with_capacity(len);
+                // this is what we have left: [KLEN:8B]*
+                // move 8 bytes ahead since we're done with len
+                let mut ptr = data.as_ptr().add(8);
+                let end_ptr = data.as_ptr().add(data.len());
+                for _ in 0..len {
+                    if (ptr.add(8)) >= end_ptr {
+                        // not enough space and even if there is a len
+                        // there is no value. This is even true for ZSTs
+                        return None;
+                    }
+                    let lenkey = transmute_len(ptr);
+                    ptr = ptr.add(8);
+                    if (ptr.add(lenkey + 1)) > end_ptr {
+                        // not enough data left
+                        return None;
+                    }
+                    if !T::is_expected_len(lenkey) {
+                        return None;
+                    }
+                    // get the key as a raw slice, we've already checked if end_ptr is less
+                    let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
+                    // move the ptr ahead; done with the key
+                    ptr = ptr.add(lenkey);
+                    let bytemark = ptr::read(ptr);
+                    ptr = ptr.add(1);
+                    // push it in
+                    if set.insert(key, bytemark).is_some() {
+                        // repeat?; that's not what we wanted
+                        return None;
+                    }
+                }
+                if ptr == end_ptr {
+                    Some(set)
+                } else {
+                    // nope, someone gave us more data
+                    None
+                }
+            }
+        }
+    }
+    /// Deserialize a file that contains a serialized map. This also returns the model code
+    pub fn deserialize_map(data: Vec<u8>) -> Option<(Coremap<Data, Data>, u8)> {
+        // First read the length header
+        if data.len() < 9 {
+            // so the file doesn't even have the length/model header? noice, just return
+            None
+        } else {
+            unsafe {
+                /*
+                 UNSAFE(@ohsayan): Everything done here is unsafely safe. We
+                 reinterpret bits of one type as another. What could be worse?
+                 nah, it's not that bad. We know that the byte representations
+                 would be in the way we expect. If the data is corrupted, we
+                 can guarantee that we won't ever read incorrect lengths of data
+                 and we won't read into others' memory (or corrupt our own)
+                */
+                let mut ptr = data.as_ptr();
+                let modelcode: u8 = ptr::read(ptr);
+
+                // model check
+                if modelcode > 3 {
+                    // this model isn't supposed to have more than 3. Corrupted data
+                    return None;
+                }
+
+                ptr = ptr.add(1);
+                // so we have 8B. Just unsafe access and transmute it; nobody cares
+                let len = transmute_len(ptr);
+                // move 8 bytes ahead since we're done with len
+                ptr = ptr.add(8);
+                let hm = Coremap::with_capacity(len);
+                // this is what we have left: [KLEN:8B][VLEN:8B]
+                let end_ptr = data.as_ptr().add(data.len());
+                for _ in 0..len {
+                    if (ptr.add(16)) >= end_ptr {
+                        // not enough space
+                        return None;
+                    }
+                    let lenkey = transmute_len(ptr);
+                    ptr = ptr.add(8);
+                    let lenval = transmute_len(ptr);
+                    ptr = ptr.add(8);
+                    if (ptr.add(lenkey + lenval)) > end_ptr {
+                        // not enough data left
+                        return None;
+                    }
+                    // get the key as a raw slice, we've already checked if end_ptr is less
+                    let key = Data::copy_from_slice(slice::from_raw_parts(ptr, lenkey));
+                    // move the ptr ahead; done with the key
+                    ptr = ptr.add(lenkey);
+                    let val = Data::copy_from_slice(slice::from_raw_parts(ptr, lenval));
+                    // move the ptr ahead; done with the value
+                    ptr = ptr.add(lenval);
+                    // push it in
+                    hm.upsert(key, val);
+                }
+                if ptr == end_ptr {
+                    Some((hm, modelcode))
+                } else {
+                    // nope, someone gave us more data
+                    None
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    unsafe fn transmute_len(start_ptr: *const u8) -> usize {
+        little_endian!({
+            // So we have an LE target
+            is_64_bit!({
+                // 64-bit LE
+                return ptr::read_unaligned(start_ptr.cast());
+            });
+            not_64_bit!({
+                // 32-bit LE
+                let ret1: u64 = ptr::read_unaligned(start_ptr.cast());
+                // lossy cast
+                let ret = ret1 as usize;
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
         });
-    });
+
+        big_endian!({
+            // so we have a BE target
+            is_64_bit!({
+                // 64-bit big endian
+                let ret: usize = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order
+                return ret.swap_bytes();
+            });
+            not_64_bit!({
+                // 32-bit big endian
+                let ret: u64 = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order and lossy cast
+                let ret = (ret.swap_bytes()) as usize;
+                // check if overflow
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
+        });
+    }
 }

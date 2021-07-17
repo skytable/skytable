@@ -32,7 +32,7 @@
 use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
-use crate::coredb::memstore::Table;
+use crate::coredb::table::{DataModel, Table};
 use crate::storage::interface::DIR_KSROOT;
 use std::fs::{self, File};
 use std::io::Result as IoResult;
@@ -50,10 +50,13 @@ macro_rules! tbl_path {
 pub fn flush_table(tableid: &ObjectID, ksid: &ObjectID, table: &Table) -> IoResult<()> {
     let path = tbl_path!(tableid, ksid);
     let mut file = File::create(&path)?;
-    match table {
-        Table::KV(kve) => {
-            super::interface::serialize_map_into_slow_buffer(&mut file, kve.__get_inner_ref())?
-        }
+    let modelcode = table.get_model_code();
+    match table.get_model_ref() {
+        DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
+            &mut file,
+            kve.__get_inner_ref(),
+            modelcode,
+        )?,
     }
     file.sync_all()?;
     fs::rename(&path, &path[..path.len() - 1])
@@ -71,7 +74,7 @@ pub fn flush_keyspace(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
 pub fn flush_partmap(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
     let path = unsafe { concat_str!(DIR_KSROOT, "/", ksid.as_str(), "/", "PARTMAP_") };
     let mut file = File::create(&path)?;
-    super::interface::serialize_set_into_slow_buffer(&mut file, &keyspace.tables)?;
+    super::interface::serialize_partmap_into_slow_buffer(&mut file, keyspace)?;
     file.sync_all()?;
     fs::rename(&path, &path[..path.len() - 1])?;
     Ok(())
