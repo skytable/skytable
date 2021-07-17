@@ -66,6 +66,8 @@ mod macros;
 pub mod flush;
 pub mod interface;
 pub mod preload;
+pub mod unflush;
+// test
 #[cfg(test)]
 mod tests;
 

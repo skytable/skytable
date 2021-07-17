@@ -106,3 +106,10 @@ macro_rules! concat_str {
         st
     }}};
 }
+
+#[macro_export]
+macro_rules! bad_data {
+    () => {
+        std::io::Error::from(std::io::ErrorKind::InvalidData)
+    };
+}
