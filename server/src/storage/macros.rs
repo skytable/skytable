@@ -91,9 +91,18 @@ macro_rules! try_dir_ignore_existing {
 
 #[macro_export]
 macro_rules! concat_path {
-    ($($s:expr),*) => {{ {
+    ($($s:expr),+) => {{ {
         let mut path = std::path::PathBuf::with_capacity($(($s).len()+)*0);
         $(path.push($s);)*
         path
+    }}};
+}
+
+#[macro_export]
+macro_rules! concat_str {
+    ($($s:expr),+) => {{ {
+        let mut st = std::string::String::with_capacity($(($s).len()+)*0);
+        $(st.push_str($s);)*
+        st
     }}};
 }

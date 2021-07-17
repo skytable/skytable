@@ -26,11 +26,10 @@
 
 //! Interfaces with the file system
 
-use super::PartitionID;
-use crate::coredb::buffers::Integer32Buffer;
 use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
 use crate::coredb::memstore::Memstore;
+use core::hash::Hash;
 use std::io::Result as IoResult;
 use std::io::{BufWriter, Write};
 
@@ -83,19 +82,32 @@ pub fn create_tree(memroot: Memstore) -> IoResult<()> {
 pub fn serialize_map_into_slow_buffer<T: Write>(
     buffer: &mut T,
     map: &Coremap<Data, Data>,
-) -> std::io::Result<()> {
+) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
     super::raw_serialize_map(map, &mut buffer)?;
     buffer.flush()?;
     Ok(())
 }
 
-/// Get the file for COW. If the parition ID is 0000
-pub(super) fn cow_file(id: PartitionID) -> Integer32Buffer {
-    let mut buffer = Integer32Buffer::init(id);
-    unsafe {
-        // UNSAFE(@ohsayan): We know we're just pushing in one thing
-        buffer.push(b'_');
-    }
-    buffer
+pub fn serialize_set_into_slow_buffer<T: Write, K, V>(
+    buffer: &mut T,
+    set: &Coremap<K, V>,
+) -> IoResult<()>
+where
+    K: Eq + Hash + AsRef<[u8]>,
+{
+    let mut buffer = BufWriter::new(buffer);
+    super::raw_serialize_set(set, &mut buffer)?;
+    buffer.flush()?;
+    Ok(())
+}
+
+pub fn serialize_preload_into_slow_buffer<T: Write>(
+    buffer: &mut T,
+    store: &Memstore,
+) -> IoResult<()> {
+    let mut buffer = BufWriter::new(buffer);
+    super::preload::raw_generate_preload(&mut buffer, store)?;
+    buffer.flush()?;
+    Ok(())
 }

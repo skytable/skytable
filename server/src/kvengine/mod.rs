@@ -107,6 +107,9 @@ impl KVEngine {
             encoded_v: AtomicBool::new(encoded_v),
         }
     }
+    pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
+        &self.table
+    }
     /// Alter the table and set the key encoding switch
     ///
     /// Note: this will need an empty table

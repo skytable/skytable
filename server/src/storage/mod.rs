@@ -63,6 +63,7 @@ use std::io::Write;
 #[macro_use]
 mod macros;
 // endof do not mess
+pub mod flush;
 pub mod interface;
 pub mod preload;
 #[cfg(test)]
@@ -229,7 +230,7 @@ where
 }
 
 pub trait DeserializeFrom {
-    fn is_expected_len(current_len: usize) -> bool;
+    fn is_expected_len(clen: usize) -> bool;
     fn from_slice(slice: &[u8]) -> Self;
 }
 
@@ -280,7 +281,10 @@ where
                 // move the ptr ahead; done with the key
                 ptr = ptr.add(lenkey);
                 // push it in
-                set.insert(key);
+                if !set.insert(key) {
+                    // repeat?; that's not what we wanted
+                    return None;
+                }
             }
             if ptr == end_ptr {
                 Some(set)

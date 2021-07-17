@@ -24,6 +24,15 @@
  *
 */
 
+//! # Preload binary files
+//!
+//! Preloads are very critical binary files which contain metadata for this instance of
+//! the database. Preloads are of two kinds:
+//! 1. the `PRELOAD` that is placed at the root directory
+//! 2. the `PARTMAP` preload that is placed in the ks directory
+//!
+
+use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
 use core::ptr;
@@ -50,7 +59,7 @@ const VERSION: u8 = 1;
 /// ([8B: Partion ID len][8B: Parition ID (not padded)])* => Data segment
 /// ```
 ///
-pub fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoResult<()> {
+pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoResult<()> {
     // generate the meta segment
     #[allow(clippy::identity_op)]
     w.write_all(&[META_SEGMENT])?;
@@ -58,7 +67,16 @@ pub fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoResult<(
     Ok(())
 }
 
-pub fn read_preload(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
+/// Generate the `PART` disk file for this keyspace
+/// ```text
+/// ([8B: Len][?B: Label])*
+/// ```
+pub(super) fn raw_generate_partfile<W: Write>(w: &mut W, store: &Keyspace) -> IoResult<()> {
+    super::raw_serialize_set(&store.tables, w)
+}
+
+/// Reads the preload file and returns a set
+pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
     if preload.len() < 16 {
         // nah, this is a bad disk file
         return Err(IoError::from(ErrorKind::UnexpectedEof));
@@ -74,6 +92,14 @@ pub fn read_preload(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
     let ret = super::deserialize_set_ctype(&preload[1..]);
     match ret {
         Some(ret) => Ok(ret),
-        _ => Err(IoError::from(ErrorKind::UnexpectedEof)),
+        _ => Err(IoError::from(ErrorKind::InvalidData)),
+    }
+}
+
+/// Reads the partfile and returns a set
+pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
+    match super::deserialize_set_ctype(&partfile) {
+        Some(s) => Ok(s),
+        None => Err(IoError::from(ErrorKind::InvalidData)),
     }
 }

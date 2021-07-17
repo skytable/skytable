@@ -129,7 +129,7 @@ fn test_runtime_panic_32bit_or_lower() {
 }
 
 mod interface_tests {
-    use super::interface::{cow_file, create_tree, DIR_KSROOT, DIR_ROOT, DIR_SNAPROOT};
+    use super::interface::{create_tree, DIR_KSROOT, DIR_ROOT, DIR_SNAPROOT};
     use crate::concat_path;
     use crate::coredb::memstore::Memstore;
     use std::fs;
@@ -167,13 +167,6 @@ mod interface_tests {
         // clean up
         fs::remove_dir_all(DIR_ROOT).unwrap();
     }
-
-    #[test]
-    fn test_cowfile() {
-        let cow_file = cow_file(10);
-        assert_eq!(cow_file, "10_".to_owned());
-        assert_eq!(&cow_file[..cow_file.len() - 1], "10".to_owned());
-    }
 }
 
 mod preload_tests {
@@ -184,7 +177,7 @@ mod preload_tests {
         let memstore = Memstore::new_default();
         let mut v = Vec::new();
         preload::raw_generate_preload(&mut v, &memstore).unwrap();
-        let de: Vec<String> = preload::read_preload(v)
+        let de: Vec<String> = preload::read_preload_raw(v)
             .unwrap()
             .into_iter()
             .map(|each| unsafe { each.as_str().to_owned() })
