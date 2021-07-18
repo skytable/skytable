@@ -72,18 +72,22 @@ pub mod oneshot {
 
     /// No `partmap` handling. Just flushes the table to the expected location
     pub fn flush_table(tableid: &ObjectID, ksid: &ObjectID, table: &Table) -> IoResult<()> {
-        let path = tbl_path!(tableid, ksid);
-        let mut file = File::create(&path)?;
-        let modelcode = table.get_model_code();
-        match table.get_model_ref() {
-            DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
-                &mut file,
-                kve.__get_inner_ref(),
-                modelcode,
-            )?,
+        if table.is_volatile() {
+            // no flushing needed
+            Ok(())
+        } else {
+            // fine, this needs to be flushed
+            let path = tbl_path!(tableid, ksid);
+            let mut file = File::create(&path)?;
+            match table.get_model_ref() {
+                DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
+                    &mut file,
+                    kve.__get_inner_ref(),
+                )?,
+            }
+            file.sync_all()?;
+            fs::rename(&path, &path[..path.len() - 1])
         }
-        file.sync_all()?;
-        fs::rename(&path, &path[..path.len() - 1])
     }
 
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling

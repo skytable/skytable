@@ -63,6 +63,7 @@ use std::io::Write;
 #[macro_use]
 mod macros;
 // endof do not mess
+pub mod bytemarks;
 pub mod flush;
 pub mod interface;
 pub mod preload;
@@ -190,16 +191,13 @@ mod se {
     use super::*;
     use crate::coredb::memstore::Keyspace;
     /// Serialize a map into a _writable_ thing
-    pub fn serialize_map(
-        map: &Coremap<Data, Data>,
-        model_code: u8,
-    ) -> Result<Vec<u8>, std::io::Error> {
+    pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Error> {
         /*
-        [1B: Model Mark][LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
+        [LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
         */
         // write the len header first
         let mut w = Vec::with_capacity(128);
-        self::raw_serialize_map(map, &mut w, model_code)?;
+        self::raw_serialize_map(map, &mut w)?;
         Ok(w)
     }
 
@@ -207,10 +205,8 @@ mod se {
     pub fn raw_serialize_map<W: Write>(
         map: &Coremap<Data, Data>,
         w: &mut W,
-        model_code: u8,
     ) -> std::io::Result<()> {
         unsafe {
-            w.write_all(raw_byte_repr(&model_code))?;
             w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
@@ -244,7 +240,7 @@ mod se {
 
     /// Generate a partition map for the given keyspace
     /// ```text
-    /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type])*
+    /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type][1B: Model type])*
     /// ```
     pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> std::io::Result<()> {
         unsafe {
@@ -259,6 +255,8 @@ mod se {
                 w.write_all(table.key())?;
                 // now storage type
                 w.write_all(raw_byte_repr(&table.storage_type()))?;
+                // now model type
+                w.write_all(raw_byte_repr(&table.get_model_code()))?;
             }
         }
         Ok(())
@@ -336,8 +334,8 @@ mod de {
         }
     }
 
-    /// Deserializes a map-like set which has an 1B _bytemark_ for every entry
-    pub fn deserialize_set_ctype_bytemark<T>(data: &[u8]) -> Option<HashMap<T, u8>>
+    /// Deserializes a map-like set which has an 2x1B _bytemark_ for every entry
+    pub fn deserialize_set_ctype_bytemark<T>(data: &[u8]) -> Option<HashMap<T, (u8, u8)>>
     where
         T: DeserializeFrom + Eq + Hash,
     {
@@ -362,7 +360,7 @@ mod de {
                     }
                     let lenkey = transmute_len(ptr);
                     ptr = ptr.add(8);
-                    if (ptr.add(lenkey + 1)) > end_ptr {
+                    if (ptr.add(lenkey + 2)) > end_ptr {
                         // not enough data left
                         return None;
                     }
@@ -373,10 +371,12 @@ mod de {
                     let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
                     // move the ptr ahead; done with the key
                     ptr = ptr.add(lenkey);
-                    let bytemark = ptr::read(ptr);
+                    let bytemark_a = ptr::read(ptr);
+                    ptr = ptr.add(1);
+                    let bytemark_b = ptr::read(ptr);
                     ptr = ptr.add(1);
                     // push it in
-                    if set.insert(key, bytemark).is_some() {
+                    if set.insert(key, (bytemark_a, bytemark_b)).is_some() {
                         // repeat?; that's not what we wanted
                         return None;
                     }
@@ -391,9 +391,9 @@ mod de {
         }
     }
     /// Deserialize a file that contains a serialized map. This also returns the model code
-    pub fn deserialize_map(data: Vec<u8>) -> Option<(Coremap<Data, Data>, u8)> {
+    pub fn deserialize_map(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
         // First read the length header
-        if data.len() < 9 {
+        if data.len() < 8 {
             // so the file doesn't even have the length/model header? noice, just return
             None
         } else {
@@ -407,15 +407,6 @@ mod de {
                  and we won't read into others' memory (or corrupt our own)
                 */
                 let mut ptr = data.as_ptr();
-                let modelcode: u8 = ptr::read(ptr);
-
-                // model check
-                if modelcode > 3 {
-                    // this model isn't supposed to have more than 3. Corrupted data
-                    return None;
-                }
-
-                ptr = ptr.add(1);
                 // so we have 8B. Just unsafe access and transmute it; nobody cares
                 let len = transmute_len(ptr);
                 // move 8 bytes ahead since we're done with len
@@ -447,7 +438,7 @@ mod de {
                     hm.upsert(key, val);
                 }
                 if ptr == end_ptr {
-                    Some((hm, modelcode))
+                    Some(hm)
                 } else {
                     // nope, someone gave us more data
                     None

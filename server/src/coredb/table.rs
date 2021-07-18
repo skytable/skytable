@@ -29,6 +29,7 @@
 use crate::coredb::htable::Coremap;
 use crate::coredb::Data;
 use crate::kvengine::KVEngine;
+use crate::storage::bytemarks;
 
 #[derive(Debug)]
 pub enum DataModel {
@@ -55,35 +56,38 @@ impl Table {
             None
         }
     }
+    /// Returns the storage type as an 8-bit uint
     pub const fn storage_type(&self) -> u8 {
         self.volatile as u8
     }
-    pub fn kve_from_model_code_and_data(
-        modelcode: u8,
-        volatile: bool,
+    /// Returns the volatility of the table
+    pub const fn is_volatile(&self) -> bool {
+        self.volatile
+    }
+    /// Create a new KVE Table with the provided settings
+    pub fn new_kve_with_data(
         data: Coremap<Data, Data>,
-    ) -> Option<Self> {
-        let data = match modelcode {
-            0 => KVEngine::init_with_data(false, false, data),
-            1 => KVEngine::init_with_data(false, true, data),
-            2 => KVEngine::init_with_data(true, true, data),
-            3 => KVEngine::init_with_data(true, false, data),
-            _ => return None,
-        };
-        Some(Self {
-            model_store: DataModel::KV(data),
+        volatile: bool,
+        k_enc: bool,
+        v_enc: bool,
+    ) -> Self {
+        Self {
             volatile,
-        })
-    }
-    pub fn kve_from_model_code(modelcode: u8) -> Option<Self> {
-        Self::kve_from_model_code_and_data(modelcode, false, Coremap::new())
-    }
-    pub fn new_default_kve() -> Self {
-        match Self::kve_from_model_code(0) {
-            Some(k) => k,
-            None => unsafe { core::hint::unreachable_unchecked() },
+            model_store: DataModel::KV(KVEngine::init_with_data(k_enc, v_enc, data)),
         }
     }
+    /// Create a new kve with default settings but with provided volatile configuration
+    pub fn new_kve_with_volatile(volatile: bool) -> Self {
+        Self::new_kve_with_data(Coremap::new(), volatile, false, false)
+    }
+    /// Returns the default kve:
+    /// - `k_enc`: `false`
+    /// - `v_enc`: `false`
+    /// - `volatile`: `false`
+    pub fn new_default_kve() -> Self {
+        Self::new_kve_with_data(Coremap::new(), false, false, false)
+    }
+    /// Returns the model code. See [`bytemarks`] for more info
     pub fn get_model_code(&self) -> u8 {
         match &self.model_store {
             DataModel::KV(kvs) => {
@@ -97,21 +101,22 @@ impl Table {
                 if kbin {
                     if vbin {
                         // both k + v are str
-                        2
+                        bytemarks::BYTEMARK_MODEL_KV_STR_STR
                     } else {
                         // only k is str
-                        3
+                        bytemarks::BYTEMARK_MODEL_KV_STR_BIN
                     }
                 } else if vbin {
                     // k is bin, v is str
-                    1
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_STR
                 } else {
                     // both are bin
-                    0
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN
                 }
             }
         }
     }
+    /// Returns the inner data model
     pub fn get_model_ref(&self) -> &DataModel {
         &self.model_store
     }

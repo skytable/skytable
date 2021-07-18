@@ -82,10 +82,9 @@ pub fn create_tree(memroot: Memstore) -> IoResult<()> {
 pub fn serialize_map_into_slow_buffer<T: Write>(
     buffer: &mut T,
     map: &Coremap<Data, Data>,
-    model_code: u8,
 ) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
-    super::se::raw_serialize_map(map, &mut buffer, model_code)?;
+    super::se::raw_serialize_map(map, &mut buffer)?;
     buffer.flush()?;
     Ok(())
 }

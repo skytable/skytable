@@ -29,10 +29,9 @@ use super::*;
 #[test]
 fn test_serialize_deserialize_empty() {
     let cmap = Coremap::new();
-    let ser = se::serialize_map(&cmap, 0).unwrap();
-    let (de, model_code) = de::deserialize_map(ser).unwrap();
+    let ser = se::serialize_map(&cmap).unwrap();
+    let de = de::deserialize_map(ser).unwrap();
     assert!(de.len() == 0);
-    assert_eq!(0, model_code);
 }
 
 #[test]
@@ -40,13 +39,12 @@ fn test_ser_de_few_elements() {
     let cmap = Coremap::new();
     cmap.upsert("sayan".into(), "writes code".into());
     cmap.upsert("supersayan".into(), "writes super code".into());
-    let ser = se::serialize_map(&cmap, 0).unwrap();
-    let (de, modelcode) = de::deserialize_map(ser).unwrap();
+    let ser = se::serialize_map(&cmap).unwrap();
+    let de = de::deserialize_map(ser).unwrap();
     assert!(de.len() == cmap.len());
     assert!(de
         .iter()
         .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
-    assert_eq!(modelcode, 0);
 }
 
 cfg_test!(
@@ -66,13 +64,12 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let ser = se::serialize_map(&cmap, 0).unwrap();
-        let (de, modelcode) = de::deserialize_map(ser).unwrap();
+        let ser = se::serialize_map(&cmap).unwrap();
+        let de = de::deserialize_map(ser).unwrap();
         assert!(de
             .iter()
             .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
         assert!(de.len() == cmap.len());
-        assert_eq!(modelcode, 0);
     }
 
     #[test]
@@ -89,7 +86,7 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let mut se = se::serialize_map(&cmap, 0).unwrap();
+        let mut se = se::serialize_map(&cmap).unwrap();
         // random chop
         se.truncate(124);
         // corrupted
@@ -113,7 +110,7 @@ cfg_test!(
             .zip(values.iter())
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
-        let mut se = se::serialize_map(&cmap, 0).unwrap();
+        let mut se = se::serialize_map(&cmap).unwrap();
         // random patch
         let patch: Vec<u8> = (0u16..500u16).into_iter().map(|v| (v >> 7) as u8).collect();
         se.extend(patch);
@@ -199,11 +196,23 @@ mod bytemark_set_tests {
         let ks = Keyspace::empty_default();
         let mut v = Vec::new();
         se::raw_serialize_partmap(&mut v, &ks).unwrap();
-        let ret: HashMap<ObjectID, u8> = de::deserialize_set_ctype_bytemark(&v).unwrap();
+        let ret: HashMap<ObjectID, (u8, u8)> = de::deserialize_set_ctype_bytemark(&v).unwrap();
         let mut expected = HashMap::new();
         unsafe {
-            expected.insert(ObjectID::from_slice("default"), 0);
-            expected.insert(ObjectID::from_slice("_system"), 0);
+            expected.insert(
+                ObjectID::from_slice("default"),
+                (
+                    bytemarks::BYTEMARK_STORAGE_PERSISTENT,
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+                ),
+            );
+            expected.insert(
+                ObjectID::from_slice("_system"),
+                (
+                    bytemarks::BYTEMARK_STORAGE_PERSISTENT,
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+                ),
+            );
         }
         assert_hmeq!(expected, ret);
     }
@@ -213,22 +222,34 @@ mod bytemark_set_tests {
         unsafe {
             ks.create_table(
                 ObjectID::from_slice("cache"),
-                Table::kve_from_model_code_and_data(0, true, Coremap::new()).unwrap(),
+                Table::new_kve_with_volatile(true),
             );
             ks.create_table(
                 ObjectID::from_slice("supersafe"),
-                Table::kve_from_model_code_and_data(0, false, Coremap::new()).unwrap(),
+                Table::new_kve_with_volatile(false),
             );
         }
         let mut v = Vec::new();
         se::raw_serialize_partmap(&mut v, &ks).unwrap();
-        let ret: HashMap<ObjectID, u8> = de::deserialize_set_ctype_bytemark(&v).unwrap();
+        let ret: HashMap<ObjectID, (u8, u8)> = de::deserialize_set_ctype_bytemark(&v).unwrap();
         let mut expected = HashMap::new();
         unsafe {
             // our cache is volatile
-            expected.insert(ObjectID::from_slice("cache"), 1);
+            expected.insert(
+                ObjectID::from_slice("cache"),
+                (
+                    bytemarks::BYTEMARK_STORAGE_VOLATILE,
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+                ),
+            );
             // our supersafe is non volatile
-            expected.insert(ObjectID::from_slice("supersafe"), 0);
+            expected.insert(
+                ObjectID::from_slice("supersafe"),
+                (
+                    bytemarks::BYTEMARK_STORAGE_PERSISTENT,
+                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+                ),
+            );
         }
         assert_hmeq!(expected, ret);
     }

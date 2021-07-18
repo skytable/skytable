@@ -28,6 +28,7 @@
 //!
 //! Routines for unflushing data
 
+use super::bytemarks;
 use crate::coredb::memstore::ObjectID;
 use crate::coredb::table::Table;
 use crate::storage::interface::DIR_KSROOT;
@@ -40,36 +41,55 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 
 /// Read a given table into a [`Table`] object
-pub fn read_table(ksid: &ObjectID, tblid: &ObjectID, volatile: bool) -> IoResult<Table> {
+///
+/// This will take care of volatility and the model_code. Just make sure that you pass the proper
+/// keyspace ID and a valid table ID
+pub fn read_table(
+    ksid: &ObjectID,
+    tblid: &ObjectID,
+    volatile: bool,
+    model_code: u8,
+) -> IoResult<Table> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
-    let read = fs::read(filepath)?;
-    // TODO(@ohsayan): Mod this to de based on data model
-    let (data, model) = super::de::deserialize_map(read).ok_or_else(|| bad_data!())?;
-    match model {
-        0 => {
-            // kve
-            Table::kve_from_model_code_and_data(model, volatile, data).ok_or_else(|| bad_data!())
+    let data = if volatile {
+        // no need to read anything; table is volatile and has no file
+        Coremap::new()
+    } else {
+        // not volatile, so read this in
+        let f = fs::read(filepath)?;
+        super::de::deserialize_map(f).ok_or_else(|| bad_data!())?
+    };
+    let tbl = match model_code {
+        bytemarks::BYTEMARK_MODEL_KV_BIN_BIN => {
+            Table::new_kve_with_data(data, volatile, false, false)
         }
-        _ => {
-            // some model that we don't know
-            Err(IoError::from(ErrorKind::Unsupported))
+        bytemarks::BYTEMARK_MODEL_KV_BIN_STR => {
+            Table::new_kve_with_data(data, volatile, false, true)
         }
-    }
+        bytemarks::BYTEMARK_MODEL_KV_STR_STR => {
+            Table::new_kve_with_data(data, volatile, true, true)
+        }
+        bytemarks::BYTEMARK_MODEL_KV_STR_BIN => {
+            Table::new_kve_with_data(data, volatile, true, false)
+        }
+        _ => return Err(IoError::from(ErrorKind::Unsupported)),
+    };
+    Ok(tbl)
 }
 
 /// Read an entire keyspace into a Coremap. You'll need to initialize the rest
 pub fn read_keyspace(ksid: ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
-    let partmap: HashMap<ObjectID, u8> =
+    let partmap: HashMap<ObjectID, (u8, u8)> =
         super::de::deserialize_set_ctype_bytemark(&fs::read(filepath)?)
             .ok_or_else(|| bad_data!())?;
     let ks: Coremap<ObjectID, Arc<Table>> = Coremap::with_capacity(partmap.len());
-    for (tableid, table_storage_type) in partmap.into_iter() {
+    for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
         if table_storage_type > 1 {
             return Err(bad_data!());
         }
         let is_volatile = table_storage_type == 1;
-        let tbl = self::read_table(&ksid, &tableid, is_volatile)?;
+        let tbl = self::read_table(&ksid, &tableid, is_volatile, model_code)?;
         ks.true_if_insert(tableid, Arc::new(tbl));
     }
     Ok(ks)
