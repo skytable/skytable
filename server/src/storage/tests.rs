@@ -254,3 +254,71 @@ mod bytemark_set_tests {
         assert_hmeq!(expected, ret);
     }
 }
+
+mod flush_routines {
+    use crate::coredb::memstore::Keyspace;
+    use crate::coredb::memstore::ObjectID;
+    use crate::coredb::table::Table;
+    use crate::coredb::Data;
+    use std::fs;
+    #[test]
+    fn test_flush_unflush_table() {
+        let tbl = Table::new_default_kve();
+        tbl.get_kvstore()
+            .unwrap()
+            .set("hello".into(), "world".into())
+            .unwrap();
+        let tblid = unsafe { ObjectID::from_slice("mytbl1") };
+        let ksid = unsafe { ObjectID::from_slice("myks1") };
+        // create the temp dir for this test
+        fs::create_dir_all("data/ks/myks1").unwrap();
+        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        // now that it's flushed, let's read the table using and unflush routine
+        let ret = super::unflush::read_table(&ksid, &tblid, false, 0).unwrap();
+        assert_eq!(
+            ret.get_kvstore()
+                .unwrap()
+                .get("hello".into())
+                .unwrap()
+                .unwrap()
+                .clone(),
+            Data::from("world")
+        );
+        fs::remove_dir_all("data/ks/myks1").unwrap()
+    }
+    #[test]
+    fn test_flush_unflush_keyspace() {
+        // create the temp dir for this test
+        fs::create_dir_all("data/ks/myks_1").unwrap();
+        let ksid = unsafe { ObjectID::from_slice("myks_1") };
+        let tbl1 = unsafe { ObjectID::from_slice("mytbl_1") };
+        let tbl2 = unsafe { ObjectID::from_slice("mytbl_2") };
+        let ks = Keyspace::empty();
+        // a persistent table
+        let mytbl = Table::new_default_kve();
+        mytbl
+            .get_kvstore()
+            .unwrap()
+            .set("hello".into(), "world".into())
+            .unwrap();
+        ks.create_table(tbl1.clone(), mytbl);
+        // and a volatile table
+        ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true));
+        super::flush::flush_keyspace_full(&ksid, &ks).unwrap();
+        let ret = super::unflush::read_keyspace(&ksid).unwrap();
+        let tbl1_ret = ret.get(&tbl1).unwrap();
+        let tbl2_ret = ret.get(&tbl2).unwrap();
+        assert_eq!(
+            tbl1_ret
+                .get_kvstore()
+                .unwrap()
+                .get(Data::from("hello"))
+                .unwrap()
+                .unwrap()
+                .clone(),
+            Data::from("world")
+        );
+        assert!(tbl2_ret.get_kvstore().unwrap().len() == 0);
+        fs::remove_dir_all("data/ks/myks_1").unwrap()
+    }
+}
