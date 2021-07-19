@@ -36,6 +36,7 @@ use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
 use core::ptr;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -97,8 +98,8 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
 }
 
 /// Reads the partfile and returns a set
-pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
-    match super::de::deserialize_set_ctype(&partfile) {
+pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<HashMap<ObjectID, (u8, u8)>> {
+    match super::de::deserialize_set_ctype_bytemark(&partfile) {
         Some(s) => Ok(s),
         None => Err(IoError::from(ErrorKind::InvalidData)),
     }

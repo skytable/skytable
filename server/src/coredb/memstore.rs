@@ -60,6 +60,7 @@ use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
 use crate::coredb::table::Table;
 use crate::coredb::SnapshotStatus;
+use crate::SnapshotConfig;
 use core::mem::MaybeUninit;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -131,6 +132,8 @@ pub struct Memstore {
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
+    /// the snapshot configuration
+    snap_config: Option<SnapshotStatus>,
 }
 
 impl Memstore {
@@ -139,6 +142,21 @@ impl Memstore {
         Self {
             keyspaces: Arc::new(Coremap::new()),
             flush_state_healthy: AtomicBool::new(true),
+            snap_config: None,
+        }
+    }
+    pub fn init_with_all(
+        keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
+        snap_config: SnapshotConfig,
+    ) -> Self {
+        Self {
+            keyspaces: Arc::new(keyspaces),
+            flush_state_healthy: AtomicBool::new(true),
+            snap_config: if let SnapshotConfig::Enabled(pref) = snap_config {
+                Some(SnapshotStatus::new(pref.atmost))
+            } else {
+                None
+            },
         }
     }
     /// Create a new in-memory table with the default keyspace and the default
@@ -164,6 +182,7 @@ impl Memstore {
                 Arc::new(n)
             },
             flush_state_healthy: AtomicBool::new(true),
+            snap_config: None,
         }
     }
     /// Get an atomic reference to a keyspace
@@ -191,12 +210,9 @@ pub enum TableType {
 pub struct Keyspace {
     /// the tables
     pub tables: Coremap<ObjectID, Arc<Table>>,
-    /// the snapshot configuration for this keyspace
-    snap_config: Option<SnapshotStatus>,
     /// the replication strategy for this keyspace
     replication_strategy: cluster::ReplicationStrategy,
 }
-
 macro_rules! unsafe_objectid_from_slice {
     ($slice:expr) => {{
         unsafe { ObjectID::from_slice($slice) }
@@ -222,7 +238,12 @@ impl Keyspace {
                 );
                 ht
             },
-            snap_config: None,
+            replication_strategy: cluster::ReplicationStrategy::default(),
+        }
+    }
+    pub fn init_with_all_def_strategy(tables: Coremap<ObjectID, Arc<Table>>) -> Self {
+        Self {
+            tables,
             replication_strategy: cluster::ReplicationStrategy::default(),
         }
     }
@@ -230,7 +251,6 @@ impl Keyspace {
     pub fn empty() -> Self {
         Self {
             tables: Coremap::new(),
-            snap_config: None,
             replication_strategy: cluster::ReplicationStrategy::default(),
         }
     }

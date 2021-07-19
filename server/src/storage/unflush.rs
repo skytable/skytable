@@ -29,16 +29,22 @@
 //! Routines for unflushing data
 
 use super::bytemarks;
+use crate::coredb::memstore::Keyspace;
+use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
 use crate::coredb::table::Table;
 use crate::storage::interface::DIR_KSROOT;
 use crate::storage::Coremap;
+use crate::SnapshotConfig;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
 use std::io::Result as IoResult;
 use std::sync::Arc;
+
+type PreloadSet = std::collections::HashSet<ObjectID>;
+const PRELOAD_PATH: &str = "data/ks/PRELOAD";
 
 /// Read a given table into a [`Table`] object
 ///
@@ -79,10 +85,7 @@ pub fn read_table(
 
 /// Read an entire keyspace into a Coremap. You'll need to initialize the rest
 pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>> {
-    let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
-    let partmap: HashMap<ObjectID, (u8, u8)> =
-        super::de::deserialize_set_ctype_bytemark(&fs::read(filepath)?)
-            .ok_or_else(|| bad_data!())?;
+    let partmap = self::read_partmap(ksid)?;
     let ks: Coremap<ObjectID, Arc<Table>> = Coremap::with_capacity(partmap.len());
     for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
         if table_storage_type > 1 {
@@ -93,4 +96,27 @@ pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>>
         ks.true_if_insert(tableid, Arc::new(tbl));
     }
     Ok(ks)
+}
+
+/// Read the `PARTMAP` for a given keyspace
+pub fn read_partmap(ksid: &ObjectID) -> IoResult<HashMap<ObjectID, (u8, u8)>> {
+    let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
+    super::preload::read_partfile_raw(fs::read(filepath)?)
+}
+
+/// Read the `PRELOAD`
+pub fn read_preload() -> IoResult<PreloadSet> {
+    let read = fs::read(PRELOAD_PATH)?;
+    super::preload::read_preload_raw(read)
+}
+
+/// Read everything and return a [`Memstore`]
+pub fn read_full(snapshot_config: SnapshotConfig) -> IoResult<Memstore> {
+    let preload = self::read_preload()?;
+    let ksmap = Coremap::with_capacity(preload.len());
+    for ksid in preload {
+        let ks = Keyspace::init_with_all_def_strategy(self::read_keyspace(&ksid)?);
+        ksmap.upsert(ksid, Arc::new(ks));
+    }
+    Ok(Memstore::init_with_all(ksmap, snapshot_config))
 }
