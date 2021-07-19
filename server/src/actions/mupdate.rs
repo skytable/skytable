@@ -29,8 +29,7 @@ use crate::dbnet::connection::prelude::*;
 
 action!(
     /// Run an `MUPDATE` query
-    fn mupdate(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn mupdate(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys

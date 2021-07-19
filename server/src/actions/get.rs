@@ -33,8 +33,7 @@ use bytes::Bytes;
 
 action!(
     /// Run a `GET` query
-    fn get(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn get(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 1);
         let res: Option<Bytes> = {
             let reader = handle.get_ref();

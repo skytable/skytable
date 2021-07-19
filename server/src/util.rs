@@ -134,7 +134,7 @@ macro_rules! assert_hmeq {
 ///
 /// ## Limitations
 ///
-/// This macro cannot currently handle mutable parameters
+/// This macro can only handle mutable parameters for a fixed number of arguments (three)
 ///
 macro_rules! action {
     (
@@ -144,6 +144,18 @@ macro_rules! action {
     ) => {
             $(#[$attr])*
             pub async fn $fname<T, Strm>($($argname: $argty,)*) -> std::io::Result<()>
+            where
+                T: ProtocolConnectionExt<Strm>,
+                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+                $block
+    };
+    (
+        $(#[$attr:meta])*
+        fn $fname:ident($argone:ident: $argonety:ty, $argtwo:ident: $argtwoty:ty, mut $argthree:ident: $argthreety:ty)
+        $block:block
+    ) => {
+            $(#[$attr])*
+            pub async fn $fname<T, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

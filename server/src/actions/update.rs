@@ -33,8 +33,7 @@ use crate::dbnet::connection::prelude::*;
 
 action!(
     /// Run an `UPDATE` query
-    fn update(handle: &CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn update(handle: &CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 2);
         let did_we = {
             if handle.is_poisoned() {

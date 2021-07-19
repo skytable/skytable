@@ -63,6 +63,7 @@ const PAIR_MAP_LUT: [u8; 200] = [
     0x39, 0x38, 0x39, 0x39, // 0x39
 ];
 
+#[allow(dead_code)]
 /// A 32-bit integer buffer with one extra byte
 pub type Integer32Buffer = Integer32BufferRaw<11>;
 
@@ -74,6 +75,7 @@ pub struct Integer32BufferRaw<const N: usize> {
     inner_stack: Array<u8, 11>,
 }
 
+#[allow(dead_code)]
 impl<const N: usize> Integer32BufferRaw<N> {
     /// Initialize a buffer
     pub fn init(integer: u32) -> Self {

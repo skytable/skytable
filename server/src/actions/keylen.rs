@@ -30,8 +30,7 @@ action!(
     /// Run a `KEYLEN` query
     ///
     /// At this moment, `keylen` only supports a single key
-    fn keylen(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn keylen(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 1);
         let res: Option<usize> = {
             let reader = handle.get_ref();

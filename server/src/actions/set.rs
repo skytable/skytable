@@ -35,8 +35,7 @@ use coredb::Data;
 
 action!(
     /// Run a `SET` query
-    fn set(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn set(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 2);
         let did_we = {
             if handle.is_poisoned() {

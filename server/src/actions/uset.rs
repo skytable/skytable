@@ -33,8 +33,7 @@ action!(
     /// Run an `USET` query
     ///
     /// This is like "INSERT or UPDATE"
-    fn uset(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn uset(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys

@@ -44,8 +44,7 @@ action!(
     ///
     /// This either returns `Okay` if all the keys were set, or it returns an
     /// `Overwrite Error` or code `2`
-    fn sset(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn sset(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
@@ -150,8 +149,7 @@ action!(
     ///
     /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
     /// or code `1`
-    fn supdate(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn supdate(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;

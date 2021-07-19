@@ -30,8 +30,7 @@ use bytes::Bytes;
 
 action!(
     /// Run an `LSKEYS` query
-    fn lskeys(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
-        let mut act = act;
+    fn lskeys(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, gt 1);
         let item_count = if let Some(cnt) = act.next() {
             if let Ok(cnt) = cnt.parse::<usize>() {
