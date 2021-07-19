@@ -28,41 +28,33 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 
-/// Run a `DEL` query
-///
-/// Do note that this function is blocking since it acquires a write lock.
-/// It will write an entire datagroup, for this `del` action
-pub async fn del<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    err_if_len_is!(act, con, eq 0);
-    let done_howmany: Option<usize>;
-    {
-        if handle.is_poisoned() {
-            done_howmany = None;
+action!(
+    /// Run a `DEL` query
+    ///
+    /// Do note that this function is blocking since it acquires a write lock.
+    /// It will write an entire datagroup, for this `del` action
+    fn del(handle: &CoreDB, con: &mut T, act: ActionIter) {
+        err_if_len_is!(act, con, eq 0);
+        let done_howmany: Option<usize>;
+        {
+            if handle.is_poisoned() {
+                done_howmany = None;
+            } else {
+                let mut many = 0;
+                let cmap = handle.get_ref();
+                act.for_each(|key| {
+                    if cmap.true_if_removed(key.as_bytes()) {
+                        many += 1
+                    }
+                });
+                done_howmany = Some(many);
+            }
+        }
+        if let Some(done_howmany) = done_howmany {
+            con.write_response(done_howmany).await
         } else {
-            let mut many = 0;
-            let cmap = handle.get_ref();
-            act.for_each(|key| {
-                if cmap.true_if_removed(key.as_bytes()) {
-                    many += 1
-                }
-            });
-            done_howmany = Some(many);
+            con.write_response(responses::groups::SERVER_ERR).await
         }
     }
-    if let Some(done_howmany) = done_howmany {
-        con.write_response(done_howmany).await
-    } else {
-        con.write_response(responses::groups::SERVER_ERR).await
-    }
-}
+);

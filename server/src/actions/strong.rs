@@ -37,190 +37,171 @@
 
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 use core::hint::unreachable_unchecked;
 
-/// Run an `SSET` query
-///
-/// This either returns `Okay` if all the keys were set, or it returns an
-/// `Overwrite Error` or code `2`
-pub async fn sset<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let howmany = act.len();
-    if is_lowbit_set!(howmany) || howmany == 0 {
-        return con.write_response(responses::groups::ACTION_ERR).await;
-    }
-    let failed;
-    {
-        // We use this additional scope to tell the compiler that the write lock
-        // doesn't go beyond the scope of this function - and is never used across
-        // an await: cause, the compiler ain't as smart as we are ;)
+action!(
+    /// Run an `SSET` query
+    ///
+    /// This either returns `Okay` if all the keys were set, or it returns an
+    /// `Overwrite Error` or code `2`
+    fn sset(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        let howmany = act.len();
+        if is_lowbit_set!(howmany) || howmany == 0 {
+            return con.write_response(responses::groups::ACTION_ERR).await;
+        }
+        let failed;
+        {
+            // We use this additional scope to tell the compiler that the write lock
+            // doesn't go beyond the scope of this function - and is never used across
+            // an await: cause, the compiler ain't as smart as we are ;)
 
-        // This iterator gives us the keys and values, skipping the first argument which
-        // is the action name
-        let mut key_iter = act.as_ref().iter();
-        if handle.is_poisoned() {
-            failed = None;
+            // This iterator gives us the keys and values, skipping the first argument which
+            // is the action name
+            let mut key_iter = act.as_ref().iter();
+            if handle.is_poisoned() {
+                failed = None;
+            } else {
+                let mut_table = handle.get_ref();
+                if key_iter.all(|key| !mut_table.contains_key(key.as_bytes())) {
+                    failed = Some(false);
+                    // Since the failed flag is false, none of the keys existed
+                    // So we can safely set the keys
+                    while let (Some(key), Some(value)) = (act.next(), act.next()) {
+                        if !mut_table.true_if_insert(Data::from(key), Data::from_string(value)) {
+                            // Tell the compiler that this will never be the case
+                            unsafe {
+                                // UNSAFE(@ohsayan): As none of the keys exist in the table, no
+                                // value will ever be returned by the `insert`. Hence, this is a
+                                // completely safe operation
+                                unreachable_unchecked()
+                            }
+                        }
+                    }
+                } else {
+                    failed = Some(true);
+                }
+            }
+        }
+        if let Some(failed) = failed {
+            if failed {
+                con.write_response(responses::groups::OVERWRITE_ERR).await
+            } else {
+                con.write_response(responses::groups::OKAY).await
+            }
         } else {
-            let mut_table = handle.get_ref();
-            if key_iter.all(|key| !mut_table.contains_key(key.as_bytes())) {
-                failed = Some(false);
-                // Since the failed flag is false, none of the keys existed
-                // So we can safely set the keys
-                while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                    if !mut_table.true_if_insert(Data::from(key), Data::from_string(value)) {
-                        // Tell the compiler that this will never be the case
+            con.write_response(responses::groups::SERVER_ERR).await
+        }
+    }
+);
+
+action!(
+    /// Run an `SDEL` query
+    ///
+    /// This either returns `Okay` if all the keys were `del`eted, or it returns a
+    /// `Nil`, which is code `1`
+    fn sdel(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let howmany = act.len();
+        if howmany == 0 {
+            return con.write_response(responses::groups::ACTION_ERR).await;
+        }
+        let failed;
+        {
+            // We use this additional scope to tell the compiler that the write lock
+            // doesn't go beyond the scope of this function - and is never used across
+            // an await: cause, the compiler ain't as smart as we are ;)
+            let mut key_iter = act.as_ref().iter();
+            if handle.is_poisoned() {
+                failed = None;
+            } else {
+                let mut_table = handle.get_ref();
+                if key_iter.all(|key| mut_table.contains_key(key.as_bytes())) {
+                    failed = Some(false);
+                    // Since the failed flag is false, all of the keys exist
+                    // So we can safely delete the keys
+                    act.into_iter().for_each(|key| {
+                        // Since we've already checked that the keys don't exist
+                        // We'll tell the compiler to optimize this
                         unsafe {
-                            // UNSAFE(@ohsayan): As none of the keys exist in the table, no
-                            // value will ever be returned by the `insert`. Hence, this is a
-                            // completely safe operation
-                            unreachable_unchecked()
+                            // UNSAFE(@ohsayan): Since all the values exist, all of them will return
+                            // some value. Hence, this branch won't ever be reached. Hence, this is safe.
+                            let _ = mut_table.remove(key.as_bytes()).unsafe_unwrap();
+                        }
+                    });
+                } else {
+                    failed = Some(true);
+                }
+            }
+        }
+        if let Some(failed) = failed {
+            if failed {
+                con.write_response(responses::groups::NIL).await
+            } else {
+                con.write_response(responses::groups::OKAY).await
+            }
+        } else {
+            con.write_response(responses::groups::SERVER_ERR).await
+        }
+    }
+);
+
+action!(
+    /// Run an `SUPDATE` query
+    ///
+    /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
+    /// or code `1`
+    fn supdate(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        let howmany = act.len();
+        if is_lowbit_set!(howmany) || howmany == 0 {
+            return con.write_response(responses::groups::ACTION_ERR).await;
+        }
+        let mut failed = Some(false);
+        {
+            // We use this additional scope to tell the compiler that the write lock
+            // doesn't go beyond the scope of this function - and is never used across
+            // an await: cause, the compiler ain't as smart as we are ;)
+            let mut key_iter = act.as_ref().iter();
+            if handle.is_poisoned() {
+                failed = None;
+            } else {
+                let mut_table = handle.get_ref();
+                while let Some(key) = key_iter.next() {
+                    if !mut_table.contains_key(key.as_bytes()) {
+                        // With one of the keys failing to exist - this action can't clearly be done
+                        // So we'll set `failed` to true and ensure that we check this while
+                        // writing a response back to the client
+                        failed = Some(true);
+                        break;
+                    }
+                    // Skip the next value that is coming our way, as we don't need it
+                    // right now
+                    unsafe {
+                        let _ = key_iter.next().unsafe_unwrap();
+                    }
+                }
+                // clippy thinks we're doing something complex when we aren't, at all!
+                #[allow(clippy::blocks_in_if_conditions)]
+                if unsafe { !failed.unsafe_unwrap() } {
+                    // Since the failed flag is false, none of the keys existed
+                    // So we can safely update the keys
+                    while let (Some(key), Some(value)) = (act.next(), act.next()) {
+                        if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
+                            // Tell the compiler that this will never be the case
+                            unsafe { unreachable_unchecked() }
                         }
                     }
                 }
+            }
+        }
+        if let Some(failed) = failed {
+            if failed {
+                con.write_response(responses::groups::NIL).await
             } else {
-                failed = Some(true);
+                con.write_response(responses::groups::OKAY).await
             }
-        }
-    }
-    if let Some(failed) = failed {
-        if failed {
-            con.write_response(responses::groups::OVERWRITE_ERR)
-                .await
         } else {
-            con.write_response(responses::groups::OKAY).await
-        }
-    } else {
-        con.write_response(responses::groups::SERVER_ERR).await
-    }
-}
-
-/// Run an `SDEL` query
-///
-/// This either returns `Okay` if all the keys were `del`eted, or it returns a
-/// `Nil`, which is code `1`
-pub async fn sdel<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let howmany = act.len();
-    if howmany == 0 {
-        return con.write_response(responses::groups::ACTION_ERR).await;
-    }
-    let failed;
-    {
-        // We use this additional scope to tell the compiler that the write lock
-        // doesn't go beyond the scope of this function - and is never used across
-        // an await: cause, the compiler ain't as smart as we are ;)
-        let mut key_iter = act.as_ref().iter();
-        if handle.is_poisoned() {
-            failed = None;
-        } else {
-            let mut_table = handle.get_ref();
-            if key_iter.all(|key| mut_table.contains_key(key.as_bytes())) {
-                failed = Some(false);
-                // Since the failed flag is false, all of the keys exist
-                // So we can safely delete the keys
-                act.into_iter().for_each(|key| {
-                    // Since we've already checked that the keys don't exist
-                    // We'll tell the compiler to optimize this
-                    unsafe {
-                        // UNSAFE(@ohsayan): Since all the values exist, all of them will return
-                        // some value. Hence, this branch won't ever be reached. Hence, this is safe.
-                        let _ = mut_table.remove(key.as_bytes()).unsafe_unwrap();
-                    }
-                });
-            } else {
-                failed = Some(true);
-            }
+            con.write_response(responses::groups::SERVER_ERR).await
         }
     }
-    if let Some(failed) = failed {
-        if failed {
-            con.write_response(responses::groups::NIL).await
-        } else {
-            con.write_response(responses::groups::OKAY).await
-        }
-    } else {
-        con.write_response(responses::groups::SERVER_ERR).await
-    }
-}
-
-/// Run an `SUPDATE` query
-///
-/// This either returns `Okay` if all the keys were updated, or it returns `Nil`
-/// or code `1`
-pub async fn supdate<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let howmany = act.len();
-    if is_lowbit_set!(howmany) || howmany == 0 {
-        return con.write_response(responses::groups::ACTION_ERR).await;
-    }
-    let mut failed = Some(false);
-    {
-        // We use this additional scope to tell the compiler that the write lock
-        // doesn't go beyond the scope of this function - and is never used across
-        // an await: cause, the compiler ain't as smart as we are ;)
-        let mut key_iter = act.as_ref().iter();
-        if handle.is_poisoned() {
-            failed = None;
-        } else {
-            let mut_table = handle.get_ref();
-            while let Some(key) = key_iter.next() {
-                if !mut_table.contains_key(key.as_bytes()) {
-                    // With one of the keys failing to exist - this action can't clearly be done
-                    // So we'll set `failed` to true and ensure that we check this while
-                    // writing a response back to the client
-                    failed = Some(true);
-                    break;
-                }
-                // Skip the next value that is coming our way, as we don't need it
-                // right now
-                unsafe {
-                    let _ = key_iter.next().unsafe_unwrap();
-                }
-            }
-            // clippy thinks we're doing something complex when we aren't, at all!
-            #[allow(clippy::blocks_in_if_conditions)]
-            if unsafe { !failed.unsafe_unwrap() } {
-                // Since the failed flag is false, none of the keys existed
-                // So we can safely update the keys
-                while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                    if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
-                        // Tell the compiler that this will never be the case
-                        unsafe { unreachable_unchecked() }
-                    }
-                }
-            }
-        }
-    }
-    if let Some(failed) = failed {
-        if failed {
-            con.write_response(responses::groups::NIL).await
-        } else {
-            con.write_response(responses::groups::OKAY).await
-        }
-    } else {
-        con.write_response(responses::groups::SERVER_ERR).await
-    }
-}
+);

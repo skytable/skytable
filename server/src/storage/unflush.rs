@@ -34,9 +34,9 @@ use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
 use crate::coredb::table::Table;
 use crate::storage::interface::DIR_KSROOT;
+use crate::storage::preload::LoadedPartfile;
 use crate::storage::Coremap;
 use crate::SnapshotConfig;
-use std::collections::HashMap;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -99,7 +99,7 @@ pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>>
 }
 
 /// Read the `PARTMAP` for a given keyspace
-pub fn read_partmap(ksid: &ObjectID) -> IoResult<HashMap<ObjectID, (u8, u8)>> {
+pub fn read_partmap(ksid: &ObjectID) -> IoResult<LoadedPartfile> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
     super::preload::read_partfile_raw(fs::read(filepath)?)
 }

@@ -25,41 +25,32 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
 
-/// Run an `LSKEYS` query
-pub async fn lskeys<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    err_if_len_is!(act, con, gt 1);
-    let item_count = if let Some(cnt) = act.next() {
-        if let Ok(cnt) = cnt.parse::<usize>() {
-            cnt
+action!(
+    /// Run an `LSKEYS` query
+    fn lskeys(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        err_if_len_is!(act, con, gt 1);
+        let item_count = if let Some(cnt) = act.next() {
+            if let Ok(cnt) = cnt.parse::<usize>() {
+                cnt
+            } else {
+                return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+            }
         } else {
-            return con
-                .write_response(responses::groups::WRONGTYPE_ERR)
-                .await;
+            10
+        };
+        let items: Vec<Bytes>;
+        {
+            let reader = handle.get_ref();
+            items = reader.get_keys(item_count);
         }
-    } else {
-        10
-    };
-    let items: Vec<Bytes>;
-    {
-        let reader = handle.get_ref();
-        items = reader.get_keys(item_count);
+        con.write_flat_array_length(items.len()).await?;
+        for item in items {
+            con.write_response(BytesWrapper(item)).await?;
+        }
+        Ok(())
     }
-    con.write_flat_array_length(items.len()).await?;
-    for item in items {
-        con.write_response(BytesWrapper(item)).await?;
-    }
-    Ok(())
-}
+);

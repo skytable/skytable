@@ -29,39 +29,34 @@ use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 
-/// Run an `USET` query
-///
-/// This is like "INSERT or UPDATE"
-pub async fn uset<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let howmany = act.len();
-    if is_lowbit_set!(howmany) || howmany == 0 {
-        // An odd number of arguments means that the number of keys
-        // is not the same as the number of values, we won't run this
-        // action at all
-        return con.write_response(responses::groups::ACTION_ERR).await;
-    }
-    let failed = {
-        if handle.is_poisoned() {
-            true
-        } else {
-            let writer = handle.get_ref();
-            while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                let _ = writer.upsert(Data::from(key), Data::from(val));
-            }
-            false
+action!(
+    /// Run an `USET` query
+    ///
+    /// This is like "INSERT or UPDATE"
+    fn uset(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        let howmany = act.len();
+        if is_lowbit_set!(howmany) || howmany == 0 {
+            // An odd number of arguments means that the number of keys
+            // is not the same as the number of values, we won't run this
+            // action at all
+            return con.write_response(responses::groups::ACTION_ERR).await;
         }
-    };
-    if failed {
-        con.write_response(responses::groups::SERVER_ERR).await
-    } else {
-        con.write_response(howmany / 2).await
+        let failed = {
+            if handle.is_poisoned() {
+                true
+            } else {
+                let writer = handle.get_ref();
+                while let (Some(key), Some(val)) = (act.next(), act.next()) {
+                    let _ = writer.upsert(Data::from(key), Data::from(val));
+                }
+                false
+            }
+        };
+        if failed {
+            con.write_response(responses::groups::SERVER_ERR).await
+        } else {
+            con.write_response(howmany / 2).await
+        }
     }
-}
+);

@@ -49,21 +49,12 @@ pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
-    use crate::protocol;
-    use crate::queryengine::ActionIter;
-    use protocol::responses;
-    /// Returns a `HEY!` `Response`
-    pub async fn heya<T, Strm>(
-        _handle: &crate::coredb::CoreDB,
-        con: &mut T,
-        _act: ActionIter,
-    ) -> std::io::Result<()>
-    where
-        T: ProtocolConnectionExt<Strm>,
-        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-    {
-        con.write_response(responses::groups::HEYA).await
-    }
+    action!(
+        /// Returns a `HEY!` `Response`
+        fn heya(_handle: &CoreDB, con: &mut T, _act: ActionIter) {
+            con.write_response(responses::groups::HEYA).await
+        }
+    );
 }
 
 /*

@@ -43,6 +43,8 @@ use std::io::ErrorKind;
 use std::io::Result as IoResult;
 use std::io::Write;
 
+pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;
+
 // our version and endian are based on nibbles
 
 #[cfg(target_endian = "little")]
@@ -98,7 +100,7 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
 }
 
 /// Reads the partfile and returns a set
-pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<HashMap<ObjectID, (u8, u8)>> {
+pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<LoadedPartfile> {
     match super::de::deserialize_set_ctype_bytemark(&partfile) {
         Some(s) => Ok(s),
         None => Err(IoError::from(ErrorKind::InvalidData)),

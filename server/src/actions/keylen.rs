@@ -25,38 +25,31 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 
-/// Run a `KEYLEN` query
-///
-/// At this moment, `keylen` only supports a single key
-pub async fn keylen<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    err_if_len_is!(act, con, not 1);
-    let res: Option<usize> = {
-        let reader = handle.get_ref();
-        unsafe {
-            // UNSAFE(@ohsayan): this is completely safe as we've already checked
-            // the number of arguments is one
-            reader
-                .get(act.next().unsafe_unwrap().as_bytes())
-                .map(|b| b.get_blob().len())
+action!(
+    /// Run a `KEYLEN` query
+    ///
+    /// At this moment, `keylen` only supports a single key
+    fn keylen(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        err_if_len_is!(act, con, not 1);
+        let res: Option<usize> = {
+            let reader = handle.get_ref();
+            unsafe {
+                // UNSAFE(@ohsayan): this is completely safe as we've already checked
+                // the number of arguments is one
+                reader
+                    .get(act.next().unsafe_unwrap().as_bytes())
+                    .map(|b| b.get_blob().len())
+            }
+        };
+        if let Some(value) = res {
+            // Good, we got the key's length, write it off to the stream
+            con.write_response(value).await?;
+        } else {
+            // Ah, couldn't find that key
+            con.write_response(responses::groups::NIL).await?;
         }
-    };
-    if let Some(value) = res {
-        // Good, we got the key's length, write it off to the stream
-        con.write_response(value).await?;
-    } else {
-        // Ah, couldn't find that key
-        con.write_response(responses::groups::NIL).await?;
+        Ok(())
     }
-    Ok(())
-}
+);

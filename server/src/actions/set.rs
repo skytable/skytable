@@ -33,47 +33,41 @@ use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use coredb::Data;
 
-/// Run a `SET` query
-pub async fn set<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    err_if_len_is!(act, con, not 2);
-    let did_we = {
-        if handle.is_poisoned() {
-            None
-        } else {
-            let writer = handle.get_ref();
-            // clippy thinks we're doing something complex when we aren't, at all!
-            #[allow(clippy::blocks_in_if_conditions)]
-            if unsafe {
-                // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                // that there are exactly 2 arguments
-                writer.true_if_insert(
-                    Data::from(act.next().unsafe_unwrap()),
-                    Data::from(act.next().unsafe_unwrap()),
-                )
-            } {
-                Some(true)
+action!(
+    /// Run a `SET` query
+    fn set(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+        let mut act = act;
+        err_if_len_is!(act, con, not 2);
+        let did_we = {
+            if handle.is_poisoned() {
+                None
             } else {
-                Some(false)
+                let writer = handle.get_ref();
+                // clippy thinks we're doing something complex when we aren't, at all!
+                #[allow(clippy::blocks_in_if_conditions)]
+                if unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
+                    writer.true_if_insert(
+                        Data::from(act.next().unsafe_unwrap()),
+                        Data::from(act.next().unsafe_unwrap()),
+                    )
+                } {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
             }
-        }
-    };
-    if let Some(did_we) = did_we {
-        if did_we {
-            con.write_response(responses::groups::OKAY).await?;
+        };
+        if let Some(did_we) = did_we {
+            if did_we {
+                con.write_response(responses::groups::OKAY).await?;
+            } else {
+                con.write_response(responses::groups::OVERWRITE_ERR).await?;
+            }
         } else {
-            con.write_response(responses::groups::OVERWRITE_ERR)
-                .await?;
+            con.write_response(responses::groups::SERVER_ERR).await?;
         }
-    } else {
-        con.write_response(responses::groups::SERVER_ERR).await?;
+        Ok(())
     }
-    Ok(())
-}
+);

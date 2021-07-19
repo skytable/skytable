@@ -119,3 +119,34 @@ macro_rules! assert_hmeq {
         assert!(hmeq!($h1, $h2))
     };
 }
+
+#[macro_export]
+/// ## The action macro
+///
+/// A macro for adding all the _fuss_ to an action. Implementing actions should be simple
+/// and should not require us to repeatedly specify generic paramters and/or trait bounds.
+/// This is exactly what this macro does: does all the _magic_ behind the scenes for you,
+/// including adding generic parameters, handling docs (if any), adding the correct
+/// trait bounds and finally making your function async. Rest knowing that all your
+/// action requirements have been happily addressed with this macro and that you don't have
+/// to write a lot of code to do the exact same thing
+///
+///
+/// ## Limitations
+///
+/// This macro cannot currently handle mutable parameters
+///
+macro_rules! action {
+    (
+        $(#[$attr:meta])*
+        fn $fname:ident($($argname:ident: $argty:ty),*)
+        $block:block
+    ) => {
+            $(#[$attr])*
+            pub async fn $fname<T, Strm>($($argname: $argty,)*) -> std::io::Result<()>
+            where
+                T: ProtocolConnectionExt<Strm>,
+                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+                $block
+    };
+}

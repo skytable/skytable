@@ -30,26 +30,20 @@
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
 
-/// Run an `EXISTS` query
-pub async fn exists<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    err_if_len_is!(act, con, eq 0);
-    let mut how_many_of_them_exist = 0usize;
-    {
-        let cmap = handle.get_ref();
-        act.for_each(|key| {
-            if cmap.contains_key(key.as_bytes()) {
-                how_many_of_them_exist += 1;
-            }
-        });
+action!(
+    /// Run an `EXISTS` query
+    fn exists(handle: &CoreDB, con: &mut T, act: ActionIter) {
+        err_if_len_is!(act, con, eq 0);
+        let mut how_many_of_them_exist = 0usize;
+        {
+            let cmap = handle.get_ref();
+            act.for_each(|key| {
+                if cmap.contains_key(key.as_bytes()) {
+                    how_many_of_them_exist += 1;
+                }
+            });
+        }
+        con.write_response(how_many_of_them_exist).await?;
+        Ok(())
     }
-    con.write_response(how_many_of_them_exist).await?;
-    Ok(())
-}
+);
