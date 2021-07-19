@@ -66,7 +66,7 @@ pub mod oneshot {
 
     macro_rules! tbl_path {
         ($ksid:expr, $tableid:expr) => {
-            unsafe { concat_str!(DIR_KSROOT, "/", $ksid.as_str(), "/", $tableid.as_str()) }
+            unsafe { concat_str!(DIR_KSROOT, "/", $ksid.as_str(), "/", $tableid.as_str(), "_") }
         };
     }
 
@@ -77,7 +77,7 @@ pub mod oneshot {
             Ok(())
         } else {
             // fine, this needs to be flushed
-            let path = tbl_path!(tableid, ksid);
+            let path = tbl_path!(ksid, tableid);
             let mut file = File::create(&path)?;
             match table.get_model_ref() {
                 DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(

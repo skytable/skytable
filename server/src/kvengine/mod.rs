@@ -116,6 +116,9 @@ impl KVEngine {
             self.encoded_v.load(ORD_RELAXED),
         )
     }
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
     pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
         &self.table
     }

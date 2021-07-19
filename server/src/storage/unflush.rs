@@ -78,7 +78,7 @@ pub fn read_table(
 }
 
 /// Read an entire keyspace into a Coremap. You'll need to initialize the rest
-pub fn read_keyspace(ksid: ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>> {
+pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
     let partmap: HashMap<ObjectID, (u8, u8)> =
         super::de::deserialize_set_ctype_bytemark(&fs::read(filepath)?)
