@@ -69,9 +69,7 @@ where
     let buf = if let Element::FlatArray(arr) = buf {
         arr
     } else {
-        return con
-            .write_response(responses::full_responses::R_WRONGTYPE_ERR)
-            .await;
+        return con.write_response(responses::groups::WRONGTYPE_ERR).await;
     };
     let mut buf = buf.into_iter();
     gen_constants_and_matches!(
