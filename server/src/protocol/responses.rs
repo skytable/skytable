@@ -49,7 +49,11 @@ pub mod groups {
     pub const HEYA: &[u8] = "+4\nHEY!\n".as_bytes();
     /// "Unknown action" error response
     pub const UNKNOWN_ACTION: &[u8] = "!14\nUnknown action\n".as_bytes();
+    /// Response code 7
     pub const WRONGTYPE_ERR: &[u8] = "!1\n7\n".as_bytes();
+    /// Response code 8
+    pub const UNKNOWN_DATA_TYPE: &[u8] = "!1\n8\n".as_bytes();
+    /// Snapshot busy error
     pub const SNAPSHOT_BUSY: &[u8] = "!17\nerr-snapshot-busy\n".as_bytes();
     /// Snapshot disabled (other error)
     pub const SNAPSHOT_DISABLED: &[u8] = "!21\nerr-snapshot-disabled\n".as_bytes();
@@ -79,6 +83,10 @@ pub mod full_responses {
     pub const R_SERVER_ERR: &[u8] = "*1\n!1\n5\n".as_bytes();
     /// Response code: 6 (Other Error _without description_)
     pub const R_OTHER_ERR_EMPTY: &[u8] = "*1\n!1\n6\n".as_bytes();
+    /// Response code: 7; wrongtype
+    pub const R_WRONGTYPE_ERR: &[u8] = "*1\n!1\n7".as_bytes();
+    /// Response code: 8; unknown data type
+    pub const R_UNKNOWN_DATA_TYPE: &[u8] = "*1\n!1\n8\n".as_bytes();
     /// A heya response
     pub const R_HEYA: &[u8] = "*1\n+4\nHEY!\n".as_bytes();
     /// An other response with description: "Unknown action"
@@ -95,6 +103,4 @@ pub mod full_responses {
     pub const R_SNAPSHOT_ILLEGAL_NAME: &[u8] = "*1\n!25\nerr-invalid-snapshot-name\n".as_bytes();
     /// Access after termination signal (other error)
     pub const R_ERR_ACCESS_AFTER_TERMSIG: &[u8] = "*1\n!24\nerr-access-after-termsig\n".as_bytes();
-    /// Response code: 7; wrongtype
-    pub const R_WRONGTYPE_ERR: &[u8] = "*1\n!1\n7".as_bytes();
 }

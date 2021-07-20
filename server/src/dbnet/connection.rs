@@ -64,7 +64,7 @@ pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
 
 pub enum QueryResult {
     Q(Query),
-    E(Vec<u8>),
+    E(&'static [u8]),
     Empty,
     Wrongtype,
 }
@@ -154,12 +154,12 @@ where
                         Err(ParseError::NotEnough) => (),
                         Err(ParseError::DataTypeParseError) => return Ok(QueryResult::Wrongtype),
                         Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                            return Ok(QueryResult::E(
-                                responses::full_responses::R_PACKET_ERR.to_owned(),
-                            ));
+                            return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
                         }
                         Err(ParseError::UnknownDatatype) => {
-                            unimplemented!()
+                            return Ok(QueryResult::E(
+                                responses::full_responses::R_UNKNOWN_DATA_TYPE,
+                            ));
                         }
                     }
                 }
@@ -246,7 +246,7 @@ where
     /// success response and an error response
     fn close_conn_with_error<'r, 's>(
         &'r mut self,
-        resp: Vec<u8>,
+        resp: impl Writable + 's + Send,
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
@@ -401,10 +401,7 @@ where
                 Ok(QueryResult::Q(s)) => {
                     self.db.execute_query(s, &mut self.con).await?;
                 }
-                Ok(QueryResult::E(r)) => {
-                    log::debug!("Failed to read query!");
-                    self.con.close_conn_with_error(r).await?
-                }
+                Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {
                     self.con
                         .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
