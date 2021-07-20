@@ -136,7 +136,7 @@ mod interface_tests {
     use std::path::PathBuf;
     #[test]
     fn test_tree() {
-        create_tree(Memstore::new_default()).unwrap();
+        create_tree(&Memstore::new_default()).unwrap();
         let read_ks: Vec<String> = fs::read_dir(DIR_KSROOT)
             .unwrap()
             .map(|dir| {

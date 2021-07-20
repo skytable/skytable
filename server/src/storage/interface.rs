@@ -59,7 +59,7 @@ pub const DIR_ROOT: &str = "data";
 /// ```
 ///
 /// If any directories exist, they are simply ignored
-pub fn create_tree(memroot: Memstore) -> IoResult<()> {
+pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
     try_dir_ignore_existing!(DIR_ROOT, DIR_KSROOT, DIR_BACKUPS, DIR_SNAPROOT);
     for ks in memroot.keyspaces.iter() {
         unsafe {
