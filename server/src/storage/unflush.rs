@@ -40,7 +40,7 @@ use crate::SnapshotConfig;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use std::io::Result as IoResult;
+use crate::IoResult;
 use std::sync::Arc;
 
 type PreloadSet = std::collections::HashSet<ObjectID>;

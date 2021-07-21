@@ -33,7 +33,7 @@ use super::interface;
 use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
 use crate::coredb::memstore::ObjectID;
-use std::io::Result as IoResult;
+use crate::IoResult;
 
 /// Flushes the entire **keyspace + partmap**
 pub fn flush_keyspace_full(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {

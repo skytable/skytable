@@ -85,6 +85,8 @@ const TEXT: &str = "
 ███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████
 ";
 
+type IoResult<T> = std::io::Result<T>;
+
 fn main() {
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))

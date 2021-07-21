@@ -50,7 +50,7 @@ use libsky::TResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use std::io::Result as IoResult;
+use crate::IoResult;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;

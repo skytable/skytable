@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use std::io::Result as IoResult;
+use crate::IoResult;
 use std::io::Write;
 
 pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;

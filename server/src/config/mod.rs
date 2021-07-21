@@ -41,8 +41,8 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::process;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-#[allow(dead_code)]
-const DEFAULT_PORT: u16 = 2003; // We'll suppress this lint as we've kept this for future use
+#[cfg(test)]
+const DEFAULT_PORT: u16 = 2003;
 const DEFAULT_SSL_PORT: u16 = 2004;
 
 /// This struct is an _object representation_ used for parsing the TOML file

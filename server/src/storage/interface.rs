@@ -30,7 +30,7 @@ use crate::coredb::htable::Coremap;
 use crate::coredb::htable::Data;
 use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
-use std::io::Result as IoResult;
+use crate::IoResult;
 use std::io::{BufWriter, Write};
 
 pub const DIR_KSROOT: &str = "data/ks";

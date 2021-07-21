@@ -54,7 +54,7 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this onece we're done
+#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
 use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
@@ -118,17 +118,18 @@ pub enum DdlError {
     StillInUse,
     ObjectNotFound,
     ProtectedObject,
+    DefaultNotFound,
 }
 
 #[derive(Debug)]
 /// The core in-memory table
 ///
 /// This in-memory table that houses all keyspaces along with other node properties.
-/// This is the structure that you should clone and send around connections for
-/// connection-level control abilities over the keyspace
+/// This is the structure that you should clone in an atomic RC wrapper. This object
+/// handles no sort of persistence
 pub struct Memstore {
     /// the keyspaces
-    pub keyspaces: Arc<Coremap<ObjectID, Arc<Keyspace>>>,
+    pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
     /// current state of the disk flush status. if this is true, we're safe to
     /// go ahead with writes
     flush_state_healthy: AtomicBool,
@@ -140,7 +141,7 @@ impl Memstore {
     /// Create a new empty in-memory table with literally nothing in it
     pub fn new_empty() -> Self {
         Self {
-            keyspaces: Arc::new(Coremap::new()),
+            keyspaces: Coremap::new(),
             flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
         }
@@ -150,7 +151,7 @@ impl Memstore {
         snap_config: SnapshotConfig,
     ) -> Self {
         Self {
-            keyspaces: Arc::new(keyspaces),
+            keyspaces,
             flush_state_healthy: AtomicBool::new(true),
             snap_config: if let SnapshotConfig::Enabled(pref) = snap_config {
                 Some(SnapshotStatus::new(pref.atmost))
@@ -179,7 +180,7 @@ impl Memstore {
             keyspaces: {
                 let n = Coremap::new();
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
-                Arc::new(n)
+                n
             },
             flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
