@@ -32,7 +32,6 @@
 use crate::coredb::{htable::HTable, Data};
 use crate::diskstore::snapshot::SNAP_MATCH;
 use bytes::Bytes;
-use core::hint::unreachable_unchecked;
 use libsky::TResult;
 use std::collections::HashMap;
 use std::fs;
@@ -167,7 +166,7 @@ fn upgrade_file(
         }
         Format::Sparrowlock => unsafe {
             // UNSAFE(@ohsayan): Not possible as we've already checked this earlier (no upgrades required)
-            unreachable_unchecked();
+            impossible!()
         },
     };
     let data_in_new_format = data_in_new_format.serialize()?;

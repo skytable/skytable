@@ -28,7 +28,6 @@
 
 use crate::compat;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
-use core::hint::unreachable_unchecked;
 #[cfg(test)]
 use libsky::TResult;
 use serde::Deserialize;
@@ -433,7 +432,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         } else {
             unsafe {
                 // UNSAFE(@ohsayan): Completely safe as our CLI args require a value to be passed to upgrade
-                unreachable_unchecked();
+                impossible!()
             }
         }
     }

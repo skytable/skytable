@@ -40,11 +40,18 @@ pub unsafe trait Unwrappable<T> {
     unsafe fn unsafe_unwrap(self) -> T;
 }
 
+#[macro_export]
+macro_rules! impossible {
+    () => {
+        core::hint::unreachable_unchecked()
+    };
+}
+
 unsafe impl<T, E> Unwrappable<T> for Result<T, E> {
     unsafe fn unsafe_unwrap(self) -> T {
         match self {
             Ok(t) => t,
-            Err(_) => core::hint::unreachable_unchecked(),
+            Err(_) => impossible!(),
         }
     }
 }
@@ -53,7 +60,7 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
     unsafe fn unsafe_unwrap(self) -> T {
         match self {
             Some(t) => t,
-            None => core::hint::unreachable_unchecked(),
+            None => impossible!(),
         }
     }
 }

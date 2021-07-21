@@ -37,7 +37,6 @@
 
 use crate::coredb::Data;
 use crate::dbnet::connection::prelude::*;
-use core::hint::unreachable_unchecked;
 
 action!(
     /// Run an `SSET` query
@@ -73,7 +72,7 @@ action!(
                                 // UNSAFE(@ohsayan): As none of the keys exist in the table, no
                                 // value will ever be returned by the `insert`. Hence, this is a
                                 // completely safe operation
-                                unreachable_unchecked()
+                                impossible!()
                             }
                         }
                     }
@@ -186,7 +185,7 @@ action!(
                     while let (Some(key), Some(value)) = (act.next(), act.next()) {
                         if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
                             // Tell the compiler that this will never be the case
-                            unsafe { unreachable_unchecked() }
+                            unsafe { impossible!() }
                         }
                     }
                 }
