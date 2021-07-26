@@ -29,6 +29,7 @@
 //! The registry module provides interfaces for system-wide, global state management
 //!
 
+use crate::coredb::lock::{QLGuard, QuickLock};
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
@@ -37,10 +38,18 @@ const ORD_REL: Ordering = Ordering::Release;
 
 /// The global system health
 static GLOBAL_STATE: AtomicBool = AtomicBool::new(true);
+/// The global flush state
+static FLUSH_STATE: QuickLock<()> = QuickLock::new(());
 
 /// Check the global system state
 pub fn state_okay() -> bool {
     GLOBAL_STATE.load(ORD_ACQ)
+}
+
+/// Lock the global flush state. **Remember to drop the lock guard**; else you'll
+/// end up pausing all sorts of global flushing/transactional systems
+pub fn lock_flush_state() -> QLGuard<'static, ()> {
+    FLUSH_STATE.lock()
 }
 
 /// Poison the global system state

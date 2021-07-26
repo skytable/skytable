@@ -114,6 +114,7 @@ pub fn run_bgsave(handle: &CoreDB) -> TResult<()> {
 
 /// This just wraps around [`_bgsave_blocking_section`] and prints nice log messages depending on the outcome
 fn bgsave_blocking_section(handle: CoreDB) -> bool {
+    registry::lock_flush_state();
     match _bgsave_blocking_section(&handle) {
         Ok(_) => {
             log::info!("BGSAVE completed successfully");
