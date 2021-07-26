@@ -42,14 +42,14 @@ action!(
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
         let failed = {
-            if handle.is_poisoned() {
-                true
-            } else {
+            if registry::state_okay() {
                 let writer = handle.get_ref();
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     let _ = writer.upsert(Data::from(key), Data::from(val));
                 }
                 false
+            } else {
+                true
             }
         };
         if failed {

@@ -39,9 +39,7 @@ action!(
         }
         let done_howmany: Option<usize>;
         {
-            if handle.is_poisoned() {
-                done_howmany = None;
-            } else {
+            if registry::state_okay() {
                 let writer = handle.get_ref();
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
@@ -50,6 +48,8 @@ action!(
                     }
                 }
                 done_howmany = Some(didmany);
+            } else {
+                done_howmany = None;
             }
         }
         if let Some(done_howmany) = done_howmany {

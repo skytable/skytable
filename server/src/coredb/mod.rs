@@ -33,8 +33,6 @@ use crate::dbnet::connection::prelude::*;
 use crate::diskstore;
 use crate::protocol::Query;
 use crate::queryengine;
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::Ordering;
 pub use htable::Data;
 use libsky::TResult;
 use std::sync::Arc;
@@ -60,11 +58,6 @@ pub struct CoreDB {
 /// A shared _state_
 #[derive(Debug)]
 pub struct Shared {
-    /// Whether the database is poisoned or not
-    ///
-    /// If the database is poisoned -> the database can no longer accept writes
-    /// but can only accept reads
-    pub poisoned: AtomicBool,
     /// The number of snapshots that are to be kept at the most
     ///
     /// If this is set to Some(0), then all the snapshots will be kept. Otherwise, if it is set to
@@ -107,13 +100,6 @@ impl SnapshotStatus {
 }
 
 impl CoreDB {
-    pub fn poison(&self) {
-        self.shared.poisoned.store(true, Ordering::Release);
-    }
-
-    pub fn unpoison(&self) {
-        self.shared.poisoned.store(false, Ordering::Release);
-    }
     /// Check if snapshotting is enabled
     pub fn is_snapshot_enabled(&self) -> bool {
         self.shared.snapcfg.is_some()
@@ -163,10 +149,7 @@ impl CoreDB {
         let db = if let Some(coremap) = coremap {
             CoreDB {
                 coremap,
-                shared: Arc::new(Shared {
-                    snapcfg,
-                    poisoned: AtomicBool::new(false),
-                }),
+                shared: Arc::new(Shared { snapcfg }),
             }
         } else {
             CoreDB::new_empty(snapcfg)
@@ -177,16 +160,8 @@ impl CoreDB {
     pub fn new_empty(snapcfg: Option<SnapshotStatus>) -> Self {
         CoreDB {
             coremap: HTable::new(),
-            shared: Arc::new(Shared {
-                poisoned: AtomicBool::new(false),
-                snapcfg,
-            }),
+            shared: Arc::new(Shared { snapcfg }),
         }
-    }
-    /// Check if the database object is poisoned, that is, data couldn't be written
-    /// to disk once, and hence, we have disabled write operations
-    pub fn is_poisoned(&self) -> bool {
-        self.shared.poisoned.load(Ordering::Acquire)
     }
     /// Provides a reference to the shared [`Coremap`] object
     pub fn get_ref(&self) -> &HTable<Data, Data> {

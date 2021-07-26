@@ -57,9 +57,7 @@ action!(
             // This iterator gives us the keys and values, skipping the first argument which
             // is the action name
             let mut key_iter = act.as_ref().iter();
-            if handle.is_poisoned() {
-                failed = None;
-            } else {
+            if registry::state_okay() {
                 let mut_table = handle.get_ref();
                 if key_iter.all(|key| !mut_table.contains_key(key.as_bytes())) {
                     failed = Some(false);
@@ -79,6 +77,8 @@ action!(
                 } else {
                     failed = Some(true);
                 }
+            } else {
+                failed = None;
             }
         }
         if let Some(failed) = failed {
@@ -109,9 +109,7 @@ action!(
             // doesn't go beyond the scope of this function - and is never used across
             // an await: cause, the compiler ain't as smart as we are ;)
             let mut key_iter = act.as_ref().iter();
-            if handle.is_poisoned() {
-                failed = None;
-            } else {
+            if registry::state_okay() {
                 let mut_table = handle.get_ref();
                 if key_iter.all(|key| mut_table.contains_key(key.as_bytes())) {
                     failed = Some(false);
@@ -129,6 +127,8 @@ action!(
                 } else {
                     failed = Some(true);
                 }
+            } else {
+                failed = None;
             }
         }
         if let Some(failed) = failed {
@@ -159,9 +159,7 @@ action!(
             // doesn't go beyond the scope of this function - and is never used across
             // an await: cause, the compiler ain't as smart as we are ;)
             let mut key_iter = act.as_ref().iter();
-            if handle.is_poisoned() {
-                failed = None;
-            } else {
+            if registry::state_okay() {
                 let mut_table = handle.get_ref();
                 while let Some(key) = key_iter.next() {
                     if !mut_table.contains_key(key.as_bytes()) {
@@ -189,6 +187,8 @@ action!(
                         }
                     }
                 }
+            } else {
+                failed = None;
             }
         }
         if let Some(failed) = failed {

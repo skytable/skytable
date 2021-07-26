@@ -1,5 +1,5 @@
 /*
- * Created on Thu Sep 24 2020
+ * Created on Mon Jul 26 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,27 +24,27 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
+//! # System-wide registry
+//!
+//! The registry module provides interfaces for system-wide, global state management
+//!
 
-action!(
-    /// Delete all the keys in the database
-    fn flushdb(handle: &CoreDB, con: &mut T, act: ActionIter) {
-        err_if_len_is!(act, con, not 0);
-        let failed;
-        {
-            if registry::state_okay() {
-                handle.get_ref().clear();
-                failed = false;
-            } else {
-                failed = true;
-            }
-        }
-        if failed {
-            con.write_response(responses::groups::SERVER_ERR).await
-        } else {
-            con.write_response(responses::groups::OKAY).await
-        }
-    }
-);
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering;
+
+const ORD_ACQ: Ordering = Ordering::Acquire;
+const ORD_REL: Ordering = Ordering::Release;
+
+static GLOBAL_STATE: AtomicBool = AtomicBool::new(true);
+
+pub fn state_okay() -> bool {
+    GLOBAL_STATE.load(ORD_ACQ)
+}
+
+pub fn poison() {
+    GLOBAL_STATE.store(false, ORD_REL)
+}
+
+pub fn unpoison() {
+    GLOBAL_STATE.store(true, ORD_REL)
+}

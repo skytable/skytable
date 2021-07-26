@@ -44,13 +44,13 @@ use crate::protocol::responses;
 use crate::protocol::ParseError;
 use crate::protocol::Query;
 use crate::resp::Writable;
+use crate::IoResult;
 use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use crate::IoResult;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -79,6 +79,7 @@ pub mod prelude {
     pub use crate::is_lowbit_set;
     pub use crate::protocol::responses;
     pub use crate::queryengine::ActionIter;
+    pub use crate::registry;
     pub use crate::util::Unwrappable;
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }

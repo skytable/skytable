@@ -60,6 +60,7 @@ mod diskstore;
 mod kvengine;
 mod protocol;
 mod queryengine;
+pub mod registry;
 mod resp;
 mod services;
 mod storage;

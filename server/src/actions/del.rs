@@ -38,9 +38,7 @@ action!(
         err_if_len_is!(act, con, eq 0);
         let done_howmany: Option<usize>;
         {
-            if handle.is_poisoned() {
-                done_howmany = None;
-            } else {
+            if registry::state_okay() {
                 let mut many = 0;
                 let cmap = handle.get_ref();
                 act.for_each(|key| {
@@ -49,6 +47,8 @@ action!(
                     }
                 });
                 done_howmany = Some(many);
+            } else {
+                done_howmany = None;
             }
         }
         if let Some(done_howmany) = done_howmany {

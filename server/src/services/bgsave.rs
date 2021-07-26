@@ -28,6 +28,7 @@ use crate::config::BGSave;
 use crate::coredb::CoreDB;
 use crate::dbnet::Terminator;
 use crate::diskstore::{self, flock};
+use crate::registry;
 #[cfg(not(test))]
 use diskstore::PERSIST_FILE;
 use libsky::TResult;
@@ -116,12 +117,12 @@ fn bgsave_blocking_section(handle: CoreDB) -> bool {
     match _bgsave_blocking_section(&handle) {
         Ok(_) => {
             log::info!("BGSAVE completed successfully");
-            handle.unpoison();
+            registry::unpoison();
             true
         }
         Err(e) => {
             log::error!("BGSAVE failed with error: {}", e);
-            handle.poison();
+            registry::poison();
             false
         }
     }

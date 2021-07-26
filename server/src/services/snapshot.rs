@@ -28,6 +28,7 @@ use crate::config::SnapshotConfig;
 use crate::coredb::CoreDB;
 use crate::dbnet::Terminator;
 use crate::diskstore::snapshot::SnapshotEngine;
+use crate::registry;
 use tokio::time::{self, Duration};
 
 /// The snapshot service
@@ -62,11 +63,11 @@ pub async fn snapshot_service(
                     _ = time::sleep_until(time::Instant::now() + duration) => {
                         if sengine.mksnap().await {
                             // it passed, so unpoison the handle
-                            handle.unpoison();
+                            registry::unpoison();
                         } else if failsafe {
                             // mksnap returned false and we are set to stop writes if snapshotting failed
                             // so let's poison the handle
-                            handle.poison();
+                            registry::poison();
                         }
                     },
                     _ = termination_signal.receive_signal() => {

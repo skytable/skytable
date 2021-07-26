@@ -34,21 +34,22 @@ action!(
     /// Run a POP action
     fn pop(handle: &coredb::CoreDB, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
-        if handle.is_poisoned() {
+        if registry::state_okay() {
+            con.write_array_length(act.len()).await?;
+            for key in act {
+                if !registry::state_okay() {
+                    // we keep this check just in case the server fails in-between running a
+                    // pop operation
+                    con.write_response(responses::groups::SERVER_ERR).await?;
+                } else if let Some((_key, val)) = handle.get_ref().remove(key.as_bytes()) {
+                    con.write_response(BytesWrapper(val.into_inner())).await?;
+                } else {
+                    con.write_response(responses::groups::NIL).await?;
+                }
+            }
+        } else {
             // don't begin the operation at all if the database is poisoned
             return con.write_response(responses::groups::SERVER_ERR).await;
-        }
-        con.write_array_length(act.len()).await?;
-        for key in act {
-            if handle.is_poisoned() {
-                // we keep this check just in case the server fails in-between running a
-                // pop operation
-                con.write_response(responses::groups::SERVER_ERR).await?;
-            } else if let Some((_key, val)) = handle.get_ref().remove(key.as_bytes()) {
-                con.write_response(BytesWrapper(val.into_inner())).await?;
-            } else {
-                con.write_response(responses::groups::NIL).await?;
-            }
         }
         Ok(())
     }

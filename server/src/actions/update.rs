@@ -36,9 +36,7 @@ action!(
     fn update(handle: &CoreDB, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 2);
         let did_we = {
-            if handle.is_poisoned() {
-                None
-            } else {
+            if registry::state_okay() {
                 let writer = handle.get_ref();
                 // clippy thinks we're doing something complex when we aren't, at all!
                 #[allow(clippy::blocks_in_if_conditions)]
@@ -54,6 +52,8 @@ action!(
                 } else {
                     Some(false)
                 }
+            } else {
+                None
             }
         };
         if let Some(did_we) = did_we {

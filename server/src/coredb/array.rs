@@ -93,7 +93,7 @@ impl<'a, T: Copy> Drop for LenScopeGuard<'a, T> {
 }
 
 // defy the compiler; just some silly hackery here -- move on
-struct UninitArray<T, const N: usize>(PhantomData<fn() -> T>);
+struct UninitArray<T, const N: usize>(PhantomData<T>);
 
 impl<T, const N: usize> UninitArray<T, N> {
     const VALUE: MaybeUninit<T> = MaybeUninit::uninit();
