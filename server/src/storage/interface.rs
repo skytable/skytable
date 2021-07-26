@@ -31,6 +31,8 @@ use crate::coredb::htable::Data;
 use crate::coredb::memstore::Keyspace;
 use crate::coredb::memstore::Memstore;
 use crate::IoResult;
+use std::collections::HashSet;
+use std::fs;
 use std::io::{BufWriter, Write};
 
 pub const DIR_KSROOT: &str = "data/ks";
@@ -46,15 +48,6 @@ pub const DIR_ROOT: &str = "data";
 ///         ks2/
 ///         ks3/
 ///     snaps/
-///         ks1/
-///             tbl1/
-///             tbl2/
-///         ks2/
-///             tbl1/
-///             tbl2/
-///         ks3/
-///             tbl1/
-///             tbl2/
 ///     backups/
 /// ```
 ///
@@ -64,13 +57,41 @@ pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
     for ks in memroot.keyspaces.iter() {
         unsafe {
             try_dir_ignore_existing!(concat_path!(DIR_KSROOT, ks.key().as_str()))?;
-            for tbl in ks.value().tables.iter() {
-                try_dir_ignore_existing!(concat_path!(
-                    DIR_SNAPROOT,
-                    ks.key().as_str(),
-                    tbl.key().as_str()
-                ))?;
-            }
+        }
+    }
+    Ok(())
+}
+
+/// Clean up the tree
+///
+/// **Warning**: Calling this is quite inefficient so consider calling it once or twice
+/// throughout the lifecycle of the server
+pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
+    // hashset because the fs itself will not allow duplicate entries
+    let dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
+    let our_keyspaces: HashSet<String> = memroot
+        .keyspaces
+        .iter()
+        .map(|kv| unsafe { kv.key().as_str() }.to_owned())
+        .collect();
+    // these are the folders that we need to remove; plonk the deleted keyspaces first
+    for folder in dir_keyspaces.difference(&our_keyspaces) {
+        let ks_path = concat_str!(DIR_KSROOT, "/", folder);
+        fs::remove_dir_all(ks_path)?;
+    }
+    // now plonk the data files
+    for keyspace in memroot.keyspaces.iter() {
+        let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
+        let dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
+        let our_tbls: HashSet<String> = keyspace
+            .value()
+            .tables
+            .iter()
+            .map(|v| unsafe { v.key().as_str() }.to_owned())
+            .collect();
+        for old_file in dir_tbls.difference(&our_tbls) {
+            // plonk this data file; we don't need it anymore
+            fs::remove_file(concat_path!(&ks_path, old_file))?;
         }
     }
     Ok(())

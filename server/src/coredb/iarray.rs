@@ -27,6 +27,7 @@
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
 use crate::coredb::array::LenScopeGuard;
+use crate::util::compiler::{likely, unlikely};
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
@@ -157,28 +158,6 @@ type DataptrLenptrCapacityMut<'a, T> = (*mut T, &'a mut usize, usize);
 pub struct IArray<A: MemoryBlock> {
     cap: usize,
     store: InlineArray<A>,
-}
-
-/*
- use branch prediction hints for optimizations as we don't expect our
- ks/ns names to exceed the memory block sizes we pre-allocate for them
-*/
-
-#[cold]
-fn cold() {}
-
-fn likely(b: bool) -> bool {
-    if !b {
-        cold()
-    }
-    b
-}
-
-fn unlikely(b: bool) -> bool {
-    if b {
-        cold()
-    }
-    b
 }
 
 impl IArray<[u8; 48]> {

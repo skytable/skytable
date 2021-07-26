@@ -26,7 +26,9 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+use crate::coredb::corestore::KeyspaceResult;
 use crate::coredb::htable::Coremap;
+use crate::coredb::memstore::DdlError;
 use crate::coredb::Data;
 use crate::kvengine::KVEngine;
 use crate::storage::bytemarks;
@@ -43,17 +45,18 @@ pub enum DataModel {
 pub struct Table {
     /// a key/value store
     model_store: DataModel,
+    /// is the table volatile
     volatile: bool,
 }
 
 impl Table {
     /// Get the key/value store if the table is a key/value store
-    pub const fn get_kvstore(&self) -> Option<&KVEngine> {
+    pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
         #[allow(irrefutable_let_patterns)]
         if let DataModel::KV(kvs) = &self.model_store {
-            Some(&kvs)
+            Ok(kvs)
         } else {
-            None
+            Err(DdlError::WrongModel)
         }
     }
     /// Returns the storage type as an 8-bit uint
@@ -75,6 +78,22 @@ impl Table {
             volatile,
             model_store: DataModel::KV(KVEngine::init_with_data(k_enc, v_enc, data)),
         }
+    }
+    pub fn new_kve_with_encoding(volatile: bool, k_enc: bool, v_enc: bool) -> Self {
+        Self {
+            volatile,
+            model_store: DataModel::KV(KVEngine::init(k_enc, v_enc)),
+        }
+    }
+    pub fn from_model_code(code: u8, volatile: bool) -> Option<Self> {
+        let ret = match code {
+            0 => Self::new_kve_with_encoding(volatile, false, false),
+            1 => Self::new_kve_with_encoding(volatile, false, true),
+            2 => Self::new_kve_with_encoding(volatile, true, true),
+            3 => Self::new_kve_with_encoding(volatile, true, false),
+            _ => return None,
+        };
+        Some(ret)
     }
     /// Create a new kve with default settings but with provided volatile configuration
     pub fn new_kve_with_volatile(volatile: bool) -> Self {

@@ -33,6 +33,7 @@ use crate::coredb::memstore::ObjectID;
 use crate::coredb::memstore::DEFAULT;
 use crate::coredb::table::Table;
 use crate::kvengine::KVEngine;
+use crate::registry;
 use crate::storage;
 use crate::util::Unwrappable;
 use crate::IoResult;
@@ -120,13 +121,63 @@ impl Corestore {
     pub fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
         match &self.ctable {
             Some(tbl) => match tbl.get_kvstore() {
-                Some(kvs) => Ok(kvs),
-                None => Err(DdlError::WrongModel),
+                Ok(kvs) => Ok(kvs),
+                _ => Err(DdlError::WrongModel),
             },
             None => Err(DdlError::DefaultNotFound),
         }
     }
     pub fn is_snapshot_enabled(&self) -> bool {
         self.store.snap_config.is_some()
+    }
+
+    /// Create a table: in-memory; **no transactional guarantees**. Two tables can be created
+    /// simultaneously, but are never flushed unless we are very lucky. If the global flush
+    /// system is close to a flush cycle -- then we are in luck: we pause the flush cycle
+    /// through a global flush lock and then allow it to resume once we're done adding the table.
+    /// This enables the flush routine to permanently write the table to disk. But it's all about
+    /// luck -- the next mutual access may be yielded to the next `create table` command
+    pub fn create_table(
+        &self,
+        ksid: ObjectID,
+        tblid: ObjectID,
+        modelcode: u8,
+        volatile: bool,
+    ) -> KeyspaceResult<()> {
+        // first lock the global flush state
+        let flush_lock = registry::lock_flush_state();
+        let ret = match &self.store.get_keyspace_atomic_ref(ksid) {
+            Some(ks) => {
+                let tbl = Table::from_model_code(modelcode, volatile);
+                if let Some(tbl) = tbl {
+                    if ks.create_table(tblid.clone(), tbl) {
+                        Ok(())
+                    } else {
+                        Err(DdlError::AlreadyExists)
+                    }
+                } else {
+                    Err(DdlError::WrongModel)
+                }
+            }
+            None => Err(DdlError::ObjectNotFound),
+        };
+        // free the global flush lock
+        drop(flush_lock);
+        ret
+    }
+
+    /// Create a keyspace **without any transactional guarantees**
+    pub fn create_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        // lock the global flush lock (see comment in create_table to know why)
+        let flush_lock = registry::lock_flush_state();
+        let ret = if self.store.create_keyspace(ksid) {
+            // woo, created
+            Ok(())
+        } else {
+            // ugh, already exists
+            Err(DdlError::AlreadyExists)
+        };
+        drop(flush_lock);
+        ret
     }
 }

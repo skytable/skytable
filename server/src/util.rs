@@ -170,6 +170,28 @@ macro_rules! action {
     };
 }
 
+pub mod compiler {
+    //! BP hints for added optim
+
+    #[cold]
+    #[inline(never)]
+    pub fn cold() {}
+
+    pub fn likely(b: bool) -> bool {
+        if !b {
+            cold()
+        }
+        b
+    }
+
+    pub fn unlikely(b: bool) -> bool {
+        if b {
+            cold()
+        }
+        b
+    }
+}
+
 #[macro_export]
 macro_rules! kve {
     ($db:ident, $con:ident) => {

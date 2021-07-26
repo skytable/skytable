@@ -59,6 +59,7 @@
 use super::corestore::KeyspaceResult;
 use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
+use crate::coredb::lock::{QLGuard, QuickLock};
 use crate::coredb::table::Table;
 use crate::coredb::SnapshotStatus;
 use crate::SnapshotConfig;
@@ -132,6 +133,12 @@ pub enum DdlError {
     DefaultNotFound,
     /// Incorrect data model semantics were used on a data model
     WrongModel,
+    /// The object already exists
+    AlreadyExists,
+    /// The target object is not ready
+    NotReady,
+    /// The DDL transaction failed
+    DdlTransactionFailure,
 }
 
 #[derive(Debug)]
@@ -145,6 +152,8 @@ pub struct Memstore {
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
     /// the snapshot configuration
     pub snap_config: Option<SnapshotStatus>,
+    /// A **virtual lock** on the preload file
+    preload_lock: QuickLock<()>,
 }
 
 impl Memstore {
@@ -153,6 +162,7 @@ impl Memstore {
         Self {
             keyspaces: Coremap::new(),
             snap_config: None,
+            preload_lock: QuickLock::new(()),
         }
     }
     pub fn init_with_all(
@@ -166,6 +176,7 @@ impl Memstore {
             } else {
                 None
             },
+            preload_lock: QuickLock::new(()),
         }
     }
     /// Create a new in-memory table with the default keyspace and the default
@@ -195,6 +206,7 @@ impl Memstore {
                 n
             },
             snap_config: None,
+            preload_lock: QuickLock::new(()),
         }
     }
     /// Get an atomic reference to a keyspace
@@ -236,6 +248,8 @@ pub struct Keyspace {
     pub tables: Coremap<ObjectID, Arc<Table>>,
     /// the replication strategy for this keyspace
     replication_strategy: cluster::ReplicationStrategy,
+    /// A **virtual lock** on the partmap for this keyspace
+    partmap_lock: QuickLock<()>,
 }
 
 macro_rules! unsafe_objectid_from_slice {
@@ -258,12 +272,14 @@ impl Keyspace {
                 ht
             },
             replication_strategy: cluster::ReplicationStrategy::default(),
+            partmap_lock: QuickLock::new(()),
         }
     }
     pub fn init_with_all_def_strategy(tables: Coremap<ObjectID, Arc<Table>>) -> Self {
         Self {
             tables,
             replication_strategy: cluster::ReplicationStrategy::default(),
+            partmap_lock: QuickLock::new(()),
         }
     }
     /// Create a new empty keyspace with zero tables
@@ -271,6 +287,7 @@ impl Keyspace {
         Self {
             tables: Coremap::new(),
             replication_strategy: cluster::ReplicationStrategy::default(),
+            partmap_lock: QuickLock::new(()),
         }
     }
     /// Get an atomic reference to a table in this keyspace if it exists
@@ -281,6 +298,11 @@ impl Keyspace {
     pub fn create_table(&self, tableid: ObjectID, table: Table) -> bool {
         self.tables.true_if_insert(tableid, Arc::new(table))
     }
+    /// Drop a table if it exists, if it is not forbidden and if no one references
+    /// back to it. We don't want any looming table references i.e table gets deleted
+    /// for the current connection and newer connections, but older instances still
+    /// refer to the table.
+    // FIXME(@ohsayan): Should we actually care?
     pub fn drop_table(&self, table_identifier: ObjectID) -> KeyspaceResult<()> {
         if table_identifier.eq(&unsafe_objectid_from_slice!("default")) {
             Err(DdlError::ProtectedObject)
@@ -300,6 +322,14 @@ impl Keyspace {
                 Err(DdlError::StillInUse)
             }
         }
+    }
+    /// Remove a table without doing any reference checks. This will just pull it off
+    pub unsafe fn force_remove_table(&self, tblid: &ObjectID) {
+        // atomic remember? nobody cares about the result
+        self.tables.remove(tblid);
+    }
+    pub fn lock_partmap(&self) -> QLGuard<'_, ()> {
+        self.partmap_lock.lock()
     }
 }
 

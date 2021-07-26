@@ -113,3 +113,16 @@ macro_rules! bad_data {
         std::io::Error::from(std::io::ErrorKind::InvalidData)
     };
 }
+
+macro_rules! read_dir_to_col {
+    ($root:expr) => {
+        std::fs::read_dir($root)?
+            .map(|v| {
+                v.expect("Unexpected directory parse failure")
+                    .file_name()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect()
+    };
+}

@@ -43,6 +43,8 @@ pub fn flush_keyspace_full(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()>
 
 /// Flush the entire **preload + keyspaces + their partmaps**
 pub fn flush_full(store: &Memstore) -> IoResult<()> {
+    // re-init the tree as new tables/keyspaces may have been added
+    super::interface::create_tree(store)?;
     self::oneshot::flush_preload(store)?;
     for keyspace in store.keyspaces.iter() {
         self::flush_keyspace_full(keyspace.key(), keyspace.value())?;
@@ -60,6 +62,8 @@ pub fn snap_flush_keyspace_full(
 }
 
 pub fn snap_flush_full(snapid: &str, store: &Memstore) -> IoResult<()> {
+    // re-init the tree as new tables/keyspaces may have been added
+    super::interface::create_tree(store)?;
     self::oneshot::snap_flush_preload(snapid, store)?;
     for keyspace in store.keyspaces.iter() {
         self::snap_flush_keyspace_full(snapid, keyspace.key(), keyspace.value())?;
