@@ -56,6 +56,7 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+use super::corestore::KeyspaceResult;
 use crate::coredb::array::Array;
 use crate::coredb::htable::Coremap;
 use crate::coredb::table::Table;
@@ -67,23 +68,29 @@ use std::sync::Arc;
 #[sky_macros::array]
 const DEFAULT_ARRAY: [MaybeUninit<u8>; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
 
+#[sky_macros::array]
+const SYSTEM_ARRAY: [MaybeUninit<u8>; 64] = [b's', b'y', b's', b't', b'e', b'm'];
+
+/// typedef for the keyspace/table IDs. We don't need too much fancy here,
+/// no atomic pointers and all. Just a nice array. With amazing gurantees
+pub type ObjectID = Array<u8, 64>;
+
 /// The `DEFAULT` array (with the rest uninit)
-pub const DEFAULT: Array<u8, 64> = Array::from_const(DEFAULT_ARRAY, 7);
+pub const DEFAULT: ObjectID = Array::from_const(DEFAULT_ARRAY, 7);
+pub const SYSTEM: ObjectID = Array::from_const(SYSTEM_ARRAY, 6);
 
 #[test]
 fn test_def_macro_sanity() {
     // just make sure our macro is working as expected
     let mut def = DEFAULT.clone();
     def.push(b'?');
-    assert_eq!(
-        def.into_iter().map(char::from).collect::<String>(),
-        "default?".to_owned()
-    );
+    unsafe {
+        assert_eq!(def.as_str(), "default?");
+        let mut sys = SYSTEM.clone();
+        sys.push(b'?');
+        assert_eq!(sys.as_str(), "system?");
+    }
 }
-
-/// typedef for the keyspace/table IDs. We don't need too much fancy here,
-/// no atomic pointers and all. Just a nice array. With amazing gurantees
-pub type ObjectID = Array<u8, 64>;
 
 mod cluster {
     /// This is for the future where every node will be allocated a shard
@@ -113,6 +120,7 @@ mod cluster {
 }
 
 #[derive(Debug, PartialEq)]
+/// Errors arising from trying to modify/access containers
 pub enum DdlError {
     /// The object is still in use
     StillInUse,
@@ -162,11 +170,14 @@ impl Memstore {
     }
     /// Create a new in-memory table with the default keyspace and the default
     /// tables. So, whenever you're calling this, this is what you get:
-    /// ```text
-    /// YOURNODE: {
-    ///     KEYSPACES: [
+    /// ```json
+    /// "YOURNODE": {
+    ///     "KEYSPACES": [
     ///         "default" : {
-    ///             TABLES: ["default", "_system"]
+    ///             "TABLES": ["default"]
+    ///         },
+    ///         "system": {
+    ///             "TABLES": []
     ///         }
     ///     ]
     /// }
@@ -180,6 +191,7 @@ impl Memstore {
             keyspaces: {
                 let n = Coremap::new();
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
+                n.true_if_insert(SYSTEM, Arc::new(Keyspace::empty()));
                 n
             },
             snap_config: None,
@@ -196,14 +208,26 @@ impl Memstore {
         self.keyspaces
             .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
+    pub fn drop_keyspace(&self, keyspace_identifier: ObjectID) -> KeyspaceResult<()> {
+        if keyspace_identifier.eq(&SYSTEM) || keyspace_identifier.eq(&DEFAULT) {
+            Err(DdlError::ProtectedObject)
+        } else if !self.keyspaces.contains_key(&keyspace_identifier) {
+            Err(DdlError::ObjectNotFound)
+        } else if self
+            .keyspaces
+            .true_remove_if(&keyspace_identifier, |_, arc| Arc::strong_count(arc) == 1)
+        {
+            Ok(())
+        } else {
+            Err(DdlError::StillInUse)
+        }
+    }
 }
 
 /// The date model of a table
 pub enum TableType {
     KeyValue,
 }
-
-// TODO(@ohsayan): Optimize the memory layouts of the UDFs to ensure that sharing is very cheap
 
 #[derive(Debug)]
 /// A keyspace houses all the other tables
@@ -213,6 +237,7 @@ pub struct Keyspace {
     /// the replication strategy for this keyspace
     replication_strategy: cluster::ReplicationStrategy,
 }
+
 macro_rules! unsafe_objectid_from_slice {
     ($slice:expr) => {{
         unsafe { ObjectID::from_slice($slice) }
@@ -220,8 +245,7 @@ macro_rules! unsafe_objectid_from_slice {
 }
 
 impl Keyspace {
-    /// Create a new empty keyspace with the default tables: a `default` table and a
-    /// `system` table
+    /// Create a new empty keyspace with the default tables: a `default` table
     pub fn empty_default() -> Self {
         Self {
             tables: {
@@ -229,11 +253,6 @@ impl Keyspace {
                 // add the default table
                 ht.true_if_insert(
                     unsafe_objectid_from_slice!("default"),
-                    Arc::new(Table::new_default_kve()),
-                );
-                // add the system table
-                ht.true_if_insert(
-                    unsafe_objectid_from_slice!("_system"),
                     Arc::new(Table::new_default_kve()),
                 );
                 ht
@@ -262,12 +281,12 @@ impl Keyspace {
     pub fn create_table(&self, tableid: ObjectID, table: Table) -> bool {
         self.tables.true_if_insert(tableid, Arc::new(table))
     }
-    pub fn drop_table(&self, table_identifier: ObjectID) -> Result<(), DdlError> {
-        if table_identifier.eq(&unsafe_objectid_from_slice!("default"))
-            || table_identifier.eq(&unsafe_objectid_from_slice!("_system"))
-        {
+    pub fn drop_table(&self, table_identifier: ObjectID) -> KeyspaceResult<()> {
+        if table_identifier.eq(&unsafe_objectid_from_slice!("default")) {
             Err(DdlError::ProtectedObject)
-        } else if self.tables.contains_key(&table_identifier) {
+        } else if !self.tables.contains_key(&table_identifier) {
+            Err(DdlError::ObjectNotFound)
+        } else {
             // has table
             let did_remove =
                 self.tables
@@ -280,8 +299,6 @@ impl Keyspace {
             } else {
                 Err(DdlError::StillInUse)
             }
-        } else {
-            Err(DdlError::ObjectNotFound)
         }
     }
 }
@@ -322,12 +339,6 @@ fn test_keyspace_try_delete_protected_table() {
     assert_eq!(
         our_keyspace
             .drop_table(unsafe_objectid_from_slice!("default"))
-            .unwrap_err(),
-        DdlError::ProtectedObject
-    );
-    assert_eq!(
-        our_keyspace
-            .drop_table(unsafe_objectid_from_slice!("_system"))
             .unwrap_err(),
         DdlError::ProtectedObject
     );

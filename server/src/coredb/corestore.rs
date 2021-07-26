@@ -39,7 +39,7 @@ use crate::IoResult;
 use crate::SnapshotConfig;
 use std::sync::Arc;
 
-type KeyspaceResult<T> = Result<T, DdlError>;
+pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 
 /// The top level abstraction for the in-memory store. This is free to be shared across
 /// threads, cloned and well, whatever. Most importantly, clones have an independent container
