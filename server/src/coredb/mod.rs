@@ -38,6 +38,7 @@ use libsky::TResult;
 use std::sync::Arc;
 pub mod array;
 pub mod buffers;
+pub mod corestore;
 pub mod htable;
 pub mod iarray;
 pub mod lazy;

@@ -62,7 +62,6 @@ use crate::coredb::table::Table;
 use crate::coredb::SnapshotStatus;
 use crate::SnapshotConfig;
 use core::mem::MaybeUninit;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 #[sky_macros::array]
@@ -115,10 +114,16 @@ mod cluster {
 
 #[derive(Debug, PartialEq)]
 pub enum DdlError {
+    /// The object is still in use
     StillInUse,
+    /// The object couldn't be found
     ObjectNotFound,
+    /// The object is not user-accessible
     ProtectedObject,
+    /// The default object wasn't found
     DefaultNotFound,
+    /// Incorrect data model semantics were used on a data model
+    WrongModel,
 }
 
 #[derive(Debug)]
@@ -130,11 +135,8 @@ pub enum DdlError {
 pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
-    /// current state of the disk flush status. if this is true, we're safe to
-    /// go ahead with writes
-    flush_state_healthy: AtomicBool,
     /// the snapshot configuration
-    snap_config: Option<SnapshotStatus>,
+    pub snap_config: Option<SnapshotStatus>,
 }
 
 impl Memstore {
@@ -142,7 +144,6 @@ impl Memstore {
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
-            flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
         }
     }
@@ -152,7 +153,6 @@ impl Memstore {
     ) -> Self {
         Self {
             keyspaces,
-            flush_state_healthy: AtomicBool::new(true),
             snap_config: if let SnapshotConfig::Enabled(pref) = snap_config {
                 Some(SnapshotStatus::new(pref.atmost))
             } else {
@@ -182,7 +182,6 @@ impl Memstore {
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
                 n
             },
-            flush_state_healthy: AtomicBool::new(true),
             snap_config: None,
         }
     }

@@ -35,16 +35,20 @@ use core::sync::atomic::Ordering;
 const ORD_ACQ: Ordering = Ordering::Acquire;
 const ORD_REL: Ordering = Ordering::Release;
 
+/// The global system health
 static GLOBAL_STATE: AtomicBool = AtomicBool::new(true);
 
+/// Check the global system state
 pub fn state_okay() -> bool {
     GLOBAL_STATE.load(ORD_ACQ)
 }
 
+/// Poison the global system state
 pub fn poison() {
     GLOBAL_STATE.store(false, ORD_REL)
 }
 
+/// Unpoison the global system state
 pub fn unpoison() {
     GLOBAL_STATE.store(true, ORD_REL)
 }

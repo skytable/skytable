@@ -169,3 +169,23 @@ macro_rules! action {
                 $block
     };
 }
+
+#[macro_export]
+macro_rules! kve {
+    ($db:ident, $con:ident) => {
+        match $db.get_kvstore() {
+            Ok(kve) => kve,
+            Err(e) => match e {
+                DdlError::WrongModel => {
+                    $con.write_response(crate::protocol::responses::groups::WRONG_MOEL)
+                        .await?;
+                }
+                DdlError::DefaultNotFound => {
+                    $con.write_response(crate::protocol::responses::groups::NO_DEFAULT_CONTAINER)
+                        .await?;
+                }
+                _ => unsafe { impossible!() },
+            },
+        }
+    };
+}
