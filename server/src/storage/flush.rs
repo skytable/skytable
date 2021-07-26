@@ -50,6 +50,23 @@ pub fn flush_full(store: &Memstore) -> IoResult<()> {
     Ok(())
 }
 
+pub fn snap_flush_keyspace_full(
+    snapid: &str,
+    ksid: &ObjectID,
+    keyspace: &Keyspace,
+) -> IoResult<()> {
+    self::oneshot::snap_flush_partmap(snapid, ksid, keyspace)?;
+    self::oneshot::snap_flush_keyspace(snapid, ksid, keyspace)
+}
+
+pub fn snap_flush_full(snapid: &str, store: &Memstore) -> IoResult<()> {
+    self::oneshot::snap_flush_preload(snapid, store)?;
+    for keyspace in store.keyspaces.iter() {
+        self::snap_flush_keyspace_full(snapid, keyspace.key(), keyspace.value())?;
+    }
+    Ok(())
+}
+
 pub mod oneshot {
     //! # Irresponsible flushing
     //!
@@ -58,11 +75,11 @@ pub mod oneshot {
     //!
     use super::*;
     use crate::coredb::table::{DataModel, Table};
-    use crate::storage::interface::DIR_KSROOT;
+    use crate::storage::interface::{DIR_KSROOT, DIR_SNAPROOT};
     use std::fs::{self, File};
 
     const PRELOAD_FILE_PATH_TEMP: &str = "data/ks/PRELOAD_";
-    const PRELOAD_FILE_PATH_TEMP_LEN_CHOP: usize = PRELOAD_FILE_PATH_TEMP.len() - 1;
+    const PRELOAD_FILE_PATH: &str = "data/ks/PRELOAD";
 
     macro_rules! tbl_path {
         ($ksid:expr, $tableid:expr) => {
@@ -70,24 +87,55 @@ pub mod oneshot {
         };
     }
 
+    macro_rules! snap_tbl_path {
+        ($snapid:expr, $ksid:expr, $tableid:expr) => {
+            unsafe {
+                concat_str!(
+                    DIR_SNAPROOT,
+                    "/",
+                    $snapid,
+                    "/",
+                    $ksid.as_str(),
+                    "/",
+                    $tableid.as_str(),
+                    "_"
+                )
+            }
+        };
+    }
+
+    macro_rules! routine_flushtable {
+        ($table:ident, $path:expr) => {
+            if $table.is_volatile() {
+                // no flushing needed
+                Ok(())
+            } else {
+                // fine, this needs to be flushed
+                let mut file = File::create(&$path)?;
+                match $table.get_model_ref() {
+                    DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
+                        &mut file,
+                        kve.__get_inner_ref(),
+                    )?,
+                }
+                file.sync_all()?;
+                fs::rename(&$path, &$path[..$path.len() - 1])
+            }
+        };
+    }
     /// No `partmap` handling. Just flushes the table to the expected location
     pub fn flush_table(tableid: &ObjectID, ksid: &ObjectID, table: &Table) -> IoResult<()> {
-        if table.is_volatile() {
-            // no flushing needed
-            Ok(())
-        } else {
-            // fine, this needs to be flushed
-            let path = tbl_path!(ksid, tableid);
-            let mut file = File::create(&path)?;
-            match table.get_model_ref() {
-                DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
-                    &mut file,
-                    kve.__get_inner_ref(),
-                )?,
-            }
-            file.sync_all()?;
-            fs::rename(&path, &path[..path.len() - 1])
-        }
+        routine_flushtable!(table, tbl_path!(ksid, tableid))
+    }
+
+    /// Same as flush_table, except for it being built specifically for snapshots
+    pub fn snap_flush_table(
+        snapid: &str,
+        ksid: &ObjectID,
+        tableid: &ObjectID,
+        table: &Table,
+    ) -> IoResult<()> {
+        routine_flushtable!(table, snap_tbl_path!(snapid, ksid, tableid))
     }
 
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
@@ -98,14 +146,44 @@ pub mod oneshot {
         Ok(())
     }
 
+    /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
+    pub fn snap_flush_keyspace(snapid: &str, ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
+        for table in keyspace.tables.iter() {
+            self::snap_flush_table(snapid, table.key(), &ksid, table.value())?;
+        }
+        Ok(())
+    }
+
+    macro_rules! routine_flushpartmap {
+        ($path:expr, $keyspace:ident) => {{
+            let mut file = File::create(&$path)?;
+            super::interface::serialize_partmap_into_slow_buffer(&mut file, $keyspace)?;
+            file.sync_all()?;
+            fs::rename(&$path, &$path[..$path.len() - 1])?;
+            Ok(())
+        }};
+    }
+
     /// Flushes a single partmap
     pub fn flush_partmap(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
         let path = unsafe { concat_str!(DIR_KSROOT, "/", ksid.as_str(), "/", "PARTMAP_") };
-        let mut file = File::create(&path)?;
-        super::interface::serialize_partmap_into_slow_buffer(&mut file, keyspace)?;
-        file.sync_all()?;
-        fs::rename(&path, &path[..path.len() - 1])?;
-        Ok(())
+        routine_flushpartmap!(path, keyspace)
+    }
+
+    /// Flushes a single partmap
+    pub fn snap_flush_partmap(snapid: &str, ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
+        let path = unsafe {
+            concat_str!(
+                DIR_SNAPROOT,
+                "/",
+                snapid,
+                "/",
+                ksid.as_str(),
+                "/",
+                "PARTMAP_"
+            )
+        };
+        routine_flushpartmap!(path, keyspace)
     }
 
     /// Flushes everything in memory. No `partmap` or `preload` handling
@@ -116,15 +194,25 @@ pub mod oneshot {
         Ok(())
     }
 
+    macro_rules! routine_flushpreload {
+        ($store:expr, $preloadtmp:expr, $preloadfinal:expr) => {{
+            let mut file = File::create(&$preloadtmp)?;
+            super::interface::serialize_preload_into_slow_buffer(&mut file, $store)?;
+            file.sync_all()?;
+            fs::rename(&$preloadtmp, &$preloadfinal)?;
+            Ok(())
+        }};
+    }
+
     // Flush the `PRELOAD`
     pub fn flush_preload(store: &Memstore) -> IoResult<()> {
-        let mut file = File::create(PRELOAD_FILE_PATH_TEMP)?;
-        super::interface::serialize_preload_into_slow_buffer(&mut file, store)?;
-        file.sync_all()?;
-        fs::rename(
-            &PRELOAD_FILE_PATH_TEMP,
-            &PRELOAD_FILE_PATH_TEMP[..PRELOAD_FILE_PATH_TEMP_LEN_CHOP],
-        )?;
-        Ok(())
+        routine_flushpreload!(store, PRELOAD_FILE_PATH_TEMP, PRELOAD_FILE_PATH)
+    }
+
+    /// Same as flush_preload, but for snapshots
+    pub fn snap_flush_preload(snapid: &str, store: &Memstore) -> IoResult<()> {
+        let preload_tmp = concat_str!(DIR_SNAPROOT, "/", snapid, "/", "ks/PRELOAD_");
+        let preload = &preload_tmp[..preload_tmp.len() - 1];
+        routine_flushpreload!(store, preload_tmp, preload)
     }
 }
