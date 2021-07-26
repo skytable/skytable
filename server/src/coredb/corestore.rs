@@ -166,6 +166,14 @@ impl Corestore {
         ret
     }
 
+    /// Drop a table
+    pub fn drop_table(&self, ksid: ObjectID, tblid: ObjectID) -> KeyspaceResult<()> {
+        match self.store.get_keyspace_atomic_ref(ksid) {
+            Some(ks) => ks.drop_table(tblid),
+            None => Err(DdlError::ObjectNotFound),
+        }
+    }
+
     /// Create a keyspace **without any transactional guarantees**
     pub fn create_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         // lock the global flush lock (see comment in create_table to know why)
@@ -179,5 +187,10 @@ impl Corestore {
         };
         drop(flush_lock);
         ret
+    }
+
+    /// Drop a keyspace
+    pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        self.store.drop_keyspace(ksid)
     }
 }
