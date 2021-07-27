@@ -143,7 +143,7 @@ mod interface_tests {
                 v.to_string_lossy().to_string()
             })
             .collect();
-        assert_eq!(read_ks, vec!["default".to_owned(), "system".to_owned()]);
+        assert_veceq!(read_ks, vec!["default".to_owned(), "system".to_owned()]);
         // just read one level of the snaps dir
         let read_snaps: Vec<String> = fs::read_dir(DIR_SNAPROOT)
             .unwrap()
