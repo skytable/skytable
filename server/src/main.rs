@@ -52,7 +52,6 @@ extern crate libsky;
 mod actions;
 mod admin;
 mod arbiter;
-mod compat;
 mod config;
 mod corestore;
 mod dbnet;

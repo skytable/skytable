@@ -26,7 +26,6 @@
 
 //! This module provides tools to handle configuration files and settings
 
-use crate::compat;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 #[cfg(test)]
 use libsky::TResult;
@@ -37,8 +36,6 @@ use std::fs;
 #[cfg(test)]
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
-use std::process;
-
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 #[cfg(test)]
 const DEFAULT_PORT: u16 = 2003;
@@ -420,22 +417,6 @@ impl fmt::Display for ConfigError {
 pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
-    // check upgrades
-    if let Some(matches) = matches.subcommand_matches("upgrade") {
-        if let Some(format) = matches.value_of("format") {
-            if let Err(e) = compat::upgrade(format) {
-                log::error!("Dataset upgrade failed with error: {}", e);
-                process::exit(0x01);
-            } else {
-                process::exit(0x000);
-            }
-        } else {
-            unsafe {
-                // UNSAFE(@ohsayan): Completely safe as our CLI args require a value to be passed to upgrade
-                impossible!()
-            }
-        }
-    }
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
     // Check flags
     let sslonly = matches.is_present("sslonly");
