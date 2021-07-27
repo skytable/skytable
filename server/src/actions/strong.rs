@@ -54,8 +54,16 @@ action!(
             // This iterator gives us the keys and values, skipping the first argument which
             // is the action name
             let mut key_iter = act.as_ref().iter();
+            let mut good_to_set = true;
+            'outer: while let (Some(key), _) = (key_iter.next(), key_iter.next()) {
+                // unwrap or true because that will make the operation fail
+                if mut_table.exists(key.clone()).unwrap_or(true) {
+                    good_to_set = false;
+                    break 'outer;
+                }
+            }
             if registry::state_okay() {
-                if key_iter.all(|key| mut_table.exists(key.clone()).unwrap_or(false)) {
+                if good_to_set {
                     failed = Some(false);
                     // Since the failed flag is false, none of the keys existed
                     // So we can safely set the keys
@@ -137,18 +145,13 @@ action!(
             let mut key_iter = act.as_ref().iter();
             if registry::state_okay() {
                 let mut_table = kve!(con, handle);
-                while let Some(key) = key_iter.next() {
-                    if !not_enc_err!(mut_table.exists(key.clone())) {
+                while let (Some(key), _) = (key_iter.next(), key_iter.next()) {
+                    if !mut_table.exists(key.clone()).unwrap_or(false) {
                         // With one of the keys failing to exist - this action can't clearly be done
                         // So we'll set `failed` to true and ensure that we check this while
                         // writing a response back to the client
                         failed = Some(true);
                         break;
-                    }
-                    // Skip the next value that is coming our way, as we don't need it
-                    // right now
-                    unsafe {
-                        let _ = key_iter.next().unsafe_unwrap();
                     }
                 }
                 // clippy thinks we're doing something complex when we aren't, at all!

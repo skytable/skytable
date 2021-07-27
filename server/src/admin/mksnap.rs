@@ -95,6 +95,7 @@ action!(
             };
             let mut path = PathBuf::from(DIR_SNAPROOT);
             path.push("remote");
+            path.push(&snapname);
             let illegal_snapshot = path
                 .components()
                 .filter(|dir| {

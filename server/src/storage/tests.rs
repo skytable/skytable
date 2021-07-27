@@ -130,7 +130,6 @@ fn test_runtime_panic_32bit_or_lower() {
 
 mod interface_tests {
     use super::interface::{create_tree, DIR_KSROOT, DIR_ROOT, DIR_SNAPROOT};
-    use crate::concat_path;
     use crate::corestore::memstore::Memstore;
     use std::fs;
     use std::path::PathBuf;
@@ -154,15 +153,6 @@ mod interface_tests {
             })
             .collect();
         assert_eq!(read_snaps, Vec::<String>::new());
-        // now read level two: snaps/default
-        let read_snaps: Vec<String> = fs::read_dir(concat_path!(DIR_SNAPROOT, "default"))
-            .unwrap()
-            .map(|dir| {
-                let v = dir.unwrap().file_name();
-                v.to_string_lossy().to_string()
-            })
-            .collect();
-        assert_veceq!(read_snaps, vec!["_system".to_owned(), "default".to_owned()]);
         assert!(PathBuf::from("data/backups").is_dir());
         // clean up
         fs::remove_dir_all(DIR_ROOT).unwrap();
@@ -201,13 +191,6 @@ mod bytemark_set_tests {
         unsafe {
             expected.insert(
                 ObjectID::from_slice("default"),
-                (
-                    bytemarks::BYTEMARK_STORAGE_PERSISTENT,
-                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
-                ),
-            );
-            expected.insert(
-                ObjectID::from_slice("_system"),
                 (
                     bytemarks::BYTEMARK_STORAGE_PERSISTENT,
                     bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
