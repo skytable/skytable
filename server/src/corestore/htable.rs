@@ -32,58 +32,7 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
-use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::Arc;
-
-#[derive(Debug)]
-/// A thread-safe in-memory hashtable
-///
-/// This wraps around a [`Coremap`] object in an [`Arc`] to make it shareable across threads. Clones
-/// are cheap because it just increments the atomic reference counter
-pub struct HTable<K: Eq + Hash, V>
-where
-    K: Eq + Hash,
-{
-    inner: Arc<Coremap<K, V>>,
-    _marker_key: PhantomData<K>,
-    _marker_value: PhantomData<V>,
-}
-
-impl<K: Eq + Hash + Clone + Serialize, V: Clone + Serialize> HTable<K, V> {
-    /// Initialize a new HTable instance from an existing [`Coremap`]
-    pub fn from_raw(inner: Coremap<K, V>) -> Self {
-        Self {
-            inner: Arc::new(inner),
-            _marker_key: PhantomData,
-            _marker_value: PhantomData,
-        }
-    }
-}
-
-impl<K: Eq + Hash, V> HTable<K, V> {
-    /// Create a new, empty in-memory table
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(Coremap::new()),
-            _marker_key: PhantomData,
-            _marker_value: PhantomData,
-        }
-    }
-}
-
-impl<K, V> Clone for HTable<K, V>
-where
-    K: Eq + Hash,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-            _marker_key: self._marker_key,
-            _marker_value: self._marker_value,
-        }
-    }
-}
 
 use dashmap::iter::Iter;
 pub use dashmap::lock::RwLock as MapRWL;
@@ -103,13 +52,6 @@ where
     K: Eq + Hash,
 {
     pub(crate) inner: HashTable<K, V>,
-}
-
-impl<K: Eq + Hash, V> Deref for HTable<K, V> {
-    type Target = Coremap<K, V>;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
 }
 
 impl<K: Eq + Hash, V> Default for Coremap<K, V> {
@@ -278,24 +220,6 @@ impl AsRef<[u8]> for Data {
     }
 }
 
-impl<K, V> FromIterator<(K, V)> for HTable<K, V>
-where
-    K: Eq + Hash,
-{
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = (K, V)>,
-    {
-        Self {
-            inner: Arc::new(Coremap {
-                inner: DashMap::from_iter(iter),
-            }),
-            _marker_value: PhantomData,
-            _marker_key: PhantomData,
-        }
-    }
-}
-
 impl<K, V> FromIterator<(K, V)> for Coremap<K, V>
 where
     K: Eq + Hash,
@@ -396,20 +320,4 @@ impl<'de> Deserialize<'de> for Data {
     {
         deserializer.deserialize_seq(DataVisitor)
     }
-}
-
-#[test]
-fn test_de() {
-    let x = HTable::new();
-    x.upsert(
-        Data::from("sayan"),
-        Data::from_string("is writing open-source code".to_owned()),
-    );
-    let ser = x.serialize().unwrap();
-    let de = Coremap::<Data, Data>::deserialize(ser).unwrap();
-    assert!(de.contains_key(&Data::from("sayan")));
-    assert!(de.len() == x.len());
-    let hmap: Coremap<Data, Data> = Coremap::new();
-    hmap.upsert(Data::from("sayan"), Data::from("writes code"));
-    assert!(hmap.get("sayan".as_bytes()).is_some());
 }

@@ -135,19 +135,16 @@ impl<T, F> Drop for Lazy<T, F> {
 }
 
 cfg_test!(
-    use crate::corestore::htable::{HTable, Data};
+    use crate::corestore::Data;
     use crate::corestore::lazy;
+    use std::collections::HashMap;
     use std::thread;
-    typedef!(
-        /// A function that returns a [`HTable`]
-        RetNs = fn() -> HTable<Data, Data>;
-        /// A [`Htable<Data, Data>`] typedef
-        Htable = HTable<Data, Data>;
-    );
 
-    static LAZY_VALUE: lazy::Lazy<Htable, RetNs> = lazy::Lazy::new(|| {
-        let ht = HTable::new();
-        ht.true_if_insert("sayan".into(), "is doing something".into());
+    #[allow(clippy::type_complexity)]
+    static LAZY_VALUE: lazy::Lazy<HashMap<Data, Data>, fn() -> HashMap<Data, Data>> = lazy::Lazy::new(|| {
+        #[allow(clippy::mutable_key_type)]
+        let mut ht = HashMap::new();
+        ht.insert("sayan".into(), "is doing something".into());
         ht
     });
 
