@@ -75,6 +75,7 @@ pub mod prelude {
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
     pub use crate::corestore::Corestore;
+    pub use crate::default_keyspace;
     pub use crate::err_if_len_is;
     pub use crate::is_lowbit_set;
     pub use crate::kve;
@@ -104,6 +105,19 @@ pub mod prelude {
             match $val {
                 Ok(v) => v,
                 Err(_) => false,
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! default_keyspace {
+        ($store:expr, $con:expr) => {
+            match $store.get_keyspace() {
+                Ok(ks) => ks,
+                Err(_) => {
+                    return $con
+                        .write_response(crate::protocol::responses::groups::DEFAULT_UNSET)
+                        .await;
+                }
             }
         };
     }

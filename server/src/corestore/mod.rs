@@ -131,6 +131,7 @@ impl Corestore {
             store: Arc::new(store),
         }
     }
+
     pub fn get_store(&self) -> &Memstore {
         &self.store
     }
@@ -176,6 +177,7 @@ impl Corestore {
             None => Err(DdlError::DefaultNotFound),
         }
     }
+
     pub fn is_snapshot_enabled(&self) -> bool {
         self.store.snap_config.is_some()
     }
@@ -188,14 +190,13 @@ impl Corestore {
     /// luck -- the next mutual access may be yielded to the next `create table` command
     pub fn create_table(
         &self,
-        ksid: ObjectID,
         tblid: ObjectID,
         modelcode: u8,
         volatile: bool,
     ) -> KeyspaceResult<()> {
         // first lock the global flush state
         let flush_lock = registry::lock_flush_state();
-        let ret = match &self.store.get_keyspace_atomic_ref(ksid) {
+        let ret = match &self.cks {
             Some(ks) => {
                 let tbl = Table::from_model_code(modelcode, volatile);
                 if let Some(tbl) = tbl {
@@ -208,7 +209,7 @@ impl Corestore {
                     Err(DdlError::WrongModel)
                 }
             }
-            None => Err(DdlError::ObjectNotFound),
+            None => Err(DdlError::DefaultNotFound),
         };
         // free the global flush lock
         drop(flush_lock);

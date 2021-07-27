@@ -112,12 +112,18 @@ impl<K: Eq + Hash, V> Deref for HTable<K, V> {
     }
 }
 
-impl<K: Eq + Hash, V> Coremap<K, V> {
-    /// Create an empty coremap
-    pub fn new() -> Self {
+impl<K: Eq + Hash, V> Default for Coremap<K, V> {
+    fn default() -> Self {
         Coremap {
             inner: HashTable::new(),
         }
+    }
+}
+
+impl<K: Eq + Hash, V> Coremap<K, V> {
+    /// Create an empty coremap
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn with_capacity(cap: usize) -> Self {
         Coremap {

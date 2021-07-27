@@ -32,6 +32,9 @@ use crate::protocol::responses;
 use crate::protocol::Element;
 use crate::{actions, admin};
 use bytes::Bytes;
+mod ddl;
+#[cfg(test)]
+mod tests;
 
 use std::vec::IntoIter;
 pub type ActionIter = IntoIter<Bytes>;
@@ -46,7 +49,7 @@ macro_rules! gen_constants_and_matches {
             )*
         }
         let mut first = match $buf.next() {
-            Some(first) => String::from_utf8_lossy(&first).to_string(),
+            Some(frst) => frst.to_vec(),
             None => return $con.write_response(responses::groups::PACKET_ERR).await,
         };
         first.make_ascii_uppercase();
@@ -97,7 +100,8 @@ where
         KEYLEN => actions::keylen::keylen,
         MKSNAP => admin::mksnap::mksnap,
         LSKEYS => actions::lskeys::lskeys,
-        POP => actions::pop::pop
+        POP => actions::pop::pop,
+        CREATE => ddl::create
     );
     Ok(())
 }
