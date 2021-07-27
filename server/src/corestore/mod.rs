@@ -241,14 +241,17 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table<Q>(&self, tblid: &Q) -> KeyspaceResult<()>
-    where
-        ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID>,
-    {
-        match &self.cks {
-            Some(ks) => ks.drop_table(tblid),
-            None => Err(DdlError::DefaultNotFound),
+    pub fn drop_table(&self, entity: EntityGroup) -> KeyspaceResult<()> {
+        match entity {
+            (Some(tblid), None) => match &self.cks {
+                Some(ks) => ks.drop_table(&tblid),
+                None => Err(DdlError::DefaultNotFound),
+            },
+            (Some(ksid), Some(tblid)) => match self.store.get_keyspace_atomic_ref(&ksid) {
+                Some(ks) => ks.drop_table(&tblid),
+                None => Err(DdlError::ObjectNotFound),
+            },
+            _ => unsafe { impossible!() },
         }
     }
 

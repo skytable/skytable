@@ -144,11 +144,12 @@ action! {
     /// Drop a table (`<tblid>` only)
     fn drop_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
         match act.next() {
-            Some(tbl) => {
-                if tbl.len() > 64 {
-                    return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
-                }
-                let ret = match handle.drop_table(unsafe {&ObjectID::from_slice(tbl)}) {
+            Some(eg) => {
+                let entity_group = match parser::get_query_entity(&eg) {
+                    Ok(egroup) => egroup,
+                    Err(e) => return con.write_response(e).await,
+                };
+                let ret = match handle.drop_table(entity_group) {
                     Ok(()) => responses::groups::OKAY,
                     Err(DdlError::DefaultNotFound) => responses::groups::DEFAULT_UNSET,
                     Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
