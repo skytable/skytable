@@ -46,22 +46,30 @@ mod parser_ddl_tests {
         // create table [mytbl keymap(str, str)]
         let it = vec![byt!("mytbl"), byt!("keymap(binstr,binstr)")].into_iter();
         let (tbl_name, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tbl_name, unsafe { ObjectID::from_slice("mytbl") });
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
         assert_eq!(mcode, 0);
 
         let it = vec![byt!("mytbl"), byt!("keymap(binstr,str)")].into_iter();
         let (tbl_name, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tbl_name, unsafe { ObjectID::from_slice("mytbl") });
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
         assert_eq!(mcode, 1);
 
         let it = vec![byt!("mytbl"), byt!("keymap(str,str)")].into_iter();
         let (tbl_name, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tbl_name, unsafe { ObjectID::from_slice("mytbl") });
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
         assert_eq!(mcode, 2);
 
         let it = vec![byt!("mytbl"), byt!("keymap(str,binstr)")].into_iter();
         let (tbl_name, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tbl_name, unsafe { ObjectID::from_slice("mytbl") });
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
         assert_eq!(mcode, 3);
     }
     #[test]
@@ -81,22 +89,30 @@ mod parser_ddl_tests {
     fn test_table_whitespaced_datatypes() {
         let it = vec![byt!("mycooltbl"), byt!("keymap(binstr, binstr)")].into_iter();
         let (tblid, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tblid, unsafe { ObjectID::from_slice("mycooltbl") });
+        assert_eq!(tblid, unsafe {
+            (Some(ObjectID::from_slice("mycooltbl")), None)
+        });
         assert_eq!(mcode, 0);
 
         let it = vec![byt!("mycooltbl"), byt!("keymap(binstr, str)")].into_iter();
         let (tblid, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tblid, unsafe { ObjectID::from_slice("mycooltbl") });
+        assert_eq!(tblid, unsafe {
+            (Some(ObjectID::from_slice("mycooltbl")), None)
+        });
         assert_eq!(mcode, 1);
 
         let it = vec![byt!("mycooltbl"), byt!("keymap(str, str)")].into_iter();
         let (tblid, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tblid, unsafe { ObjectID::from_slice("mycooltbl") });
+        assert_eq!(tblid, unsafe {
+            (Some(ObjectID::from_slice("mycooltbl")), None)
+        });
         assert_eq!(mcode, 2);
 
         let it = vec![byt!("mycooltbl"), byt!("keymap(str, binstr)")].into_iter();
         let (tblid, mcode) = parse_table_args(it).unwrap();
-        assert_eq!(tblid, unsafe { ObjectID::from_slice("mycooltbl") });
+        assert_eq!(tblid, unsafe {
+            (Some(ObjectID::from_slice("mycooltbl")), None)
+        });
         assert_eq!(mcode, 3);
     }
 
@@ -261,7 +277,7 @@ mod entity_parser_tests {
         let x = byt!("tbl");
         assert_eq!(
             get_query_entity(&x).unwrap(),
-            (None, Some(unsafe { ObjectID::from_slice("tbl") }))
+            (Some(unsafe { ObjectID::from_slice("tbl") }), None)
         )
     }
     #[test]
