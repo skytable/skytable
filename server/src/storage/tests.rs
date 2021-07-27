@@ -144,7 +144,7 @@ mod interface_tests {
                 v.to_string_lossy().to_string()
             })
             .collect();
-        assert_eq!(read_ks, vec!["default".to_owned()]);
+        assert_eq!(read_ks, vec!["default".to_owned(), "system".to_owned()]);
         // just read one level of the snaps dir
         let read_snaps: Vec<String> = fs::read_dir(DIR_SNAPROOT)
             .unwrap()
@@ -153,7 +153,7 @@ mod interface_tests {
                 v.to_string_lossy().to_string()
             })
             .collect();
-        assert_eq!(read_snaps, vec!["default".to_owned()]);
+        assert_eq!(read_snaps, Vec::<String>::new());
         // now read level two: snaps/default
         let read_snaps: Vec<String> = fs::read_dir(concat_path!(DIR_SNAPROOT, "default"))
             .unwrap()
@@ -182,7 +182,7 @@ mod preload_tests {
             .into_iter()
             .map(|each| unsafe { each.as_str().to_owned() })
             .collect();
-        assert_veceq!(de, vec!["default".to_owned()]);
+        assert_veceq!(de, vec!["default".to_owned(), "system".to_owned()]);
     }
 }
 
