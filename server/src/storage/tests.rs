@@ -129,7 +129,7 @@ fn test_runtime_panic_32bit_or_lower() {
 }
 
 mod interface_tests {
-    use super::interface::{create_tree, DIR_KSROOT, DIR_ROOT, DIR_SNAPROOT};
+    use super::interface::{create_tree, DIR_KSROOT, DIR_SNAPROOT};
     use crate::corestore::memstore::Memstore;
     use std::fs;
     use std::path::PathBuf;
@@ -143,7 +143,8 @@ mod interface_tests {
                 v.to_string_lossy().to_string()
             })
             .collect();
-        assert_veceq!(read_ks, vec!["default".to_owned(), "system".to_owned()]);
+        assert!(read_ks.contains(&"system".to_owned()));
+        assert!(read_ks.contains(&"default".to_owned()));
         // just read one level of the snaps dir
         let read_snaps: Vec<String> = fs::read_dir(DIR_SNAPROOT)
             .unwrap()
@@ -154,8 +155,6 @@ mod interface_tests {
             .collect();
         assert_eq!(read_snaps, Vec::<String>::new());
         assert!(PathBuf::from("data/backups").is_dir());
-        // clean up
-        fs::remove_dir_all(DIR_ROOT).unwrap();
     }
 }
 
@@ -267,7 +266,6 @@ mod flush_routines {
                 .clone(),
             Data::from("world")
         );
-        fs::remove_dir_all("data/ks/myks1").unwrap()
     }
     #[test]
     fn test_flush_unflush_keyspace() {
@@ -302,6 +300,5 @@ mod flush_routines {
             Data::from("world")
         );
         assert!(tbl2_ret.get_kvstore().unwrap().len() == 0);
-        fs::remove_dir_all("data/ks/myks_1").unwrap()
     }
 }

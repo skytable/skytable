@@ -54,7 +54,7 @@ RELEASE_SERVER_COMMAND += $(BUILD_SERVER_COMMAND)
 RELEASE_SERVER_COMMAND += --release
 RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
 BUILD_COMMAND += $(BUILD_VERBOSE)
-TEST_COMMAND += cargo test $(TARGET_ARG) -- --test-threads=1
+TEST_COMMAND += cargo test $(TARGET_ARG)
 START_COMMAND += cargo run $(TARGET_ARG) -p skyd
 START_COMMAND_RELEASE =
 START_COMMAND_RELEASE += ${START_COMMAND}
@@ -132,7 +132,7 @@ test: .build-server
 	@echo "===================================================================="
 	@echo "Running all tests"
 	@echo "===================================================================="
-	cargo test $(TARGET_ARG) -- --test-threads=1
+	cargo test $(TARGET_ARG)
 	@$(STOP_SERVER)
 	@sleep 2
 	@rm -f .sky_pid cert.pem key.pem

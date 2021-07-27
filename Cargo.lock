@@ -948,6 +948,7 @@ version = "0.6.3"
 dependencies = [
  "proc-macro2",
  "quote",
+ "rand",
  "syn",
 ]
 

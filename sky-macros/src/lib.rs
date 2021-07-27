@@ -47,11 +47,16 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{self};
 
+const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
 /// This parses a function within a `dbtest` module
 ///
 /// This accepts an `async` function and returns a non-`async` version of it - by
 /// making the body of the function use the `tokio` runtime
-fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
+fn parse_dbtest(
+    mut input: syn::ItemFn,
+    rng: &mut impl rand::Rng,
+) -> Result<TokenStream, syn::Error> {
     let sig = &mut input.sig;
     let fname = sig.ident.to_string();
     let body = &input.block;
@@ -65,8 +70,33 @@ fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
         return Err(syn::Error::new_spanned(sig.fn_token, msg));
     }
     sig.asyncness = None;
+    let rand_string: String = (0..30)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect();
     let body = quote! {
         let mut con = skytable::AsyncConnection::new("127.0.0.1", 2003).await.unwrap();
+        let __create_ks =
+            con.run_simple_query(
+                &skytable::query!("create", "keyspace", "testsuite")
+            ).await.unwrap();
+        let __switch_ks =
+            con.run_simple_query(
+                &skytable::query!("use", "testsuite")
+            ).await.unwrap();
+        let __create_tbl =
+            con.run_simple_query(
+                &skytable::query!("create", "table", #rand_string, "keymap(binstr,binstr)")
+            ).await.unwrap();
+        let mut __concat_entity = std::string::String::new();
+        __concat_entity.push_str("testsuite:");
+        __concat_entity.push_str(&#rand_string);
+        let __switch_entity =
+            con.run_simple_query(
+                &skytable::query!("use", __concat_entity)
+            ).await.unwrap();
         let mut query = skytable::Query::new();
         #body
         {
@@ -95,7 +125,7 @@ fn parse_dbtest(mut input: syn::ItemFn) -> Result<TokenStream, syn::Error> {
 }
 
 /// This function checks if the current function is eligible to be a test
-fn parse_test_sig(input: syn::ItemFn) -> TokenStream {
+fn parse_test_sig(input: syn::ItemFn, rng: &mut impl rand::Rng) -> TokenStream {
     for attr in &input.attrs {
         if attr.path.is_ident("test") {
             let msg = "second test attribute is supplied";
@@ -111,7 +141,7 @@ fn parse_test_sig(input: syn::ItemFn) -> TokenStream {
             .to_compile_error()
             .into();
     }
-    parse_dbtest(input).unwrap_or_else(|e| e.to_compile_error().into())
+    parse_dbtest(input, rng).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// This function accepts an entire module which comprises of `dbtest` functions.
@@ -175,6 +205,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
     let mut result = quote! {};
+    let mut rng = rand::thread_rng();
     for item in content {
         match item {
             // We just care about functions, so parse functions and ignore everything
@@ -187,7 +218,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     };
                     continue;
                 }
-                let inp = parse_test_sig(function);
+                let inp = parse_test_sig(function, &mut rng);
                 let __tok: syn::ItemFn = syn::parse_macro_input!(inp as syn::ItemFn);
                 let tok = quote! {
                     #__tok
