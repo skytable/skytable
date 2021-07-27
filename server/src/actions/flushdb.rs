@@ -25,26 +25,25 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 
 action!(
     /// Delete all the keys in the database
-    fn flushdb(handle: &Corestore, con: &mut T, act: ActionIter) {
-        err_if_len_is!(act, con, not 0);
-        let failed;
-        {
-            if registry::state_okay() {
-                kve!(con, handle).truncate_table();
-                failed = false;
+    fn flushdb(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, gt 1);
+        if registry::state_okay() {
+            if act.len() == 0 {
+                // flush the current table
+                get_tbl!(handle, con).truncate_table();
             } else {
-                failed = true;
+                // flush the entity
+                let entity = handle_entity!(con, unsafe { act.next().unsafe_unwrap() });
+                get_tbl!(entity, handle, con).truncate_table();
             }
-        }
-        if failed {
-            con.write_response(responses::groups::SERVER_ERR).await
+            conwrite!(con, responses::groups::OKAY)?;
         } else {
-            con.write_response(responses::groups::OKAY).await
+            conwrite!(con, responses::groups::SERVER_ERR)?;
         }
+        Ok(())
     }
 );

@@ -815,6 +815,13 @@ mod __private {
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::UnsignedInt(3))
         );
+        let mut query = Query::new();
+        query.push("dbsize");
+        query.push(__MYENTITY__);
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(3))
+        );
     }
 
     /// Test `DBSIZE` with an incorrect number of arguments
@@ -822,6 +829,7 @@ mod __private {
         query.push("dbsize");
         query.push("iroegjoeijgor");
         query.push("roigjoigjj094");
+        query.push("ioewjforfifrj");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::ActionError))

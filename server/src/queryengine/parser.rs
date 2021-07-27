@@ -125,7 +125,7 @@ pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(EntityGroup, u8),
     Ok((entity_group, model_code))
 }
 
-pub(super) fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8]> {
+pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8]> {
     let y: Vec<&[u8]> = input.split(|v| *v == b':').collect();
     unsafe {
         if y.len() == 1 {

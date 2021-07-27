@@ -164,6 +164,30 @@ impl Corestore {
         }
         Ok(())
     }
+    /// Get an atomic reference to a table
+    pub fn get_table(&self, entity: EntityGroup) -> KeyspaceResult<Arc<Table>> {
+        match entity {
+            (Some(ksid), Some(table)) => match self.store.get_keyspace_atomic_ref(&ksid) {
+                Some(ks) => match ks.get_table_atomic_ref(&table) {
+                    Some(tbl) => Ok(tbl),
+                    None => Err(DdlError::ObjectNotFound),
+                },
+                None => Err(DdlError::ObjectNotFound),
+            },
+            (Some(tbl), None) => match &self.cks {
+                Some(ks) => match ks.get_table_atomic_ref(&tbl) {
+                    Some(tbl) => Ok(tbl),
+                    None => Err(DdlError::ObjectNotFound),
+                },
+                None => Err(DdlError::DefaultNotFound),
+            },
+            _ => unsafe { impossible!() },
+        }
+    }
+    pub fn get_ctable(&self) -> Option<&Arc<Table>> {
+        self.ctable.as_ref()
+    }
+
     /// Get the key/value store
     ///
     /// `Err`s are propagated if the target table has an incorrect table or if

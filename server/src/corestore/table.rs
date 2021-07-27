@@ -57,6 +57,16 @@ impl Table {
             Err(DdlError::WrongModel)
         }
     }
+    pub fn count(&self) -> usize {
+        match &self.model_store {
+            DataModel::KV(kv) => kv.len(),
+        }
+    }
+    pub fn truncate_table(&self) {
+        match self.model_store {
+            DataModel::KV(ref kv) => kv.truncate_table(),
+        }
+    }
     /// Returns the storage type as an 8-bit uint
     pub const fn storage_type(&self) -> u8 {
         self.volatile as u8

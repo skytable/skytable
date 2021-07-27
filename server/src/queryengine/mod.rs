@@ -34,7 +34,7 @@ use crate::protocol::Element;
 use crate::{actions, admin};
 use bytes::Bytes;
 mod ddl;
-mod parser;
+pub mod parser;
 #[cfg(test)]
 mod tests;
 

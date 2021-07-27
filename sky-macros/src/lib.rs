@@ -93,6 +93,7 @@ fn parse_dbtest(
         let mut __concat_entity = std::string::String::new();
         __concat_entity.push_str("testsuite:");
         __concat_entity.push_str(&#rand_string);
+        let __MYENTITY__: String = __concat_entity.clone();
         let __switch_entity =
             con.run_simple_query(
                 &skytable::query!("use", __concat_entity)

@@ -74,9 +74,13 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
+    pub use crate::aerr;
+    pub use crate::conwrite;
     pub use crate::corestore::Corestore;
     pub use crate::default_keyspace;
     pub use crate::err_if_len_is;
+    pub use crate::get_tbl;
+    pub use crate::handle_entity;
     pub use crate::is_lowbit_set;
     pub use crate::kve;
     pub use crate::not_enc_err;
@@ -120,6 +124,52 @@ pub mod prelude {
                 }
             }
         };
+    }
+    #[macro_export]
+    macro_rules! conwrite {
+        ($con:expr, $what:expr) => {
+            $con.write_response($what).await
+        };
+    }
+    #[macro_export]
+    macro_rules! aerr {
+        ($con:expr, aerr) => {
+            return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR);
+        };
+    }
+    #[macro_export]
+    macro_rules! get_tbl {
+        ($entity:expr, $store:expr, $con:expr) => {{
+            use crate::corestore::memstore::DdlError;
+            match $store.get_table($entity) {
+                Ok(tbl) => tbl,
+                Err(DdlError::DefaultNotFound) => {
+                    return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET);
+                }
+                Err(DdlError::ObjectNotFound) => {
+                    return conwrite!(
+                        $con,
+                        crate::protocol::responses::groups::CONTAINER_NOT_FOUND
+                    );
+                }
+                Err(_) => unsafe { impossible!() },
+            }
+        }};
+        ($store:expr, $con:expr) => {{
+            match $store.get_ctable() {
+                Some(tbl) => tbl,
+                None => return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET),
+            }
+        }};
+    }
+    #[macro_export]
+    macro_rules! handle_entity {
+        ($con:expr, $ident:expr) => {{
+            match crate::queryengine::parser::get_query_entity(&$ident) {
+                Ok(e) => e,
+                Err(e) => return conwrite!($con, e),
+            }
+        }};
     }
 }
 
