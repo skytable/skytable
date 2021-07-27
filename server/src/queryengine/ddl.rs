@@ -53,7 +53,27 @@ action!(
             TABLE => create_table(handle, con, act).await?,
             KEYSPACE => create_keyspace(handle, con, act).await?,
             _ => {
-                con.write_response(responses::groups::UNKNOWN_CREATE_QUERY)
+                con.write_response(responses::groups::UNKNOWN_DDL_QUERY)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+);
+
+action!(
+    /// Handle `drop table <tableid>` and `drop keyspace <ksid>`
+    /// like queries
+    fn ddl_drop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        // minlength is 2 (create has already been checked)
+        err_if_len_is!(act, con, lt 2);
+        let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
+        create_what.make_ascii_uppercase();
+        match create_what.as_ref() {
+            TABLE => drop_table(handle, con, act).await?,
+            KEYSPACE => drop_keyspace(handle, con, act).await?,
+            _ => {
+                con.write_response(responses::groups::UNKNOWN_DDL_QUERY)
                     .await?;
             }
         }
@@ -171,7 +191,9 @@ action!(
 );
 
 action!(
+    /// We should have `<ksid>`
     fn create_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(ksid) => {
                 if !encoding::is_utf8(&ksid) {
@@ -202,3 +224,56 @@ action!(
         }
     }
 );
+
+action! {
+    /// Drop a table (`<tblid>` only)
+    fn drop_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        match act.next() {
+            Some(tbl) => {
+                if tbl.len() > 64 {
+                    return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
+                }
+                let ret = match handle.drop_table(unsafe {ObjectID::from_slice(tbl)}) {
+                    Ok(()) => responses::groups::OKAY,
+                    Err(DdlError::DefaultNotFound) => responses::groups::DEFAULT_UNSET,
+                    Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
+                    Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
+                    Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
+                    Err(_) => unsafe {
+                        // we know that Memstore::drop_table won't ever return anything else
+                        impossible!()
+                    }
+                };
+                con.write_response(ret).await?;
+            },
+            None => con.write_response(responses::groups::ACTION_ERR).await?,
+        }
+        Ok(())
+    }
+}
+
+action! {
+    /// Drop a keyspace (`<ksid>` only)
+    fn drop_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        match act.next() {
+            Some(ksid) => {
+                if ksid.len() > 64 {
+                    return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
+                }
+                let ret = match handle.drop_keyspace(unsafe {ObjectID::from_slice(ksid)}) {
+                    Ok(()) => responses::groups::OKAY,
+                    Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
+                    Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
+                    Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
+                    Err(_) => unsafe {
+                        // we know that Memstore::drop_table won't ever return anything else
+                        impossible!()
+                    }
+                };
+                con.write_response(ret).await?;
+            },
+            None => con.write_response(responses::groups::ACTION_ERR).await?,
+        }
+        Ok(())
+    }
+}

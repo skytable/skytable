@@ -217,10 +217,10 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, ksid: ObjectID, tblid: ObjectID) -> KeyspaceResult<()> {
-        match self.store.get_keyspace_atomic_ref(ksid) {
+    pub fn drop_table(&self, tblid: ObjectID) -> KeyspaceResult<()> {
+        match &self.cks {
             Some(ks) => ks.drop_table(tblid),
-            None => Err(DdlError::ObjectNotFound),
+            None => Err(DdlError::DefaultNotFound),
         }
     }
 

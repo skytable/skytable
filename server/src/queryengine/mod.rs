@@ -101,7 +101,8 @@ where
         MKSNAP => admin::mksnap::mksnap,
         LSKEYS => actions::lskeys::lskeys,
         POP => actions::pop::pop,
-        CREATE => ddl::create
+        CREATE => ddl::create,
+        DROP => ddl::ddl_drop
     );
     Ok(())
 }

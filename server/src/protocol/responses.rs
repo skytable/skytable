@@ -73,7 +73,7 @@ pub mod groups {
     pub const ALREADY_EXISTS: &[u8] = "!18\nerr-already-exists\n".as_bytes();
     pub const NOT_READY: &[u8] = "!9\nnot-ready\n".as_bytes();
     pub const DDL_TRANSACTIONAL_FAILURE: &[u8] = "!21\ntransactional-failure\n".as_bytes();
-    pub const UNKNOWN_CREATE_QUERY: &[u8] = "!20\nunknown-create-query\n".as_bytes();
+    pub const UNKNOWN_DDL_QUERY: &[u8] = "!17\nunknown-ddl-query\n".as_bytes();
     pub const BAD_EXPRESSION: &[u8] = "!20\nmalformed-expression\n".as_bytes();
     pub const UNKNOWN_MODEL: &[u8] = "!13\nunknown-model\n".as_bytes();
     pub const TOO_MANY_ARGUMENTS: &[u8] = "!13\ntoo-many-args\n".as_bytes();
