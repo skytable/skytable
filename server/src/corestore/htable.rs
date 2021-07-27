@@ -189,7 +189,11 @@ where
             false
         }
     }
-    pub fn true_remove_if(&self, key: &K, exec: impl FnOnce(&K, &V) -> bool) -> bool {
+    pub fn true_remove_if<Q>(&self, key: &Q, exec: impl FnOnce(&K, &V) -> bool) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         self.inner.remove_if(key, exec).is_some()
     }
     /// Update or insert

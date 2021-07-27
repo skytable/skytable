@@ -61,6 +61,8 @@ use crate::corestore::lock::{QLGuard, QuickLock};
 use crate::corestore::table::Table;
 use crate::corestore::SnapshotStatus;
 use crate::SnapshotConfig;
+use core::borrow::Borrow;
+use core::hash::Hash;
 use core::mem::MaybeUninit;
 use std::sync::Arc;
 
@@ -208,7 +210,11 @@ impl Memstore {
         }
     }
     /// Get an atomic reference to a keyspace
-    pub fn get_keyspace_atomic_ref(&self, keyspace_identifier: ObjectID) -> Option<Arc<Keyspace>> {
+    pub fn get_keyspace_atomic_ref<Q>(&self, keyspace_identifier: &Q) -> Option<Arc<Keyspace>>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + Sized,
+    {
         self.keyspaces
             .get(&keyspace_identifier)
             .map(|ns| ns.clone())
@@ -218,18 +224,24 @@ impl Memstore {
         self.keyspaces
             .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
-    pub fn drop_keyspace(&self, keyspace_identifier: ObjectID) -> KeyspaceResult<()> {
-        if keyspace_identifier.eq(&SYSTEM) || keyspace_identifier.eq(&DEFAULT) {
+    pub fn drop_keyspace<Q>(&self, ksid: Q) -> KeyspaceResult<()>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID>,
+    {
+        if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
-        } else if !self.keyspaces.contains_key(&keyspace_identifier) {
+        } else if !self.keyspaces.contains_key(&ksid) {
             Err(DdlError::ObjectNotFound)
-        } else if self
-            .keyspaces
-            .true_remove_if(&keyspace_identifier, |_, arc| Arc::strong_count(arc) == 1)
-        {
-            Ok(())
         } else {
-            Err(DdlError::StillInUse)
+            let good_to_remove = self.keyspaces.true_remove_if(&ksid, |_, arc| {
+                Arc::strong_count(arc) == 1 && arc.table_count() == 0
+            });
+            if good_to_remove {
+                Ok(())
+            } else {
+                Err(DdlError::StillInUse)
+            }
         }
     }
 }
@@ -245,6 +257,7 @@ pub struct Keyspace {
     partmap_lock: QuickLock<()>,
 }
 
+#[cfg(test)]
 macro_rules! unsafe_objectid_from_slice {
     ($slice:expr) => {{
         unsafe { ObjectID::from_slice($slice) }
@@ -258,10 +271,7 @@ impl Keyspace {
             tables: {
                 let ht = Coremap::new();
                 // add the default table
-                ht.true_if_insert(
-                    unsafe_objectid_from_slice!("default"),
-                    Arc::new(Table::new_default_kve()),
-                );
+                ht.true_if_insert(DEFAULT, Arc::new(Table::new_default_kve()));
                 ht
             },
             replication_strategy: cluster::ReplicationStrategy::default(),
@@ -283,8 +293,15 @@ impl Keyspace {
             partmap_lock: QuickLock::new(()),
         }
     }
+    pub fn table_count(&self) -> usize {
+        self.tables.len()
+    }
     /// Get an atomic reference to a table in this keyspace if it exists
-    pub fn get_table_atomic_ref(&self, table_identifier: ObjectID) -> Option<Arc<Table>> {
+    pub fn get_table_atomic_ref<Q>(&self, table_identifier: &Q) -> Option<Arc<Table>>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID>,
+    {
         self.tables.get(&table_identifier).map(|v| v.clone())
     }
     /// Create a new table
@@ -296,8 +313,12 @@ impl Keyspace {
     /// for the current connection and newer connections, but older instances still
     /// refer to the table.
     // FIXME(@ohsayan): Should we actually care?
-    pub fn drop_table(&self, table_identifier: ObjectID) -> KeyspaceResult<()> {
-        if table_identifier.eq(&unsafe_objectid_from_slice!("default")) {
+    pub fn drop_table<Q>(&self, table_identifier: &Q) -> KeyspaceResult<()>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID>,
+    {
+        if table_identifier.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
         } else if !self.tables.contains_key(&table_identifier) {
             Err(DdlError::ObjectNotFound)
@@ -334,7 +355,7 @@ fn test_keyspace_drop_no_atomic_ref() {
         Table::new_default_kve()
     ));
     assert!(our_keyspace
-        .drop_table(unsafe_objectid_from_slice!("apps"))
+        .drop_table(&unsafe_objectid_from_slice!("apps"))
         .is_ok());
 }
 
@@ -346,11 +367,11 @@ fn test_keyspace_drop_fail_with_atomic_ref() {
         Table::new_default_kve()
     ));
     let _atomic_tbl_ref = our_keyspace
-        .get_table_atomic_ref(unsafe_objectid_from_slice!("apps"))
+        .get_table_atomic_ref(&unsafe_objectid_from_slice!("apps"))
         .unwrap();
     assert_eq!(
         our_keyspace
-            .drop_table(unsafe_objectid_from_slice!("apps"))
+            .drop_table(&unsafe_objectid_from_slice!("apps"))
             .unwrap_err(),
         DdlError::StillInUse
     );
@@ -361,7 +382,7 @@ fn test_keyspace_try_delete_protected_table() {
     let our_keyspace = Keyspace::empty_default();
     assert_eq!(
         our_keyspace
-            .drop_table(unsafe_objectid_from_slice!("default"))
+            .drop_table(&unsafe_objectid_from_slice!("default"))
             .unwrap_err(),
         DdlError::ProtectedObject
     );

@@ -148,7 +148,7 @@ action! {
                 if tbl.len() > 64 {
                     return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
                 }
-                let ret = match handle.drop_table(unsafe {ObjectID::from_slice(tbl)}) {
+                let ret = match handle.drop_table(unsafe {&ObjectID::from_slice(tbl)}) {
                     Ok(()) => responses::groups::OKAY,
                     Err(DdlError::DefaultNotFound) => responses::groups::DEFAULT_UNSET,
                     Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,

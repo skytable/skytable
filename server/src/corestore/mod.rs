@@ -40,6 +40,8 @@ use crate::storage;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use crate::SnapshotConfig;
+use core::borrow::Borrow;
+use core::hash::Hash;
 pub use htable::Data;
 use libsky::TResult;
 use std::sync::Arc;
@@ -54,6 +56,7 @@ pub mod memstore;
 pub mod table;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
+pub type EntityGroup = (Option<ObjectID>, Option<ObjectID>);
 
 /// The top level abstraction for the in-memory store. This is free to be shared across
 /// threads, cloned and well, whatever. Most importantly, clones have an independent container
@@ -123,8 +126,8 @@ impl Corestore {
         }
     }
     pub fn default_with_store(store: Memstore) -> Self {
-        let cks = unsafe { store.get_keyspace_atomic_ref(DEFAULT).unsafe_unwrap() };
-        let ctable = unsafe { cks.get_table_atomic_ref(DEFAULT).unsafe_unwrap() };
+        let cks = unsafe { store.get_keyspace_atomic_ref(&DEFAULT).unsafe_unwrap() };
+        let ctable = unsafe { cks.get_table_atomic_ref(&DEFAULT).unsafe_unwrap() };
         Self {
             cks: Some(cks),
             ctable: Some(ctable),
@@ -135,32 +138,29 @@ impl Corestore {
     pub fn get_store(&self) -> &Memstore {
         &self.store
     }
-    /// Swap out the current keyspace with a different one
-    ///
-    /// If the keyspace is non-existent then false is returned, else true is
-    /// returned
-    pub fn swap_ks(&mut self, id: ObjectID) -> KeyspaceResult<()> {
-        match self.store.get_keyspace_atomic_ref(id) {
-            Some(ks) => {
-                // important: Don't forget to reset the table when switching keyspaces
-                self.ctable = None;
-                self.cks = Some(ks)
-            }
-            None => return Err(DdlError::DefaultNotFound),
-        }
-        Ok(())
-    }
     /// Swap out the current table with a different one
     ///
     /// If the table is non-existent or the default keyspace was unset, then
     /// false is returned. Else true is returned
-    pub fn swap_table(&mut self, id: ObjectID) -> KeyspaceResult<()> {
-        match &self.cks {
-            Some(ks) => match ks.get_table_atomic_ref(id) {
-                Some(tbl) => self.ctable = Some(tbl),
+    pub fn swap_entity(&mut self, entity: EntityGroup) -> KeyspaceResult<()> {
+        match entity {
+            // Switch to the provided keyspace
+            (Some(ks), None) => match self.store.get_keyspace_atomic_ref(&ks) {
+                Some(ksref) => {
+                    self.cks = Some(ksref);
+                    self.ctable = None;
+                }
                 None => return Err(DdlError::ObjectNotFound),
             },
-            None => return Err(DdlError::DefaultNotFound),
+            // Switch to the provided table in the given keyspace
+            (Some(ks), Some(tbl)) => match self.store.get_keyspace_atomic_ref(&ks) {
+                Some(kspace) => match kspace.get_table_atomic_ref(&tbl) {
+                    Some(tblref) => self.ctable = Some(tblref),
+                    None => return Err(DdlError::ObjectNotFound),
+                },
+                None => return Err(DdlError::ObjectNotFound),
+            },
+            _ => unsafe { impossible!() },
         }
         Ok(())
     }
@@ -217,7 +217,11 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, tblid: ObjectID) -> KeyspaceResult<()> {
+    pub fn drop_table<Q>(&self, tblid: &Q) -> KeyspaceResult<()>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID>,
+    {
         match &self.cks {
             Some(ks) => ks.drop_table(tblid),
             None => Err(DdlError::DefaultNotFound),
@@ -240,12 +244,16 @@ impl Corestore {
     }
 
     /// Drop a keyspace
-    pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+    pub fn drop_keyspace<Q>(&self, ksid: Q) -> KeyspaceResult<()>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID>,
+    {
         self.store.drop_keyspace(ksid)
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query<T, Strm>(&self, query: Query, con: &mut T) -> TResult<()>
+    pub async fn execute_query<T, Strm>(&mut self, query: Query, con: &mut T) -> TResult<()>
     where
         T: ProtocolConnectionExt<Strm>,
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

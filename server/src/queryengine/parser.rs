@@ -26,6 +26,7 @@
 
 use crate::corestore::lazy::Lazy;
 use crate::corestore::memstore::ObjectID;
+use crate::corestore::EntityGroup;
 use crate::kvengine::encoding;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
@@ -131,18 +132,16 @@ pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(ObjectID, u8), &'
     }
 }
 
-pub type EntityGroup<'a> = (Option<&'a [u8]>, Option<&'a [u8]>);
-
-pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup<'a>, &'static [u8]> {
+pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup, &'static [u8]> {
     let y: Vec<&[u8]> = input.split(|v| *v == b':').collect();
     unsafe {
         if y.len() == 1 {
-            // just tbl
-            let tblret = y.get_unchecked(0);
-            if compiler::unlikely(tblret.len() > 64 || tblret.is_empty()) {
+            // just ks
+            let ksret = y.get_unchecked(0);
+            if compiler::unlikely(ksret.len() > 64 || ksret.is_empty()) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
             } else {
-                Ok((None, Some(tblret)))
+                Ok((Some(ObjectID::from_slice(ksret)), None))
             }
         } else if y.len() == 2 {
             // tbl + ns
@@ -153,7 +152,10 @@ pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup<'a>, 
             } else if compiler::unlikely(tblret.is_empty() || ksret.is_empty()) {
                 Err(responses::groups::BAD_EXPRESSION)
             } else {
-                Ok((Some(ksret), Some(tblret)))
+                Ok((
+                    Some(ObjectID::from_slice(ksret)),
+                    Some(ObjectID::from_slice(tblret)),
+                ))
             }
         } else {
             // something wrong

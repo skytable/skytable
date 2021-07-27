@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
 use bytes::Bytes;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
@@ -499,6 +497,7 @@ impl<T, const CAP: usize> BorrowMut<[T]> for Array<T, CAP> {
         self
     }
 }
+
 impl<T, const CAP: usize> AsRef<[T]> for Array<T, CAP> {
     fn as_ref(&self) -> &[T] {
         self
@@ -571,6 +570,24 @@ where
         deserializer.deserialize_seq(ArrayVisitor {
             _marker: PhantomData,
         })
+    }
+}
+
+impl<const N: usize> PartialEq<Bytes> for Array<u8, N> {
+    fn eq(&self, oth: &Bytes) -> bool {
+        self.as_ref() == oth.as_ref()
+    }
+}
+
+impl<const N: usize> PartialEq<Array<u8, N>> for Bytes {
+    fn eq(&self, oth: &Array<u8, N>) -> bool {
+        self.as_ref() == oth.as_ref()
+    }
+}
+
+impl<const N: usize> Borrow<str> for Array<u8, N> {
+    fn borrow(&self) -> &str {
+        unsafe { self.as_str() }
     }
 }
 

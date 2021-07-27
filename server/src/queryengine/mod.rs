@@ -26,6 +26,7 @@
 
 //! # The Query Engine
 
+use crate::corestore::memstore::DdlError;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
@@ -67,7 +68,7 @@ macro_rules! gen_constants_and_matches {
 
 /// Execute a simple(*) query
 pub async fn execute_simple<T, Strm>(
-    db: &Corestore,
+    db: &mut Corestore,
     con: &mut T,
     buf: Element,
 ) -> std::io::Result<()>
@@ -103,7 +104,29 @@ where
         LSKEYS => actions::lskeys::lskeys,
         POP => actions::pop::pop,
         CREATE => ddl::create,
-        DROP => ddl::ddl_drop
+        DROP => ddl::ddl_drop,
+        USE => self::entity_swap
     );
     Ok(())
+}
+
+action! {
+    fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter) {
+        match act.next() {
+            Some(entity) => match parser::get_query_entity(&entity) {
+                Ok(e) => match handle.swap_entity(e) {
+                    Ok(()) => con.write_response(responses::groups::OKAY).await?,
+                    Err(DdlError::ObjectNotFound) => con.write_response(responses::groups::CONTAINER_NOT_FOUND).await?,
+                    Err(DdlError::DefaultNotFound) => con.write_response(responses::groups::DEFAULT_UNSET).await?,
+                    Err(_) => unsafe {
+                        // we know Corestore::swap_entity doesn't return anything else
+                        impossible!()
+                    }
+                },
+                Err(e) => con.write_response(e).await?,
+            },
+            None => con.write_response(responses::groups::ACTION_ERR).await?,
+        }
+        Ok(())
+    }
 }
