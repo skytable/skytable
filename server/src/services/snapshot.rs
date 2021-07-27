@@ -25,7 +25,7 @@
 */
 
 use crate::config::SnapshotConfig;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
 use crate::diskstore::snapshot::SnapshotEngine;
 use crate::registry;
@@ -39,7 +39,7 @@ use tokio::time::{self, Duration};
 /// a termination signal, we're ready to quit. This function will, by default, poison the database
 /// if snapshotting fails, unless customized by the user.
 pub async fn snapshot_service(
-    handle: CoreDB,
+    handle: Corestore,
     ss_config: SnapshotConfig,
     mut termination_signal: Terminator,
 ) {
@@ -51,7 +51,7 @@ pub async fn snapshot_service(
         SnapshotConfig::Enabled(configuration) => {
             let (duration, atmost, failsafe) = configuration.decompose();
             let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle, None) {
+            let mut sengine = match SnapshotEngine::new(atmost, &handle) {
                 Ok(ss) => ss,
                 Err(e) => {
                     log::error!("Failed to initialize snapshot service with error: '{}'", e);

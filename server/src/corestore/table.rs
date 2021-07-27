@@ -24,12 +24,10 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
-use crate::coredb::corestore::KeyspaceResult;
-use crate::coredb::htable::Coremap;
-use crate::coredb::memstore::DdlError;
-use crate::coredb::Data;
+use crate::corestore::htable::Coremap;
+use crate::corestore::memstore::DdlError;
+use crate::corestore::Data;
+use crate::corestore::KeyspaceResult;
 use crate::kvengine::KVEngine;
 use crate::storage::bytemarks;
 

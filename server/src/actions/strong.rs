@@ -35,7 +35,7 @@
 //! slow things down due to the checks performed.
 //! Do note that this isn't the same as the gurantees provided by ACID transactions
 
-use crate::coredb::Data;
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 
 action!(
@@ -43,36 +43,24 @@ action!(
     ///
     /// This either returns `Okay` if all the keys were set, or it returns an
     /// `Overwrite Error` or code `2`
-    fn sset(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn sset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
+        let mut_table = kve!(con, handle);
         let failed;
         {
-            // We use this additional scope to tell the compiler that the write lock
-            // doesn't go beyond the scope of this function - and is never used across
-            // an await: cause, the compiler ain't as smart as we are ;)
-
             // This iterator gives us the keys and values, skipping the first argument which
             // is the action name
             let mut key_iter = act.as_ref().iter();
             if registry::state_okay() {
-                let mut_table = handle.get_ref();
-                if key_iter.all(|key| !mut_table.contains_key(key.as_bytes())) {
+                if key_iter.all(|key| mut_table.exists(key.clone()).unwrap_or(false)) {
                     failed = Some(false);
                     // Since the failed flag is false, none of the keys existed
                     // So we can safely set the keys
                     while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                        if !mut_table.true_if_insert(Data::from(key), Data::from_string(value)) {
-                            // Tell the compiler that this will never be the case
-                            unsafe {
-                                // UNSAFE(@ohsayan): As none of the keys exist in the table, no
-                                // value will ever be returned by the `insert`. Hence, this is a
-                                // completely safe operation
-                                impossible!()
-                            }
-                        }
+                        let _ = mut_table.set(key.into(), value.into());
                     }
                 } else {
                     failed = Some(true);
@@ -98,31 +86,22 @@ action!(
     ///
     /// This either returns `Okay` if all the keys were `del`eted, or it returns a
     /// `Nil`, which is code `1`
-    fn sdel(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+    fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         let howmany = act.len();
         if howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
         let failed;
         {
-            // We use this additional scope to tell the compiler that the write lock
-            // doesn't go beyond the scope of this function - and is never used across
-            // an await: cause, the compiler ain't as smart as we are ;)
             let mut key_iter = act.as_ref().iter();
             if registry::state_okay() {
-                let mut_table = handle.get_ref();
-                if key_iter.all(|key| mut_table.contains_key(key.as_bytes())) {
+                let mut_table = kve!(con, handle);
+                if key_iter.all(|key| mut_table.exists(key.clone()).unwrap_or(false)) {
                     failed = Some(false);
                     // Since the failed flag is false, all of the keys exist
                     // So we can safely delete the keys
                     act.into_iter().for_each(|key| {
-                        // Since we've already checked that the keys don't exist
-                        // We'll tell the compiler to optimize this
-                        unsafe {
-                            // UNSAFE(@ohsayan): Since all the values exist, all of them will return
-                            // some value. Hence, this branch won't ever be reached. Hence, this is safe.
-                            let _ = mut_table.remove(key.as_bytes()).unsafe_unwrap();
-                        }
+                        let _ = mut_table.remove(key);
                     });
                 } else {
                     failed = Some(true);
@@ -148,21 +127,18 @@ action!(
     ///
     /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
     /// or code `1`
-    fn supdate(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn supdate(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
         let mut failed = Some(false);
         {
-            // We use this additional scope to tell the compiler that the write lock
-            // doesn't go beyond the scope of this function - and is never used across
-            // an await: cause, the compiler ain't as smart as we are ;)
             let mut key_iter = act.as_ref().iter();
             if registry::state_okay() {
-                let mut_table = handle.get_ref();
+                let mut_table = kve!(con, handle);
                 while let Some(key) = key_iter.next() {
-                    if !mut_table.contains_key(key.as_bytes()) {
+                    if !not_enc_err!(mut_table.exists(key.clone())) {
                         // With one of the keys failing to exist - this action can't clearly be done
                         // So we'll set `failed` to true and ensure that we check this while
                         // writing a response back to the client
@@ -181,10 +157,7 @@ action!(
                     // Since the failed flag is false, none of the keys existed
                     // So we can safely update the keys
                     while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                        if !mut_table.true_if_update(Data::from(key), Data::from_string(value)) {
-                            // Tell the compiler that this will never be the case
-                            unsafe { impossible!() }
-                        }
+                        let _ = mut_table.update(Data::from(key), Data::from(value));
                     }
                 }
             } else {

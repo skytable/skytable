@@ -54,14 +54,12 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
-use super::corestore::KeyspaceResult;
-use crate::coredb::array::Array;
-use crate::coredb::htable::Coremap;
-use crate::coredb::lock::{QLGuard, QuickLock};
-use crate::coredb::table::Table;
-use crate::coredb::SnapshotStatus;
+use super::KeyspaceResult;
+use crate::corestore::array::Array;
+use crate::corestore::htable::Coremap;
+use crate::corestore::lock::{QLGuard, QuickLock};
+use crate::corestore::table::Table;
+use crate::corestore::SnapshotStatus;
 use crate::SnapshotConfig;
 use core::mem::MaybeUninit;
 use std::sync::Arc;
@@ -167,7 +165,7 @@ impl Memstore {
     }
     pub fn init_with_all(
         keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
-        snap_config: SnapshotConfig,
+        snap_config: &SnapshotConfig,
     ) -> Self {
         Self {
             keyspaces,
@@ -234,11 +232,6 @@ impl Memstore {
             Err(DdlError::StillInUse)
         }
     }
-}
-
-/// The date model of a table
-pub enum TableType {
-    KeyValue,
 }
 
 #[derive(Debug)]

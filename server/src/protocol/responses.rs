@@ -31,19 +31,19 @@ pub mod groups {
     //! # Pre-compiled response **elements**
     //! These are pre-compiled response groups and **not** complete responses. If complete
     //! responses are required, user protocol::responses::fresp
-    /// Response code 0 as a datagroup element
+    /// Response code 0 as a array element
     pub const OKAY: &[u8] = "!1\n0\n".as_bytes();
-    /// Response code 1 as a datagroup element
+    /// Response code 1 as a array element
     pub const NIL: &[u8] = "!1\n1\n".as_bytes();
-    /// Response code 2 as a datagroup element
+    /// Response code 2 as a array element
     pub const OVERWRITE_ERR: &[u8] = "!1\n2\n".as_bytes();
-    /// Response code 3 as a datagroup element
+    /// Response code 3 as a array element
     pub const ACTION_ERR: &[u8] = "!1\n3\n".as_bytes();
-    /// Response code 4 as a datagroup element
+    /// Response code 4 as a array element
     pub const PACKET_ERR: &[u8] = "!1\n4\n".as_bytes();
-    /// Response code 5 as a datagroup element
+    /// Response code 5 as a array element
     pub const SERVER_ERR: &[u8] = "!1\n5\n".as_bytes();
-    /// Response code 6 as a datagroup element
+    /// Response code 6 as a array element
     pub const OTHER_ERR_EMPTY: &[u8] = "!1\n6\n".as_bytes();
     /// Response group element with string "HEYA"
     pub const HEYA: &[u8] = "+4\nHEY!\n".as_bytes();
@@ -53,6 +53,8 @@ pub mod groups {
     pub const WRONGTYPE_ERR: &[u8] = "!1\n7\n".as_bytes();
     /// Response code 8
     pub const UNKNOWN_DATA_TYPE: &[u8] = "!1\n8\n".as_bytes();
+    /// Response code 9 as an array element
+    pub const ENCODING_ERROR: &[u8] = "!1\n9\n".as_bytes();
     /// Snapshot busy error
     pub const SNAPSHOT_BUSY: &[u8] = "!17\nerr-snapshot-busy\n".as_bytes();
     /// Snapshot disabled (other error)
@@ -61,6 +63,16 @@ pub mod groups {
     pub const SNAPSHOT_ILLEGAL_NAME: &[u8] = "!25\nerr-invalid-snapshot-name\n".as_bytes();
     /// Access after termination signal (other error)
     pub const ERR_ACCESS_AFTER_TERMSIG: &[u8] = "!24\nerr-access-after-termsig\n".as_bytes();
+
+    // keyspace related resps
+    pub const DEFAULT_UNSET: &[u8] = "!23\ndefault-container-unset\n".as_bytes();
+    pub const CONTAINER_NOT_FOUND: &[u8] = "!19\ncontainer-not-found\n".as_bytes();
+    pub const STILL_IN_USE: &[u8] = "!12\nstill-in-use\n".as_bytes();
+    pub const PROTECTED_OBJECT: &[u8] = "!20\nerr-protected-object\n".as_bytes();
+    pub const WRONG_MODEL: &[u8] = "!11\nwrong-model\n".as_bytes();
+    pub const ALREADY_EXISTS: &[u8] = "!18\nerr-already-exists\n".as_bytes();
+    pub const NOT_READY: &[u8] = "!9\nnot-ready\n".as_bytes();
+    pub const DDL_TRANSACTIONAL_FAILURE: &[u8] = "!21\ntransactional-failure\n".as_bytes();
 }
 
 pub mod full_responses {

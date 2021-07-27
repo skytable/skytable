@@ -30,10 +30,10 @@ use bytes::Bytes;
 
 action!(
     /// Run an `LSKEYS` query
-    fn lskeys(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, gt 1);
         let item_count = if let Some(cnt) = act.next() {
-            if let Ok(cnt) = cnt.parse::<usize>() {
+            if let Ok(cnt) = String::from_utf8_lossy(&cnt).parse::<usize>() {
                 cnt
             } else {
                 return con.write_response(responses::groups::WRONGTYPE_ERR).await;
@@ -43,8 +43,8 @@ action!(
         };
         let items: Vec<Bytes>;
         {
-            let reader = handle.get_ref();
-            items = reader.get_keys(item_count);
+            let reader = kve!(con, handle);
+            items = reader.__get_inner_ref().get_keys(item_count);
         }
         con.write_flat_array_length(items.len()).await?;
         for item in items {

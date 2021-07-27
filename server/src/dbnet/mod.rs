@@ -36,13 +36,13 @@
 //! 3. Data from the socket is asynchronously read into an 8KB read buffer
 //! 4. Once the data is read completely (i.e the source sends an EOF byte), the `protocol` module
 //! is used to parse the stream
-//! 5. Now errors are handled if they occur. Otherwise, the query is executed by `CoreDB::execute_query()`
+//! 5. Now errors are handled if they occur. Otherwise, the query is executed by `Corestore::execute_query()`
 //!
 
 use self::tcp::Listener;
 use crate::config::PortConfig;
 use crate::config::SslOpts;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use libsky::TResult;
 use std::io::Error as IoError;
 use std::net::IpAddr;
@@ -92,7 +92,7 @@ impl Terminator {
 /// The base TCP listener
 pub struct BaseListener {
     /// An atomic reference to the coretable
-    pub db: CoreDB,
+    pub db: Corestore,
     /// The incoming connection listener (binding)
     pub listener: TcpListener,
     /// The maximum number of connections
@@ -107,7 +107,7 @@ pub struct BaseListener {
 
 impl BaseListener {
     pub async fn init(
-        db: &CoreDB,
+        db: &Corestore,
         host: IpAddr,
         port: u16,
         semaphore: Arc<Semaphore>,
@@ -225,7 +225,7 @@ impl MultiListener {
     }
     /// Signal the ports to shut down and only return after they have shut down
     ///
-    /// **Do note:** This function doesn't flush the `CoreDB` object! The **caller has to
+    /// **Do note:** This function doesn't flush the `Corestore` object! The **caller has to
     /// make sure that the data is saved!**
     pub async fn finish_with_termsig(self) {
         match self {
@@ -243,7 +243,7 @@ impl MultiListener {
 pub async fn connect(
     ports: PortConfig,
     maxcon: usize,
-    db: CoreDB,
+    db: Corestore,
     signal: broadcast::Sender<()>,
 ) -> Result<MultiListener, String> {
     let climit = Arc::new(Semaphore::const_new(maxcon));

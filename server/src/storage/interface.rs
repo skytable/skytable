@@ -26,10 +26,10 @@
 
 //! Interfaces with the file system
 
-use crate::coredb::htable::Coremap;
-use crate::coredb::htable::Data;
-use crate::coredb::memstore::Keyspace;
-use crate::coredb::memstore::Memstore;
+use crate::corestore::htable::Coremap;
+use crate::corestore::htable::Data;
+use crate::corestore::memstore::Keyspace;
+use crate::corestore::memstore::Memstore;
 use crate::IoResult;
 use std::collections::HashSet;
 use std::fs;
@@ -62,6 +62,15 @@ pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
     Ok(())
 }
 
+pub fn snap_create_tree(snapid: &str, memroot: &Memstore) -> IoResult<()> {
+    for ks in memroot.keyspaces.iter() {
+        unsafe {
+            try_dir_ignore_existing!(concat_path!(DIR_SNAPROOT, snapid, ks.key().as_str()))?;
+        }
+    }
+    Ok(())
+}
+
 /// Clean up the tree
 ///
 /// **Warning**: Calling this is quite inefficient so consider calling it once or twice
@@ -76,8 +85,10 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
         .collect();
     // these are the folders that we need to remove; plonk the deleted keyspaces first
     for folder in dir_keyspaces.difference(&our_keyspaces) {
-        let ks_path = concat_str!(DIR_KSROOT, "/", folder);
-        fs::remove_dir_all(ks_path)?;
+        if folder != "PRELOAD" {
+            let ks_path = concat_str!(DIR_KSROOT, "/", folder);
+            fs::remove_dir_all(ks_path)?;
+        }
     }
     // now plonk the data files
     for keyspace in memroot.keyspaces.iter() {
@@ -90,8 +101,10 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
             .map(|v| unsafe { v.key().as_str() }.to_owned())
             .collect();
         for old_file in dir_tbls.difference(&our_tbls) {
-            // plonk this data file; we don't need it anymore
-            fs::remove_file(concat_path!(&ks_path, old_file))?;
+            if old_file != "PARTMAP" {
+                // plonk this data file; we don't need it anymore
+                fs::remove_file(concat_path!(&ks_path, old_file))?;
+            }
         }
     }
     Ok(())

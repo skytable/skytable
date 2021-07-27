@@ -24,12 +24,12 @@
  *
 */
 
-use crate::coredb::Data;
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 
 action!(
     /// Run an `MSET` query
-    fn mset(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn mset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys
@@ -40,10 +40,10 @@ action!(
         let done_howmany: Option<usize>;
         {
             if registry::state_okay() {
-                let writer = handle.get_ref();
+                let writer = kve!(con, handle);
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    if writer.true_if_insert(Data::from(key), Data::from(val)) {
+                    if not_enc_err!(writer.set(Data::from(key), Data::from(val))) {
                         didmany += 1;
                     }
                 }

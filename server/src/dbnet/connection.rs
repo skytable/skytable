@@ -36,7 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
@@ -74,14 +74,39 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
-    pub use crate::coredb::CoreDB;
+    pub use crate::corestore::Corestore;
     pub use crate::err_if_len_is;
     pub use crate::is_lowbit_set;
+    pub use crate::kve;
+    pub use crate::not_enc_err;
     pub use crate::protocol::responses;
     pub use crate::queryengine::ActionIter;
     pub use crate::registry;
     pub use crate::util::Unwrappable;
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    #[macro_export]
+    macro_rules! kve {
+        ($con:expr, $store:expr) => {
+            match $store.get_kvstore() {
+                Ok(store) => store,
+                _ => {
+                    // wrong model
+                    return $con
+                        .write_response(crate::protocol::responses::groups::WRONG_MODEL)
+                        .await;
+                }
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! not_enc_err {
+        ($val:expr) => {
+            match $val {
+                Ok(v) => v,
+                Err(_) => false,
+            }
+        };
+    }
 }
 
 /// # The `ProtocolConnectionExt` trait
@@ -353,14 +378,14 @@ where
 ///
 /// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
 /// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
-/// a query, parse it and return an appropriate response through [`coredb::CoreDB::execute_query`]
+/// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
 pub struct ConnectionHandler<T, Strm>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
     Self: Send,
 {
-    db: CoreDB,
+    db: Corestore,
     con: T,
     climit: Arc<Semaphore>,
     terminator: Terminator,
@@ -374,7 +399,7 @@ where
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
 {
     pub fn new(
-        db: CoreDB,
+        db: Corestore,
         con: T,
         climit: Arc<Semaphore>,
         terminator: Terminator,

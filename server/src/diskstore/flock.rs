@@ -29,6 +29,8 @@
 //! This module provides the `FileLock` struct that can be used for locking and/or unlocking files on
 //! unix-based systems and Windows systems
 
+#![allow(dead_code)] // TODO: Enable this lint or remove the offending methods
+
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Result;
@@ -254,7 +256,6 @@ mod __sys {
 
 #[cfg(all(not(target_os = "solaris"), unix))]
 mod __sys {
-    #![allow(dead_code)] // TODO: Enable this lint or remove the offending methods
     //! # Unix platform-specific file locking
     //! This module contains methods used by the `FileLock` object in this module to lock and/or
     //! unlock files.

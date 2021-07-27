@@ -33,15 +33,13 @@ use skytable::RespCode;
 action!(
     /// Run an `MGET` query
     ///
-    fn mget(handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+    fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         crate::err_if_len_is!(act, con, eq 0);
         con.write_array_length(act.len()).await?;
         for key in act {
-            let res: Option<Bytes> = {
-                handle
-                    .get_ref()
-                    .get(key.as_bytes())
-                    .map(|b| b.get_blob().clone())
+            let res: Option<Bytes> = match kve!(con, handle).get(key) {
+                Ok(v) => v.map(|b| b.get_blob().clone()),
+                Err(_) => None,
             };
             if let Some(value) = res {
                 // Good, we got the value, write it off to the stream

@@ -24,21 +24,34 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
-use crate::coredb::memstore::DdlError;
-use crate::coredb::memstore::Keyspace;
-use crate::coredb::memstore::Memstore;
-use crate::coredb::memstore::ObjectID;
-use crate::coredb::memstore::DEFAULT;
-use crate::coredb::table::Table;
+use crate::corestore::lock::QLGuard;
+use crate::corestore::memstore::DdlError;
+use crate::corestore::memstore::Keyspace;
+use crate::corestore::memstore::Memstore;
+use crate::corestore::memstore::ObjectID;
+use crate::corestore::memstore::DEFAULT;
+use crate::corestore::table::Table;
+use crate::dbnet::connection::ProtocolConnectionExt;
 use crate::kvengine::KVEngine;
+use crate::protocol::Query;
+use crate::queryengine;
 use crate::registry;
 use crate::storage;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use crate::SnapshotConfig;
+pub use htable::Data;
+use libsky::TResult;
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+pub mod array;
+pub mod buffers;
+pub mod htable;
+pub mod iarray;
+pub mod lazy;
+pub mod lock;
+pub mod memstore;
+pub mod table;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 
@@ -46,6 +59,7 @@ pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 /// threads, cloned and well, whatever. Most importantly, clones have an independent container
 /// state that is the state of one connection and its container state preferences are never
 /// synced across instances. This is important (see the impl for more info)
+#[derive(Debug, Clone)]
 pub struct Corestore {
     /// the default keyspace for this instance of the object
     cks: Option<Arc<Keyspace>>,
@@ -55,26 +69,58 @@ pub struct Corestore {
     store: Arc<Memstore>,
 }
 
-impl Clone for Corestore {
-    fn clone(&self) -> Self {
-        // this is very important: DO NOT use the derive macro for clones
-        // as it will clone the connection local state over to all connections
-        // we never want this!
-        Self {
-            cks: None,
-            ctable: None,
-            store: Arc::clone(&self.store),
+/// The status and details of the snapshotting service
+///
+/// The in_progress field is kept behind a mutex to ensure only one snapshot
+/// operation can run at a time. Although on the server side this isn't a problem
+/// because we don't have multiple snapshot tasks, but can be an issue when external
+/// snapshots are triggered, for example via `MKSNAP`
+#[derive(Debug)]
+pub struct SnapshotStatus {
+    /// The maximum number of recent snapshots to keep
+    pub max: usize,
+    /// The current state of the snapshot service
+    pub in_progress: lock::QuickLock<()>,
+}
+
+impl SnapshotStatus {
+    /// Create a new `SnapshotStatus` instance with preset values
+    pub fn new(max: usize) -> Self {
+        SnapshotStatus {
+            max,
+            in_progress: lock::QuickLock::new(()),
         }
+    }
+
+    /// Lock the snapshot service
+    pub fn lock_snap(&self) -> lock::QLGuard<'_, ()> {
+        self.in_progress.lock()
+    }
+
+    /// Check if the snapshot service is busy
+    pub fn is_busy(&self) -> bool {
+        self.in_progress.is_locked()
     }
 }
 
 impl Corestore {
     /// This is the only function you'll ever need to either create a new database instance
     /// or restore from an earlier instance
-    pub fn init_with_snapcfg(snapcfg: Option<SnapshotConfig>) -> IoResult<Self> {
-        let store =
-            storage::unflush::read_full(option_unwrap_or!(snapcfg, SnapshotConfig::default()))?;
+    pub fn init_with_snapcfg(snapcfg: &SnapshotConfig) -> IoResult<Self> {
+        let store = storage::unflush::read_full(snapcfg)?;
         Ok(Self::default_with_store(store))
+    }
+    pub fn lock_snap(&self) -> QLGuard<'_, ()> {
+        match &self.store.snap_config {
+            Some(lck) => lck.lock_snap(),
+            None => unsafe { impossible!() },
+        }
+    }
+    pub fn get_snapstatus(&self) -> &SnapshotStatus {
+        match &self.store.snap_config {
+            Some(sc) => sc,
+            None => unsafe { impossible!() },
+        }
     }
     pub fn default_with_store(store: Memstore) -> Self {
         let cks = unsafe { store.get_keyspace_atomic_ref(DEFAULT).unsafe_unwrap() };
@@ -84,6 +130,9 @@ impl Corestore {
             ctable: Some(ctable),
             store: Arc::new(store),
         }
+    }
+    pub fn get_store(&self) -> &Memstore {
+        &self.store
     }
     /// Swap out the current keyspace with a different one
     ///
@@ -192,5 +241,26 @@ impl Corestore {
     /// Drop a keyspace
     pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         self.store.drop_keyspace(ksid)
+    }
+
+    /// Execute a query that has already been validated by `Connection::read_query`
+    pub async fn execute_query<T, Strm>(&self, query: Query, con: &mut T) -> TResult<()>
+    where
+        T: ProtocolConnectionExt<Strm>,
+        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+    {
+        match query {
+            Query::SimpleQuery(q) => {
+                con.write_simple_query_header().await?;
+                queryengine::execute_simple(self, con, q).await?;
+                con.flush_stream().await?;
+            }
+            // TODO(@ohsayan): Pipeline commands haven't been implemented yet
+            Query::PipelinedQuery(_) => unimplemented!(),
+        }
+        Ok(())
+    }
+    pub fn strong_count(&self) -> usize {
+        Arc::strong_count(&self.store)
     }
 }

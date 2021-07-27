@@ -26,7 +26,7 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
-use crate::coredb::array::LenScopeGuard;
+use crate::corestore::array::LenScopeGuard;
 use crate::util::compiler::{likely, unlikely};
 use core::alloc::Layout;
 use core::borrow::Borrow;

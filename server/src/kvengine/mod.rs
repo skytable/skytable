@@ -24,16 +24,16 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
-
-use crate::coredb::htable::Coremap;
-use crate::coredb::htable::Data;
-use crate::coredb::htable::MapRWLGuard;
-use crate::coredb::htable::MapSingleReference;
-use crate::coredb::htable::SharedValue;
+use crate::corestore::htable::Coremap;
+use crate::corestore::htable::Data;
+use crate::corestore::htable::MapRWLGuard;
+use crate::corestore::htable::MapSingleReference;
+use crate::corestore::htable::SharedValue;
+use core::borrow::Borrow;
+use core::hash::Hash;
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
-mod encoding;
+pub mod encoding;
 
 const ORD_RELAXED: Ordering = Ordering::Relaxed;
 
@@ -160,19 +160,34 @@ impl KVEngine {
         self.table.clear()
     }
     /// Get the value for a given key if it exists
-    pub fn get(&self, key: Data) -> Result<Option<MapSingleReference<Data, Data>>, ()> {
-        Ok(self.table.get(&self._encode_key(key)?))
+    pub fn get(&self, key: impl Into<Data>) -> Result<Option<MapSingleReference<Data, Data>>, ()> {
+        Ok(self.table.get(&self._encode_key(key.into())?))
+    }
+    pub fn exists<Q>(&self, key: Q) -> Result<bool, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq,
+    {
+        Ok(self.table.contains_key(&self._encode_key(key)?))
     }
     /// Check the unicode encoding of a given byte array
-    fn _encode(data: Data) -> Result<Data, ()> {
-        if encoding::is_utf8(&data) {
+    fn _encode<Q>(data: Q) -> Result<Q, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]>,
+    {
+        if encoding::is_utf8(data.borrow()) {
             Ok(data)
         } else {
             Err(())
         }
     }
     /// Check the unicode encoding of the given key, if the encoded_k flag is set
-    fn _encode_key(&self, key: Data) -> Result<Data, ()> {
+    fn _encode_key<Q>(&self, key: Q) -> Result<Q, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]>,
+    {
         if self.encoded_k.load(ORD_RELAXED) {
             Self::_encode(key)
         } else {
@@ -180,7 +195,11 @@ impl KVEngine {
         }
     }
     /// Check the unicode encoding of the given value, if the encoded_v flag is set
-    fn _encode_value(&self, value: Data) -> Result<Data, ()> {
+    fn _encode_value<Q>(&self, value: Q) -> Result<Q, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]>,
+    {
         if self.encoded_v.load(ORD_RELAXED) {
             Self::_encode(value)
         } else {
@@ -206,8 +225,19 @@ impl KVEngine {
         Ok(())
     }
     /// Remove an existing key
-    pub fn remove(&self, key: Data) -> Result<bool, ()> {
+    pub fn remove<Q>(&self, key: Q) -> Result<bool, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq,
+    {
         Ok(self.table.true_if_removed(&self._encode_key(key)?))
+    }
+    pub fn pop<Q>(&self, key: Q) -> Result<Option<(Data, Data)>, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq,
+    {
+        Ok(self.table.remove(&self._encode_key(key)?))
     }
 }
 

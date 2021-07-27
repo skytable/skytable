@@ -621,7 +621,7 @@ macro_rules! array_from_string {
 
 #[test]
 fn test_map_serialize_deserialize() {
-    use crate::coredb::htable::Coremap;
+    use crate::corestore::htable::Coremap;
     let map = Coremap::new();
     map.true_if_insert(
         array_from_string!("hello", 5),

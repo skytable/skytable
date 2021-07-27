@@ -34,15 +34,15 @@ action!(
     ///
     /// Do note that this function is blocking since it acquires a write lock.
     /// It will write an entire datagroup, for this `del` action
-    fn del(handle: &CoreDB, con: &mut T, act: ActionIter) {
+    fn del(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         let done_howmany: Option<usize>;
         {
             if registry::state_okay() {
                 let mut many = 0;
-                let cmap = handle.get_ref();
+                let cmap = kve!(con, handle);
                 act.for_each(|key| {
-                    if cmap.true_if_removed(key.as_bytes()) {
+                    if not_enc_err!(cmap.remove(key)) {
                         many += 1
                     }
                 });

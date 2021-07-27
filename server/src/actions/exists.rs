@@ -32,13 +32,13 @@ use crate::queryengine::ActionIter;
 
 action!(
     /// Run an `EXISTS` query
-    fn exists(handle: &CoreDB, con: &mut T, act: ActionIter) {
+    fn exists(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         let mut how_many_of_them_exist = 0usize;
         {
-            let cmap = handle.get_ref();
+            let cmap = kve!(con, handle);
             act.for_each(|key| {
-                if cmap.contains_key(key.as_bytes()) {
+                if not_enc_err!(cmap.exists(key)) {
                     how_many_of_them_exist += 1;
                 }
             });

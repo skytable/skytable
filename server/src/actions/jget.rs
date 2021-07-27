@@ -40,7 +40,7 @@ action! {
     /// {"key":"value"}\n
     /// ```
     ///
-    fn jget(_handle: &crate::coredb::CoreDB, con: &mut T, act: ActionIter) {
+    fn jget(_handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, not 1);
         todo!()
     }

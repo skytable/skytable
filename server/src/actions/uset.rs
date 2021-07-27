@@ -24,7 +24,7 @@
  *
 */
 
-use crate::coredb::Data;
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
@@ -33,7 +33,7 @@ action!(
     /// Run an `USET` query
     ///
     /// This is like "INSERT or UPDATE"
-    fn uset(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys
@@ -43,7 +43,7 @@ action!(
         }
         let failed = {
             if registry::state_okay() {
-                let writer = handle.get_ref();
+                let writer = kve!(con, handle);
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     let _ = writer.upsert(Data::from(key), Data::from(val));
                 }

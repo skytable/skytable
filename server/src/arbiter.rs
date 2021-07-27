@@ -26,12 +26,10 @@
 
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::{self, Terminator};
-use crate::diskstore::snapshot::DIR_REMOTE_SNAPSHOT;
 use crate::services;
 use crate::PortConfig;
-use std::fs;
 use tokio::sync::broadcast;
 
 #[cfg(unix)]
@@ -67,16 +65,13 @@ pub async fn run(
     ports: PortConfig,
     bgsave_cfg: BGSave,
     snapshot_cfg: SnapshotConfig,
-    restore_filepath: Option<String>,
+    _restore_filepath: Option<String>,
     maxcon: usize,
-) -> Result<CoreDB, String> {
+) -> Result<Corestore, String> {
     // Intialize the broadcast channel
     let (signal, _) = broadcast::channel(1);
 
-    // create the data directories and intialize the coredb
-    fs::create_dir_all(&*DIR_REMOTE_SNAPSHOT)
-        .map_err(|e| format!("Failed to create data directories: '{}'", e))?;
-    let db = CoreDB::new(&snapshot_cfg, restore_filepath)
+    let db = Corestore::init_with_snapcfg(&snapshot_cfg)
         .map_err(|e| format!("Error while initializing database: {}", e))?;
 
     // initialize the background services

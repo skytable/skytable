@@ -30,16 +30,17 @@ action!(
     /// Run a `KEYLEN` query
     ///
     /// At this moment, `keylen` only supports a single key
-    fn keylen(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn keylen(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 1);
         let res: Option<usize> = {
-            let reader = handle.get_ref();
+            let reader = kve!(con, handle);
             unsafe {
                 // UNSAFE(@ohsayan): this is completely safe as we've already checked
                 // the number of arguments is one
-                reader
-                    .get(act.next().unsafe_unwrap().as_bytes())
-                    .map(|b| b.get_blob().len())
+                match reader.get(act.next().unsafe_unwrap()) {
+                    Ok(v) => v.map(|b| b.len()),
+                    Err(_) => None,
+                }
             }
         };
         if let Some(value) = res {

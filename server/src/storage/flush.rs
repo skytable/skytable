@@ -30,9 +30,9 @@
 //! the table level
 
 use super::interface;
-use crate::coredb::memstore::Keyspace;
-use crate::coredb::memstore::Memstore;
-use crate::coredb::memstore::ObjectID;
+use crate::corestore::memstore::Keyspace;
+use crate::corestore::memstore::Memstore;
+use crate::corestore::memstore::ObjectID;
 use crate::IoResult;
 
 /// Flushes the entire **keyspace + partmap**
@@ -62,8 +62,7 @@ pub fn snap_flush_keyspace_full(
 }
 
 pub fn snap_flush_full(snapid: &str, store: &Memstore) -> IoResult<()> {
-    // re-init the tree as new tables/keyspaces may have been added
-    super::interface::create_tree(store)?;
+    super::interface::snap_create_tree(snapid, store)?;
     self::oneshot::snap_flush_preload(snapid, store)?;
     for keyspace in store.keyspaces.iter() {
         self::snap_flush_keyspace_full(snapid, keyspace.key(), keyspace.value())?;
@@ -78,7 +77,7 @@ pub mod oneshot {
     //! files et al are handled
     //!
     use super::*;
-    use crate::coredb::table::{DataModel, Table};
+    use crate::corestore::table::{DataModel, Table};
     use crate::storage::interface::{DIR_KSROOT, DIR_SNAPROOT};
     use std::fs::{self, File};
 
@@ -190,14 +189,6 @@ pub mod oneshot {
         routine_flushpartmap!(path, keyspace)
     }
 
-    /// Flushes everything in memory. No `partmap` or `preload` handling
-    pub fn flush(store: &Memstore) -> IoResult<()> {
-        for keyspace in store.keyspaces.iter() {
-            self::flush_keyspace(keyspace.key(), keyspace.value())?;
-        }
-        Ok(())
-    }
-
     macro_rules! routine_flushpreload {
         ($store:expr, $preloadtmp:expr, $preloadfinal:expr) => {{
             let mut file = File::create(&$preloadtmp)?;
@@ -215,7 +206,7 @@ pub mod oneshot {
 
     /// Same as flush_preload, but for snapshots
     pub fn snap_flush_preload(snapid: &str, store: &Memstore) -> IoResult<()> {
-        let preload_tmp = concat_str!(DIR_SNAPROOT, "/", snapid, "/", "ks/PRELOAD_");
+        let preload_tmp = concat_str!(DIR_SNAPROOT, "/", snapid, "/", "PRELOAD_");
         let preload = &preload_tmp[..preload_tmp.len() - 1];
         routine_flushpreload!(store, preload_tmp, preload)
     }

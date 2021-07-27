@@ -29,18 +29,18 @@
 //! Routines for unflushing data
 
 use super::bytemarks;
-use crate::coredb::memstore::Keyspace;
-use crate::coredb::memstore::Memstore;
-use crate::coredb::memstore::ObjectID;
-use crate::coredb::table::Table;
+use crate::corestore::memstore::Keyspace;
+use crate::corestore::memstore::Memstore;
+use crate::corestore::memstore::ObjectID;
+use crate::corestore::table::Table;
 use crate::storage::interface::DIR_KSROOT;
 use crate::storage::preload::LoadedPartfile;
 use crate::storage::Coremap;
+use crate::IoResult;
 use crate::SnapshotConfig;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use crate::IoResult;
 use std::sync::Arc;
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
@@ -91,7 +91,7 @@ pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>>
         if table_storage_type > 1 {
             return Err(bad_data!());
         }
-        let is_volatile = table_storage_type == 1;
+        let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
         let tbl = self::read_table(&ksid, &tableid, is_volatile, model_code)?;
         ks.true_if_insert(tableid, Arc::new(tbl));
     }
@@ -115,7 +115,7 @@ pub fn read_preload() -> IoResult<PreloadSet> {
 /// If this is a new instance an empty store is returned while the directory tree
 /// is also created. If this is an already initialized instance then the store
 /// is read and returned (and any possible errors that are encountered are returned)
-pub fn read_full(snapshot_config: SnapshotConfig) -> IoResult<Memstore> {
+pub fn read_full(snapshot_config: &SnapshotConfig) -> IoResult<Memstore> {
     if is_new_instance()? {
         // init an empty store
         let store = Memstore::new_default();

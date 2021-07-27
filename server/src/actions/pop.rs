@@ -24,7 +24,7 @@
  *
 */
 
-use crate::coredb;
+use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
@@ -32,7 +32,7 @@ use crate::resp::BytesWrapper;
 
 action!(
     /// Run a POP action
-    fn pop(handle: &coredb::CoreDB, con: &mut T, act: ActionIter) {
+    fn pop(handle: &corestore::Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         if registry::state_okay() {
             con.write_array_length(act.len()).await?;
@@ -41,10 +41,17 @@ action!(
                     // we keep this check just in case the server fails in-between running a
                     // pop operation
                     con.write_response(responses::groups::SERVER_ERR).await?;
-                } else if let Some((_key, val)) = handle.get_ref().remove(key.as_bytes()) {
-                    con.write_response(BytesWrapper(val.into_inner())).await?;
                 } else {
-                    con.write_response(responses::groups::NIL).await?;
+                    match kve!(con, handle).pop(key) {
+                        Ok(Some((_key, val))) => {
+                            con.write_response(BytesWrapper(val.into_inner())).await?
+                        }
+                        Ok(None) => con.write_response(responses::groups::NIL).await?,
+                        Err(_) => {
+                            con.write_response(responses::groups::ENCODING_ERROR)
+                                .await?
+                        }
+                    }
                 }
             }
         } else {

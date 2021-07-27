@@ -26,14 +26,15 @@
 
 //! # The Query Engine
 
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::protocol::Element;
 use crate::{actions, admin};
+use bytes::Bytes;
 
 use std::vec::IntoIter;
-pub type ActionIter = IntoIter<String>;
+pub type ActionIter = IntoIter<Bytes>;
 
 macro_rules! gen_constants_and_matches {
     ($con:ident, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
@@ -41,15 +42,15 @@ macro_rules! gen_constants_and_matches {
             //! This module is a collection of tags/strings used for evaluating queries
             //! and responses
             $(
-                pub const $action: &'static str = stringify!($action);
+                pub const $action: &[u8] = stringify!($action).as_bytes();
             )*
         }
         let mut first = match $buf.next() {
-            Some(first) => first,
+            Some(first) => String::from_utf8_lossy(&first).to_string(),
             None => return $con.write_response(responses::groups::PACKET_ERR).await,
         };
         first.make_ascii_uppercase();
-        match first.as_str() {
+        match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
             )*
@@ -61,7 +62,11 @@ macro_rules! gen_constants_and_matches {
 }
 
 /// Execute a simple(*) query
-pub async fn execute_simple<T, Strm>(db: &CoreDB, con: &mut T, buf: Element) -> std::io::Result<()>
+pub async fn execute_simple<T, Strm>(
+    db: &Corestore,
+    con: &mut T,
+    buf: Element,
+) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

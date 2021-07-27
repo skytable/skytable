@@ -32,15 +32,14 @@
 //! 2. the `PARTMAP` preload that is placed in the ks directory
 //!
 
-use crate::coredb::memstore::Keyspace;
-use crate::coredb::memstore::Memstore;
-use crate::coredb::memstore::ObjectID;
+use crate::corestore::memstore::Memstore;
+use crate::corestore::memstore::ObjectID;
+use crate::IoResult;
 use core::ptr;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use crate::IoResult;
 use std::io::Write;
 
 pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;
@@ -52,8 +51,6 @@ const META_SEGMENT: u8 = 0b1000_0000;
 
 #[cfg(target_endian = "big")]
 const META_SEGMENT: u8 = 0b1000_0001;
-
-const VERSION: u8 = 1;
 
 /// Generate the `PRELOAD` disk file for this instance
 /// ```text
@@ -68,14 +65,6 @@ pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoR
     w.write_all(&[META_SEGMENT])?;
     super::se::raw_serialize_set(&store.keyspaces, w)?;
     Ok(())
-}
-
-/// Generate the `PART` disk file for this keyspace
-/// ```text
-/// ([8B: Len][?B: Label])*
-/// ```
-pub(super) fn raw_generate_partfile<W: Write>(w: &mut W, store: &Keyspace) -> IoResult<()> {
-    super::se::raw_serialize_set(&store.tables, w)
 }
 
 /// Reads the preload file and returns a set

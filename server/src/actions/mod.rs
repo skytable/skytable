@@ -51,7 +51,7 @@ pub mod heya {
     use crate::dbnet::connection::prelude::*;
     action!(
         /// Returns a `HEY!` `Response`
-        fn heya(_handle: &CoreDB, con: &mut T, _act: ActionIter) {
+        fn heya(_handle: &Corestore, con: &mut T, _act: ActionIter) {
             con.write_response(responses::groups::HEYA).await
         }
     );

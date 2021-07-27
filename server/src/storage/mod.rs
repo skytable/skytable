@@ -30,8 +30,6 @@
  -- Sayan on July 8, 2021
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
 //! # Storage engine
 //!
 //! This module contains code to rapidly encode/decode data. All sizes are encoded into unsigned
@@ -50,9 +48,9 @@
 //! think of using them anywhere outside. This is a specialized parser built for the database.
 //! -- Sayan (July 2021)
 
-use crate::coredb::array::Array;
-use crate::coredb::htable::Coremap;
-use crate::coredb::Data;
+use crate::corestore::array::Array;
+use crate::corestore::htable::Coremap;
+use crate::corestore::Data;
 use core::hash::Hash;
 use core::mem;
 use core::ptr;
@@ -71,12 +69,6 @@ pub mod unflush;
 // test
 #[cfg(test)]
 mod tests;
-
-/// The ID of the partition in a keyspace. Using too many keyspaces is an absolute anti-pattern
-/// on Skytable, something that it has inherited from prior experience in large scale systems. As
-/// such, the maximum number of tables in a keyspace is limited to 4.1 billion tables and ideally,
-/// you should never hit that limit.
-pub type PartitionID = u32;
 
 /*
     Endian and pointer "appendix":
@@ -189,7 +181,8 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
 
 mod se {
     use super::*;
-    use crate::coredb::memstore::Keyspace;
+    use crate::corestore::memstore::Keyspace;
+    #[cfg(test)]
     /// Serialize a map into a _writable_ thing
     pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Error> {
         /*

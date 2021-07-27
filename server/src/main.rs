@@ -33,6 +33,7 @@
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
+use crate::corestore::memstore::Memstore;
 use env_logger::Builder;
 use libsky::util::terminal;
 use libsky::URL;
@@ -42,7 +43,6 @@ use std::fs;
 use std::io::Write;
 use std::path;
 use std::process;
-use std::sync::Arc;
 use std::thread;
 use std::time;
 #[macro_use]
@@ -54,7 +54,7 @@ mod admin;
 mod arbiter;
 mod compat;
 mod config;
-mod coredb;
+mod corestore;
 mod dbnet;
 mod diskstore;
 mod kvengine;
@@ -105,7 +105,7 @@ fn main() {
     // important: create the pid_file just here and nowhere else because check_args can also
     // involve passing --help or wrong arguments which can falsely create a PID file
     let pid_file = run_pre_startup_tasks();
-    let db: Result<coredb::CoreDB, String> = runtime.block_on(async move {
+    let db: Result<corestore::Corestore, String> = runtime.block_on(async move {
         arbiter::run(
             ports,
             bgsave_config,
@@ -122,14 +122,14 @@ fn main() {
         Err(e) => {
             // uh oh, something happened while starting up
             log::error!("{}", e);
-            pre_shutdown_cleanup(pid_file);
+            pre_shutdown_cleanup(pid_file, None);
             process::exit(1);
         }
     };
     assert_eq!(
-        Arc::strong_count(&db.shared),
+        db.strong_count(),
         1,
-        "Maybe the compiler reordered the drop causing more than one instance of CoreDB to live at this point"
+        "Maybe the compiler reordered the drop causing more than one instance of Corestore to live at this point"
     );
     log::info!("Stopped accepting incoming connections");
     loop {
@@ -148,15 +148,21 @@ fn main() {
         }
         thread::sleep(time::Duration::from_secs(10));
     }
-    pre_shutdown_cleanup(pid_file);
+    pre_shutdown_cleanup(pid_file, Some(db.get_store()));
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 
-pub fn pre_shutdown_cleanup(pid_file: fs::File) {
+pub fn pre_shutdown_cleanup(pid_file: fs::File, mr: Option<&Memstore>) {
     drop(pid_file);
     if let Err(e) = fs::remove_file(PATH) {
         log::error!("Shutdown failure: Failed to remove pid file: {}", e);
         process::exit(0x01);
+    }
+    if let Some(mr) = mr {
+        if let Err(e) = storage::interface::cleanup_tree(mr) {
+            log::error!("Failed to compact tree: {}", e);
+            process::exit(0x01);
+        }
     }
 }
 

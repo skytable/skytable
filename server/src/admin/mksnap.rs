@@ -25,15 +25,16 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::diskstore;
 use crate::diskstore::snapshot::SnapshotEngine;
-use crate::diskstore::snapshot::DIR_SNAPSHOT;
+use crate::kvengine::encoding;
+use crate::storage;
+use crate::storage::interface::DIR_SNAPROOT;
 use std::path::{Component, PathBuf};
 
 action!(
     /// Create a snapshot
     ///
-    fn mksnap(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn mksnap(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         if act.len() == 0 {
             if !handle.is_snapshot_enabled() {
                 // Since snapshotting is disabled, we can't create a snapshot!
@@ -46,13 +47,8 @@ action!(
             let mut was_engine_error = false;
             let mut succeeded = None;
 
-            let snaphandle = handle.shared.clone();
-            let snapstatus = unsafe {
-                // UNSAFE(@ohsayan) This is safe as we've already checked
-                // if snapshots are enabled or not with `is_snapshot_enabled`
-                snaphandle.snapcfg.as_ref().unsafe_unwrap()
-            };
-            let snapengine = SnapshotEngine::new(snapstatus.max, handle, None);
+            let snapstatus = handle.get_snapstatus();
+            let snapengine = SnapshotEngine::new(snapstatus.max, handle);
             if snapengine.is_err() {
                 was_engine_error = true;
             } else if snapstatus.is_busy() {
@@ -92,9 +88,13 @@ action!(
                 // contains a second argument, so this can't be reached
                 act.next().unsafe_unwrap()
             };
-            let mut path = PathBuf::from(DIR_SNAPSHOT);
+            let snapname = if encoding::is_utf8(&snapname) {
+                unsafe { String::from_utf8_unchecked(snapname.to_vec()) }
+            } else {
+                return con.write_response(responses::groups::ENCODING_ERROR).await;
+            };
+            let mut path = PathBuf::from(DIR_SNAPROOT);
             path.push("remote");
-            path.push(snapname.to_owned() + ".snapshot");
             let illegal_snapshot = path
                 .components()
                 .filter(|dir| {
@@ -113,8 +113,9 @@ action!(
             }
             let failed;
             {
-                let tbl_ref = handle.get_ref();
-                match diskstore::write_to_disk(&path, &*tbl_ref) {
+                let mut snapid = String::from("remote/");
+                snapid.push_str(&snapname);
+                match storage::flush::snap_flush_full(&snapid, handle.get_store()) {
                     Ok(_) => failed = false,
                     Err(e) => {
                         log::error!("Error while creating snapshot: {}", e);

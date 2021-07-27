@@ -135,8 +135,8 @@ impl<T, F> Drop for Lazy<T, F> {
 }
 
 cfg_test!(
-    use crate::coredb::htable::{HTable, Data};
-    use crate::coredb::lazy;
+    use crate::corestore::htable::{HTable, Data};
+    use crate::corestore::lazy;
     use std::thread;
     typedef!(
         /// A function that returns a [`HTable`]

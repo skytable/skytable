@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)]
+
 //! # Bytemarks
 //!
 //! Bytemarks are single bytes that are written to parts of files to provide metadata. This module

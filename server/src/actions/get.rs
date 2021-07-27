@@ -33,16 +33,17 @@ use bytes::Bytes;
 
 action!(
     /// Run a `GET` query
-    fn get(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 1);
         let res: Option<Bytes> = {
-            let reader = handle.get_ref();
+            let reader = kve!(con, handle);
             unsafe {
                 // UNSAFE(@ohsayan): this is safe because we've already checked if the action
                 // group contains one argument (excluding the action itself)
-                reader
-                    .get(act.next().unsafe_unwrap().as_bytes())
-                    .map(|b| b.get_blob().clone())
+                match reader.get(act.next().unsafe_unwrap()) {
+                    Ok(v) => v.map(|b| b.get_blob().clone()),
+                    Err(_) => None,
+                }
             }
         };
         if let Some(value) = res {

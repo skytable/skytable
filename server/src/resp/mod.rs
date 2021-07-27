@@ -26,7 +26,7 @@
 
 //! Utilities for generating responses, which are only used by the `server`
 //!
-use crate::coredb::buffers::Integer64;
+use crate::corestore::buffers::Integer64;
 use bytes::Bytes;
 use skytable::RespCode;
 use std::future::Future;
@@ -76,7 +76,7 @@ where
 }
 
 /// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
-/// from `CoreDB`.
+/// from `Corestore`.
 ///
 /// This wrapper exists to prevent trait implementation conflicts when
 /// an impl for `fmt::Display` may be implemented upstream

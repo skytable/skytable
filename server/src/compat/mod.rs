@@ -29,7 +29,7 @@
 //! This module will enable users from an earlier version of Skytable to migrate their data to match
 //! the latest format
 
-use crate::coredb::{htable::HTable, Data};
+use crate::corestore::{htable::HTable, Data};
 use crate::diskstore::snapshot::SNAP_MATCH;
 use bytes::Bytes;
 use libsky::TResult;

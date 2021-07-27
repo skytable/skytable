@@ -35,13 +35,11 @@ pub enum Element {
     /// Arrays can be nested! Their `<tsymbol>` is `&`
     Array(Vec<Element>),
     /// A String value; `<tsymbol>` is `+`
-    String(String),
+    String(Bytes),
     /// An unsigned integer value; `<tsymbol>` is `:`
     UnsignedInt(u64),
     /// A non-recursive String array; tsymbol: `_`
-    FlatArray(Vec<String>),
+    FlatArray(Vec<Bytes>),
     /// Swap the KS (ASCII `1A` (SUB HEADER))
     SwapKSHeader(Bytes),
-    /// Swap the NS (ASCII `0x1B` (ESC HEADER))
-    SwapNSHeader(Bytes),
 }

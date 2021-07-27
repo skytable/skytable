@@ -131,7 +131,7 @@ fn test_runtime_panic_32bit_or_lower() {
 mod interface_tests {
     use super::interface::{create_tree, DIR_KSROOT, DIR_ROOT, DIR_SNAPROOT};
     use crate::concat_path;
-    use crate::coredb::memstore::Memstore;
+    use crate::corestore::memstore::Memstore;
     use std::fs;
     use std::path::PathBuf;
     #[test]
@@ -171,7 +171,7 @@ mod interface_tests {
 
 mod preload_tests {
     use super::*;
-    use crate::coredb::memstore::Memstore;
+    use crate::corestore::memstore::Memstore;
     #[test]
     fn test_preload() {
         let memstore = Memstore::new_default();
@@ -188,8 +188,8 @@ mod preload_tests {
 
 mod bytemark_set_tests {
     use super::*;
-    use crate::coredb::memstore::{Keyspace, ObjectID};
-    use crate::coredb::table::Table;
+    use crate::corestore::memstore::{Keyspace, ObjectID};
+    use crate::corestore::table::Table;
     use std::collections::HashMap;
     #[test]
     fn test_bytemark_for_nonvolatile() {
@@ -256,10 +256,10 @@ mod bytemark_set_tests {
 }
 
 mod flush_routines {
-    use crate::coredb::memstore::Keyspace;
-    use crate::coredb::memstore::ObjectID;
-    use crate::coredb::table::Table;
-    use crate::coredb::Data;
+    use crate::corestore::memstore::Keyspace;
+    use crate::corestore::memstore::ObjectID;
+    use crate::corestore::table::Table;
+    use crate::corestore::Data;
     use std::fs;
     #[test]
     fn test_flush_unflush_table() {
@@ -278,7 +278,7 @@ mod flush_routines {
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
-                .get("hello".into())
+                .get(Data::from("hello"))
                 .unwrap()
                 .unwrap()
                 .clone(),

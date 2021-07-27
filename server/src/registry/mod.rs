@@ -29,7 +29,7 @@
 //! The registry module provides interfaces for system-wide, global state management
 //!
 
-use crate::coredb::lock::{QLGuard, QuickLock};
+use crate::corestore::lock::{QLGuard, QuickLock};
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 

@@ -30,12 +30,12 @@ use crate::queryengine::ActionIter;
 
 action!(
     /// Delete all the keys in the database
-    fn flushdb(handle: &CoreDB, con: &mut T, act: ActionIter) {
+    fn flushdb(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, not 0);
         let failed;
         {
             if registry::state_okay() {
-                handle.get_ref().clear();
+                kve!(con, handle).truncate_table();
                 failed = false;
             } else {
                 failed = true;

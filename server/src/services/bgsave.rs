@@ -25,27 +25,19 @@
 */
 
 use crate::config::BGSave;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
-use crate::diskstore::{self, flock};
 use crate::registry;
-#[cfg(not(test))]
-use diskstore::PERSIST_FILE;
+use crate::storage;
 use libsky::TResult;
-use std::fs;
 use tokio::time::{self, Duration};
 
-const SKY_TEMP_FILE: &str = "__skydata_file.bin";
-#[cfg(test)]
-/// The **test location** for the PERSIST_FILE
-pub const BGSAVE_DIRECTORY_TESTING_LOC: &str = "skydata_bgsavetest.bin";
-
-/// The bgsave_scheduler calls the bgsave task in `CoreDB` after `every` seconds
+/// The bgsave_scheduler calls the bgsave task in `Corestore` after `every` seconds
 ///
 /// The time after which the scheduler will wake up the BGSAVE task is determined by
 /// `bgsave_cfg` which is to be passed as an argument. If BGSAVE is disabled, this function
 /// immediately returns
-pub async fn bgsave_scheduler(handle: CoreDB, bgsave_cfg: BGSave, mut terminator: Terminator) {
+pub async fn bgsave_scheduler(handle: Corestore, bgsave_cfg: BGSave, mut terminator: Terminator) {
     match bgsave_cfg {
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
@@ -78,44 +70,17 @@ pub async fn bgsave_scheduler(handle: CoreDB, bgsave_cfg: BGSave, mut terminator
     log::info!("BGSAVE service has exited");
 }
 
-/// This is a _raw_ version of what Sky's persistence does and is **blocking in nature** since it does
-/// a good amount of disk I/O (which totally depends on the size of the dataset though)
-/// There's nothing dangerous about this really and hence it isn't as _raw_ as it sounds. This method accepts
-/// a handle to a [`coredb::CoreDB`] and uses that to acquire a read lock. This method will create a temporary
-/// file and lock it. It then passes an immutable HTable reference to [`diskstore::flush_data`] which flushes the data to our
-/// temporary locked file. Once the data is successfully flushed, the new temporary file replaces the old data file
-/// by using [`fs::rename`]. This provides us with two gurantees:
-/// 1. No silly logic is seen if the user deletes the data.bin file and yet BGSAVE doesn't complain
-/// 2. If this method crashes midway, we can still be sure that the old file is intact
-fn _bgsave_blocking_section(handle: &CoreDB) -> TResult<()> {
-    // first lock our temporary file
-    let mut file = flock::FileLock::lock(SKY_TEMP_FILE)?;
-    // get a read lock on the coretable
-    let tbl_ref = handle.get_ref();
-    diskstore::flush_data(&mut file, &*tbl_ref)?;
-    // now rename the file
-    #[cfg(not(test))]
-    fs::rename(SKY_TEMP_FILE, &*PERSIST_FILE)?;
-    #[cfg(test)]
-    fs::rename(SKY_TEMP_FILE, BGSAVE_DIRECTORY_TESTING_LOC)?;
-    // now unlock the file
-    file.unlock()?;
-    // close the file
-    drop(file);
-    Ok(())
-}
-
 /// Run bgsave
 ///
 /// This function just hides away the BGSAVE blocking section from the _public API_
-pub fn run_bgsave(handle: &CoreDB) -> TResult<()> {
-    _bgsave_blocking_section(handle)
+pub fn run_bgsave(handle: &Corestore) -> TResult<()> {
+    storage::flush::flush_full(handle.get_store()).map_err(|e| e.into())
 }
 
 /// This just wraps around [`_bgsave_blocking_section`] and prints nice log messages depending on the outcome
-fn bgsave_blocking_section(handle: CoreDB) -> bool {
+fn bgsave_blocking_section(handle: Corestore) -> bool {
     registry::lock_flush_state();
-    match _bgsave_blocking_section(&handle) {
+    match run_bgsave(&handle) {
         Ok(_) => {
             log::info!("BGSAVE completed successfully");
             registry::unpoison();

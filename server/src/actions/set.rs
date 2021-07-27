@@ -27,28 +27,28 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
-use crate::coredb;
+use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use coredb::Data;
+use corestore::Data;
 
 action!(
     /// Run a `SET` query
-    fn set(handle: &crate::coredb::CoreDB, con: &mut T, mut act: ActionIter) {
+    fn set(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 2);
         let did_we = {
             if registry::state_okay() {
-                let writer = handle.get_ref();
+                let writer = kve!(con, handle);
                 // clippy thinks we're doing something complex when we aren't, at all!
                 #[allow(clippy::blocks_in_if_conditions)]
                 if unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
-                    writer.true_if_insert(
+                    not_enc_err!(writer.set(
                         Data::from(act.next().unsafe_unwrap()),
                         Data::from(act.next().unsafe_unwrap()),
-                    )
+                    ))
                 } {
                     Some(true)
                 } else {

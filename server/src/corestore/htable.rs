@@ -24,7 +24,7 @@
  *
 */
 
-use crate::coredb::array::Array;
+use crate::corestore::array::Array;
 use bytes::Bytes;
 use libsky::TResult;
 use serde::{Deserialize, Serialize};
@@ -256,6 +256,12 @@ impl Borrow<[u8]> for Data {
     }
 }
 
+impl Borrow<Bytes> for Data {
+    fn borrow(&self) -> &Bytes {
+        &self.blob
+    }
+}
+
 impl AsRef<[u8]> for Data {
     fn as_ref(&self) -> &[u8] {
         &self.blob
@@ -359,7 +365,7 @@ struct DataVisitor;
 impl<'de> Visitor<'de> for DataVisitor {
     type Value = Data;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting a coredb::htable::Data object")
+        formatter.write_str("Expecting a corestore::htable::Data object")
     }
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
     where
