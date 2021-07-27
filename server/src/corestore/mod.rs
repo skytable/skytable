@@ -190,27 +190,51 @@ impl Corestore {
     /// luck -- the next mutual access may be yielded to the next `create table` command
     pub fn create_table(
         &self,
-        tblid: ObjectID,
+        entity: EntityGroup,
         modelcode: u8,
         volatile: bool,
     ) -> KeyspaceResult<()> {
         // first lock the global flush state
         let flush_lock = registry::lock_flush_state();
-        let ret = match &self.cks {
-            Some(ks) => {
-                let tbl = Table::from_model_code(modelcode, volatile);
-                if let Some(tbl) = tbl {
-                    if ks.create_table(tblid.clone(), tbl) {
-                        Ok(())
-                    } else {
-                        Err(DdlError::AlreadyExists)
+        let ret;
+        match entity {
+            // Important: create table <tblname> is only ks
+            (Some(tblid), None) => {
+                ret = match &self.cks {
+                    Some(ks) => {
+                        let tbl = Table::from_model_code(modelcode, volatile);
+                        if let Some(tbl) = tbl {
+                            if ks.create_table(tblid.clone(), tbl) {
+                                Ok(())
+                            } else {
+                                Err(DdlError::AlreadyExists)
+                            }
+                        } else {
+                            Err(DdlError::WrongModel)
+                        }
                     }
-                } else {
-                    Err(DdlError::WrongModel)
+                    None => Err(DdlError::DefaultNotFound),
+                };
+            }
+            (Some(ksid), Some(tblid)) => {
+                ret = match self.store.get_keyspace_atomic_ref(&ksid) {
+                    Some(kspace) => {
+                        let tbl = Table::from_model_code(modelcode, volatile);
+                        if let Some(tbl) = tbl {
+                            if kspace.create_table(tblid.clone(), tbl) {
+                                Ok(())
+                            } else {
+                                Err(DdlError::AlreadyExists)
+                            }
+                        } else {
+                            Err(DdlError::WrongModel)
+                        }
+                    }
+                    None => Err(DdlError::ObjectNotFound),
                 }
             }
-            None => Err(DdlError::DefaultNotFound),
-        };
+            _ => unsafe { impossible!() },
+        }
         // free the global flush lock
         drop(flush_lock);
         ret

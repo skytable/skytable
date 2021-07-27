@@ -32,7 +32,6 @@ use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 use crate::util::Unwrappable;
-use bytes::Bytes;
 use core::str;
 use regex::Regex;
 
@@ -49,17 +48,16 @@ fn cold_err<T>(v: T) -> T {
     v
 }
 
-pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(ObjectID, u8), &'static [u8]> {
+pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(EntityGroup, u8), &'static [u8]> {
     let table_name = unsafe { act.next().unsafe_unwrap() };
     let model_name = unsafe { act.next().unsafe_unwrap() };
     if compiler::unlikely(!encoding::is_utf8(&table_name) || !encoding::is_utf8(&model_name)) {
         return Err(responses::groups::ENCODING_ERROR);
     }
-    let table_name_str = unsafe { str::from_utf8_unchecked(&table_name) };
     let model_name_str = unsafe { str::from_utf8_unchecked(&model_name) };
-    if compiler::unlikely(!VALID_CONTAINER_NAME.is_match(table_name_str)) {
-        return Err(responses::groups::BAD_EXPRESSION);
-    }
+
+    // get the entity group
+    let entity_group = get_query_entity(&table_name)?;
     let splits: Vec<&str> = model_name_str.split('(').collect();
     if compiler::unlikely(splits.len() != 2) {
         return Err(responses::groups::BAD_EXPRESSION);
@@ -124,15 +122,10 @@ pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(ObjectID, u8), &'
         (STR, BINSTR) => 3,
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
-
-    if compiler::unlikely(table_name_str.len() > 64) {
-        Err(responses::groups::CONTAINER_NAME_TOO_LONG)
-    } else {
-        Ok((unsafe { ObjectID::from_slice(table_name_str) }, model_code))
-    }
+    Ok((entity_group, model_code))
 }
 
-pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup, &'static [u8]> {
+pub(super) fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8]> {
     let y: Vec<&[u8]> = input.split(|v| *v == b':').collect();
     unsafe {
         if y.len() == 1 {
@@ -140,6 +133,10 @@ pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup, &'st
             let ksret = y.get_unchecked(0);
             if compiler::unlikely(ksret.len() > 64 || ksret.is_empty()) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
+            } else if compiler::unlikely(
+                !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(ksret)),
+            ) {
+                Err(responses::groups::BAD_EXPRESSION)
             } else {
                 Ok((Some(ObjectID::from_slice(ksret)), None))
             }
@@ -151,6 +148,11 @@ pub(super) fn get_query_entity<'a>(input: &'a Bytes) -> Result<EntityGroup, &'st
                 Err(responses::groups::BAD_CONTAINER_NAME)
             } else if compiler::unlikely(tblret.is_empty() || ksret.is_empty()) {
                 Err(responses::groups::BAD_EXPRESSION)
+            } else if compiler::unlikely(
+                !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(ksret))
+                    || !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(tblret)),
+            ) {
+                Err(responses::groups::BAD_CONTAINER_NAME)
             } else {
                 Ok((
                     Some(ObjectID::from_slice(ksret)),

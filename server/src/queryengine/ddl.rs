@@ -79,11 +79,11 @@ action!(
     /// We should have `<tableid> <model>(args)`
     fn create_table(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, not 2);
-        let (table_name, model_code) = match parser::parse_table_args(act) {
+        let (table_entity, model_code) = match parser::parse_table_args(act) {
             Ok(v) => v,
             Err(e) => return con.write_response(e).await,
         };
-        match handle.create_table(table_name, model_code, false) {
+        match handle.create_table(table_entity, model_code, false) {
             Ok(_) => con.write_response(responses::groups::OKAY).await?,
             Err(DdlError::AlreadyExists) => {
                 con.write_response(responses::groups::ALREADY_EXISTS)
