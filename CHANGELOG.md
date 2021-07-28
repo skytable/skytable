@@ -2,15 +2,90 @@
 
 All changes in this project will be noted in this file.
 
-## Unreleased
+## Version 0.7.0
+
+### Additions
+
+- **Multiple keyspaces**:
+  - Keyspaces hold multiple tables and determine the replication strategy
+  - Keyspaces can be created with:
+    ```sql
+    CREATE KEYSPACE <name>
+    ```
+  - The `system` keyspace is reserved for the system
+  - Keyspaces can be deleted with:
+    ```sql
+    DROP KEYSPACE <name>
+    ```
+- **Multiple tables**:
+  - Tables hold the actual data
+  - Tables can be created with:
+    ```sql
+    CREATE TABLE <entity> <model>(modelargs) <properties>
+    ```
+  - Tables can be dropped with:
+    ```sql
+    DROP TABLE <entity>
+    ```
+- **Entity groups**: While using DDL queries and inspection queries, we can use the _Fully Qualified Entity_ (FQE) syntax instead of the table name. For example, to `inspect` the `cyan` table in keyspace `supercyan`, one can simply run:
+  ```sql
+  INSPECT TABLE supercyan:cyan
+  ```
+  The syntax is:
+  ```sql
+  keyspace:table
+  ```
+  **Note**: Both keyspaces and tables are entities. The names of entities must:
+  - Begin with an underscore (\_) or an ASCII alphabet
+  - Not begin with a number (0-9)
+  - Must have lesser than 64 characters
+- **Keymap data model**:
+  - To create a keymap table, run:
+    ```sql
+    CREATE TABLE <entity> keymap(<type>,<type>)
+    ```
+  - The following types were introduced:
+    - `str`: A valid unicode string
+    - `binstr`: A binary string
+- **Volatile table property**:
+
+  - To create a volatile table, irrespective of the data model, run:
+    ```sql
+    CREATE TABLE <entity> <model>(modelargs) volatile
+    ```
+  - Volatile tables always exist, but the data in them does not persist between restarts. This makes them extremely useful for caches
+
+- **Inspection**:
+  - Keyspaces can be inspected with:
+    ```sql
+    INSPECT KEYSPACE <name>
+    ```
+    This will list all the tables in the keyspace
+  - Tables can be inspected with:
+    ```sql
+    INSPECT TABLE <entity>
+    ```
+    This will give information about the data model and other properties of the table
+  - To list all keyspaces, this can be run:
+    ```sql
+    INSPECT KEYSPACES
+    ```
+- **Cyanstore 1A disk storage format**: Cyanstore (v1A) was a new storage format built for the multi-keyspace-table world. It efficiently stores and retrieves records, tables and keyspaces
+- **Realtime keyspace/table switch**
+  - To switch to a new keyspace in real-time, one needs to run:
+    ```sql
+    USE keyspace
+    ```
+  - To switch to a new table in real-time, one needs to run:
+    ```sql
+    USE keyspace:table
+    ```
+- TLS port can now be set to a custom port via CLI arguments
 
 ### Fixes
 
 - Zero length argument causing runtime panic in `skysh`
-
-### Additions
-
-- TLS port can now be set to a custom port via CLI arguments
+- Panic on incorrect data type in `skyd`
 
 ## Version 0.6.3 [2021-06-27]
 

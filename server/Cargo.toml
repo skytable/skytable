@@ -1,6 +1,6 @@
 [package]
 name = "skyd"
-version = "0.6.3"
+version = "0.7.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 build = "build.rs"
