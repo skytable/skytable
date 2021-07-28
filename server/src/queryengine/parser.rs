@@ -137,6 +137,8 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8
                 !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(ksret)),
             ) {
                 Err(responses::groups::BAD_EXPRESSION)
+            } else if compiler::unlikely(ksret.eq(&"system".as_bytes())) {
+                Err(responses::groups::PROTECTED_OBJECT)
             } else {
                 Ok((Some(ObjectID::from_slice(ksret)), None))
             }
@@ -153,6 +155,8 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8
                     || !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(tblret)),
             ) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
+            } else if compiler::unlikely(ksret.eq(&"system".as_bytes())) {
+                Err(responses::groups::PROTECTED_OBJECT)
             } else {
                 Ok((
                     Some(ObjectID::from_slice(ksret)),
