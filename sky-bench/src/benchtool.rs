@@ -54,16 +54,51 @@ pub fn runner(
         );
     }
     let host = hoststr!(host, port);
+    let host_clone = host.clone();
     let mut rand = thread_rng();
     let mut dt = DevTime::new_complex();
-    // Create separate connection pools for get and set operations
-    let setpool = Workpool::new(
-        max_connections,
-        move || TcpStream::connect(host.clone()).unwrap(),
+
+    // create the temporary table to work on
+    let util_pool = Workpool::new(
+        1,
+        move || TcpStream::connect(&host_clone).unwrap(),
         |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
             // we don't care much about what's returned
-            let _ = sock.read(&mut vec![0; 1024]).unwrap();
+            let _ = sock.read(&mut [0; 1024]).unwrap();
+        },
+        |socket| {
+            socket.shutdown(std::net::Shutdown::Both).unwrap();
+        },
+        true,
+    );
+    let temp_table = libstress::utils::rand_alphastring(10, &mut rand);
+    let create_table = libsky::into_raw_query(&format!(
+        "create table {} keymap(binstr,binstr)",
+        &temp_table
+    ));
+    let switch_table = libsky::into_raw_query(&format!(
+        "use default:{} keymap(binstr,binstr)",
+        &temp_table
+    ));
+    let drop_table = libsky::into_raw_query(&format!("drop table {}", &temp_table));
+    util_pool.execute(create_table);
+    util_pool.execute(switch_table.clone());
+    let drop_pool = util_pool.clone();
+    drop(util_pool);
+    // Create separate connection pools for get and set operations
+    let setpool = Workpool::new(
+        max_connections,
+        move || {
+            let mut stream = TcpStream::connect(&host).unwrap();
+            stream.write_all(&switch_table).unwrap();
+            let _ = stream.read(&mut [0; 1024]).unwrap();
+            stream
+        },
+        |sock, packet: Vec<u8>| {
+            sock.write_all(&packet).unwrap();
+            // we don't care much about what's returned
+            let _ = sock.read(&mut [0; 1024]).unwrap();
         },
         |socket| {
             socket.shutdown(std::net::Shutdown::Both).unwrap();
@@ -71,7 +106,6 @@ pub fn runner(
         true,
     );
     let getpool = setpool.clone();
-    let delpool = getpool.clone();
     let keys: Vec<String> =
         generate_random_string_vector(max_queries, packet_size, &mut rand, true);
     let values = generate_random_string_vector(max_queries, packet_size, &mut rand, false);
@@ -89,9 +123,6 @@ pub fn runner(
     let get_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
         .collect();
-    let del_packs: Vec<Vec<u8>> = (0..max_queries)
-        .map(|idx| libsky::into_raw_query(&format!("DEL {}", keys[idx])))
-        .collect();
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
@@ -108,7 +139,8 @@ pub fn runner(
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
-    delpool.execute_and_finish_iter(del_packs);
+    drop_pool.execute(drop_table);
+    drop(drop_pool);
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
     if json_out {

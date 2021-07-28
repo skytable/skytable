@@ -268,6 +268,7 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
 }
 
 pub mod utils {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     use rand::distributions::Alphanumeric;
     use std::collections::HashSet;
 
@@ -301,5 +302,13 @@ pub mod utils {
                 .map(|_| ran_string(size, &mut rng))
                 .collect()
         }
+    }
+    pub fn rand_alphastring(len: usize, rng: &mut impl rand::Rng) -> String {
+        (0..len)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARSET.len());
+                CHARSET[idx] as char
+            })
+            .collect()
     }
 }
