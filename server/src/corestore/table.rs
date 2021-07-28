@@ -62,6 +62,16 @@ impl Table {
             DataModel::KV(kv) => kv.len(),
         }
     }
+    /// Returns this table's _description_
+    pub fn describe_self(&self) -> &'static str {
+        match self.get_model_code() {
+            0 => r#"KeyValue(binstr,binstr)"#,
+            1 => r#"KeyValue(binstr,str)"#,
+            2 => r#"KeyValue(str,str)"#,
+            3 => r#"KeyValue(str,binstr)"#,
+            _ => unsafe { impossible!() },
+        }
+    }
     pub fn truncate_table(&self) {
         match self.model_store {
             DataModel::KV(ref kv) => kv.truncate_table(),

@@ -32,8 +32,8 @@ use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding;
 use core::str;
 
-const TABLE: &[u8] = "TABLE".as_bytes();
-const KEYSPACE: &[u8] = "KEYSPACE".as_bytes();
+pub const TABLE: &[u8] = "TABLE".as_bytes();
+pub const KEYSPACE: &[u8] = "KEYSPACE".as_bytes();
 
 action!(
     /// Handle `create table <tableid> <model>(args)` and `create keyspace <ksid>`

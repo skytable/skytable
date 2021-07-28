@@ -79,6 +79,7 @@ pub mod groups {
     pub const TOO_MANY_ARGUMENTS: &[u8] = "!13\ntoo-many-args\n".as_bytes();
     pub const CONTAINER_NAME_TOO_LONG: &[u8] = "!23\ncontainer-name-too-long\n".as_bytes();
     pub const BAD_CONTAINER_NAME: &[u8] = "!18\nbad-container-name\n".as_bytes();
+    pub const UNKNOWN_INSPECT_QUERY: &[u8] = "!21\nunknown-inspect-query\n".as_bytes();
 }
 
 pub mod full_responses {

@@ -164,6 +164,9 @@ impl Corestore {
         }
         Ok(())
     }
+    pub fn get_keyspace(&self, ksid: ObjectID) -> Option<Arc<Keyspace>> {
+        self.store.get_keyspace_atomic_ref(&ksid)
+    }
     /// Get an atomic reference to a table
     pub fn get_table(&self, entity: EntityGroup) -> KeyspaceResult<Arc<Table>> {
         match entity {

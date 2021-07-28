@@ -34,6 +34,7 @@ use crate::protocol::Element;
 use crate::{actions, admin};
 use bytes::Bytes;
 mod ddl;
+mod inspect;
 pub mod parser;
 #[cfg(test)]
 mod tests;
@@ -105,7 +106,8 @@ where
         POP => actions::pop::pop,
         CREATE => ddl::create,
         DROP => ddl::ddl_drop,
-        USE => self::entity_swap
+        USE => self::entity_swap,
+        INSPECT => inspect::inspect
     );
     Ok(())
 }

@@ -288,7 +288,7 @@ impl<T, const N: usize> Array<T, N> {
     // of the array
     /// Get self as a slice. Super safe because we guarantee that all the other invarians
     /// are upheld
-    fn as_slice(&self) -> &[T] {
+    pub fn as_slice(&self) -> &[T] {
         unsafe { slice::from_raw_parts(self.as_ptr(), self.len()) }
     }
     /// Get self as a mutable slice. Super safe (see comment above)

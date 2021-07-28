@@ -158,6 +158,7 @@ pub fn pre_shutdown_cleanup(pid_file: fs::File, mr: Option<&Memstore>) {
         process::exit(0x01);
     }
     if let Some(mr) = mr {
+        log::info!("Compacting tree");
         if let Err(e) = storage::interface::cleanup_tree(mr) {
             log::error!("Failed to compact tree: {}", e);
             process::exit(0x01);
