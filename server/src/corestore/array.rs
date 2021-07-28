@@ -44,9 +44,10 @@ use serde::{de::SeqAccess, de::Visitor, Deserialize, Deserializer, Serialize, Se
 
 /// A compile-time, fixed size array that can have unintialized memory. This array is as
 /// efficient as you'd expect a normal array to be, but with the added benefit that you
-/// don't have to initialize all the elements. Safe abstractions are made available
-/// enabling us to not enter uninitialized space and read the _available_ elements. The
-/// array size is limited to 16 bits or 2 bytes to prevent stack overflows.
+/// don't have to initialize all the elements. This was inspired by the arrayvec crate.
+/// Safe abstractions are made available enabling us to not enter uninitialized space and
+/// read the _available_ elements. The array size is limited to 16 bits or 2 bytes to
+/// prevent stack overflows.
 ///
 /// ## Panics
 /// To avoid stack corruption among other crazy things, several implementations like [`Extend`]

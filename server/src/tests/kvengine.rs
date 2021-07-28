@@ -866,6 +866,32 @@ mod __private {
         );
     }
 
+    async fn test_flushdb_fqe() {
+        setkeys!(
+            con,
+            "w":000,
+            "x":100,
+            "y":200,
+            "z":300
+        );
+        // now flush the database
+        let mut query = Query::new();
+        query.push("flushdb");
+        // add the fqe
+        query.push(__MYENTITY__);
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+        // now check the size
+        let mut query = Query::new();
+        query.push("dbsize");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::UnsignedInt(0))
+        );
+    }
+
     /// Test `FLUSHDB` with an incorrect number of arguments
     async fn test_flushdb_syntax_error() {
         query.push("flushdb");

@@ -152,9 +152,11 @@ type DataptrLenptrCapacityMut<'a, T> = (*mut T, &'a mut usize, usize);
 /// An [`IArray`] is heavily optimized for storing items on the stack and will
 /// not perform very well (but of course will) when the object overflows its
 /// stack and is moved to the heap. Optimizations are made to mark overflows
-/// as branches that are unlikely to be called. This makes the [`IArray`]
-/// extremely performant for operations on the stack, but a little expensive
-/// when operations are done on the heap
+/// as branches that are unlikely to be called. The IArray is like a smallvec,
+/// but with extremely aggressive optimizations for items stored on the stack,
+/// for example to avoid the maneuvers with speculative execution.
+/// This makes the [`IArray`] extremely performant for operations on the stack,
+/// but a little expensive when operations are done on the heap
 pub struct IArray<A: MemoryBlock> {
     cap: usize,
     store: InlineArray<A>,
