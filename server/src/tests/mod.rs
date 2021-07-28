@@ -27,6 +27,7 @@
 //! This module contains automated tests for queries
 
 mod ddl_tests;
+mod inspect_tests;
 mod kvengine;
 
 mod ssl {

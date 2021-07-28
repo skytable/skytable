@@ -70,6 +70,19 @@ mod __private {
             Response::Item(Element::RespCode(RespCode::Okay))
         );
     }
+    async fn test_create_volatile() {
+        let mut rng = rand::thread_rng();
+        let tblname = utils::rand_alphastring(10, &mut rng);
+        query.push("create");
+        query.push("table");
+        query.push(&tblname);
+        query.push("keymap(str,str)");
+        query.push("volatile");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+    }
     async fn test_create_table_fully_qualified_entity() {
         let mykeyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
         let mut rng = rand::thread_rng();
@@ -78,6 +91,20 @@ mod __private {
         query.push("table");
         query.push(mykeyspace.to_owned() + ":" + &tblname);
         query.push("keymap(str,str)");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        );
+    }
+    async fn test_create_table_volatile_fully_qualified_entity() {
+        let mykeyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
+        let mut rng = rand::thread_rng();
+        let tblname = utils::rand_alphastring(10, &mut rng);
+        query.push("create");
+        query.push("table");
+        query.push(mykeyspace.to_owned() + ":" + &tblname);
+        query.push("keymap(str,str)");
+        query.push("volatile");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::Okay))
