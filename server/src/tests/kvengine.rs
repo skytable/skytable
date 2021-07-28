@@ -1061,18 +1061,11 @@ mod __private {
             panic!("Expected flat string array");
         }
     }
-    async fn test_lskeys_wrongtype() {
-        query.push("lskeys");
-        query.push("abcdefg");
-        assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Wrongtype))
-        );
-    }
     async fn test_lskeys_syntax_error() {
         query.push("lskeys");
         query.push("abcdefg");
         query.push("hijklmn");
+        query.push("riufrif");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::ActionError))

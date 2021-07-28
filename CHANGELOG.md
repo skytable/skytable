@@ -80,6 +80,22 @@ All changes in this project will be noted in this file.
     ```sql
     USE keyspace:table
     ```
+- **Entity respecting actions**:
+
+  - **`FLUSHDB`**: To flush all the data in a specific table, run:
+    ```sql
+    FLUSHDB <entity>
+    ```
+  - **`DBSIZE`**: To see the number of entries in a specific table, run:
+    ```sql
+    DBSIZE <entity>
+    ```
+  - **`LSKEYS`**:
+    - `LSKEYS` will return keys from the current table
+    - `LSKEYS <count>` will return _count_ keys from the current table
+    - `LSKEYS <entity>` will return keys from the given table
+    - `LSKEYS <entity> <count>` will return _count_ keys from the given table
+
 - TLS port can now be set to a custom port via CLI arguments
 
 ### Fixes

@@ -24,28 +24,53 @@
  *
 */
 
+use crate::corestore::memstore::DdlError;
 use crate::dbnet::connection::prelude::*;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
 
+const DEFAULT_COUNT: usize = 10;
+
 action!(
     /// Run an `LSKEYS` query
     fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
-        err_if_len_is!(act, con, gt 1);
-        let item_count = if let Some(cnt) = act.next() {
-            if let Ok(cnt) = String::from_utf8_lossy(&cnt).parse::<usize>() {
+        err_if_len_is!(act, con, gt 2);
+        let (table, count) = if act.len() == 0 {
+            (get_tbl!(handle, con), DEFAULT_COUNT)
+        } else if act.len() == 1 {
+            // two args, could either be count or an entity
+            let nextret = unsafe { act.next().unsafe_unwrap() };
+            if unsafe { nextret.get_unchecked(0) }.is_ascii_digit() {
+                // noice, this is a number; let's try to parse it
+                let count = if let Ok(cnt) = String::from_utf8_lossy(&nextret).parse::<usize>() {
+                    cnt
+                } else {
+                    return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+                };
+                (get_tbl!(handle, con), count)
+            } else {
+                // sigh, an entity
+                let entity = handle_entity!(con, nextret);
+                (get_tbl!(entity, handle, con), DEFAULT_COUNT)
+            }
+        } else {
+            // an entity and a count, gosh this fella is really trying us
+            let entity_ret = unsafe { act.next().unsafe_unwrap() };
+            let count_ret = unsafe { act.next().unsafe_unwrap() };
+            let entity = handle_entity!(con, entity_ret);
+            let count = if let Ok(cnt) = String::from_utf8_lossy(&count_ret).parse::<usize>() {
                 cnt
             } else {
                 return con.write_response(responses::groups::WRONGTYPE_ERR).await;
-            }
-        } else {
-            10
+            };
+            (get_tbl!(entity, handle, con), count)
         };
-        let items: Vec<Bytes>;
-        {
-            let reader = kve!(con, handle);
-            items = reader.__get_inner_ref().get_keys(item_count);
-        }
+        let kve = match table.get_kvstore() {
+            Ok(kv) => kv,
+            Err(DdlError::WrongModel) => return conwrite!(con, responses::groups::WRONG_MODEL),
+            Err(_) => unsafe { impossible!() },
+        };
+        let items: Vec<Bytes> = kve.__get_inner_ref().get_keys(count);
         con.write_flat_array_length(items.len()).await?;
         for item in items {
             con.write_response(BytesWrapper(item)).await?;

@@ -187,8 +187,8 @@ impl Corestore {
             _ => unsafe { impossible!() },
         }
     }
-    pub fn get_ctable(&self) -> Option<&Arc<Table>> {
-        self.ctable.as_ref()
+    pub fn get_ctable(&self) -> Option<Arc<Table>> {
+        self.ctable.clone()
     }
 
     /// Get the key/value store
