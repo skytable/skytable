@@ -26,74 +26,9 @@
 
 //! This module contains automated tests for queries
 
+mod ddl_tests;
+mod inspect_tests;
 mod kvengine;
-
-mod bgsave {
-    use crate::config::BGSave;
-    use crate::coredb::{htable::HTable, CoreDB, Data};
-    use crate::dbnet::Terminator;
-    use crate::diskstore;
-    use crate::services;
-    use services::bgsave::BGSAVE_DIRECTORY_TESTING_LOC;
-    use std::fs;
-    use tokio::sync::broadcast;
-    use tokio::time::{self, Duration};
-    #[tokio::test]
-    async fn test_bgsave() {
-        // pre-initialize our maps for comparison
-        let map_should_be_with_one = HTable::new();
-        map_should_be_with_one.upsert(
-            Data::from(String::from("sayan")),
-            Data::from_string("is testing bgsave".to_owned()),
-        );
-        #[allow(non_snake_case)]
-        let DUR_WITH_EPSILON: Duration = Duration::from_millis(1500) + Duration::from_secs(10);
-        let (signal, _) = broadcast::channel(1);
-        let datahandle = CoreDB::new_empty(None);
-        let bgsave_configuration = BGSave::Enabled(10);
-        let handle = tokio::spawn(services::bgsave::bgsave_scheduler(
-            datahandle.clone(),
-            bgsave_configuration,
-            Terminator::new(signal.subscribe()),
-        ));
-        // sleep for 10 seconds with epsilon 1.5s
-        time::sleep(DUR_WITH_EPSILON).await;
-        // we should get an empty map
-        let saved =
-            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
-        assert!(saved.len() == 0);
-        // now let's quickly write some data
-        {
-            datahandle.get_ref().upsert(
-                Data::from(String::from("sayan")),
-                Data::from("is testing bgsave".to_owned()),
-            );
-        }
-        // sleep for 10 seconds with epsilon 1.5s
-        time::sleep(DUR_WITH_EPSILON).await;
-        // we should get a map with the one key
-        let saved =
-            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
-        assert_eq!(saved, map_should_be_with_one);
-        // now let's remove all the data
-        {
-            datahandle.get_ref().clear();
-        }
-        // sleep for 10 seconds with epsilon 1.5s
-        time::sleep(DUR_WITH_EPSILON).await;
-        let saved =
-            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
-        assert!(saved.len() == 0);
-        // drop the signal; all waiting tasks can now terminate
-        drop(signal);
-        handle.await.unwrap();
-        // check the file again after unlocking
-        let saved =
-            diskstore::test_deserialize(fs::read(BGSAVE_DIRECTORY_TESTING_LOC).unwrap()).unwrap();
-        assert!(saved.len() == 0);
-        fs::remove_file(BGSAVE_DIRECTORY_TESTING_LOC).unwrap();
-    }
-}
 
 mod ssl {
     use skytable::aio::TlsConnection;

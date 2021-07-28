@@ -268,8 +268,8 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
 }
 
 pub mod utils {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     use rand::distributions::Alphanumeric;
-    use rayon::prelude::*;
     use std::collections::HashSet;
 
     pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
@@ -295,12 +295,20 @@ pub mod utils {
                 }
                 keys.insert(ran);
             });
-            keys.into_par_iter().collect()
+            keys.into_iter().collect()
         } else {
             (0..count)
                 .into_iter()
                 .map(|_| ran_string(size, &mut rng))
                 .collect()
         }
+    }
+    pub fn rand_alphastring(len: usize, rng: &mut impl rand::Rng) -> String {
+        (0..len)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARSET.len());
+                CHARSET[idx] as char
+            })
+            .collect()
     }
 }

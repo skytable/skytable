@@ -29,28 +29,21 @@
 //! Functions for handling `JGET` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::queryengine::ActionIter;
 
-/// Run a `JGET` query
-/// This returns a JSON key/value pair of keys and values
-/// We need to write something like
-/// ```json
-/// &1\n
-/// $15\n
-/// {"key":"value"}\n
-/// ```
-///
-pub async fn jget<T, Strm>(
-    _handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, not 1);
-    todo!()
+action! {
+    /// Run a `JGET` query
+    /// This returns a JSON key/value pair of keys and values
+    /// We need to write something like
+    /// ```json
+    /// &1\n
+    /// $15\n
+    /// {"key":"value"}\n
+    /// ```
+    ///
+    fn jget(_handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
+        todo!()
+    }
 }
 
 mod json {

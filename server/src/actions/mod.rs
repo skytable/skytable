@@ -49,21 +49,34 @@ pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
-    use crate::protocol;
-    use crate::queryengine::ActionIter;
-    use protocol::responses;
-    /// Returns a `HEY!` `Response`
-    pub async fn heya<T, Strm>(
-        _handle: &crate::coredb::CoreDB,
-        con: &mut T,
-        _act: ActionIter,
-    ) -> std::io::Result<()>
-    where
-        T: ProtocolConnectionExt<Strm>,
-        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-    {
-        con.write_response(&**responses::groups::HEYA).await
-    }
+    action!(
+        /// Returns a `HEY!` `Response`
+        fn heya(_handle: &Corestore, con: &mut T, _act: ActionIter) {
+            con.write_response(responses::groups::HEYA).await
+        }
+    );
+}
+
+/*
+ Don't modulo because it's an L1 miss and an L2 hit. Use lowbit checks to check for parity
+*/
+
+#[macro_export]
+/// endian independent check to see if the lowbit is set or not. Returns true if the lowbit
+/// is set. this is undefined to be applied on signed values on one's complement targets
+macro_rules! is_lowbit_set {
+    ($v:expr) => {
+        $v & 1 == 1
+    };
+}
+
+#[macro_export]
+/// endian independent check to see if the lowbit is unset or not. Returns true if the lowbit
+/// is unset. this is undefined to be applied on signed values on one's complement targets
+macro_rules! is_lowbit_unset {
+    ($v:expr) => {
+        $v & 1 == 0
+    };
 }
 
 #[macro_export]
@@ -71,49 +84,49 @@ macro_rules! err_if_len_is {
     ($buf:ident, $con:ident, eq $len:literal) => {
         if $buf.len() == $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, not $len:literal) => {
         if $buf.len() != $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, gt $len:literal) => {
         if $buf.len() > $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, lt $len:literal) => {
         if $buf.len() < $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, gt_or_eq $len:literal) => {
         if $buf.len() >= $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
     ($buf:ident, $con:ident, lt_or_eq $len:literal) => {
         if $buf.len() <= $len {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };
-    ($buf:ident, $con:ident, & $len:literal) => {
-        if $buf.len() & $len {
+    ($con:ident, $expr:expr) => {
+        if $expr {
             return $con
-                .write_response(&**crate::protocol::responses::groups::ACTION_ERR)
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
                 .await;
         }
     };

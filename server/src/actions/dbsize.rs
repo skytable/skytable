@@ -25,23 +25,21 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::queryengine::ActionIter;
 
-/// Get the number of keys in the database
-pub async fn dbsize<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, not 0);
-    let len;
-    {
-        len = handle.get_ref().len();
+action!(
+    /// Returns the number of keys in the database
+    fn dbsize(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, gt 1);
+        if act.len() == 0 {
+            let len;
+            {
+                len = kve!(con, handle).len();
+            }
+            con.write_response(len).await?;
+        } else {
+            let entity = handle_entity!(con, unsafe { act.next().unsafe_unwrap() });
+            conwrite!(con, get_tbl!(entity, handle, con).count())?;
+        }
+        Ok(())
     }
-    con.write_response(len).await?;
-    Ok(())
-}
+);

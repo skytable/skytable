@@ -39,7 +39,14 @@
 mod element;
 pub mod responses;
 use crate::util::Unwrappable;
+use bytes::Bytes;
 pub use element::Element;
+
+const ASCII_CONTROL_SUB_HEADER: u8 = 0x1A_u8;
+const ASCII_UNDERSCORE: u8 = b'_';
+const ASCII_AMPERSAND: u8 = b'&';
+const ASCII_COLON: u8 = b':';
+const ASCII_PLUS_SIGN: u8 = b'+';
 
 #[derive(Debug)]
 /// # Skyhash Deserializer (Parser)
@@ -274,9 +281,9 @@ impl<'a> Parser<'a> {
         }
     }
     /// The cursor should have passed the `+` tsymbol
-    fn parse_next_string(&mut self) -> ParseResult<String> {
+    fn parse_next_string(&mut self) -> ParseResult<Bytes> {
         let our_string_chunk = self.__get_next_element()?;
-        let our_string = String::from_utf8_lossy(&our_string_chunk).to_string();
+        let our_string = Bytes::copy_from_slice(our_string_chunk);
         if self.will_cursor_give_linefeed()? {
             // there is a lf after the end of the string; great!
             // let's skip that now
@@ -285,6 +292,18 @@ impl<'a> Parser<'a> {
             Ok(our_string)
         } else {
             Err(ParseError::UnexpectedByte)
+        }
+    }
+    /// Should be at the `\x1A` (SUB header)
+    fn parse_next_byte(&mut self) -> ParseResult<Bytes> {
+        let our_chunk = self.__get_next_element()?;
+        let our_ks_name = Bytes::copy_from_slice(our_chunk);
+        if self.will_cursor_give_linefeed()? {
+            // end has LF; go on
+            self.incr_cursor();
+            Ok(our_ks_name)
+        } else {
+            Err(ParseError::NotEnough)
         }
     }
     /// The cursor should have passed the `:` tsymbol
@@ -307,10 +326,12 @@ impl<'a> Parser<'a> {
             // but advance the cursor before doing that
             self.incr_cursor();
             let ret = match *tsymbol {
-                b'+' => Element::String(self.parse_next_string()?),
-                b':' => Element::UnsignedInt(self.parse_next_u64()?),
-                b'&' => Element::Array(self.parse_next_array()?),
-                b'_' => Element::FlatArray(self.parse_next_flat_array()?),
+                ASCII_PLUS_SIGN => Element::String(self.parse_next_string()?),
+                ASCII_COLON => Element::UnsignedInt(self.parse_next_u64()?),
+                ASCII_AMPERSAND => Element::Array(self.parse_next_array()?),
+                ASCII_UNDERSCORE => Element::FlatArray(self.parse_next_flat_array()?),
+                // switch keyspace with SUB
+                ASCII_CONTROL_SUB_HEADER => Element::SwapKSHeader(self.parse_next_byte()?),
                 _ => return Err(ParseError::UnknownDatatype),
             };
             Ok(ret)
@@ -320,7 +341,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// The cursor should have passed the tsymbol
-    fn parse_next_flat_array(&mut self) -> ParseResult<Vec<String>> {
+    fn parse_next_flat_array(&mut self) -> ParseResult<Vec<Bytes>> {
         let (start, stop) = self.read_line();
         if let Some(our_size_chunk) = self.buffer.get(start..stop) {
             let array_size = Self::parse_into_usize(&our_size_chunk)?;
@@ -468,7 +489,7 @@ fn test_query_fail_not_enough() {
 fn test_parse_next_string() {
     let bytes = "5\nsayan\n".as_bytes();
     let st = Parser::new(&bytes).parse_next_string().unwrap();
-    assert_eq!(st, "sayan".to_owned());
+    assert_eq!(st, Bytes::from("sayan"));
 }
 
 #[test]
@@ -488,7 +509,7 @@ fn test_parse_next_u64() {
 fn test_parse_next_element_string() {
     let bytes = "+5\nsayan\n".as_bytes();
     let next_element = Parser::new(&bytes).parse_next_element().unwrap();
-    assert_eq!(next_element, Element::String("sayan".to_owned()));
+    assert_eq!(next_element, Element::String(Bytes::from("sayan")));
 }
 
 #[test]
@@ -524,9 +545,9 @@ fn test_parse_next_element_array() {
     assert_eq!(
         array,
         Element::Array(vec![
-            Element::String("MGET".to_owned()),
-            Element::String("foo".to_owned()),
-            Element::String("bar".to_owned())
+            Element::String(Bytes::from("MGET".to_owned())),
+            Element::String(Bytes::from("foo".to_owned())),
+            Element::String(Bytes::from("bar".to_owned()))
         ])
     );
     assert_eq!(parser.cursor, bytes.len());
@@ -554,15 +575,15 @@ fn test_parse_nested_array() {
     assert_eq!(
         array,
         Element::Array(vec![
-            Element::String("ACT".to_owned()),
-            Element::String("foo".to_owned()),
+            Element::String(Bytes::from("ACT".to_owned())),
+            Element::String(Bytes::from("foo".to_owned())),
             Element::Array(vec![
-                Element::String("sayan".to_owned()),
-                Element::String("is".to_owned()),
-                Element::String("working".to_owned()),
+                Element::String(Bytes::from("sayan".to_owned())),
+                Element::String(Bytes::from("is".to_owned())),
+                Element::String(Bytes::from("working".to_owned())),
                 Element::Array(vec![
-                    Element::String("really".to_owned()),
-                    Element::String("hard".to_owned())
+                    Element::String(Bytes::from("really".to_owned())),
+                    Element::String(Bytes::from("hard".to_owned()))
                 ])
             ])
         ])
@@ -580,15 +601,15 @@ fn test_parse_multitype_array() {
     assert_eq!(
         array,
         Element::Array(vec![
-            Element::String("ACT".to_owned()),
-            Element::String("foo".to_owned()),
+            Element::String(Bytes::from("ACT".to_owned())),
+            Element::String(Bytes::from("foo".to_owned())),
             Element::Array(vec![
-                Element::String("sayan".to_owned()),
-                Element::String("is".to_owned()),
-                Element::String("working".to_owned()),
+                Element::String(Bytes::from("sayan".to_owned())),
+                Element::String(Bytes::from("is".to_owned())),
+                Element::String(Bytes::from("working".to_owned())),
                 Element::Array(vec![
                     Element::UnsignedInt(23),
-                    Element::String("april".to_owned())
+                    Element::String(Bytes::from("april".to_owned()))
                 ])
             ])
         ])
@@ -606,15 +627,15 @@ fn test_parse_a_query() {
     assert_eq!(
         resp,
         Query::SimpleQuery(Element::Array(vec![
-            Element::String("ACT".to_owned()),
-            Element::String("foo".to_owned()),
+            Element::String(Bytes::from("ACT".to_owned())),
+            Element::String(Bytes::from("foo".to_owned())),
             Element::Array(vec![
-                Element::String("sayan".to_owned()),
-                Element::String("is".to_owned()),
-                Element::String("working".to_owned()),
+                Element::String(Bytes::from("sayan".to_owned())),
+                Element::String(Bytes::from("is".to_owned())),
+                Element::String(Bytes::from("working".to_owned())),
                 Element::Array(vec![
                     Element::UnsignedInt(23),
-                    Element::String("april".to_owned())
+                    Element::String(Bytes::from("april".to_owned()))
                 ])
             ])
         ]))
@@ -655,15 +676,15 @@ fn test_pipelined_query() {
         res,
         Query::PipelinedQuery(vec![
             Element::Array(vec![
-                Element::String("ACT".to_owned()),
-                Element::String("foo".to_owned()),
+                Element::String(Bytes::from("ACT".to_owned())),
+                Element::String(Bytes::from("foo".to_owned())),
                 Element::Array(vec![
-                    Element::String("sayan".to_owned()),
-                    Element::String("is".to_owned()),
-                    Element::String("working".to_owned())
+                    Element::String(Bytes::from("sayan".to_owned())),
+                    Element::String(Bytes::from("is".to_owned())),
+                    Element::String(Bytes::from("working".to_owned()))
                 ])
             ]),
-            Element::String("HEYA".to_owned())
+            Element::String(Bytes::from("HEYA".to_owned()))
         ])
     );
     assert_eq!(forward_by, bytes.len());
@@ -678,15 +699,15 @@ fn test_query_with_part_of_next_query() {
     assert_eq!(
         res,
         Query::SimpleQuery(Element::Array(vec![
-            Element::String("ACT".to_owned()),
-            Element::String("foo".to_owned()),
+            Element::String(Bytes::from("ACT".to_owned())),
+            Element::String(Bytes::from("foo".to_owned())),
             Element::Array(vec![
-                Element::String("sayan".to_owned()),
-                Element::String("is".to_owned()),
-                Element::String("working".to_owned()),
+                Element::String(Bytes::from("sayan".to_owned())),
+                Element::String(Bytes::from("is".to_owned())),
+                Element::String(Bytes::from("working".to_owned())),
                 Element::Array(vec![
                     Element::UnsignedInt(23),
-                    Element::String("april".to_owned())
+                    Element::String(Bytes::from("april".to_owned()))
                 ])
             ])
         ]))
@@ -703,9 +724,9 @@ fn test_parse_flat_array() {
     assert_eq!(
         res,
         Element::FlatArray(vec![
-            "SET".to_owned(),
-            "Hello".to_owned(),
-            "World".to_owned()
+            Bytes::from("SET".to_owned()),
+            Bytes::from("Hello".to_owned()),
+            Bytes::from("World".to_owned())
         ])
     );
 }
@@ -760,4 +781,22 @@ fn test_u64_incomplete() {
     let bytes = "*1\n:".as_bytes();
     let res = Parser::new(&bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
+}
+
+#[test]
+fn test_ks_sub() {
+    let bytes = [
+        b"*1\n",
+        &[ASCII_CONTROL_SUB_HEADER][..],
+        &[b'5', b'\n'][..],
+        b"sayan\n",
+    ]
+    .concat();
+    assert_eq!(
+        Parser::new(&bytes).parse().unwrap(),
+        (
+            Query::SimpleQuery(Element::SwapKSHeader("sayan".into())),
+            bytes.len()
+        )
+    );
 }

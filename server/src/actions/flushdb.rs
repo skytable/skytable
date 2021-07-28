@@ -25,32 +25,25 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 
-/// Delete all the keys in the database
-pub async fn flushdb<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, not 0);
-    let failed;
-    {
-        if handle.is_poisoned() {
-            failed = true;
+action!(
+    /// Delete all the keys in the database
+    fn flushdb(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, gt 1);
+        if registry::state_okay() {
+            if act.len() == 0 {
+                // flush the current table
+                get_tbl!(handle, con).truncate_table();
+            } else {
+                // flush the entity
+                let entity = handle_entity!(con, unsafe { act.next().unsafe_unwrap() });
+                get_tbl!(entity, handle, con).truncate_table();
+            }
+            conwrite!(con, responses::groups::OKAY)?;
         } else {
-            handle.get_ref().clear();
-            failed = false;
+            conwrite!(con, responses::groups::SERVER_ERR)?;
         }
+        Ok(())
     }
-    if failed {
-        con.write_response(&**responses::groups::SERVER_ERR).await
-    } else {
-        con.write_response(&**responses::groups::OKAY).await
-    }
-}
+);

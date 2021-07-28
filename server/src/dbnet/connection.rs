@@ -36,7 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
-use crate::coredb::CoreDB;
+use crate::corestore::Corestore;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
@@ -44,13 +44,13 @@ use crate::protocol::responses;
 use crate::protocol::ParseError;
 use crate::protocol::Query;
 use crate::resp::Writable;
+use crate::IoResult;
 use bytes::Buf;
 use bytes::BytesMut;
 use libsky::TResult;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use std::io::Result as IoResult;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -64,7 +64,7 @@ pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
 
 pub enum QueryResult {
     Q(Query),
-    E(Vec<u8>),
+    E(&'static [u8]),
     Empty,
     Wrongtype,
 }
@@ -74,8 +74,103 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
+    pub use crate::aerr;
+    pub use crate::conwrite;
+    pub use crate::corestore::Corestore;
+    pub use crate::default_keyspace;
+    pub use crate::err_if_len_is;
+    pub use crate::get_tbl;
+    pub use crate::handle_entity;
+    pub use crate::is_lowbit_set;
+    pub use crate::kve;
+    pub use crate::not_enc_err;
+    pub use crate::protocol::responses;
+    pub use crate::queryengine::ActionIter;
+    pub use crate::registry;
     pub use crate::util::Unwrappable;
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    #[macro_export]
+    macro_rules! kve {
+        ($con:expr, $store:expr) => {
+            match $store.get_kvstore() {
+                Ok(store) => store,
+                _ => {
+                    // wrong model
+                    return $con
+                        .write_response(crate::protocol::responses::groups::WRONG_MODEL)
+                        .await;
+                }
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! not_enc_err {
+        ($val:expr) => {
+            match $val {
+                Ok(v) => v,
+                Err(_) => false,
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! default_keyspace {
+        ($store:expr, $con:expr) => {
+            match $store.get_keyspace() {
+                Ok(ks) => ks,
+                Err(_) => {
+                    return $con
+                        .write_response(crate::protocol::responses::groups::DEFAULT_UNSET)
+                        .await;
+                }
+            }
+        };
+    }
+    #[macro_export]
+    macro_rules! conwrite {
+        ($con:expr, $what:expr) => {
+            $con.write_response($what).await
+        };
+    }
+    #[macro_export]
+    macro_rules! aerr {
+        ($con:expr, aerr) => {
+            return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR);
+        };
+    }
+    #[macro_export]
+    macro_rules! get_tbl {
+        ($entity:expr, $store:expr, $con:expr) => {{
+            use crate::corestore::memstore::DdlError;
+            match $store.get_table($entity) {
+                Ok(tbl) => tbl,
+                Err(DdlError::DefaultNotFound) => {
+                    return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET);
+                }
+                Err(DdlError::ObjectNotFound) => {
+                    return conwrite!(
+                        $con,
+                        crate::protocol::responses::groups::CONTAINER_NOT_FOUND
+                    );
+                }
+                Err(_) => unsafe { impossible!() },
+            }
+        }};
+        ($store:expr, $con:expr) => {{
+            match $store.get_ctable() {
+                Some(tbl) => tbl,
+                None => return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET),
+            }
+        }};
+    }
+    #[macro_export]
+    macro_rules! handle_entity {
+        ($con:expr, $ident:expr) => {{
+            match crate::queryengine::parser::get_query_entity(&$ident) {
+                Ok(e) => e,
+                Err(e) => return conwrite!($con, e),
+            }
+        }};
+    }
 }
 
 /// # The `ProtocolConnectionExt` trait
@@ -122,7 +217,7 @@ where
         if self.get_buffer().is_empty() {
             return Err(ParseError::Empty);
         }
-        protocol::Parser::new(&self.get_buffer()).parse()
+        protocol::Parser::new(self.get_buffer()).parse()
     }
     /// Read a query from the remote end
     ///
@@ -149,12 +244,12 @@ where
                         Err(ParseError::NotEnough) => (),
                         Err(ParseError::DataTypeParseError) => return Ok(QueryResult::Wrongtype),
                         Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                            return Ok(QueryResult::E(
-                                responses::full_responses::R_PACKET_ERR.to_owned(),
-                            ));
+                            return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
                         }
                         Err(ParseError::UnknownDatatype) => {
-                            unimplemented!()
+                            return Ok(QueryResult::E(
+                                responses::full_responses::R_UNKNOWN_DATA_TYPE,
+                            ));
                         }
                     }
                 }
@@ -241,7 +336,7 @@ where
     /// success response and an error response
     fn close_conn_with_error<'r, 's>(
         &'r mut self,
-        resp: Vec<u8>,
+        resp: impl Writable + 's + Send,
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
@@ -347,14 +442,14 @@ where
 ///
 /// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
 /// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
-/// a query, parse it and return an appropriate response through [`coredb::CoreDB::execute_query`]
+/// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
 pub struct ConnectionHandler<T, Strm>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
     Self: Send,
 {
-    db: CoreDB,
+    db: Corestore,
     con: T,
     climit: Arc<Semaphore>,
     terminator: Terminator,
@@ -368,7 +463,7 @@ where
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
 {
     pub fn new(
-        db: CoreDB,
+        db: Corestore,
         con: T,
         climit: Arc<Semaphore>,
         terminator: Terminator,
@@ -396,10 +491,7 @@ where
                 Ok(QueryResult::Q(s)) => {
                     self.db.execute_query(s, &mut self.con).await?;
                 }
-                Ok(QueryResult::E(r)) => {
-                    log::debug!("Failed to read query!");
-                    self.con.close_conn_with_error(r).await?
-                }
+                Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {
                     self.con
                         .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())

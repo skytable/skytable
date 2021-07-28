@@ -40,11 +40,18 @@ pub unsafe trait Unwrappable<T> {
     unsafe fn unsafe_unwrap(self) -> T;
 }
 
+#[macro_export]
+macro_rules! impossible {
+    () => {
+        core::hint::unreachable_unchecked()
+    };
+}
+
 unsafe impl<T, E> Unwrappable<T> for Result<T, E> {
     unsafe fn unsafe_unwrap(self) -> T {
         match self {
             Ok(t) => t,
-            Err(_) => core::hint::unreachable_unchecked(),
+            Err(_) => impossible!(),
         }
     }
 }
@@ -53,7 +60,134 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
     unsafe fn unsafe_unwrap(self) -> T {
         match self {
             Some(t) => t,
-            None => core::hint::unreachable_unchecked(),
+            None => impossible!(),
         }
+    }
+}
+
+#[macro_export]
+macro_rules! consts {
+    ($($(#[$attr:meta])* $ident:ident : $ty:ty = $expr:expr;)*) => {
+        $(
+            $(#[$attr])*
+            const $ident: $ty = $expr;
+        )*
+    };
+    ($($(#[$attr:meta])* $vis:vis $ident:ident : $ty:ty = $expr:expr;)*) => {
+        $(
+            $(#[$attr])*
+            $vis const $ident: $ty = $expr;
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! typedef {
+    ($($(#[$attr:meta])* $ident:ident = $ty:ty;)*) => {
+        $($(#[$attr])* type $ident = $ty;)*
+    };
+    ($($(#[$attr:meta])* $vis:vis $ident:ident = $ty:ty;)*) => {
+        $($(#[$attr])* $vis type $ident = $ty;)*
+    };
+}
+
+#[macro_export]
+macro_rules! cfg_test {
+    ($($item:item)*) => {
+        $(#[cfg(test)] $item)*
+    };
+}
+
+#[macro_export]
+/// Compare two vectors irrespective of their elements' position
+macro_rules! veceq {
+    ($v1:expr, $v2:expr) => {
+        $v1.len() == $v2.len() && $v1.iter().all(|v| $v2.contains(v))
+    };
+}
+
+#[macro_export]
+macro_rules! assert_veceq {
+    ($v1:expr, $v2:expr) => {
+        assert!(veceq!($v1, $v2))
+    };
+}
+
+#[macro_export]
+macro_rules! hmeq {
+    ($h1:expr, $h2:expr) => {
+        $h1.len() == $h2.len() && $h1.iter().all(|(k, v)| $h2.get(k).unwrap().eq(v))
+    };
+}
+
+#[macro_export]
+macro_rules! assert_hmeq {
+    ($h1:expr, $h2: expr) => {
+        assert!(hmeq!($h1, $h2))
+    };
+}
+
+#[macro_export]
+/// ## The action macro
+///
+/// A macro for adding all the _fuss_ to an action. Implementing actions should be simple
+/// and should not require us to repeatedly specify generic paramters and/or trait bounds.
+/// This is exactly what this macro does: does all the _magic_ behind the scenes for you,
+/// including adding generic parameters, handling docs (if any), adding the correct
+/// trait bounds and finally making your function async. Rest knowing that all your
+/// action requirements have been happily addressed with this macro and that you don't have
+/// to write a lot of code to do the exact same thing
+///
+///
+/// ## Limitations
+///
+/// This macro can only handle mutable parameters for a fixed number of arguments (three)
+///
+macro_rules! action {
+    (
+        $(#[$attr:meta])*
+        fn $fname:ident($($argname:ident: $argty:ty),*)
+        $block:block
+    ) => {
+            $(#[$attr])*
+            pub async fn $fname<T, Strm>($($argname: $argty,)*) -> std::io::Result<()>
+            where
+                T: ProtocolConnectionExt<Strm>,
+                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+                $block
+    };
+    (
+        $(#[$attr:meta])*
+        fn $fname:ident($argone:ident: $argonety:ty, $argtwo:ident: $argtwoty:ty, mut $argthree:ident: $argthreety:ty)
+        $block:block
+    ) => {
+            $(#[$attr])*
+            pub async fn $fname<T, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
+            where
+                T: ProtocolConnectionExt<Strm>,
+                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+                $block
+    };
+}
+
+pub mod compiler {
+    //! BP hints for added optim
+
+    #[cold]
+    #[inline(never)]
+    pub fn cold() {}
+
+    pub fn likely(b: bool) -> bool {
+        if !b {
+            cold()
+        }
+        b
+    }
+
+    pub fn unlikely(b: bool) -> bool {
+        if b {
+            cold()
+        }
+        b
     }
 }

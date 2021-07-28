@@ -28,52 +28,43 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::coredb::{self};
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
-use coredb::Data;
 
-/// Run an `UPDATE` query
-pub async fn update<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, not 2);
-    let did_we = {
-        if handle.is_poisoned() {
-            None
-        } else {
-            let writer = handle.get_ref();
-            // clippy thinks we're doing something complex when we aren't, at all!
-            #[allow(clippy::blocks_in_if_conditions)]
-            if unsafe {
-                // UNSAFE(@ohsayan): This is completely safe as we've already checked
-                // that there are exactly 2 arguments
-                writer.true_if_update(
-                    Data::from(act.next().unsafe_unwrap()),
-                    Data::from(act.next().unsafe_unwrap()),
-                )
-            } {
-                Some(true)
+action!(
+    /// Run an `UPDATE` query
+    fn update(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 2);
+        let did_we = {
+            if registry::state_okay() {
+                let writer = kve!(con, handle);
+                // clippy thinks we're doing something complex when we aren't, at all!
+                #[allow(clippy::blocks_in_if_conditions)]
+                if unsafe {
+                    // UNSAFE(@ohsayan): This is completely safe as we've already checked
+                    // that there are exactly 2 arguments
+                    not_enc_err!(writer.update(
+                        Data::from(act.next().unsafe_unwrap()),
+                        Data::from(act.next().unsafe_unwrap()),
+                    ))
+                } {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
             } else {
-                Some(false)
+                None
             }
-        }
-    };
-    if let Some(did_we) = did_we {
-        if did_we {
-            con.write_response(&**responses::groups::OKAY).await?;
+        };
+        if let Some(did_we) = did_we {
+            if did_we {
+                con.write_response(responses::groups::OKAY).await?;
+            } else {
+                con.write_response(responses::groups::NIL).await?;
+            }
         } else {
-            con.write_response(&**responses::groups::NIL).await?;
+            con.write_response(responses::groups::SERVER_ERR).await?;
         }
-    } else {
-        con.write_response(&**responses::groups::SERVER_ERR).await?;
+        Ok(())
     }
-    Ok(())
-}
+);

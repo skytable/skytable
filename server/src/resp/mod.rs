@@ -26,6 +26,8 @@
 
 //! Utilities for generating responses, which are only used by the `server`
 //!
+use crate::corestore::buffers::Integer64;
+use crate::corestore::memstore::ObjectID;
 use bytes::Bytes;
 use skytable::RespCode;
 use std::future::Future;
@@ -75,7 +77,7 @@ where
 }
 
 /// A `BytesWrapper` object wraps around a `Bytes` object that might have been pulled
-/// from `CoreDB`.
+/// from `Corestore`.
 ///
 /// This wrapper exists to prevent trait implementation conflicts when
 /// an impl for `fmt::Display` may be implemented upstream
@@ -123,6 +125,33 @@ impl Writable for &'static [u8] {
     }
 }
 
+impl Writable for &'static str {
+    fn write<'s>(
+        self,
+        con: &'s mut impl IsConnection,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+        async fn write_bytes(con: &mut impl IsConnection, bytes: &str) -> Result<(), IoError> {
+            // First write a `+` character to the stream since this is a
+            // string (we represent `String`s as `Byte` objects internally)
+            // and since `Bytes` are effectively `String`s we will append the
+            // type operator `+` to the stream
+            con.write_lowlevel(&[b'+']).await?;
+            // Now get the size of the Bytes object as bytes
+            let size = Integer64::from(bytes.len());
+            // Write this to the stream
+            con.write_lowlevel(&size).await?;
+            // Now write a LF character
+            con.write_lowlevel(&[b'\n']).await?;
+            // Now write the REAL bytes (of the object)
+            con.write_lowlevel(bytes.as_bytes()).await?;
+            // Now write another LF
+            con.write_lowlevel(&[b'\n']).await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self))
+    }
+}
+
 impl Writable for BytesWrapper {
     fn write<'s>(
         self,
@@ -135,7 +164,7 @@ impl Writable for BytesWrapper {
             // type operator `+` to the stream
             con.write_lowlevel(&[b'+']).await?;
             // Now get the size of the Bytes object as bytes
-            let size = bytes.len().to_string().into_bytes();
+            let size = Integer64::from(bytes.len());
             // Write this to the stream
             con.write_lowlevel(&size).await?;
             // Now write a LF character
@@ -164,7 +193,7 @@ impl Writable for RespCode {
                 let e = e.to_string().into_bytes();
                 // Now get the length of the byte vector and turn it into
                 // a string and then into a byte vector
-                let len_as_bytes = e.len().to_string().into_bytes();
+                let len_as_bytes = Integer64::from(e.len());
                 // Write the length
                 con.write_lowlevel(&len_as_bytes).await?;
                 // Then an LF
@@ -201,7 +230,7 @@ impl Writable for usize {
         async fn write_bytes(con: &mut impl IsConnection, val: usize) -> Result<(), IoError> {
             con.write_lowlevel(b":").await?;
             let usize_bytes = val.to_string().into_bytes();
-            let usize_bytes_len = usize_bytes.len().to_string().into_bytes();
+            let usize_bytes_len = Integer64::from(usize_bytes.len());
             con.write_lowlevel(&usize_bytes_len).await?;
             con.write_lowlevel(b"\n").await?;
             con.write_lowlevel(&usize_bytes).await?;
@@ -220,11 +249,38 @@ impl Writable for u64 {
         async fn write_bytes(con: &mut impl IsConnection, val: u64) -> Result<(), IoError> {
             con.write_lowlevel(b":").await?;
             let usize_bytes = val.to_string().into_bytes();
-            let usize_bytes_len = usize_bytes.len().to_string().into_bytes();
+            let usize_bytes_len = Integer64::from(usize_bytes.len());
             con.write_lowlevel(&usize_bytes_len).await?;
             con.write_lowlevel(b"\n").await?;
             con.write_lowlevel(&usize_bytes).await?;
             con.write_lowlevel(b"\n").await?;
+            Ok(())
+        }
+        Box::pin(write_bytes(con, self))
+    }
+}
+
+impl Writable for ObjectID {
+    fn write<'s>(
+        self,
+        con: &'s mut impl IsConnection,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+        async fn write_bytes(con: &mut impl IsConnection, bytes: ObjectID) -> Result<(), IoError> {
+            // First write a `+` character to the stream since this is a
+            // string (we represent `String`s as `Byte` objects internally)
+            // and since `Bytes` are effectively `String`s we will append the
+            // type operator `+` to the stream
+            con.write_lowlevel(&[b'+']).await?;
+            // Now get the size of the Bytes object as bytes
+            let size = Integer64::from(bytes.len());
+            // Write this to the stream
+            con.write_lowlevel(&size).await?;
+            // Now write a LF character
+            con.write_lowlevel(&[b'\n']).await?;
+            // Now write the REAL bytes (of the object)
+            con.write_lowlevel(&bytes).await?;
+            // Now write another LF
+            con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         }
         Box::pin(write_bytes(con, self))

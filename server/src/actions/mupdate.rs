@@ -24,46 +24,38 @@
  *
 */
 
-use crate::coredb::Data;
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 
-/// Run an `MUPDATE` query
-pub async fn mupdate<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let howmany = act.len();
-    if howmany & 1 == 1 || howmany == 0 {
-        // An odd number of arguments means that the number of keys
-        // is not the same as the number of values, we won't run this
-        // action at all
-        return con.write_response(&**responses::groups::ACTION_ERR).await;
-    }
-    let done_howmany: Option<usize>;
-    {
-        if handle.is_poisoned() {
-            done_howmany = None;
-        } else {
-            let writer = handle.get_ref();
-            let mut didmany = 0;
-            while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                if writer.true_if_update(Data::from(key), Data::from(val)) {
-                    didmany += 1;
+action!(
+    /// Run an `MUPDATE` query
+    fn mupdate(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+        let howmany = act.len();
+        if is_lowbit_set!(howmany) || howmany == 0 {
+            // An odd number of arguments means that the number of keys
+            // is not the same as the number of values, we won't run this
+            // action at all
+            return con.write_response(responses::groups::ACTION_ERR).await;
+        }
+        let done_howmany: Option<usize>;
+        {
+            if registry::state_okay() {
+                let writer = kve!(con, handle);
+                let mut didmany = 0;
+                while let (Some(key), Some(val)) = (act.next(), act.next()) {
+                    if not_enc_err!(writer.update(Data::from(key), Data::from(val))) {
+                        didmany += 1;
+                    }
                 }
+                done_howmany = Some(didmany);
+            } else {
+                done_howmany = None;
             }
-            done_howmany = Some(didmany);
+        }
+        if let Some(done_howmany) = done_howmany {
+            return con.write_response(done_howmany as usize).await;
+        } else {
+            return con.write_response(responses::groups::SERVER_ERR).await;
         }
     }
-    if let Some(done_howmany) = done_howmany {
-        return con.write_response(done_howmany as usize).await;
-    } else {
-        return con.write_response(&**responses::groups::SERVER_ERR).await;
-    }
-}
+);

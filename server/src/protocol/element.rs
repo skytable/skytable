@@ -24,8 +24,10 @@
  *
 */
 
-#[derive(Debug, PartialEq)]
+use bytes::Bytes;
+
 #[non_exhaustive]
+#[derive(Debug, PartialEq)]
 /// # Data Types
 ///
 /// This enum represents the data types supported by the Skyhash Protocol
@@ -33,9 +35,11 @@ pub enum Element {
     /// Arrays can be nested! Their `<tsymbol>` is `&`
     Array(Vec<Element>),
     /// A String value; `<tsymbol>` is `+`
-    String(String),
+    String(Bytes),
     /// An unsigned integer value; `<tsymbol>` is `:`
     UnsignedInt(u64),
     /// A non-recursive String array; tsymbol: `_`
-    FlatArray(Vec<String>),
+    FlatArray(Vec<Bytes>),
+    /// Swap the KS (ASCII `1A` (SUB HEADER))
+    SwapKSHeader(Bytes),
 }

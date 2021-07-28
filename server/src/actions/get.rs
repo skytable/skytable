@@ -28,38 +28,31 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 use bytes::Bytes;
 
-/// Run a `GET` query
-pub async fn get<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    mut act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, not 1);
-    let res: Option<Bytes> = {
-        let reader = handle.get_ref();
-        unsafe {
-            // UNSAFE(@ohsayan): this is safe because we've already checked if the action
-            // group contains one argument (excluding the action itself)
-            reader
-                .get(act.next().unsafe_unwrap().as_bytes())
-                .map(|b| b.get_blob().clone())
+action!(
+    /// Run a `GET` query
+    fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
+        let res: Option<Bytes> = {
+            let reader = kve!(con, handle);
+            unsafe {
+                // UNSAFE(@ohsayan): this is safe because we've already checked if the action
+                // group contains one argument (excluding the action itself)
+                match reader.get(act.next().unsafe_unwrap()) {
+                    Ok(v) => v.map(|b| b.get_blob().clone()),
+                    Err(_) => None,
+                }
+            }
+        };
+        if let Some(value) = res {
+            // Good, we got the value, write it off to the stream
+            con.write_response(BytesWrapper(value)).await?;
+        } else {
+            // Ah, couldn't find that key
+            con.write_response(responses::groups::NIL).await?;
         }
-    };
-    if let Some(value) = res {
-        // Good, we got the value, write it off to the stream
-        con.write_response(BytesWrapper(value)).await?;
-    } else {
-        // Ah, couldn't find that key
-        con.write_response(&**responses::groups::NIL).await?;
+        Ok(())
     }
-    Ok(())
-}
+);

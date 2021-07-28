@@ -26,9 +26,7 @@
 
 //! This module provides tools to handle configuration files and settings
 
-use crate::compat;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
-use core::hint::unreachable_unchecked;
 #[cfg(test)]
 use libsky::TResult;
 use serde::Deserialize;
@@ -38,11 +36,9 @@ use std::fs;
 #[cfg(test)]
 use std::net::Ipv6Addr;
 use std::net::{IpAddr, Ipv4Addr};
-use std::process;
-
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-#[allow(dead_code)]
-const DEFAULT_PORT: u16 = 2003; // We'll suppress this lint as we've kept this for future use
+#[cfg(test)]
+const DEFAULT_PORT: u16 = 2003;
 const DEFAULT_SSL_PORT: u16 = 2004;
 
 /// This struct is an _object representation_ used for parsing the TOML file
@@ -283,7 +279,7 @@ impl ParsedConfig {
     /// TOML file (represented as an object)
     fn from_config(cfg_info: Config) -> Self {
         ParsedConfig {
-            noart: libsky::option_unwrap_or!(cfg_info.server.noart, false),
+            noart: option_unwrap_or!(cfg_info.server.noart, false),
             bgsave: if let Some(bgsave) = cfg_info.bgsave {
                 match (bgsave.enabled, bgsave.every) {
                     // TODO: Show a warning that there are unused keys
@@ -301,7 +297,7 @@ impl ParsedConfig {
                     SnapshotConfig::Enabled(SnapshotPref::new(
                         snapshot.every,
                         snapshot.atmost,
-                        libsky::option_unwrap_or!(snapshot.failsafe, true),
+                        option_unwrap_or!(snapshot.failsafe, true),
                     ))
                 })
                 .unwrap_or_else(SnapshotConfig::default),
@@ -332,7 +328,7 @@ impl ParsedConfig {
                     port: cfg_info.server.port,
                 }
             },
-            maxcon: libsky::option_unwrap_or!(cfg_info.server.maxclient, MAXIMUM_CONNECTION_LIMIT),
+            maxcon: option_unwrap_or!(cfg_info.server.maxclient, MAXIMUM_CONNECTION_LIMIT),
         }
     }
     #[cfg(test)]
@@ -421,22 +417,6 @@ impl fmt::Display for ConfigError {
 pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String>, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
-    // check upgrades
-    if let Some(matches) = matches.subcommand_matches("upgrade") {
-        if let Some(format) = matches.value_of("format") {
-            if let Err(e) = compat::upgrade(format) {
-                log::error!("Dataset upgrade failed with error: {}", e);
-                process::exit(0x01);
-            } else {
-                process::exit(0x000);
-            }
-        } else {
-            unsafe {
-                // UNSAFE(@ohsayan): Completely safe as our CLI args require a value to be passed to upgrade
-                unreachable_unchecked();
-            }
-        }
-    }
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
     // Check flags
     let sslonly = matches.is_present("sslonly");
@@ -562,7 +542,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             },
             None => None,
         };
-        let failsafe = if let Ok(failsafe) = libsky::option_unwrap_or!(
+        let failsafe = if let Ok(failsafe) = option_unwrap_or!(
             matches
                 .value_of("stop-write-on-fail")
                 .map(|val| val.parse::<bool>()),

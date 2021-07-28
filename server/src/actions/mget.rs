@@ -30,33 +30,25 @@ use crate::resp::BytesWrapper;
 use bytes::Bytes;
 use skytable::RespCode;
 
-/// Run an `MGET` query
-///
-pub async fn mget<T, Strm>(
-    handle: &crate::coredb::CoreDB,
-    con: &mut T,
-    act: ActionIter,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    crate::err_if_len_is!(act, con, eq 0);
-    con.write_array_length(act.len()).await?;
-    for key in act {
-        let res: Option<Bytes> = {
-            handle
-                .get_ref()
-                .get(key.as_bytes())
-                .map(|b| b.get_blob().clone())
-        };
-        if let Some(value) = res {
-            // Good, we got the value, write it off to the stream
-            con.write_response(BytesWrapper(value)).await?;
-        } else {
-            // Ah, couldn't find that key
-            con.write_response(RespCode::NotFound).await?;
+action!(
+    /// Run an `MGET` query
+    ///
+    fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
+        crate::err_if_len_is!(act, con, eq 0);
+        con.write_array_length(act.len()).await?;
+        for key in act {
+            let res: Option<Bytes> = match kve!(con, handle).get(key) {
+                Ok(v) => v.map(|b| b.get_blob().clone()),
+                Err(_) => None,
+            };
+            if let Some(value) = res {
+                // Good, we got the value, write it off to the stream
+                con.write_response(BytesWrapper(value)).await?;
+            } else {
+                // Ah, couldn't find that key
+                con.write_response(RespCode::NotFound).await?;
+            }
         }
+        Ok(())
     }
-    Ok(())
-}
+);
