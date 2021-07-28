@@ -34,6 +34,7 @@ use core::str;
 
 pub const TABLE: &[u8] = "TABLE".as_bytes();
 pub const KEYSPACE: &[u8] = "KEYSPACE".as_bytes();
+const VOLATILE: &[u8] = "volatile".as_bytes();
 
 action!(
     /// Handle `create table <tableid> <model>(args)` and `create keyspace <ksid>`
@@ -77,13 +78,23 @@ action!(
 
 action!(
     /// We should have `<tableid> <model>(args)`
-    fn create_table(handle: &Corestore, con: &mut T, act: ActionIter) {
-        err_if_len_is!(act, con, not 2);
-        let (table_entity, model_code) = match parser::parse_table_args(act) {
+    fn create_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(con, act.len() > 3 || act.len() < 2);
+        let (table_entity, model_code) = match parser::parse_table_args(&mut act) {
             Ok(v) => v,
             Err(e) => return con.write_response(e).await,
         };
-        match handle.create_table(table_entity, model_code, false) {
+        let is_volatile = match act.next() {
+            Some(maybe_volatile) => {
+                if maybe_volatile.eq(VOLATILE) {
+                    true
+                } else {
+                    return conwrite!(con, responses::groups::UNKNOWN_PROPERTY);
+                }
+            }
+            None => false,
+        };
+        match handle.create_table(table_entity, model_code, is_volatile) {
             Ok(_) => con.write_response(responses::groups::OKAY).await?,
             Err(DdlError::AlreadyExists) => {
                 con.write_response(responses::groups::ALREADY_EXISTS)

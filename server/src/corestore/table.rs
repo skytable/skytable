@@ -65,10 +65,14 @@ impl Table {
     /// Returns this table's _description_
     pub fn describe_self(&self) -> &'static str {
         match self.get_model_code() {
-            0 => r#"KeyValue(binstr,binstr)"#,
-            1 => r#"KeyValue(binstr,str)"#,
-            2 => r#"KeyValue(str,str)"#,
-            3 => r#"KeyValue(str,binstr)"#,
+            0 if self.is_volatile() => "KeyValue { data:(binstr,binstr), volatile:true }",
+            0 if !self.is_volatile() => "KeyValue { data:(binstr,binstr), volatile:false }",
+            1 if self.is_volatile() => "KeyValue { data:(binstr,str), volatile:true }",
+            1 if !self.is_volatile() => "KeyValue { data:(binstr,str), volatile:false }",
+            2 if self.is_volatile() => "KeyValue { data:(str,str), volatile:true }",
+            2 if !self.is_volatile() => "KeyValue { data:(str,str), volatile:false }",
+            3 if self.is_volatile() => "KeyValue { data:(str,binstr), volatile:true }",
+            3 if !self.is_volatile() => "KeyValue { data:(str,binstr), volatile:false }",
             _ => unsafe { impossible!() },
         }
     }

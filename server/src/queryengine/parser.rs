@@ -48,7 +48,7 @@ fn cold_err<T>(v: T) -> T {
     v
 }
 
-pub(super) fn parse_table_args(mut act: ActionIter) -> Result<(EntityGroup, u8), &'static [u8]> {
+pub(super) fn parse_table_args(act: &mut ActionIter) -> Result<(EntityGroup, u8), &'static [u8]> {
     let table_name = unsafe { act.next().unsafe_unwrap() };
     let model_name = unsafe { act.next().unsafe_unwrap() };
     if compiler::unlikely(!encoding::is_utf8(&table_name) || !encoding::is_utf8(&model_name)) {

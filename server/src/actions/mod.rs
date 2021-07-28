@@ -123,4 +123,11 @@ macro_rules! err_if_len_is {
                 .await;
         }
     };
+    ($con:ident, $expr:expr) => {
+        if $expr {
+            return $con
+                .write_response(crate::protocol::responses::groups::ACTION_ERR)
+                .await;
+        }
+    };
 }
