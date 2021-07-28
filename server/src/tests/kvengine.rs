@@ -1061,11 +1061,55 @@ mod __private {
             panic!("Expected flat string array");
         }
     }
+    async fn test_lskeys_entity() {
+        setkeys!(
+            con,
+            "x":100,
+            "y":200,
+            "z":300
+        );
+        query.push("lskeys");
+        query.push(&__MYENTITY__);
+        let ret = con.run_simple_query(&query).await.unwrap();
+        let ret_should_have: Vec<String> = vec!["x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
+    }
+    async fn test_lskeys_entity_with_count() {
+        setkeys!(
+            con,
+            "x":100,
+            "y":200,
+            "z":300
+        );
+        query.push("lskeys");
+        query.push(&__MYENTITY__);
+        query.push(3);
+        let ret = con.run_simple_query(&query).await.unwrap();
+        let ret_should_have: Vec<String> = vec!["x", "y", "z"]
+            .into_iter()
+            .map(|element| element.to_owned())
+            .collect();
+        if let Response::Item(Element::FlatArray(arr)) = ret {
+            assert_eq!(ret_should_have.len(), arr.len());
+            assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
+        } else {
+            panic!("Expected flat string array");
+        }
+    }
     async fn test_lskeys_syntax_error() {
         query.push("lskeys");
         query.push("abcdefg");
         query.push("hijklmn");
         query.push("riufrif");
+        query.push("fvnjnvv");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::ActionError))
