@@ -82,7 +82,7 @@ Skytable uses a Makefile for builds and running the test suite along with a numb
    make release
    ```
 
-> **TIP**: You can explicitly specificy a target triple by setting a `TARGET` environment variable
+> **TIP**: You can explicitly specify a target triple by setting a `TARGET` environment variable
 
 **Testing**
 
@@ -92,4 +92,4 @@ Testing is simple: just run this:
 make test
 ```
 
-> **NOTE**: Make sure port 2003 is not used by any applications
+> **NOTE**: Make sure port 2003 is not used by any applications and make sure your own instance isn't running on port 2003! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.

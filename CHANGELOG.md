@@ -12,13 +12,15 @@ All changes in this project will be noted in this file.
     ```sql
     CREATE KEYSPACE <name>
     ```
-  - The `system` keyspace is reserved for the system
+  - The `system` keyspace is reserved for the system while the `default` keyspace is
+    the one available by default. The `system` or `default` keyspace cannot be removed
   - Keyspaces can be deleted with:
     ```sql
     DROP KEYSPACE <name>
     ```
 - **Multiple tables**:
-  - Tables hold the actual data
+  - Tables hold the actual data. When you connect to the server, you are connected to the `default`
+    table in the `default` keyspace. This table is non-removable
   - Tables can be created with:
     ```sql
     CREATE TABLE <entity> <model>(modelargs) <properties>
@@ -102,6 +104,8 @@ All changes in this project will be noted in this file.
 
 - Zero length argument causing runtime panic in `skysh`
 - Panic on incorrect data type in `skyd`
+- `sky-bench` no longer affects your personal data because it creates a random temporary table
+  under the `default` keyspace
 
 ## Version 0.6.3 [2021-06-27]
 

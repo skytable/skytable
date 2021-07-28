@@ -67,6 +67,29 @@ macro_rules! gen_constants_and_matches {
     };
 }
 
+macro_rules! swap_entity {
+    ($con:expr, $handle:expr, $entity:expr) => {
+        match parser::get_query_entity(&$entity) {
+            Ok(e) => match $handle.swap_entity(e) {
+                Ok(()) => $con.write_response(responses::groups::OKAY).await?,
+                Err(DdlError::ObjectNotFound) => {
+                    $con.write_response(responses::groups::CONTAINER_NOT_FOUND)
+                        .await?
+                }
+                Err(DdlError::DefaultNotFound) => {
+                    $con.write_response(responses::groups::DEFAULT_UNSET)
+                        .await?
+                }
+                Err(_) => unsafe {
+                    // we know Corestore::swap_entity doesn't return anything else
+                    impossible!()
+                },
+            },
+            Err(e) => $con.write_response(e).await?,
+        }
+    };
+}
+
 /// Execute a simple(*) query
 pub async fn execute_simple<T, Strm>(
     db: &mut Corestore,
@@ -77,10 +100,13 @@ where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let buf = if let Element::FlatArray(arr) = buf {
-        arr
-    } else {
-        return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+    let buf = match buf {
+        Element::FlatArray(a) => a,
+        Element::SwapKSHeader(swapks) => {
+            swap_entity!(con, db, swapks);
+            return Ok(());
+        }
+        _ => return con.write_response(responses::groups::WRONGTYPE_ERR).await,
     };
     let mut buf = buf.into_iter();
     gen_constants_and_matches!(
@@ -113,20 +139,10 @@ where
 }
 
 action! {
+    /// Handle `use <entity>` like queries
     fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter) {
         match act.next() {
-            Some(entity) => match parser::get_query_entity(&entity) {
-                Ok(e) => match handle.swap_entity(e) {
-                    Ok(()) => con.write_response(responses::groups::OKAY).await?,
-                    Err(DdlError::ObjectNotFound) => con.write_response(responses::groups::CONTAINER_NOT_FOUND).await?,
-                    Err(DdlError::DefaultNotFound) => con.write_response(responses::groups::DEFAULT_UNSET).await?,
-                    Err(_) => unsafe {
-                        // we know Corestore::swap_entity doesn't return anything else
-                        impossible!()
-                    }
-                },
-                Err(e) => con.write_response(e).await?,
-            },
+            Some(entity) => swap_entity!(con, handle, entity),
             None => con.write_response(responses::groups::ACTION_ERR).await?,
         }
         Ok(())

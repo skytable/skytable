@@ -28,7 +28,9 @@ You can learn more about installation [here](https://docs.skytable.io/getting-st
 ## Features
 
 - **Insanely fast**: Scale to millions of queries per second per node
-- **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/actions-overview)
+- **Multiple keyspaces/tables**: Seamlessly integrates with actions to provide a SQL-like experience
+- **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/actions-overview). With the `str` and `binstr` types.
+- **Volatile tables**: For all the caching you need
 - **Snapshots**: Automated (and tunable) snapshots for stress-free backups
 - **Secure**: Secure connections are built into Skytable with SSL/TLS
 - **Multithreaded**: Designed to exploit all CPU cores
