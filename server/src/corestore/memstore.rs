@@ -213,7 +213,7 @@ impl Memstore {
     pub fn get_keyspace_atomic_ref<Q>(&self, keyspace_identifier: &Q) -> Option<Arc<Keyspace>>
     where
         ObjectID: Borrow<Q>,
-        Q: Hash + Eq + Sized,
+        Q: Hash + Eq + ?Sized,
     {
         self.keyspaces
             .get(&keyspace_identifier)
@@ -224,10 +224,10 @@ impl Memstore {
         self.keyspaces
             .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
-    pub fn drop_keyspace<Q>(&self, ksid: Q) -> KeyspaceResult<()>
+    pub fn drop_keyspace<Q>(&self, ksid: &Q) -> KeyspaceResult<()>
     where
         ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID>,
+        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
     {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)

@@ -164,7 +164,11 @@ impl Corestore {
         }
         Ok(())
     }
-    pub fn get_keyspace(&self, ksid: ObjectID) -> Option<Arc<Keyspace>> {
+    pub fn get_keyspace<Q>(&self, ksid: &Q) -> Option<Arc<Keyspace>>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         self.store.get_keyspace_atomic_ref(&ksid)
     }
     /// Get an atomic reference to a table
@@ -298,10 +302,10 @@ impl Corestore {
     }
 
     /// Drop a keyspace
-    pub fn drop_keyspace<Q>(&self, ksid: Q) -> KeyspaceResult<()>
+    pub fn drop_keyspace<Q>(&self, ksid: &Q) -> KeyspaceResult<()>
     where
         ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID>,
+        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
     {
         self.store.drop_keyspace(ksid)
     }

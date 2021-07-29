@@ -201,7 +201,8 @@ action! {
                     return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
                 }
                 if registry::state_okay() {
-                    let ret = match handle.drop_keyspace(unsafe {ObjectID::from_slice(ksid)}) {
+                    let ks_slice = &ksid[..];
+                    let ret = match handle.drop_keyspace(ks_slice) {
                         Ok(()) => responses::groups::OKAY,
                         Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
                         Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,

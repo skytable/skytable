@@ -67,9 +67,7 @@ action! {
                 let ksid = if keyspace_name.len() > 64 {
                     return conwrite!(con, responses::groups::BAD_CONTAINER_NAME);
                 } else {
-                    unsafe {
-                        ObjectID::from_slice(keyspace_name)
-                    }
+                    &keyspace_name[..]
                 };
                 let ks = match handle.get_keyspace(ksid) {
                     Some(kspace) => kspace,

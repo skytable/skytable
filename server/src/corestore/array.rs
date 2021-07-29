@@ -458,6 +458,18 @@ where
     }
 }
 
+impl<const N: usize> PartialEq<[u8]> for Array<u8, N> {
+    fn eq(&self, oth: &[u8]) -> bool {
+        **self == *oth
+    }
+}
+
+impl<const N: usize> PartialEq<Array<u8, N>> for [u8] {
+    fn eq(&self, oth: &Array<u8, N>) -> bool {
+        oth.as_slice() == self
+    }
+}
+
 impl<T, const N: usize> PartialEq for Array<T, N>
 where
     T: PartialEq,
