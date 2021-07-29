@@ -37,7 +37,8 @@ action!(
             }
             con.write_response(len).await?;
         } else {
-            let entity = handle_entity!(con, unsafe { act.next().unsafe_unwrap() });
+            let raw_entity = unsafe { act.next().unsafe_unwrap() };
+            let entity = handle_entity!(con, raw_entity);
             conwrite!(con, get_tbl!(entity, handle, con).count())?;
         }
         Ok(())

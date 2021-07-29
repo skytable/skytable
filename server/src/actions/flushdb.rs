@@ -37,7 +37,8 @@ action!(
                 get_tbl!(handle, con).truncate_table();
             } else {
                 // flush the entity
-                let entity = handle_entity!(con, unsafe { act.next().unsafe_unwrap() });
+                let raw_entity = unsafe { act.next().unsafe_unwrap() };
+                let entity = handle_entity!(con, raw_entity);
                 get_tbl!(entity, handle, con).truncate_table();
             }
             conwrite!(con, responses::groups::OKAY)?;

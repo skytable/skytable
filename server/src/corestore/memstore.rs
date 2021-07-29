@@ -300,7 +300,7 @@ impl Keyspace {
     pub fn get_table_atomic_ref<Q>(&self, table_identifier: &Q) -> Option<Arc<Table>>
     where
         ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID>,
+        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
     {
         self.tables.get(&table_identifier).map(|v| v.clone())
     }
@@ -316,7 +316,7 @@ impl Keyspace {
     pub fn drop_table<Q>(&self, table_identifier: &Q) -> KeyspaceResult<()>
     where
         ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID>,
+        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
     {
         if table_identifier.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)

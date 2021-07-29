@@ -260,24 +260,22 @@ mod parser_ddl_tests {
 
 mod entity_parser_tests {
     use super::parser::get_query_entity;
-    use crate::corestore::memstore::ObjectID;
+    use crate::corestore::BorrowedEntityGroup;
     use crate::protocol::responses;
     #[test]
     fn test_query_full_entity_okay() {
         let x = byt!("ks:tbl");
-        assert_eq!(get_query_entity(&x).unwrap(), unsafe {
-            (
-                Some(ObjectID::from_slice("ks")),
-                Some(ObjectID::from_slice("tbl")),
-            )
-        });
+        assert_eq!(
+            get_query_entity(&x).unwrap(),
+            BorrowedEntityGroup::from((Some("ks".as_bytes()), Some("tbl".as_bytes())))
+        );
     }
     #[test]
     fn test_query_half_entity() {
         let x = byt!("tbl");
         assert_eq!(
             get_query_entity(&x).unwrap(),
-            (Some(unsafe { ObjectID::from_slice("tbl") }), None)
+            BorrowedEntityGroup::from((Some("tbl".as_bytes()), None))
         )
     }
     #[test]

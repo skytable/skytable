@@ -25,8 +25,7 @@
 */
 
 use crate::corestore::lazy::Lazy;
-use crate::corestore::memstore::ObjectID;
-use crate::corestore::EntityGroup;
+use crate::corestore::{BorrowedEntityGroup, OwnedEntityGroup};
 use crate::kvengine::encoding;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
@@ -48,7 +47,9 @@ fn cold_err<T>(v: T) -> T {
     v
 }
 
-pub(super) fn parse_table_args(act: &mut ActionIter) -> Result<(EntityGroup, u8), &'static [u8]> {
+pub(super) fn parse_table_args(
+    act: &mut ActionIter,
+) -> Result<(OwnedEntityGroup, u8), &'static [u8]> {
     let table_name = unsafe { act.next().unsafe_unwrap() };
     let model_name = unsafe { act.next().unsafe_unwrap() };
     if compiler::unlikely(!encoding::is_utf8(&table_name) || !encoding::is_utf8(&model_name)) {
@@ -122,10 +123,16 @@ pub(super) fn parse_table_args(act: &mut ActionIter) -> Result<(EntityGroup, u8)
         (STR, BINSTR) => 3,
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
-    Ok((entity_group, model_code))
+    Ok((
+        unsafe {
+            // SAFETY: All sizes checked here
+            entity_group.into_owned()
+        },
+        model_code,
+    ))
 }
 
-pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8]> {
+pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<BorrowedEntityGroup, &'static [u8]> {
     let y: Vec<&[u8]> = input.split(|v| *v == b':').collect();
     unsafe {
         if y.len() == 1 {
@@ -140,7 +147,7 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8
             } else if compiler::unlikely(ksret.eq(&"system".as_bytes())) {
                 Err(responses::groups::PROTECTED_OBJECT)
             } else {
-                Ok((Some(ObjectID::from_slice(ksret)), None))
+                Ok(BorrowedEntityGroup::from((Some(*ksret), None)))
             }
         } else if y.len() == 2 {
             // tbl + ns
@@ -158,10 +165,7 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<EntityGroup, &'static [u8
             } else if compiler::unlikely(ksret.eq(&"system".as_bytes())) {
                 Err(responses::groups::PROTECTED_OBJECT)
             } else {
-                Ok((
-                    Some(ObjectID::from_slice(ksret)),
-                    Some(ObjectID::from_slice(tblret)),
-                ))
+                Ok(BorrowedEntityGroup::from((Some(*ksret), Some(*tblret))))
             }
         } else {
             // something wrong

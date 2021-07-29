@@ -56,7 +56,37 @@ pub mod memstore;
 pub mod table;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
-pub type EntityGroup = (Option<ObjectID>, Option<ObjectID>);
+type OptionTuple<T> = (Option<T>, Option<T>);
+/// An owned entity group
+pub type OwnedEntityGroup = OptionTuple<ObjectID>;
+/// A raw borrowed entity (not the struct, but in a tuple form)
+type BorrowedEntityGroupRaw<'a> = OptionTuple<&'a [u8]>;
+
+#[derive(Debug, PartialEq)]
+/// An entity group borrowed from a byte slice
+pub struct BorrowedEntityGroup<'a> {
+    va: Option<&'a [u8]>,
+    vb: Option<&'a [u8]>,
+}
+
+impl<'a> BorrowedEntityGroup<'a> {
+    pub fn into_inner(self) -> OptionTuple<&'a [u8]> {
+        (self.va, self.vb)
+    }
+    pub unsafe fn into_owned(self) -> OwnedEntityGroup {
+        (
+            self.va.map(|v| ObjectID::from_slice(v)),
+            self.vb.map(|v| ObjectID::from_slice(v)),
+        )
+    }
+}
+
+impl<'a> From<BorrowedEntityGroupRaw<'a>> for BorrowedEntityGroup<'a> {
+    fn from(oth: BorrowedEntityGroupRaw<'a>) -> Self {
+        let (va, vb) = oth;
+        Self { va, vb }
+    }
+}
 
 /// The top level abstraction for the in-memory store. This is free to be shared across
 /// threads, cloned and well, whatever. Most importantly, clones have an independent container
@@ -142,10 +172,10 @@ impl Corestore {
     ///
     /// If the table is non-existent or the default keyspace was unset, then
     /// false is returned. Else true is returned
-    pub fn swap_entity(&mut self, entity: EntityGroup) -> KeyspaceResult<()> {
-        match entity {
+    pub fn swap_entity(&mut self, entity: BorrowedEntityGroup) -> KeyspaceResult<()> {
+        match entity.into_inner() {
             // Switch to the provided keyspace
-            (Some(ks), None) => match self.store.get_keyspace_atomic_ref(&ks) {
+            (Some(ks), None) => match self.store.get_keyspace_atomic_ref(ks) {
                 Some(ksref) => {
                     self.cks = Some(ksref);
                     self.ctable = None;
@@ -153,8 +183,8 @@ impl Corestore {
                 None => return Err(DdlError::ObjectNotFound),
             },
             // Switch to the provided table in the given keyspace
-            (Some(ks), Some(tbl)) => match self.store.get_keyspace_atomic_ref(&ks) {
-                Some(kspace) => match kspace.get_table_atomic_ref(&tbl) {
+            (Some(ks), Some(tbl)) => match self.store.get_keyspace_atomic_ref(ks) {
+                Some(kspace) => match kspace.get_table_atomic_ref(tbl) {
                     Some(tblref) => self.ctable = Some(tblref),
                     None => return Err(DdlError::ObjectNotFound),
                 },
@@ -172,17 +202,17 @@ impl Corestore {
         self.store.get_keyspace_atomic_ref(&ksid)
     }
     /// Get an atomic reference to a table
-    pub fn get_table(&self, entity: EntityGroup) -> KeyspaceResult<Arc<Table>> {
-        match entity {
-            (Some(ksid), Some(table)) => match self.store.get_keyspace_atomic_ref(&ksid) {
-                Some(ks) => match ks.get_table_atomic_ref(&table) {
+    pub fn get_table(&self, entity: BorrowedEntityGroup) -> KeyspaceResult<Arc<Table>> {
+        match entity.into_inner() {
+            (Some(ksid), Some(table)) => match self.store.get_keyspace_atomic_ref(ksid) {
+                Some(ks) => match ks.get_table_atomic_ref(table) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
                 None => Err(DdlError::ObjectNotFound),
             },
             (Some(tbl), None) => match &self.cks {
-                Some(ks) => match ks.get_table_atomic_ref(&tbl) {
+                Some(ks) => match ks.get_table_atomic_ref(tbl) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
@@ -221,7 +251,7 @@ impl Corestore {
     /// luck -- the next mutual access may be yielded to the next `create table` command
     pub fn create_table(
         &self,
-        entity: EntityGroup,
+        entity: OwnedEntityGroup,
         modelcode: u8,
         volatile: bool,
     ) -> KeyspaceResult<()> {
@@ -272,14 +302,14 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, entity: EntityGroup) -> KeyspaceResult<()> {
-        match entity {
+    pub fn drop_table(&self, entity: BorrowedEntityGroup) -> KeyspaceResult<()> {
+        match entity.into_inner() {
             (Some(tblid), None) => match &self.cks {
-                Some(ks) => ks.drop_table(&tblid),
+                Some(ks) => ks.drop_table(tblid),
                 None => Err(DdlError::DefaultNotFound),
             },
-            (Some(ksid), Some(tblid)) => match self.store.get_keyspace_atomic_ref(&ksid) {
-                Some(ks) => ks.drop_table(&tblid),
+            (Some(ksid), Some(tblid)) => match self.store.get_keyspace_atomic_ref(ksid) {
+                Some(ks) => ks.drop_table(tblid),
                 None => Err(DdlError::ObjectNotFound),
             },
             _ => unsafe { impossible!() },
