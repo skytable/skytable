@@ -6,7 +6,7 @@ members = [
     "sky-bench",
     "sky-macros",
     "libstress",
-    "stress-test"
+    "stress-test",
 ]
 
 [profile.release]

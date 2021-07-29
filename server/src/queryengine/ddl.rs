@@ -30,6 +30,7 @@ use crate::corestore::memstore::DdlError;
 use crate::corestore::memstore::ObjectID;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding;
+use crate::registry;
 use core::str;
 
 pub const TABLE: &[u8] = "TABLE".as_bytes();
@@ -94,23 +95,27 @@ action!(
             }
             None => false,
         };
-        match handle.create_table(table_entity, model_code, is_volatile) {
-            Ok(_) => con.write_response(responses::groups::OKAY).await?,
-            Err(DdlError::AlreadyExists) => {
-                con.write_response(responses::groups::ALREADY_EXISTS)
-                    .await?;
+        if registry::state_okay() {
+            match handle.create_table(table_entity, model_code, is_volatile) {
+                Ok(_) => con.write_response(responses::groups::OKAY).await?,
+                Err(DdlError::AlreadyExists) => {
+                    con.write_response(responses::groups::ALREADY_EXISTS)
+                        .await?;
+                }
+                Err(DdlError::WrongModel) => unsafe {
+                    // we have already checked the model ourselves
+                    impossible!()
+                },
+                Err(DdlError::DefaultNotFound) => {
+                    con.write_response(responses::groups::DEFAULT_UNSET).await?
+                }
+                Err(_) => unsafe {
+                    // we know that Corestore::create_table won't return anything else
+                    impossible!()
+                },
             }
-            Err(DdlError::WrongModel) => unsafe {
-                // we have already checked the model ourselves
-                impossible!()
-            },
-            Err(DdlError::DefaultNotFound) => {
-                con.write_response(responses::groups::DEFAULT_UNSET).await?
-            }
-            Err(_) => unsafe {
-                // we know that Corestore::create_table won't return anything else
-                impossible!()
-            },
+        } else {
+            conwrite!(con, responses::groups::SERVER_ERR)?;
         }
         Ok(())
     }
@@ -135,15 +140,19 @@ action!(
                         .await;
                 }
                 let ksid = unsafe { ObjectID::from_slice(ksid_str) };
-                match handle.create_keyspace(ksid) {
-                    Ok(()) => return con.write_response(responses::groups::OKAY).await,
-                    Err(DdlError::AlreadyExists) => {
-                        return con.write_response(responses::groups::ALREADY_EXISTS).await
+                if registry::state_okay() {
+                    match handle.create_keyspace(ksid) {
+                        Ok(()) => return con.write_response(responses::groups::OKAY).await,
+                        Err(DdlError::AlreadyExists) => {
+                            return con.write_response(responses::groups::ALREADY_EXISTS).await
+                        }
+                        Err(_) => unsafe {
+                            // we already know that Corestore::create_keyspace doesn't return anything else
+                            impossible!()
+                        },
                     }
-                    Err(_) => unsafe {
-                        // we already know that Corestore::create_keyspace doesn't return anything else
-                        impossible!()
-                    },
+                } else {
+                    return conwrite!(con, responses::groups::SERVER_ERR);
                 }
             }
             None => return con.write_response(responses::groups::ACTION_ERR).await,
@@ -160,18 +169,22 @@ action! {
                     Ok(egroup) => egroup,
                     Err(e) => return con.write_response(e).await,
                 };
-                let ret = match handle.drop_table(entity_group) {
-                    Ok(()) => responses::groups::OKAY,
-                    Err(DdlError::DefaultNotFound) => responses::groups::DEFAULT_UNSET,
-                    Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
-                    Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
-                    Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
-                    Err(_) => unsafe {
-                        // we know that Memstore::drop_table won't ever return anything else
-                        impossible!()
-                    }
-                };
-                con.write_response(ret).await?;
+                if registry::state_okay() {
+                    let ret = match handle.drop_table(entity_group) {
+                        Ok(()) => responses::groups::OKAY,
+                        Err(DdlError::DefaultNotFound) => responses::groups::DEFAULT_UNSET,
+                        Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
+                        Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
+                        Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
+                        Err(_) => unsafe {
+                            // we know that Memstore::drop_table won't ever return anything else
+                            impossible!()
+                        }
+                    };
+                    con.write_response(ret).await?;
+                } else {
+                    conwrite!(con, responses::groups::SERVER_ERR)?;
+                }
             },
             None => con.write_response(responses::groups::ACTION_ERR).await?,
         }
@@ -187,17 +200,21 @@ action! {
                 if ksid.len() > 64 {
                     return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
                 }
-                let ret = match handle.drop_keyspace(unsafe {ObjectID::from_slice(ksid)}) {
-                    Ok(()) => responses::groups::OKAY,
-                    Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
-                    Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
-                    Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
-                    Err(_) => unsafe {
-                        // we know that Memstore::drop_table won't ever return anything else
-                        impossible!()
-                    }
-                };
-                con.write_response(ret).await?;
+                if registry::state_okay() {
+                    let ret = match handle.drop_keyspace(unsafe {ObjectID::from_slice(ksid)}) {
+                        Ok(()) => responses::groups::OKAY,
+                        Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
+                        Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
+                        Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
+                        Err(_) => unsafe {
+                            // we know that Memstore::drop_table won't ever return anything else
+                            impossible!()
+                        }
+                    };
+                    con.write_response(ret).await?;
+                } else {
+                    conwrite!(con, responses::groups::SERVER_ERR)?;
+                }
             },
             None => con.write_response(responses::groups::ACTION_ERR).await?,
         }
