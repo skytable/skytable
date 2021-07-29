@@ -81,6 +81,7 @@ pub mod groups {
     pub const BAD_CONTAINER_NAME: &[u8] = "!18\nbad-container-name\n".as_bytes();
     pub const UNKNOWN_INSPECT_QUERY: &[u8] = "!21\nunknown-inspect-query\n".as_bytes();
     pub const UNKNOWN_PROPERTY: &[u8] = "!16\nunknown-property\n".as_bytes();
+    pub const KEYSPACE_NOT_EMPTY: &[u8] = "!18\nkeyspace-not-empty\n".as_bytes();
 }
 
 pub mod full_responses {

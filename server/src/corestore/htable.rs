@@ -29,6 +29,7 @@ use bytes::Bytes;
 use libsky::TResult;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+use std::collections::hash_map::RandomState;
 use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
@@ -38,6 +39,7 @@ use dashmap::iter::Iter;
 pub use dashmap::lock::RwLock as MapRWL;
 pub use dashmap::lock::RwLockReadGuard as MapRWLGuard;
 pub use dashmap::mapref::entry::Entry as MapEntry;
+pub use dashmap::mapref::entry::OccupiedEntry;
 pub use dashmap::mapref::one::Ref as MapSingleReference;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
@@ -136,7 +138,14 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.inner.remove_if(key, exec).is_some()
+        self.remove_if(key, exec).is_some()
+    }
+    pub fn remove_if<Q>(&self, key: &Q, exec: impl FnOnce(&K, &V) -> bool) -> Option<(K, V)>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.inner.remove_if(key, exec)
     }
     /// Update or insert
     pub fn upsert(&self, k: K, v: V) {
@@ -149,6 +158,13 @@ where
             true
         } else {
             false
+        }
+    }
+    pub fn mut_entry(&self, key: K) -> Option<OccupiedEntry<K, V, RandomState>> {
+        if let MapEntry::Occupied(oe) = self.inner.entry(key) {
+            Some(oe)
+        } else {
+            None
         }
     }
 }

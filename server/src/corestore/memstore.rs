@@ -137,6 +137,8 @@ pub enum DdlError {
     AlreadyExists,
     /// The target object is not ready
     NotReady,
+    /// The target object is not empty
+    NotEmpty,
     /// The DDL transaction failed
     DdlTransactionFailure,
 }
@@ -224,23 +226,64 @@ impl Memstore {
         self.keyspaces
             .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
-    pub fn drop_keyspace<Q>(&self, ksid: &Q) -> KeyspaceResult<()>
-    where
-        ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
-    {
+    /// Drop a keyspace only if it is empty and has no clients connected to it
+    pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
         } else if !self.keyspaces.contains_key(&ksid) {
             Err(DdlError::ObjectNotFound)
         } else {
-            let good_to_remove = self.keyspaces.true_remove_if(&ksid, |_, arc| {
-                Arc::strong_count(arc) == 1 && arc.table_count() == 0
-            });
-            if good_to_remove {
-                Ok(())
-            } else {
-                Err(DdlError::StillInUse)
+            let removed_keyspace = self.keyspaces.mut_entry(ksid);
+            match removed_keyspace {
+                Some(ks) => {
+                    let no_one_is_using_keyspace = Arc::strong_count(ks.get()) == 1;
+                    let no_tables_are_in_keyspace = ks.get().table_count() == 0;
+                    if no_one_is_using_keyspace && no_tables_are_in_keyspace {
+                        // we are free to drop this
+                        ks.remove_entry();
+                        Ok(())
+                    } else if !no_tables_are_in_keyspace {
+                        // not empty; may be referenced to or not referenced to
+                        Err(DdlError::NotEmpty)
+                    } else {
+                        // still referenced to; may or may not be empty
+                        Err(DdlError::StillInUse)
+                    }
+                }
+                None => Err(DdlError::ObjectNotFound),
+            }
+        }
+    }
+    /// Force remove a keyspace along with all its tables. This force however only
+    /// removes tables if they aren't in use and iff the keyspace is not currently
+    /// in use to avoid the problem of having "ghost tables"
+    pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
+            Err(DdlError::ProtectedObject)
+        } else if !self.keyspaces.contains_key(&ksid) {
+            Err(DdlError::ObjectNotFound)
+        } else {
+            let removed_keyspace = self.keyspaces.mut_entry(ksid);
+            match removed_keyspace {
+                Some(keyspace) => {
+                    // force remove drops tables, but only if they aren't in use
+                    // we can potentially have "ghost" tables if we don't do this
+                    // check. Similarly, if we don't check the strong count of the
+                    // keyspace, we might end up with "ghost" keyspaces
+                    let no_tables_in_use = Arc::strong_count(keyspace.get()) == 1
+                        && keyspace
+                            .get()
+                            .tables
+                            .iter()
+                            .all(|table| Arc::strong_count(table.value()) == 1);
+                    if no_tables_in_use {
+                        keyspace.remove_entry();
+                        Ok(())
+                    } else {
+                        Err(DdlError::StillInUse)
+                    }
+                }
+                None => Err(DdlError::ObjectNotFound),
             }
         }
     }
