@@ -25,6 +25,8 @@
 */
 
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::KVEngine;
+use crate::kvengine::SingleEncoder;
 use crate::util::compiler;
 
 action! {
@@ -36,39 +38,12 @@ action! {
         err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
         let key_encoder = kve.get_key_encoder();
-        let mut snapshots = Vec::with_capacity(act.len());
-        let mut err_enc = false;
-        let iter_stat_ok;
-        {
-            iter_stat_ok =  act.as_ref().iter().all(|key| {
-                if compiler::likely(key_encoder.is_ok(key)) {
-                    if let Some(snap) = kve.take_snapshot(key) {
-                        snapshots.push(snap);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    err_enc = true;
-                    false
-                }
-            });
-        }
-        if iter_stat_ok {
-            {
-                let kve = kve;
-                let lowtable = kve.__get_inner_ref();
-                // nice, all keys exist; let's plonk 'em
-                act.zip(snapshots).for_each(|(key, snapshot)| {
-                    // the check is very important: some thread may have updated the
-                    // value after we snapshotted it. In that case, let this key
-                    // be whatever the "newer" value is. Since our snapshot is a "happens-before"
-                    // thing, this is absolutely fine
-                    let _ = lowtable.remove_if(&key, |_, val| val.eq(&snapshot));
-                });
-            }
+        let (all_okay, enc_err) = {
+            self::snapshot_and_del(kve, key_encoder, act)
+        };
+        if all_okay {
             conwrite!(con, groups::OKAY)?;
-        } else if compiler::unlikely(err_enc) {
+        } else if compiler::unlikely(enc_err) {
             // the errors we love to hate: encoding error
             conwrite!(con, groups::ENCODING_ERROR)?;
         } else {
@@ -76,5 +51,43 @@ action! {
             conwrite!(con, groups::NIL)?;
         }
         Ok(())
+    }
+}
+
+/// Snapshot the current status and then delete maintaining concurrency
+/// guarantees. `(all_okay, enc_err)`
+fn snapshot_and_del(kve: &KVEngine, key_encoder: SingleEncoder, act: ActionIter) -> (bool, bool) {
+    let mut snapshots = Vec::with_capacity(act.len());
+    let mut err_enc = false;
+    let iter_stat_ok;
+    {
+        iter_stat_ok = act.as_ref().iter().all(|key| {
+            if compiler::likely(key_encoder.is_ok(key)) {
+                if let Some(snap) = kve.take_snapshot(key) {
+                    snapshots.push(snap);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                err_enc = true;
+                false
+            }
+        });
+    }
+    if iter_stat_ok {
+        // nice, all keys exist; let's plonk 'em
+        let kve = kve;
+        let lowtable = kve.__get_inner_ref();
+        act.zip(snapshots).for_each(|(key, snapshot)| {
+            // the check is very important: some thread may have updated the
+            // value after we snapshotted it. In that case, let this key
+            // be whatever the "newer" value is. Since our snapshot is a "happens-before"
+            // thing, this is absolutely fine
+            let _ = lowtable.remove_if(&key, |_, val| val.eq(&snapshot));
+        });
+        (true, false)
+    } else {
+        (iter_stat_ok, err_enc)
     }
 }

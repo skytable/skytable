@@ -26,6 +26,8 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::DoubleEncoder;
+use crate::kvengine::KVEngine;
 use crate::util::compiler;
 
 action! {
@@ -40,53 +42,69 @@ action! {
         }
         let kve = kve!(con, handle);
         let encoder = kve.get_encoder();
-        let mut err_enc = false;
-        let mut snapshots = Vec::with_capacity(act.len());
-        let iter_stat_ok;
-        {
-            // snapshot the values at this point in time
-            iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| {
-                unsafe {
-                    let key = kv.get_unchecked(0);
-                    let value = kv.get_unchecked(1);
-                    if compiler::likely(encoder.is_ok(key, value)) {
-                        if let Some(snapshot) = kve.take_snapshot(key) {
-                            snapshots.push(snapshot);
-                            true
-                        } else {
-                            false
-                        }
-                    } else {
-                        err_enc = true;
-                        false
-                    }
-                }
-            });
-        }
-        if iter_stat_ok {
-            {
-                let kve = kve;
-                // good, so all the values existed when we snapshotted them; let's update 'em
-                let mut snap_cc = snapshots.into_iter();
-                let lowtable = kve.__get_inner_ref();
-                while let (Some(key), Some(value), Some(snapshot)) = (act.next(), act.next(), snap_cc.next()) {
-                    // When we snapshotted, we looked at `snapshot`. If the value is still the
-                    // same, then we'll update it. Otherwise, let it be
-                    if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
-                        if mutable.get().eq(&snapshot) {
-                            mutable.insert(Data::from(value));
-                        } else{
-                            drop(mutable);
-                        }
-                    }
-                }
-            }
+        let (all_okay, enc_err) = {
+            self::snapshot_and_update(kve, encoder, act)
+        };
+        if all_okay {
             conwrite!(con, groups::OKAY)?;
-        } else if compiler::unlikely(err_enc) {
+        } else if compiler::unlikely(enc_err) {
             conwrite!(con, groups::ENCODING_ERROR)?;
         } else {
             conwrite!(con, groups::NIL)?;
         }
         Ok(())
+    }
+}
+
+/// Take a consistent snapshot of the database at this point in time. Once snapshotting
+/// completes, mutate the entries in place while keeping up with isolation guarantees
+/// `(all_okay, enc_err)`
+fn snapshot_and_update(
+    kve: &KVEngine,
+    encoder: DoubleEncoder,
+    mut act: ActionIter,
+) -> (bool, bool) {
+    let mut err_enc = false;
+    let mut snapshots = Vec::with_capacity(act.len());
+    let iter_stat_ok;
+    {
+        // snapshot the values at this point in time
+        iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
+            let key = kv.get_unchecked(0);
+            let value = kv.get_unchecked(1);
+            if compiler::likely(encoder.is_ok(key, value)) {
+                if let Some(snapshot) = kve.take_snapshot(key) {
+                    snapshots.push(snapshot);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                err_enc = true;
+                false
+            }
+        });
+    }
+    if iter_stat_ok {
+        let kve = kve;
+        // good, so all the values existed when we snapshotted them; let's update 'em
+        let mut snap_cc = snapshots.into_iter();
+        let lowtable = kve.__get_inner_ref();
+        while let (Some(key), Some(value), Some(snapshot)) =
+            (act.next(), act.next(), snap_cc.next())
+        {
+            // When we snapshotted, we looked at `snapshot`. If the value is still the
+            // same, then we'll update it. Otherwise, let it be
+            if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
+                if mutable.get().eq(&snapshot) {
+                    mutable.insert(Data::from(value));
+                } else {
+                    drop(mutable);
+                }
+            }
+        }
+        (true, false)
+    } else {
+        (iter_stat_ok, err_enc)
     }
 }

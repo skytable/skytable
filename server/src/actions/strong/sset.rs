@@ -26,6 +26,8 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::DoubleEncoder;
+use crate::kvengine::KVEngine;
 use crate::util::compiler;
 
 action! {
@@ -40,36 +42,10 @@ action! {
         }
         let kve = kve!(con, handle);
         let encoder = kve.get_encoder();
-        let mut enc_err = false;
-        let lowtable = kve.__get_inner_ref();
-        let key_iter_stat_ok;
-        {
-            key_iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| {
-                unsafe {
-                    let key = kv.get_unchecked(0);
-                    let value = kv.get_unchecked(1);
-                    if compiler::likely(encoder.is_ok(key, value)) {
-                        lowtable.get(key).is_none()
-                    } else {
-                        enc_err = true;
-                        false
-                    }
-                }
-            });
-        }
-        if key_iter_stat_ok {
-            {
-                let _kve = kve;
-                let lowtable = lowtable;
-                // fine, the keys were non-existent when we looked at them
-                while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                    if let Some(fresh) = lowtable.fresh_entry(Data::from(key)) {
-                        fresh.insert(Data::from(value));
-                    }
-                    // we don't care if some other thread initialized the value we checked
-                    // it. We expected a fresh entry, so that's what we'll check and use
-                }
-            }
+        let (all_okay, enc_err) = {
+            self::snapshot_and_insert(kve, encoder, act)
+        };
+        if all_okay {
             conwrite!(con, groups::OKAY)?;
         } else if compiler::unlikely(enc_err) {
             conwrite!(con, groups::ENCODING_ERROR)?;
@@ -77,5 +53,45 @@ action! {
             conwrite!(con, groups::OVERWRITE_ERR)?;
         }
         Ok(())
+    }
+}
+
+/// Take a consistent snapshot of the database at this current point in time
+/// and then mutate the entries, respecting concurrency guarantees
+/// `(all_okay, enc_err)`
+fn snapshot_and_insert(
+    kve: &KVEngine,
+    encoder: DoubleEncoder,
+    mut act: ActionIter,
+) -> (bool, bool) {
+    let mut enc_err = false;
+    let lowtable = kve.__get_inner_ref();
+    let key_iter_stat_ok;
+    {
+        key_iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
+            let key = kv.get_unchecked(0);
+            let value = kv.get_unchecked(1);
+            if compiler::likely(encoder.is_ok(key, value)) {
+                lowtable.get(key).is_none()
+            } else {
+                enc_err = true;
+                false
+            }
+        });
+    }
+    if key_iter_stat_ok {
+        let _kve = kve;
+        let lowtable = lowtable;
+        // fine, the keys were non-existent when we looked at them
+        while let (Some(key), Some(value)) = (act.next(), act.next()) {
+            if let Some(fresh) = lowtable.fresh_entry(Data::from(key)) {
+                fresh.insert(Data::from(value));
+            }
+            // we don't care if some other thread initialized the value we checked
+            // it. We expected a fresh entry, so that's what we'll check and use
+        }
+        (true, false)
+    } else {
+        (key_iter_stat_ok, enc_err)
     }
 }
