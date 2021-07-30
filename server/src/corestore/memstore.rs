@@ -218,7 +218,7 @@ impl Memstore {
         Q: Hash + Eq + ?Sized,
     {
         self.keyspaces
-            .get(&keyspace_identifier)
+            .get(keyspace_identifier)
             .map(|ns| ns.clone())
     }
     /// Returns true if a new keyspace was created
@@ -358,7 +358,7 @@ impl Keyspace {
         ObjectID: Borrow<Q>,
         Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
     {
-        self.tables.get(&table_identifier).map(|v| v.clone())
+        self.tables.get(table_identifier).map(|v| v.clone())
     }
     /// Create a new table
     pub fn create_table(&self, tableid: ObjectID, table: Table) -> bool {
@@ -376,13 +376,13 @@ impl Keyspace {
     {
         if table_identifier.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
-        } else if !self.tables.contains_key(&table_identifier) {
+        } else if !self.tables.contains_key(table_identifier) {
             Err(DdlError::ObjectNotFound)
         } else {
             // has table
             let did_remove =
                 self.tables
-                    .true_remove_if(&table_identifier, |_table_id, table_atomic_ref| {
+                    .true_remove_if(table_identifier, |_table_id, table_atomic_ref| {
                         // 1 because this should just be us, the one instance
                         Arc::strong_count(table_atomic_ref) == 1
                     });

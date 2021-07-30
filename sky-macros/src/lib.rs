@@ -357,7 +357,7 @@ pub fn array(args: TokenStream, item: TokenStream) -> TokenStream {
                                 .map(|s| {
                                     let mut st = String::new();
                                     st.push_str("MaybeUninit::new(");
-                                    st.push_str(&s);
+                                    st.push_str(s);
                                     st.push(')');
                                     st.push(',');
                                     st

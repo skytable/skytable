@@ -144,7 +144,7 @@ pub mod oneshot {
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
     pub fn flush_keyspace(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
         for table in keyspace.tables.iter() {
-            self::flush_table(table.key(), &ksid, table.value())?;
+            self::flush_table(table.key(), ksid, table.value())?;
         }
         Ok(())
     }
@@ -152,7 +152,7 @@ pub mod oneshot {
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
     pub fn snap_flush_keyspace(snapid: &str, ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
         for table in keyspace.tables.iter() {
-            self::snap_flush_table(snapid, table.key(), &ksid, table.value())?;
+            self::snap_flush_table(snapid, table.key(), ksid, table.value())?;
         }
         Ok(())
     }

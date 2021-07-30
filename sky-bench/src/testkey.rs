@@ -57,12 +57,11 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         .into_iter()
         .map(|_| ran_string(size, &mut rand))
         .collect();
-    let set_packs: Vec<Vec<u8>> = (0..num)
+    (0..num)
         .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
-        .collect();
-    set_packs.into_iter().for_each(|packet| {
-        np.execute(packet);
-    });
+        .for_each(|packet| {
+            np.execute(packet);
+        });
     drop(np);
     println!("Created mock keys successfully");
 }

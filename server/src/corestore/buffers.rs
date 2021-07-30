@@ -172,7 +172,7 @@ impl<const N: usize> Deref for Integer32BufferRaw<N> {
 
 impl<const N: usize> AsRef<str> for Integer32BufferRaw<N> {
     fn as_ref(&self) -> &str {
-        &self
+        self
     }
 }
 

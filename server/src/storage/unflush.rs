@@ -92,7 +92,7 @@ pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>>
             return Err(bad_data!());
         }
         let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
-        let tbl = self::read_table(&ksid, &tableid, is_volatile, model_code)?;
+        let tbl = self::read_table(ksid, &tableid, is_volatile, model_code)?;
         ks.true_if_insert(tableid, Arc::new(tbl));
     }
     Ok(ks)

@@ -92,7 +92,7 @@ pub enum ParseError {
     /// A data type was given but the parser failed to serialize it into this type
     ///
     /// This can happen not just for elements but can also happen for their sizes ([`Self::parse_into_u64`])
-    DataTypeParseError,
+    DatatypeParseFailure,
     /// A data type that the server doesn't know was passed into the query
     ///
     /// This is a frequent problem that can arise between different server editions as more data types
@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
         for dig in byte_iter {
             if !dig.is_ascii_digit() {
                 // dig has to be an ASCII digit
-                return Err(ParseError::DataTypeParseError);
+                return Err(ParseError::DatatypeParseFailure);
             }
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
@@ -200,11 +200,11 @@ impl<'a> Parser<'a> {
             // The usize can overflow; check that case
             let product = match item_usize.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
-                None => return Err(ParseError::DataTypeParseError),
+                None => return Err(ParseError::DatatypeParseFailure),
             };
             let sum = match product.checked_add(curdig) {
                 Some(not_overflowed) => not_overflowed,
-                None => return Err(ParseError::DataTypeParseError),
+                None => return Err(ParseError::DatatypeParseFailure),
             };
             item_usize = sum;
         }
@@ -220,7 +220,7 @@ impl<'a> Parser<'a> {
         for dig in byte_iter {
             if !dig.is_ascii_digit() {
                 // dig has to be an ASCII digit
-                return Err(ParseError::DataTypeParseError);
+                return Err(ParseError::DatatypeParseFailure);
             }
             // 48 is the ASCII code for 0, and 57 is the ascii code for 9
             // so if 0 is given, the subtraction should give 0; similarly
@@ -233,11 +233,11 @@ impl<'a> Parser<'a> {
             // Now the entire u64 can overflow, so let's attempt to check it
             let product = match item_u64.checked_mul(10) {
                 Some(not_overflowed) => not_overflowed,
-                None => return Err(ParseError::DataTypeParseError),
+                None => return Err(ParseError::DatatypeParseFailure),
             };
             let sum = match product.checked_add(curdig) {
                 Some(not_overflowed) => not_overflowed,
-                None => return Err(ParseError::DataTypeParseError),
+                None => return Err(ParseError::DatatypeParseFailure),
             };
             item_u64 = sum;
         }
@@ -344,7 +344,7 @@ impl<'a> Parser<'a> {
     fn parse_next_flat_array(&mut self) -> ParseResult<Vec<Bytes>> {
         let (start, stop) = self.read_line();
         if let Some(our_size_chunk) = self.buffer.get(start..stop) {
-            let array_size = Self::parse_into_usize(&our_size_chunk)?;
+            let array_size = Self::parse_into_usize(our_size_chunk)?;
             let mut array = Vec::with_capacity(array_size);
             for _ in 0..array_size {
                 if let Some(tsymbol) = self.buffer.get(self.cursor) {
@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
 #[test]
 fn test_metaframe_parse() {
     let metaframe = "*2\n".as_bytes();
-    let mut parser = Parser::new(&metaframe);
+    let mut parser = Parser::new(metaframe);
     assert_eq!(2, parser.parse_metaframe_get_datagroup_count().unwrap());
     assert_eq!(parser.cursor, metaframe.len());
 }
@@ -454,7 +454,7 @@ fn test_cursor_next_char() {
 fn test_metaframe_parse_fail() {
     // First byte should be CR and not $
     let metaframe = "$2\n*2\n".as_bytes();
-    let mut parser = Parser::new(&metaframe);
+    let mut parser = Parser::new(metaframe);
     assert_eq!(
         parser.parse_metaframe_get_datagroup_count().unwrap_err(),
         ParseError::UnexpectedByte
@@ -462,7 +462,7 @@ fn test_metaframe_parse_fail() {
     // Give a wrong length approximation
     let metaframe = "\r1\n*2\n".as_bytes();
     assert_eq!(
-        Parser::new(&metaframe)
+        Parser::new(metaframe)
             .parse_metaframe_get_datagroup_count()
             .unwrap_err(),
         ParseError::UnexpectedByte
@@ -473,12 +473,12 @@ fn test_metaframe_parse_fail() {
 fn test_query_fail_not_enough() {
     let query_packet = "*".as_bytes();
     assert_eq!(
-        Parser::new(&query_packet).parse().err().unwrap(),
+        Parser::new(query_packet).parse().err().unwrap(),
         ParseError::NotEnough
     );
     let metaframe = "*2".as_bytes();
     assert_eq!(
-        Parser::new(&metaframe)
+        Parser::new(metaframe)
             .parse_metaframe_get_datagroup_count()
             .unwrap_err(),
         ParseError::NotEnough
@@ -488,7 +488,7 @@ fn test_query_fail_not_enough() {
 #[test]
 fn test_parse_next_string() {
     let bytes = "5\nsayan\n".as_bytes();
-    let st = Parser::new(&bytes).parse_next_string().unwrap();
+    let st = Parser::new(bytes).parse_next_string().unwrap();
     assert_eq!(st, Bytes::from("sayan"));
 }
 
@@ -497,18 +497,18 @@ fn test_parse_next_u64() {
     let max = 18446744073709551615;
     assert!(u64::MAX == max);
     let bytes = "20\n18446744073709551615\n".as_bytes();
-    let our_u64 = Parser::new(&bytes).parse_next_u64().unwrap();
+    let our_u64 = Parser::new(bytes).parse_next_u64().unwrap();
     assert_eq!(our_u64, max);
     // now overflow the u64
     let bytes = "21\n184467440737095516156\n".as_bytes();
-    let our_u64 = Parser::new(&bytes).parse_next_u64().unwrap_err();
-    assert_eq!(our_u64, ParseError::DataTypeParseError);
+    let our_u64 = Parser::new(bytes).parse_next_u64().unwrap_err();
+    assert_eq!(our_u64, ParseError::DatatypeParseFailure);
 }
 
 #[test]
 fn test_parse_next_element_string() {
     let bytes = "+5\nsayan\n".as_bytes();
-    let next_element = Parser::new(&bytes).parse_next_element().unwrap();
+    let next_element = Parser::new(bytes).parse_next_element().unwrap();
     assert_eq!(next_element, Element::String(Bytes::from("sayan")));
 }
 
@@ -516,7 +516,7 @@ fn test_parse_next_element_string() {
 fn test_parse_next_element_string_fail() {
     let bytes = "+5\nsayan".as_bytes();
     assert_eq!(
-        Parser::new(&bytes).parse_next_element().unwrap_err(),
+        Parser::new(bytes).parse_next_element().unwrap_err(),
         ParseError::NotEnough
     );
 }
@@ -524,7 +524,7 @@ fn test_parse_next_element_string_fail() {
 #[test]
 fn test_parse_next_element_u64() {
     let bytes = ":20\n18446744073709551615\n".as_bytes();
-    let our_u64 = Parser::new(&bytes).parse_next_element().unwrap();
+    let our_u64 = Parser::new(bytes).parse_next_element().unwrap();
     assert_eq!(our_u64, Element::UnsignedInt(u64::MAX));
 }
 
@@ -532,7 +532,7 @@ fn test_parse_next_element_u64() {
 fn test_parse_next_element_u64_fail() {
     let bytes = ":20\n18446744073709551615".as_bytes();
     assert_eq!(
-        Parser::new(&bytes).parse_next_element().unwrap_err(),
+        Parser::new(bytes).parse_next_element().unwrap_err(),
         ParseError::NotEnough
     );
 }
@@ -540,7 +540,7 @@ fn test_parse_next_element_u64_fail() {
 #[test]
 fn test_parse_next_element_array() {
     let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\nbar\n".as_bytes();
-    let mut parser = Parser::new(&bytes);
+    let mut parser = Parser::new(bytes);
     let array = parser.parse_next_element().unwrap();
     assert_eq!(
         array,
@@ -557,7 +557,7 @@ fn test_parse_next_element_array() {
 fn test_parse_next_element_array_fail() {
     // should've been three elements, but there are two!
     let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\n".as_bytes();
-    let mut parser = Parser::new(&bytes);
+    let mut parser = Parser::new(bytes);
     assert_eq!(
         parser.parse_next_element().unwrap_err(),
         ParseError::NotEnough
@@ -570,7 +570,7 @@ fn test_parse_nested_array() {
     let bytes =
         "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n+6\nreally\n+4\nhard\n"
             .as_bytes();
-    let mut parser = Parser::new(&bytes);
+    let mut parser = Parser::new(bytes);
     let array = parser.parse_next_element().unwrap();
     assert_eq!(
         array,
@@ -596,7 +596,7 @@ fn test_parse_multitype_array() {
     // let's test a nested array
     let bytes = "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
         .as_bytes();
-    let mut parser = Parser::new(&bytes);
+    let mut parser = Parser::new(bytes);
     let array = parser.parse_next_element().unwrap();
     assert_eq!(
         array,
@@ -622,7 +622,7 @@ fn test_parse_a_query() {
     let bytes =
         "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
             .as_bytes();
-    let parser = Parser::new(&bytes);
+    let parser = Parser::new(bytes);
     let (resp, forward_by) = parser.parse().unwrap();
     assert_eq!(
         resp,
@@ -648,7 +648,7 @@ fn test_parse_a_query_fail_moredata() {
     let bytes =
         "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&1\n:2\n23\n+5\napril\n"
             .as_bytes();
-    let parser = Parser::new(&bytes);
+    let parser = Parser::new(bytes);
     assert_eq!(parser.parse().unwrap_err(), ParseError::UnexpectedByte);
 }
 
@@ -659,7 +659,7 @@ fn test_pipelined_query_incomplete() {
         "*2\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
             .as_bytes();
     assert_eq!(
-        Parser::new(&bytes).parse().unwrap_err(),
+        Parser::new(bytes).parse().unwrap_err(),
         ParseError::NotEnough
     )
 }
@@ -671,7 +671,7 @@ fn test_pipelined_query() {
     /*
     (\r2\n*2\n)(&3\n)({+3\nACT\n}{+3\nfoo\n}{[&3\n][+5\nsayan\n][+2\nis\n][+7\nworking\n]})(+4\nHEYA\n)
     */
-    let (res, forward_by) = Parser::new(&bytes).parse().unwrap();
+    let (res, forward_by) = Parser::new(bytes).parse().unwrap();
     assert_eq!(
         res,
         Query::PipelinedQuery(vec![
@@ -695,7 +695,7 @@ fn test_query_with_part_of_next_query() {
     let bytes =
         "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n*1\n"
             .as_bytes();
-    let (res, forward_by) = Parser::new(&bytes).parse().unwrap();
+    let (res, forward_by) = Parser::new(bytes).parse().unwrap();
     assert_eq!(
         res,
         Query::SimpleQuery(Element::Array(vec![
@@ -720,7 +720,7 @@ fn test_query_with_part_of_next_query() {
 #[test]
 fn test_parse_flat_array() {
     let bytes = "_3\n+3\nSET\n+5\nHello\n+5\nWorld\n".as_bytes();
-    let res = Parser::new(&bytes).parse_next_element().unwrap();
+    let res = Parser::new(bytes).parse_next_element().unwrap();
     assert_eq!(
         res,
         Element::FlatArray(vec![
@@ -734,52 +734,52 @@ fn test_parse_flat_array() {
 #[test]
 fn test_flat_array_incomplete() {
     let bytes = "*1\n_1\n".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n_1".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n_".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
 }
 
 #[test]
 fn test_array_incomplete() {
     let bytes = "*1\n&1\n".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n&1".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n&".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
 }
 
 #[test]
 fn test_string_incomplete() {
     let bytes = "*1\n+1\n".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n+1".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n+".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
 }
 
 #[test]
 fn test_u64_incomplete() {
     let bytes = "*1\n:1\n".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n:1".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
     let bytes = "*1\n:".as_bytes();
-    let res = Parser::new(&bytes).parse().unwrap_err();
+    let res = Parser::new(bytes).parse().unwrap_err();
     assert_eq!(res, ParseError::NotEnough);
 }
 

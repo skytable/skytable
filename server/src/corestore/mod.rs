@@ -211,7 +211,7 @@ impl Corestore {
         ObjectID: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.store.get_keyspace_atomic_ref(&ksid)
+        self.store.get_keyspace_atomic_ref(ksid)
     }
     /// Get an atomic reference to a table
     pub fn get_table(&self, entity: BorrowedEntityGroup) -> KeyspaceResult<Arc<Table>> {

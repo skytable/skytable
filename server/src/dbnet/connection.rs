@@ -242,7 +242,7 @@ where
                         }
                         Err(ParseError::Empty) => return Ok(QueryResult::Empty),
                         Err(ParseError::NotEnough) => (),
-                        Err(ParseError::DataTypeParseError) => return Ok(QueryResult::Wrongtype),
+                        Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
                         Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
                             return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
                         }

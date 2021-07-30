@@ -118,10 +118,10 @@ impl Writable for &'static [u8] {
         con: &'s mut impl IsConnection,
     ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
         async fn write_bytes(con: &mut impl IsConnection, resp: &[u8]) -> Result<(), IoError> {
-            con.write_lowlevel(&resp).await?;
+            con.write_lowlevel(resp).await?;
             Ok(())
         }
-        Box::pin(write_bytes(con, &self))
+        Box::pin(write_bytes(con, self))
     }
 }
 
