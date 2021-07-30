@@ -90,12 +90,59 @@ mod sset_concurrency_tests {
         let t1handle = thread::spawn(move || sset::snapshot_and_insert(&kve1, encoder, it));
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
-        // lets
+        // update the value externally
         assert!(kve.set(Data::from("k1"), Data::from("updated-v1")).unwrap());
         // let us join t1
         let (all_okay, _) = t1handle.join().unwrap();
+        // but set won't fail because someone set it before it did; this is totally
+        // acceptable because we only wanted to set it if it matches the status when
+        // we created a snapshot
         assert!(all_okay);
         // although we told sset to set a key, but it shouldn't because we updated it
+        assert_eq!(
+            kve.get(Data::from("k1")).unwrap().unwrap().clone(),
+            Data::from("updated-v1")
+        );
+    }
+}
+
+mod supdate_concurrency_tests {
+    use super::super::supdate;
+    use crate::corestore::Data;
+    use crate::kvengine::KVEngine;
+    use std::sync::Arc;
+    use std::thread;
+    #[test]
+    fn test_snapshot_okay() {
+        let kve = KVEngine::init(true, true);
+        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
+        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+        let encoder = kve.get_encoder();
+        let it = bi!("k1", "v1", "k2", "v2");
+        let (all_okay, _) = supdate::snapshot_and_update(&kve, encoder, it);
+        assert!(all_okay);
+    }
+    #[test]
+    fn test_supdate_snapshot_fail_with_t2() {
+        let kve = Arc::new(KVEngine::init(true, true));
+        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
+        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+        let kve1 = kve.clone();
+        let encoder = kve.get_encoder();
+        let it = bi!("k1", "v1", "k2", "v2");
+        // supdate will wait 10s for us
+        let t1handle = thread::spawn(move || supdate::snapshot_and_update(&kve1, encoder, it));
+        // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
+        do_sleep!(5 s);
+        // lets update the value externally
+        assert!(kve
+            .update(Data::from("k1"), Data::from("updated-v1"))
+            .unwrap());
+        // let us join t1
+        let (all_okay, _) = t1handle.join().unwrap();
+        assert!(all_okay);
+        // although we told supdate to update the key, it shouldn't because we updated it
+        // externally; hence our `updated-v1` value should persist
         assert_eq!(
             kve.get(Data::from("k1")).unwrap().unwrap().clone(),
             Data::from("updated-v1")

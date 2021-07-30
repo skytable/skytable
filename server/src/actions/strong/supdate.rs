@@ -59,7 +59,7 @@ action! {
 /// Take a consistent snapshot of the database at this point in time. Once snapshotting
 /// completes, mutate the entries in place while keeping up with isolation guarantees
 /// `(all_okay, enc_err)`
-fn snapshot_and_update(
+pub(super) fn snapshot_and_update(
     kve: &KVEngine,
     encoder: DoubleEncoder,
     mut act: ActionIter,
@@ -85,6 +85,10 @@ fn snapshot_and_update(
             }
         });
     }
+    cfg_test!({
+        // give the caller 10 seconds to do some crap
+        do_sleep!(10 s);
+    });
     if iter_stat_ok {
         let kve = kve;
         // good, so all the values existed when we snapshotted them; let's update 'em
