@@ -33,12 +33,15 @@ mod sdel_concurrency_tests {
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEngine::init(true, true);
+        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
+        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_key_encoder();
-        let it = bi!("k1", "v1", "k2", "v2");
-        sdel::snapshot_and_del(&kve, encoder, it);
+        let it = bi!("k1", "k2");
+        let (all_okay, _) = sdel::snapshot_and_del(&kve, encoder, it);
+        assert!(all_okay);
     }
     #[test]
-    fn test_snapshot_fail_with_t2() {
+    fn test_sdel_snapshot_fail_with_t2() {
         let kve = Arc::new(KVEngine::init(true, true));
         let kve1 = kve.clone();
         let encoder = kve.get_key_encoder();
@@ -55,9 +58,47 @@ mod sdel_concurrency_tests {
             .update(Data::from("k1"), Data::from("updated-v1"))
             .unwrap());
         // let us join t1
-        t1handle.join().unwrap();
+        let (all_okay, _) = t1handle.join().unwrap();
+        assert!(all_okay);
         // although we told sdel to delete it, it shouldn't because we externally
         // updated the value
         assert!(kve.exists(Data::from("k1")).unwrap());
+    }
+}
+
+mod sset_concurrency_tests {
+    use super::super::sset;
+    use crate::corestore::Data;
+    use crate::kvengine::KVEngine;
+    use std::sync::Arc;
+    use std::thread;
+    #[test]
+    fn test_snapshot_okay() {
+        let kve = KVEngine::init(true, true);
+        let encoder = kve.get_encoder();
+        let it = bi!("k1", "v1", "k2", "v2");
+        let (all_okay, _) = sset::snapshot_and_insert(&kve, encoder, it);
+        assert!(all_okay);
+    }
+    #[test]
+    fn test_sset_snapshot_fail_with_t2() {
+        let kve = Arc::new(KVEngine::init(true, true));
+        let kve1 = kve.clone();
+        let encoder = kve.get_encoder();
+        let it = bi!("k1", "v1", "k2", "v2");
+        // sset will wait 10s for us
+        let t1handle = thread::spawn(move || sset::snapshot_and_insert(&kve1, encoder, it));
+        // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
+        do_sleep!(5 s);
+        // lets
+        assert!(kve.set(Data::from("k1"), Data::from("updated-v1")).unwrap());
+        // let us join t1
+        let (all_okay, _) = t1handle.join().unwrap();
+        assert!(all_okay);
+        // although we told sset to set a key, but it shouldn't because we updated it
+        assert_eq!(
+            kve.get(Data::from("k1")).unwrap().unwrap().clone(),
+            Data::from("updated-v1")
+        );
     }
 }

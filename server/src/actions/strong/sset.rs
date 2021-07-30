@@ -59,7 +59,7 @@ action! {
 /// Take a consistent snapshot of the database at this current point in time
 /// and then mutate the entries, respecting concurrency guarantees
 /// `(all_okay, enc_err)`
-fn snapshot_and_insert(
+pub(super) fn snapshot_and_insert(
     kve: &KVEngine,
     encoder: DoubleEncoder,
     mut act: ActionIter,
@@ -80,8 +80,8 @@ fn snapshot_and_insert(
         });
     }
     cfg_test!({
-        // give the caller 5 seconds to do some crap
-        do_sleep!(5 s);
+        // give the caller 10 seconds to do some crap
+        do_sleep!(10 s);
     });
     if key_iter_stat_ok {
         let _kve = kve;
