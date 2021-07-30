@@ -54,6 +54,8 @@ pub mod lazy;
 pub mod lock;
 pub mod memstore;
 pub mod table;
+#[cfg(test)]
+mod tests;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 type OptionTuple<T> = (Option<T>, Option<T>);
@@ -354,12 +356,13 @@ impl Corestore {
     }
 
     /// Drop a keyspace
-    pub fn drop_keyspace<Q>(&self, ksid: &Q) -> KeyspaceResult<()>
-    where
-        ObjectID: Borrow<Q>,
-        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
-    {
+    pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         self.store.drop_keyspace(ksid)
+    }
+
+    /// Force drop a keyspace
+    pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        self.store.force_drop_keyspace(ksid)
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`

@@ -36,6 +36,7 @@ use core::str;
 pub const TABLE: &[u8] = "TABLE".as_bytes();
 pub const KEYSPACE: &[u8] = "KEYSPACE".as_bytes();
 const VOLATILE: &[u8] = "volatile".as_bytes();
+const FORCE_REMOVE: &[u8] = "force".as_bytes();
 
 action!(
     /// Handle `create table <tableid> <model>(args)` and `create keyspace <ksid>`
@@ -200,13 +201,24 @@ action! {
                 if ksid.len() > 64 {
                     return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
                 }
+                let force_remove = match act.next() {
+                    Some(bts) if bts.eq(FORCE_REMOVE) => true,
+                    None => false,
+                    _ => return conwrite!(con, responses::groups::UNKNOWN_ACTION)
+                };
                 if registry::state_okay() {
-                    let ks_slice = &ksid[..];
-                    let ret = match handle.drop_keyspace(ks_slice) {
+                    let objid = unsafe {ObjectID::from_slice(ksid)};
+                    let result = if force_remove {
+                        handle.force_drop_keyspace(objid)
+                    } else {
+                        handle.drop_keyspace(objid)
+                    };
+                    let ret = match result {
                         Ok(()) => responses::groups::OKAY,
                         Err(DdlError::ProtectedObject) => responses::groups::PROTECTED_OBJECT,
                         Err(DdlError::ObjectNotFound) => responses::groups::CONTAINER_NOT_FOUND,
                         Err(DdlError::StillInUse) => responses::groups::STILL_IN_USE,
+                        Err(DdlError::NotEmpty) => responses::groups::KEYSPACE_NOT_EMPTY,
                         Err(_) => unsafe {
                             // we know that Memstore::drop_table won't ever return anything else
                             impossible!()

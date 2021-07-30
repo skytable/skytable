@@ -18,6 +18,8 @@ All changes in this project will be noted in this file.
     ```sql
     DROP KEYSPACE <name>
     ```
+  - If a keyspace still has tables, it cannot be dropped by using `DROP KEYSPACE <name>`, instead
+    one needs to use `DROP KEYSPACE <name> force` to force drop the keyspace
 - **Multiple tables**:
   - Tables hold the actual data. When you connect to the server, you are connected to the `default`
     table in the `default` keyspace. This table is non-removable
