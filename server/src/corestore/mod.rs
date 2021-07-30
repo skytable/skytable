@@ -54,6 +54,8 @@ pub mod lazy;
 pub mod lock;
 pub mod memstore;
 pub mod table;
+#[cfg(test)]
+mod tests;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 type OptionTuple<T> = (Option<T>, Option<T>);

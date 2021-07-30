@@ -227,6 +227,10 @@ impl Memstore {
             .true_if_insert(keyspace_identifier, Arc::new(Keyspace::empty()))
     }
     /// Drop a keyspace only if it is empty and has no clients connected to it
+    ///
+    /// The invariants maintained here are:
+    /// 1. The keyspace is not referenced to
+    /// 2. There are no tables in the keyspace
     pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
@@ -246,7 +250,7 @@ impl Memstore {
                         // not empty; may be referenced to or not referenced to
                         Err(DdlError::NotEmpty)
                     } else {
-                        // still referenced to; may or may not be empty
+                        // still referenced to; but is empty
                         Err(DdlError::StillInUse)
                     }
                 }
@@ -257,6 +261,10 @@ impl Memstore {
     /// Force remove a keyspace along with all its tables. This force however only
     /// removes tables if they aren't in use and iff the keyspace is not currently
     /// in use to avoid the problem of having "ghost tables"
+    ///
+    /// The invariants maintained here are:
+    /// 1. The keyspace is not referenced to
+    /// 2. The tables in the keyspace are not referenced to
     pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
@@ -269,7 +277,12 @@ impl Memstore {
                     // force remove drops tables, but only if they aren't in use
                     // we can potentially have "ghost" tables if we don't do this
                     // check. Similarly, if we don't check the strong count of the
-                    // keyspace, we might end up with "ghost" keyspaces
+                    // keyspace, we might end up with "ghost" keyspaces. A good
+                    // question would be: why not just check the number of tables --
+                    // well, the force drop is specifically built to address the problem
+                    // of having not empty keyspaces. The invariant that `drop keyspace force`
+                    // maintains is that the keyspace or any of its objects are never
+                    // referenced to -- only then it is safe to delete the keyspace
                     let no_tables_in_use = Arc::strong_count(keyspace.get()) == 1
                         && keyspace
                             .get()
