@@ -35,7 +35,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were set, or it returns an
     /// `Overwrite Error` or code `2`
-    fn sset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
@@ -79,6 +79,10 @@ fn snapshot_and_insert(
             }
         });
     }
+    cfg_test!({
+        // give the caller 5 seconds to do some crap
+        do_sleep!(5 s);
+    });
     if key_iter_stat_ok {
         let _kve = kve;
         let lowtable = lowtable;

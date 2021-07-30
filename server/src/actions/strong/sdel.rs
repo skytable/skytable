@@ -56,7 +56,11 @@ action! {
 
 /// Snapshot the current status and then delete maintaining concurrency
 /// guarantees. `(all_okay, enc_err)`
-fn snapshot_and_del(kve: &KVEngine, key_encoder: SingleEncoder, act: ActionIter) -> (bool, bool) {
+pub(super) fn snapshot_and_del(
+    kve: &KVEngine,
+    key_encoder: SingleEncoder,
+    act: ActionIter,
+) -> (bool, bool) {
     let mut snapshots = Vec::with_capacity(act.len());
     let mut err_enc = false;
     let iter_stat_ok;
@@ -75,6 +79,10 @@ fn snapshot_and_del(kve: &KVEngine, key_encoder: SingleEncoder, act: ActionIter)
             }
         });
     }
+    cfg_test!({
+        // give the caller 10 seconds to do some crap
+        do_sleep!(10 s);
+    });
     if iter_stat_ok {
         // nice, all keys exist; let's plonk 'em
         let kve = kve;

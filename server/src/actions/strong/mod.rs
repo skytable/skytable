@@ -39,3 +39,6 @@ pub use self::{sdel::sdel, sset::sset, supdate::supdate};
 mod sdel;
 mod sset;
 mod supdate;
+
+#[cfg(test)]
+mod tests;

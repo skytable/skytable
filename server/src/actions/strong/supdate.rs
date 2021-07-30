@@ -35,7 +35,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were updated, or it returns `Nil`
     /// or code `1`
-    fn supdate(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn supdate(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;

@@ -26,17 +26,6 @@
 
 use super::parser;
 
-macro_rules! byt {
-    ($f:expr) => {
-        bytes::Bytes::from($f)
-    };
-}
-macro_rules! bi {
-    ($($x:expr),+ $(,)?) => {{
-        vec![$(bytes::Bytes::from($x),)*].into_iter()
-    }};
-}
-
 mod parser_ddl_tests {
     use super::parser::parse_table_args;
     use crate::corestore::memstore::ObjectID;

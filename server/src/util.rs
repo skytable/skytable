@@ -93,6 +93,10 @@ macro_rules! typedef {
 
 #[macro_export]
 macro_rules! cfg_test {
+    ($block:block) => {
+        #[cfg(test)]
+        $block
+    };
     ($($item:item)*) => {
         $(#[cfg(test)] $item)*
     };
@@ -190,4 +194,24 @@ pub mod compiler {
         }
         b
     }
+}
+
+#[macro_export]
+macro_rules! byt {
+    ($f:expr) => {
+        bytes::Bytes::from($f)
+    };
+}
+#[macro_export]
+macro_rules! bi {
+    ($($x:expr),+ $(,)?) => {{
+        vec![$(bytes::Bytes::from($x),)*].into_iter()
+    }};
+}
+
+#[macro_export]
+macro_rules! do_sleep {
+    ($dur:literal s) => {{
+        std::thread::sleep(std::time::Duration::from_secs($dur));
+    }};
 }
