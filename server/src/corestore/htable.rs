@@ -40,6 +40,7 @@ pub use dashmap::lock::RwLock as MapRWL;
 pub use dashmap::lock::RwLockReadGuard as MapRWLGuard;
 pub use dashmap::mapref::entry::Entry as MapEntry;
 pub use dashmap::mapref::entry::OccupiedEntry;
+use dashmap::mapref::entry::VacantEntry;
 pub use dashmap::mapref::one::Ref as MapSingleReference;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
@@ -163,6 +164,13 @@ where
     pub fn mut_entry(&self, key: K) -> Option<OccupiedEntry<K, V, RandomState>> {
         if let MapEntry::Occupied(oe) = self.inner.entry(key) {
             Some(oe)
+        } else {
+            None
+        }
+    }
+    pub fn fresh_entry(&self, key: K) -> Option<VacantEntry<K, V, RandomState>> {
+        if let MapEntry::Vacant(ve) = self.inner.entry(key) {
+            Some(ve)
         } else {
             None
         }

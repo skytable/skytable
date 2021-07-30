@@ -70,6 +70,30 @@ impl<'a> ShardLock<'a> {
     }
 }
 
+/// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
+pub struct DoubleEncoder {
+    fn_ptr: fn(&[u8], &[u8]) -> bool,
+}
+
+impl DoubleEncoder {
+    /// Check if the underlying encoding validator verifies the encoding
+    pub fn is_ok(&self, a: &[u8], b: &[u8]) -> bool {
+        (self.fn_ptr)(a, b)
+    }
+}
+
+/// A _single encoder_ for a single byte slice input
+pub struct SingleEncoder {
+    fn_ptr: fn(&[u8]) -> bool,
+}
+
+impl SingleEncoder {
+    /// Check if the underlying encoding validator verifies the encoding
+    pub fn is_ok(&self, a: &[u8]) -> bool {
+        (self.fn_ptr)(a)
+    }
+}
+
 // DROP impl isn't required as ShardLock's field types need-drop (std::mem)
 
 /// The key/value engine that acts as the in-memory backing store for the database
@@ -116,6 +140,74 @@ impl KVEngine {
             self.encoded_v.load(ORD_RELAXED),
         )
     }
+    /// Returns an encoder for the key and the value
+    pub fn get_encoder(&self) -> DoubleEncoder {
+        let (encoded_k, encoded_v) = (
+            self.encoded_k.load(ORD_RELAXED),
+            self.encoded_v.load(ORD_RELAXED),
+        );
+        let ret = match (encoded_k, encoded_v) {
+            (true, true) => {
+                // both k & v
+                fn is_okay(key: &[u8], value: &[u8]) -> bool {
+                    encoding::is_utf8(key) && encoding::is_utf8(value)
+                }
+                is_okay
+            }
+            (true, false) => {
+                // only k
+                fn is_okay(key: &[u8], _value: &[u8]) -> bool {
+                    encoding::is_utf8(key)
+                }
+                is_okay
+            }
+            (false, false) => {
+                // none
+                fn is_okay(_k: &[u8], _v: &[u8]) -> bool {
+                    true
+                }
+                is_okay
+            }
+            (false, true) => {
+                // only v
+                fn is_okay(_k: &[u8], v: &[u8]) -> bool {
+                    encoding::is_utf8(v)
+                }
+                is_okay
+            }
+        };
+        DoubleEncoder { fn_ptr: ret }
+    }
+    /// Returns an encoder for the key
+    pub fn get_key_encoder(&self) -> SingleEncoder {
+        let ret = if self.encoded_k.load(ORD_RELAXED) {
+            fn e(inp: &[u8]) -> bool {
+                encoding::is_utf8(inp)
+            }
+            e
+        } else {
+            fn e(_inp: &[u8]) -> bool {
+                true
+            }
+            e
+        };
+        SingleEncoder { fn_ptr: ret }
+    }
+    /// Returns an encoder for the value
+    pub fn get_value_encoder(&self) -> SingleEncoder {
+        let ret = if self.encoded_v.load(ORD_RELAXED) {
+            fn e(inp: &[u8]) -> bool {
+                encoding::is_utf8(inp)
+            }
+            e
+        } else {
+            fn e(_inp: &[u8]) -> bool {
+                true
+            }
+            e
+        };
+        SingleEncoder { fn_ptr: ret }
+    }
     pub fn len(&self) -> usize {
         self.table.len()
     }
@@ -154,6 +246,15 @@ impl KVEngine {
             self.encoded_v.store(encoded_v, ORD_RELAXED);
             Ok(())
         }
+    }
+    /// Return an owned value of the key. In most cases, the reference count is just incremented
+    /// unless the data itself is mutated in place
+    pub fn take_snapshot<Q>(&self, key: &Q) -> Option<Data>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq,
+    {
+        self.table.get(key).map(|v| v.clone())
     }
     /// Truncate the table
     pub fn truncate_table(&self) {
@@ -302,4 +403,18 @@ fn test_with_bincode() {
         bincode::deserialize::<User>(&tbl.get(Data::from("Joe")).unwrap().unwrap()).unwrap(),
         joe
     );
+}
+
+#[test]
+fn test_encoder_ignore() {
+    let tbl = KVEngine::default();
+    let encoder = tbl.get_encoder();
+    assert!(encoder.is_ok("hello".as_bytes(), b"Hello \xF0\x90\x80World"));
+}
+
+#[test]
+fn test_encoder_validate_with_non_unicode() {
+    let tbl = KVEngine::init(true, true);
+    let encoder = tbl.get_encoder();
+    assert!(!encoder.is_ok("hello".as_bytes(), b"Hello \xF0\x90\x80World"));
 }
