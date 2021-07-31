@@ -123,6 +123,10 @@ pub fn runner(
     let get_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
         .collect();
+    // just update key -> value to key -> key to avoid unnecessary memory usage
+    let update_packs: Vec<Vec<u8>> = (0..max_queries)
+        .map(|idx| libsky::into_raw_query(&format!("UPDATE {} {}", keys[idx], keys[idx])))
+        .collect();
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
@@ -143,6 +147,13 @@ pub fn runner(
     getpool.execute_and_finish_iter(get_packs);
     dt.stop_timer("GET").unwrap();
 
+    // bench UPDATE
+    let update_pool = pool_config.get_pool();
+    dt.create_timer("UPDATE").unwrap();
+    dt.start_timer("UPDATE").unwrap();
+    update_pool.execute_and_finish_iter(update_packs);
+    dt.stop_timer("UPDATE").unwrap();
+
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
@@ -153,10 +164,12 @@ pub fn runner(
 
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
+    let updates_per_sec = calc(max_queries, dt.time_in_nanos("UPDATE").unwrap());
     if json_out {
         let dat = vec![
             JSONReportBlock::new("GET", gets_per_sec),
             JSONReportBlock::new("SET", sets_per_sec),
+            JSONReportBlock::new("UPDATE", updates_per_sec),
         ];
         let serialized = serde_json::to_string(&dat).unwrap();
         println!("{}", serialized);
@@ -164,6 +177,7 @@ pub fn runner(
         println!("==========RESULTS==========");
         println!("{} GETs/sec", gets_per_sec);
         println!("{} SETs/sec", sets_per_sec);
+        println!("{} UPDATEs/sec", updates_per_sec);
         println!("===========================");
     }
 }
