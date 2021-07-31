@@ -100,6 +100,9 @@ All changes in this project will be noted in this file.
     - `LSKEYS <entity>` will return keys from the given table
     - `LSKEYS <entity> <count>` will return _count_ keys from the given table
 
+- **Snapshot isolation for strong actions**: This makes strong actions
+  extremely reliable when compared to the earlier releases
+
 - TLS port can now be set to a custom port via CLI arguments
 
 ### Fixes

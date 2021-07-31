@@ -85,6 +85,7 @@ pub mod prelude {
     pub use crate::kve;
     pub use crate::not_enc_err;
     pub use crate::protocol::responses;
+    pub use crate::protocol::responses::groups;
     pub use crate::queryengine::ActionIter;
     pub use crate::registry;
     pub use crate::util::Unwrappable;

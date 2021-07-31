@@ -30,6 +30,7 @@ use crate::util::calc;
 use crate::util::JSONReportBlock;
 use devtimer::DevTime;
 use libstress::utils::generate_random_string_vector;
+use libstress::PoolConfig;
 use libstress::Workpool;
 use rand::thread_rng;
 use std::io::{Read, Write};
@@ -87,7 +88,7 @@ pub fn runner(
     let drop_pool = util_pool.clone();
     drop(util_pool);
     // Create separate connection pools for get and set operations
-    let setpool = Workpool::new(
+    let pool_config = PoolConfig::new(
         max_connections,
         move || {
             let mut stream = TcpStream::connect(&host).unwrap();
@@ -105,7 +106,6 @@ pub fn runner(
         },
         true,
     );
-    let getpool = setpool.clone();
     let keys: Vec<String> =
         generate_random_string_vector(max_queries, packet_size, &mut rand, true);
     let values = generate_random_string_vector(max_queries, packet_size, &mut rand, false);
@@ -123,30 +123,53 @@ pub fn runner(
     let get_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
         .collect();
+    // just update key -> value to key -> key to avoid unnecessary memory usage
+    let update_packs: Vec<Vec<u8>> = (0..max_queries)
+        .map(|idx| libsky::into_raw_query(&format!("UPDATE {} {}", keys[idx], keys[idx])))
+        .collect();
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
         println!("Initialization complete! Benchmark started");
     }
+
+    // bench SET
+    let setpool = pool_config.get_pool();
     dt.create_timer("SET").unwrap();
     dt.start_timer("SET").unwrap();
     setpool.execute_and_finish_iter(set_packs);
     dt.stop_timer("SET").unwrap();
+
+    // bench GET
+    let getpool = pool_config.get_pool();
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
     getpool.execute_and_finish_iter(get_packs);
     dt.stop_timer("GET").unwrap();
+
+    // bench UPDATE
+    let update_pool = pool_config.get_pool();
+    dt.create_timer("UPDATE").unwrap();
+    dt.start_timer("UPDATE").unwrap();
+    update_pool.execute_and_finish_iter(update_packs);
+    dt.stop_timer("UPDATE").unwrap();
+
     if !json_out {
         println!("Benchmark completed! Removing created keys...");
     }
+
+    // drop table
     drop_pool.execute(drop_table);
     drop(drop_pool);
+
     let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
     let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
+    let updates_per_sec = calc(max_queries, dt.time_in_nanos("UPDATE").unwrap());
     if json_out {
         let dat = vec![
             JSONReportBlock::new("GET", gets_per_sec),
             JSONReportBlock::new("SET", sets_per_sec),
+            JSONReportBlock::new("UPDATE", updates_per_sec),
         ];
         let serialized = serde_json::to_string(&dat).unwrap();
         println!("{}", serialized);
@@ -154,6 +177,7 @@ pub fn runner(
         println!("==========RESULTS==========");
         println!("{} GETs/sec", gets_per_sec);
         println!("{} SETs/sec", sets_per_sec);
+        println!("{} UPDATEs/sec", updates_per_sec);
         println!("===========================");
     }
 }

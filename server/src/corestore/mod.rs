@@ -283,7 +283,7 @@ impl Corestore {
                     Some(ks) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
-                            if ks.create_table(tblid.clone(), tbl) {
+                            if ks.create_table(tblid, tbl) {
                                 Ok(())
                             } else {
                                 Err(DdlError::AlreadyExists)
@@ -300,7 +300,7 @@ impl Corestore {
                     Some(kspace) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
-                            if kspace.create_table(tblid.clone(), tbl) {
+                            if kspace.create_table(tblid, tbl) {
                                 Ok(())
                             } else {
                                 Err(DdlError::AlreadyExists)
