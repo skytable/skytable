@@ -24,6 +24,7 @@
  *
 */
 
+use crate::actions::strong::StrongActionResult;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
@@ -41,16 +42,26 @@ action! {
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
         let kve = kve!(con, handle);
-        let encoder = kve.get_encoder();
-        let (all_okay, enc_err) = {
-            self::snapshot_and_insert(kve, encoder, act)
-        };
-        if all_okay {
-            conwrite!(con, groups::OKAY)?;
-        } else if compiler::unlikely(enc_err) {
-            conwrite!(con, groups::ENCODING_ERROR)?;
+        if registry::state_okay() {
+            let encoder = kve.get_encoder();
+            let outcome = {
+                self::snapshot_and_insert(kve, encoder, act)
+            };
+            match outcome {
+                StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
+                StrongActionResult::OverwriteError => conwrite!(con, groups::OVERWRITE_ERR)?,
+                StrongActionResult::ServerError => conwrite!(con, groups::SERVER_ERR)?,
+                StrongActionResult::EncodingError => {
+                    // error we love to hate: encoding error, ugh
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?
+                },
+                StrongActionResult::Nil => unsafe {
+                    // SAFETY check: never the case
+                    impossible!()
+                }
+            }
         } else {
-            conwrite!(con, groups::OVERWRITE_ERR)?;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }
@@ -58,12 +69,11 @@ action! {
 
 /// Take a consistent snapshot of the database at this current point in time
 /// and then mutate the entries, respecting concurrency guarantees
-/// `(all_okay, enc_err)`
 pub(super) fn snapshot_and_insert(
     kve: &KVEngine,
     encoder: DoubleEncoder,
     mut act: ActionIter,
-) -> (bool, bool) {
+) -> StrongActionResult {
     let mut enc_err = false;
     let lowtable = kve.__get_inner_ref();
     let key_iter_stat_ok;
@@ -83,19 +93,26 @@ pub(super) fn snapshot_and_insert(
         // give the caller 10 seconds to do some crap
         do_sleep!(10 s);
     });
-    if key_iter_stat_ok {
-        let _kve = kve;
-        let lowtable = lowtable;
-        // fine, the keys were non-existent when we looked at them
-        while let (Some(key), Some(value)) = (act.next(), act.next()) {
-            if let Some(fresh) = lowtable.fresh_entry(Data::from(key)) {
-                fresh.insert(Data::from(value));
+    if compiler::unlikely(enc_err) {
+        return compiler::cold_err(StrongActionResult::EncodingError);
+    }
+    if registry::state_okay() {
+        if key_iter_stat_ok {
+            let _kve = kve;
+            let lowtable = lowtable;
+            // fine, the keys were non-existent when we looked at them
+            while let (Some(key), Some(value)) = (act.next(), act.next()) {
+                if let Some(fresh) = lowtable.fresh_entry(Data::from(key)) {
+                    fresh.insert(Data::from(value));
+                }
+                // we don't care if some other thread initialized the value we checked
+                // it. We expected a fresh entry, so that's what we'll check and use
             }
-            // we don't care if some other thread initialized the value we checked
-            // it. We expected a fresh entry, so that's what we'll check and use
+            StrongActionResult::Okay
+        } else {
+            StrongActionResult::OverwriteError
         }
-        (true, false)
     } else {
-        (key_iter_stat_ok, enc_err)
+        StrongActionResult::ServerError
     }
 }

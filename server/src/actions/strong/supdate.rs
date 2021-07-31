@@ -24,6 +24,7 @@
  *
 */
 
+use crate::actions::strong::StrongActionResult;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
@@ -41,16 +42,29 @@ action! {
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
         let kve = kve!(con, handle);
-        let encoder = kve.get_encoder();
-        let (all_okay, enc_err) = {
-            self::snapshot_and_update(kve, encoder, act)
-        };
-        if all_okay {
-            conwrite!(con, groups::OKAY)?;
-        } else if compiler::unlikely(enc_err) {
-            conwrite!(con, groups::ENCODING_ERROR)?;
+        if registry::state_okay() {
+            let encoder = kve.get_encoder();
+            let outcome = {
+                self::snapshot_and_update(kve, encoder, act)
+            };
+            match outcome {
+                StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
+                StrongActionResult::Nil => {
+                    // good, it failed because some key didn't exist
+                    conwrite!(con, groups::NIL)?;
+                },
+                StrongActionResult::ServerError => conwrite!(con, groups::SERVER_ERR)?,
+                StrongActionResult::EncodingError => {
+                    // error we love to hate: encoding error, ugh
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?
+                },
+                StrongActionResult::OverwriteError => unsafe {
+                    // SAFETY check: never the case
+                    impossible!()
+                }
+            }
         } else {
-            conwrite!(con, groups::NIL)?;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }
@@ -63,8 +77,8 @@ pub(super) fn snapshot_and_update(
     kve: &KVEngine,
     encoder: DoubleEncoder,
     mut act: ActionIter,
-) -> (bool, bool) {
-    let mut err_enc = false;
+) -> StrongActionResult {
+    let mut enc_err = false;
     let mut snapshots = Vec::with_capacity(act.len());
     let iter_stat_ok;
     {
@@ -80,7 +94,7 @@ pub(super) fn snapshot_and_update(
                     false
                 }
             } else {
-                err_enc = true;
+                enc_err = true;
                 false
             }
         });
@@ -89,26 +103,34 @@ pub(super) fn snapshot_and_update(
         // give the caller 10 seconds to do some crap
         do_sleep!(10 s);
     });
-    if iter_stat_ok {
-        let kve = kve;
-        // good, so all the values existed when we snapshotted them; let's update 'em
-        let mut snap_cc = snapshots.into_iter();
-        let lowtable = kve.__get_inner_ref();
-        while let (Some(key), Some(value), Some(snapshot)) =
-            (act.next(), act.next(), snap_cc.next())
-        {
-            // When we snapshotted, we looked at `snapshot`. If the value is still the
-            // same, then we'll update it. Otherwise, let it be
-            if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
-                if mutable.get().eq(&snapshot) {
-                    mutable.insert(Data::from(value));
-                } else {
-                    drop(mutable);
+    if compiler::unlikely(enc_err) {
+        return compiler::cold_err(StrongActionResult::EncodingError);
+    }
+    if registry::state_okay() {
+        // uphold consistency
+        if iter_stat_ok {
+            let kve = kve;
+            // good, so all the values existed when we snapshotted them; let's update 'em
+            let mut snap_cc = snapshots.into_iter();
+            let lowtable = kve.__get_inner_ref();
+            while let (Some(key), Some(value), Some(snapshot)) =
+                (act.next(), act.next(), snap_cc.next())
+            {
+                // When we snapshotted, we looked at `snapshot`. If the value is still the
+                // same, then we'll update it. Otherwise, let it be
+                if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
+                    if mutable.get().eq(&snapshot) {
+                        mutable.insert(Data::from(value));
+                    } else {
+                        drop(mutable);
+                    }
                 }
             }
+            StrongActionResult::Okay
+        } else {
+            StrongActionResult::Nil
         }
-        (true, false)
     } else {
-        (iter_stat_ok, err_enc)
+        StrongActionResult::ServerError
     }
 }

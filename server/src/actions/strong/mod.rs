@@ -42,3 +42,24 @@ mod supdate;
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug)]
+enum StrongActionResult {
+    /// Internal server error
+    ServerError,
+    /// A single value was not found
+    Nil,
+    /// An overwrite error for a single value
+    OverwriteError,
+    /// An encoding error occurred
+    EncodingError,
+    /// Everything worked as expected
+    Okay,
+}
+
+#[cfg(test)]
+impl StrongActionResult {
+    pub const fn is_ok(&self) -> bool {
+        matches!(self, StrongActionResult::Okay)
+    }
+}

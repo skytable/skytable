@@ -194,6 +194,12 @@ pub mod compiler {
         }
         b
     }
+
+    #[cold]
+    #[inline(never)]
+    pub fn cold_err<T>(v: T) -> T {
+        v
+    }
 }
 
 #[macro_export]

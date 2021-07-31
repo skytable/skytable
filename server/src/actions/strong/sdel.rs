@@ -24,6 +24,7 @@
  *
 */
 
+use crate::actions::strong::StrongActionResult;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::KVEngine;
 use crate::kvengine::SingleEncoder;
@@ -37,30 +38,42 @@ action! {
     fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
-        let key_encoder = kve.get_key_encoder();
-        let (all_okay, enc_err) = {
-            self::snapshot_and_del(kve, key_encoder, act)
-        };
-        if all_okay {
-            conwrite!(con, groups::OKAY)?;
-        } else if compiler::unlikely(enc_err) {
-            // the errors we love to hate: encoding error
-            conwrite!(con, groups::ENCODING_ERROR)?;
+        if registry::state_okay() {
+            // guarantee one check: consistency
+            let key_encoder = kve.get_key_encoder();
+            let outcome = {
+                self::snapshot_and_del(kve, key_encoder, act)
+            };
+            match outcome {
+                StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
+                StrongActionResult::Nil => {
+                    // good, it failed because some key didn't exist
+                    conwrite!(con, groups::NIL)?;
+                },
+                StrongActionResult::ServerError => conwrite!(con, groups::SERVER_ERR)?,
+                StrongActionResult::EncodingError => {
+                    // error we love to hate: encoding error, ugh
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?
+                },
+                StrongActionResult::OverwriteError => unsafe {
+                    // SAFETY check: never the case
+                    impossible!()
+                }
+            }
         } else {
-            // good, it failed because some key didn't exist
-            conwrite!(con, groups::NIL)?;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }
 }
 
 /// Snapshot the current status and then delete maintaining concurrency
-/// guarantees. `(all_okay, enc_err)`
+/// guarantees
 pub(super) fn snapshot_and_del(
     kve: &KVEngine,
     key_encoder: SingleEncoder,
     act: ActionIter,
-) -> (bool, bool) {
+) -> StrongActionResult {
     let mut snapshots = Vec::with_capacity(act.len());
     let mut err_enc = false;
     let iter_stat_ok;
@@ -83,19 +96,27 @@ pub(super) fn snapshot_and_del(
         // give the caller 10 seconds to do some crap
         do_sleep!(10 s);
     });
-    if iter_stat_ok {
-        // nice, all keys exist; let's plonk 'em
-        let kve = kve;
-        let lowtable = kve.__get_inner_ref();
-        act.zip(snapshots).for_each(|(key, snapshot)| {
-            // the check is very important: some thread may have updated the
-            // value after we snapshotted it. In that case, let this key
-            // be whatever the "newer" value is. Since our snapshot is a "happens-before"
-            // thing, this is absolutely fine
-            let _ = lowtable.remove_if(&key, |_, val| val.eq(&snapshot));
-        });
-        (true, false)
+    if compiler::unlikely(err_enc) {
+        return compiler::cold_err(StrongActionResult::EncodingError);
+    }
+    if registry::state_okay() {
+        // guarantee upholded: consistency
+        if iter_stat_ok {
+            // nice, all keys exist; let's plonk 'em
+            let kve = kve;
+            let lowtable = kve.__get_inner_ref();
+            act.zip(snapshots).for_each(|(key, snapshot)| {
+                // the check is very important: some thread may have updated the
+                // value after we snapshotted it. In that case, let this key
+                // be whatever the "newer" value is. Since our snapshot is a "happens-before"
+                // thing, this is absolutely fine
+                let _ = lowtable.remove_if(&key, |_, val| val.eq(&snapshot));
+            });
+            StrongActionResult::Okay
+        } else {
+            StrongActionResult::Nil
+        }
     } else {
-        (iter_stat_ok, err_enc)
+        StrongActionResult::ServerError
     }
 }

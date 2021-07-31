@@ -37,8 +37,8 @@ mod sdel_concurrency_tests {
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_key_encoder();
         let it = bi!("k1", "k2");
-        let (all_okay, _) = sdel::snapshot_and_del(&kve, encoder, it);
-        assert!(all_okay);
+        let ret = sdel::snapshot_and_del(&kve, encoder, it);
+        assert!(ret.is_ok());
     }
     #[test]
     fn test_sdel_snapshot_fail_with_t2() {
@@ -58,8 +58,8 @@ mod sdel_concurrency_tests {
             .update(Data::from("k1"), Data::from("updated-v1"))
             .unwrap());
         // let us join t1
-        let (all_okay, _) = t1handle.join().unwrap();
-        assert!(all_okay);
+        let ret = t1handle.join().unwrap();
+        assert!(ret.is_ok());
         // although we told sdel to delete it, it shouldn't because we externally
         // updated the value
         assert!(kve.exists(Data::from("k1")).unwrap());
@@ -77,8 +77,8 @@ mod sset_concurrency_tests {
         let kve = KVEngine::init(true, true);
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
-        let (all_okay, _) = sset::snapshot_and_insert(&kve, encoder, it);
-        assert!(all_okay);
+        let ret = sset::snapshot_and_insert(&kve, encoder, it);
+        assert!(ret.is_ok());
     }
     #[test]
     fn test_sset_snapshot_fail_with_t2() {
@@ -93,11 +93,11 @@ mod sset_concurrency_tests {
         // update the value externally
         assert!(kve.set(Data::from("k1"), Data::from("updated-v1")).unwrap());
         // let us join t1
-        let (all_okay, _) = t1handle.join().unwrap();
+        let ret = t1handle.join().unwrap();
         // but set won't fail because someone set it before it did; this is totally
         // acceptable because we only wanted to set it if it matches the status when
         // we created a snapshot
-        assert!(all_okay);
+        assert!(ret.is_ok());
         // although we told sset to set a key, but it shouldn't because we updated it
         assert_eq!(
             kve.get(Data::from("k1")).unwrap().unwrap().clone(),
@@ -119,8 +119,8 @@ mod supdate_concurrency_tests {
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
-        let (all_okay, _) = supdate::snapshot_and_update(&kve, encoder, it);
-        assert!(all_okay);
+        let ret = supdate::snapshot_and_update(&kve, encoder, it);
+        assert!(ret.is_ok());
     }
     #[test]
     fn test_supdate_snapshot_fail_with_t2() {
@@ -139,8 +139,8 @@ mod supdate_concurrency_tests {
             .update(Data::from("k1"), Data::from("updated-v1"))
             .unwrap());
         // let us join t1
-        let (all_okay, _) = t1handle.join().unwrap();
-        assert!(all_okay);
+        let ret = t1handle.join().unwrap();
+        assert!(ret.is_ok());
         // although we told supdate to update the key, it shouldn't because we updated it
         // externally; hence our `updated-v1` value should persist
         assert_eq!(

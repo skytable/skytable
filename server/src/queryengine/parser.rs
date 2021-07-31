@@ -30,6 +30,7 @@ use crate::kvengine::encoding;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
+use crate::util::compiler::cold_err;
 use crate::util::Unwrappable;
 use core::str;
 use regex::Regex;
@@ -40,12 +41,6 @@ const STR: &[u8] = "str".as_bytes();
 
 pub(super) static VALID_CONTAINER_NAME: Lazy<Regex, fn() -> Regex> =
     Lazy::new(|| Regex::new("^[a-zA-Z_$][a-zA-Z_$0-9]*$").unwrap());
-
-#[cold]
-#[inline(never)]
-fn cold_err<T>(v: T) -> T {
-    v
-}
 
 pub(super) fn parse_table_args(
     act: &mut ActionIter,
