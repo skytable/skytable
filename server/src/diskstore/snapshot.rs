@@ -174,15 +174,12 @@ impl<'a> SnapshotEngine<'a> {
         handle: Corestore,
         oldsnap: Option<String>,
     ) -> bool {
-        log::trace!("Snapshotting was initiated");
         // This is a potentially blocking section
         // So we acquired a lock
-        log::trace!("Acquired a lock on the snapshot service");
         let lck = handle.lock_snap(); // Lock the snapshot service
                                       // Another blocking section that does the actual I/O
         if let Err(e) = storage::flush::snap_flush_full(&snapname, handle.get_store()) {
             log::error!("Snapshotting failed with error: '{}'", e);
-            log::trace!("Released lock on the snapshot service");
             drop(lck);
             return false;
         } else {
@@ -196,7 +193,6 @@ impl<'a> SnapshotEngine<'a> {
                     old_snapshot,
                     e
                 );
-                log::trace!("Released lock on the snapshot service");
                 drop(lck);
                 return false;
             } else {
@@ -204,7 +200,6 @@ impl<'a> SnapshotEngine<'a> {
             }
         }
         drop(lck);
-        log::trace!("Released lock on snapshot service");
         true
     }
     /// Create a snapshot

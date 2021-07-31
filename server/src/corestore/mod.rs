@@ -267,6 +267,8 @@ impl Corestore {
     /// through a global flush lock and then allow it to resume once we're done adding the table.
     /// This enables the flush routine to permanently write the table to disk. But it's all about
     /// luck -- the next mutual access may be yielded to the next `create table` command
+    ///
+    /// **Trip switch handled:** Yes
     pub fn create_table(
         &self,
         entity: OwnedEntityGroup,
@@ -284,6 +286,8 @@ impl Corestore {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
                             if ks.create_table(tblid, tbl) {
+                                // we need to re-init tree; so trip
+                                registry::get_preload_tripswitch().trip();
                                 Ok(())
                             } else {
                                 Err(DdlError::AlreadyExists)
@@ -301,6 +305,8 @@ impl Corestore {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
                             if kspace.create_table(tblid, tbl) {
+                                // trip the preload switch
+                                registry::get_preload_tripswitch().trip();
                                 Ok(())
                             } else {
                                 Err(DdlError::AlreadyExists)
@@ -341,11 +347,15 @@ impl Corestore {
     }
 
     /// Create a keyspace **without any transactional guarantees**
+    ///
+    /// **Trip switch handled:** Yes
     pub fn create_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         // lock the global flush lock (see comment in create_table to know why)
         let flush_lock = registry::lock_flush_state();
         let ret = if self.store.create_keyspace(ksid) {
             // woo, created
+            // trip the preload switch
+            registry::get_preload_tripswitch().trip();
             Ok(())
         } else {
             // ugh, already exists
@@ -357,11 +367,13 @@ impl Corestore {
 
     /// Drop a keyspace
     pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        // trip switch is handled by memstore here
         self.store.drop_keyspace(ksid)
     }
 
     /// Force drop a keyspace
     pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
+        // trip switch is handled by memstore here
         self.store.force_drop_keyspace(ksid)
     }
 

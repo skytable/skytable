@@ -30,6 +30,7 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::htable::Data;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
+use crate::registry;
 use crate::IoResult;
 use std::collections::HashSet;
 use std::fs;
@@ -76,34 +77,37 @@ pub fn snap_create_tree(snapid: &str, memroot: &Memstore) -> IoResult<()> {
 /// **Warning**: Calling this is quite inefficient so consider calling it once or twice
 /// throughout the lifecycle of the server
 pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
-    // hashset because the fs itself will not allow duplicate entries
-    let dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
-    let our_keyspaces: HashSet<String> = memroot
-        .keyspaces
-        .iter()
-        .map(|kv| unsafe { kv.key().as_str() }.to_owned())
-        .collect();
-    // these are the folders that we need to remove; plonk the deleted keyspaces first
-    for folder in dir_keyspaces.difference(&our_keyspaces) {
-        if folder != "PRELOAD" {
-            let ks_path = concat_str!(DIR_KSROOT, "/", folder);
-            fs::remove_dir_all(ks_path)?;
-        }
-    }
-    // now plonk the data files
-    for keyspace in memroot.keyspaces.iter() {
-        let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
-        let dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
-        let our_tbls: HashSet<String> = keyspace
-            .value()
-            .tables
+    if registry::get_preload_tripswitch().is_tripped() {
+        // only run a cleanup if someone tripped the switch
+        // hashset because the fs itself will not allow duplicate entries
+        let dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
+        let our_keyspaces: HashSet<String> = memroot
+            .keyspaces
             .iter()
-            .map(|v| unsafe { v.key().as_str() }.to_owned())
+            .map(|kv| unsafe { kv.key().as_str() }.to_owned())
             .collect();
-        for old_file in dir_tbls.difference(&our_tbls) {
-            if old_file != "PARTMAP" {
-                // plonk this data file; we don't need it anymore
-                fs::remove_file(concat_path!(&ks_path, old_file))?;
+        // these are the folders that we need to remove; plonk the deleted keyspaces first
+        for folder in dir_keyspaces.difference(&our_keyspaces) {
+            if folder != "PRELOAD" {
+                let ks_path = concat_str!(DIR_KSROOT, "/", folder);
+                fs::remove_dir_all(ks_path)?;
+            }
+        }
+        // now plonk the data files
+        for keyspace in memroot.keyspaces.iter() {
+            let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
+            let dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
+            let our_tbls: HashSet<String> = keyspace
+                .value()
+                .tables
+                .iter()
+                .map(|v| unsafe { v.key().as_str() }.to_owned())
+                .collect();
+            for old_file in dir_tbls.difference(&our_tbls) {
+                if old_file != "PARTMAP" {
+                    // plonk this data file; we don't need it anymore
+                    fs::remove_file(concat_path!(&ks_path, old_file))?;
+                }
             }
         }
     }

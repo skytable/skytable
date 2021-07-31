@@ -35,11 +35,50 @@ use core::sync::atomic::Ordering;
 
 const ORD_ACQ: Ordering = Ordering::Acquire;
 const ORD_REL: Ordering = Ordering::Release;
+const ORD_SEQ: Ordering = Ordering::SeqCst;
+
+/// A digital _trip switch_ that can be tripped and untripped in a thread
+/// friendly, consistent manner. It is slightly expensive on processors
+/// with weaker memory ordering (like ARM) when compared to the native
+/// strong ordering provided by some platforms (like x86).
+pub struct Trip {
+    /// the switch
+    inner: AtomicBool,
+}
+
+impl Trip {
+    /// Get an untripped switch
+    pub const fn new_untripped() -> Self {
+        Self {
+            inner: AtomicBool::new(false),
+        }
+    }
+    /// trip the switch
+    pub fn trip(&self) {
+        // we need the strongest consistency here
+        self.inner.store(true, ORD_SEQ)
+    }
+    /// reset the switch
+    pub fn untrip(&self) {
+        // we need the strongest consistency here
+        self.inner.store(false, ORD_SEQ)
+    }
+    /// check if the switch has tripped
+    pub fn is_tripped(&self) -> bool {
+        self.inner.load(ORD_SEQ)
+    }
+    /// Returns the previous state and untrips the switch. **Single op**
+    pub fn check_and_untrip(&self) -> bool {
+        self.inner.swap(false, ORD_SEQ)
+    }
+}
 
 /// The global system health
 static GLOBAL_STATE: AtomicBool = AtomicBool::new(true);
 /// The global flush state
 static FLUSH_STATE: QuickLock<()> = QuickLock::new(());
+/// The preload trip switch
+static PRELOAD_TRIPSWITCH: Trip = Trip::new_untripped();
 
 /// Check the global system state
 pub fn state_okay() -> bool {
@@ -60,4 +99,9 @@ pub fn poison() {
 /// Unpoison the global system state
 pub fn unpoison() {
     GLOBAL_STATE.store(true, ORD_REL)
+}
+
+/// Get a static reference to the global preload trip switch
+pub fn get_preload_tripswitch() -> &'static Trip {
+    &PRELOAD_TRIPSWITCH
 }

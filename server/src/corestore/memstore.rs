@@ -60,6 +60,7 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::lock::{QLGuard, QuickLock};
 use crate::corestore::table::Table;
 use crate::corestore::SnapshotStatus;
+use crate::registry;
 use crate::SnapshotConfig;
 use core::borrow::Borrow;
 use core::hash::Hash;
@@ -77,8 +78,14 @@ const SYSTEM_ARRAY: [MaybeUninit<u8>; 64] = [b's', b'y', b's', b't', b'e', b'm']
 pub type ObjectID = Array<u8, 64>;
 
 /// The `DEFAULT` array (with the rest uninit)
-pub const DEFAULT: ObjectID = Array::from_const(DEFAULT_ARRAY, 7);
-pub const SYSTEM: ObjectID = Array::from_const(SYSTEM_ARRAY, 6);
+pub const DEFAULT: ObjectID = unsafe {
+    // SAFETY: known init len
+    Array::from_const(DEFAULT_ARRAY, 7)
+};
+pub const SYSTEM: ObjectID = unsafe {
+    // SAFETY: known init len
+    Array::from_const(SYSTEM_ARRAY, 6)
+};
 
 #[test]
 fn test_def_macro_sanity() {
@@ -217,9 +224,7 @@ impl Memstore {
         ObjectID: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.keyspaces
-            .get(keyspace_identifier)
-            .map(|ns| ns.clone())
+        self.keyspaces.get(keyspace_identifier).map(|ns| ns.clone())
     }
     /// Returns true if a new keyspace was created
     pub fn create_keyspace(&self, keyspace_identifier: ObjectID) -> bool {
@@ -231,6 +236,8 @@ impl Memstore {
     /// The invariants maintained here are:
     /// 1. The keyspace is not referenced to
     /// 2. There are no tables in the keyspace
+    ///
+    /// **Trip switch handled:** Yes
     pub fn drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
@@ -245,6 +252,8 @@ impl Memstore {
                     if no_one_is_using_keyspace && no_tables_are_in_keyspace {
                         // we are free to drop this
                         ks.remove_entry();
+                        // trip the preload switch
+                        registry::get_preload_tripswitch().trip();
                         Ok(())
                     } else if !no_tables_are_in_keyspace {
                         // not empty; may be referenced to or not referenced to
@@ -265,6 +274,8 @@ impl Memstore {
     /// The invariants maintained here are:
     /// 1. The keyspace is not referenced to
     /// 2. The tables in the keyspace are not referenced to
+    ///
+    /// **Trip switch handled:** Yes
     pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         if ksid.eq(&SYSTEM) || ksid.eq(&DEFAULT) {
             Err(DdlError::ProtectedObject)
@@ -291,6 +302,8 @@ impl Memstore {
                             .all(|table| Arc::strong_count(table.value()) == 1);
                     if no_tables_in_use {
                         keyspace.remove_entry();
+                        // trip the preload switch
+                        registry::get_preload_tripswitch().trip();
                         Ok(())
                     } else {
                         Err(DdlError::StillInUse)
@@ -369,6 +382,8 @@ impl Keyspace {
     /// for the current connection and newer connections, but older instances still
     /// refer to the table.
     // FIXME(@ohsayan): Should we actually care?
+    ///
+    /// **Trip switch handled:** Yes
     pub fn drop_table<Q>(&self, table_identifier: &Q) -> KeyspaceResult<()>
     where
         ObjectID: Borrow<Q>,
@@ -387,17 +402,21 @@ impl Keyspace {
                         Arc::strong_count(table_atomic_ref) == 1
                     });
             if did_remove {
+                // we need to re-init tree; so trip
+                registry::get_preload_tripswitch().trip();
                 Ok(())
             } else {
                 Err(DdlError::StillInUse)
             }
         }
     }
+
     /// Remove a table without doing any reference checks. This will just pull it off
     pub unsafe fn force_remove_table(&self, tblid: &ObjectID) {
         // atomic remember? nobody cares about the result
         self.tables.remove(tblid);
     }
+
     pub fn lock_partmap(&self) -> QLGuard<'_, ()> {
         self.partmap_lock.lock()
     }

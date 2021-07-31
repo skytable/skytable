@@ -33,6 +33,7 @@ use super::interface;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
+use crate::registry;
 use crate::IoResult;
 
 /// Flushes the entire **keyspace + partmap**
@@ -43,9 +44,15 @@ pub fn flush_keyspace_full(ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()>
 
 /// Flush the entire **preload + keyspaces + their partmaps**
 pub fn flush_full(store: &Memstore) -> IoResult<()> {
-    // re-init the tree as new tables/keyspaces may have been added
-    super::interface::create_tree(store)?;
-    self::oneshot::flush_preload(store)?;
+    // IMPORTANT: Just untrip and get the status at this exact point in time
+    // don't spread it over two atomic accesses because another thread may have updated
+    // it in-between. Even if it was untripped, we'll get the expected outcome here: false
+    let has_tripped = registry::get_preload_tripswitch().check_and_untrip();
+    if has_tripped {
+        // re-init the tree as new tables/keyspaces may have been added
+        super::interface::create_tree(store)?;
+        self::oneshot::flush_preload(store)?;
+    }
     for keyspace in store.keyspaces.iter() {
         self::flush_keyspace_full(keyspace.key(), keyspace.value())?;
     }

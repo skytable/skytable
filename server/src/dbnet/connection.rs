@@ -480,7 +480,6 @@ where
         }
     }
     pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("ConnectionHandler initialized to handle a remote client");
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,

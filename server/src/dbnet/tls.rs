@@ -49,7 +49,6 @@ impl SslListener {
         chain_file: String,
         base: BaseListener,
     ) -> TResult<Self> {
-        log::debug!("New SSL/TLS connection registered");
         let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
         acceptor.set_private_key_file(key_file, SslFiletype::PEM)?;
         acceptor.set_certificate_chain_file(chain_file)?;
@@ -57,7 +56,6 @@ impl SslListener {
         Ok(SslListener { base, acceptor })
     }
     async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
-        log::debug!("Trying to accept a SSL connection");
         let mut backoff = 1;
         loop {
             match self.base.listener.accept().await {
@@ -65,15 +63,12 @@ impl SslListener {
                 // We get the encrypted stream which we need to decrypt
                 // by using the acceptor
                 Ok((stream, _)) => {
-                    log::debug!("Accepted an SSL/TLS connection");
                     let ssl = Ssl::new(self.acceptor.context())?;
                     let mut stream = SslStream::new(ssl, stream)?;
                     Pin::new(&mut stream).accept().await?;
-                    log::debug!("Connected to secure socket over TCP");
                     return Ok(stream);
                 }
                 Err(e) => {
-                    log::debug!("Failed to establish a secure connection");
                     if backoff > 64 {
                         // Too many retries, goodbye user
                         return Err(e.into());
@@ -87,7 +82,6 @@ impl SslListener {
         }
     }
     pub async fn run(&mut self) -> TResult<()> {
-        log::debug!("Started secure server");
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
@@ -101,7 +95,6 @@ impl SslListener {
                 self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {
-                log::debug!("Spawned listener task");
                 if let Err(e) = sslhandle.run().await {
                     log::error!("Error: {}", e);
                 }

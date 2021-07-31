@@ -99,13 +99,23 @@ impl<T, const N: usize> UninitArray<T, N> {
     const ARRAY: [MaybeUninit<T>; N] = [Self::VALUE; N];
 }
 
-impl<T: Default + Copy, const N: usize> Array<T, N> {
-    pub fn new_zeroed() -> Self {
-        Self {
-            stack: [MaybeUninit::new(T::default()); N],
-            init_len: N as u16,
-        }
-    }
+macro_rules! impl_zeroed_nm {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl<const N: usize> Array<$ty, N> {
+                pub const fn new_zeroed() -> Self {
+                    Self {
+                        stack: [MaybeUninit::new(0); N],
+                        init_len: N as u16,
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_zeroed_nm! {
+    u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize
 }
 
 impl<T, const N: usize> Array<T, N> {
@@ -116,7 +126,9 @@ impl<T, const N: usize> Array<T, N> {
             init_len: 0,
         }
     }
-    pub const fn from_const(array: [MaybeUninit<T>; N], init_len: u16) -> Self {
+    /// This is very safe from the ctor point of view, but the correctness of `init_len`
+    /// may be a bad assumption and might make us read garbage
+    pub const unsafe fn from_const(array: [MaybeUninit<T>; N], init_len: u16) -> Self {
         Self {
             stack: array,
             init_len,
