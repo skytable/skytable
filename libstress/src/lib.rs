@@ -117,6 +117,67 @@ impl Worker {
     }
 }
 
+/// A pool configuration setting to easily generate [`Workpool`]s without
+/// having to clone an entire pool and its threads upfront
+pub struct PoolConfig<Inp, UIn, Lv, Lp, Ex>
+where
+    UIn: Send + Sync + 'static,
+    Inp: Sync,
+    Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
+    Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
+    Lp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
+{
+    /// the pool size
+    count: usize,
+    /// the function that sets the pre-loop variable
+    init_pre_loop_var: Lv,
+    /// the function to be executed on worker termination
+    on_exit: Ex,
+    /// the function to be executed on loop
+    on_loop: Lp,
+    /// a marker for `Inp` since no parameters use it directly
+    _marker: PhantomData<(Inp, UIn)>,
+    /// check if self needs a pool for parallel iterators
+    needs_iterator_pool: bool,
+}
+
+impl<Inp: 'static, UIn, Lv, Lp, Ex> PoolConfig<Inp, UIn, Lv, Lp, Ex>
+where
+    UIn: Send + Sync + 'static,
+    Inp: Sync,
+    Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
+    Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
+    Lp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
+{
+    /// Create a new pool config
+    pub fn new(
+        count: usize,
+        init_pre_loop_var: Lv,
+        on_loop: Lp,
+        on_exit: Ex,
+        needs_iterator_pool: bool,
+    ) -> Self {
+        Self {
+            count,
+            init_pre_loop_var,
+            on_loop,
+            on_exit,
+            needs_iterator_pool,
+            _marker: PhantomData,
+        }
+    }
+    /// Get a new [`Workpool`] from the current config
+    pub fn get_pool(&self) -> Workpool<Inp, UIn, Lv, Lp, Ex> {
+        Workpool::new(
+            self.count,
+            self.init_pre_loop_var.clone(),
+            self.on_loop.clone(),
+            self.on_exit.clone(),
+            self.needs_iterator_pool,
+        )
+    }
+}
+
 impl<Inp: 'static, UIn, Lp, Lv, Ex> Clone for Workpool<Inp, UIn, Lv, Lp, Ex>
 where
     UIn: Send + Sync + 'static,
