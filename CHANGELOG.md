@@ -111,6 +111,7 @@ All changes in this project will be noted in this file.
 - Panic on incorrect data type in `skyd`
 - `sky-bench` no longer affects your personal data because it creates a random temporary table
   under the `default` keyspace
+- Fix log output in `sky-bench` even if the `--json` flag was passed
 
 ## Version 0.6.3 [2021-06-27]
 

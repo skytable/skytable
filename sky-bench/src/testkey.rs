@@ -33,7 +33,10 @@ use std::io::{Read, Write};
 use std::net::{self, TcpStream};
 
 pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, size: usize) {
-    sanity_test!(host, port);
+    if let Err(e) = sanity_test!(host, port) {
+        err!(format!("Sanity test failed with error: {}", e));
+    }
+
     let host = hoststr!(host, port);
     let mut rand = thread_rng();
     let np = Workpool::new(

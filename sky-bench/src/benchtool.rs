@@ -31,7 +31,6 @@ use crate::util::JSONReportBlock;
 use devtimer::DevTime;
 use libstress::utils::generate_random_string_vector;
 use libstress::PoolConfig;
-use libstress::Workpool;
 use rand::thread_rng;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -42,37 +41,24 @@ pub fn runner(
     port: u16,
     max_connections: usize,
     max_queries: usize,
-    packet_size: usize,
+    per_kv_size: usize,
     json_out: bool,
 ) {
-    sanity_test!(host, port);
+    if let Err(e) = sanity_test!(host, port) {
+        err!(format!("Sanity test failed with error: {}", e));
+    }
     if !json_out {
         println!(
             "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
             max_connections,
             max_queries,
-            (packet_size * 2), // key size + value size
+            (per_kv_size * 2), // key size + value size
         );
     }
     let host = hoststr!(host, port);
-    let host_clone = host.clone();
     let mut rand = thread_rng();
     let mut dt = DevTime::new_complex();
 
-    // create the temporary table to work on
-    let util_pool = Workpool::new(
-        1,
-        move || TcpStream::connect(&host_clone).unwrap(),
-        |sock, packet: Vec<u8>| {
-            sock.write_all(&packet).unwrap();
-            // we don't care much about what's returned
-            let _ = sock.read(&mut [0; 1024]).unwrap();
-        },
-        |socket| {
-            socket.shutdown(std::net::Shutdown::Both).unwrap();
-        },
-        true,
-    );
     let temp_table = libstress::utils::rand_alphastring(10, &mut rand);
     let create_table = libsky::into_raw_query(&format!(
         "create table {} keymap(binstr,binstr)",
@@ -82,17 +68,12 @@ pub fn runner(
         "use default:{} keymap(binstr,binstr)",
         &temp_table
     ));
-    let drop_table = libsky::into_raw_query(&format!("drop table {}", &temp_table));
-    util_pool.execute(create_table);
-    util_pool.execute(switch_table.clone());
-    let drop_pool = util_pool.clone();
-    drop(util_pool);
-    // Create separate connection pools for get and set operations
+
     let pool_config = PoolConfig::new(
         max_connections,
         move || {
             let mut stream = TcpStream::connect(&host).unwrap();
-            stream.write_all(&switch_table).unwrap();
+            stream.write_all(&switch_table.clone()).unwrap();
             let _ = stream.read(&mut [0; 1024]).unwrap();
             stream
         },
@@ -106,9 +87,16 @@ pub fn runner(
         },
         true,
     );
+
+    let drop_table = libsky::into_raw_query(&format!("drop table {}", &temp_table));
+    let util_pool = pool_config.get_pool_with_workers(1);
+    util_pool.execute(create_table);
+    drop(util_pool);
+    // Create separate connection pools for get and set operations
+
     let keys: Vec<String> =
-        generate_random_string_vector(max_queries, packet_size, &mut rand, true);
-    let values = generate_random_string_vector(max_queries, packet_size, &mut rand, false);
+        generate_random_string_vector(max_queries, per_kv_size, &mut rand, true);
+    let values = generate_random_string_vector(max_queries, per_kv_size, &mut rand, false);
     /*
     We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`
     The bytes in each of `set_packs` has a query packet for setting data;
@@ -130,6 +118,7 @@ pub fn runner(
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
+        println!("Per-packet size (UPDATE): {} bytes", update_packs[0].len());
         println!("Initialization complete! Benchmark started");
     }
 
@@ -159,6 +148,7 @@ pub fn runner(
     }
 
     // drop table
+    let drop_pool = pool_config.get_pool_with_workers(1);
     drop_pool.execute(drop_table);
     drop(drop_pool);
 

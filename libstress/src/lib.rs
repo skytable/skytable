@@ -168,8 +168,12 @@ where
     }
     /// Get a new [`Workpool`] from the current config
     pub fn get_pool(&self) -> Workpool<Inp, UIn, Lv, Lp, Ex> {
+        self.get_pool_with_workers(self.count)
+    }
+    /// Get a [`Workpool`] with the base config but with a different number of workers
+    pub fn get_pool_with_workers(&self, count: usize) -> Workpool<Inp, UIn, Lv, Lp, Ex> {
         Workpool::new(
-            self.count,
+            count,
             self.init_pre_loop_var.clone(),
             self.on_loop.clone(),
             self.on_exit.clone(),

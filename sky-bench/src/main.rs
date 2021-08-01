@@ -31,9 +31,10 @@
 //! **NOTE:** This is experimental and may show incorrect results - that is,
 //! the response times may be shown to be slower than they actually are
 
+#[macro_use]
+mod util;
 mod benchtool;
 mod testkey;
-mod util;
 use crate::util::DEFAULT_PACKET_SIZE;
 use crate::util::DEFAULT_QUERY_COUNT;
 use crate::util::DEFAULT_WORKER_COUNT;

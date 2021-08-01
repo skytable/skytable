@@ -45,15 +45,14 @@ macro_rules! hoststr {
 
 #[macro_export]
 macro_rules! sanity_test {
-    ($host:expr, $port:expr) => {
-        println!("Running a sanity test...");
+    ($host:expr, $port:expr) => {{
         // Run a sanity test
         if let Err(e) = crate::util::run_sanity_test(&$host, $port) {
-            eprintln!("ERROR: Sanity test failed: {}", e);
-            return;
+            Err(e)
+        } else {
+            Ok(())
         }
-        println!("Sanity test succeeded");
-    };
+    }};
 }
 
 #[macro_export]
