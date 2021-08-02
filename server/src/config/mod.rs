@@ -302,7 +302,7 @@ impl ParsedConfig {
                 })
                 .unwrap_or_else(SnapshotConfig::default),
             ports: if let Some(sslopts) = cfg_info.ssl {
-                if sslopts.only.is_some() {
+                if option_unwrap_or!(sslopts.only, false) {
                     PortConfig::SecureOnly {
                         ssl: SslOpts {
                             key: sslopts.key,
