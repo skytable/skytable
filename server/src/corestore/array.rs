@@ -652,29 +652,6 @@ fn test_uninitialized() {
     assert_eq!(b.iter().count(), 1);
 }
 
-#[cfg(test)]
-macro_rules! array_from_string {
-    ($st:expr, $len:expr) => {{
-        let mut array: Array<u8, $len> = Array::new();
-        $st.chars().into_iter().for_each(|ch| array.push(ch as u8));
-        array
-    }};
-}
-
-#[test]
-fn test_map_serialize_deserialize() {
-    use crate::corestore::htable::Coremap;
-    let map = Coremap::new();
-    map.true_if_insert(
-        array_from_string!("hello", 5),
-        array_from_string!("sayan", 5),
-    );
-    let ret = map.serialize().unwrap();
-    let bc: Coremap<Array<u8, 5>, Array<u8, 5>> = Coremap::deserialize_array(ret).unwrap();
-    assert!(bc.len() == map.len());
-    assert!(bc.into_iter().all(|(k, _v)| { map.contains_key(&k) }));
-}
-
 #[test]
 #[should_panic]
 fn test_array_overflow() {

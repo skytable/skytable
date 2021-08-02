@@ -41,6 +41,7 @@ use crate::SnapshotConfig;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
+use std::path::Path;
 use std::sync::Arc;
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
@@ -116,7 +117,7 @@ pub fn read_preload() -> IoResult<PreloadSet> {
 /// is also created. If this is an already initialized instance then the store
 /// is read and returned (and any possible errors that are encountered are returned)
 pub fn read_full(snapshot_config: &SnapshotConfig) -> IoResult<Memstore> {
-    if is_new_instance()? {
+    if is_new_instance() {
         // init an empty store
         let store = Memstore::new_default();
         // fine, so we need to create the tree
@@ -132,13 +133,8 @@ pub fn read_full(snapshot_config: &SnapshotConfig) -> IoResult<Memstore> {
     Ok(Memstore::init_with_all(ksmap, snapshot_config))
 }
 
-/// Check if the data directory exists (if not: we're on a new instance)
-pub fn is_new_instance() -> IoResult<bool> {
-    match fs::read_dir("data") {
-        Ok(_) => Ok(false),
-        Err(e) => match e.kind() {
-            ErrorKind::NotFound => Ok(true),
-            _ => Err(e),
-        },
-    }
+/// Check if the data/PRELOAD file exists (if not: we're on a new instance)
+pub fn is_new_instance() -> bool {
+    let path = Path::new("data/PRELOAD");
+    !(path.exists() && path.is_file())
 }

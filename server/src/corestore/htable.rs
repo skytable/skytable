@@ -24,9 +24,7 @@
  *
 */
 
-use crate::corestore::array::Array;
 use bytes::Bytes;
-use libsky::TResult;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::hash_map::RandomState;
@@ -177,17 +175,6 @@ where
     }
 }
 
-impl<K, V> Coremap<K, V>
-where
-    K: Eq + Hash + Serialize,
-    V: Serialize,
-{
-    /// Serialize the hashtable into a `Vec<u8>` that can be saved to a file
-    pub fn serialize(&self) -> TResult<Vec<u8>> {
-        bincode::serialize(&self.inner).map_err(|e| e.into())
-    }
-}
-
 impl Coremap<Data, Data> {
     /// Returns atleast `count` number of keys from the hashtable
     pub fn get_keys(&self, count: usize) -> Vec<Bytes> {
@@ -198,19 +185,8 @@ impl Coremap<Data, Data> {
             .for_each(|key| v.push(key));
         v
     }
-    /// Returns a `Coremap<Data, Data>` from the provided file (as a `Vec<u8>`)
-    pub fn deserialize(src: Vec<u8>) -> TResult<Self> {
-        let h: HashTable<Data, Data> = bincode::deserialize(&src)?;
-        Ok(Self { inner: h })
-    }
 }
-impl<const M: usize, const N: usize> Coremap<Array<u8, M>, Array<u8, N>> {
-    #[cfg(test)]
-    pub fn deserialize_array(bytes: Vec<u8>) -> TResult<Self> {
-        let h: HashTable<Array<u8, M>, Array<u8, N>> = bincode::deserialize(&bytes)?;
-        Ok(Self { inner: h })
-    }
-}
+
 impl<K: Eq + Hash, V> IntoIterator for Coremap<K, V> {
     type Item = (K, V);
     type IntoIter = dashmap::iter::OwningIter<K, V>;
