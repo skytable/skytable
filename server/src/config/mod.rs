@@ -182,6 +182,7 @@ pub struct KeySslOpts {
     chain: String,
     port: u16,
     only: Option<bool>,
+    passin: Option<String>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -189,11 +190,17 @@ pub struct SslOpts {
     pub key: String,
     pub chain: String,
     pub port: u16,
+    pub passfile: Option<String>,
 }
 
 impl SslOpts {
-    pub const fn new(key: String, chain: String, port: u16) -> Self {
-        SslOpts { key, chain, port }
+    pub const fn new(key: String, chain: String, port: u16, passfile: Option<String>) -> Self {
+        SslOpts {
+            key,
+            chain,
+            port,
+            passfile,
+        }
     }
 }
 
@@ -308,6 +315,7 @@ impl ParsedConfig {
                             key: sslopts.key,
                             chain: sslopts.chain,
                             port: sslopts.port,
+                            passfile: sslopts.passin,
                         },
                         host: cfg_info.server.host,
                     }
@@ -317,6 +325,7 @@ impl ParsedConfig {
                             key: sslopts.key,
                             chain: sslopts.chain,
                             port: sslopts.port,
+                            passfile: sslopts.passin,
                         },
                         host: cfg_info.server.host,
                         port: cfg_info.server.port,
@@ -434,6 +443,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     let sslkey = matches.value_of("sslkey");
     let sslchain = matches.value_of("sslchain");
     let maxcon = matches.value_of("maxcon");
+    let passfile = matches.value_of("tlspassin");
     let cli_has_overrideable_args = host.is_some()
         || port.is_some()
         || noart
@@ -445,6 +455,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         || sslkey.is_some()
         || maxcon.is_some()
         || custom_ssl_port
+        || passfile.is_some()
         || sslonly;
     if filename.is_some() && cli_has_overrideable_args {
         return Err(ConfigError::CfgError(
@@ -588,9 +599,16 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
             }
             (Some(key), Some(chain)) => {
                 if sslonly {
-                    PortConfig::new_secure_only(host, SslOpts::new(key, chain, sslport))
+                    PortConfig::new_secure_only(
+                        host,
+                        SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
+                    )
                 } else {
-                    PortConfig::new_multi(host, port, SslOpts::new(key, chain, sslport))
+                    PortConfig::new_multi(
+                        host,
+                        port,
+                        SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
+                    )
                 }
             }
             _ => {
@@ -743,7 +761,8 @@ mod tests {
                     SslOpts::new(
                         "/path/to/keyfile.pem".into(),
                         "/path/to/chain.pem".into(),
-                        2004
+                        2004,
+                        Some("/path/to/cert/passphrase.txt".to_owned())
                     )
                 ),
                 MAXIMUM_CONNECTION_LIMIT

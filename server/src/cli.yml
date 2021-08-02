@@ -85,6 +85,12 @@ args:
       takes_value: true
       value_name: sslport
       help: Set a custom SSL port to bind to
+  - tlspassin:
+      required: false
+      long: tlspassin
+      takes_value: true
+      value_name: tlspassin
+      help: Path to the file containing the passphrase for the TLS certificate
   - stopwriteonfail:
       required: false
       long: stop-write-on-fail

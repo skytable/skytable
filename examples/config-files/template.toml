@@ -8,10 +8,9 @@
 # This is a *REQUIRED* key
 [server]
 host = "127.0.0.1" # The IP address to which you want sdb to bind to
-port = 2003 # The port to which you want sdb to bind to
-# Set `noart` to true if you want to disable terminal artwork
-noart = false
-maxcon = 50000 # set the maximum number of clients that the server can accept
+port = 2003        # The port to which you want sdb to bind to
+noart = false      # Set `noart` to true if you want to disable terminal artwork
+maxcon = 50000     # set the maximum number of clients that the server can accept
 
 # This key is *OPTIONAL*
 [bgsave]
@@ -22,8 +21,8 @@ every = 120
 
 # This key is *OPTIONAL*
 [snapshot]
-every = 3600 # Make a snapshot after every 1 hour (60min * 60sec= 3600secs)
-atmost = 4 # Keep the 4 most recent snapshots
+every = 3600    # Make a snapshot after every 1 hour (60min * 60sec= 3600secs)
+atmost = 4      # Keep the 4 most recent snapshots
 failsafe = true # stops accepting writes if snapshotting fails
 
 # This key is *OPTIONAL*, used for TLS/SSL config
@@ -31,4 +30,5 @@ failsafe = true # stops accepting writes if snapshotting fails
 key = "/path/to/keyfile.pem"
 chain = "/path/to/chain.pem"
 port = 2004
-only = true # optional to enable SSL-only requests
+only = true                             # optional to enable SSL-only requests
+passin = "/path/to/cert/passphrase.txt" # optional to programmatically verify the TLS cert

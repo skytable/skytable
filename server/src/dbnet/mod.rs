@@ -174,7 +174,7 @@ impl MultiListener {
     pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> Result<Self, String> {
         let bindaddr = bindaddr!(base);
         let slf = MultiListener::SecureOnly(
-            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base)
+            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base, ssl.passfile)
                 .map_err(|e| format!("Couldn't bind to secure port: {}", e))?,
         );
         log::info!("Server started on: skyhash-secure://{}", bindaddr);
@@ -188,9 +188,13 @@ impl MultiListener {
     ) -> Result<Self, String> {
         let sec_bindaddr = bindaddr!(ssl_base_listener);
         let insec_binaddr = bindaddr!(tcp_base_listener);
-        let secure_listener =
-            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, ssl_base_listener)
-                .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
+        let secure_listener = SslListener::new_pem_based_ssl_connection(
+            ssl.key,
+            ssl.chain,
+            ssl_base_listener,
+            ssl.passfile,
+        )
+        .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
         let insecure_listener = Listener {
             base: tcp_base_listener,
         };

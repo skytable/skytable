@@ -102,6 +102,9 @@ All changes in this project will be noted in this file.
 
 - **Snapshot isolation for strong actions**: This makes strong actions
   extremely reliable when compared to the earlier releases
+- Non-interactive TLS private key passphrase input: Just save your password in some
+  file and then pass `--tlspassin /path/to/passfile.txt`. You can do the same by using the
+  `tlspassin` key under SSL in the configuration file
 
 - TLS port can now be set to a custom port via CLI arguments
 
