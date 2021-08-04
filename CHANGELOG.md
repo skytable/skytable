@@ -115,6 +115,7 @@ All changes in this project will be noted in this file.
 - `sky-bench` no longer affects your personal data because it creates a random temporary table
   under the `default` keyspace
 - Fix log output in `sky-bench` even if the `--json` flag was passed
+- Use flocks to enable auto release of pid file, even if process is forcefully terminated
 
 ## Version 0.6.3 [2021-06-27]
 
@@ -218,7 +219,7 @@ Fix persistence (see [#150](https://github.com/skytable/skytable/issues/150))
 - Built-in TLS/SSL support
 - Custom host/port settings in `sky-bench`
 - Mock keys can be created with `sky-bench`
-- Security patch for VE/S/00001
+- Security patch for VE/S/00001 [(CVE-2021-32814)](https://nvd.nist.gov/vuln/detail/CVE-2021-32814)
 - Escaping for spaces in `skysh`
 - `tdb` is now called `skyd` (short for 'Skytable Daemon')
 

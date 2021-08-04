@@ -34,14 +34,12 @@
 //! the modules for their respective documentation.
 
 use crate::corestore::memstore::Memstore;
+use crate::diskstore::flock::FileLock;
 use env_logger::Builder;
 use libsky::util::terminal;
 use libsky::URL;
 use libsky::VERSION;
 use std::env;
-use std::fs;
-use std::io::Write;
-use std::path;
 use std::process;
 use std::thread;
 use std::time;
@@ -151,10 +149,9 @@ fn main() {
     terminal::write_info("Goodbye :)\n").unwrap();
 }
 
-pub fn pre_shutdown_cleanup(pid_file: fs::File, mr: Option<&Memstore>) {
-    drop(pid_file);
-    if let Err(e) = fs::remove_file(PATH) {
-        log::error!("Shutdown failure: Failed to remove pid file: {}", e);
+pub fn pre_shutdown_cleanup(mut pid_file: FileLock, mr: Option<&Memstore>) {
+    if let Err(e) = pid_file.unlock() {
+        log::error!("Shutdown failure: Failed to unlock pid file: {}", e);
         process::exit(0x01);
     }
     if let Some(mr) = mr {
@@ -203,29 +200,15 @@ fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<Strin
 /// processes will detect this and this helps us prevent two processes from writing
 /// to the same directory which can cause potentially undefined behavior.
 ///
-fn run_pre_startup_tasks() -> fs::File {
-    let path = path::Path::new(PATH);
-    if path.exists() {
-        let pid = fs::read_to_string(path).unwrap_or_else(|_| "unknown".to_owned());
-        log::error!(
-            "Startup failure: Another process with parent PID {} is using the data directory",
-            pid
-        );
-        process::exit(0x01);
-    }
-    let mut file = match fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(PATH)
-    {
+fn run_pre_startup_tasks() -> FileLock {
+    let mut file = match FileLock::lock(PATH) {
         Ok(fle) => fle,
         Err(e) => {
-            log::error!("Startup failure: Failed to open pid file: {}", e);
+            log::error!("Startup failure: Failed to lock pid file: {}", e);
             process::exit(0x01);
         }
     };
-    if let Err(e) = file.write_all(process::id().to_string().as_bytes()) {
+    if let Err(e) = file.write(process::id().to_string().as_bytes()) {
         log::error!("Startup failure: Failed to write to pid file: {}", e);
         process::exit(0x01);
     }

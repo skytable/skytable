@@ -29,7 +29,7 @@
 //! This module provides the `FileLock` struct that can be used for locking and/or unlocking files on
 //! unix-based systems and Windows systems
 
-#![allow(dead_code)] // TODO: Enable this lint or remove the offending methods
+#![allow(dead_code)] // TODO(@ohsayan): Remove lint or remove offending methods
 
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -64,6 +64,7 @@ impl FileLock {
     ///
     /// This function will create and lock a file if it doesn't exist or it
     /// will create and lock a new file
+    /// **This will immediately fail if locking fails, i.e it is non-blocking**
     pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
