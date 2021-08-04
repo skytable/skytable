@@ -43,7 +43,7 @@ and will also be mentioned in the CVE report filed (if any).
 
 ## Conditions
 
-1. You may **not** disclose the vulnerability before the team releases a hotfix
+1. You may **not** disclose anything before the team publicly discloses the vulnerability
 2. You agree that this is voluntary work
 
 ## Supported versions
