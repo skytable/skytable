@@ -52,6 +52,8 @@ use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio::sync::{broadcast, mpsc};
 pub mod connection;
+#[macro_use]
+mod macros;
 mod tcp;
 mod tls;
 

@@ -116,6 +116,13 @@ All changes in this project will be noted in this file.
   under the `default` keyspace
 - Fix log output in `sky-bench` even if the `--json` flag was passed
 - Use flocks to enable auto release of pid file, even if process is forcefully terminated
+- Fixes [CVE-2021-37625](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-37625)
+
+## Version 0.6.4 [2021-08-05]
+
+### Fixes
+
+- Fixes [CVE-2021-37625](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-37625) (backport)
 
 ## Version 0.6.3 [2021-06-27]
 
