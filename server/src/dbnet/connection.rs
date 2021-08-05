@@ -122,7 +122,7 @@ where
         if self.get_buffer().is_empty() {
             return Err(ParseError::Empty);
         }
-        protocol::Parser::new(&self.get_buffer()).parse()
+        protocol::Parser::new(self.get_buffer()).parse()
     }
     /// Read a query from the remote end
     ///

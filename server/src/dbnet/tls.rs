@@ -92,7 +92,15 @@ impl SslListener {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
             self.base.climit.acquire().await.unwrap().forget();
-            let stream = self.accept().await?;
+            /*
+             SECURITY: Ignore any errors that may arise in the accept
+             loop. If we apply the try operator here, we will immediately
+             terminate the run loop causing the entire server to go down.
+             Also, do not log any errors because many connection errors
+             can arise and it will flood the log and might also result
+             in a crash
+            */
+            let stream = skip_loop_err!(self.accept().await);
             let mut sslhandle = ConnectionHandler::new(
                 self.base.db.clone(),
                 Connection::new(stream),

@@ -1,6 +1,6 @@
 [package]
 name = "skysh"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 
