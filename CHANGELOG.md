@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.6.4 [2021-08-05]
+
+### Fixes
+
+- Fixes [CVE-2021-37625](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-37625)
+
 ## Version 0.6.3 [2021-06-27]
 
 ### Additions
