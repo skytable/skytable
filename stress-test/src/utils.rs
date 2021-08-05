@@ -28,7 +28,7 @@ use skytable::Query;
 use sysinfo::{System, SystemExt};
 
 pub fn calculate_max_keylen(expected_queries: usize, sys: &mut System) -> usize {
-    let total_mem_in_bytes = (sys.get_total_memory() * 1024) as usize;
+    let total_mem_in_bytes = (sys.total_memory() * 1024) as usize;
     trace!(
         "This host has a total memory of: {} Bytes",
         total_mem_in_bytes

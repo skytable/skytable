@@ -8,7 +8,9 @@ edition = "2018"
 
 [dependencies]
 # internal deps
-skytable = { git="https://github.com/skytable/client-rust", branch="next", features=["dbg"], default-features=false }
+skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
+    "dbg",
+], default-features = false }
 # external deps
 lazy_static = "1.4.0"
 termcolor = "1.1.2"
