@@ -180,6 +180,19 @@ where
             self.needs_iterator_pool,
         )
     }
+    /// Get a [`Workpool`] with the base config but with a custom loop-stage closure
+    pub fn with_loop_closure<Dlp>(&self, lp: Dlp) -> Workpool<Inp, UIn, Lv, Dlp, Ex>
+    where
+        Dlp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
+    {
+        Workpool::new(
+            self.count,
+            self.init_pre_loop_var.clone(),
+            lp,
+            self.on_exit.clone(),
+            self.needs_iterator_pool,
+        )
+    }
 }
 
 impl<Inp: 'static, UIn, Lp, Lv, Ex> Clone for Workpool<Inp, UIn, Lv, Lp, Ex>

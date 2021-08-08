@@ -45,6 +45,7 @@ const SIMPLE_QUERY_SIZE: usize = 3;
 /// &<n>\n
 /// (<tsymbol><size>\n<element>)*
 /// ```
+#[allow(dead_code)] // TODO(@ohsayan): Remove this lint
 pub fn calculate_array_dataframe_size(element_count: usize, per_element_size: usize) -> usize {
     let mut s = 0;
     s += 1; // `&`
@@ -90,12 +91,18 @@ fn test_monoelement_calculation() {
 /// ```text
 /// *<n>\n
 /// ```
+#[allow(dead_code)] // TODO(@ohsayan): Remove this lint
 pub fn calculate_metaframe_size(queries: usize) -> usize {
     let mut s = 0;
     s += 1; // `*`
     s += queries.to_string().len(); // the bytes in size string
     s += 1; // `\n`
     s
+}
+
+#[test]
+fn test_simple_query_metaframe_size() {
+    assert_eq!(calculate_metaframe_size(1), SIMPLE_QUERY_SIZE);
 }
 
 /// Run the benchmark tool
@@ -144,10 +151,11 @@ pub fn runner(
             let _ = stream.read_exact(&mut v).unwrap();
             stream
         },
-        |sock, packet: Vec<u8>| {
+        move |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
-            // we don't care much about what's returned
-            let _ = sock.read(&mut [0; 1024]).unwrap();
+            // all `okay`s are returned (for both update and set)
+            let mut v = vec![0; response_okay_size];
+            let _ = sock.read_exact(&mut v).unwrap();
         },
         |socket| {
             socket.shutdown(std::net::Shutdown::Both).unwrap();
@@ -196,8 +204,16 @@ pub fn runner(
     setpool.execute_and_finish_iter(set_packs);
     dt.stop_timer("SET").unwrap();
 
+    // TODO: Update the getpool to use correct sizes
     // bench GET
-    let getpool = pool_config.get_pool();
+    let get_response_packet_size =
+        calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
+    let getpool = pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
+        sock.write_all(&packet).unwrap();
+        // all `okay`s are returned (for both update and set)
+        let mut v = vec![0; get_response_packet_size];
+        let _ = sock.read(&mut v).unwrap();
+    });
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
     getpool.execute_and_finish_iter(get_packs);
