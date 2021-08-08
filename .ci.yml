@@ -22,8 +22,6 @@ steps:
         from_secret: srcenv
       CARGO_HOME:
         from_secret: cargohome
-      CARGO_TARGET_DIR:
-        from_secret: cargotarget
     commands:
       - source $SRCENV/.cargo/env
       - export RUSTUP_HOME=$SRCENV/.rustup
@@ -38,8 +36,6 @@ steps:
         from_secret: srcenv
       CARGO_HOME:
         from_secret: cargohome
-      CARGO_TARGET_DIR:
-        from_secret: cargotarget
       TARGET: aarch64-apple-darwin
       VERSION: ${DRONE_TAG}
       ARTIFACT: aarch64-apple-darwin
