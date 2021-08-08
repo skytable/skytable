@@ -67,6 +67,15 @@ impl<'a, T> QLGuard<'a, T> {
  * things may look different.
 */
 
+impl QuickLock<()> {
+    pub const fn new_void() -> Self {
+        Self {
+            lock_state: AtomicBool::new(false),
+            rawdata: UnsafeCell::new(()),
+        }
+    }
+}
+
 impl<T> QuickLock<T> {
     pub const fn new(rawdata: T) -> Self {
         Self {
