@@ -35,6 +35,69 @@ use rand::thread_rng;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
+/// Just a sweet `*1\n`
+const SIMPLE_QUERY_SIZE: usize = 3;
+
+/// For a dataframe, this returns the dataframe size for array responses.
+///
+/// For example,
+/// ```text
+/// &<n>\n
+/// (<tsymbol><size>\n<element>)*
+/// ```
+pub fn calculate_array_dataframe_size(element_count: usize, per_element_size: usize) -> usize {
+    let mut s = 0;
+    s += 1; // `&`
+    s += element_count.to_string().len(); // `<n>`
+    s += 1; // `\n`
+    let mut subsize = 0;
+    subsize += 1; // `+`
+    subsize += per_element_size.to_string().len(); // `<n>`
+    subsize += 1; // `\n`
+    subsize += per_element_size; // the element size itself
+    subsize += 1; // `\n`
+    s += subsize * element_count;
+    s
+}
+
+/// For a monoelement dataframe, this returns the size:
+/// ```text
+/// <tsymbol><size>\n
+/// <element>\n
+/// ```
+///
+/// For an `okay` respcode, it will look like this:
+/// ```text
+/// !1\n
+/// 0\n
+/// ```
+pub fn calculate_monoelement_dataframe_size(per_element_size: usize) -> usize {
+    let mut s = 0;
+    s += 1; // the tsymbol (always one byte)
+    s += per_element_size.to_string().len(); // the bytes in size string
+    s += 1; // the LF
+    s += per_element_size; // the element itself
+    s += 1; // the final LF
+    s
+}
+
+#[test]
+fn test_monoelement_calculation() {
+    assert_eq!(calculate_monoelement_dataframe_size(1), 5);
+}
+
+/// Returns the metaframe size
+/// ```text
+/// *<n>\n
+/// ```
+pub fn calculate_metaframe_size(queries: usize) -> usize {
+    let mut s = 0;
+    s += 1; // `*`
+    s += queries.to_string().len(); // the bytes in size string
+    s += 1; // `\n`
+    s
+}
+
 /// Run the benchmark tool
 pub fn runner(
     host: String,
@@ -69,12 +132,16 @@ pub fn runner(
         &temp_table
     ));
 
+    // an okay response code size: `*1\n!1\n0\n`:
+    let response_okay_size = calculate_monoelement_dataframe_size(1) + SIMPLE_QUERY_SIZE;
+
     let pool_config = PoolConfig::new(
         max_connections,
         move || {
             let mut stream = TcpStream::connect(&host).unwrap();
             stream.write_all(&switch_table.clone()).unwrap();
-            let _ = stream.read(&mut [0; 1024]).unwrap();
+            let mut v = vec![0; response_okay_size];
+            let _ = stream.read_exact(&mut v).unwrap();
             stream
         },
         |sock, packet: Vec<u8>| {
