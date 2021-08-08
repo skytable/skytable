@@ -93,11 +93,15 @@ fn test_monoelement_calculation() {
 /// ```
 #[allow(dead_code)] // TODO(@ohsayan): Remove this lint
 pub fn calculate_metaframe_size(queries: usize) -> usize {
-    let mut s = 0;
-    s += 1; // `*`
-    s += queries.to_string().len(); // the bytes in size string
-    s += 1; // `\n`
-    s
+    if queries == 1 {
+        SIMPLE_QUERY_SIZE
+    } else {
+        let mut s = 0;
+        s += 1; // `*`
+        s += queries.to_string().len(); // the bytes in size string
+        s += 1; // `\n`
+        s
+    }
 }
 
 #[test]
@@ -210,9 +214,9 @@ pub fn runner(
         calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
     let getpool = pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
         sock.write_all(&packet).unwrap();
-        // all `okay`s are returned (for both update and set)
+        // read exact for the key size
         let mut v = vec![0; get_response_packet_size];
-        let _ = sock.read(&mut v).unwrap();
+        let _ = sock.read_exact(&mut v).unwrap();
     });
     dt.create_timer("GET").unwrap();
     dt.start_timer("GET").unwrap();
