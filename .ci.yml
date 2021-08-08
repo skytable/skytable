@@ -17,16 +17,7 @@ steps:
     commands:
       - /usr/local/bin/rustup-update
   - name: Run tests
-    environment:
-      SRCENV:
-        from_secret: srcenv
-      CARGO_HOME:
-        from_secret: cargohome
-      CARGO_TARGET_DIR:
-        from_secret: cargotarget
     commands:
-      - source $SRCENV/.cargo/env
-      - export RUSTUP_HOME=$SRCENV/.rustup
       - make test
     when:
       event:
@@ -34,12 +25,6 @@ steps:
           - tag
   - name: Build bundle
     environment:
-      SRCENV:
-        from_secret: srcenv
-      CARGO_HOME:
-        from_secret: cargohome
-      CARGO_TARGET_DIR:
-        from_secret: cargotarget
       TARGET: aarch64-apple-darwin
       VERSION: ${DRONE_TAG}
       ARTIFACT: aarch64-apple-darwin
@@ -48,8 +33,6 @@ steps:
       GITHUB_TOKEN:
         from_secret: github_token
     commands:
-      - source $SRCENV/.cargo/env
-      - export RUSTUP_HOME=$SRCENV/.rustup
       - make bundle
       - $TOOLDIR/hub release edit $($TOOLDIR/gfind . -type f -name "*.zip" -printf "-a %p ") -m "" "$VERSION"
     when:
