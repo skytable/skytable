@@ -238,23 +238,32 @@ pub fn runner(
     let drop_pool = pool_config.get_pool_with_workers(1);
     drop_pool.execute(drop_table);
     drop(drop_pool);
-
-    let gets_per_sec = calc(max_queries, dt.time_in_nanos("GET").unwrap());
-    let sets_per_sec = calc(max_queries, dt.time_in_nanos("SET").unwrap());
-    let updates_per_sec = calc(max_queries, dt.time_in_nanos("UPDATE").unwrap());
+    let mut maxpad = 0usize;
+    let mut data: Vec<JSONReportBlock> = dt
+        .iter()
+        .map(|(timer, time)| {
+            if timer.len() > maxpad {
+                maxpad = timer.len();
+            }
+            JSONReportBlock::new(timer, calc(max_queries, time.time_in_nanos().unwrap()))
+        })
+        .collect();
+    // sort alphabetically
+    data.sort();
     if json_out {
-        let dat = vec![
-            JSONReportBlock::new("GET", gets_per_sec),
-            JSONReportBlock::new("SET", sets_per_sec),
-            JSONReportBlock::new("UPDATE", updates_per_sec),
-        ];
-        let serialized = serde_json::to_string(&dat).unwrap();
+        let serialized = serde_json::to_string(&data).unwrap();
         println!("{}", serialized);
     } else {
-        println!("==========RESULTS==========");
-        println!("{} GETs/sec", gets_per_sec);
-        println!("{} SETs/sec", sets_per_sec);
-        println!("{} UPDATEs/sec", updates_per_sec);
-        println!("===========================");
+        let pad = |clen: usize| " ".repeat(maxpad - clen);
+        println!("===========RESULTS===========");
+        data.into_iter().for_each(|block| {
+            println!(
+                "{}{} {:.6}/sec",
+                block.get_report(),
+                pad(block.get_report().len()),
+                block.get_stat()
+            );
+        });
+        println!("=============================");
     }
 }

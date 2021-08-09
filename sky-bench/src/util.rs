@@ -24,6 +24,7 @@
  *
 */
 
+use core::cmp::Ordering;
 use libstress::utils::ran_string;
 use rand::thread_rng;
 use serde::Serialize;
@@ -87,6 +88,31 @@ impl JSONReportBlock {
             report: report.to_owned(),
             stat,
         }
+    }
+    pub const fn get_report(&self) -> &String {
+        &self.report
+    }
+    pub const fn get_stat(&self) -> f64 {
+        self.stat
+    }
+}
+
+impl PartialEq for JSONReportBlock {
+    fn eq(&self, oth: &Self) -> bool {
+        self.report == oth.report
+    }
+}
+
+impl Eq for JSONReportBlock {}
+impl PartialOrd for JSONReportBlock {
+    fn partial_cmp(&self, oth: &Self) -> Option<Ordering> {
+        self.report.partial_cmp(&oth.report)
+    }
+}
+
+impl Ord for JSONReportBlock {
+    fn cmp(&self, oth: &Self) -> std::cmp::Ordering {
+        self.report.cmp(&oth.report)
     }
 }
 
