@@ -23,6 +23,9 @@ chrono = "0.4.19"
 regex = "1.5.4"
 tokio-openssl = "0.6.2"
 openssl = { version = "0.10.35", features = ["vendored"] }
+hashbrown = { version = "*", features = ["raw"] }
+parking_lot = "0.11.1"
+num_cpus = "1.13.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 # external deps

@@ -52,6 +52,7 @@ pub mod htable;
 pub mod iarray;
 pub mod lazy;
 pub mod lock;
+pub mod map;
 pub mod memstore;
 pub mod table;
 #[cfg(test)]
