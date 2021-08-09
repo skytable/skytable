@@ -30,7 +30,7 @@ use core::str;
 
 macro_rules! push_self {
     ($self:expr, $what:expr) => {
-        $self.inner_stack.push_unchecked($what);
+        $self.inner_stack.push_unchecked($what)
     };
 }
 
