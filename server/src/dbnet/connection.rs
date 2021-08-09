@@ -135,7 +135,7 @@ pub mod prelude {
     #[macro_export]
     macro_rules! aerr {
         ($con:expr, aerr) => {
-            return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR);
+            return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR)
         };
     }
     #[macro_export]

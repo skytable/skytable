@@ -61,19 +61,19 @@ impl AsyncSocket for aio::TlsConnection {
 
 macro_rules! write_string {
     ($st:ident) => {
-        println!("\"{}\"", $st);
+        println!("\"{}\"", $st)
     };
     ($idx:ident, $st:ident) => {
-        println!("({}) \"{}\"", $idx, $st);
+        println!("({}) \"{}\"", $idx, $st)
     };
 }
 
 macro_rules! write_int {
     ($int:ident) => {
-        println!("{}", $int);
+        println!("{}", $int)
     };
     ($idx:ident, $st:ident) => {
-        println!("({}) \"{}\"", $idx, $st);
+        println!("({}) \"{}\"", $idx, $st)
     };
 }
 
@@ -89,7 +89,7 @@ macro_rules! write_err {
             }),
             ResetColor
         )
-        .expect("Failed to write to stdout");
+        .expect("Failed to write to stdout")
     };
     ($idx:ident, $err:literal) => {
         crossterm::execute!(
@@ -104,7 +104,7 @@ macro_rules! write_err {
             ),
             ResetColor
         )
-        .expect("Failed to write to stdout");
+        .expect("Failed to write to stdout")
     };
 }
 
@@ -116,7 +116,7 @@ macro_rules! write_okay {
             Print("(Okay)\n".to_string()),
             ResetColor
         )
-        .expect("Failed to write to stdout");
+        .expect("Failed to write to stdout")
     };
     ($idx:ident) => {
         crossterm::execute!(
@@ -125,7 +125,7 @@ macro_rules! write_okay {
             Print(format!("({}) (Okay)\n", $idx)),
             ResetColor
         )
-        .expect("Failed to write to stdout");
+        .expect("Failed to write to stdout")
     };
 }
 

@@ -146,7 +146,7 @@ macro_rules! bindaddr {
         $base
             .listener
             .local_addr()
-            .map_err(|e| format!("Failed to get bind address: {}", e))?;
+            .map_err(|e| format!("Failed to get bind address: {}", e))?
     };
 }
 
