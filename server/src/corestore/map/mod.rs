@@ -38,6 +38,8 @@ use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
 mod bref;
+use iter::{BorrowedIter, BorrowedIterMut, OwnedIter};
+mod iter;
 use bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry};
 
 type LowMap<K, V> = hashbrown::raw::RawTable<(K, V)>;
@@ -143,6 +145,15 @@ where
     }
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+    pub fn get_iter(&self) -> BorrowedIter<K, V, S> {
+        BorrowedIter::new(self)
+    }
+    pub fn get_iter_mut(&self) -> BorrowedIterMut<K, V, S> {
+        BorrowedIterMut::new(self)
+    }
+    pub fn get_owned_iter(self) -> OwnedIter<K, V, S> {
+        OwnedIter::new(self)
     }
 }
 

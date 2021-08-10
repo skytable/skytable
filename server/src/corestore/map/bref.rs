@@ -35,6 +35,7 @@ use core::ops::DerefMut;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
+use std::sync::Arc;
 
 pub struct Ref<'a, K, V> {
     _guard: RwLockReadGuard<'a, LowMap<K, V>>,
@@ -53,7 +54,8 @@ impl<'a, K, V> Ref<'a, K, V> {
         self.v
     }
     pub const fn pair(&self) -> (&K, &V) {
-        (self.k, self.v)
+        let Self { k, v, .. } = self;
+        (k, v)
     }
 }
 
@@ -87,7 +89,8 @@ impl<'a, K, V> RefMut<'a, K, V> {
         self.v
     }
     pub fn pair(&mut self) -> (&K, &V) {
-        (self.k, self.v)
+        let Self { k, v, .. } = self;
+        (k, v)
     }
     pub fn downgrade_ref(self) -> Ref<'a, K, V> {
         Ref::new(RwLockWriteGuard::downgrade(self.guard), self.k, self.v)
@@ -198,3 +201,80 @@ impl<'a, K, V, S> Entry<'a, K, V, S> {
         matches!(self, Self::Vacant(_))
     }
 }
+
+pub struct RefMulti<'a, K, V> {
+    _g: Arc<RwLockReadGuard<'a, LowMap<K, V>>>,
+    k: &'a K,
+    v: &'a V,
+}
+
+impl<'a, K, V> RefMulti<'a, K, V> {
+    pub const fn new(_g: Arc<RwLockReadGuard<'a, LowMap<K, V>>>, k: &'a K, v: &'a V) -> Self {
+        Self { _g, k, v }
+    }
+    pub const fn key(&self) -> &K {
+        self.k
+    }
+    pub const fn value(&self) -> &V {
+        self.v
+    }
+    pub const fn pair(&self) -> (&K, &V) {
+        let Self { k, v, .. } = self;
+        (k, v)
+    }
+}
+
+impl<'a, K, V> Deref for RefMulti<'a, K, V> {
+    type Target = V;
+    fn deref(&self) -> &Self::Target {
+        self.value()
+    }
+}
+
+unsafe impl<'a, K: Sync, V: Sync> Sync for RefMulti<'a, K, V> {}
+unsafe impl<'a, K: Send, V: Send> Send for RefMulti<'a, K, V> {}
+
+pub struct RefMultiMut<'a, K, V> {
+    _g: Arc<RwLockWriteGuard<'a, LowMap<K, V>>>,
+    k: &'a K,
+    v: &'a mut V,
+}
+
+impl<'a, K, V> RefMultiMut<'a, K, V> {
+    pub fn new(_g: Arc<RwLockWriteGuard<'a, LowMap<K, V>>>, k: &'a K, v: &'a mut V) -> Self {
+        Self { _g, k, v }
+    }
+    pub const fn key(&self) -> &K {
+        self.k
+    }
+    pub const fn value(&self) -> &V {
+        self.v
+    }
+    pub fn value_mut(&mut self) -> &mut V {
+        self.v
+    }
+    pub fn pair(&self) -> (&K, &V) {
+        let Self { k, v, .. } = self;
+        (k, v)
+    }
+    pub fn pair_mut(&mut self) -> (&K, &mut V) {
+        let Self { k, v, .. } = self;
+        (k, v)
+    }
+}
+
+impl<'a, K, V> Deref for RefMultiMut<'a, K, V> {
+    type Target = V;
+    fn deref(&self) -> &Self::Target {
+        self.value()
+    }
+}
+
+impl<'a, K, V> DerefMut for RefMultiMut<'a, K, V> {
+    fn deref_mut(&mut self) -> &mut V {
+        self.value_mut()
+    }
+}
+
+unsafe impl<'a, K: Sync, V: Sync> Sync for RefMultiMut<'a, K, V> {}
+unsafe impl<'a, K: Send, V: Send> Send for RefMultiMut<'a, K, V> {}
