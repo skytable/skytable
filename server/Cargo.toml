@@ -11,6 +11,7 @@ skytable = { git = "https://github.com/skytable/client-rust", branch = "next", d
 sky_macros = { path = "../sky-macros" }
 # external deps
 tokio = { version = "1.9.0", features = ["full"] }
+ahash = "0.7.4"
 bytes = "1.0.1"
 libsky = { path = "../libsky" }
 serde = { version = "1.0.126", features = ["derive"] }

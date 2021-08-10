@@ -135,6 +135,12 @@ where
     }
 }
 
+impl<K, V> Skymap<K, V, ahash::RandomState> {
+    pub fn new_ahash() -> Self {
+        Skymap::new()
+    }
+}
+
 // basic impls
 impl<K, V, S> Skymap<K, V, S>
 where

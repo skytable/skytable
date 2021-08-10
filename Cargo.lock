@@ -965,6 +965,7 @@ dependencies = [
 name = "skyd"
 version = "0.7.0"
 dependencies = [
+ "ahash",
  "bincode",
  "bytes",
  "cc",

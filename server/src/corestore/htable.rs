@@ -29,10 +29,10 @@ use crate::corestore::map::{
     iter::{BorrowedIter, OwnedIter},
     Skymap,
 };
+use ahash::RandomState;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::hash_map::RandomState;
 use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
@@ -53,7 +53,7 @@ where
 impl<K: Eq + Hash, V> Default for Coremap<K, V> {
     fn default() -> Self {
         Coremap {
-            inner: HashTable::new(),
+            inner: HashTable::new_ahash(),
         }
     }
 }
@@ -107,7 +107,7 @@ where
         self.inner.clear()
     }
     /// Return a non-consuming iterator
-    pub fn iter(&self) -> BorrowedIter<'_, K, V> {
+    pub fn iter(&self) -> BorrowedIter<'_, K, V, RandomState> {
         self.inner.get_iter()
     }
     /// Get a reference to the value of a key, if it exists
@@ -184,7 +184,7 @@ impl Coremap<Data, Data> {
 
 impl<K: Eq + Hash, V> IntoIterator for Coremap<K, V> {
     type Item = (K, V);
-    type IntoIter = OwnedIter<K, V>;
+    type IntoIter = OwnedIter<K, V, RandomState>;
     fn into_iter(self) -> Self::IntoIter {
         self.inner.get_owned_iter()
     }
