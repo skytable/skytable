@@ -26,9 +26,7 @@
 
 use crate::corestore::htable::Coremap;
 use crate::corestore::htable::Data;
-use crate::corestore::htable::MapRWLGuard;
-use crate::corestore::htable::MapSingleReference;
-use crate::corestore::htable::SharedValue;
+use crate::corestore::map::bref::Ref;
 use core::borrow::Borrow;
 use core::hash::Hash;
 use core::sync::atomic::AtomicBool;
@@ -36,40 +34,6 @@ use core::sync::atomic::Ordering;
 pub mod encoding;
 
 const ORD_RELAXED: Ordering = Ordering::Relaxed;
-
-/// A shard lock
-///
-/// Our jagged or sharded or striped in-memory table is made of multiple in-memory shards
-/// and we need a convenient interface to lock down the records. This is exactly why this
-/// structure exists: it locks down the table making it resistant to any possible write
-/// operation which might give us trouble in some cases
-///
-pub struct ShardLock<'a> {
-    /// A reference to the table (just for lifetime convenience)
-    _tableref: &'a Coremap<Data, Data>,
-    /// the shard locks
-    shard_locks: Vec<MapRWLGuard<'a, std::collections::HashMap<Data, SharedValue<Data>>>>,
-}
-
-impl<'a> ShardLock<'a> {
-    /// Initialize a shard lock from a provided table: DARN, **this is blocking** because
-    /// it will wait for every writer in every stripe to exit before returning. So, know
-    /// what you're doing beforehand!
-    pub fn init(_tableref: &'a Coremap<Data, Data>) -> Self {
-        let shard_locks = _tableref
-            .inner
-            .shards()
-            .iter()
-            .map(|lck| lck.read())
-            .collect();
-        // no lifetime issues here :)
-        Self {
-            _tableref,
-            shard_locks,
-        }
-    }
-}
-
 /// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
 pub struct DoubleEncoder {
     fn_ptr: fn(&[u8], &[u8]) -> bool,
@@ -106,12 +70,6 @@ pub struct KVEngine {
     encoded_k: AtomicBool,
     /// the encoding switch for the value
     encoded_v: AtomicBool,
-}
-
-/// Errors arising from trying to modify the definition of tables
-pub enum DdlError {
-    /// The table is not empty
-    TableNotEmpty,
 }
 
 impl Default for KVEngine {
@@ -214,39 +172,6 @@ impl KVEngine {
     pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
         &self.table
     }
-    /// Alter the table and set the key encoding switch
-    ///
-    /// Note: this will need an empty table
-    pub fn alter_table_key(&self, encoded_k: bool) -> Result<(), DdlError> {
-        let _shardlock = ShardLock::init(&self.table);
-        // we can now be sure random records are not being tossed around
-        if self.table.len() != 0 {
-            Err(DdlError::TableNotEmpty)
-        } else {
-            // the table is empty, roger the alter
-            // relaxed memory ordering is fine because we have locked the table
-            // for this specific alteration
-            self.encoded_k.store(encoded_k, ORD_RELAXED);
-            Ok(())
-        }
-    }
-    /// Alter the table and set the value encoding switch
-    ///
-    /// Note: this will need an empty table
-    // TODO(@ohsayan): Figure out how exactly we will handle this at the keyspace level
-    pub fn alter_table_value(&self, encoded_v: bool) -> Result<(), DdlError> {
-        let _shardlock = ShardLock::init(&self.table);
-        // we can now be sure random records are not being tossed around
-        if self.table.len() != 0 {
-            Err(DdlError::TableNotEmpty)
-        } else {
-            // the table is empty, roger the alter
-            // relaxed memory ordering is fine because we have locked the table
-            // for this specific alteration
-            self.encoded_v.store(encoded_v, ORD_RELAXED);
-            Ok(())
-        }
-    }
     /// Return an owned value of the key. In most cases, the reference count is just incremented
     /// unless the data itself is mutated in place
     pub fn take_snapshot<Q>(&self, key: &Q) -> Option<Data>
@@ -261,7 +186,7 @@ impl KVEngine {
         self.table.clear()
     }
     /// Get the value for a given key if it exists
-    pub fn get(&self, key: impl Into<Data>) -> Result<Option<MapSingleReference<Data, Data>>, ()> {
+    pub fn get(&self, key: impl Into<Data>) -> Result<Option<Ref<Data, Data>>, ()> {
         Ok(self.table.get(&self._encode_key(key.into())?))
     }
     pub fn exists<Q>(&self, key: Q) -> Result<bool, ()>

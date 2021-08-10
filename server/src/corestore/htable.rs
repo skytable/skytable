@@ -24,6 +24,11 @@
  *
 */
 
+use crate::corestore::map::{
+    bref::{Entry, OccupiedEntry, Ref, VacantEntry},
+    iter::{BorrowedIter, OwnedIter},
+    Skymap,
+};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -33,17 +38,7 @@ use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Deref;
 
-use dashmap::iter::Iter;
-pub use dashmap::lock::RwLock as MapRWL;
-pub use dashmap::lock::RwLockReadGuard as MapRWLGuard;
-pub use dashmap::mapref::entry::Entry as MapEntry;
-pub use dashmap::mapref::entry::OccupiedEntry;
-use dashmap::mapref::entry::VacantEntry;
-pub use dashmap::mapref::one::Ref as MapSingleReference;
-use dashmap::mapref::one::Ref;
-use dashmap::DashMap;
-pub use dashmap::SharedValue;
-pub type HashTable<K, V> = DashMap<K, V>;
+type HashTable<K, V> = Skymap<K, V, RandomState>;
 
 #[derive(Debug)]
 /// The Coremap contains the actual key/value pairs along with additional fields for data safety
@@ -112,8 +107,8 @@ where
         self.inner.clear()
     }
     /// Return a non-consuming iterator
-    pub fn iter(&self) -> Iter<'_, K, V> {
-        self.inner.iter()
+    pub fn iter(&self) -> BorrowedIter<'_, K, V> {
+        self.inner.get_iter()
     }
     /// Get a reference to the value of a key, if it exists
     pub fn get<Q>(&self, key: &Q) -> Option<Ref<'_, K, V>>
@@ -125,7 +120,7 @@ where
     }
     /// Returns true if the non-existent key was assigned to a value
     pub fn true_if_insert(&self, k: K, v: V) -> bool {
-        if let MapEntry::Vacant(ve) = self.inner.entry(k) {
+        if let Entry::Vacant(ve) = self.inner.entry(k) {
             ve.insert(v);
             true
         } else {
@@ -152,7 +147,7 @@ where
     }
     /// Returns true if the value was updated
     pub fn true_if_update(&self, k: K, v: V) -> bool {
-        if let MapEntry::Occupied(mut oe) = self.inner.entry(k) {
+        if let Entry::Occupied(mut oe) = self.inner.entry(k) {
             oe.insert(v);
             true
         } else {
@@ -160,14 +155,14 @@ where
         }
     }
     pub fn mut_entry(&self, key: K) -> Option<OccupiedEntry<K, V, RandomState>> {
-        if let MapEntry::Occupied(oe) = self.inner.entry(key) {
+        if let Entry::Occupied(oe) = self.inner.entry(key) {
             Some(oe)
         } else {
             None
         }
     }
     pub fn fresh_entry(&self, key: K) -> Option<VacantEntry<K, V, RandomState>> {
-        if let MapEntry::Vacant(ve) = self.inner.entry(key) {
+        if let Entry::Vacant(ve) = self.inner.entry(key) {
             Some(ve)
         } else {
             None
@@ -189,9 +184,9 @@ impl Coremap<Data, Data> {
 
 impl<K: Eq + Hash, V> IntoIterator for Coremap<K, V> {
     type Item = (K, V);
-    type IntoIter = dashmap::iter::OwningIter<K, V>;
+    type IntoIter = OwnedIter<K, V>;
     fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter()
+        self.inner.get_owned_iter()
     }
 }
 
@@ -229,7 +224,7 @@ where
         T: IntoIterator<Item = (K, V)>,
     {
         Coremap {
-            inner: DashMap::from_iter(iter),
+            inner: Skymap::from_iter(iter),
         }
     }
 }
