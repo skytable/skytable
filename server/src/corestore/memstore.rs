@@ -247,11 +247,11 @@ impl Memstore {
             let removed_keyspace = self.keyspaces.mut_entry(ksid);
             match removed_keyspace {
                 Some(ks) => {
-                    let no_one_is_using_keyspace = Arc::strong_count(ks.get()) == 1;
-                    let no_tables_are_in_keyspace = ks.get().table_count() == 0;
+                    let no_one_is_using_keyspace = Arc::strong_count(ks.value()) == 1;
+                    let no_tables_are_in_keyspace = ks.value().table_count() == 0;
                     if no_one_is_using_keyspace && no_tables_are_in_keyspace {
                         // we are free to drop this
-                        ks.remove_entry();
+                        ks.remove();
                         // trip the preload switch
                         registry::get_preload_tripswitch().trip();
                         Ok(())
@@ -294,14 +294,14 @@ impl Memstore {
                     // of having not empty keyspaces. The invariant that `drop keyspace force`
                     // maintains is that the keyspace or any of its objects are never
                     // referenced to -- only then it is safe to delete the keyspace
-                    let no_tables_in_use = Arc::strong_count(keyspace.get()) == 1
+                    let no_tables_in_use = Arc::strong_count(keyspace.value()) == 1
                         && keyspace
-                            .get()
+                            .value()
                             .tables
                             .iter()
                             .all(|table| Arc::strong_count(table.value()) == 1);
                     if no_tables_in_use {
-                        keyspace.remove_entry();
+                        keyspace.remove();
                         // trip the preload switch
                         registry::get_preload_tripswitch().trip();
                         Ok(())

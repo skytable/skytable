@@ -197,17 +197,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dashmap"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
-dependencies = [
- "cfg-if",
- "num_cpus",
- "serde",
-]
-
-[[package]]
 name = "devtimer"
 version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -981,7 +970,6 @@ dependencies = [
  "cc",
  "chrono",
  "clap",
- "dashmap",
  "env_logger",
  "hashbrown",
  "jemallocator",

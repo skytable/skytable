@@ -119,7 +119,7 @@ pub(super) fn snapshot_and_update(
                 // When we snapshotted, we looked at `snapshot`. If the value is still the
                 // same, then we'll update it. Otherwise, let it be
                 if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
-                    if mutable.get().eq(&snapshot) {
+                    if mutable.value().eq(&snapshot) {
                         mutable.insert(Data::from(value));
                     } else {
                         drop(mutable);

@@ -24,22 +24,23 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
 #![allow(clippy::manual_map)] // avoid LLVM bloat
 
 use crate::util::compiler;
 use core::borrow::Borrow;
+use core::fmt;
 use core::hash::BuildHasher;
 use core::hash::Hash;
 use core::hash::Hasher;
+use core::iter::FromIterator;
 use core::mem;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
-mod bref;
+pub mod bref;
 use iter::{BorrowedIter, BorrowedIterMut, OwnedIter};
-mod iter;
+pub mod iter;
 use bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry};
 
 type LowMap<K, V> = hashbrown::raw::RawTable<(K, V)>;
@@ -104,6 +105,33 @@ pub struct Skymap<K, V, S = RandomState> {
 impl<K, V> Default for Skymap<K, V, RandomState> {
     fn default() -> Self {
         Self::with_hasher(RandomState::default())
+    }
+}
+
+impl<K: fmt::Debug, V: fmt::Debug, S: BuildHasher + Default> fmt::Debug for Skymap<K, V, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut map = f.debug_map();
+        for s in self.get_iter() {
+            map.entry(s.key(), s.value());
+        }
+        map.finish()
+    }
+}
+
+impl<K, V, S> FromIterator<(K, V)> for Skymap<K, V, S>
+where
+    K: Eq + Hash,
+    S: BuildHasher + Default + Clone,
+{
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = (K, V)>,
+    {
+        let map = Skymap::new();
+        iter.into_iter().for_each(|(k, v)| {
+            let _ = map.insert(k, v);
+        });
+        map
     }
 }
 
@@ -209,7 +237,7 @@ where
             // end critical section
         }
     }
-    pub fn remove_if<Q>(&self, k: &Q, f: impl Fn(&(K, V)) -> bool) -> Option<(K, V)>
+    pub fn remove_if<Q>(&self, k: &Q, f: impl FnOnce(&K, &V) -> bool) -> Option<(K, V)>
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
@@ -221,7 +249,8 @@ where
             let mut lowtable = self.get_wshard_unchecked(idx);
             match lowtable.find(hash, ceq(k)) {
                 Some(bucket) => {
-                    if f(bucket.as_ref()) {
+                    let (kptr, vptr) = bucket.as_ref();
+                    if f(kptr, vptr) {
                         Some(lowtable.remove(bucket))
                     } else {
                         None
@@ -335,7 +364,7 @@ fn test_remove_if() {
     let map = Skymap::default();
     map.insert("hello", "world");
     assert!(map
-        .remove_if("hello", |(_k, v)| { (*v).eq("notworld") })
+        .remove_if("hello", |_k, v| { (*v).eq("notworld") })
         .is_none());
 }
 
