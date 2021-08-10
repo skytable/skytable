@@ -140,6 +140,7 @@ stress: .release-server
 	@echo "===================================================================="
 	@echo "Starting database server in background"
 	@echo "===================================================================="
+	@chmod +x ci/ssl.sh && bash ci/ssl.sh
 	@${START_COMMAND_RELEASE}
 # sleep for 5s to let the server start up
 	@sleep 5

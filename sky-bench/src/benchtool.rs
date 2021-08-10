@@ -118,9 +118,11 @@ pub fn runner(
     per_kv_size: usize,
     json_out: bool,
 ) {
+    println!("Running sanity test ...");
     if let Err(e) = sanity_test!(host, port) {
         err!(format!("Sanity test failed with error: {}", e));
     }
+    println!("Finished sanity test");
     if !json_out {
         println!(
             "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
@@ -142,6 +144,7 @@ pub fn runner(
         "use default:{} keymap(binstr,binstr)",
         &temp_table
     ));
+    let mut create_table_connection = TcpStream::connect(&host).unwrap();
 
     // an okay response code size: `*1\n!1\n0\n`:
     let response_okay_size = calculate_monoelement_dataframe_size(1) + SIMPLE_QUERY_SIZE;
@@ -168,9 +171,12 @@ pub fn runner(
     );
 
     let drop_table = libsky::into_raw_query(&format!("drop table {}", &temp_table));
-    let util_pool = pool_config.get_pool_with_workers(1);
-    util_pool.execute(create_table);
-    drop(util_pool);
+
+    // create table
+    create_table_connection.write_all(&create_table).unwrap();
+    let mut v = vec![0; response_okay_size];
+    let _ = create_table_connection.read_exact(&mut v).unwrap();
+
     // Create separate connection pools for get and set operations
 
     let keys: Vec<String> =
