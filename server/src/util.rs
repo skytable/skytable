@@ -175,7 +175,10 @@ macro_rules! action {
 }
 
 pub mod compiler {
-    //! BP hints for added optim
+    //! Dark compiler arts and hackery to defy the normal. Use at your own
+    //! risk
+
+    use core::mem;
 
     #[cold]
     #[inline(never)]
@@ -199,6 +202,13 @@ pub mod compiler {
     #[inline(never)]
     pub fn cold_err<T>(v: T) -> T {
         v
+    }
+
+    pub unsafe fn extend_lifetime<'a, 'b, T>(inp: &'a T) -> &'b T {
+        mem::transmute(inp)
+    }
+    pub unsafe fn extend_lifetime_mut<'a, 'b, T>(inp: &'a mut T) -> &'b mut T {
+        mem::transmute(inp)
     }
 }
 

@@ -27,6 +27,7 @@
 #![allow(dead_code)] // TODO(@ohsayan): Remove this lint once we're done
 #![allow(clippy::manual_map)] // avoid LLVM bloat
 
+use crate::util::compiler;
 use core::borrow::Borrow;
 use core::hash::BuildHasher;
 use core::hash::Hash;
@@ -36,6 +37,8 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
+mod bref;
+use bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry};
 
 type LowMap<K, V> = hashbrown::raw::RawTable<(K, V)>;
 type ShardSlice<K, V> = [RwLock<LowMap<K, V>>];
@@ -132,6 +135,15 @@ where
     pub fn with_hasher(hasher: S) -> Self {
         Self::with_capacity_and_hasher(DEFAULT_CAP, hasher)
     }
+    pub fn len(&self) -> usize {
+        self.shards.iter().map(|s| s.read().len()).sum()
+    }
+    pub fn capacity(&self) -> usize {
+        self.shards.iter().map(|s| s.read().capacity()).sum()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 // const impls
@@ -211,12 +223,91 @@ where
     }
 }
 
+// lt impls
+impl<'a, K: 'a + Hash + Eq, V: 'a, S: BuildHasher + Clone> Skymap<K, V, S> {
+    pub fn get<Q>(&'a self, k: &Q) -> Option<Ref<'a, K, V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let hash = make_hash::<K, Q, S>(self.h(), k);
+        let idx = self.determine_shard(hash as usize);
+        unsafe {
+            // begin critical section
+            let lowtable = self.get_rshard_unchecked(idx);
+            match lowtable.get(hash, ceq(k)) {
+                Some((ref kptr, ref vptr)) => {
+                    let kptr = compiler::extend_lifetime(kptr);
+                    let vptr = compiler::extend_lifetime(vptr);
+                    Some(Ref::new(lowtable, kptr, vptr))
+                }
+                None => None,
+            }
+            // end critical section
+        }
+    }
+
+    pub fn get_mut<Q>(&'a self, k: &Q) -> Option<RefMut<'a, K, V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let hash = make_hash::<K, Q, S>(self.h(), k);
+        let idx = self.determine_shard(hash as usize);
+        unsafe {
+            // begin critical section
+            let mut lowtable = self.get_wshard_unchecked(idx);
+            match lowtable.get_mut(hash, ceq(k)) {
+                Some(&mut (ref kptr, ref mut vptr)) => {
+                    let kptr = compiler::extend_lifetime(kptr);
+                    let vptr = compiler::extend_lifetime_mut(vptr);
+                    Some(RefMut::new(lowtable, kptr, vptr))
+                }
+                None => None,
+            }
+            // end critical section
+        }
+    }
+    pub fn entry(&'a self, key: K) -> Entry<'a, K, V, S> {
+        let hash = make_insert_hash::<K, S>(self.h(), &key);
+        let idx = self.determine_shard(hash as usize);
+        unsafe {
+            // begin critical section
+            let lowtable = self.get_wshard_unchecked(idx);
+            if let Some(elem) = lowtable.find(hash, ceq(&key)) {
+                let (kptr, vptr) = elem.as_mut();
+                let kptr = compiler::extend_lifetime(kptr);
+                let vptr = compiler::extend_lifetime_mut(vptr);
+                Entry::Occupied(OccupiedEntry::new(
+                    lowtable,
+                    key,
+                    (kptr, vptr),
+                    self.hasher.clone(),
+                ))
+            } else {
+                Entry::Vacant(VacantEntry::new(lowtable, key, self.hasher.clone()))
+            }
+            // end critical section
+        }
+    }
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.get(key).is_some()
+    }
+    pub fn clear(&self) {
+        self.shards().iter().for_each(|shard| shard.write().clear())
+    }
+}
+
 // inner impls
-impl<K, V, S> Skymap<K, V, S> {
-    unsafe fn get_rshard_unchecked(&self, shard: usize) -> SRlock<K, V> {
+impl<'a, K: 'a, V: 'a, S> Skymap<K, V, S> {
+    unsafe fn get_rshard_unchecked(&'a self, shard: usize) -> SRlock<'a, K, V> {
         self.shards.get_unchecked(shard).read()
     }
-    unsafe fn get_wshard_unchecked(&self, shard: usize) -> SWlock<K, V> {
+    unsafe fn get_wshard_unchecked(&'a self, shard: usize) -> SWlock<'a, K, V> {
         self.shards.get_unchecked(shard).write()
     }
 }
@@ -235,4 +326,20 @@ fn test_remove_if() {
     assert!(map
         .remove_if("hello", |(_k, v)| { (*v).eq("notworld") })
         .is_none());
+}
+
+#[test]
+fn test_insert_get() {
+    let map = Skymap::default();
+    map.insert("sayan", "likes computational dark arts");
+    let _ref = map.get("sayan").unwrap();
+    assert_eq!(*_ref, "likes computational dark arts")
+}
+
+#[test]
+fn test_entry() {
+    let map = Skymap::default();
+    map.insert("hello", "world");
+    assert!(map.entry("hello").is_occupied());
+    assert!(map.entry("world").is_vacant());
 }
