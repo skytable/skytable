@@ -110,20 +110,20 @@ impl<'a, K, V, S> Iterator for BorrowedIter<'a, K, V, S> {
                     let guard = current.1.clone();
                     return Some(RefMulti::new(guard, kptr, vptr));
                 }
-                if self.cs == self.map.shards().len() {
-                    // end of shards
-                    return None;
-                }
-                // warning: the rawiter allows us to terribly violate conditions
-                // you can mutate!
-                let wshard = unsafe { self.map.get_rshard_unchecked(self.cs) };
-                let iter = unsafe {
-                    // same thing: our lt params ensure validity
-                    wshard.iter()
-                };
-                self.citer = Some((iter, Arc::new(wshard)));
-                self.cs += 1;
             }
+            if self.cs == self.map.shards().len() {
+                // end of shards
+                return None;
+            }
+            // warning: the rawiter allows us to terribly violate conditions
+            // you can mutate!
+            let rshard = unsafe { self.map.get_rshard_unchecked(self.cs) };
+            let iter = unsafe {
+                // same thing: our lt params ensure validity
+                rshard.iter()
+            };
+            self.citer = Some((iter, Arc::new(rshard)));
+            self.cs += 1;
         }
     }
 }
@@ -171,4 +171,17 @@ impl<'a, K, V, S> Iterator for BorrowedIterMut<'a, K, V, S> {
             self.cs += 1;
         }
     }
+}
+
+#[test]
+fn test_iter() {
+    let map = Skymap::default();
+    map.insert("hello1", "world");
+    map.insert("hello2", "world");
+    map.insert("hello3", "world");
+    let collected: Vec<(&str, &str)> = map.get_owned_iter().collect();
+    assert!(collected.len() == 3);
+    assert!(collected.contains(&("hello1", "world")));
+    assert!(collected.contains(&("hello2", "world")));
+    assert!(collected.contains(&("hello3", "world")));
 }
