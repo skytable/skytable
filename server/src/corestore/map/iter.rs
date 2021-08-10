@@ -35,6 +35,7 @@ use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
 use std::sync::Arc;
 
+/// An owned iterator for a [`Skymap`]
 pub struct OwnedIter<K, V, S = RandomState> {
     map: Skymap<K, V, S>,
     cs: usize,
@@ -80,6 +81,7 @@ unsafe impl<K: Sync, V: Sync, S> Sync for OwnedIter<K, V, S> {}
 type BorrowedIterGroup<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockReadGuard<'a, LowMap<K, V>>>);
 type BorrowedIterGroupMut<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockWriteGuard<'a, LowMap<K, V>>>);
 
+/// A borrowed iterator for a [`Skymap`]
 pub struct BorrowedIter<'a, K, V, S = RandomState> {
     map: &'a Skymap<K, V, S>,
     cs: usize,
@@ -131,6 +133,7 @@ impl<'a, K, V, S> Iterator for BorrowedIter<'a, K, V, S> {
 unsafe impl<'a, K: Send, V: Send, S> Send for BorrowedIter<'a, K, V, S> {}
 unsafe impl<'a, K: Sync, V: Sync, S> Sync for BorrowedIter<'a, K, V, S> {}
 
+/// A borrowed iterator with mutable references for a [`Skymap`]
 pub struct BorrowedIterMut<'a, K, V, S> {
     map: &'a Skymap<K, V, S>,
     cs: usize,

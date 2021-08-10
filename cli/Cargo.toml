@@ -8,10 +8,13 @@ edition = "2018"
 
 [dependencies]
 # internal deps
-libsky = { path="../libsky" }
-skytable = { git="https://github.com/skytable/client-rust", branch="next", features=["async", "aio-sslv"], default-features=false }
+libsky = { path = "../libsky" }
+skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
+    "async",
+    "aio-sslv",
+], default-features = false }
 # external deps
-tokio = { version="1.9.0", features=["full"] }
-clap = { version="2.33.3", features=["yaml"] }
+tokio = { version = "1.9.0", features = ["full"] }
+clap = { version = "2.33.3", features = ["yaml"] }
 rustyline = "8.2.0"
 crossterm = "0.20.0"
