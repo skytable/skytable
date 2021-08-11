@@ -31,9 +31,7 @@ use crate::corestore::map::{
 };
 use ahash::RandomState;
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Deref;
@@ -270,49 +268,5 @@ where
 {
     fn from(dat: T) -> Self {
         Self { blob: dat.into() }
-    }
-}
-
-use serde::ser::{SerializeSeq, Serializer};
-
-impl Serialize for Data {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.blob.len()))?;
-        for e in self.blob.iter() {
-            seq.serialize_element(e)?;
-        }
-        seq.end()
-    }
-}
-
-use serde::de::{Deserializer, SeqAccess, Visitor};
-
-struct DataVisitor;
-impl<'de> Visitor<'de> for DataVisitor {
-    type Value = Data;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting a corestore::htable::Data object")
-    }
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: SeqAccess<'de>,
-    {
-        let mut bytes = Vec::new();
-        while let Some(unsigned_8bit_int) = seq.next_element()? {
-            bytes.push(unsigned_8bit_int);
-        }
-        Ok(Data::from_blob(Bytes::from(bytes)))
-    }
-}
-
-impl<'de> Deserialize<'de> for Data {
-    fn deserialize<D>(deserializer: D) -> Result<Data, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_seq(DataVisitor)
     }
 }

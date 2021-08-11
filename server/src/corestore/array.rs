@@ -40,7 +40,6 @@ use core::ops;
 use core::ptr;
 use core::slice;
 use core::str;
-use serde::{de::SeqAccess, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A compile-time, fixed size array that can have unintialized memory. This array is as
 /// efficient as you'd expect a normal array to be, but with the added benefit that you
@@ -541,60 +540,6 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         (**self).fmt(f)
-    }
-}
-
-impl<T, const N: usize> Serialize for Array<T, N>
-where
-    T: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.collect_seq(self.iter())
-    }
-}
-
-struct ArrayVisitor<T, const N: usize> {
-    _marker: PhantomData<Array<T, N>>,
-}
-
-impl<'de, T, const N: usize> Visitor<'de> for ArrayVisitor<T, N>
-where
-    T: Deserialize<'de>,
-{
-    type Value = Array<T, N>;
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a sequence")
-    }
-    fn visit_seq<B>(self, mut seq: B) -> Result<Self::Value, B::Error>
-    where
-        B: SeqAccess<'de>,
-    {
-        let len = seq.size_hint().unwrap_or(0);
-        if len > N {
-            return Err(serde::de::Error::custom("Bad length"));
-        }
-        let mut array = Array::new();
-        while let Some(item) = seq.next_element()? {
-            unsafe {
-                // UNSAFE(@ohsayan): This is completely safe because we have checked len
-                array.push_unchecked(item)
-            }
-        }
-        Ok(array)
-    }
-}
-
-impl<'de, T, const N: usize> Deserialize<'de> for Array<T, N>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_seq(ArrayVisitor {
-            _marker: PhantomData,
-        })
     }
 }
 
