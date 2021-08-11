@@ -25,9 +25,8 @@
 */
 
 use crate::hoststr;
+use crate::report;
 use crate::sanity_test;
-use crate::util::calc;
-use crate::util::JSONReportBlock;
 use devtimer::DevTime;
 use libstress::utils::generate_random_string_vector;
 use libstress::PoolConfig;
@@ -37,6 +36,8 @@ use std::net::TcpStream;
 
 /// Just a sweet `*1\n`
 const SIMPLE_QUERY_SIZE: usize = 3;
+
+const DEFAULT_REPEAT: usize = 5;
 
 /// For a dataframe, this returns the dataframe size for array responses.
 ///
@@ -118,22 +119,20 @@ pub fn runner(
     per_kv_size: usize,
     json_out: bool,
 ) {
-    println!("Running sanity test ...");
+    if !json_out {
+        println!("Running sanity test ...");
+    }
     if let Err(e) = sanity_test!(host, port) {
         err!(format!("Sanity test failed with error: {}", e));
     }
-    println!("Finished sanity test");
     if !json_out {
-        println!(
-            "Initializing benchmark\nConnections: {}\nQueries: {}\nData size (key+value): {} bytes",
-            max_connections,
-            max_queries,
-            (per_kv_size * 2), // key size + value size
-        );
+        println!("Finished sanity test. Initializing benchmark ...");
+        println!("Connections: {}", max_connections);
+        println!("Queries: {}", max_queries);
+        println!("Data size (key+value): {} bytes", (per_kv_size * 2));
     }
     let host = hoststr!(host, port);
     let mut rand = thread_rng();
-    let mut dt = DevTime::new_complex();
 
     let temp_table = libstress::utils::rand_alphastring(10, &mut rand);
     let create_table = libsky::into_raw_query(&format!(
@@ -206,63 +205,63 @@ pub fn runner(
         println!("Per-packet size (UPDATE): {} bytes", update_packs[0].len());
         println!("Initialization complete! Benchmark started");
     }
+    let mut report = report::AggregatedReport::new(3, DEFAULT_REPEAT, max_queries);
+    for i in 0..DEFAULT_REPEAT {
+        let mut dt = DevTime::new_complex();
+        // clone in the keys
+        let set_packs = set_packs.clone();
+        let get_packs = get_packs.clone();
+        let update_packs = update_packs.clone();
 
-    // bench SET
-    let setpool = pool_config.get_pool();
-    dt.create_timer("SET").unwrap();
-    dt.start_timer("SET").unwrap();
-    setpool.execute_and_finish_iter(set_packs);
-    dt.stop_timer("SET").unwrap();
+        // bench SET
+        let setpool = pool_config.get_pool();
+        dt.create_timer("SET").unwrap();
+        dt.start_timer("SET").unwrap();
+        setpool.execute_and_finish_iter(set_packs);
+        dt.stop_timer("SET").unwrap();
 
-    // TODO: Update the getpool to use correct sizes
-    // bench GET
-    let get_response_packet_size =
-        calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
-    let getpool = pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
-        sock.write_all(&packet).unwrap();
-        // read exact for the key size
-        let mut v = vec![0; get_response_packet_size];
-        let _ = sock.read_exact(&mut v).unwrap();
-    });
-    dt.create_timer("GET").unwrap();
-    dt.start_timer("GET").unwrap();
-    getpool.execute_and_finish_iter(get_packs);
-    dt.stop_timer("GET").unwrap();
+        // TODO: Update the getpool to use correct sizes
+        // bench GET
+        let get_response_packet_size =
+            calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
+        let getpool =
+            pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
+                sock.write_all(&packet).unwrap();
+                // read exact for the key size
+                let mut v = vec![0; get_response_packet_size];
+                let _ = sock.read_exact(&mut v).unwrap();
+            });
+        dt.create_timer("GET").unwrap();
+        dt.start_timer("GET").unwrap();
+        getpool.execute_and_finish_iter(get_packs);
+        dt.stop_timer("GET").unwrap();
 
-    // bench UPDATE
-    let update_pool = pool_config.get_pool();
-    dt.create_timer("UPDATE").unwrap();
-    dt.start_timer("UPDATE").unwrap();
-    update_pool.execute_and_finish_iter(update_packs);
-    dt.stop_timer("UPDATE").unwrap();
+        // bench UPDATE
+        let update_pool = pool_config.get_pool();
+        dt.create_timer("UPDATE").unwrap();
+        dt.start_timer("UPDATE").unwrap();
+        update_pool.execute_and_finish_iter(update_packs);
+        dt.stop_timer("UPDATE").unwrap();
 
-    if !json_out {
-        println!("Benchmark completed! Removing created keys...");
+        if !json_out {
+            println!("Finished run: {}", i + 1);
+        }
+
+        // drop table
+        let drop_pool = pool_config.get_pool_with_workers(1);
+        drop_pool.execute(drop_table.clone());
+        drop(drop_pool);
+        dt.iter()
+            .for_each(|(name, timer)| report.insert(name, timer.time_in_nanos().unwrap()));
     }
-
-    // drop table
-    let drop_pool = pool_config.get_pool_with_workers(1);
-    drop_pool.execute(drop_table);
-    drop(drop_pool);
-    let mut maxpad = 0usize;
-    let mut data: Vec<JSONReportBlock> = dt
-        .iter()
-        .map(|(timer, time)| {
-            if timer.len() > maxpad {
-                maxpad = timer.len();
-            }
-            JSONReportBlock::new(timer, calc(max_queries, time.time_in_nanos().unwrap()))
-        })
-        .collect();
-    // sort alphabetically
-    data.sort();
     if json_out {
-        let serialized = serde_json::to_string(&data).unwrap();
+        let serialized = report.into_json();
         println!("{}", serialized);
     } else {
-        let pad = |clen: usize| " ".repeat(maxpad - clen);
         println!("===========RESULTS===========");
-        data.into_iter().for_each(|block| {
+        let (report, maxpad) = report.into_sorted_stat();
+        let pad = |clen: usize| " ".repeat(maxpad - clen);
+        report.into_iter().for_each(|block| {
             println!(
                 "{}{} {:.6}/sec",
                 block.get_report(),

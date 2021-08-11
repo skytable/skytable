@@ -34,6 +34,7 @@
 #[macro_use]
 mod util;
 mod benchtool;
+mod report;
 mod testkey;
 use crate::util::DEFAULT_PACKET_SIZE;
 use crate::util::DEFAULT_QUERY_COUNT;

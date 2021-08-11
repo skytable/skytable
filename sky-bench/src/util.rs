@@ -24,10 +24,8 @@
  *
 */
 
-use core::cmp::Ordering;
 use libstress::utils::ran_string;
 use rand::thread_rng;
-use serde::Serialize;
 use std::error::Error;
 
 pub const DEFAULT_WORKER_COUNT: usize = 10;
@@ -62,58 +60,6 @@ macro_rules! err {
         eprintln!("ERROR: {}", $note);
         std::process::exit(0x01);
     }};
-}
-
-#[derive(Serialize)]
-/// A `JSONReportBlock` represents a JSON object which contains the type of report
-/// (for example `GET` or `SET`) and the number of such queries per second
-///
-/// This is an example of the object, when serialized into JSON:
-/// ```json
-/// {
-///     "report" : "GET",
-///     "stat" : 123456789.10,
-/// }
-/// ```
-pub struct JSONReportBlock {
-    /// The type of benchmark
-    report: String,
-    /// The number of such queries per second
-    stat: f64,
-}
-
-impl JSONReportBlock {
-    pub fn new(report: &'static str, stat: f64) -> Self {
-        JSONReportBlock {
-            report: report.to_owned(),
-            stat,
-        }
-    }
-    pub const fn get_report(&self) -> &String {
-        &self.report
-    }
-    pub const fn get_stat(&self) -> f64 {
-        self.stat
-    }
-}
-
-impl PartialEq for JSONReportBlock {
-    fn eq(&self, oth: &Self) -> bool {
-        self.report == oth.report
-    }
-}
-
-impl Eq for JSONReportBlock {}
-impl PartialOrd for JSONReportBlock {
-    fn partial_cmp(&self, oth: &Self) -> Option<Ordering> {
-        self.report.partial_cmp(&oth.report)
-    }
-}
-
-impl Ord for JSONReportBlock {
-    fn cmp(&self, oth: &Self) -> std::cmp::Ordering {
-        self.report.cmp(&oth.report)
-    }
 }
 
 /// Returns the number of queries/sec
