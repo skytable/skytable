@@ -37,8 +37,6 @@ use std::net::TcpStream;
 /// Just a sweet `*1\n`
 const SIMPLE_QUERY_SIZE: usize = 3;
 
-const DEFAULT_REPEAT: usize = 5;
-
 /// For a dataframe, this returns the dataframe size for array responses.
 ///
 /// For example,
@@ -118,6 +116,7 @@ pub fn runner(
     max_queries: usize,
     per_kv_size: usize,
     json_out: bool,
+    runs: usize,
 ) {
     if !json_out {
         println!("Running sanity test ...");
@@ -205,8 +204,8 @@ pub fn runner(
         println!("Per-packet size (UPDATE): {} bytes", update_packs[0].len());
         println!("Initialization complete! Benchmark started");
     }
-    let mut report = report::AggregatedReport::new(3, DEFAULT_REPEAT, max_queries);
-    for i in 0..DEFAULT_REPEAT {
+    let mut report = report::AggregatedReport::new(3, runs, max_queries);
+    for i in 1..runs + 1 {
         let mut dt = DevTime::new_complex();
         // clone in the keys
         let set_packs = set_packs.clone();
@@ -244,7 +243,7 @@ pub fn runner(
         dt.stop_timer("UPDATE").unwrap();
 
         if !json_out {
-            println!("Finished run: {}", i + 1);
+            println!("Finished run: {}", i);
         }
 
         // drop table

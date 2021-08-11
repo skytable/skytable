@@ -23,54 +23,61 @@ name: Skytable Benchmark Tool
 version: 0.6.0
 author: Sayan N. <ohsayan@outlook.com>
 about: |
-        The Skytable benchmark tool can be used to benchmark Skytable installations. 
-        If you find any issues, then report one here: https://github.com/skytable/skytable
+  The Skytable benchmark tool can be used to benchmark Skytable installations. 
+  If you find any issues, then report one here: https://github.com/skytable/skytable
 args:
-        - connections:
-                  short: c
-                  long: connections
-                  value_name: count
-                  help: Sets the number of simultaneous clients
-                  takes_value: true
-        - queries:
-                  short: q
-                  long: queries
-                  value_name: number
-                  help: Sets the number of queries to run
-                  takes_value: true
-        - size:
-                  short: s
-                  long: kvsize
-                  value_name: bytes
-                  help: Sets the size of the key/value pairs
-                  takes_value: true
-        - json:
-                  required: false
-                  long: json
-                  help: Sets output type to JSON
-                  takes_value: false
-        - host:
-                  short: h
-                  required: false
-                  long: host
-                  value_name: host
-                  help: Sets the remote host to connect to
-                  takes_value: true
-        - port:
-                  short: p
-                  required: false
-                  long: port
-                  value_name: port
-                  help: Sets the remote port to connect to
-                  takes_value: true
+  - connections:
+      short: c
+      long: connections
+      value_name: count
+      help: Sets the number of simultaneous clients
+      takes_value: true
+  - queries:
+      short: q
+      long: queries
+      value_name: number
+      help: Sets the number of queries to run
+      takes_value: true
+  - size:
+      short: s
+      long: kvsize
+      value_name: bytes
+      help: Sets the size of the key/value pairs
+      takes_value: true
+  - json:
+      required: false
+      long: json
+      help: Sets output type to JSON
+      takes_value: false
+  - host:
+      short: h
+      required: false
+      long: host
+      value_name: host
+      help: Sets the remote host to connect to
+      takes_value: true
+  - port:
+      short: p
+      required: false
+      long: port
+      value_name: port
+      help: Sets the remote port to connect to
+      takes_value: true
+  - runs:
+      short: r
+      required: false
+      long: runs
+      value_name: runs
+      takes_value: true
+      help: Sets the number of times the entire test should be run
 subcommands:
-        - testkey:
-                  about: This can be used to create 'mock' keys
-                  args:
-                          - count:
-                                    short: c
-                                    required: true
-                                    long: count
-                                    value_name: NUMBEROFKEYS
-                                    help: Sets the number of keys to create
-                                    takes_value: true
+  - testkey:
+      about: This can be used to create 'mock' keys
+      args:
+        - count:
+            short: c
+            required: true
+            long: count
+            value_name: NUMBEROFKEYS
+            help: Sets the number of keys to create
+            takes_value: true

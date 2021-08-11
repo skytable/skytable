@@ -38,6 +38,7 @@ mod report;
 mod testkey;
 use crate::util::DEFAULT_PACKET_SIZE;
 use crate::util::DEFAULT_QUERY_COUNT;
+use crate::util::DEFAULT_REPEAT;
 use crate::util::DEFAULT_WORKER_COUNT;
 // external imports
 use clap::{load_yaml, App};
@@ -73,6 +74,11 @@ fn main() {
         None => DEFAULT_PACKET_SIZE,
         _ => err!("Bad value for key/value size"),
     };
+    let runs: usize = match matches.value_of("runs").map(|v| v.parse()) {
+        Some(Ok(r)) => r,
+        Some(Err(_)) => err!("Bad value for runs"),
+        None => DEFAULT_REPEAT,
+    };
     if packet_size == 0 || max_queries == 0 || max_connections == 0 {
         err!("All inputs must be non-zero values");
     }
@@ -98,6 +104,7 @@ fn main() {
             max_queries,
             packet_size,
             json_out,
+            runs,
         );
     }
 }
