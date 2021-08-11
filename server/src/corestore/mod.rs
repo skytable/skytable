@@ -33,6 +33,7 @@ use crate::corestore::memstore::DEFAULT;
 use crate::corestore::table::Table;
 use crate::dbnet::connection::ProtocolConnectionExt;
 use crate::kvengine::KVEngine;
+use crate::protocol::responses;
 use crate::protocol::Query;
 use crate::queryengine;
 use crate::registry;
@@ -391,7 +392,11 @@ impl Corestore {
                 con.flush_stream().await?;
             }
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
-            Query::PipelinedQuery(_) => unimplemented!(),
+            Query::PipelinedQuery(_) => {
+                con.write_response(responses::full_responses::R_PIPELINE_UNSUPPORTED)
+                    .await?;
+                con.flush_stream().await?;
+            }
         }
         Ok(())
     }

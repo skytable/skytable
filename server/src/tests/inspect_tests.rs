@@ -54,7 +54,7 @@ mod __private {
             Response::Item(Element::String(st)) => {
                 assert_eq!(
                     st,
-                    "KeyValue { data:(binstr,binstr), volatile:true }".to_owned()
+                    "Keymap { data:(binstr,binstr), volatile:true }".to_owned()
                 )
             }
             _ => panic!("Bad response for inspect table"),
@@ -68,7 +68,7 @@ mod __private {
             Response::Item(Element::String(st)) => {
                 assert_eq!(
                     st,
-                    "KeyValue { data:(binstr,binstr), volatile:true }".to_owned()
+                    "Keymap { data:(binstr,binstr), volatile:true }".to_owned()
                 )
             }
             _ => panic!("Bad response for inspect table"),
