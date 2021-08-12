@@ -24,7 +24,6 @@
  *
 */
 
-use crate::corestore::lock::QLGuard;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
@@ -37,9 +36,9 @@ use crate::protocol::Query;
 use crate::queryengine;
 use crate::registry;
 use crate::storage;
+use crate::storage::sengine::SnapshotEngine;
 use crate::util::Unwrappable;
 use crate::IoResult;
-use crate::SnapshotConfig;
 use core::borrow::Borrow;
 use core::hash::Hash;
 pub use htable::Data;
@@ -106,71 +105,33 @@ pub struct Corestore {
     ctable: Option<Arc<Table>>,
     /// an atomic reference to the actual backing storage
     store: Arc<Memstore>,
-}
-
-/// The status and details of the snapshotting service
-///
-/// The in_progress field is kept behind a mutex to ensure only one snapshot
-/// operation can run at a time. Although on the server side this isn't a problem
-/// because we don't have multiple snapshot tasks, but can be an issue when external
-/// snapshots are triggered, for example via `MKSNAP`
-#[derive(Debug)]
-pub struct SnapshotStatus {
-    /// The maximum number of recent snapshots to keep
-    pub max: usize,
-    /// The current state of the snapshot service
-    pub in_progress: lock::QuickLock<()>,
-}
-
-impl SnapshotStatus {
-    /// Create a new `SnapshotStatus` instance with preset values
-    pub fn new(max: usize) -> Self {
-        SnapshotStatus {
-            max,
-            in_progress: lock::QuickLock::new(()),
-        }
-    }
-
-    /// Lock the snapshot service
-    pub fn lock_snap(&self) -> lock::QLGuard<'_, ()> {
-        self.in_progress.lock()
-    }
-
-    /// Check if the snapshot service is busy
-    pub fn is_busy(&self) -> bool {
-        self.in_progress.is_locked()
-    }
+    /// the snapshot engine
+    sengine: Arc<SnapshotEngine>,
 }
 
 impl Corestore {
     /// This is the only function you'll ever need to either create a new database instance
     /// or restore from an earlier instance
-    pub fn init_with_snapcfg(snapcfg: &SnapshotConfig) -> IoResult<Self> {
-        let store = storage::unflush::read_full(snapcfg)?;
-        Ok(Self::default_with_store(store))
+    pub fn init_with_snapcfg(sengine: Arc<SnapshotEngine>) -> IoResult<Self> {
+        let store = storage::unflush::read_full()?;
+        Ok(Self::default_with_store(store, sengine))
     }
-    pub fn lock_snap(&self) -> QLGuard<'_, ()> {
-        match &self.store.snap_config {
-            Some(lck) => lck.lock_snap(),
-            None => unsafe { impossible!() },
-        }
+    pub fn clone_store(&self) -> Arc<Memstore> {
+        self.store.clone()
     }
-    pub fn get_snapstatus(&self) -> &SnapshotStatus {
-        match &self.store.snap_config {
-            Some(sc) => sc,
-            None => unsafe { impossible!() },
-        }
-    }
-    pub fn default_with_store(store: Memstore) -> Self {
+    pub fn default_with_store(store: Memstore, sengine: Arc<SnapshotEngine>) -> Self {
         let cks = unsafe { store.get_keyspace_atomic_ref(&DEFAULT).unsafe_unwrap() };
         let ctable = unsafe { cks.get_table_atomic_ref(&DEFAULT).unsafe_unwrap() };
         Self {
             cks: Some(cks),
             ctable: Some(ctable),
             store: Arc::new(store),
+            sengine,
         }
     }
-
+    pub fn get_engine(&self) -> &SnapshotEngine {
+        &self.sengine
+    }
     pub fn get_store(&self) -> &Memstore {
         &self.store
     }
@@ -255,10 +216,6 @@ impl Corestore {
             },
             None => Err(DdlError::DefaultNotFound),
         }
-    }
-
-    pub fn is_snapshot_enabled(&self) -> bool {
-        self.store.snap_config.is_some()
     }
 
     /// Create a table: in-memory; **no transactional guarantees**. Two tables can be created

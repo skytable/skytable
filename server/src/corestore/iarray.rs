@@ -24,10 +24,9 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
+#![allow(dead_code)] // TODO(@ohsayan): Remove this lint or remove offending methods
 
 use crate::corestore::array::LenScopeGuard;
-use crate::util::compiler::{likely, unlikely};
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
@@ -49,6 +48,15 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::alloc as std_alloc;
+
+pub const fn new_const_iarray<T, const N: usize>() -> IArray<[T; N]> {
+    IArray {
+        cap: 0,
+        store: InlineArray {
+            stack: ManuallyDrop::new(MaybeUninit::uninit()),
+        },
+    }
+}
 
 /// An arbitrary trait used for identifying something as a contiguous block of memory
 pub trait MemoryBlock {
@@ -162,6 +170,7 @@ pub struct IArray<A: MemoryBlock> {
     store: InlineArray<A>,
 }
 
+#[cfg(test)]
 impl IArray<[u8; 48]> {
     /// Returns a new 48-bit, stack allocated array of bytes
     fn new_bytearray() -> Self {
@@ -177,7 +186,7 @@ impl<A: MemoryBlock> IArray<A> {
         }
     }
     pub fn from_vec(mut vec: Vec<A::LayoutItem>) -> Self {
-        if likely(vec.capacity() <= Self::stack_capacity()) {
+        if vec.capacity() <= Self::stack_capacity() {
             let mut store = InlineArray::<A>::from_stack(MaybeUninit::uninit());
             let len = vec.len();
             unsafe {
@@ -209,9 +218,9 @@ impl<A: MemoryBlock> IArray<A> {
     /// Helper function that returns a ptr to the data, the len and the capacity
     fn meta_triple(&self) -> DataptrLenptrCapacity<A::LayoutItem> {
         unsafe {
-            if unlikely(self.went_off_stack()) {
-                let (data_ptr, len_ptr) = self.store.heap();
-                (data_ptr, len_ptr, self.cap)
+            if self.went_off_stack() {
+                let (data_ptr, len_ref) = self.store.heap();
+                (data_ptr, len_ref, self.cap)
             } else {
                 // still on stack
                 (self.store.stack_ptr(), self.cap, Self::stack_capacity())
@@ -221,10 +230,10 @@ impl<A: MemoryBlock> IArray<A> {
     /// Mutable version of `meta_triple`
     fn meta_triple_mut(&mut self) -> DataptrLenptrCapacityMut<A::LayoutItem> {
         unsafe {
-            if unlikely(self.went_off_stack()) {
+            if self.went_off_stack() {
                 // get heap
-                let (data_ptr, len_ptr) = self.store.heap_mut();
-                (data_ptr, len_ptr, self.cap)
+                let (data_ptr, len_ref) = self.store.heap_mut();
+                (data_ptr, len_ref, self.cap)
             } else {
                 // still on stack
                 (
@@ -237,7 +246,7 @@ impl<A: MemoryBlock> IArray<A> {
     }
     /// Returns a raw ptr to the data
     fn get_data_ptr_mut(&mut self) -> *mut A::LayoutItem {
-        if unlikely(self.went_off_stack()) {
+        if self.went_off_stack() {
             // get the heap ptr
             unsafe { self.store.heap_ptr_mut() }
         } else {
@@ -251,7 +260,7 @@ impl<A: MemoryBlock> IArray<A> {
     }
     /// Returns the length
     pub fn len(&self) -> usize {
-        if unlikely(self.went_off_stack()) {
+        if self.went_off_stack() {
             // so we're off the stack
             unsafe { self.store.heap_size() }
         } else {
@@ -265,7 +274,7 @@ impl<A: MemoryBlock> IArray<A> {
     }
     /// Returns the capacity
     fn get_capacity(&self) -> usize {
-        if unlikely(self.went_off_stack()) {
+        if self.went_off_stack() {
             self.cap
         } else {
             Self::stack_capacity()
@@ -279,7 +288,7 @@ impl<A: MemoryBlock> IArray<A> {
             let (data_ptr, &mut len, cap) = self.meta_triple_mut();
             let still_on_stack = !self.went_off_stack();
             assert!(new_cap > len);
-            if likely(new_cap <= Self::stack_capacity()) {
+            if new_cap <= Self::stack_capacity() {
                 if still_on_stack {
                     return;
                 }
@@ -357,15 +366,26 @@ impl<A: MemoryBlock> IArray<A> {
             }
         }
     }
+    /// This is amazingly dangerous if `idx` doesn't exist. You can potentially
+    /// corrupt a bunch of things
+    pub unsafe fn remove(&mut self, idx: usize) -> A::LayoutItem {
+        let (mut ptr, len_ref, _) = self.meta_triple_mut();
+        let len = *len_ref;
+        *len_ref = len - 1;
+        ptr = ptr.add(idx);
+        let item = ptr::read(ptr);
+        ptr::copy(ptr.add(1), ptr, len - idx - 1);
+        item
+    }
     /// Shrink this IArray so that it only occupies the required space and not anything
     /// more
     pub fn shrink(&mut self) {
-        if unlikely(self.went_off_stack()) {
+        if self.went_off_stack() {
             // it's off the stack, so no chance of moving back to the stack
             return;
         }
         let current_len = self.len();
-        if likely(Self::stack_capacity() >= current_len) {
+        if Self::stack_capacity() >= current_len {
             // we have a chance of copying this over to our stack
             unsafe {
                 let (data_ptr, len) = self.store.heap();
@@ -419,7 +439,7 @@ where
     pub fn from_slice(slice: &[A::LayoutItem]) -> Self {
         // FIXME(@ohsayan): Could we have had this as a From::from() method?
         let slice_len = slice.len();
-        if likely(slice_len <= Self::stack_capacity()) {
+        if slice_len <= Self::stack_capacity() {
             // so we can place this thing on the stack
             let mut new_stack = MaybeUninit::uninit();
             unsafe {
@@ -523,7 +543,7 @@ impl<A: MemoryBlock> BorrowMut<[A::LayoutItem]> for IArray<A> {
 impl<A: MemoryBlock> Drop for IArray<A> {
     fn drop(&mut self) {
         unsafe {
-            if unlikely(self.went_off_stack()) {
+            if self.went_off_stack() {
                 // free the heap
                 let (ptr, len) = self.store.heap();
                 // let vec's destructor do the work
@@ -544,8 +564,8 @@ impl<A: MemoryBlock> Extend<A::LayoutItem> for IArray<A> {
         self.reserve(lower_bound);
 
         unsafe {
-            let (data_ptr, len_ptr, cap) = self.meta_triple_mut();
-            let mut len = LenScopeGuard::new(len_ptr);
+            let (data_ptr, len_ref, cap) = self.meta_triple_mut();
+            let mut len = LenScopeGuard::new(len_ref);
             while len.get_temp() < cap {
                 if let Some(out) = iter.next() {
                     ptr::write(data_ptr.add(len.get_temp()), out);

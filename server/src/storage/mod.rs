@@ -65,6 +65,7 @@ pub mod bytemarks;
 pub mod flush;
 pub mod interface;
 pub mod preload;
+pub mod sengine;
 pub mod unflush;
 // test
 #[cfg(test)]

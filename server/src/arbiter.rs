@@ -26,10 +26,13 @@
 
 use crate::config::BGSave;
 use crate::config::SnapshotConfig;
+use crate::config::SnapshotPref;
 use crate::corestore::Corestore;
 use crate::dbnet::{self, Terminator};
 use crate::services;
+use crate::storage::sengine::SnapshotEngine;
 use crate::PortConfig;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 
 #[cfg(unix)]
@@ -70,8 +73,20 @@ pub async fn run(
 ) -> Result<Corestore, String> {
     // Intialize the broadcast channel
     let (signal, _) = broadcast::channel(1);
-
-    let db = Corestore::init_with_snapcfg(&snapshot_cfg)
+    let engine;
+    match &snapshot_cfg {
+        SnapshotConfig::Enabled(SnapshotPref { atmost, .. }) => {
+            engine = SnapshotEngine::new(*atmost);
+            engine
+                .parse_dir()
+                .map_err(|e| format!("Failed to init snapshot engine: {}", e))?;
+        }
+        SnapshotConfig::Disabled => {
+            engine = SnapshotEngine::new_disabled();
+        }
+    }
+    let engine = Arc::new(engine);
+    let db = Corestore::init_with_snapcfg(engine.clone())
         .map_err(|e| format!("Error while initializing database: {}", e))?;
 
     // initialize the background services
@@ -81,6 +96,7 @@ pub async fn run(
         Terminator::new(signal.subscribe()),
     ));
     let snapshot_handle = tokio::spawn(services::snapshot::snapshot_service(
+        engine,
         db.clone(),
         snapshot_cfg,
         Terminator::new(signal.subscribe()),

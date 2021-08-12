@@ -27,5 +27,3 @@
 //! This module provides tools for handling persistently stored data
 
 pub mod flock;
-pub mod sengine;
-pub mod snapshot;

@@ -38,6 +38,7 @@ use std::io::{BufWriter, Write};
 
 pub const DIR_KSROOT: &str = "data/ks";
 pub const DIR_SNAPROOT: &str = "data/snaps";
+pub const DIR_RSNAPROOT: &str = "data/rsnap";
 pub const DIR_BACKUPS: &str = "data/backups";
 pub const DIR_ROOT: &str = "data";
 
@@ -54,7 +55,13 @@ pub const DIR_ROOT: &str = "data";
 ///
 /// If any directories exist, they are simply ignored
 pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
-    try_dir_ignore_existing!(DIR_ROOT, DIR_KSROOT, DIR_BACKUPS, DIR_SNAPROOT);
+    try_dir_ignore_existing!(
+        DIR_ROOT,
+        DIR_KSROOT,
+        DIR_BACKUPS,
+        DIR_SNAPROOT,
+        DIR_RSNAPROOT
+    );
     for ks in memroot.keyspaces.iter() {
         unsafe {
             try_dir_ignore_existing!(concat_path!(DIR_KSROOT, ks.key().as_str()))?;
@@ -63,10 +70,10 @@ pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
     Ok(())
 }
 
-pub fn snap_create_tree(snapid: &str, memroot: &Memstore) -> IoResult<()> {
+pub fn snap_create_tree(snapdir: &str, snapid: &str, memroot: &Memstore) -> IoResult<()> {
     for ks in memroot.keyspaces.iter() {
         unsafe {
-            try_dir_ignore_existing!(concat_path!(DIR_SNAPROOT, snapid, ks.key().as_str()))?;
+            try_dir_ignore_existing!(concat_path!(snapdir, snapid, ks.key().as_str()))?;
         }
     }
     Ok(())

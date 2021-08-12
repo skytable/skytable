@@ -67,15 +67,6 @@ impl<'a, T> QLGuard<'a, T> {
  * things may look different.
 */
 
-impl QuickLock<()> {
-    pub const fn new_void() -> Self {
-        Self {
-            lock_state: AtomicBool::new(false),
-            rawdata: UnsafeCell::new(()),
-        }
-    }
-}
-
 impl<T> QuickLock<T> {
     pub const fn new(rawdata: T) -> Self {
         Self {
@@ -84,7 +75,6 @@ impl<T> QuickLock<T> {
         }
     }
     /// Try to acquire a lock
-    #[allow(dead_code)] // TODO(@ohsayan): Keep or remove this lint
     pub fn try_lock(&self) -> Option<QLGuard<'_, T>> {
         let ret = self
             .lock_state
@@ -94,10 +84,6 @@ impl<T> QuickLock<T> {
         } else {
             None
         }
-    }
-    /// Check if already locked
-    pub fn is_locked(&self) -> bool {
-        self.lock_state.load(ORD_ACQUIRE)
     }
     /// Enter a _busy loop_ waiting to get an unlock. Behold, this is blocking!
     pub fn lock(&self) -> QLGuard<'_, T> {
@@ -147,12 +133,6 @@ impl<'a, T> DerefMut for QLGuard<'a, T> {
             &mut *self.lck.rawdata.get()
         }
     }
-}
-
-#[test]
-fn test_lock() {
-    let lck = QuickLock::new(100);
-    assert!(!lck.is_locked());
 }
 
 #[test]

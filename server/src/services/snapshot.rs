@@ -27,8 +27,9 @@
 use crate::config::SnapshotConfig;
 use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
-use crate::diskstore::snapshot::SnapshotEngine;
 use crate::registry;
+use crate::storage::sengine::SnapshotEngine;
+use std::sync::Arc;
 use tokio::time::{self, Duration};
 
 /// The snapshot service
@@ -39,6 +40,7 @@ use tokio::time::{self, Duration};
 /// a termination signal, we're ready to quit. This function will, by default, poison the database
 /// if snapshotting fails, unless customized by the user.
 pub async fn snapshot_service(
+    engine: Arc<SnapshotEngine>,
     handle: Corestore,
     ss_config: SnapshotConfig,
     mut termination_signal: Terminator,
@@ -49,19 +51,12 @@ pub async fn snapshot_service(
             return;
         }
         SnapshotConfig::Enabled(configuration) => {
-            let (duration, atmost, failsafe) = configuration.decompose();
+            let (duration, _, failsafe) = configuration.decompose();
             let duration = Duration::from_secs(duration);
-            let mut sengine = match SnapshotEngine::new(atmost, &handle) {
-                Ok(ss) => ss,
-                Err(e) => {
-                    log::error!("Failed to initialize snapshot service with error: '{}'", e);
-                    return;
-                }
-            };
             loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        if sengine.mksnap().await {
+                        if engine.mksnap(handle.clone_store()).await == 0 {
                             // it passed, so unpoison the handle
                             registry::unpoison();
                         } else if failsafe {

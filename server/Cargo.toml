@@ -13,7 +13,6 @@ sky_macros = { path = "../sky-macros" }
 tokio = { version = "1.9.0", features = ["full"] }
 bytes = "1.0.1"
 libsky = { path = "../libsky" }
-crossbeam-queue = "0.3.2"
 dashmap = { version = "4.0.2", features = ["serde", "raw-api"] }
 serde = { version = "1.0.126", features = ["derive"] }
 toml = "0.5.8"
