@@ -35,7 +35,7 @@ action! {
             act.next().unsafe_unwrap()
         };
         if registry::state_okay() {
-            match kve!(con, handle).pop(key) {
+            match kve!(con, handle).pop(&key) {
                 Ok(Some((_key, val))) => conwrite!(con, BytesWrapper(val.into_inner()))?,
                 Ok(None) => conwrite!(con, groups::NIL)?,
                 Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,

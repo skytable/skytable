@@ -177,7 +177,7 @@ impl KVEngine {
     pub fn take_snapshot<Q>(&self, key: &Q) -> Option<Data>
     where
         Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
     {
         self.table.get(key).map(|v| v.clone())
     }
@@ -186,84 +186,81 @@ impl KVEngine {
         self.table.clear()
     }
     /// Get the value for a given key if it exists
-    pub fn get(&self, key: impl Into<Data>) -> Result<Option<Ref<Data, Data>>, ()> {
-        Ok(self.table.get(&self._encode_key(key.into())?))
-    }
-    pub fn exists<Q>(&self, key: Q) -> Result<bool, ()>
+    pub fn get<Q>(&self, key: &Q) -> Result<Option<Ref<Data, Data>>, ()>
     where
         Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
     {
-        Ok(self.table.contains_key(&self._encode_key(key)?))
+        self._encode_key(key)?;
+        Ok(self.table.get(key))
+    }
+    pub fn exists<Q>(&self, key: &Q) -> Result<bool, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self._encode_key(key)?;
+        Ok(self.table.contains_key(key))
     }
     /// Check the unicode encoding of a given byte array
-    fn _encode<Q>(data: Q) -> Result<Q, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]>,
-    {
-        if encoding::is_utf8(data.borrow()) {
-            Ok(data)
+    fn _encode<T: AsRef<[u8]>>(data: T) -> Result<(), ()> {
+        if encoding::is_utf8(data.as_ref()) {
+            Ok(())
         } else {
             Err(())
         }
     }
     /// Check the unicode encoding of the given key, if the encoded_k flag is set
-    fn _encode_key<Q>(&self, key: Q) -> Result<Q, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]>,
-    {
+    fn _encode_key<T: AsRef<[u8]>>(&self, key: T) -> Result<(), ()> {
         if self.encoded_k.load(ORD_RELAXED) {
-            Self::_encode(key)
+            Self::_encode(key.as_ref())
         } else {
-            Ok(key)
+            Ok(())
         }
     }
     /// Check the unicode encoding of the given value, if the encoded_v flag is set
-    fn _encode_value<Q>(&self, value: Q) -> Result<Q, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]>,
-    {
+    fn _encode_value<T: AsRef<[u8]>>(&self, value: T) -> Result<(), ()> {
         if self.encoded_v.load(ORD_RELAXED) {
             Self::_encode(value)
         } else {
-            Ok(value)
+            Ok(())
         }
     }
     /// Set the value of a non-existent key
     pub fn set(&self, key: Data, value: Data) -> Result<bool, ()> {
-        Ok(self
-            .table
-            .true_if_insert(self._encode_key(key)?, self._encode_value(value)?))
+        self._encode_key(&key)?;
+        self._encode_value(&value)?;
+        Ok(self.table.true_if_insert(key, value))
     }
     /// Update the value of an existing key
     pub fn update(&self, key: Data, value: Data) -> Result<bool, ()> {
-        Ok(self
-            .table
-            .true_if_update(self._encode_key(key)?, self._encode_value(value)?))
+        self._encode_key(&key)?;
+        self._encode_value(&value)?;
+        Ok(self.table.true_if_update(key, value))
     }
     /// Update or insert the value of a key
     pub fn upsert(&self, key: Data, value: Data) -> Result<(), ()> {
-        self.table
-            .upsert(self._encode_key(key)?, self._encode_value(value)?);
+        self._encode_key(&key)?;
+        self._encode_value(&value)?;
+        self.table.upsert(key, value);
         Ok(())
     }
     /// Remove an existing key
-    pub fn remove<Q>(&self, key: Q) -> Result<bool, ()>
+    pub fn remove<Q>(&self, key: &Q) -> Result<bool, ()>
     where
         Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
     {
-        Ok(self.table.true_if_removed(&self._encode_key(key)?))
+        self._encode_key(key)?;
+        Ok(self.table.true_if_removed(key))
     }
-    pub fn pop<Q>(&self, key: Q) -> Result<Option<(Data, Data)>, ()>
+    pub fn pop<Q>(&self, key: &Q) -> Result<Option<(Data, Data)>, ()>
     where
         Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
     {
-        Ok(self.table.remove(&self._encode_key(key)?))
+        self._encode_key(key)?;
+        Ok(self.table.remove(key))
     }
 }
 
@@ -325,7 +322,7 @@ fn test_with_bincode() {
         )
         .is_ok(),);
     assert_eq!(
-        bincode::deserialize::<User>(&tbl.get(Data::from("Joe")).unwrap().unwrap()).unwrap(),
+        bincode::deserialize::<User>(&tbl.get("Joe".as_bytes()).unwrap().unwrap()).unwrap(),
         joe
     );
 }

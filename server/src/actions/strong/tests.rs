@@ -62,7 +62,7 @@ mod sdel_concurrency_tests {
         assert!(ret.is_ok());
         // although we told sdel to delete it, it shouldn't because we externally
         // updated the value
-        assert!(kve.exists(Data::from("k1")).unwrap());
+        assert!(kve.exists(&Data::from("k1")).unwrap());
     }
 }
 
@@ -100,7 +100,7 @@ mod sset_concurrency_tests {
         assert!(ret.is_ok());
         // although we told sset to set a key, but it shouldn't because we updated it
         assert_eq!(
-            kve.get(Data::from("k1")).unwrap().unwrap().clone(),
+            kve.get(&Data::from("k1")).unwrap().unwrap().clone(),
             Data::from("updated-v1")
         );
     }
@@ -144,7 +144,7 @@ mod supdate_concurrency_tests {
         // although we told supdate to update the key, it shouldn't because we updated it
         // externally; hence our `updated-v1` value should persist
         assert_eq!(
-            kve.get(Data::from("k1")).unwrap().unwrap().clone(),
+            kve.get(&Data::from("k1")).unwrap().unwrap().clone(),
             Data::from("updated-v1")
         );
     }

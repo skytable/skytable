@@ -37,7 +37,7 @@ action!(
         crate::err_if_len_is!(act, con, eq 0);
         con.write_array_length(act.len()).await?;
         for key in act {
-            let res: Option<Bytes> = match kve!(con, handle).get(key) {
+            let res: Option<Bytes> = match kve!(con, handle).get(&key) {
                 Ok(v) => v.map(|b| b.get_blob().clone()),
                 Err(_) => None,
             };

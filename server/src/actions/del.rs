@@ -42,7 +42,7 @@ action!(
                 let mut many = 0;
                 let cmap = kve!(con, handle);
                 act.for_each(|key| {
-                    if not_enc_err!(cmap.remove(key)) {
+                    if not_enc_err!(cmap.remove(&key)) {
                         many += 1
                     }
                 });

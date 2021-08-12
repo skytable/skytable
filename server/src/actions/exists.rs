@@ -38,7 +38,7 @@ action!(
         {
             let cmap = kve!(con, handle);
             act.for_each(|key| {
-                if not_enc_err!(cmap.exists(key)) {
+                if not_enc_err!(cmap.exists(&key)) {
                     how_many_of_them_exist += 1;
                 }
             });

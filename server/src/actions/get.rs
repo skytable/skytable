@@ -40,7 +40,7 @@ action!(
             unsafe {
                 // UNSAFE(@ohsayan): this is safe because we've already checked if the action
                 // group contains one argument (excluding the action itself)
-                match reader.get(act.next().unsafe_unwrap()) {
+                match reader.get(&act.next().unsafe_unwrap()) {
                     Ok(v) => v.map(|b| b.get_blob().clone()),
                     Err(_) => None,
                 }

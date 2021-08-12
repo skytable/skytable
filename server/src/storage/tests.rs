@@ -260,7 +260,7 @@ mod flush_routines {
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
-                .get(Data::from("hello"))
+                .get(&Data::from("hello"))
                 .unwrap()
                 .unwrap()
                 .clone(),
@@ -293,7 +293,7 @@ mod flush_routines {
             tbl1_ret
                 .get_kvstore()
                 .unwrap()
-                .get(Data::from("hello"))
+                .get(&Data::from("hello"))
                 .unwrap()
                 .unwrap()
                 .clone(),

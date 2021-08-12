@@ -37,7 +37,7 @@ action!(
             unsafe {
                 // UNSAFE(@ohsayan): this is completely safe as we've already checked
                 // the number of arguments is one
-                match reader.get(act.next().unsafe_unwrap()) {
+                match reader.get(&act.next().unsafe_unwrap()) {
                     Ok(v) => v.map(|b| b.len()),
                     Err(_) => None,
                 }

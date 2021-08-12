@@ -42,7 +42,7 @@ action!(
                     // pop operation
                     con.write_response(responses::groups::SERVER_ERR).await?;
                 } else {
-                    match kve!(con, handle).pop(key) {
+                    match kve!(con, handle).pop(&key) {
                         Ok(Some((_key, val))) => {
                             con.write_response(BytesWrapper(val.into_inner())).await?
                         }
