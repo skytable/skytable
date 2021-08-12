@@ -60,19 +60,20 @@ pub fn flush_full(store: &Memstore) -> IoResult<()> {
 }
 
 pub fn snap_flush_keyspace_full(
+    snapdir: &str,
     snapid: &str,
     ksid: &ObjectID,
     keyspace: &Keyspace,
 ) -> IoResult<()> {
-    self::oneshot::snap_flush_partmap(snapid, ksid, keyspace)?;
-    self::oneshot::snap_flush_keyspace(snapid, ksid, keyspace)
+    self::oneshot::snap_flush_partmap(snapdir, snapid, ksid, keyspace)?;
+    self::oneshot::snap_flush_keyspace(snapdir, snapid, ksid, keyspace)
 }
 
-pub fn snap_flush_full(snapid: &str, store: &Memstore) -> IoResult<()> {
-    super::interface::snap_create_tree(snapid, store)?;
-    self::oneshot::snap_flush_preload(snapid, store)?;
+pub fn snap_flush_full(snapdir: &str, snapid: &str, store: &Memstore) -> IoResult<()> {
+    super::interface::snap_create_tree(snapdir, snapid, store)?;
+    self::oneshot::snap_flush_preload(snapdir, snapid, store)?;
     for keyspace in store.keyspaces.iter() {
-        self::snap_flush_keyspace_full(snapid, keyspace.key(), keyspace.value())?;
+        self::snap_flush_keyspace_full(snapdir, snapid, keyspace.key(), keyspace.value())?;
     }
     Ok(())
 }
@@ -85,7 +86,7 @@ pub mod oneshot {
     //!
     use super::*;
     use crate::corestore::table::{DataModel, Table};
-    use crate::storage::interface::{DIR_KSROOT, DIR_SNAPROOT};
+    use crate::storage::interface::DIR_KSROOT;
     use std::fs::{self, File};
 
     const PRELOAD_FILE_PATH_TEMP: &str = "data/ks/PRELOAD_";
@@ -98,10 +99,10 @@ pub mod oneshot {
     }
 
     macro_rules! snap_tbl_path {
-        ($snapid:expr, $ksid:expr, $tableid:expr) => {
+        ($root:expr, $snapid:expr, $ksid:expr, $tableid:expr) => {
             unsafe {
                 concat_str!(
-                    DIR_SNAPROOT,
+                    $root,
                     "/",
                     $snapid,
                     "/",
@@ -140,12 +141,13 @@ pub mod oneshot {
 
     /// Same as flush_table, except for it being built specifically for snapshots
     pub fn snap_flush_table(
+        snapdir: &str,
         snapid: &str,
         ksid: &ObjectID,
         tableid: &ObjectID,
         table: &Table,
     ) -> IoResult<()> {
-        routine_flushtable!(table, snap_tbl_path!(snapid, ksid, tableid))
+        routine_flushtable!(table, snap_tbl_path!(snapdir, snapid, ksid, tableid))
     }
 
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
@@ -157,9 +159,14 @@ pub mod oneshot {
     }
 
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
-    pub fn snap_flush_keyspace(snapid: &str, ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
+    pub fn snap_flush_keyspace(
+        snapdir: &str,
+        snapid: &str,
+        ksid: &ObjectID,
+        keyspace: &Keyspace,
+    ) -> IoResult<()> {
         for table in keyspace.tables.iter() {
-            self::snap_flush_table(snapid, table.key(), ksid, table.value())?;
+            self::snap_flush_table(snapdir, snapid, table.key(), ksid, table.value())?;
         }
         Ok(())
     }
@@ -181,18 +188,14 @@ pub mod oneshot {
     }
 
     /// Flushes a single partmap
-    pub fn snap_flush_partmap(snapid: &str, ksid: &ObjectID, keyspace: &Keyspace) -> IoResult<()> {
-        let path = unsafe {
-            concat_str!(
-                DIR_SNAPROOT,
-                "/",
-                snapid,
-                "/",
-                ksid.as_str(),
-                "/",
-                "PARTMAP_"
-            )
-        };
+    pub fn snap_flush_partmap(
+        snapdir: &str,
+        snapid: &str,
+        ksid: &ObjectID,
+        keyspace: &Keyspace,
+    ) -> IoResult<()> {
+        let path =
+            unsafe { concat_str!(snapdir, "/", snapid, "/", ksid.as_str(), "/", "PARTMAP_") };
         routine_flushpartmap!(path, keyspace)
     }
 
@@ -212,8 +215,8 @@ pub mod oneshot {
     }
 
     /// Same as flush_preload, but for snapshots
-    pub fn snap_flush_preload(snapid: &str, store: &Memstore) -> IoResult<()> {
-        let preload_tmp = concat_str!(DIR_SNAPROOT, "/", snapid, "/", "PRELOAD_");
+    pub fn snap_flush_preload(snapdir: &str, snapid: &str, store: &Memstore) -> IoResult<()> {
+        let preload_tmp = concat_str!(snapdir, "/", snapid, "/", "PRELOAD_");
         let preload = &preload_tmp[..preload_tmp.len() - 1];
         routine_flushpreload!(store, preload_tmp, preload)
     }

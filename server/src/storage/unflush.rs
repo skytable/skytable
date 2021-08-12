@@ -37,7 +37,6 @@ use crate::storage::interface::DIR_KSROOT;
 use crate::storage::preload::LoadedPartfile;
 use crate::storage::Coremap;
 use crate::IoResult;
-use crate::SnapshotConfig;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -116,7 +115,7 @@ pub fn read_preload() -> IoResult<PreloadSet> {
 /// If this is a new instance an empty store is returned while the directory tree
 /// is also created. If this is an already initialized instance then the store
 /// is read and returned (and any possible errors that are encountered are returned)
-pub fn read_full(snapshot_config: &SnapshotConfig) -> IoResult<Memstore> {
+pub fn read_full() -> IoResult<Memstore> {
     if is_new_instance() {
         // init an empty store
         let store = Memstore::new_default();
@@ -130,7 +129,7 @@ pub fn read_full(snapshot_config: &SnapshotConfig) -> IoResult<Memstore> {
         let ks = Keyspace::init_with_all_def_strategy(self::read_keyspace(&ksid)?);
         ksmap.upsert(ksid, Arc::new(ks));
     }
-    Ok(Memstore::init_with_all(ksmap, snapshot_config))
+    Ok(Memstore::init_with_all(ksmap))
 }
 
 /// Check if the data/PRELOAD file exists (if not: we're on a new instance)

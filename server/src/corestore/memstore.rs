@@ -59,9 +59,7 @@ use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
 use crate::corestore::lock::{QLGuard, QuickLock};
 use crate::corestore::table::Table;
-use crate::corestore::SnapshotStatus;
 use crate::registry;
-use crate::SnapshotConfig;
 use core::borrow::Borrow;
 use core::hash::Hash;
 use core::mem::MaybeUninit;
@@ -160,7 +158,6 @@ pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
     /// the snapshot configuration
-    pub snap_config: Option<SnapshotStatus>,
     /// A **virtual lock** on the preload file
     preload_lock: QuickLock<()>,
 }
@@ -170,21 +167,12 @@ impl Memstore {
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
-            snap_config: None,
             preload_lock: QuickLock::new(()),
         }
     }
-    pub fn init_with_all(
-        keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
-        snap_config: &SnapshotConfig,
-    ) -> Self {
+    pub fn init_with_all(keyspaces: Coremap<ObjectID, Arc<Keyspace>>) -> Self {
         Self {
             keyspaces,
-            snap_config: if let SnapshotConfig::Enabled(pref) = snap_config {
-                Some(SnapshotStatus::new(pref.atmost))
-            } else {
-                None
-            },
             preload_lock: QuickLock::new(()),
         }
     }
@@ -214,7 +202,6 @@ impl Memstore {
                 n.true_if_insert(SYSTEM, Arc::new(Keyspace::empty()));
                 n
             },
-            snap_config: None,
             preload_lock: QuickLock::new(()),
         }
     }
