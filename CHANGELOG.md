@@ -105,7 +105,8 @@ All changes in this project will be noted in this file.
 - Non-interactive TLS private key passphrase input: Just save your password in some
   file and then pass `--tlspassin /path/to/passfile.txt`. You can do the same by using the
   `tlspassin` key under SSL in the configuration file
-
+- `MPOP` now replaces `POP` to accept multiple keys while `POP` will accept a single key
+  to follow the `MGET`/`GET` naming convention
 - TLS port can now be set to a custom port via CLI arguments
 
 ### Fixes

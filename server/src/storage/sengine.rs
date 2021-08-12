@@ -131,7 +131,6 @@ impl SnapshotEngine {
     }
     pub fn parse_dir(&self) -> SnapshotResult<()> {
         parse_dir!(self.local_queue, DIR_SNAPROOT);
-        println!("Queue: {:?}", self.local_queue);
         Ok(())
     }
     /// Generate the snapshot name

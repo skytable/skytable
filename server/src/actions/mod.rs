@@ -39,6 +39,7 @@ pub mod jget;
 pub mod keylen;
 pub mod lskeys;
 pub mod mget;
+pub mod mpop;
 pub mod mset;
 pub mod mupdate;
 pub mod pop;

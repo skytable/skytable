@@ -133,7 +133,8 @@ where
         CREATE => ddl::create,
         DROP => ddl::ddl_drop,
         USE => self::entity_swap,
-        INSPECT => inspect::inspect
+        INSPECT => inspect::inspect,
+        MPOP => actions::mpop::mpop
     );
     Ok(())
 }

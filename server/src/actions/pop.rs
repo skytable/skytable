@@ -24,40 +24,25 @@
  *
 */
 
-use crate::corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::responses;
-use crate::queryengine::ActionIter;
 use crate::resp::BytesWrapper;
 
-action!(
-    /// Run a POP action
-    fn pop(handle: &corestore::Corestore, con: &mut T, act: ActionIter) {
-        err_if_len_is!(act, con, eq 0);
+action! {
+    fn pop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
+        let key = unsafe {
+            // SAFETY: We have checked for there to be one arg
+            act.next().unsafe_unwrap()
+        };
         if registry::state_okay() {
-            con.write_array_length(act.len()).await?;
-            for key in act {
-                if !registry::state_okay() {
-                    // we keep this check just in case the server fails in-between running a
-                    // pop operation
-                    con.write_response(responses::groups::SERVER_ERR).await?;
-                } else {
-                    match kve!(con, handle).pop(key) {
-                        Ok(Some((_key, val))) => {
-                            con.write_response(BytesWrapper(val.into_inner())).await?
-                        }
-                        Ok(None) => con.write_response(responses::groups::NIL).await?,
-                        Err(_) => {
-                            con.write_response(responses::groups::ENCODING_ERROR)
-                                .await?
-                        }
-                    }
-                }
+            match kve!(con, handle).pop(key) {
+                Ok(Some((_key, val))) => conwrite!(con, BytesWrapper(val.into_inner()))?,
+                Ok(None) => conwrite!(con, groups::NIL)?,
+                Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
             }
         } else {
-            // don't begin the operation at all if the database is poisoned
-            return con.write_response(responses::groups::SERVER_ERR).await;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }
-);
+}

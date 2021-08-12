@@ -1141,14 +1141,15 @@ mod __private {
             Response::Item(Element::RespCode(RespCode::ActionError))
         );
     }
-    async fn test_pop_syntax_error() {
-        query.push("pop");
+    async fn test_mpop_syntax_error() {
+        query.push("mpop");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::RespCode(RespCode::ActionError))
         );
     }
-    async fn test_pop_all_success() {
+
+    async fn test_mpop_all_success() {
         setkeys!(
             con,
             "x":100,
@@ -1165,7 +1166,7 @@ mod __private {
             ]))
         )
     }
-    async fn test_pop_mixed() {
+    async fn test_mpop_mixed() {
         setkeys!(
             con,
             "x":100,
@@ -1183,6 +1184,33 @@ mod __private {
                 Element::String("200".to_owned()),
                 Element::String("300".to_owned())
             ]))
+        );
+    }
+    async fn test_pop_syntax_error() {
+        query.push("pop");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
+    async fn test_pop_okay() {
+        setkeys!(
+            con,
+            "x":100
+        );
+        query.push("pop");
+        query.push("x");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::String("100".to_owned()))
+        );
+    }
+    async fn test_pop_nil() {
+        query.push("pop");
+        query.push("x");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::String("100".to_owned()))
         );
     }
 }
