@@ -1156,7 +1156,7 @@ mod __private {
             "y":200,
             "z":300
         );
-        query.push(vec!["pop", "x", "y", "z"]);
+        query.push(vec!["mpop", "x", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::Array(vec![
@@ -1173,7 +1173,7 @@ mod __private {
             "y":200,
             "z":300
         );
-        query.push(vec!["pop", "apple", "arnold", "x", "madonna", "y", "z"]);
+        query.push(vec!["mpop", "apple", "arnold", "x", "madonna", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
             Response::Item(Element::Array(vec![
@@ -1210,7 +1210,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::String("100".to_owned()))
+            Response::Item(Element::RespCode(RespCode::NotFound))
         );
     }
 }
