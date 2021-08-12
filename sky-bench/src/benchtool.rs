@@ -163,6 +163,7 @@ pub fn runner(
             socket.shutdown(std::net::Shutdown::Both).unwrap();
         },
         true,
+        Some(max_queries)
     );
 
     // create table
