@@ -26,6 +26,8 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding;
+use core::str;
+use std::path::{Component, PathBuf};
 
 action!(
     /// Create a snapshot
@@ -50,6 +52,29 @@ action!(
             if !encoding::is_utf8(&name) {
                 return conwrite!(con, groups::ENCODING_ERROR);
             }
+
+            // SECURITY: Check for directory traversal syntax
+            let st = unsafe {
+                // SAFETY: We have already checked for UTF-8 validity
+                str::from_utf8_unchecked(&name)
+            };
+            let path = PathBuf::from(st);
+            let illegal_snapshot = path
+                .components()
+                .filter(|dir| {
+                    // Sanitize snapshot name, to avoid directory traversal attacks
+                    // If the snapshot name has any root directory or parent directory, then
+                    // we'll allow it to pass through this adaptor.
+                    // As a result, this iterator will give us a count of the 'bad' components
+                    dir == &Component::RootDir || dir == &Component::ParentDir
+                })
+                .count()
+                != 0;
+            if illegal_snapshot {
+                return conwrite!(con, groups::SNAPSHOT_ILLEGAL_NAME);
+            }
+
+            // now make the snapshot
             match engine.mkrsnap(name, handle.clone_store()).await {
                 0 => conwrite!(con, groups::OKAY)?,
                 1 => conwrite!(con, groups::SERVER_ERR)?,
