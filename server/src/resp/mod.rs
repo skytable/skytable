@@ -35,6 +35,10 @@ use std::io::Error as IoError;
 use std::pin::Pin;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+pub mod writer;
+
+pub const TSYMBOL_BINARY: u8 = b'?';
+pub const TSYMBOL_UNICODE: u8 = b'+';
 
 /// # The `Writable` trait
 /// All trait implementors are given access to an asynchronous stream to which

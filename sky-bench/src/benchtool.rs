@@ -24,9 +24,7 @@
  *
 */
 
-use crate::hoststr;
 use crate::report;
-use crate::sanity_test;
 use devtimer::DevTime;
 use libstress::utils::generate_random_string_vector;
 use libstress::PoolConfig;
@@ -163,7 +161,7 @@ pub fn runner(
             socket.shutdown(std::net::Shutdown::Both).unwrap();
         },
         true,
-        Some(max_queries)
+        Some(max_queries),
     );
 
     // create table

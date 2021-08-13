@@ -25,7 +25,7 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::resp::BytesWrapper;
+use crate::resp::writer;
 
 action! {
     fn pop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
@@ -35,8 +35,13 @@ action! {
             act.next().unsafe_unwrap()
         };
         if registry::state_okay() {
-            match kve!(con, handle).pop(&key) {
-                Ok(Some((_key, val))) => conwrite!(con, BytesWrapper(val.into_inner()))?,
+            let kve = kve!(con, handle);
+            let tsymbol = kve.get_vt();
+            match kve.pop(&key) {
+                Ok(Some((_key, val))) => unsafe {
+                    // SAFETY: We have verified the tsymbol ourselves
+                    writer::write_raw_mono(con, tsymbol, &val).await?
+                },
                 Ok(None) => conwrite!(con, groups::NIL)?,
                 Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
             }

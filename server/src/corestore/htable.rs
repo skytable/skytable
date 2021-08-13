@@ -168,6 +168,16 @@ where
     }
 }
 
+impl<K: Eq + Hash, V: Clone> Coremap<K, V> {
+    pub fn get_cloned<Q>(&self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.inner.get_cloned(key)
+    }
+}
+
 impl Coremap<Data, Data> {
     /// Returns atleast `count` number of keys from the hashtable
     pub fn get_keys(&self, count: usize) -> Vec<Bytes> {

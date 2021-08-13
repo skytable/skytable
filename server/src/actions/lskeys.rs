@@ -26,7 +26,7 @@
 
 use crate::corestore::memstore::DdlError;
 use crate::dbnet::connection::prelude::*;
-use crate::resp::BytesWrapper;
+use crate::resp::writer::Writer;
 use bytes::Bytes;
 
 const DEFAULT_COUNT: usize = 10;
@@ -71,9 +71,14 @@ action!(
             Err(_) => unsafe { impossible!() },
         };
         let items: Vec<Bytes> = kve.__get_inner_ref().get_keys(count);
+        let tsymbol = kve.get_kt();
         con.write_flat_array_length(items.len()).await?;
-        for item in items {
-            con.write_response(BytesWrapper(item)).await?;
+        let mut writer = unsafe {
+            // SAFETY: We have checked kty ourselves
+            Writer::new(con, tsymbol)
+        };
+        for key in items {
+            writer.write_rawstring(key).await?;
         }
         Ok(())
     }

@@ -367,6 +367,9 @@ where
             ret
         })
     }
+    unsafe fn raw_stream(&mut self) -> &mut BufWriter<Strm> {
+        self.get_mut_stream()
+    }
 }
 
 /// # The `ProtocolConnection` trait

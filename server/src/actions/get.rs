@@ -28,30 +28,18 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::resp::BytesWrapper;
-use bytes::Bytes;
-
+use crate::resp::writer;
 action!(
     /// Run a `GET` query
     fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 1);
-        let res: Option<Bytes> = {
-            let reader = kve!(con, handle);
-            unsafe {
-                // UNSAFE(@ohsayan): this is safe because we've already checked if the action
-                // group contains one argument (excluding the action itself)
-                match reader.get(&act.next().unsafe_unwrap()) {
-                    Ok(v) => v.map(|b| b.get_blob().clone()),
-                    Err(_) => None,
-                }
+        let kve = kve!(con, handle);
+        unsafe {
+            match kve.get_cloned_with_tsymbol(&act.next().unsafe_unwrap()) {
+                Ok((Some(val), tsymbol)) => writer::write_raw_mono(con, tsymbol, &val).await?,
+                Err(_) => conwrite!(con, groups::ENCODING_ERROR)?,
+                Ok(_) => conwrite!(con, groups::NIL)?,
             }
-        };
-        if let Some(value) = res {
-            // Good, we got the value, write it off to the stream
-            con.write_response(BytesWrapper(value)).await?;
-        } else {
-            // Ah, couldn't find that key
-            con.write_response(responses::groups::NIL).await?;
         }
         Ok(())
     }
