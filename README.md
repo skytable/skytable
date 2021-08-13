@@ -37,12 +37,13 @@ You can learn more about installation [here](https://docs.skytable.io/getting-st
 - **Resource friendly**: The database server doesn't need more than 1MB to run
 - **Convenient**: Without the setup hassle and system-specific dependencies
 
-(...with more on the way)
+**🛣️ There's a lot more coming! View our [roadmap](https://github.com/skytable/skytable/issues/203)**
 
 ## Clients 🔌
 
 The project currently maintains an official [Rust driver](https://github.com/skytable/client-rust) and we have plans
 to support more languages along the way!
+We also maintain a list of [community supported drivers here](https://github.com/skytable/skytable/wiki/Drivers).
 
 If you want to use a different language, for now you'll just need to implement the simple and performant [Skyhash Protocol](https://docs.skytable.io/protocol/skyhash).
 
