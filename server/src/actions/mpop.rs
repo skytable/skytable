@@ -29,6 +29,7 @@ use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::resp::writer::FlatArrayWriter;
+use crate::util::compiler;
 
 action!(
     /// Run an MPOP action
@@ -42,7 +43,7 @@ action!(
                 let encoder = kve.get_key_encoder();
                 act.as_ref().iter().all(|k| encoder.is_ok(k))
             };
-            if encoding_is_okay {
+            if compiler::likely(encoding_is_okay) {
                 let mut writer = unsafe {
                     // SAFETY: We have verified the tsymbol ourselves
                     FlatArrayWriter::new(con, kve.get_vt(), act.len())

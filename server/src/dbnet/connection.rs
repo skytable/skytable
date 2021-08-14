@@ -83,7 +83,6 @@ pub mod prelude {
     pub use crate::handle_entity;
     pub use crate::is_lowbit_set;
     pub use crate::kve;
-    pub use crate::not_enc_err;
     pub use crate::protocol::responses;
     pub use crate::protocol::responses::groups;
     pub use crate::queryengine::ActionIter;
@@ -101,15 +100,6 @@ pub mod prelude {
                         .write_response(crate::protocol::responses::groups::WRONG_MODEL)
                         .await;
                 }
-            }
-        };
-    }
-    #[macro_export]
-    macro_rules! not_enc_err {
-        ($val:expr) => {
-            match $val {
-                Ok(v) => v,
-                Err(_) => false,
             }
         };
     }

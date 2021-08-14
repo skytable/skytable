@@ -206,6 +206,9 @@ impl KVEngine {
     pub const fn needs_key_encoding(&self) -> bool {
         self.encoded_k
     }
+    pub const fn needs_no_encoding(&self) -> bool {
+        !(self.encoded_k && self.encoded_v)
+    }
     pub const fn get_vt(&self) -> u8 {
         if self.encoded_v {
             TSYMBOL_UNICODE
@@ -271,6 +274,13 @@ impl KVEngine {
         self._encode_key(key)?;
         Ok(self.table.contains_key(key))
     }
+    pub fn exists_unchecked<Q>(&self, key: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.contains_key(key)
+    }
     /// Check the unicode encoding of a given byte array
     fn _encode<T: AsRef<[u8]>>(data: T) -> Result<(), ()> {
         if encoding::is_utf8(data.as_ref()) {
@@ -302,11 +312,19 @@ impl KVEngine {
         self._encode_value(&value)?;
         Ok(self.table.true_if_insert(key, value))
     }
+    /// Set the value of a non-existent key
+    pub fn set_unchecked(&self, key: Data, value: Data) -> bool {
+        self.table.true_if_insert(key, value)
+    }
     /// Update the value of an existing key
     pub fn update(&self, key: Data, value: Data) -> Result<bool, ()> {
         self._encode_key(&key)?;
         self._encode_value(&value)?;
         Ok(self.table.true_if_update(key, value))
+    }
+    /// Update the value of an existing key
+    pub fn update_unchecked(&self, key: Data, value: Data) -> bool {
+        self.table.true_if_update(key, value)
     }
     /// Update or insert the value of a key
     pub fn upsert(&self, key: Data, value: Data) -> Result<(), ()> {
@@ -314,6 +332,10 @@ impl KVEngine {
         self._encode_value(&value)?;
         self.table.upsert(key, value);
         Ok(())
+    }
+    /// Update or insert the value of a key
+    pub fn upsert_unchecked(&self, key: Data, value: Data) {
+        self.table.upsert(key, value);
     }
     /// Remove an existing key
     pub fn remove<Q>(&self, key: &Q) -> Result<bool, ()>
@@ -323,6 +345,14 @@ impl KVEngine {
     {
         self._encode_key(key)?;
         Ok(self.table.true_if_removed(key))
+    }
+    /// Remove an existing key
+    pub fn remove_unchecked<Q>(&self, key: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self.table.true_if_removed(key)
     }
     pub fn pop<Q>(&self, key: &Q) -> Result<Option<(Data, Data)>, ()>
     where
