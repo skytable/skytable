@@ -28,30 +28,31 @@ use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::Writer;
+use crate::resp::writer::TypedArrayWriter;
 
 action!(
     /// Run an MPOP action
     fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         if registry::state_okay() {
-            con.write_array_length(act.len()).await?;
             let kve = kve!(con, handle);
             let mut writer = unsafe {
                 // SAFETY: We have verified the tsymbol ourselves
-                Writer::new(con, kve.get_vt())
+                TypedArrayWriter::new(con, kve.get_vt())
             };
+            // write len
+            writer.write_length(act.len()).await?;
             for key in act {
                 if registry::state_okay() {
                     match kve.pop(&key) {
-                        Ok(Some((_key, val))) => writer.write_rawstring(&val).await?,
+                        Ok(Some((_key, val))) => writer.write_element(val).await?,
                         Ok(None) => writer.write_nil().await?,
                         Err(_) => writer.write_encoding_error().await?,
                     }
                 } else {
                     // we keep this check just in case the server fails in-between running a
                     // pop operation
-                    writer.write_server_err().await?;
+                    writer.write_server_error().await?;
                 }
             }
         } else {

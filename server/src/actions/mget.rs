@@ -26,22 +26,23 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::Writer;
+use crate::resp::writer::TypedArrayWriter;
 
 action!(
     /// Run an `MGET` query
     ///
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         crate::err_if_len_is!(act, con, eq 0);
-        con.write_array_length(act.len()).await?;
         let kve = kve!(con, handle);
         let mut writer = unsafe {
             // SAFETY: We are getting the value type ourselves
-            Writer::new(con, kve.get_vt())
+            TypedArrayWriter::new(con, kve.get_vt())
         };
+        // write len
+        writer.write_length(act.len()).await?;
         for key in act {
             match kve.get_cloned(&key) {
-                Ok(Some(v)) => writer.write_rawstring(&v).await?,
+                Ok(Some(v)) => writer.write_element(&v).await?,
                 Ok(None) => writer.write_nil().await?,
                 Err(_) => writer.write_encoding_error().await?,
             }

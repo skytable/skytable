@@ -92,3 +92,65 @@ where
     raw_stream.write_all(&[b'\n']).await?; // final LF
     Ok(())
 }
+
+#[derive(Debug)]
+pub struct TypedArrayWriter<'a, T, Strm> {
+    tsymbol: u8,
+    con: &'a mut T,
+    _owned: PhantomData<Strm>,
+}
+
+impl<'a, T, Strm> TypedArrayWriter<'a, T, Strm>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
+    pub unsafe fn new(con: &'a mut T, tsymbol: u8) -> Self {
+        Self {
+            con,
+            tsymbol,
+            _owned: PhantomData,
+        }
+    }
+    /// This will write out the tsymbol and the length
+    pub async fn write_length(&mut self, len: usize) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        // first write @<tsymbol>
+        stream.write_all(&[b'@', self.tsymbol]).await?;
+        let bytes = Integer64::from(len);
+        // now write len
+        stream.write_all(&bytes).await?;
+        // first LF
+        stream.write_all(&[b'\n']).await?;
+        Ok(())
+    }
+    pub async fn write_element(&mut self, bytes: impl AsRef<[u8]>) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        let bytes = bytes.as_ref();
+        // first write <tsymbol>
+        stream.write_all(&[self.tsymbol]).await?;
+        // now len
+        let len = Integer64::from(bytes.len());
+        stream.write_all(&len).await?;
+        // now LF
+        stream.write_all(&[b'\n']).await?;
+        // now element
+        stream.write_all(bytes).await?;
+        // now final LF
+        stream.write_all(&[b'\n']).await?;
+        Ok(())
+    }
+    pub async fn write_nil(&mut self) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        stream.write_all(groups::NIL).await?;
+        Ok(())
+    }
+    pub async fn write_server_error(&mut self) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        stream.write_all(groups::NIL).await?;
+        Ok(())
+    }
+    pub async fn write_encoding_error(&mut self) -> IoResult<()> {
+        self.con.write_response(groups::ENCODING_ERROR).await
+    }
+}
