@@ -4,6 +4,9 @@ kind: pipeline
 type: ssh
 name: Build on M1
 
+environment:
+  CARGO_TERM_COLOR: always
+
 server:
   host:
     from_secret: host

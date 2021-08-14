@@ -3,6 +3,7 @@ name: Test (PR)
 on: [pull_request]
 env:
   BUILD: false
+  CARGO_TERM_COLOR: always
 jobs:
   test:
     name: Test
