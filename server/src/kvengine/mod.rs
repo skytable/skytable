@@ -200,6 +200,12 @@ impl KVEngine {
     pub fn truncate_table(&self) {
         self.table.clear()
     }
+    pub const fn needs_value_encoding(&self) -> bool {
+        self.encoded_v
+    }
+    pub const fn needs_key_encoding(&self) -> bool {
+        self.encoded_k
+    }
     pub const fn get_vt(&self) -> u8 {
         if self.encoded_v {
             TSYMBOL_UNICODE
@@ -240,6 +246,13 @@ impl KVEngine {
     {
         self._encode_key(key)?;
         Ok(self.table.get_cloned(key))
+    }
+    pub fn get_cloned_unchecked<Q>(&self, key: &Q) -> Option<Data>
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.get_cloned(key)
     }
     /// Get the value for a given key if it exists, returning a cloned reference
     pub fn get_cloned_with_tsymbol<Q>(&self, key: &Q) -> Result<(Option<Data>, u8), ()>
@@ -318,6 +331,13 @@ impl KVEngine {
     {
         self._encode_key(key)?;
         Ok(self.table.remove(key))
+    }
+    pub fn pop_unchecked<Q>(&self, key: &Q) -> Option<(Data, Data)>
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.remove(key)
     }
 }
 

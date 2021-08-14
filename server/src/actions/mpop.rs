@@ -28,7 +28,7 @@ use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::TypedArrayWriter;
+use crate::resp::writer::FlatArrayWriter;
 
 action!(
     /// Run an MPOP action
@@ -36,24 +36,32 @@ action!(
         err_if_len_is!(act, con, eq 0);
         if registry::state_okay() {
             let kve = kve!(con, handle);
-            let mut writer = unsafe {
-                // SAFETY: We have verified the tsymbol ourselves
-                TypedArrayWriter::new(con, kve.get_vt())
+            let encoding_is_okay = if kve.needs_key_encoding() {
+                true
+            } else {
+                let encoder = kve.get_key_encoder();
+                act.as_ref().iter().all(|k| encoder.is_ok(k))
             };
-            // write len
-            writer.write_length(act.len()).await?;
-            for key in act {
-                if registry::state_okay() {
-                    match kve.pop(&key) {
-                        Ok(Some((_key, val))) => writer.write_element(val).await?,
-                        Ok(None) => writer.write_nil().await?,
-                        Err(_) => writer.write_encoding_error().await?,
-                    }
-                } else {
-                    // we keep this check just in case the server fails in-between running a
-                    // pop operation
-                    writer.write_server_error().await?;
+            if encoding_is_okay {
+                let mut writer = unsafe {
+                    // SAFETY: We have verified the tsymbol ourselves
+                    FlatArrayWriter::new(con, kve.get_vt(), act.len())
                 }
+                .await?;
+                for key in act {
+                    if registry::state_okay() {
+                        match kve.pop_unchecked(&key) {
+                            Some((_key, val)) => writer.write_element(val).await?,
+                            None => writer.write_nil().await?,
+                        }
+                    } else {
+                        // we keep this check just in case the server fails in-between running a
+                        // pop operation
+                        writer.write_server_error().await?;
+                    }
+                }
+            } else {
+                conwrite!(con, groups::ENCODING_ERROR)?;
             }
         } else {
             // don't begin the operation at all if the database is poisoned

@@ -33,46 +33,6 @@ use core::marker::PhantomData;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-pub struct Writer<'a, T, Strm> {
-    tsymbol: [u8; 1],
-    con: &'a mut T,
-    _owned: PhantomData<Strm>,
-}
-
-impl<'a, T, Strm> Writer<'a, T, Strm>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    pub unsafe fn new(con: &'a mut T, tsymbol: u8) -> Self {
-        Self {
-            tsymbol: [tsymbol; 1],
-            con,
-            _owned: PhantomData,
-        }
-    }
-    pub async fn write_nil(&mut self) -> IoResult<()> {
-        self.con.write_response(groups::NIL).await
-    }
-    pub async fn write_rawstring(&mut self, payload: impl AsRef<[u8]>) -> IoResult<()> {
-        let payload = payload.as_ref();
-        let raw_stream = unsafe { self.con.raw_stream() };
-        raw_stream.write_all(&self.tsymbol).await?; // first write tsymbol
-        let bytes = Integer64::from(payload.len());
-        raw_stream.write_all(&bytes).await?; // then len
-        raw_stream.write_all(&[b'\n']).await?; // LF
-        raw_stream.write_all(payload).await?; // payload
-        raw_stream.write_all(&[b'\n']).await?; // final LF
-        Ok(())
-    }
-    pub async fn write_encoding_error(&mut self) -> IoResult<()> {
-        self.con.write_response(groups::ENCODING_ERROR).await
-    }
-    pub async fn write_server_err(&mut self) -> IoResult<()> {
-        self.con.write_response(groups::SERVER_ERR).await
-    }
-}
-
 /// Write a raw mono group with a custom tsymbol
 pub async unsafe fn write_raw_mono<T, Strm>(
     con: &mut T,
@@ -94,36 +54,42 @@ where
 }
 
 #[derive(Debug)]
-pub struct TypedArrayWriter<'a, T, Strm> {
+/// A writer for a flat array, which is a multi-typed non-recursive array
+pub struct FlatArrayWriter<'a, T, Strm> {
     tsymbol: u8,
     con: &'a mut T,
     _owned: PhantomData<Strm>,
 }
 
-impl<'a, T, Strm> TypedArrayWriter<'a, T, Strm>
+impl<'a, T, Strm> FlatArrayWriter<'a, T, Strm>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    pub unsafe fn new(con: &'a mut T, tsymbol: u8) -> Self {
-        Self {
+    /// Intialize a new flat array writer. This will write out the tsymbol
+    /// and length for the flat array
+    pub async unsafe fn new(
+        con: &'a mut T,
+        tsymbol: u8,
+        len: usize,
+    ) -> IoResult<FlatArrayWriter<'a, T, Strm>> {
+        {
+            let stream = unsafe { con.raw_stream() };
+            // first write @<tsymbol>
+            stream.write_all(&[b'@', tsymbol]).await?;
+            let bytes = Integer64::from(len);
+            // now write len
+            stream.write_all(&bytes).await?;
+            // first LF
+            stream.write_all(&[b'\n']).await?;
+        }
+        Ok(Self {
             con,
             tsymbol,
             _owned: PhantomData,
-        }
+        })
     }
-    /// This will write out the tsymbol and the length
-    pub async fn write_length(&mut self, len: usize) -> IoResult<()> {
-        let stream = unsafe { self.con.raw_stream() };
-        // first write @<tsymbol>
-        stream.write_all(&[b'@', self.tsymbol]).await?;
-        let bytes = Integer64::from(len);
-        // now write len
-        stream.write_all(&bytes).await?;
-        // first LF
-        stream.write_all(&[b'\n']).await?;
-        Ok(())
-    }
+    /// Write an element
     pub async fn write_element(&mut self, bytes: impl AsRef<[u8]>) -> IoResult<()> {
         let stream = unsafe { self.con.raw_stream() };
         let bytes = bytes.as_ref();
@@ -140,17 +106,74 @@ where
         stream.write_all(&[b'\n']).await?;
         Ok(())
     }
+    /// Write the NIL response code
     pub async fn write_nil(&mut self) -> IoResult<()> {
         let stream = unsafe { self.con.raw_stream() };
         stream.write_all(groups::NIL).await?;
         Ok(())
     }
+    /// Write the SERVER_ERR (5) response code
     pub async fn write_server_error(&mut self) -> IoResult<()> {
         let stream = unsafe { self.con.raw_stream() };
         stream.write_all(groups::NIL).await?;
         Ok(())
     }
-    pub async fn write_encoding_error(&mut self) -> IoResult<()> {
-        self.con.write_response(groups::ENCODING_ERROR).await
+}
+
+#[derive(Debug)]
+/// A writer for a typed array, which is a singly-typed array which either
+/// has a typed element or a `NULL`
+pub struct TypedArrayWriter<'a, T, Strm> {
+    con: &'a mut T,
+    _owned: PhantomData<Strm>,
+}
+
+impl<'a, T, Strm> TypedArrayWriter<'a, T, Strm>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
+    /// Create a new `typedarraywriter`. This will write the tsymbol and
+    /// the array length
+    pub async unsafe fn new(
+        con: &'a mut T,
+        tsymbol: u8,
+        len: usize,
+    ) -> IoResult<TypedArrayWriter<'a, T, Strm>> {
+        {
+            let stream = unsafe { con.raw_stream() };
+            // first write @<tsymbol>
+            stream.write_all(&[b'@', tsymbol]).await?;
+            let bytes = Integer64::from(len);
+            // now write len
+            stream.write_all(&bytes).await?;
+            // first LF
+            stream.write_all(&[b'\n']).await?;
+        }
+        Ok(Self {
+            con,
+            _owned: PhantomData,
+        })
+    }
+    /// Write an element
+    pub async fn write_element(&mut self, bytes: impl AsRef<[u8]>) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        let bytes = bytes.as_ref();
+        // write len
+        let len = Integer64::from(bytes.len());
+        stream.write_all(&len).await?;
+        // now LF
+        stream.write_all(&[b'\n']).await?;
+        // now element
+        stream.write_all(bytes).await?;
+        // now final LF
+        stream.write_all(&[b'\n']).await?;
+        Ok(())
+    }
+    /// Write a null
+    pub async fn write_null(&mut self) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        stream.write_all(&[b'\0', b'\n']).await?;
+        Ok(())
     }
 }

@@ -74,9 +74,9 @@ action!(
         let tsymbol = kve.get_kt();
         let mut writer = unsafe {
             // SAFETY: We have checked kty ourselves
-            TypedArrayWriter::new(con, tsymbol)
-        };
-        writer.write_length(items.len()).await?;
+            TypedArrayWriter::new(con, tsymbol, items.len())
+        }
+        .await?;
         for key in items {
             writer.write_element(key).await?;
         }
