@@ -315,4 +315,13 @@ mod entity_parser_tests {
             responses::groups::BAD_EXPRESSION
         );
     }
+
+    #[test]
+    fn test_bad_entity_name() {
+        let ename = byt!("$var");
+        assert_eq!(
+            get_query_entity(&ename).unwrap_err(),
+            responses::groups::BAD_CONTAINER_NAME
+        );
+    }
 }
