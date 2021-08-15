@@ -88,7 +88,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::String("HEY!".to_owned())))
+        .eq(&Response::Item(Element::Str("HEY!".to_owned())))
     {
         return Err("HEYA test failed".into());
     }
@@ -111,7 +111,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::String(value)))
+        .eq(&Response::Item(Element::Str(value)))
     {
         return Err("GET test failed".into());
     }

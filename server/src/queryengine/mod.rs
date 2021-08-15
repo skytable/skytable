@@ -101,7 +101,7 @@ where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     let buf = match buf {
-        Element::FlatArray(a) => a,
+        Element::AnyArray(a) => a,
         Element::SwapKSHeader(swapks) => {
             swap_entity!(con, db, swapks);
             return Ok(());

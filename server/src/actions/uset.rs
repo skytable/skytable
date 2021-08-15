@@ -57,7 +57,7 @@ action!(
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     kve.upsert_unchecked(Data::from(key), Data::from(val));
                 }
-                conwrite!(con, howmany)
+                conwrite!(con, howmany / 2)
             } else {
                 conwrite!(con, groups::SERVER_ERR)
             }

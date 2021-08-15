@@ -55,7 +55,7 @@ action!(
                 if did_we {
                     con.write_response(responses::groups::OKAY).await?;
                 } else {
-                    con.write_response(responses::groups::OVERWRITE_ERR).await?;
+                    con.write_response(responses::groups::NIL).await?;
                 }
             } else {
                 con.write_response(responses::groups::ENCODING_ERROR)

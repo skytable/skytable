@@ -42,7 +42,7 @@ mod ssl {
         let q = Query::from("heya");
         assert_eq!(
             con.run_simple_query(&q).await.unwrap(),
-            Response::Item(Element::String("HEY!".to_owned()))
+            Response::Item(Element::Str("HEY!".to_owned()))
         );
     }
 }

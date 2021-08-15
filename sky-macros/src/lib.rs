@@ -88,7 +88,7 @@ fn parse_dbtest(
             ).await.unwrap();
         let __create_tbl =
             con.run_simple_query(
-                &skytable::query!("create", "table", #rand_string, "keymap(binstr,binstr)", "volatile")
+                &skytable::query!("create", "table", #rand_string, "keymap(str,str)", "volatile")
             ).await.unwrap();
         let mut __concat_entity = std::string::String::new();
         __concat_entity.push_str("testsuite:");
