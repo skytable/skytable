@@ -75,8 +75,8 @@ where
     ) -> IoResult<FlatArrayWriter<'a, T, Strm>> {
         {
             let stream = unsafe { con.raw_stream() };
-            // first write @<tsymbol>
-            stream.write_all(&[b'@', tsymbol]).await?;
+            // first write _
+            stream.write_all(&[b'_']).await?;
             let bytes = Integer64::from(len);
             // now write len
             stream.write_all(&bytes).await?;

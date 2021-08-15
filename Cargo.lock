@@ -1002,7 +1002,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.4.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#87462dba8dfab5dbb095e363ee63b331d6cea532"
+source = "git+https://github.com/skytable/client-rust?branch=next#9c44e56dc1a4bcaa755b5a07066f800d94f67b5f"
 dependencies = [
  "bytes",
  "openssl",
