@@ -66,12 +66,12 @@ mod parser_ddl_tests {
         let mut it = vec![byt!("1one"), byt!("keymap(binstr,binstr)")].into_iter();
         assert_eq!(
             parse_table_args(&mut it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            responses::groups::BAD_CONTAINER_NAME
         );
         let mut it = vec![byt!("%whywouldsomeone"), byt!("keymap(binstr,binstr)")].into_iter();
         assert_eq!(
             parse_table_args(&mut it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            responses::groups::BAD_CONTAINER_NAME
         );
     }
     #[test]
