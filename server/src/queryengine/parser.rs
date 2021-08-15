@@ -40,7 +40,7 @@ const BINSTR: &[u8] = "binstr".as_bytes();
 const STR: &[u8] = "str".as_bytes();
 
 pub(super) static VALID_CONTAINER_NAME: Lazy<Regex, fn() -> Regex> =
-    Lazy::new(|| Regex::new("^[a-zA-Z_$][a-zA-Z_$0-9]*$").unwrap());
+    Lazy::new(|| Regex::new("^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap());
 
 pub(super) fn parse_table_args(
     act: &mut ActionIter,
@@ -133,12 +133,13 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<BorrowedEntityGroup, &'st
         if y.len() == 1 {
             // just ks
             let ksret = y.get_unchecked(0);
+            #[allow(clippy::if_same_then_else)]
             if compiler::unlikely(ksret.len() > 64 || ksret.is_empty()) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
             } else if compiler::unlikely(
                 !VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(ksret)),
             ) {
-                Err(responses::groups::BAD_EXPRESSION)
+                Err(responses::groups::BAD_CONTAINER_NAME)
             } else if compiler::unlikely(ksret.eq(&"system".as_bytes())) {
                 Err(responses::groups::PROTECTED_OBJECT)
             } else {

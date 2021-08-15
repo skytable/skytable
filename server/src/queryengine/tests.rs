@@ -66,12 +66,12 @@ mod parser_ddl_tests {
         let mut it = vec![byt!("1one"), byt!("keymap(binstr,binstr)")].into_iter();
         assert_eq!(
             parse_table_args(&mut it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            responses::groups::BAD_CONTAINER_NAME
         );
         let mut it = vec![byt!("%whywouldsomeone"), byt!("keymap(binstr,binstr)")].into_iter();
         assert_eq!(
             parse_table_args(&mut it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            responses::groups::BAD_CONTAINER_NAME
         );
     }
     #[test]
@@ -313,6 +313,15 @@ mod entity_parser_tests {
         assert_eq!(
             get_query_entity(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
+        );
+    }
+
+    #[test]
+    fn test_bad_entity_name() {
+        let ename = byt!("$var");
+        assert_eq!(
+            get_query_entity(&ename).unwrap_err(),
+            responses::groups::BAD_CONTAINER_NAME
         );
     }
 }
