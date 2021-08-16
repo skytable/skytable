@@ -111,7 +111,9 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::Str(value)))
+        .eq(&Response::Item(Element::Binstr(
+            value.as_bytes().to_owned(),
+        )))
     {
         return Err("GET test failed".into());
     }
