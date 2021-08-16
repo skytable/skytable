@@ -1,0 +1,167 @@
+#
+#  Created on Thu Aug 27 2020
+#
+#  This file is a part of Skytable
+#  Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
+#  NoSQL database written by Sayan Nandan ("the Author") with the
+#  vision to provide flexibility in data modelling without compromising
+#  on performance, queryability or scalability.
+#
+#  Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU Affero General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  GNU Affero General Public License for more details.
+#
+#  You should have received a copy of the GNU Affero General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+#
+#
+#  This file is used by Skytable's documentation website for automatically
+#  generating documentation for the actions. It will also be used by the Skytable
+#  server in the future
+
+# the docbuilder expects:
+# 'name': str, 'complexity': str, 'accept': [str]
+# 'return': [str], 'syntax': [str], 'desc': str
+
+- name: GET
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [GET <key>]
+  desc: Get the value of a key from the current table
+  return: [Rcode 1, String, Binstr]
+- name: MGET
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [MGET <key1> <key2> ...]
+  desc: Get the value of 'n' keys from the current table
+  return: [Typed Array]
+- name: SET
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [SET <key> <value>]
+  desc: Set the value of a key in the current table
+  return: [Rcode 0, Rcode 2, Rcode 5]
+- name: MSET
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [MSET <key1> <value1> <key2> <value2> ...]
+  desc: Set the value of 'n' keys in the current table
+  return: [Integer, Rcode 5]
+- name: UPDATE
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [UPDATE <key> <value>]
+  desc: Update the value of an existing key in the current table
+  return: [Rcode 0, Rcode 1, Rcode 5]
+- name: MUPDATE
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [MUPDATE <key1> <value1> <key2> <value2> ...]
+  desc: Update the value of 'n' keys in the current table
+  return: [Integer, Rcode 5]
+- name: DEL
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [DEL <key1> <key2> ...]
+  desc: Delete 'n' keys from the current table
+  return: [Integer, Rcode 5]
+- name: EXISTS
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [EXISTS <key1> <key2> ...]
+  desc: Check if 'n' keys exist in the current table
+  return: [Integer]
+- name: SSET
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [SSET <key1> <value1> <key2> <value2> ...]
+  desc: Set all keys to the given values only if all of them don't exist in the current table
+  return: [Rcode 0, Rcode 2, Rcode 5]
+- name: SDEL
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [SDEL <key1> <key2> ...]
+  desc: |
+    Delete all keys if all of the keys exist in the current table. Do note that if a single key doesn't
+    exist, then a `Nil` code is returned.
+  return: [Rcode 0, Rcode 1, Rcode 5]
+- name: SUPDATE
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [SUPDATE <key1> <value1> <key2> <value2> ...]
+  desc: |
+    Update all keys if all of the keys exist in the current table. Do note that if a single key doesn't
+    exist, then a `Nil` code is returned.
+  return: [Rcode 0, Rcode 1, Rcode 5]
+- name: DBSIZE
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [DBSIZE, DBSIZE <entity>]
+  desc: Check the number of entries stored in the current table or in the provided entity
+  return: [Integer]
+- name: FLUSHDB
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [FLUSHDB, FLUSHDB <entity>]
+  desc: Removes all entries stored in the current table or in the provided entity
+  return: [Rcode 0, Rcode 5]
+- name: USET
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [USET <key1> <value1> <key2> <value2> ...]
+  desc: SET all keys if they don't exist, or UPDATE them if they do exist. This operation performs `USET`s in the current table
+  return: [Integer, Rcode 5]
+- name: KEYLEN
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [KEYLEN <key>]
+  desc: Returns the length of the UTF-8 string, if it exists in the current table
+  return: [Integer, Rcode 1]
+- name: MKSNAP
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [MKSNAP <SNAPNAME>]
+  desc: |
+    This action can be used to create a snapshot. Do note that this action# *requires
+    snapshotting to be enabled on the server side**, before it can create snapshots.
+    \nIf you want to create snapshots# *without** snapshots being enabled on the server-side,
+    pass a second argument <SNAPNAME> to specify a snapshot name and a snapshot will
+    be create in a folder called `remote` under your snapshots directory. \nFor more
+    information on snapshots, read [this document](/snapshots)
+  return: [Rcode 0, err-snapshot-disabled, err-snapshot-busy]
+- name: LSKEYS
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [LSKEYS <limit>, LSKEYS <entity>, LSKEYS <entity> <limit>]
+  desc: |
+    Returns a flat string array of keys present in the current table or in the provided entity.
+    If no <limit> is given, then a maximum of 10 keys are returned. If a limit is specified,
+    then a maximum of <limit> keys are returned. The order of keys is meaningless.
+  return: [Typed Array]
+- name: POP
+  complexity: O(1)
+  accept: AnyArray
+  syntax: [POP <key>]
+  desc: Deletes and return the value of the provided key from the current table.
+  return: [String, Binstr, Rcode 5]
+- name: MPOP
+  complexity: O(n)
+  accept: AnyArray
+  syntax: [POP <key1> <key2> ...]
+  desc: |
+    Deletes and returns the values of the provided keys from the current table. If the database is poisoned,
+    this will return a server error. An exceptional scenario can arise when the database
+    fails in-between removing all the keys. In that case, you get the server error
+    response code instead of the keys. If the server recovers inbetween, then the
+    appropriate values (if any) will be returned. In all other cases a NIL error is
+    returned (code 1)
+  return: [Flat Array]
