@@ -26,6 +26,7 @@
 use core::future::Future;
 use core::pin::Pin;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
+use skytable::types::FlatElement;
 use skytable::Query;
 use skytable::{aio, Element, RespCode, Response};
 use std::io::Error as IoError;
@@ -108,6 +109,12 @@ macro_rules! write_err {
     };
 }
 
+macro_rules! str {
+    ($in:expr) => {
+        String::from_utf8_lossy(&$in)
+    };
+}
+
 macro_rules! write_okay {
     () => {
         crossterm::execute!(
@@ -150,6 +157,7 @@ impl<T: AsyncSocket> Runner<T> {
                     Element::StrArray(srr) => print_str_array(srr),
                     Element::RespCode(r) => print_rcode(r, None),
                     Element::UnsignedInt(int) => write_int!(int),
+                    Element::FlatArray(frr) => write_flat_array(frr),
                     Element::Array(a) => print_array(a),
                     _ => unimplemented!(),
                 },
@@ -210,6 +218,21 @@ fn print_str_array(str_array: Vec<Option<String>>) {
     })
 }
 
+fn write_flat_array(flat_array: Vec<FlatElement>) {
+    for (idx, item) in flat_array.into_iter().enumerate() {
+        let idx = idx + 1;
+        match item {
+            FlatElement::String(st) => write_string!(idx, st),
+            FlatElement::Binstr(st) => {
+                let st = str!(st);
+                write_string!(idx, st)
+            }
+            FlatElement::RespCode(rc) => print_rcode(rc, Some(idx)),
+            FlatElement::UnsignedInt(int) => write_int!(int, idx),
+        }
+    }
+}
+
 fn print_array(array: Vec<Element>) {
     for (idx, item) in array.into_iter().enumerate() {
         let idx = idx + 1;
@@ -219,7 +242,7 @@ fn print_array(array: Vec<Element>) {
             Element::UnsignedInt(int) => write_int!(idx, int),
             Element::BinArray(brr) => print_bin_array(brr),
             Element::StrArray(srr) => print_str_array(srr),
-            _ => unimplemented!("Nested arrays cannot be printed just yet"),
+            _ => eprintln!("Nested arrays cannot be printed just yet"),
         }
     }
 }
