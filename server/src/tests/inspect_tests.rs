@@ -32,7 +32,7 @@ mod __private {
         query.push("KEYSPACES");
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(_))
+            Response::Item(Element::StrArray(_))
         ))
     }
     async fn test_inspect_keyspace() {
@@ -42,7 +42,7 @@ mod __private {
         query.push(my_keyspace);
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(_))
+            Response::Item(Element::StrArray(_))
         ))
     }
     async fn test_inspect_table() {
