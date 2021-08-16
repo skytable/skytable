@@ -44,7 +44,7 @@ In other cases, use the C style.
 
 Each project has its own jargon — and so do we!
 
-- _actiondoc_ and _actions docs_ : This refers to the `actions.jsonc` file, which is used by the Skytable documentation website for automatically building documentation for the actions
+- _actiondoc_ and _actions docs_ : This refers to the `actiondoc.yml` file, which is used by the Skytable documentation website for automatically building documentation for the actions
 
 ### Branches
 
