@@ -28,6 +28,7 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::dbnet::connection::prelude::*;
+use crate::util::compiler;
 
 action!(
     /// Run a `DEL` query
@@ -36,25 +37,35 @@ action!(
     /// It will write an entire datagroup, for this `del` action
     fn del(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
-        let done_howmany: Option<usize>;
-        {
-            if registry::state_okay() {
-                let mut many = 0;
-                let cmap = kve!(con, handle);
-                act.for_each(|key| {
-                    if not_enc_err!(cmap.remove(&key)) {
-                        many += 1
-                    }
-                });
-                done_howmany = Some(many);
-            } else {
-                done_howmany = None;
-            }
-        }
-        if let Some(done_howmany) = done_howmany {
-            con.write_response(done_howmany).await
+        let kve = kve!(con, handle);
+        let encoding_is_okay = if kve.needs_key_encoding() {
+            true
         } else {
-            con.write_response(responses::groups::SERVER_ERR).await
+            let encoder = kve.get_key_encoder();
+            act.as_ref().iter().all(|k| encoder.is_ok(k))
+        };
+        if compiler::likely(encoding_is_okay) {
+            let done_howmany: Option<usize>;
+            {
+                if registry::state_okay() {
+                    let mut many = 0;
+                    act.for_each(|key| {
+                        if kve.remove_unchecked(&key) {
+                            many += 1
+                        }
+                    });
+                    done_howmany = Some(many);
+                } else {
+                    done_howmany = None;
+                }
+            }
+            if let Some(done_howmany) = done_howmany {
+                con.write_response(done_howmany).await
+            } else {
+                con.write_response(responses::groups::SERVER_ERR).await
+            }
+        } else {
+            conwrite!(con, groups::ENCODING_ERROR)
         }
     }
 );

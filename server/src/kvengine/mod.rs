@@ -27,16 +27,16 @@
 use crate::corestore::htable::Coremap;
 use crate::corestore::htable::Data;
 use crate::corestore::map::bref::Ref;
+use crate::resp::TSYMBOL_BINARY;
+use crate::resp::TSYMBOL_UNICODE;
 use core::borrow::Borrow;
 use core::hash::Hash;
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::Ordering;
 pub mod encoding;
 
-const ORD_RELAXED: Ordering = Ordering::Relaxed;
 /// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
 pub struct DoubleEncoder {
     fn_ptr: fn(&[u8], &[u8]) -> bool,
+    v_t: u8,
 }
 
 impl DoubleEncoder {
@@ -44,11 +44,15 @@ impl DoubleEncoder {
     pub fn is_ok(&self, a: &[u8], b: &[u8]) -> bool {
         (self.fn_ptr)(a, b)
     }
+    pub const fn get_tsymbol(&self) -> u8 {
+        self.v_t
+    }
 }
 
 /// A _single encoder_ for a single byte slice input
 pub struct SingleEncoder {
     fn_ptr: fn(&[u8]) -> bool,
+    v_t: u8,
 }
 
 impl SingleEncoder {
@@ -56,6 +60,27 @@ impl SingleEncoder {
     pub fn is_ok(&self, a: &[u8]) -> bool {
         (self.fn_ptr)(a)
     }
+    pub const fn get_tsymbol(&self) -> u8 {
+        self.v_t
+    }
+}
+
+macro_rules! d_encoder {
+    ($fn:expr, $t:expr) => {
+        DoubleEncoder {
+            fn_ptr: $fn,
+            v_t: $t,
+        }
+    };
+}
+
+macro_rules! s_encoder {
+    ($fn:expr, $t:expr) => {
+        SingleEncoder {
+            fn_ptr: $fn,
+            v_t: $t,
+        }
+    };
 }
 
 // DROP impl isn't required as ShardLock's field types need-drop (std::mem)
@@ -67,9 +92,9 @@ pub struct KVEngine {
     /// the atomic table
     table: Coremap<Data, Data>,
     /// the encoding switch for the key
-    encoded_k: AtomicBool,
+    encoded_k: bool,
     /// the encoding switch for the value
-    encoded_v: AtomicBool,
+    encoded_v: bool,
 }
 
 impl Default for KVEngine {
@@ -88,83 +113,73 @@ impl KVEngine {
     pub fn init_with_data(encoded_k: bool, encoded_v: bool, table: Coremap<Data, Data>) -> Self {
         Self {
             table,
-            encoded_k: AtomicBool::new(encoded_k),
-            encoded_v: AtomicBool::new(encoded_v),
+            encoded_k,
+            encoded_v,
         }
     }
     pub fn get_encoding(&self) -> (bool, bool) {
-        (
-            self.encoded_k.load(ORD_RELAXED),
-            self.encoded_v.load(ORD_RELAXED),
-        )
+        (self.encoded_k, self.encoded_v)
     }
     /// Returns an encoder for the key and the value
     pub fn get_encoder(&self) -> DoubleEncoder {
-        let (encoded_k, encoded_v) = (
-            self.encoded_k.load(ORD_RELAXED),
-            self.encoded_v.load(ORD_RELAXED),
-        );
-        let ret = match (encoded_k, encoded_v) {
+        match self.get_encoding() {
             (true, true) => {
                 // both k & v
                 fn is_okay(key: &[u8], value: &[u8]) -> bool {
                     encoding::is_utf8(key) && encoding::is_utf8(value)
                 }
-                is_okay
+                d_encoder!(is_okay, TSYMBOL_UNICODE)
             }
             (true, false) => {
                 // only k
                 fn is_okay(key: &[u8], _value: &[u8]) -> bool {
                     encoding::is_utf8(key)
                 }
-                is_okay
+                d_encoder!(is_okay, TSYMBOL_BINARY)
             }
             (false, false) => {
                 // none
                 fn is_okay(_k: &[u8], _v: &[u8]) -> bool {
                     true
                 }
-                is_okay
+                d_encoder!(is_okay, TSYMBOL_BINARY)
             }
             (false, true) => {
                 // only v
                 fn is_okay(_k: &[u8], v: &[u8]) -> bool {
                     encoding::is_utf8(v)
                 }
-                is_okay
+                d_encoder!(is_okay, TSYMBOL_UNICODE)
             }
-        };
-        DoubleEncoder { fn_ptr: ret }
+        }
     }
     /// Returns an encoder for the key
     pub fn get_key_encoder(&self) -> SingleEncoder {
-        let ret = if self.encoded_k.load(ORD_RELAXED) {
+        if self.encoded_k {
             fn e(inp: &[u8]) -> bool {
                 encoding::is_utf8(inp)
             }
-            e
+            s_encoder!(e, TSYMBOL_UNICODE)
         } else {
             fn e(_inp: &[u8]) -> bool {
                 true
             }
-            e
-        };
-        SingleEncoder { fn_ptr: ret }
+            s_encoder!(e, TSYMBOL_BINARY)
+        }
     }
     /// Returns an encoder for the value
     pub fn get_value_encoder(&self) -> SingleEncoder {
-        let ret = if self.encoded_v.load(ORD_RELAXED) {
+        if self.encoded_v {
             fn e(inp: &[u8]) -> bool {
                 encoding::is_utf8(inp)
             }
-            e
+            s_encoder!(e, TSYMBOL_UNICODE)
         } else {
             fn e(_inp: &[u8]) -> bool {
                 true
             }
-            e
-        };
-        SingleEncoder { fn_ptr: ret }
+            s_encoder!(e, TSYMBOL_BINARY)
+        }
     }
     pub fn len(&self) -> usize {
         self.table.len()
@@ -185,6 +200,38 @@ impl KVEngine {
     pub fn truncate_table(&self) {
         self.table.clear()
     }
+    pub const fn needs_value_encoding(&self) -> bool {
+        self.encoded_v
+    }
+    pub const fn needs_key_encoding(&self) -> bool {
+        self.encoded_k
+    }
+    pub const fn needs_no_encoding(&self) -> bool {
+        !(self.encoded_k && self.encoded_v)
+    }
+    pub const fn get_vt(&self) -> u8 {
+        if self.encoded_v {
+            TSYMBOL_UNICODE
+        } else {
+            TSYMBOL_BINARY
+        }
+    }
+    pub const fn get_kt(&self) -> u8 {
+        if self.encoded_k {
+            TSYMBOL_UNICODE
+        } else {
+            TSYMBOL_BINARY
+        }
+    }
+    /// Get the value for a given key if it exists
+    pub fn get_with_tsymbol<Q>(&self, key: &Q) -> Result<(Option<Ref<Data, Data>>, u8), ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self._encode_key(key)?;
+        Ok((self.table.get(key), self.get_vt()))
+    }
     /// Get the value for a given key if it exists
     pub fn get<Q>(&self, key: &Q) -> Result<Option<Ref<Data, Data>>, ()>
     where
@@ -194,6 +241,31 @@ impl KVEngine {
         self._encode_key(key)?;
         Ok(self.table.get(key))
     }
+    /// Get the value for a given key if it exists, returning a cloned reference
+    pub fn get_cloned<Q>(&self, key: &Q) -> Result<Option<Data>, ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self._encode_key(key)?;
+        Ok(self.table.get_cloned(key))
+    }
+    pub fn get_cloned_unchecked<Q>(&self, key: &Q) -> Option<Data>
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.get_cloned(key)
+    }
+    /// Get the value for a given key if it exists, returning a cloned reference
+    pub fn get_cloned_with_tsymbol<Q>(&self, key: &Q) -> Result<(Option<Data>, u8), ()>
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self._encode_key(key)?;
+        Ok((self.table.get_cloned(key), self.get_vt()))
+    }
     pub fn exists<Q>(&self, key: &Q) -> Result<bool, ()>
     where
         Data: Borrow<Q>,
@@ -201,6 +273,13 @@ impl KVEngine {
     {
         self._encode_key(key)?;
         Ok(self.table.contains_key(key))
+    }
+    pub fn exists_unchecked<Q>(&self, key: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.contains_key(key)
     }
     /// Check the unicode encoding of a given byte array
     fn _encode<T: AsRef<[u8]>>(data: T) -> Result<(), ()> {
@@ -212,15 +291,16 @@ impl KVEngine {
     }
     /// Check the unicode encoding of the given key, if the encoded_k flag is set
     fn _encode_key<T: AsRef<[u8]>>(&self, key: T) -> Result<(), ()> {
-        if self.encoded_k.load(ORD_RELAXED) {
-            Self::_encode(key.as_ref())
+        if self.encoded_k {
+            Self::_encode(key.as_ref())?;
+            Ok(())
         } else {
             Ok(())
         }
     }
     /// Check the unicode encoding of the given value, if the encoded_v flag is set
     fn _encode_value<T: AsRef<[u8]>>(&self, value: T) -> Result<(), ()> {
-        if self.encoded_v.load(ORD_RELAXED) {
+        if self.encoded_v {
             Self::_encode(value)
         } else {
             Ok(())
@@ -232,11 +312,19 @@ impl KVEngine {
         self._encode_value(&value)?;
         Ok(self.table.true_if_insert(key, value))
     }
+    /// Set the value of a non-existent key
+    pub fn set_unchecked(&self, key: Data, value: Data) -> bool {
+        self.table.true_if_insert(key, value)
+    }
     /// Update the value of an existing key
     pub fn update(&self, key: Data, value: Data) -> Result<bool, ()> {
         self._encode_key(&key)?;
         self._encode_value(&value)?;
         Ok(self.table.true_if_update(key, value))
+    }
+    /// Update the value of an existing key
+    pub fn update_unchecked(&self, key: Data, value: Data) -> bool {
+        self.table.true_if_update(key, value)
     }
     /// Update or insert the value of a key
     pub fn upsert(&self, key: Data, value: Data) -> Result<(), ()> {
@@ -244,6 +332,10 @@ impl KVEngine {
         self._encode_value(&value)?;
         self.table.upsert(key, value);
         Ok(())
+    }
+    /// Update or insert the value of a key
+    pub fn upsert_unchecked(&self, key: Data, value: Data) {
+        self.table.upsert(key, value);
     }
     /// Remove an existing key
     pub fn remove<Q>(&self, key: &Q) -> Result<bool, ()>
@@ -254,6 +346,14 @@ impl KVEngine {
         self._encode_key(key)?;
         Ok(self.table.true_if_removed(key))
     }
+    /// Remove an existing key
+    pub fn remove_unchecked<Q>(&self, key: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
+    {
+        self.table.true_if_removed(key)
+    }
     pub fn pop<Q>(&self, key: &Q) -> Result<Option<(Data, Data)>, ()>
     where
         Data: Borrow<Q>,
@@ -261,6 +361,13 @@ impl KVEngine {
     {
         self._encode_key(key)?;
         Ok(self.table.remove(key))
+    }
+    pub fn pop_unchecked<Q>(&self, key: &Q) -> Option<(Data, Data)>
+    where
+        Data: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.table.remove(key)
     }
 }
 

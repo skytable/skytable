@@ -28,6 +28,7 @@ use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
+use crate::util::compiler;
 
 action!(
     /// Run an `USET` query
@@ -41,21 +42,27 @@ action!(
             // action at all
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
-        let failed = {
-            if registry::state_okay() {
-                let writer = kve!(con, handle);
-                while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    let _ = writer.upsert(Data::from(key), Data::from(val));
-                }
-                false
-            } else {
-                true
-            }
-        };
-        if failed {
-            con.write_response(responses::groups::SERVER_ERR).await
+        let kve = kve!(con, handle);
+        let encoding_is_okay = if kve.needs_no_encoding() {
+            true
         } else {
-            con.write_response(howmany / 2).await
+            let encoder = kve.get_encoder();
+            act.as_ref().chunks_exact(2).all(|kv| unsafe {
+                let (k, v) = (kv.get_unchecked(0), kv.get_unchecked(1));
+                encoder.is_ok(k, v)
+            })
+        };
+        if compiler::likely(encoding_is_okay) {
+            if registry::state_okay() {
+                while let (Some(key), Some(val)) = (act.next(), act.next()) {
+                    kve.upsert_unchecked(Data::from(key), Data::from(val));
+                }
+                conwrite!(con, howmany / 2)
+            } else {
+                conwrite!(con, groups::SERVER_ERR)
+            }
+        } else {
+            conwrite!(con, groups::ENCODING_ERROR)
         }
     }
 );

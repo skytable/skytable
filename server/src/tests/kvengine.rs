@@ -51,12 +51,12 @@ mod __private {
         };
     }
     #[cfg(test)]
-    use skytable::{Element, Query, RespCode, Response};
+    use skytable::{types::FlatElement, Element, Query, RespCode, Response};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         query.push("heya");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::String("HEY!".to_owned())));
+        assert_eq!(resp, Response::Item(Element::Str("HEY!".to_owned())));
     }
 
     /// Test a GET query: for a non-existing key
@@ -78,7 +78,7 @@ mod __private {
         query.push("get");
         query.push("x");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::String("100".to_owned())));
+        assert_eq!(resp, Response::Item(Element::Str("100".to_owned())));
     }
 
     /// Test a GET query with an incorrect number of arguments
@@ -323,10 +323,10 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::Array(vec![
-                Element::String("100".to_owned()),
-                Element::String("200".to_owned()),
-                Element::String("300".to_owned())
+            Response::Item(Element::StrArray(vec![
+                Some("100".to_owned()),
+                Some("200".to_owned()),
+                Some("300".to_owned())
             ]))
         );
     }
@@ -354,12 +354,12 @@ mod __private {
         query.push("b");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::Array(vec![
-                Element::String("100".to_owned()),
-                Element::String("200".to_owned()),
-                Element::RespCode(RespCode::NotFound),
-                Element::String("300".to_owned()),
-                Element::RespCode(RespCode::NotFound)
+            Response::Item(Element::StrArray(vec![
+                Some("100".to_owned()),
+                Some("200".to_owned()),
+                None,
+                Some("300".to_owned()),
+                None
             ]))
         );
     }
@@ -1046,7 +1046,8 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::FlatArray(arr)) = ret {
+        if let Response::Item(Element::StrArray(arr)) = ret {
+            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1080,7 +1081,8 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::FlatArray(arr)) = ret {
+        if let Response::Item(Element::StrArray(arr)) = ret {
+            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1101,7 +1103,8 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::FlatArray(arr)) = ret {
+        if let Response::Item(Element::StrArray(arr)) = ret {
+            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1123,7 +1126,8 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::FlatArray(arr)) = ret {
+        if let Response::Item(Element::StrArray(arr)) = ret {
+            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1159,10 +1163,10 @@ mod __private {
         query.push(vec!["mpop", "x", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::Array(vec![
-                Element::String("100".to_owned()),
-                Element::String("200".to_owned()),
-                Element::String("300".to_owned())
+            Response::Item(Element::FlatArray(vec![
+                FlatElement::String("100".to_owned()),
+                FlatElement::String("200".to_owned()),
+                FlatElement::String("300".to_owned())
             ]))
         )
     }
@@ -1176,13 +1180,13 @@ mod __private {
         query.push(vec!["mpop", "apple", "arnold", "x", "madonna", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::Array(vec![
-                Element::RespCode(RespCode::NotFound),
-                Element::RespCode(RespCode::NotFound),
-                Element::String("100".to_owned()),
-                Element::RespCode(RespCode::NotFound),
-                Element::String("200".to_owned()),
-                Element::String("300".to_owned())
+            Response::Item(Element::FlatArray(vec![
+                FlatElement::RespCode(RespCode::NotFound),
+                FlatElement::RespCode(RespCode::NotFound),
+                FlatElement::String("100".to_owned()),
+                FlatElement::RespCode(RespCode::NotFound),
+                FlatElement::String("200".to_owned()),
+                FlatElement::String("300".to_owned())
             ]))
         );
     }
@@ -1202,7 +1206,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::String("100".to_owned()))
+            Response::Item(Element::Str("100".to_owned()))
         );
     }
     async fn test_pop_nil() {

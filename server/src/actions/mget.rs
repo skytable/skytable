@@ -26,28 +26,35 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
-use crate::resp::BytesWrapper;
-use bytes::Bytes;
-use skytable::RespCode;
+use crate::resp::writer::TypedArrayWriter;
+use crate::util::compiler;
 
 action!(
     /// Run an `MGET` query
     ///
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
         crate::err_if_len_is!(act, con, eq 0);
-        con.write_array_length(act.len()).await?;
-        for key in act {
-            let res: Option<Bytes> = match kve!(con, handle).get(&key) {
-                Ok(v) => v.map(|b| b.get_blob().clone()),
-                Err(_) => None,
-            };
-            if let Some(value) = res {
-                // Good, we got the value, write it off to the stream
-                con.write_response(BytesWrapper(value)).await?;
-            } else {
-                // Ah, couldn't find that key
-                con.write_response(RespCode::NotFound).await?;
+        let kve = kve!(con, handle);
+        let encoding_is_okay = if kve.needs_key_encoding() {
+            true
+        } else {
+            let encoder = kve.get_key_encoder();
+            act.as_ref().iter().all(|k| encoder.is_ok(k))
+        };
+        if compiler::likely(encoding_is_okay) {
+            let mut writer = unsafe {
+                // SAFETY: We are getting the value type ourselves
+                TypedArrayWriter::new(con, kve.get_vt(), act.len())
             }
+            .await?;
+            for key in act {
+                match kve.get_cloned_unchecked(&key) {
+                    Some(v) => writer.write_element(&v).await?,
+                    None => writer.write_null().await?,
+                }
+            }
+        } else {
+            conwrite!(con, groups::ENCODING_ERROR)?;
         }
         Ok(())
     }

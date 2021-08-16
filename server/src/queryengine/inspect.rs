@@ -27,6 +27,7 @@
 use super::ddl::{KEYSPACE, TABLE};
 use crate::corestore::memstore::ObjectID;
 use crate::dbnet::connection::prelude::*;
+use crate::resp::writer::TypedArrayWriter;
 
 const KEYSPACES: &[u8] = "KEYSPACES".as_bytes();
 action! {
@@ -46,9 +47,11 @@ action! {
                             .iter()
                             .map(|kv| kv.key().clone())
                             .collect();
-                        con.write_flat_array_length(ks_list.len()).await?;
+                        let mut writer = unsafe {
+                            TypedArrayWriter::new(con, b'+', ks_list.len())
+                        }.await?;
                         for tbl in ks_list {
-                            con.write_response(tbl).await?;
+                            writer.write_element(tbl).await?;
                         }
                     }
                     _ => conwrite!(con, responses::groups::UNKNOWN_INSPECT_QUERY)?,
@@ -74,9 +77,11 @@ action! {
                     None => return conwrite!(con, responses::groups::CONTAINER_NOT_FOUND),
                 };
                 let tbl_list: Vec<ObjectID> = ks.tables.iter().map(|kv| kv.key().clone()).collect();
-                con.write_flat_array_length(tbl_list.len()).await?;
+                let mut writer = unsafe {
+                    TypedArrayWriter::new(con, b'+', tbl_list.len())
+                }.await?;
                 for tbl in tbl_list {
-                    con.write_response(tbl).await?;
+                    writer.write_element(tbl).await?;
                 }
             },
             None => aerr!(con, aerr),

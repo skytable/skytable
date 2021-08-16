@@ -35,35 +35,34 @@ action!(
     /// Run an `UPDATE` query
     fn update(handle: &Corestore, con: &mut T, mut act: ActionIter) {
         err_if_len_is!(act, con, not 2);
-        let did_we = {
-            if registry::state_okay() {
+        if registry::state_okay() {
+            let did_we = {
                 let writer = kve!(con, handle);
-                // clippy thinks we're doing something complex when we aren't, at all!
-                #[allow(clippy::blocks_in_if_conditions)]
-                if unsafe {
+                match unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
-                    not_enc_err!(writer.update(
+                    writer.update(
                         Data::from(act.next().unsafe_unwrap()),
                         Data::from(act.next().unsafe_unwrap()),
-                    ))
+                    )
                 } {
-                    Some(true)
+                    Ok(true) => Some(true),
+                    Ok(false) => Some(false),
+                    Err(()) => None,
+                }
+            };
+            if let Some(did_we) = did_we {
+                if did_we {
+                    con.write_response(responses::groups::OKAY).await?;
                 } else {
-                    Some(false)
+                    con.write_response(responses::groups::NIL).await?;
                 }
             } else {
-                None
-            }
-        };
-        if let Some(did_we) = did_we {
-            if did_we {
-                con.write_response(responses::groups::OKAY).await?;
-            } else {
-                con.write_response(responses::groups::NIL).await?;
+                con.write_response(responses::groups::ENCODING_ERROR)
+                    .await?;
             }
         } else {
-            con.write_response(responses::groups::SERVER_ERR).await?;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }

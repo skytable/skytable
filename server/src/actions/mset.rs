@@ -26,6 +26,7 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
+use crate::util::compiler;
 
 action!(
     /// Run an `MSET` query
@@ -37,13 +38,22 @@ action!(
             // action at all
             return con.write_response(responses::groups::ACTION_ERR).await;
         }
-        let done_howmany: Option<usize>;
-        {
+        let kve = kve!(con, handle);
+        let encoding_is_okay = if kve.needs_no_encoding() {
+            true
+        } else {
+            let encoder = kve.get_encoder();
+            act.as_ref().chunks_exact(2).all(|kv| unsafe {
+                let (k, v) = (kv.get_unchecked(0), kv.get_unchecked(1));
+                encoder.is_ok(k, v)
+            })
+        };
+        if compiler::likely(encoding_is_okay) {
+            let done_howmany: Option<usize>;
             if registry::state_okay() {
-                let writer = kve!(con, handle);
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    if not_enc_err!(writer.set(Data::from(key), Data::from(val))) {
+                    if kve.set_unchecked(Data::from(key), Data::from(val)) {
                         didmany += 1;
                     }
                 }
@@ -51,11 +61,13 @@ action!(
             } else {
                 done_howmany = None;
             }
-        }
-        if let Some(done_howmany) = done_howmany {
-            return con.write_response(done_howmany as usize).await;
+            if let Some(done_howmany) = done_howmany {
+                return con.write_response(done_howmany as usize).await;
+            } else {
+                return con.write_response(responses::groups::SERVER_ERR).await;
+            }
         } else {
-            return con.write_response(responses::groups::SERVER_ERR).await;
+            conwrite!(con, groups::ENCODING_ERROR)
         }
     }
 );

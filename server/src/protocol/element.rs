@@ -40,6 +40,8 @@ pub enum Element {
     UnsignedInt(u64),
     /// A non-recursive String array; tsymbol: `_`
     FlatArray(Vec<Bytes>),
+    /// A type-less non-recursive array
+    AnyArray(Vec<Bytes>),
     /// Swap the KS (ASCII `1A` (SUB HEADER))
     SwapKSHeader(Bytes),
 }

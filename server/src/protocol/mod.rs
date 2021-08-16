@@ -47,6 +47,7 @@ const ASCII_UNDERSCORE: u8 = b'_';
 const ASCII_AMPERSAND: u8 = b'&';
 const ASCII_COLON: u8 = b':';
 const ASCII_PLUS_SIGN: u8 = b'+';
+const ASCII_TILDE_SIGN: u8 = b'~';
 
 #[derive(Debug)]
 /// # Skyhash Deserializer (Parser)
@@ -329,6 +330,7 @@ impl<'a> Parser<'a> {
                 ASCII_PLUS_SIGN => Element::String(self.parse_next_string()?),
                 ASCII_COLON => Element::UnsignedInt(self.parse_next_u64()?),
                 ASCII_AMPERSAND => Element::Array(self.parse_next_array()?),
+                ASCII_TILDE_SIGN => Element::AnyArray(self.parse_next_any_array()?),
                 ASCII_UNDERSCORE => Element::FlatArray(self.parse_next_flat_array()?),
                 // switch keyspace with SUB
                 ASCII_CONTROL_SUB_HEADER => Element::SwapKSHeader(self.parse_next_byte()?),
@@ -337,6 +339,32 @@ impl<'a> Parser<'a> {
             Ok(ret)
         } else {
             // Not enough bytes to read an element
+            Err(ParseError::NotEnough)
+        }
+    }
+    fn parse_next_blob(&mut self) -> ParseResult<Bytes> {
+        let our_string_chunk = self.__get_next_element()?;
+        let our_string = Bytes::copy_from_slice(our_string_chunk);
+        if self.will_cursor_give_linefeed()? {
+            // there is a lf after the end of the string; great!
+            // let's skip that now
+            self.incr_cursor();
+            // let's return our string
+            Ok(our_string)
+        } else {
+            Err(ParseError::UnexpectedByte)
+        }
+    }
+    fn parse_next_any_array(&mut self) -> ParseResult<Vec<Bytes>> {
+        let (start, stop) = self.read_line();
+        if let Some(our_size_chunk) = self.buffer.get(start..stop) {
+            let array_size = Self::parse_into_usize(our_size_chunk)?;
+            let mut array = Vec::with_capacity(array_size);
+            for _ in 0..array_size {
+                array.push(self.parse_next_blob()?);
+            }
+            Ok(array)
+        } else {
             Err(ParseError::NotEnough)
         }
     }
@@ -799,4 +827,19 @@ fn test_ks_sub() {
             bytes.len()
         )
     );
+}
+
+#[test]
+fn test_parse_any_array() {
+    let anyarray = "*1\n~3\n3\nthe\n3\ncat\n6\nmeowed\n".as_bytes();
+    let (query, forward_by) = Parser::new(anyarray).parse().unwrap();
+    assert_eq!(forward_by, anyarray.len());
+    assert_eq!(
+        query,
+        Query::SimpleQuery(Element::AnyArray(vec![
+            "the".into(),
+            "cat".into(),
+            "meowed".into()
+        ]))
+    )
 }

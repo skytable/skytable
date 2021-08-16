@@ -373,7 +373,7 @@ impl<'a, K: 'a + Hash + Eq, V: 'a, S: BuildHasher + Clone> Skymap<K, V, S> {
 }
 
 // cloned impls
-impl<'a, K: Clone, V: Clone, S: BuildHasher> Skymap<K, V, S> {
+impl<'a, K, V: Clone, S: BuildHasher> Skymap<K, V, S> {
     pub fn get_cloned<Q>(&'a self, k: &Q) -> Option<V>
     where
         K: Borrow<Q>,

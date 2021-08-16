@@ -35,15 +35,25 @@ action!(
     fn exists(handle: &Corestore, con: &mut T, act: ActionIter) {
         err_if_len_is!(act, con, eq 0);
         let mut how_many_of_them_exist = 0usize;
-        {
-            let cmap = kve!(con, handle);
-            act.for_each(|key| {
-                if not_enc_err!(cmap.exists(&key)) {
-                    how_many_of_them_exist += 1;
-                }
-            });
+        let kve = kve!(con, handle);
+        let encoding_is_okay = if kve.needs_key_encoding() {
+            true
+        } else {
+            let encoder = kve.get_key_encoder();
+            act.as_ref().iter().all(|k| encoder.is_ok(k))
+        };
+        if encoding_is_okay {
+            {
+                act.for_each(|key| {
+                    if kve.exists_unchecked(&key) {
+                        how_many_of_them_exist += 1;
+                    }
+                });
+            }
+            con.write_response(how_many_of_them_exist).await?;
+        } else {
+            conwrite!(con, groups::ENCODING_ERROR)?;
         }
-        con.write_response(how_many_of_them_exist).await?;
         Ok(())
     }
 );

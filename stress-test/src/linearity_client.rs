@@ -228,7 +228,7 @@ pub fn stress_linearity_concurrent_clients_get(
         let rets: Vec<String> = rx
             .into_iter()
             .map(|v| {
-                if let Response::Item(Element::String(val)) = v {
+                if let Response::Item(Element::Str(val)) = v {
                     val
                 } else {
                     panic!("Unexpected response from server");

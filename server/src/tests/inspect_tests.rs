@@ -32,7 +32,7 @@ mod __private {
         query.push("KEYSPACES");
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(_))
+            Response::Item(Element::StrArray(_))
         ))
     }
     async fn test_inspect_keyspace() {
@@ -42,7 +42,7 @@ mod __private {
         query.push(my_keyspace);
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(_))
+            Response::Item(Element::StrArray(_))
         ))
     }
     async fn test_inspect_table() {
@@ -51,11 +51,8 @@ mod __private {
         query.push("TABLE");
         query.push(my_table);
         match con.run_simple_query(&query).await.unwrap() {
-            Response::Item(Element::String(st)) => {
-                assert_eq!(
-                    st,
-                    "Keymap { data:(binstr,binstr), volatile:true }".to_owned()
-                )
+            Response::Item(Element::Str(st)) => {
+                assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
             _ => panic!("Bad response for inspect table"),
         }
@@ -65,11 +62,8 @@ mod __private {
         query.push("TABLE");
         query.push(__MYENTITY__);
         match con.run_simple_query(&query).await.unwrap() {
-            Response::Item(Element::String(st)) => {
-                assert_eq!(
-                    st,
-                    "Keymap { data:(binstr,binstr), volatile:true }".to_owned()
-                )
+            Response::Item(Element::Str(st)) => {
+                assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
             _ => panic!("Bad response for inspect table"),
         }
