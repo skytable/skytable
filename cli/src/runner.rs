@@ -142,6 +142,10 @@ impl<T: AsyncSocket> Runner<T> {
                 }
                 Response::Item(element) => match element {
                     Element::Str(st) => write_string!(st),
+                    Element::Binstr(st) => {
+                        let st = String::from_utf8_lossy(&st);
+                        write_string!(st)
+                    }
                     Element::BinArray(brr) => print_bin_array(brr),
                     Element::StrArray(srr) => print_str_array(srr),
                     Element::RespCode(r) => print_rcode(r, None),
@@ -182,23 +186,28 @@ fn print_rcode(rcode: RespCode, idx: Option<usize>) {
 }
 
 fn print_bin_array(bin_array: Vec<Option<Vec<u8>>>) {
-    bin_array
-        .into_iter()
-        .enumerate()
-        .for_each(|(idx, elem)| match elem {
-            Some(ele) => println!("({}) {:?}", idx, ele),
+    bin_array.into_iter().enumerate().for_each(|(idx, elem)| {
+        let idx = idx + 1;
+        match elem {
+            Some(ele) => {
+                let st = String::from_utf8_lossy(&ele);
+                println!("({}) {}", idx, st)
+            }
             None => print_rcode(RespCode::NotFound, Some(idx)),
-        })
+        }
+    })
 }
 
 fn print_str_array(str_array: Vec<Option<String>>) {
-    str_array
-        .into_iter()
-        .enumerate()
-        .for_each(|(idx, elem)| match elem {
-            Some(ele) => println!("\"{}\"", ele),
+    str_array.into_iter().enumerate().for_each(|(idx, elem)| {
+        let idx = idx + 1;
+        match elem {
+            Some(ele) => {
+                println!("({}) {}", idx, ele)
+            }
             None => print_rcode(RespCode::NotFound, Some(idx)),
-        })
+        }
+    })
 }
 
 fn print_array(array: Vec<Element>) {
