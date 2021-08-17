@@ -117,10 +117,23 @@ pub fn read_preload() -> IoResult<PreloadSet> {
 /// is read and returned (and any possible errors that are encountered are returned)
 pub fn read_full() -> IoResult<Memstore> {
     if is_new_instance() {
+        log::trace!("Detected new instance. Creating data directory");
+        /*
+        Since the `PRELOAD` file doesn't exist -- this is a new instance
+        This means that we need to:
+        1. Create the tree (this only creates the directories)
+        2. Create the PRELOAD (this is not created by flush_full!)
+        3. Do a full flush (this flushes, but doesn't do anything to the PRELOAD!!!)
+        */
         // init an empty store
         let store = Memstore::new_default();
-        // fine, so we need to create the tree
+
+        // (1) create the tree
         super::interface::create_tree(&store)?;
+        // (2) create the preload
+        super::flush::oneshot::flush_preload(&store)?;
+        // (3) do a full flush
+        super::flush::flush_full(&store)?;
         return Ok(store);
     }
     let preload = self::read_preload()?;
@@ -132,8 +145,8 @@ pub fn read_full() -> IoResult<Memstore> {
     Ok(Memstore::init_with_all(ksmap))
 }
 
-/// Check if the data/PRELOAD file exists (if not: we're on a new instance)
+/// Check if the data/ks/PRELOAD file exists (if not: we're on a new instance)
 pub fn is_new_instance() -> bool {
-    let path = Path::new("data/PRELOAD");
+    let path = Path::new("data/ks/PRELOAD");
     !(path.exists() && path.is_file())
 }
