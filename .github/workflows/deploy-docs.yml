@@ -1,3 +1,5 @@
+name: Rebuild docs
+
 on:
   push:
     branches:
@@ -10,10 +12,16 @@ jobs:
     name: Build new actiondoc
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+
       - name: Setup environment
         run: |
           chmod +x ci/setvars.sh
           ci/setvars.sh
+
       - name: Publish docs
         env:
           BOT_USER: ${{ secrets.BOT_INIT_USER }}
