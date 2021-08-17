@@ -59,6 +59,13 @@ mod __private {
         assert_eq!(resp, Response::Item(Element::Str("HEY!".to_owned())));
     }
 
+    async fn test_heya_echo() {
+        query.push("heya");
+        query.push("sayan");
+        let resp = con.run_simple_query(&query).await.unwrap();
+        assert_eq!(resp, Response::Item(Element::Str("sayan".to_owned())));
+    }
+
     /// Test a GET query: for a non-existing key
     async fn test_get_single_nil() {
         query.push("get");

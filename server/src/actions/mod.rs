@@ -50,10 +50,17 @@ pub mod uset;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
+    use crate::resp::BytesWrapper;
     action!(
         /// Returns a `HEY!` `Response`
-        fn heya(_handle: &Corestore, con: &mut T, _act: ActionIter) {
-            con.write_response(responses::groups::HEYA).await
+        fn heya(_handle: &Corestore, con: &mut T, mut act: ActionIter) {
+            err_if_len_is!(act, con, gt 1);
+            if act.len() == 1 {
+                let raw_byte = unsafe { act.next().unsafe_unwrap() };
+                con.write_response(BytesWrapper(raw_byte)).await
+            } else {
+                con.write_response(responses::groups::HEYA).await
+            }
         }
     );
 }

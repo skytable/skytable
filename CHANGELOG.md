@@ -109,10 +109,12 @@ All changes in this project will be noted in this file.
   to follow the `MGET`/`GET` naming convention
 - TLS port can now be set to a custom port via CLI arguments
 - `sky-bench` can now run multiple times to get average values through the `--runs` option
+- `HEYA` now does an echo with the second argument
 
 ### Fixes
 
 - Zero length argument causing runtime panic in `skysh`
+- `HEYA!` not reporting errors on incorrect number of arguments
 - Panic on incorrect data type in `skyd`
 - `sky-bench` no longer affects your personal data because it creates a random temporary table
   under the `default` keyspace
