@@ -119,8 +119,8 @@ pub async fn start_repl() {
             }
         };
         let mut runner = Runner::new(con);
-        println!("Connected to skyhash-secure://{}:{}", host, port);
         inner_eval!(runner, matches);
+        println!("Connected to skyhash-secure://{}:{}", host, port);
         inner_repl!(runner);
     } else {
         let con = match AsyncConnection::new(host, port).await {
@@ -131,8 +131,8 @@ pub async fn start_repl() {
             }
         };
         let mut runner = Runner::new(con);
-        println!("Connected to skyhash://{}:{}", host, port);
         inner_eval!(runner, matches);
+        println!("Connected to skyhash://{}:{}", host, port);
         inner_repl!(runner);
     }
     println!("Goodbye!");

@@ -26,7 +26,6 @@
 
 use crate::hoststr;
 use crate::sanity_test;
-use libstress::utils::ran_string;
 use libstress::Workpool;
 use rand::thread_rng;
 use std::io::{Read, Write};
@@ -50,22 +49,18 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
             socket.shutdown(net::Shutdown::Both).unwrap();
         },
         true,
-        Some(connections)
+        Some(connections),
     );
     println!("Generating keys ...");
-    let keys: Vec<String> = (0..num)
-        .into_iter()
-        .map(|_| ran_string(size, &mut rand))
-        .collect();
-    let values: Vec<String> = (0..num)
-        .into_iter()
-        .map(|_| ran_string(size, &mut rand))
-        .collect();
-    (0..num)
-        .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
-        .for_each(|packet| {
-            np.execute(packet);
-        });
-    drop(np);
+    let keys = libstress::utils::generate_random_string_vector(num, size, &mut rand, true);
+    let values = libstress::utils::generate_random_string_vector(num, size, &mut rand, false);
+    {
+        let np = np;
+        (0..num)
+            .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
+            .for_each(|packet| {
+                np.execute(packet);
+            });
+    }
     println!("Created mock keys successfully");
 }
