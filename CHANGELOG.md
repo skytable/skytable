@@ -108,6 +108,7 @@ All changes in this project will be noted in this file.
 - `MPOP` now replaces `POP` to accept multiple keys while `POP` will accept a single key
   to follow the `MGET`/`GET` naming convention
 - TLS port can now be set to a custom port via CLI arguments
+- `sky-bench` can now run multiple times to get average values through the `--runs` option
 
 ### Fixes
 
@@ -115,9 +116,16 @@ All changes in this project will be noted in this file.
 - Panic on incorrect data type in `skyd`
 - `sky-bench` no longer affects your personal data because it creates a random temporary table
   under the `default` keyspace
+- `sky-bench`'s `testkey` subcommand causing key collisions
 - Fix log output in `sky-bench` even if the `--json` flag was passed
 - Use flocks to enable auto release of pid file, even if process is forcefully terminated
 - Fixes [CVE-2021-37625](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-37625)
+
+### Breaking
+
+- All actions now accept the `AnyArray` type introduced in Skyhash 1.1
+- `POP` now accepts one key while `MPOP` accepts multiple keys
+- Disk storage format has changed
 
 ## Version 0.6.4 [2021-08-05]
 
