@@ -472,7 +472,7 @@ version = "0.7.0"
 dependencies = [
  "lazy_static",
  "regex",
- "skytable",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "termcolor",
 ]
 
@@ -943,7 +943,18 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "skytable",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+]
+
+[[package]]
+name = "sky-migrate"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "env_logger",
+ "log",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust.git)",
 ]
 
 [[package]]
@@ -980,7 +991,7 @@ dependencies = [
  "regex",
  "serde",
  "sky_macros",
- "skytable",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -995,7 +1006,7 @@ dependencies = [
  "crossterm",
  "libsky",
  "rustyline",
- "skytable",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
 ]
 
@@ -1009,6 +1020,11 @@ dependencies = [
  "tokio",
  "tokio-openssl",
 ]
+
+[[package]]
+name = "skytable"
+version = "0.4.0"
+source = "git+https://github.com/skytable/client-rust.git#376c05e7ae83ae1c0c06ec10ef0039774819f6c7"
 
 [[package]]
 name = "slab"
@@ -1039,7 +1055,7 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "skytable",
+ "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "sysinfo",
 ]
 

@@ -73,25 +73,25 @@ ifeq ($(origin TARGET),undefined)
 ifeq ($(OS),Windows_NT)
 # windows, so we need exe
 BUNDLE += cd target/release &&
-BUNDLE += 7z a ../../../bundle.zip skysh.exe skyd.exe sky-bench.exe
+BUNDLE += 7z a ../../../bundle.zip skysh.exe skyd.exe sky-bench.exe sky-migrate.exe
 else
 # not windows, so no exe
-BUNDLE+=zip -j bundle.zip target/release/skysh target/release/skyd target/release/sky-bench
+BUNDLE+=zip -j bundle.zip target/release/skysh target/release/skyd target/release/sky-bench target/release/sky-migrate
 endif
 else
 # target was defined, but check for windows
 ifeq ($(OS),Windows_NT)
 # windows, so we need exe
 BUNDLE += cd target/${TARGET}/release &&
-BUNDLE+=7z a ../../../sky-bundle-${VERSION}-${ARTIFACT}.zip skysh.exe skyd.exe sky-bench.exe
+BUNDLE+=7z a ../../../sky-bundle-${VERSION}-${ARTIFACT}.zip skysh.exe skyd.exe sky-bench.exe sky-migrate.exe
 else
 # not windows, so no exe
 ifneq ($(origin CARGO_TARGET_DIR),undefined)
 # target defined and target dir. use this instead of target/
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip ${CARGO_TARGET_DIR}/${TARGET}/release/skysh ${CARGO_TARGET_DIR}/${TARGET}/release/skyd ${CARGO_TARGET_DIR}/${TARGET}/release/sky-bench
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip ${CARGO_TARGET_DIR}/${TARGET}/release/skysh ${CARGO_TARGET_DIR}/${TARGET}/release/skyd ${CARGO_TARGET_DIR}/${TARGET}/release/sky-bench ${CARGO_TARGET_DIR}/${TARGET}/release/sky-migrate
 else
 # just the plain old target/${TARGET} path
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench
+BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench target/${TARGET}/release/sky-migrate
 endif
 endif
 endif

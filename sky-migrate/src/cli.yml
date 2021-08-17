@@ -1,0 +1,30 @@
+name: Skytable Migration Tool
+version: 0.7.0
+author: Sayan N. <ohsayan@outlook.com>
+about: |
+  The Skytable migration tool allows users coming from older versions (>=0.6.0)
+  to upgrade their datasets to the latest Skytable version. This tool currently
+  supports versions >= 0.6.0 and upgrading it to 0.7.0. To upgrade, on needs
+  to simply run:
+  sky-migrate --prevdir <lastpath> --new <host>:<port>
+  Where `<lastpath>` is the path to the last installation's data directory and
+  `<host>` and `<port>` is the hostname and port for the new server instance
+args:
+  - new:
+      long: new
+      takes_value: true
+      required: true
+      help: The <host>:<port> combo for the new instance
+      value_name: new
+  - prevdir:
+      long: prevdir
+      takes_value: true
+      required: true
+      help: Path to the previous installation location
+      value_name: prevdir
+  - serial:
+      long: serial
+      takes_value: false
+      required: false
+      help: |
+        Transfer entries one-by-one instead of all at once to save memory
