@@ -131,11 +131,11 @@
   accept: [AnyArray]
   syntax: [MKSNAP <SNAPNAME>]
   desc: |
-    This action can be used to create a snapshot. Do note that this action# *requires
+    This action can be used to create a snapshot. Do note that this action **requires
     snapshotting to be enabled on the server side**, before it can create snapshots.
-    \nIf you want to create snapshots# *without** snapshots being enabled on the server-side,
+    If you want to create snapshots **without** snapshots being enabled on the server-side,
     pass a second argument <SNAPNAME> to specify a snapshot name and a snapshot will
-    be create in a folder called `remote` under your snapshots directory. \nFor more
+    be create in a folder called `remote` under your snapshots directory. For more
     information on snapshots, read [this document](/snapshots)
   return: [Rcode 0, err-snapshot-disabled, err-snapshot-busy]
 - name: LSKEYS
@@ -164,7 +164,7 @@
     get the server error response code instead of the keys. If the server recovers inbetween,
     then the appropriate values (if any) will be returned. In all other cases a NIL error is
     returned (code 1)
-  return: [Flat Array]
+  return: [Typed Array]
 - name: HEYA
   complexity: O(1)
   accept: [AnyArray]

@@ -61,6 +61,7 @@ pub struct FlatArrayWriter<'a, T, Strm> {
     _owned: PhantomData<Strm>,
 }
 
+#[allow(dead_code)] // TODO(@ohsayan): Remove this once we start using the flat array writer
 impl<'a, T, Strm> FlatArrayWriter<'a, T, Strm>
 where
     T: ProtocolConnectionExt<Strm>,

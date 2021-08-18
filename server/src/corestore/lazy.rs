@@ -203,17 +203,13 @@ cfg_test!(
     }
 
     struct DropLessStruct(());
-    impl Drop for DropLessStruct {
-        fn drop(&mut self) {
-            // If this is called, we're dead
-            panic!("Dropped on dropless type");
-        }
-    }
     #[test]
     fn test_no_drop_nodrop() {
         let x: Lazy<DropLessStruct, fn() -> DropLessStruct> = Lazy::new(|| {
             DropLessStruct(())
         });
+        // deref to init
+        let _y = &*x;
         drop(x);
     }
 );

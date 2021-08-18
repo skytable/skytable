@@ -54,7 +54,7 @@ action!(
                 }
             }
         } else {
-            conwrite!(con, groups::ENCODING_ERROR)?;
+            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
         }
         Ok(())
     }

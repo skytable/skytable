@@ -65,22 +65,39 @@ pub mod groups {
     pub const ERR_ACCESS_AFTER_TERMSIG: &[u8] = "!24\nerr-access-after-termsig\n".as_bytes();
 
     // keyspace related resps
+    /// The default container was not set
     pub const DEFAULT_UNSET: &[u8] = "!23\ndefault-container-unset\n".as_bytes();
+    /// The container was not found
     pub const CONTAINER_NOT_FOUND: &[u8] = "!19\ncontainer-not-found\n".as_bytes();
+    /// The container is still in use and so cannot be removed
     pub const STILL_IN_USE: &[u8] = "!12\nstill-in-use\n".as_bytes();
+    /// This is a protected object and hence cannot be accessed
     pub const PROTECTED_OBJECT: &[u8] = "!20\nerr-protected-object\n".as_bytes();
+    /// The action was applied against the wrong model
     pub const WRONG_MODEL: &[u8] = "!11\nwrong-model\n".as_bytes();
+    /// The container already exists
     pub const ALREADY_EXISTS: &[u8] = "!18\nerr-already-exists\n".as_bytes();
+    /// The container is not ready
     pub const NOT_READY: &[u8] = "!9\nnot-ready\n".as_bytes();
+    /// A transactional failure occurred
     pub const DDL_TRANSACTIONAL_FAILURE: &[u8] = "!21\ntransactional-failure\n".as_bytes();
+    /// An unknown DDL query was run
     pub const UNKNOWN_DDL_QUERY: &[u8] = "!17\nunknown-ddl-query\n".as_bytes();
+    /// The expression for a DDL query was malformed
     pub const BAD_EXPRESSION: &[u8] = "!20\nmalformed-expression\n".as_bytes();
+    /// An unknown model was passed in a DDL query
     pub const UNKNOWN_MODEL: &[u8] = "!13\nunknown-model\n".as_bytes();
+    /// Too many arguments were passed to model constructor
     pub const TOO_MANY_ARGUMENTS: &[u8] = "!13\ntoo-many-args\n".as_bytes();
+    /// The container name is too long
     pub const CONTAINER_NAME_TOO_LONG: &[u8] = "!23\ncontainer-name-too-long\n".as_bytes();
+    /// The container name contains invalid characters
     pub const BAD_CONTAINER_NAME: &[u8] = "!18\nbad-container-name\n".as_bytes();
+    /// An unknown inspect query
     pub const UNKNOWN_INSPECT_QUERY: &[u8] = "!21\nunknown-inspect-query\n".as_bytes();
+    /// An unknown table property was passed
     pub const UNKNOWN_PROPERTY: &[u8] = "!16\nunknown-property\n".as_bytes();
+    /// The keyspace is not empty and hence cannot be removed
     pub const KEYSPACE_NOT_EMPTY: &[u8] = "!18\nkeyspace-not-empty\n".as_bytes();
 }
 

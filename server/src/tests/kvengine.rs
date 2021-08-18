@@ -51,7 +51,7 @@ mod __private {
         };
     }
     #[cfg(test)]
-    use skytable::{types::FlatElement, Element, Query, RespCode, Response};
+    use skytable::{Element, Query, RespCode, Response};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         query.push("heya");
@@ -1170,10 +1170,10 @@ mod __private {
         query.push(vec!["mpop", "x", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(vec![
-                FlatElement::String("100".to_owned()),
-                FlatElement::String("200".to_owned()),
-                FlatElement::String("300".to_owned())
+            Response::Item(Element::StrArray(vec![
+                Some("100".to_owned()),
+                Some("200".to_owned()),
+                Some("300".to_owned())
             ]))
         )
     }
@@ -1187,13 +1187,13 @@ mod __private {
         query.push(vec!["mpop", "apple", "arnold", "x", "madonna", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::FlatArray(vec![
-                FlatElement::RespCode(RespCode::NotFound),
-                FlatElement::RespCode(RespCode::NotFound),
-                FlatElement::String("100".to_owned()),
-                FlatElement::RespCode(RespCode::NotFound),
-                FlatElement::String("200".to_owned()),
-                FlatElement::String("300".to_owned())
+            Response::Item(Element::StrArray(vec![
+                None,
+                None,
+                Some("100".to_owned()),
+                None,
+                Some("200".to_owned()),
+                Some("300".to_owned())
             ]))
         );
     }

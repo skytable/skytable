@@ -62,7 +62,7 @@ action!(
                 conwrite!(con, groups::SERVER_ERR)
             }
         } else {
-            conwrite!(con, groups::ENCODING_ERROR)
+            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
         }
     }
 );

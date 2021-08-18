@@ -26,6 +26,7 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::resp::writer;
+use crate::util::compiler;
 
 action! {
     fn pop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
@@ -43,7 +44,7 @@ action! {
                     writer::write_raw_mono(con, tsymbol, &val).await?
                 },
                 Ok(None) => conwrite!(con, groups::NIL)?,
-                Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                Err(()) => compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?,
             }
         } else {
             conwrite!(con, groups::SERVER_ERR)?;

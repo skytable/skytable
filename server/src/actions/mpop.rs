@@ -28,7 +28,7 @@ use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::FlatArrayWriter;
+use crate::resp::writer::TypedArrayWriter;
 use crate::util::compiler;
 
 action!(
@@ -46,23 +46,17 @@ action!(
             if compiler::likely(encoding_is_okay) {
                 let mut writer = unsafe {
                     // SAFETY: We have verified the tsymbol ourselves
-                    FlatArrayWriter::new(con, kve.get_vt(), act.len())
+                    TypedArrayWriter::new(con, kve.get_vt(), act.len())
                 }
                 .await?;
                 for key in act {
-                    if registry::state_okay() {
-                        match kve.pop_unchecked(&key) {
-                            Some((_key, val)) => writer.write_element(val).await?,
-                            None => writer.write_nil().await?,
-                        }
-                    } else {
-                        // we keep this check just in case the server fails in-between running a
-                        // pop operation
-                        writer.write_server_error().await?;
+                    match kve.pop_unchecked(&key) {
+                        Some((_key, val)) => writer.write_element(val).await?,
+                        None => writer.write_null().await?,
                     }
                 }
             } else {
-                conwrite!(con, groups::ENCODING_ERROR)?;
+                compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
             }
         } else {
             // don't begin the operation at all if the database is poisoned

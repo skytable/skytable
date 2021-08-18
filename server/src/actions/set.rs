@@ -31,6 +31,7 @@ use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
+use crate::util::compiler;
 use corestore::Data;
 
 action!(
@@ -60,8 +61,7 @@ action!(
                     con.write_response(responses::groups::OVERWRITE_ERR).await?;
                 }
             } else {
-                con.write_response(responses::groups::ENCODING_ERROR)
-                    .await?;
+                compiler::cold_err(con.write_response(responses::groups::ENCODING_ERROR)).await?;
             }
         } else {
             conwrite!(con, groups::SERVER_ERR)?;

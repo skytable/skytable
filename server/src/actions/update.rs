@@ -30,6 +30,7 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
+use crate::util::compiler;
 
 action!(
     /// Run an `UPDATE` query
@@ -58,8 +59,7 @@ action!(
                     con.write_response(responses::groups::NIL).await?;
                 }
             } else {
-                con.write_response(responses::groups::ENCODING_ERROR)
-                    .await?;
+                compiler::cold_err(con.write_response(responses::groups::ENCODING_ERROR)).await?;
             }
         } else {
             conwrite!(con, groups::SERVER_ERR)?;

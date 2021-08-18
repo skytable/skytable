@@ -158,7 +158,7 @@ impl<'a, K: Hash + Eq, V, S: BuildHasher> OccupiedEntry<'a, K, V, S> {
     }
     /// Remove this element from the map
     pub fn remove(mut self) -> V {
-        let hash = super::make_hash::<K, K, S>(&self.hasher, &self.key);
+        let hash = super::make_hash::<K, _, S>(&self.hasher, &self.key);
         unsafe {
             self.guard
                 .remove_entry(hash, super::ceq(self.elem.0))

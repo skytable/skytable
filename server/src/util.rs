@@ -182,16 +182,16 @@ pub mod compiler {
 
     #[cold]
     #[inline(never)]
-    pub fn cold() {}
+    pub const fn cold() {}
 
-    pub fn likely(b: bool) -> bool {
+    pub const fn likely(b: bool) -> bool {
         if !b {
             cold()
         }
         b
     }
 
-    pub fn unlikely(b: bool) -> bool {
+    pub const fn unlikely(b: bool) -> bool {
         if b {
             cold()
         }
@@ -200,7 +200,7 @@ pub mod compiler {
 
     #[cold]
     #[inline(never)]
-    pub fn cold_err<T>(v: T) -> T {
+    pub const fn cold_err<T>(v: T) -> T {
         v
     }
 

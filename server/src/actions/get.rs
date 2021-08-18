@@ -29,6 +29,8 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::resp::writer;
+use crate::util::compiler;
+
 action!(
     /// Run a `GET` query
     fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
@@ -37,7 +39,7 @@ action!(
         unsafe {
             match kve.get_cloned_with_tsymbol(&act.next().unsafe_unwrap()) {
                 Ok((Some(val), tsymbol)) => writer::write_raw_mono(con, tsymbol, &val).await?,
-                Err(_) => conwrite!(con, groups::ENCODING_ERROR)?,
+                Err(_) => compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?,
                 Ok(_) => conwrite!(con, groups::NIL)?,
             }
         }

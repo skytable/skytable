@@ -29,6 +29,7 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
+use crate::util::compiler;
 
 action!(
     /// Run an `EXISTS` query
@@ -42,7 +43,7 @@ action!(
             let encoder = kve.get_key_encoder();
             act.as_ref().iter().all(|k| encoder.is_ok(k))
         };
-        if encoding_is_okay {
+        if compiler::likely(encoding_is_okay) {
             {
                 act.for_each(|key| {
                     if kve.exists_unchecked(&key) {

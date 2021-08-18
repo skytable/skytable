@@ -136,6 +136,12 @@ macro_rules! write_okay {
     };
 }
 
+macro_rules! eskysh {
+    ($e:expr) => {
+        eprintln!("[SKYSH ERROR] {}", $e)
+    };
+}
+
 impl<T: AsyncSocket> Runner<T> {
     pub fn new(con: T) -> Self {
         Runner { con }
@@ -159,17 +165,12 @@ impl<T: AsyncSocket> Runner<T> {
                     Element::UnsignedInt(int) => write_int!(int),
                     Element::FlatArray(frr) => write_flat_array(frr),
                     Element::Array(a) => print_array(a),
-                    _ => unimplemented!(),
+                    _ => eskysh!("Data type not supported"),
                 },
                 Response::ParseError => {
                     println!("ERROR: The client failed to deserialize data sent by the server")
                 }
-                x => {
-                    println!(
-                        "The server possibly sent a newer data type that we can't parse: {:?}",
-                        x
-                    )
-                }
+                _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
             },
             Err(e) => {
                 eprintln!("An I/O error occurred while querying: {}", e);
@@ -242,7 +243,7 @@ fn print_array(array: Vec<Element>) {
             Element::UnsignedInt(int) => write_int!(idx, int),
             Element::BinArray(brr) => print_bin_array(brr),
             Element::StrArray(srr) => print_str_array(srr),
-            _ => eprintln!("Nested arrays cannot be printed just yet"),
+            _ => eskysh!("Nested arrays cannot be printed just yet"),
         }
     }
 }

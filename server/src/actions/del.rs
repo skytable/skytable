@@ -65,7 +65,7 @@ action!(
                 con.write_response(responses::groups::SERVER_ERR).await
             }
         } else {
-            conwrite!(con, groups::ENCODING_ERROR)
+            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
         }
     }
 );
