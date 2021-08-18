@@ -11,7 +11,7 @@ skytable = { git = "https://github.com/skytable/client-rust", branch = "next", d
 sky_macros = { path = "../sky-macros" }
 libsky = { path = "../libsky" }
 # external deps
-tokio = { version = "1.9.0", features = ["full"] }
+tokio = { version = "1.10.0", features = ["full"] }
 ahash = "0.7.4"
 bytes = "1.0.1"
 serde = { version = "1.0.127", features = ["derive"] }
@@ -46,7 +46,7 @@ skytable = { git = "https://github.com/skytable/client-rust", features = [
     "aio-ssl",
 ], default-features = false, branch = "next" }
 # external deps
-tokio = { version = "1.9.0", features = ["test-util"] }
+tokio = { version = "1.10.0", features = ["test-util"] }
 rand = "0.8.4"
 bincode = "1.3.3"
 [target.'cfg(unix)'.dependencies]
