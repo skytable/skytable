@@ -27,7 +27,7 @@
 #[sky_macros::dbtest]
 mod __private {
     use libstress::utils;
-    use skytable::{Element, Query, RespCode, Response};
+    use skytable::{Element, Query, RespCode};
     async fn test_create_keyspace() {
         let mut rng = rand::thread_rng();
         let ksname = utils::rand_alphastring(10, &mut rng);
@@ -36,7 +36,7 @@ mod __private {
         query.push(&ksname);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_drop_keyspace() {
@@ -47,7 +47,7 @@ mod __private {
         query.push(&ksname);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
         query.push("drop");
@@ -55,7 +55,7 @@ mod __private {
         query.push(ksname);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_create_table() {
@@ -67,7 +67,7 @@ mod __private {
         query.push("keymap(str,str)");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_create_volatile() {
@@ -80,7 +80,7 @@ mod __private {
         query.push("volatile");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_create_table_fully_qualified_entity() {
@@ -93,7 +93,7 @@ mod __private {
         query.push("keymap(str,str)");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_create_table_volatile_fully_qualified_entity() {
@@ -107,7 +107,7 @@ mod __private {
         query.push("volatile");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_drop_table() {
@@ -119,7 +119,7 @@ mod __private {
         query.push("keymap(str,str)");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
         query.push("drop");
@@ -127,7 +127,7 @@ mod __private {
         query.push(&tblname);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_drop_table_fully_qualified_entity() {
@@ -141,7 +141,7 @@ mod __private {
         query.push("keymap(str,str)");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
         query.push("drop");
@@ -149,7 +149,7 @@ mod __private {
         query.push(my_fqe);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_use() {
@@ -157,7 +157,7 @@ mod __private {
         query.push(&__MYENTITY__);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         )
     }
     async fn test_use_syntax_error() {
@@ -166,7 +166,7 @@ mod __private {
         query.push("wiwofjwjfio");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         )
     }
 }

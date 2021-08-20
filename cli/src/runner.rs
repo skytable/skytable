@@ -26,10 +26,11 @@
 use core::future::Future;
 use core::pin::Pin;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
+use skytable::error::Error;
+use skytable::types::Array;
 use skytable::types::FlatElement;
 use skytable::Query;
-use skytable::{aio, Element, RespCode, Response};
-use std::io::Error as IoError;
+use skytable::{aio, Element, RespCode};
 
 pub struct Runner<T: AsyncSocket> {
     con: T,
@@ -39,14 +40,14 @@ pub trait AsyncSocket {
     fn run_simple_query<'s>(
         &'s mut self,
         query: Query,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Element, Error>> + Send + Sync + 's>>;
 }
 
 impl AsyncSocket for aio::Connection {
     fn run_simple_query<'s>(
         &'s mut self,
         query: Query,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Element, Error>> + Send + Sync + 's>> {
         Box::pin(async move { self.run_simple_query(&query).await })
     }
 }
@@ -55,7 +56,7 @@ impl AsyncSocket for aio::TlsConnection {
     fn run_simple_query<'s>(
         &'s mut self,
         query: Query,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, IoError>> + Send + Sync + 's>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Element, Error>> + Send + Sync + 's>> {
         Box::pin(async move { self.run_simple_query(&query).await })
     }
 }
@@ -150,26 +151,17 @@ impl<T: AsyncSocket> Runner<T> {
         let query = libsky::turn_into_query(unescaped_items);
         match self.con.run_simple_query(query).await {
             Ok(resp) => match resp {
-                Response::InvalidResponse => {
-                    println!("ERROR: The server sent an invalid response");
+                Element::String(st) => write_string!(st),
+                Element::Binstr(st) => {
+                    let st = String::from_utf8_lossy(&st);
+                    write_string!(st)
                 }
-                Response::Item(element) => match element {
-                    Element::Str(st) => write_string!(st),
-                    Element::Binstr(st) => {
-                        let st = String::from_utf8_lossy(&st);
-                        write_string!(st)
-                    }
-                    Element::BinArray(brr) => print_bin_array(brr),
-                    Element::StrArray(srr) => print_str_array(srr),
-                    Element::RespCode(r) => print_rcode(r, None),
-                    Element::UnsignedInt(int) => write_int!(int),
-                    Element::FlatArray(frr) => write_flat_array(frr),
-                    Element::Array(a) => print_array(a),
-                    _ => eskysh!("Data type not supported"),
-                },
-                Response::ParseError => {
-                    println!("ERROR: The client failed to deserialize data sent by the server")
-                }
+                Element::Array(Array::Bin(brr)) => print_bin_array(brr),
+                Element::Array(Array::Str(srr)) => print_str_array(srr),
+                Element::RespCode(r) => print_rcode(r, None),
+                Element::UnsignedInt(int) => write_int!(int),
+                Element::Array(Array::Flat(frr)) => write_flat_array(frr),
+                Element::Array(Array::Recursive(a)) => print_array(a),
                 _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
             },
             Err(e) => {
@@ -230,6 +222,7 @@ fn write_flat_array(flat_array: Vec<FlatElement>) {
             }
             FlatElement::RespCode(rc) => print_rcode(rc, Some(idx)),
             FlatElement::UnsignedInt(int) => write_int!(int, idx),
+            _ => eskysh!("Element typed cannot yet be parsed"),
         }
     }
 }
@@ -238,11 +231,11 @@ fn print_array(array: Vec<Element>) {
     for (idx, item) in array.into_iter().enumerate() {
         let idx = idx + 1;
         match item {
-            Element::Str(st) => write_string!(idx, st),
+            Element::String(st) => write_string!(idx, st),
             Element::RespCode(rc) => print_rcode(rc, Some(idx)),
             Element::UnsignedInt(int) => write_int!(idx, int),
-            Element::BinArray(brr) => print_bin_array(brr),
-            Element::StrArray(srr) => print_str_array(srr),
+            Element::Array(Array::Bin(brr)) => print_bin_array(brr),
+            Element::Array(Array::Str(srr)) => print_str_array(srr),
             _ => eskysh!("Nested arrays cannot be printed just yet"),
         }
     }

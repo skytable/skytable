@@ -41,29 +41,29 @@ mod __private {
             let mut count = 0;
             $(
                 q.push($key);
-                q.push($value);
+                q.push(stringify!($value));
                 count += 1;
             )*
             assert_eq!(
                 $con.run_simple_query(&q).await.unwrap(),
-                Response::Item(Element::UnsignedInt(count))
+                Element::UnsignedInt(count)
             );
         };
     }
     #[cfg(test)]
-    use skytable::{Element, Query, RespCode, Response};
+    use skytable::{types::Array, Element, Query, RespCode};
     /// Test a HEYA query: The server should return HEY!
     async fn test_heya() {
         query.push("heya");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::Str("HEY!".to_owned())));
+        assert_eq!(resp, Element::String("HEY!".to_owned()));
     }
 
     async fn test_heya_echo() {
         query.push("heya");
         query.push("sayan");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::Str("sayan".to_owned())));
+        assert_eq!(resp, Element::String("sayan".to_owned()));
     }
 
     /// Test a GET query: for a non-existing key
@@ -71,7 +71,7 @@ mod __private {
         query.push("get");
         query.push("x");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::RespCode(RespCode::NotFound)));
+        assert_eq!(resp, Element::RespCode(RespCode::NotFound));
     }
 
     /// Test a GET query: for an existing key
@@ -80,12 +80,12 @@ mod __private {
         query.push("x");
         query.push("100");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::RespCode(RespCode::Okay)));
+        assert_eq!(resp, Element::RespCode(RespCode::Okay));
         let mut query = Query::new();
         query.push("get");
         query.push("x");
         let resp = con.run_simple_query(&query).await.unwrap();
-        assert_eq!(resp, Response::Item(Element::Str("100".to_owned())));
+        assert_eq!(resp, Element::String("100".to_owned()));
     }
 
     /// Test a GET query with an incorrect number of arguments
@@ -93,7 +93,7 @@ mod __private {
         query.push("get");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
         let mut query = Query::new();
         query.push("get");
@@ -101,7 +101,7 @@ mod __private {
         query.push("y");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -112,7 +112,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -124,7 +124,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // attempt the same thing again
         let mut query = Query::new();
@@ -133,7 +133,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::OverwriteError))
+            Element::RespCode(RespCode::OverwriteError)
         );
     }
 
@@ -143,7 +143,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
         let mut query = Query::new();
         query.push("set");
@@ -152,7 +152,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -164,7 +164,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // attempt to update it
         let mut query = Query::new();
@@ -173,7 +173,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -185,7 +185,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 
@@ -194,7 +194,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
         let mut query = Query::new();
         query.push("update");
@@ -203,7 +203,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -213,7 +213,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(0))
+            Element::UnsignedInt(0)
         );
     }
 
@@ -225,7 +225,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now delete it
         let mut query = Query::new();
@@ -233,7 +233,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(1))
+            Element::UnsignedInt(1)
         );
     }
 
@@ -249,7 +249,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now delete them
         let mut query = Query::new();
@@ -259,7 +259,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -268,7 +268,7 @@ mod __private {
         query.push("del");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -284,7 +284,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now check if they exist
         let mut query = Query::new();
@@ -295,7 +295,7 @@ mod __private {
         query.push("a");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -304,7 +304,7 @@ mod __private {
         query.push("exists");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -320,7 +320,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now get them
         let mut query = Query::new();
@@ -330,7 +330,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(vec![
+            Element::Array(Array::Str(vec![
                 Some("100".to_owned()),
                 Some("200".to_owned()),
                 Some("300".to_owned())
@@ -350,7 +350,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         let mut query = Query::new();
         query.push("mget");
@@ -361,7 +361,7 @@ mod __private {
         query.push("b");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(vec![
+            Element::Array(Array::Str(vec![
                 Some("100".to_owned()),
                 Some("200".to_owned()),
                 None,
@@ -376,7 +376,7 @@ mod __private {
         query.push("mget");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -388,7 +388,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(1))
+            Element::UnsignedInt(1)
         );
     }
 
@@ -404,7 +404,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -420,7 +420,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now try to set them again with just another new key
         let mut query = Query::new();
@@ -435,7 +435,7 @@ mod __private {
         query.push("apple");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(1))
+            Element::UnsignedInt(1)
         );
     }
 
@@ -444,7 +444,7 @@ mod __private {
         query.push("mset");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_mset_syntax_error_args_three() {
@@ -454,7 +454,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -466,7 +466,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(1))
+            Element::UnsignedInt(1)
         );
         // now attempt to update it
         // first set the keys
@@ -476,7 +476,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(1))
+            Element::UnsignedInt(1)
         );
     }
 
@@ -492,7 +492,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now try to update them with just another new key
         let mut query = Query::new();
@@ -507,7 +507,7 @@ mod __private {
         query.push("apple");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -516,7 +516,7 @@ mod __private {
         query.push("mupdate");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -527,7 +527,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -539,7 +539,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -551,7 +551,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now attempt to overwrite it
         let mut query = Query::new();
@@ -560,7 +560,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::OverwriteError))
+            Element::RespCode(RespCode::OverwriteError)
         );
     }
 
@@ -576,7 +576,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -592,7 +592,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now attempt to sset again with just one new extra key
         let mut query = Query::new();
@@ -607,7 +607,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::OverwriteError))
+            Element::RespCode(RespCode::OverwriteError)
         );
     }
 
@@ -616,7 +616,7 @@ mod __private {
         query.push("sset");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -627,7 +627,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -639,7 +639,7 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // update it
         let mut query = Query::new();
@@ -648,7 +648,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -659,7 +659,7 @@ mod __private {
         query.push("200");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 
@@ -675,7 +675,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now update all of them
         let mut query = Query::new();
@@ -688,7 +688,7 @@ mod __private {
         query.push("400");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -703,7 +703,7 @@ mod __private {
         query.push("400");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 
@@ -712,7 +712,7 @@ mod __private {
         query.push("mupdate");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -723,7 +723,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -733,7 +733,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 
@@ -744,14 +744,14 @@ mod __private {
         query.push("100");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
         query.push("sdel");
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -767,7 +767,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now delete them
         let mut query = Query::new();
@@ -777,7 +777,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
     }
 
@@ -788,7 +788,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 
@@ -797,7 +797,7 @@ mod __private {
         query.push("sdel");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -813,21 +813,21 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now check the size
         let mut query = Query::new();
         query.push("dbsize");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         let mut query = Query::new();
         query.push("dbsize");
         query.push(__MYENTITY__);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -839,7 +839,7 @@ mod __private {
         query.push("ioewjforfifrj");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -855,21 +855,21 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now flush the database
         let mut query = Query::new();
         query.push("flushdb");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now check the size
         let mut query = Query::new();
         query.push("dbsize");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(0))
+            Element::UnsignedInt(0)
         );
     }
 
@@ -888,14 +888,14 @@ mod __private {
         query.push(__MYENTITY__);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now check the size
         let mut query = Query::new();
         query.push("dbsize");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(0))
+            Element::UnsignedInt(0)
         );
     }
 
@@ -907,7 +907,7 @@ mod __private {
         query.push("z");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -924,7 +924,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
         // now that the keys already exist, do it all over again
         let mut query = Query::new();
@@ -937,7 +937,7 @@ mod __private {
         query.push("300");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(3))
+            Element::UnsignedInt(3)
         );
     }
 
@@ -946,7 +946,7 @@ mod __private {
         query.push("uset");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -957,7 +957,7 @@ mod __private {
         query.push("three");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -969,7 +969,7 @@ mod __private {
         query.push("helloworld");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::Okay))
+            Element::RespCode(RespCode::Okay)
         );
         // now check for the length
         let mut query = Query::new();
@@ -977,7 +977,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(10))
+            Element::UnsignedInt(10)
         );
     }
 
@@ -986,7 +986,7 @@ mod __private {
         query.push("keylen");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_keylen_syntax_error_args_two() {
@@ -995,16 +995,14 @@ mod __private {
         query.push("y");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_mksnap_disabled() {
         query.push("mksnap");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ErrorString(
-                "err-snapshot-disabled".to_owned()
-            )))
+            Element::RespCode(RespCode::ErrorString("err-snapshot-disabled".to_owned()))
         );
     }
     async fn test_mksnap_sanitization() {
@@ -1012,18 +1010,18 @@ mod __private {
         query.push("/var/omgcrazysnappy");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ErrorString(
+            Element::RespCode(RespCode::ErrorString(
                 "err-invalid-snapshot-name".to_owned()
-            )))
+            ))
         );
         let mut query = Query::new();
         query.push("mksnap");
         query.push("../omgbacktoparent");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ErrorString(
+            Element::RespCode(RespCode::ErrorString(
                 "err-invalid-snapshot-name".to_owned()
-            )))
+            ))
         );
     }
     async fn test_lskeys_default() {
@@ -1042,7 +1040,7 @@ mod __private {
         query.push("carrots");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(6))
+            Element::UnsignedInt(6)
         );
         // now get 'em
         let mut query = Query::new();
@@ -1053,7 +1051,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::StrArray(arr)) = ret {
+        if let Element::Array(Array::Str(arr)) = ret {
             let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
@@ -1077,7 +1075,7 @@ mod __private {
         query.push("carrots");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::UnsignedInt(6))
+            Element::UnsignedInt(6)
         );
         let mut query = Query::new();
         query.push("lskeys");
@@ -1088,7 +1086,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::StrArray(arr)) = ret {
+        if let Element::Array(Array::Str(arr)) = ret {
             let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
@@ -1110,7 +1108,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::StrArray(arr)) = ret {
+        if let Element::Array(Array::Str(arr)) = ret {
             let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
@@ -1127,13 +1125,13 @@ mod __private {
         );
         query.push("lskeys");
         query.push(&__MYENTITY__);
-        query.push(3);
+        query.push(3.to_string());
         let ret = con.run_simple_query(&query).await.unwrap();
         let ret_should_have: Vec<String> = vec!["x", "y", "z"]
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Response::Item(Element::StrArray(arr)) = ret {
+        if let Element::Array(Array::Str(arr)) = ret {
             let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
@@ -1149,14 +1147,14 @@ mod __private {
         query.push("fvnjnvv");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_mpop_syntax_error() {
         query.push("mpop");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 
@@ -1170,7 +1168,7 @@ mod __private {
         query.push(vec!["mpop", "x", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(vec![
+            Element::Array(Array::Str(vec![
                 Some("100".to_owned()),
                 Some("200".to_owned()),
                 Some("300".to_owned())
@@ -1187,7 +1185,7 @@ mod __private {
         query.push(vec!["mpop", "apple", "arnold", "x", "madonna", "y", "z"]);
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(vec![
+            Element::Array(Array::Str(vec![
                 None,
                 None,
                 Some("100".to_owned()),
@@ -1201,7 +1199,7 @@ mod __private {
         query.push("pop");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_pop_okay() {
@@ -1213,7 +1211,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::Str("100".to_owned()))
+            Element::String("100".to_owned())
         );
     }
     async fn test_pop_nil() {
@@ -1221,7 +1219,7 @@ mod __private {
         query.push("x");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::NotFound))
+            Element::RespCode(RespCode::NotFound)
         );
     }
 }

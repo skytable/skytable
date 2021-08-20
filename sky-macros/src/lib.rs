@@ -104,7 +104,7 @@ fn parse_dbtest(
             let mut __flush__ = skytable::Query::from("flushdb");
             std::assert_eq!(
                 con.run_simple_query(&__flush__).await.unwrap(),
-                skytable::Response::Item(skytable::Element::RespCode(skytable::RespCode::Okay))
+                skytable::Element::RespCode(skytable::RespCode::Okay)
             );
         }
     };

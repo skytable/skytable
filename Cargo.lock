@@ -260,10 +260,11 @@ dependencies = [
 
 [[package]]
 name = "fd-lock"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
+checksum = "b8806dd91a06a7a403a8e596f9bfbfb34e469efbc363fc9c9713e79e26472e36"
 dependencies = [
+ "cfg-if",
  "libc",
  "winapi",
 ]
@@ -472,13 +473,13 @@ version = "0.7.0"
 dependencies = [
  "lazy_static",
  "regex",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust?branch=next)",
  "termcolor",
 ]
 
 [[package]]
 name = "libstress"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -507,9 +508,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
+checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "memoffset"
@@ -553,9 +554,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.20.1"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df8e5e343312e7fbeb2a52139114e9e702991ef9c2aea6817ff2440b35647d56"
+checksum = "e7555d6c7164cc913be1ce7f95cbecdabda61eb2ccd89008524af306fb7f5031"
 dependencies = [
  "bitflags",
  "cc",
@@ -610,9 +611,9 @@ checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
 
 [[package]]
 name = "openssl"
-version = "0.10.35"
+version = "0.10.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "549430950c79ae24e6d02e0b7404534ecf311d94cc9f861e9e4020187d13d885"
+checksum = "8d9facdb76fec0b73c406f125d44d86fdad818d66fef0531eec9233ca425ff4a"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -633,9 +634,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.65"
+version = "0.9.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a7907e3bfa08bb85105209cdfcb6c63d109f8f6c1ed6ca318fff5c1853fbc1d"
+checksum = "1996d2d305e561b70d1ee0c53f1542833f4e1ac6ce9a6708b6ff2738ca67dc82"
 dependencies = [
  "autocfg",
  "cc",
@@ -837,9 +838,9 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "rustyline"
-version = "8.2.0"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbd4eaf7a7738f76c98e4f0395253ae853be3eb018f7b0bb57fe1b6c17e31874"
+checksum = "790487c3881a63489ae77126f57048b42d62d3b2bafbf37453ea19eedb6340d6"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -943,18 +944,18 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust?branch=next)",
 ]
 
 [[package]]
 name = "sky-migrate"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "clap",
  "env_logger",
  "log",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust.git)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust.git)",
 ]
 
 [[package]]
@@ -991,7 +992,7 @@ dependencies = [
  "regex",
  "serde",
  "sky_macros",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -1006,14 +1007,14 @@ dependencies = [
  "crossterm",
  "libsky",
  "rustyline",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
 ]
 
 [[package]]
 name = "skytable"
-version = "0.4.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#9c44e56dc1a4bcaa755b5a07066f800d94f67b5f"
+version = "0.5.0-alpha.1"
+source = "git+https://github.com/skytable/client-rust?branch=next#106bbcf94fd344ca0375b48c08ef3f200ec22126"
 dependencies = [
  "bytes",
  "openssl",
@@ -1023,8 +1024,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.4.0"
-source = "git+https://github.com/skytable/client-rust.git#376c05e7ae83ae1c0c06ec10ef0039774819f6c7"
+version = "0.5.0-alpha.1"
+source = "git+https://github.com/skytable/client-rust.git#106bbcf94fd344ca0375b48c08ef3f200ec22126"
 
 [[package]]
 name = "slab"
@@ -1055,7 +1056,7 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "skytable 0.4.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.5.0-alpha.1 (git+https://github.com/skytable/client-rust?branch=next)",
  "sysinfo",
 ]
 

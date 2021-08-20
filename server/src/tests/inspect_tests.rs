@@ -26,13 +26,13 @@
 
 #[sky_macros::dbtest]
 mod __private {
-    use skytable::{Element, RespCode, Response};
+    use skytable::{types::Array, Element, RespCode};
     async fn test_inspect_keyspaces() {
         query.push("INSPECT");
         query.push("KEYSPACES");
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(_))
+            Element::Array(Array::Str(_))
         ))
     }
     async fn test_inspect_keyspace() {
@@ -42,7 +42,7 @@ mod __private {
         query.push(my_keyspace);
         assert!(matches!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::StrArray(_))
+            Element::Array(Array::Str(_))
         ))
     }
     async fn test_inspect_table() {
@@ -51,7 +51,7 @@ mod __private {
         query.push("TABLE");
         query.push(my_table);
         match con.run_simple_query(&query).await.unwrap() {
-            Response::Item(Element::Str(st)) => {
+            Element::String(st) => {
                 assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
             _ => panic!("Bad response for inspect table"),
@@ -62,7 +62,7 @@ mod __private {
         query.push("TABLE");
         query.push(__MYENTITY__);
         match con.run_simple_query(&query).await.unwrap() {
-            Response::Item(Element::Str(st)) => {
+            Element::String(st) => {
                 assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
             _ => panic!("Bad response for inspect table"),
@@ -74,7 +74,7 @@ mod __private {
         query.push("iowjfjofoe");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_inspect_keyspace_syntax_error() {
@@ -84,7 +84,7 @@ mod __private {
         query.push("oijfwirfjwo");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
     async fn test_inspect_table_syntax_error() {
@@ -94,7 +94,7 @@ mod __private {
         query.push("oijfwirfjwo");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Response::Item(Element::RespCode(RespCode::ActionError))
+            Element::RespCode(RespCode::ActionError)
         );
     }
 }
