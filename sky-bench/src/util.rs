@@ -79,7 +79,7 @@ pub fn calc(reqs: usize, time: u128) -> f64 {
 /// A 65535 character long key/value pair is created and fetched. This random string has extremely low
 /// chances of colliding with any existing key
 pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
-    use skytable::{Connection, Element, Query, RespCode, Response};
+    use skytable::{Connection, Element, Query, RespCode};
     let mut rng = thread_rng();
     let mut connection = Connection::new(host, port)?;
     // test heya
@@ -88,7 +88,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::Str("HEY!".to_owned())))
+        .eq(&Element::String("HEY!".to_owned()))
     {
         return Err("HEYA test failed".into());
     }
@@ -101,7 +101,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::RespCode(RespCode::Okay)))
+        .eq(&Element::RespCode(RespCode::Okay))
     {
         return Err("SET test failed".into());
     }
@@ -111,9 +111,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::Binstr(
-            value.as_bytes().to_owned(),
-        )))
+        .eq(&Element::Binstr(value.as_bytes().to_owned()))
     {
         return Err("GET test failed".into());
     }
@@ -123,7 +121,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     if !connection
         .run_simple_query(&query)
         .unwrap()
-        .eq(&Response::Item(Element::UnsignedInt(1)))
+        .eq(&Element::UnsignedInt(1))
     {
         return Err("DEL test failed".into());
     }

@@ -32,7 +32,7 @@ mod kvengine;
 
 mod ssl {
     use skytable::aio::TlsConnection;
-    use skytable::{Element, Query, Response};
+    use skytable::{Element, Query};
     use std::env;
     #[tokio::test]
     async fn test_ssl() {
@@ -42,7 +42,7 @@ mod ssl {
         let q = Query::from("heya");
         assert_eq!(
             con.run_simple_query(&q).await.unwrap(),
-            Response::Item(Element::Str("HEY!".to_owned()))
+            Element::String("HEY!".to_owned())
         );
     }
 }

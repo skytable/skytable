@@ -42,7 +42,7 @@ use libstress::Workpool;
 use skytable::actions::Actions;
 use skytable::query;
 use skytable::Connection;
-use skytable::{Element, Query, RespCode, Response};
+use skytable::{Element, Query, RespCode};
 
 macro_rules! log_client_linearity {
     ($stressid:expr, $counter:expr, $what:expr) => {
@@ -134,7 +134,7 @@ pub fn stress_linearity_concurrent_clients_set(
             move |sock, query| {
                 assert_eq!(
                     sock.run_simple_query(&query).unwrap(),
-                    Response::Item(Element::RespCode(RespCode::Okay))
+                    Element::RespCode(RespCode::Okay)
                 );
             },
             |_| {},
@@ -185,7 +185,7 @@ pub fn stress_linearity_concurrent_clients_get(
         move |sock, query| {
             assert_eq!(
                 sock.run_simple_query(&query).unwrap(),
-                Response::Item(Element::RespCode(RespCode::Okay))
+                Element::RespCode(RespCode::Okay)
             );
         },
         |_| {},
@@ -202,7 +202,7 @@ pub fn stress_linearity_concurrent_clients_get(
          We create a  mpmc to receive the results returned. This avoids us using
          any kind of locking on the surface which can slow down things
         */
-        let (tx, rx) = bounded::<Response>(DEFAULT_QUERY_COUNT);
+        let (tx, rx) = bounded::<Element>(DEFAULT_QUERY_COUNT);
 
         // generate the get packets
         let get_packs: Vec<Query> = keys.iter().map(|k| query!("GET", k)).collect();
@@ -228,7 +228,7 @@ pub fn stress_linearity_concurrent_clients_get(
         let rets: Vec<String> = rx
             .into_iter()
             .map(|v| {
-                if let Response::Item(Element::Str(val)) = v {
+                if let Element::String(val) = v {
                     val
                 } else {
                     panic!("Unexpected response from server");

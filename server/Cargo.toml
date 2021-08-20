@@ -22,7 +22,7 @@ log = "0.4.14"
 chrono = "0.4.19"
 regex = "1.5.4"
 tokio-openssl = "0.6.2"
-openssl = { version = "0.10.35", features = ["vendored"] }
+openssl = { version = "0.10.36", features = ["vendored"] }
 hashbrown = { version = "0.11.2", features = ["raw"] }
 parking_lot = "0.11.1"
 num_cpus = "1.13.0"

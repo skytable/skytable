@@ -33,9 +33,9 @@ use log::error as err;
 use log::info;
 use skytable::query;
 use skytable::sync::Connection;
+use skytable::Element;
 use skytable::Query;
 use skytable::RespCode;
-use skytable::{Element, Response};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -77,7 +77,7 @@ fn main() {
     // run sanity test
     let q = query!("HEYA");
     match con.run_simple_query(&q) {
-        Ok(Response::Item(Element::Str(s))) if s.eq("HEY!") => {}
+        Ok(Element::String(s)) if s.eq("HEY!") => {}
         Ok(_) => err(err!("Unknown response from server")),
         Err(e) => err(err!(
             "An I/O error occurred while running sanity test: {}",
@@ -128,7 +128,7 @@ fn err(_i: ()) -> ! {
 
 fn okay(con: &mut Connection, q: Query) {
     match con.run_simple_query(&q) {
-        Ok(Response::Item(Element::RespCode(RespCode::Okay))) => {}
+        Ok(Element::RespCode(RespCode::Okay)) => {}
         Err(e) => err(err!("An I/O error occurred while running query: {}", e)),
         Ok(_) => err(err!("Unknown response from server")),
     }
