@@ -152,4 +152,21 @@ mod __private {
             Response::Item(Element::RespCode(RespCode::Okay))
         );
     }
+    async fn test_use() {
+        query.push("USE");
+        query.push(&__MYENTITY__);
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::Okay))
+        )
+    }
+    async fn test_use_syntax_error() {
+        query.push("USE");
+        query.push(&__MYENTITY__);
+        query.push("wiwofjwjfio");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        )
+    }
 }

@@ -164,6 +164,7 @@ action!(
 action! {
     /// Drop a table (`<tblid>` only)
     fn drop_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(eg) => {
                 let entity_group = match parser::get_query_entity(&eg) {
@@ -196,6 +197,7 @@ action! {
 action! {
     /// Drop a keyspace (`<ksid>` only)
     fn drop_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(ksid) => {
                 if ksid.len() > 64 {

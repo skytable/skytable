@@ -102,10 +102,6 @@ where
 {
     let buf = match buf {
         Element::AnyArray(a) => a,
-        Element::SwapKSHeader(swapks) => {
-            swap_entity!(con, db, swapks);
-            return Ok(());
-        }
         _ => return con.write_response(responses::groups::WRONGTYPE_ERR).await,
     };
     let mut buf = buf.into_iter();
@@ -142,10 +138,12 @@ where
 action! {
     /// Handle `use <entity>` like queries
     fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter) {
-        match act.next() {
-            Some(entity) => swap_entity!(con, handle, entity),
-            None => con.write_response(responses::groups::ACTION_ERR).await?,
-        }
+        err_if_len_is!(act, con, not 1);
+        let entity = unsafe {
+            // SAFETY: Already checked len
+            act.next().unsafe_unwrap()
+        };
+        swap_entity!(con, handle, entity);
         Ok(())
     }
 }

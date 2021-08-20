@@ -31,6 +31,10 @@ use crate::resp::writer::TypedArrayWriter;
 
 const KEYSPACES: &[u8] = "KEYSPACES".as_bytes();
 action! {
+    /// Runs an inspect query:
+    /// - `INSPECT KEYSPACES` is run by this function itself
+    /// - `INSPECT TABLE <tblid>` is delegated to self::inspect_table
+    /// - `INSPECT KEYSPACE <ksid>` is delegated to self::inspect_keyspace
     fn inspect(handle: &Corestore, con: &mut T, mut act: ActionIter) {
         match act.next() {
             Some(inspect_what) => {
@@ -40,6 +44,7 @@ action! {
                     KEYSPACE => inspect_keyspace(handle, con, act).await?,
                     TABLE => inspect_table(handle, con, act).await?,
                     KEYSPACES => {
+                        err_if_len_is!(act, con, not 0);
                         // let's return what all keyspaces exist
                         let ks_list: Vec<ObjectID> = handle
                             .get_store()
@@ -64,7 +69,9 @@ action! {
 }
 
 action! {
+    /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(keyspace_name) => {
                 let ksid = if keyspace_name.len() > 64 {
@@ -91,7 +98,9 @@ action! {
 }
 
 action! {
+    /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+        err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(entity) => {
                 let entity = handle_entity!(con, entity);

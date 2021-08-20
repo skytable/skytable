@@ -26,7 +26,7 @@
 
 #[sky_macros::dbtest]
 mod __private {
-    use skytable::{Element, Response};
+    use skytable::{Element, RespCode, Response};
     async fn test_inspect_keyspaces() {
         query.push("INSPECT");
         query.push("KEYSPACES");
@@ -67,5 +67,34 @@ mod __private {
             }
             _ => panic!("Bad response for inspect table"),
         }
+    }
+    async fn test_inspect_keyspaces_syntax_error() {
+        query.push("INSPECT");
+        query.push("KEYSPACES");
+        query.push("iowjfjofoe");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
+    async fn test_inspect_keyspace_syntax_error() {
+        query.push("INSPECT");
+        query.push("KEYSPACE");
+        query.push("ijfwijifwjo");
+        query.push("oijfwirfjwo");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
+    }
+    async fn test_inspect_table_syntax_error() {
+        query.push("INSPECT");
+        query.push("TABLE");
+        query.push("ijfwijifwjo");
+        query.push("oijfwirfjwo");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Response::Item(Element::RespCode(RespCode::ActionError))
+        );
     }
 }
