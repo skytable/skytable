@@ -21,7 +21,7 @@ Skytable is curently under development, but can be used as a **performant**, **s
 2. Unzip the bundle
 3. Make the files executable (run `chmod +x skyd skysh` on \*nix systems)
 4. First run `skyd` to start the database server and then run `skysh` to start the interactive shell
-5. Run commands like: `SET foo bar` , `GET foo` , `SET cat paws`, `UPDATE cat mittens` or `DEL foo` on `skysh`!
+5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` on `skysh`!
 
 You can learn more about installation [here](https://docs.skytable.io/getting-started/)
 
