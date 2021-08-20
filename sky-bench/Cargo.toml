@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 # internal deps
 skytable = { git = "https://github.com/skytable/client-rust", branch = "next" }
-libsky = { path = "../libsky" }
 libstress = { path = "../libstress" }
 # external deps
 rand = "0.8.4"
