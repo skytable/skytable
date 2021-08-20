@@ -133,11 +133,15 @@ pub fn runner(
     let mut rand = thread_rng();
 
     let temp_table = libstress::utils::rand_alphastring(10, &mut rand);
-    let create_table = libsky::into_raw_query(&format!(
-        "create table {} keymap(binstr,binstr) volatile",
-        &temp_table
-    ));
-    let switch_table = libsky::into_raw_query(&format!("use default:{}", &temp_table));
+    let create_table = Query::from("create")
+        .arg("table")
+        .arg(&temp_table)
+        .arg("keymap(binstr,binstr)")
+        .arg("volatile")
+        .into_raw_query();
+    let switch_table = Query::from("use")
+        .arg(format!("default:{}", &temp_table))
+        .into_raw_query();
     let mut create_table_connection = TcpStream::connect(&host).unwrap();
 
     // an okay response code size: `*1\n!1\n0\n`:
@@ -256,7 +260,10 @@ pub fn runner(
         }
 
         // drop table
-        let flushdb = libsky::into_raw_query(&format!("flushdb default:{}", &temp_table));
+        let flushdb = Query::new()
+            .arg("FLUSHDB")
+            .arg(format!("default:{}", &temp_table))
+            .into_raw_query();
         let drop_pool = pool_config.get_pool_with_workers(1);
         drop_pool.execute(flushdb);
         drop(drop_pool);

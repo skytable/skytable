@@ -28,6 +28,7 @@ use crate::hoststr;
 use crate::sanity_test;
 use libstress::Workpool;
 use rand::thread_rng;
+use skytable::Query;
 use std::io::{Read, Write};
 use std::net::{self, TcpStream};
 
@@ -43,7 +44,7 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
-            let mut buf = [0u8; 5];
+            let mut buf = [0u8; 7];
             let _ = sock.read_exact(&mut buf).unwrap();
         },
         |socket| {
@@ -58,7 +59,13 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
     {
         let np = np;
         (0..num)
-            .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
+            .map(|idx| {
+                Query::new()
+                    .arg("SET")
+                    .arg(&keys[idx])
+                    .arg(&values[idx])
+                    .into_raw_query()
+            })
             .for_each(|packet| {
                 np.execute(packet);
             });
