@@ -29,7 +29,7 @@ use rand::thread_rng;
 use std::error::Error;
 
 pub const DEFAULT_WORKER_COUNT: usize = 10;
-pub const DEFAULT_PACKET_SIZE: usize = 8;
+pub const DEFAULT_PACKET_SIZE: usize = 4;
 pub const DEFAULT_QUERY_COUNT: usize = 100_000;
 pub const DEFAULT_REPEAT: usize = 5;
 

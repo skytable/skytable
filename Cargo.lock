@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "libstress"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "sky-migrate"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "clap",

@@ -29,6 +29,7 @@ use devtimer::DevTime;
 use libstress::utils::generate_random_string_vector;
 use libstress::PoolConfig;
 use rand::thread_rng;
+use skytable::Query;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
@@ -183,14 +184,28 @@ pub fn runner(
     one of `set_packs`
     */
     let set_packs: Vec<Vec<u8>> = (0..max_queries)
-        .map(|idx| libsky::into_raw_query(&format!("SET {} {}", keys[idx], values[idx])))
+        .map(|idx| {
+            let mut q = Query::from("SET");
+            q.push(&keys[idx]);
+            q.push(&values[idx]);
+            q.into_raw_query()
+        })
         .collect();
     let get_packs: Vec<Vec<u8>> = (0..max_queries)
-        .map(|idx| libsky::into_raw_query(&format!("GET {}", keys[idx])))
+        .map(|idx| {
+            let mut q = Query::from("GET");
+            q.push(&keys[idx]);
+            q.into_raw_query()
+        })
         .collect();
     // just update key -> value to key -> key to avoid unnecessary memory usage
     let update_packs: Vec<Vec<u8>> = (0..max_queries)
-        .map(|idx| libsky::into_raw_query(&format!("UPDATE {} {}", keys[idx], keys[idx])))
+        .map(|idx| {
+            let mut q = Query::from("UPDATE");
+            q.push(&keys[idx]);
+            q.push(&keys[idx]);
+            q.into_raw_query()
+        })
         .collect();
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
