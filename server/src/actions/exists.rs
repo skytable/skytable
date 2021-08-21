@@ -33,7 +33,7 @@ use crate::util::compiler;
 
 action!(
     /// Run an `EXISTS` query
-    fn exists(handle: &Corestore, con: &mut T, act: ActionIter) {
+    fn exists(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
         let mut how_many_of_them_exist = 0usize;
         let kve = kve!(con, handle);
@@ -41,12 +41,12 @@ action!(
             true
         } else {
             let encoder = kve.get_key_encoder();
-            act.as_ref().iter().all(|k| encoder.is_ok(k))
+            act.as_ref().all(|k| encoder.is_ok(k))
         };
         if compiler::likely(encoding_is_okay) {
             {
                 act.for_each(|key| {
-                    if kve.exists_unchecked(&key) {
+                    if kve.exists_unchecked(key) {
                         how_many_of_them_exist += 1;
                     }
                 });

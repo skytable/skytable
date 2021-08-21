@@ -29,16 +29,16 @@ use crate::resp::writer;
 use crate::util::compiler;
 
 action! {
-    fn pop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn pop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         let key = unsafe {
             // SAFETY: We have checked for there to be one arg
-            act.next().unsafe_unwrap()
+            act.next_unchecked()
         };
         if registry::state_okay() {
             let kve = kve!(con, handle);
             let tsymbol = kve.get_vt();
-            match kve.pop(&key) {
+            match kve.pop(key) {
                 Ok(Some((_key, val))) => unsafe {
                     // SAFETY: We have verified the tsymbol ourselves
                     writer::write_raw_mono(con, tsymbol, &val).await?

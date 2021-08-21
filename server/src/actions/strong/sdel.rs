@@ -35,7 +35,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were `del`eted, or it returns a
     /// `Nil`, which is code `1`
-    fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
+    fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
         if registry::state_okay() {
@@ -73,6 +73,61 @@ pub(super) fn snapshot_and_del(
     kve: &KVEngine,
     key_encoder: SingleEncoder,
     act: ActionIter,
+) -> StrongActionResult {
+    let mut snapshots = Vec::with_capacity(act.len());
+    let mut err_enc = false;
+    let iter_stat_ok;
+    {
+        iter_stat_ok = act.as_ref().all(|key| {
+            if compiler::likely(key_encoder.is_ok(key)) {
+                if let Some(snap) = kve.take_snapshot(key) {
+                    snapshots.push(snap);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                err_enc = true;
+                false
+            }
+        });
+    }
+    cfg_test!({
+        // give the caller 10 seconds to do some crap
+        do_sleep!(10 s);
+    });
+    if compiler::unlikely(err_enc) {
+        return compiler::cold_err(StrongActionResult::EncodingError);
+    }
+    if registry::state_okay() {
+        // guarantee upholded: consistency
+        if iter_stat_ok {
+            // nice, all keys exist; let's plonk 'em
+            let kve = kve;
+            let lowtable = kve.__get_inner_ref();
+            act.zip(snapshots).for_each(|(key, snapshot)| {
+                // the check is very important: some thread may have updated the
+                // value after we snapshotted it. In that case, let this key
+                // be whatever the "newer" value is. Since our snapshot is a "happens-before"
+                // thing, this is absolutely fine
+                let _ = lowtable.remove_if(key, |_, val| val.eq(&snapshot));
+            });
+            StrongActionResult::Okay
+        } else {
+            StrongActionResult::Nil
+        }
+    } else {
+        StrongActionResult::ServerError
+    }
+}
+
+/// Snapshot the current status and then delete maintaining concurrency
+/// guarantees
+#[cfg(test)]
+pub(super) fn snapshot_and_del_test(
+    kve: &KVEngine,
+    key_encoder: SingleEncoder,
+    act: std::vec::IntoIter<bytes::Bytes>,
 ) -> StrongActionResult {
     let mut snapshots = Vec::with_capacity(act.len());
     let mut err_enc = false;

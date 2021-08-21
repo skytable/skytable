@@ -32,7 +32,7 @@ use std::path::{Component, PathBuf};
 action!(
     /// Create a snapshot
     ///
-    fn mksnap(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn mksnap(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let engine = handle.get_engine();
         if act.len() == 0 {
             // traditional mksnap
@@ -47,7 +47,7 @@ action!(
             // remote snapshot, let's see what we've got
             let name = unsafe {
                 // SAFETY: We have already checked that there is one item
-                act.next().unsafe_unwrap()
+                act.next_unchecked_bytes()
             };
             if !encoding::is_utf8(&name) {
                 return conwrite!(con, groups::ENCODING_ERROR);

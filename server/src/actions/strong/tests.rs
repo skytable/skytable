@@ -37,7 +37,7 @@ mod sdel_concurrency_tests {
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_key_encoder();
         let it = bi!("k1", "k2");
-        let ret = sdel::snapshot_and_del(&kve, encoder, it);
+        let ret = sdel::snapshot_and_del_test(&kve, encoder, it);
         assert!(ret.is_ok());
     }
     #[test]
@@ -51,7 +51,7 @@ mod sdel_concurrency_tests {
         }
         let it = bi!("k1", "k2");
         // sdel will wait 10s for us
-        let t1handle = thread::spawn(move || sdel::snapshot_and_del(&kve1, encoder, it));
+        let t1handle = thread::spawn(move || sdel::snapshot_and_del_test(&kve1, encoder, it));
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
         assert!(kve
@@ -77,7 +77,7 @@ mod sset_concurrency_tests {
         let kve = KVEngine::init(true, true);
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
-        let ret = sset::snapshot_and_insert(&kve, encoder, it);
+        let ret = sset::snapshot_and_insert_test(&kve, encoder, it);
         assert!(ret.is_ok());
     }
     #[test]
@@ -87,7 +87,7 @@ mod sset_concurrency_tests {
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         // sset will wait 10s for us
-        let t1handle = thread::spawn(move || sset::snapshot_and_insert(&kve1, encoder, it));
+        let t1handle = thread::spawn(move || sset::snapshot_and_insert_test(&kve1, encoder, it));
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
         // update the value externally
@@ -119,7 +119,7 @@ mod supdate_concurrency_tests {
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
-        let ret = supdate::snapshot_and_update(&kve, encoder, it);
+        let ret = supdate::snapshot_and_update_test(&kve, encoder, it);
         assert!(ret.is_ok());
     }
     #[test]
@@ -131,7 +131,7 @@ mod supdate_concurrency_tests {
         let encoder = kve.get_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         // supdate will wait 10s for us
-        let t1handle = thread::spawn(move || supdate::snapshot_and_update(&kve1, encoder, it));
+        let t1handle = thread::spawn(move || supdate::snapshot_and_update_test(&kve1, encoder, it));
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
         // lets update the value externally

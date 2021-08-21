@@ -154,7 +154,7 @@ macro_rules! action {
         $block:block
     ) => {
             $(#[$attr])*
-            pub async fn $fname<T, Strm>($($argname: $argty,)*) -> std::io::Result<()>
+            pub async fn $fname<'a, T: 'a, Strm>($($argname: $argty,)*) -> std::io::Result<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
@@ -166,7 +166,7 @@ macro_rules! action {
         $block:block
     ) => {
             $(#[$attr])*
-            pub async fn $fname<T, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
+            pub async fn $fname<'a, T: 'a, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

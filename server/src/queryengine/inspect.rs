@@ -35,7 +35,7 @@ action! {
     /// - `INSPECT KEYSPACES` is run by this function itself
     /// - `INSPECT TABLE <tblid>` is delegated to self::inspect_table
     /// - `INSPECT KEYSPACE <ksid>` is delegated to self::inspect_keyspace
-    fn inspect(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn inspect(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         match act.next() {
             Some(inspect_what) => {
                 let mut inspect_what = inspect_what.to_vec();
@@ -70,14 +70,14 @@ action! {
 
 action! {
     /// INSPECT a keyspace. This should only have the keyspace ID
-    fn inspect_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(keyspace_name) => {
                 let ksid = if keyspace_name.len() > 64 {
                     return conwrite!(con, responses::groups::BAD_CONTAINER_NAME);
                 } else {
-                    &keyspace_name[..]
+                    keyspace_name
                 };
                 let ks = match handle.get_keyspace(ksid) {
                     Some(kspace) => kspace,
@@ -99,7 +99,7 @@ action! {
 
 action! {
     /// INSPECT a table. This should only have the table ID
-    fn inspect_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(entity) => {

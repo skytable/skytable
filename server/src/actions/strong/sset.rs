@@ -36,7 +36,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were set, or it returns an
     /// `Overwrite Error` or code `2`
-    fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
+    fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             return con.write_response(responses::groups::ACTION_ERR).await;
@@ -73,6 +73,57 @@ pub(super) fn snapshot_and_insert(
     kve: &KVEngine,
     encoder: DoubleEncoder,
     mut act: ActionIter,
+) -> StrongActionResult {
+    let mut enc_err = false;
+    let lowtable = kve.__get_inner_ref();
+    let key_iter_stat_ok;
+    {
+        key_iter_stat_ok = act.chunks_exact(2).all(|kv| unsafe {
+            let key = kv.get_unchecked(0).as_slice();
+            let value = kv.get_unchecked(1).as_slice();
+            if compiler::likely(encoder.is_ok(key, value)) {
+                lowtable.get(key).is_none()
+            } else {
+                enc_err = true;
+                false
+            }
+        });
+    }
+    cfg_test!({
+        // give the caller 10 seconds to do some crap
+        do_sleep!(10 s);
+    });
+    if compiler::unlikely(enc_err) {
+        return compiler::cold_err(StrongActionResult::EncodingError);
+    }
+    if registry::state_okay() {
+        if key_iter_stat_ok {
+            let _kve = kve;
+            let lowtable = lowtable;
+            // fine, the keys were non-existent when we looked at them
+            while let (Some(key), Some(value)) = (act.next(), act.next()) {
+                if let Some(fresh) = lowtable.fresh_entry(Data::copy_from_slice(key)) {
+                    fresh.insert(Data::copy_from_slice(value));
+                }
+                // we don't care if some other thread initialized the value we checked
+                // it. We expected a fresh entry, so that's what we'll check and use
+            }
+            StrongActionResult::Okay
+        } else {
+            StrongActionResult::OverwriteError
+        }
+    } else {
+        StrongActionResult::ServerError
+    }
+}
+
+/// Take a consistent snapshot of the database at this current point in time
+/// and then mutate the entries, respecting concurrency guarantees
+#[cfg(test)]
+pub(super) fn snapshot_and_insert_test(
+    kve: &KVEngine,
+    encoder: DoubleEncoder,
+    mut act: std::vec::IntoIter<bytes::Bytes>,
 ) -> StrongActionResult {
     let mut enc_err = false;
     let lowtable = kve.__get_inner_ref();

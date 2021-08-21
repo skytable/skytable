@@ -349,7 +349,7 @@ impl Corestore {
                 con.flush_stream().await?;
             }
             // TODO(@ohsayan): Pipeline commands haven't been implemented yet
-            Query::PipelinedQuery(_) => {
+            Query::PipelineQuery(_) => {
                 con.write_response(responses::full_responses::R_PIPELINE_UNSUPPORTED)
                     .await?;
                 con.flush_stream().await?;

@@ -28,7 +28,7 @@ use crate::dbnet::connection::prelude::*;
 
 action!(
     /// Returns the number of keys in the database
-    fn dbsize(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn dbsize(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 1);
         if act.len() == 0 {
             let len;
