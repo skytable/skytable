@@ -24,6 +24,18 @@
  *
 */
 
+//! # The Skyhash Protocol
+//!
+//! ## Introduction
+//! The Skyhash Protocol is a serialization protocol that is used by Skytable for client/server communication.
+//! It works in a query/response action similar to HTTP's request/response action. Skyhash supersedes the Terrapipe
+//! protocol as a more simple, reliable, robust and scalable protocol.
+//!
+//! This module contains the [`Parser`] for the Skyhash protocol and it's enough to just pass a query packet as
+//! a slice of unsigned 8-bit integers and the parser will do everything else. The Skyhash protocol was designed
+//! and implemented by the Author (Sayan Nandan)
+//!
+
 // modules
 pub mod element;
 pub mod iter;
@@ -48,7 +60,29 @@ const ASCII_PLUS_SIGN: u8 = b'+';
 const ASCII_TILDE_SIGN: u8 = b'~';
 
 #[derive(Debug)]
-/// A parser for Skyhash serialized queries
+/// # Skyhash Deserializer (Parser)
+///
+/// The [`Parser`] object can be used to deserialized a packet serialized by Skyhash which in turn serializes
+/// it into data structures native to the Rust Language (and some Compound Types built on top of them).
+///
+/// ## Safety
+///
+/// The results returned by the parser are not bound by any lifetime and instead return raw
+/// pointers to parts of the source buffer. This means that the caller must ensure that the
+/// source buffer remains valid for as long as the result is used.
+///
+/// ## Evaluation
+///
+/// The parser is pessimistic in most cases and will readily throw out any errors. On non-recusrive types
+/// there is no recursion, but the parser will use implicit recursion for nested arrays. The parser will
+/// happily not report any errors if some part of the next query was passed. This is very much a possibility
+/// and so has been accounted for
+///
+/// ## Important note
+///
+/// All developers willing to modify the deserializer must keep this in mind: the cursor is always Ahead-Of-Position
+/// that is the cursor should always point at the next character that can be read.
+///
 pub struct Parser<'a> {
     /// the cursor ptr
     cursor: *const u8,
