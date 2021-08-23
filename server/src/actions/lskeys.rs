@@ -33,16 +33,16 @@ const DEFAULT_COUNT: usize = 10;
 
 action!(
     /// Run an `LSKEYS` query
-    fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 3);
         let (table, count) = if act.len() == 0 {
             (get_tbl!(handle, con), DEFAULT_COUNT)
         } else if act.len() == 1 {
             // two args, could either be count or an entity
-            let nextret = unsafe { act.next().unsafe_unwrap() };
+            let nextret = unsafe { act.next_unchecked() };
             if unsafe { nextret.get_unchecked(0) }.is_ascii_digit() {
                 // noice, this is a number; let's try to parse it
-                let count = if let Ok(cnt) = String::from_utf8_lossy(&nextret).parse::<usize>() {
+                let count = if let Ok(cnt) = String::from_utf8_lossy(nextret).parse::<usize>() {
                     cnt
                 } else {
                     return con.write_response(responses::groups::WRONGTYPE_ERR).await;
@@ -58,7 +58,7 @@ action!(
             let entity_ret = unsafe { act.next().unsafe_unwrap() };
             let count_ret = unsafe { act.next().unsafe_unwrap() };
             let entity = handle_entity!(con, entity_ret);
-            let count = if let Ok(cnt) = String::from_utf8_lossy(&count_ret).parse::<usize>() {
+            let count = if let Ok(cnt) = String::from_utf8_lossy(count_ret).parse::<usize>() {
                 cnt
             } else {
                 return con.write_response(responses::groups::WRONGTYPE_ERR).await;

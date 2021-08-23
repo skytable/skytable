@@ -61,9 +61,10 @@ use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
 
 pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
+type QueryWithAdvance = (Query, usize);
 
 pub enum QueryResult {
-    Q(Query),
+    Q(QueryWithAdvance),
     E(&'static [u8]),
     Empty,
     Wrongtype,
@@ -204,7 +205,7 @@ where
         })
     }
     /// Try to parse a query from the buffered data
-    fn try_query(&self) -> Result<(Query, usize), ParseError> {
+    fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
         if self.get_buffer().is_empty() {
             return Err(ParseError::Empty);
         }
@@ -227,9 +228,8 @@ where
                 loop {
                     mv_self.read_again().await?;
                     match mv_self.try_query() {
-                        Ok((query, forward_by)) => {
-                            mv_self.advance_buffer(forward_by);
-                            return Ok(QueryResult::Q(query));
+                        Ok(query_with_advance) => {
+                            return Ok(QueryResult::Q(query_with_advance));
                         }
                         Err(ParseError::Empty) => return Ok(QueryResult::Empty),
                         Err(ParseError::NotEnough) => (),
@@ -481,8 +481,9 @@ where
                 }
             };
             match try_df {
-                Ok(QueryResult::Q(s)) => {
-                    self.db.execute_query(s, &mut self.con).await?;
+                Ok(QueryResult::Q((query, advance_by))) => {
+                    self.db.execute_query(query, &mut self.con).await?;
+                    self.con.advance_buffer(advance_by);
                 }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {

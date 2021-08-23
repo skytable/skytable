@@ -41,7 +41,7 @@ const FORCE_REMOVE: &[u8] = "force".as_bytes();
 action!(
     /// Handle `create table <tableid> <model>(args)` and `create keyspace <ksid>`
     /// like queries
-    fn create(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn create(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
         err_if_len_is!(act, con, lt 2);
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
@@ -61,7 +61,7 @@ action!(
 action!(
     /// Handle `drop table <tableid>` and `drop keyspace <ksid>`
     /// like queries
-    fn ddl_drop(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn ddl_drop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
         err_if_len_is!(act, con, lt 2);
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
@@ -80,7 +80,7 @@ action!(
 
 action!(
     /// We should have `<tableid> <model>(args)`
-    fn create_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(con, act.len() > 3 || act.len() < 2);
         let (table_entity, model_code) = match parser::parse_table_args(&mut act) {
             Ok(v) => v,
@@ -124,14 +124,14 @@ action!(
 
 action!(
     /// We should have `<ksid>`
-    fn create_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn create_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(ksid) => {
                 if !encoding::is_utf8(&ksid) {
                     return con.write_response(responses::groups::ENCODING_ERROR).await;
                 }
-                let ksid_str = unsafe { str::from_utf8_unchecked(&ksid) };
+                let ksid_str = unsafe { str::from_utf8_unchecked(ksid) };
                 if !VALID_CONTAINER_NAME.is_match(ksid_str) {
                     return con.write_response(responses::groups::BAD_EXPRESSION).await;
                 }
@@ -163,11 +163,11 @@ action!(
 
 action! {
     /// Drop a table (`<tblid>` only)
-    fn drop_table(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn drop_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(eg) => {
-                let entity_group = match parser::get_query_entity(&eg) {
+                let entity_group = match parser::get_query_entity(eg) {
                     Ok(egroup) => egroup,
                     Err(e) => return con.write_response(e).await,
                 };
@@ -196,7 +196,7 @@ action! {
 
 action! {
     /// Drop a keyspace (`<ksid>` only)
-    fn drop_keyspace(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn drop_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         match act.next() {
             Some(ksid) => {

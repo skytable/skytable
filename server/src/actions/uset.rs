@@ -34,7 +34,7 @@ action!(
     /// Run an `USET` query
     ///
     /// This is like "INSERT or UPDATE"
-    fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys
@@ -47,15 +47,15 @@ action!(
             true
         } else {
             let encoder = kve.get_encoder();
-            act.as_ref().chunks_exact(2).all(|kv| unsafe {
+            act.chunks_exact(2).all(|kv| unsafe {
                 let (k, v) = (kv.get_unchecked(0), kv.get_unchecked(1));
-                encoder.is_ok(k, v)
+                encoder.is_ok(k.as_slice(), v.as_slice())
             })
         };
         if compiler::likely(encoding_is_okay) {
             if registry::state_okay() {
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    kve.upsert_unchecked(Data::from(key), Data::from(val));
+                    kve.upsert_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val));
                 }
                 conwrite!(con, howmany / 2)
             } else {

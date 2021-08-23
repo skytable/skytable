@@ -33,11 +33,11 @@ use crate::util::compiler;
 
 action!(
     /// Run a `GET` query
-    fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         let kve = kve!(con, handle);
         unsafe {
-            match kve.get_cloned_with_tsymbol(&act.next().unsafe_unwrap()) {
+            match kve.get_cloned_with_tsymbol(act.next_unchecked()) {
                 Ok((Some(val), tsymbol)) => writer::write_raw_mono(con, tsymbol, &val).await?,
                 Err(_) => compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?,
                 Ok(_) => conwrite!(con, groups::NIL)?,

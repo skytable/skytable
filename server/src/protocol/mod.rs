@@ -24,25 +24,23 @@
  *
 */
 
-//! # The Skyhash Protocol
-//!
-//! ## Introduction
-//! The Skyhash Protocol is a serialization protocol that is used by Skytable for client/server communication.
-//! It works in a query/response action similar to HTTP's request/response action. Skyhash supersedes the Terrapipe
-//! protocol as a more simple, reliable, robust and scalable protocol.
-//!
-//! This module contains the [`Parser`] for the Skyhash protocol and it's enough to just pass a query packet as
-//! a slice of unsigned 8-bit integers and the parser will do everything else. The Skyhash protocol was designed
-//! and implemented by the Author (Sayan Nandan)
-//!
-
-mod element;
+// modules
+pub mod element;
+pub mod iter;
 pub mod responses;
+#[cfg(test)]
+mod tests;
+// endof modules
+// test imports
+#[cfg(test)]
+use self::element::OwnedElement;
+// endof test imports
+use self::element::{UnsafeElement, UnsafeFlatElement};
 use crate::util::Unwrappable;
-use bytes::Bytes;
-pub use element::Element;
+use core::fmt;
+use core::hint::unreachable_unchecked;
+use core::slice;
 
-const ASCII_CONTROL_SUB_HEADER: u8 = 0x1A_u8;
 const ASCII_UNDERSCORE: u8 = b'_';
 const ASCII_AMPERSAND: u8 = b'&';
 const ASCII_COLON: u8 = b':';
@@ -50,30 +48,76 @@ const ASCII_PLUS_SIGN: u8 = b'+';
 const ASCII_TILDE_SIGN: u8 = b'~';
 
 #[derive(Debug)]
-/// # Skyhash Deserializer (Parser)
-///
-/// The [`Parser`] object can be used to deserialized a packet serialized by Skyhash which in turn serializes
-/// it into data structures native to the Rust Language (and some Compound Types built on top of them).
-///
-/// ## Evaluation
-///
-/// The parser is pessimistic in most cases and will readily throw out any errors. On non-recusrive types
-/// there is no recursion, but the parser will use implicit recursion for nested arrays. The parser will
-/// happily not report any errors if some part of the next query was passed. This is very much a possibility
-/// and so has been accounted for
-///
-/// ## Important note
-///
-/// All developers willing to modify the deserializer must keep this in mind: the cursor is always Ahead-Of-Position
-/// that is the cursor should always point at the next character that can be read.
-///
-pub(super) struct Parser<'a> {
-    /// The internal cursor position
-    ///
-    /// Do not even think of touching this externally
-    cursor: usize,
-    /// The buffer slice
+/// A parser for Skyhash serialized queries
+pub struct Parser<'a> {
+    /// the cursor ptr
+    cursor: *const u8,
+    /// the data end ptr
+    data_end_ptr: *const u8,
+    /// the buffer
     buffer: &'a [u8],
+}
+
+#[derive(PartialEq)]
+/// As its name says, an [`UnsafeSlice`] is a terribly unsafe slice. It's guarantess are
+/// very C-like, your ptr goes dangling -- and everything is unsafe.
+///
+/// ## Safety contracts
+/// - The `start_ptr` is valid
+/// - The `len` is correct
+/// - `start_ptr` remains valid as long as the object is used
+///
+pub struct UnsafeSlice {
+    start_ptr: *const u8,
+    len: usize,
+}
+
+// we know we won't let the ptrs go out of scope
+unsafe impl Send for UnsafeSlice {}
+unsafe impl Sync for UnsafeSlice {}
+
+// The debug impl is unsafe, but since we know we'll only ever use it within this module
+// and that it can be only returned by this module, we'll keep it here
+impl fmt::Debug for UnsafeSlice {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unsafe { f.write_str(core::str::from_utf8_unchecked(self.as_slice())) }
+    }
+}
+
+impl UnsafeSlice {
+    /// Create a new `UnsafeSlice`
+    pub const unsafe fn new(start_ptr: *const u8, len: usize) -> Self {
+        Self { start_ptr, len }
+    }
+    /// Return self as a slice
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        slice::from_raw_parts(self.start_ptr, self.len)
+    }
+    /// Destruct self, and return a slice, lifetime bound by whoever calls it
+    pub unsafe fn into_slice<'a>(self) -> &'a [u8] {
+        slice::from_raw_parts(self.start_ptr, self.len)
+    }
+    #[cfg(test)]
+    pub unsafe fn to_owned(&self) -> Vec<u8> {
+        self.as_slice().to_owned()
+    }
+    /// Check if a certain idx has a certain byte. This can be _thought of something
+    /// like_:
+    /// ```notest
+    /// *(slice.get_unchecked(pos)).eq(pos)
+    /// ```
+    pub unsafe fn unsafe_eq(&self, byte: u8, pos: usize) -> bool {
+        *self.start_ptr.add(pos) == byte
+    }
+    /// Turns self into a slice, lifetime bound by caller's lifetime with the provided `chop`.
+    /// This is roughly equivalent to:
+    /// ```notest
+    /// &slice[..slice.len() - chop]
+    /// ```
+    pub unsafe fn into_slice_with_start_and_end<'a>(self, len: usize, chop: usize) -> &'a [u8] {
+        debug_assert!(len <= self.len);
+        slice::from_raw_parts(self.start_ptr.add(len), self.len - chop)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -106,78 +150,226 @@ pub enum ParseError {
 }
 
 #[derive(Debug, PartialEq)]
-/// # Types of Queries
+/// A simple query object. This object is **not bound to any lifetime!** That's
+/// why, merely _having_ it is not unsafe, but all methods on it are unsafe and
+/// the caller has to uphold the guarantee of keeping the source buffer's pointers
+/// valid
 ///
-/// A simple query carries out one action while a complex query executes multiple actions
+/// ## Safety Contracts
+///
+/// - The provided `UnsafeElement` is valid and generated _legally_
+pub struct SimpleQuery {
+    /// the inner unsafe element
+    inner: UnsafeElement,
+}
+
+impl SimpleQuery {
+    /// Create a new `SimpleQuery`
+    ///
+    /// ## Safety
+    ///
+    /// This is unsafe because the caller must guarantee the sanctity of
+    /// the provided element
+    const unsafe fn new(inner: UnsafeElement) -> SimpleQuery {
+        Self { inner }
+    }
+    /// Decomposes self into an [`UnsafeElement`]
+    ///
+    /// ## Safety
+    ///
+    /// Caller must ensure that the UnsafeElement's pointers are still valid
+    pub unsafe fn into_inner(self) -> UnsafeElement {
+        self.inner
+    }
+    pub const fn is_any_array(&self) -> bool {
+        matches!(self.inner, UnsafeElement::AnyArray(_))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// A pipelined query object. This is bound to an _anonymous lifetime_ which is to be bound by
+/// the instantiator
+///
+/// ## Safety Contracts
+///
+/// - The provided `UnsafeElement` is valid and generated _legally_
+/// - The source pointers for the `UnsafeElement` is valid
+pub struct PipelineQuery {
+    inner: Box<[UnsafeElement]>,
+}
+
+impl PipelineQuery {
+    /// Create a new `PipelineQuery`
+    ///
+    /// ## Safety
+    ///
+    /// The caller has the responsibility to uphold the guarantee of keeping the source
+    /// pointers valid
+    const unsafe fn new(inner: Box<[UnsafeElement]>) -> PipelineQuery {
+        Self { inner }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// # Queries
+///
+/// This enum has two variants: Simple and Pipelined. Both hold two **terribly `unsafe`**
+/// objects:
+/// - A [`SimpleQuery`] or
+/// - A [`PipelineQuery`]
+///
+/// Again, **both objects hold raw pointers and guarantee nothing about the source's
+/// validity**.
+/// ## Safety
+///
+/// This object holds zero ownership on the actual data, but only holds a collection
+/// of pointers. This means that you have to **ensure that the source outlives the Query**
+/// object. Using it otherwise is very **`unsafe`**! The caller who creates the instance or the
+/// one who uses it is responsible for ensuring any validity guarantee
+///
 pub enum Query {
     /// A simple query will just hold one element
-    SimpleQuery(Element),
+    SimpleQuery(SimpleQuery),
     /// A pipelined/batch query will hold multiple elements
-    PipelinedQuery(Vec<Element>),
+    PipelineQuery(PipelineQuery),
+}
+
+impl Query {
+    #[cfg(test)]
+    /// Turns self into an onwed query (see [`OwnedQuery`])
+    ///
+    /// ## Safety contracts
+    ///
+    /// - The query itself is valid
+    /// - The query is correctly bound to the lifetime
+    unsafe fn into_owned_query(self) -> OwnedQuery {
+        match self {
+            Self::SimpleQuery(SimpleQuery { inner, .. }) => {
+                OwnedQuery::SimpleQuery(inner.as_owned_element())
+            }
+            Self::PipelineQuery(PipelineQuery { inner, .. }) => {
+                OwnedQuery::PipelineQuery(inner.iter().map(|v| v.as_owned_element()).collect())
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+#[cfg(test)]
+/// An owned query with direct ownership of the data rather than through
+/// pointers
+enum OwnedQuery {
+    SimpleQuery(OwnedElement),
+    PipelineQuery(Vec<OwnedElement>),
 }
 
 /// A generic result to indicate parsing errors thorugh the [`ParseError`] enum
 pub type ParseResult<T> = Result<T, ParseError>;
 
 impl<'a> Parser<'a> {
-    /// Initialize a new parser instance
-    pub const fn new(buffer: &'a [u8]) -> Self {
-        Parser {
-            cursor: 0usize,
-            buffer,
-        }
-    }
-    /// Read from the current cursor position to `until` number of positions ahead
-    /// This **will forward the cursor itself** if the bytes exist or it will just return a `NotEnough` error
-    fn read_until(&mut self, until: usize) -> ParseResult<&[u8]> {
-        if let Some(b) = self.buffer.get(self.cursor..self.cursor + until) {
-            self.cursor += until;
-            Ok(b)
-        } else {
-            Err(ParseError::NotEnough)
-        }
-    }
-    /// This returns the position at which the line parsing began and the position at which the line parsing
-    /// stopped, in other words, you should be able to do self.buffer[started_at..stopped_at] to get a line
-    /// and do it unchecked. This **will move the internal cursor ahead** and place it **at the `\n` byte**
-    fn read_line(&mut self) -> (usize, usize) {
-        let started_at = self.cursor;
-        let mut stopped_at = self.cursor;
-        while self.cursor < self.buffer.len() {
-            if self.buffer[self.cursor] == b'\n' {
-                // Oh no! Newline reached, time to break the loop
-                // But before that ... we read the newline, so let's advance the cursor
-                self.incr_cursor();
-                break;
+    /// Create a new parser instance, bound to the lifetime of the source buffer
+    pub fn new(buffer: &'a [u8]) -> Self {
+        unsafe {
+            let cursor = buffer.as_ptr();
+            let data_end_ptr = cursor.add(buffer.len());
+            Self {
+                cursor,
+                data_end_ptr,
+                buffer,
             }
-            // So this isn't an LF, great! Let's forward the stopped_at position
-            stopped_at += 1;
-            self.incr_cursor();
         }
-        (started_at, stopped_at)
     }
-    /// Push the internal cursor ahead by one
+    /// Returns what we have consumed
+    /// ```text
+    /// [*****************************]
+    ///  ^    ^                      ^
+    /// start cursor             data end ptr
+    /// ```
+    fn consumed(&self) -> usize {
+        unsafe { self.cursor.offset_from(self.buffer.as_ptr()) as usize }
+    }
+    /// Returns what we have left
+    /// ```text
+    /// [*****************************]
+    ///    ^                         ^
+    ///  cursor             data end ptr
+    /// ```
+    fn remaining(&self) -> usize {
+        unsafe { self.data_end_ptr().offset_from(self.cursor) as usize }
+    }
+    fn exhausted(&self) -> bool {
+        self.cursor >= self.data_end_ptr()
+    }
+    /// Returns a ptr to one byte past the last non-null ptr
+    const fn data_end_ptr(&self) -> *const u8 {
+        self.data_end_ptr
+    }
+    /// Move the cursor ptr ahead by the provided amount
+    fn incr_cursor_by(&mut self, by: usize) {
+        unsafe { self.cursor = self.cursor.add(by) }
+    }
+    /// Increment the cursor by 1
     fn incr_cursor(&mut self) {
-        self.cursor += 1;
+        self.incr_cursor_by(1)
     }
-    /// This function will evaluate if the byte at the current cursor position equals the `ch` argument, i.e
-    /// the expression `*v == ch` is evaluated. However, if no element is present ahead, then the function
-    /// will return `Ok(_this_if_nothing_ahead_)`
+    /// Read `until` bytes from source
+    fn read_until(&mut self, until: usize) -> ParseResult<UnsafeSlice> {
+        if self.remaining() < until {
+            Err(ParseError::NotEnough)
+        } else {
+            let start_ptr = self.cursor;
+            self.incr_cursor_by(until);
+            unsafe { Ok(UnsafeSlice::new(start_ptr, until)) }
+        }
+    }
+    /// Read a line. This will place the cursor at a point just ahead of
+    /// the LF
+    fn read_line(&mut self) -> ParseResult<UnsafeSlice> {
+        if self.exhausted() {
+            Err(ParseError::NotEnough)
+        } else {
+            let start_ptr = self.cursor;
+            let end_ptr = self.data_end_ptr();
+            let mut len = 0usize;
+            unsafe {
+                while end_ptr > self.cursor {
+                    if *self.cursor == b'\n' {
+                        self.incr_cursor();
+                        break;
+                    }
+                    len += 1;
+                    self.incr_cursor();
+                }
+                Ok(UnsafeSlice::new(start_ptr, len))
+            }
+        }
+    }
+}
+
+impl<'a> Parser<'a> {
+    /// Returns true if the cursor will give a char, but if `this_if_nothing_ahead` is set
+    /// to true, then if no byte is ahead, it will still return true
     fn will_cursor_give_char(&self, ch: u8, this_if_nothing_ahead: bool) -> ParseResult<bool> {
-        self.buffer.get(self.cursor).map_or(
+        if self.exhausted() {
+            // nothing left
             if this_if_nothing_ahead {
                 Ok(true)
             } else {
                 Err(ParseError::NotEnough)
-            },
-            |v| Ok(*v == ch),
-        )
+            }
+        } else if unsafe { (*self.cursor).eq(&ch) } {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
-    /// Will the current cursor position give a linefeed? This will return `ParseError::NotEnough` if
-    /// the current cursor points at a non-existent index in `self.buffer`
+    /// Check if the current cursor will give an LF
     fn will_cursor_give_linefeed(&self) -> ParseResult<bool> {
         self.will_cursor_give_char(b'\n', false)
     }
+}
+
+impl<'a> Parser<'a> {
     /// Parse a stream of bytes into [`usize`]
     fn parse_into_usize(bytes: &[u8]) -> ParseResult<usize> {
         if bytes.is_empty() {
@@ -244,602 +436,190 @@ impl<'a> Parser<'a> {
         }
         Ok(item_u64)
     }
-    /// This will return the number of datagroups present in this query packet
-    ///
-    /// This **will forward the cursor itself**
+}
+
+impl<'a> Parser<'a> {
+    /// Parse the metaframe to get the number of queries, i.e the datagroup
+    /// count
     fn parse_metaframe_get_datagroup_count(&mut self) -> ParseResult<usize> {
-        // the smallest query we can have is: *1\n or 3 chars
         if self.buffer.len() < 3 {
-            return Err(ParseError::NotEnough);
+            // the smallest query we can have is: *1\n or 3 chars
+            Err(ParseError::NotEnough)
+        } else {
+            unsafe {
+                let our_chunk = self.read_line()?;
+                if our_chunk.unsafe_eq(b'*', 0) {
+                    Ok(Self::parse_into_usize(
+                        our_chunk.into_slice_with_start_and_end(1, 1),
+                    )?)
+                } else {
+                    Err(ParseError::UnexpectedByte)
+                }
+            }
         }
-        // Now we want to read `*<n>\n`
-        let (start, stop) = self.read_line();
-        if let Some(our_chunk) = self.buffer.get(start..stop) {
-            if our_chunk[0] == b'*' {
-                // Good, this will tell us the number of actions
-                // Let us attempt to read the usize from this point onwards
-                // that is excluding the '*' (so 1..)
-                let ret = Self::parse_into_usize(&our_chunk[1..])?;
+    }
+}
+
+impl<'a> Parser<'a> {
+    /// Gets the _next element. **The cursor should be at the tsymbol (passed)**
+    fn _next(&mut self) -> ParseResult<UnsafeSlice> {
+        let sizeline = self.read_line()?;
+        unsafe {
+            let element_size = Self::parse_into_usize(sizeline.into_slice())?;
+            self.read_until(element_size)
+        }
+    }
+    /// Gets the next string (`+`). **The cursor should be at the tsymbol (passed)**
+    fn parse_next_string(&mut self) -> ParseResult<UnsafeSlice> {
+        {
+            let chunk = self._next()?;
+            let haslf = self.will_cursor_give_linefeed()?;
+            if haslf {
+                self.incr_cursor();
+                Ok(chunk)
+            } else {
+                Err(ParseError::NotEnough)
+            }
+        }
+    }
+    /// Gets the next `u64`. **The cursor should be at the tsymbol (passed)**
+    fn parse_next_u64(&mut self) -> ParseResult<u64> {
+        let chunk = self._next()?;
+        unsafe {
+            let ret = Self::parse_into_u64(chunk.into_slice())?;
+            if self.will_cursor_give_linefeed()? {
+                self.incr_cursor();
                 Ok(ret)
+            } else {
+                Err(ParseError::NotEnough)
+            }
+        }
+    }
+    /// Gets the next element. **The cursor should be at the tsymbol (_not_ passed)**
+    fn parse_next_element(&mut self) -> ParseResult<UnsafeElement> {
+        if self.exhausted() {
+            Err(ParseError::NotEnough)
+        } else {
+            unsafe {
+                let tsymbol = *self.cursor;
+                // got tsymbol, now incr
+                self.incr_cursor();
+                let ret = match tsymbol {
+                    ASCII_PLUS_SIGN => UnsafeElement::String(self.parse_next_string()?),
+                    ASCII_COLON => UnsafeElement::UnsignedInt(self.parse_next_u64()?),
+                    ASCII_AMPERSAND => UnsafeElement::Array(self.parse_next_array()?),
+                    ASCII_TILDE_SIGN => UnsafeElement::AnyArray(self.parse_next_any_array()?),
+                    ASCII_UNDERSCORE => UnsafeElement::FlatArray(self.parse_next_flat_array()?),
+                    _ => {
+                        return Err(ParseError::UnknownDatatype);
+                    }
+                };
+                Ok(ret)
+            }
+        }
+    }
+    /// Parse the next blob. **The cursor should be at the tsymbol (passed)**
+    fn parse_next_blob(&mut self) -> ParseResult<UnsafeSlice> {
+        {
+            let chunk = self._next()?;
+            if self.will_cursor_give_linefeed()? {
+                self.incr_cursor();
+                Ok(chunk)
             } else {
                 Err(ParseError::UnexpectedByte)
             }
-        } else {
-            Err(ParseError::NotEnough)
         }
     }
-    /// Get the next element **without** the tsymbol
-    ///
-    /// This function **does not forward the newline**
-    fn __get_next_element(&mut self) -> ParseResult<&[u8]> {
-        let string_sizeline = self.read_line();
-        if let Some(line) = self.buffer.get(string_sizeline.0..string_sizeline.1) {
-            let string_size = Self::parse_into_usize(line)?;
-            let our_chunk = self.read_until(string_size)?;
-            Ok(our_chunk)
-        } else {
-            Err(ParseError::NotEnough)
-        }
-    }
-    /// The cursor should have passed the `+` tsymbol
-    fn parse_next_string(&mut self) -> ParseResult<Bytes> {
-        let our_string_chunk = self.__get_next_element()?;
-        let our_string = Bytes::copy_from_slice(our_string_chunk);
-        if self.will_cursor_give_linefeed()? {
-            // there is a lf after the end of the string; great!
-            // let's skip that now
-            self.incr_cursor();
-            // let's return our string
-            Ok(our_string)
-        } else {
-            Err(ParseError::UnexpectedByte)
-        }
-    }
-    /// Should be at the `\x1A` (SUB header)
-    fn parse_next_byte(&mut self) -> ParseResult<Bytes> {
-        let our_chunk = self.__get_next_element()?;
-        let our_ks_name = Bytes::copy_from_slice(our_chunk);
-        if self.will_cursor_give_linefeed()? {
-            // end has LF; go on
-            self.incr_cursor();
-            Ok(our_ks_name)
-        } else {
-            Err(ParseError::NotEnough)
-        }
-    }
-    /// The cursor should have passed the `:` tsymbol
-    fn parse_next_u64(&mut self) -> ParseResult<u64> {
-        let our_u64_chunk = self.__get_next_element()?;
-        let our_u64 = Self::parse_into_u64(our_u64_chunk)?;
-        if self.will_cursor_give_linefeed()? {
-            // line feed after u64; heck yeah!
-            self.incr_cursor();
-            // return it
-            Ok(our_u64)
-        } else {
-            Err(ParseError::UnexpectedByte)
-        }
-    }
-    /// The cursor should be **at the tsymbol**
-    fn parse_next_element(&mut self) -> ParseResult<Element> {
-        if let Some(tsymbol) = self.buffer.get(self.cursor) {
-            // so we have a tsymbol; nice, let's match it
-            // but advance the cursor before doing that
-            self.incr_cursor();
-            let ret = match *tsymbol {
-                ASCII_PLUS_SIGN => Element::String(self.parse_next_string()?),
-                ASCII_COLON => Element::UnsignedInt(self.parse_next_u64()?),
-                ASCII_AMPERSAND => Element::Array(self.parse_next_array()?),
-                ASCII_TILDE_SIGN => Element::AnyArray(self.parse_next_any_array()?),
-                ASCII_UNDERSCORE => Element::FlatArray(self.parse_next_flat_array()?),
-                // switch keyspace with SUB
-                ASCII_CONTROL_SUB_HEADER => Element::SwapKSHeader(self.parse_next_byte()?),
-                _ => return Err(ParseError::UnknownDatatype),
-            };
-            Ok(ret)
-        } else {
-            // Not enough bytes to read an element
-            Err(ParseError::NotEnough)
-        }
-    }
-    fn parse_next_blob(&mut self) -> ParseResult<Bytes> {
-        let our_string_chunk = self.__get_next_element()?;
-        let our_string = Bytes::copy_from_slice(our_string_chunk);
-        if self.will_cursor_give_linefeed()? {
-            // there is a lf after the end of the string; great!
-            // let's skip that now
-            self.incr_cursor();
-            // let's return our string
-            Ok(our_string)
-        } else {
-            Err(ParseError::UnexpectedByte)
-        }
-    }
-    fn parse_next_any_array(&mut self) -> ParseResult<Vec<Bytes>> {
-        let (start, stop) = self.read_line();
-        if let Some(our_size_chunk) = self.buffer.get(start..stop) {
-            let array_size = Self::parse_into_usize(our_size_chunk)?;
-            let mut array = Vec::with_capacity(array_size);
-            for _ in 0..array_size {
+    /// Parse the next `AnyArray`. **The cursor should be at the tsymbol (passed)**
+    fn parse_next_any_array(&mut self) -> ParseResult<Box<[UnsafeSlice]>> {
+        unsafe {
+            let size_line = self.read_line()?;
+            let size = Self::parse_into_usize(size_line.into_slice())?;
+            let mut array = Vec::with_capacity(size);
+            for _ in 0..size {
                 array.push(self.parse_next_blob()?);
             }
-            Ok(array)
-        } else {
-            Err(ParseError::NotEnough)
+            Ok(array.into_boxed_slice())
         }
     }
     /// The cursor should have passed the tsymbol
-    fn parse_next_flat_array(&mut self) -> ParseResult<Vec<Bytes>> {
-        let (start, stop) = self.read_line();
-        if let Some(our_size_chunk) = self.buffer.get(start..stop) {
-            let array_size = Self::parse_into_usize(our_size_chunk)?;
+    fn parse_next_flat_array(&mut self) -> ParseResult<Box<[UnsafeFlatElement]>> {
+        unsafe {
+            let flat_array_sizeline = self.read_line()?;
+            let array_size = Self::parse_into_usize(flat_array_sizeline.into_slice())?;
             let mut array = Vec::with_capacity(array_size);
             for _ in 0..array_size {
-                if let Some(tsymbol) = self.buffer.get(self.cursor) {
+                if self.exhausted() {
+                    return Err(ParseError::NotEnough);
+                } else {
+                    let tsymb = *self.cursor;
                     // good, there is a tsymbol; move the cursor ahead
                     self.incr_cursor();
-                    let ret = match *tsymbol {
-                        b'+' => self.parse_next_string()?,
+                    let ret = match tsymb {
+                        b'+' => self.parse_next_string().map(UnsafeFlatElement::String)?,
                         _ => return Err(ParseError::UnknownDatatype),
                     };
                     array.push(ret);
-                } else {
-                    return Err(ParseError::NotEnough);
                 }
             }
-            Ok(array)
-        } else {
-            Err(ParseError::NotEnough)
+            Ok(array.into_boxed_slice())
         }
     }
-    /// The tsymbol `&` should have been passed!
-    fn parse_next_array(&mut self) -> ParseResult<Vec<Element>> {
-        let (start, stop) = self.read_line();
-        if let Some(our_size_chunk) = self.buffer.get(start..stop) {
-            let array_size = Self::parse_into_usize(our_size_chunk)?;
-            let mut array = Vec::with_capacity(array_size);
-            for _ in 0..array_size {
+    /// Parse the next array. **The cursor should be at the tsymbol (passed)**
+    fn parse_next_array(&mut self) -> ParseResult<Box<[UnsafeElement]>> {
+        unsafe {
+            let size_of_array_chunk = self.read_line()?;
+            let size_of_array = Self::parse_into_usize(size_of_array_chunk.into_slice())?;
+            let mut array = Vec::with_capacity(size_of_array);
+            for _ in 0..size_of_array {
                 array.push(self.parse_next_element()?);
             }
-            Ok(array)
-        } else {
-            Err(ParseError::NotEnough)
+            Ok(array.into_boxed_slice())
         }
     }
-    /// Parse a query and return the [`Query`] and an `usize` indicating the number of bytes that
-    /// can be safely discarded from the buffer. It will otherwise return errors if they are found.
-    ///
-    /// This object will drop `Self`
-    pub fn parse(mut self) -> Result<(Query, usize), ParseError> {
+}
+
+impl<'a> Parser<'a> {
+    /// Try to parse the provided buffer (lt: 'a) into a Query (lt: 'a). The
+    /// parser itself can (or must) go out of scope, but the buffer can't!
+    pub fn parse(&mut self) -> Result<(Query, usize), ParseError> {
         let number_of_queries = self.parse_metaframe_get_datagroup_count()?;
         if number_of_queries == 0 {
-            // how on earth do you expect us to execute 0 queries? waste of bandwidth
             return Err(ParseError::BadPacket);
         }
         if number_of_queries == 1 {
-            // This is a simple query
-            let single_group = self.parse_next_element()?;
-            // The below line defaults to false if no item is there in the buffer
-            // or it checks if the next time is a \r char; if it is, then it is the beginning
-            // of the next query
-            // clippy thinks we're doing something complex when we aren't, at all!
-            #[allow(clippy::blocks_in_if_conditions)]
+            let query = self.parse_next_element()?;
             if unsafe {
-                // UNSAFE(@ohsayan): This will never be the case because we'll always get a result and no error value
-                // as we've passed true which will yield Ok(true) even if there is no byte ahead
-                self.will_cursor_give_char(b'*', true).unsafe_unwrap()
+                self.will_cursor_give_char(b'*', true)
+                    .unwrap_or_else(|_| unreachable_unchecked())
             } {
-                Ok((Query::SimpleQuery(single_group), self.cursor))
+                unsafe {
+                    // SAFETY: Contract upheld
+                    Ok((Query::SimpleQuery(SimpleQuery::new(query)), self.consumed()))
+                }
             } else {
-                // the next item isn't the beginning of a query but something else?
-                // that doesn't look right!
                 Err(ParseError::UnexpectedByte)
             }
         } else {
-            // This is a pipelined query
-            // We'll first make space for all the actiongroups
+            // pipelined query
             let mut queries = Vec::with_capacity(number_of_queries);
             for _ in 0..number_of_queries {
                 queries.push(self.parse_next_element()?);
             }
-            if self.will_cursor_give_char(b'*', true)? {
-                Ok((Query::PipelinedQuery(queries), self.cursor))
+            if unsafe {
+                self.will_cursor_give_char(b'*', true)
+                    .unwrap_or_else(|_| unreachable_unchecked())
+            } {
+                unsafe {
+                    // SAFETY: Contract upheld
+                    Ok((
+                        Query::PipelineQuery(PipelineQuery::new(queries.into_boxed_slice())),
+                        self.consumed(),
+                    ))
+                }
             } else {
                 Err(ParseError::UnexpectedByte)
             }
         }
     }
-}
-
-#[test]
-fn test_metaframe_parse() {
-    let metaframe = "*2\n".as_bytes();
-    let mut parser = Parser::new(metaframe);
-    assert_eq!(2, parser.parse_metaframe_get_datagroup_count().unwrap());
-    assert_eq!(parser.cursor, metaframe.len());
-}
-
-#[test]
-fn test_cursor_next_char() {
-    let bytes = &[b'\n'];
-    assert!(Parser::new(&bytes[..])
-        .will_cursor_give_char(b'\n', false)
-        .unwrap());
-    let bytes = &[];
-    assert!(Parser::new(&bytes[..])
-        .will_cursor_give_char(b'\r', true)
-        .unwrap());
-    let bytes = &[];
-    assert!(
-        Parser::new(&bytes[..])
-            .will_cursor_give_char(b'\n', false)
-            .unwrap_err()
-            == ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_metaframe_parse_fail() {
-    // First byte should be CR and not $
-    let metaframe = "$2\n*2\n".as_bytes();
-    let mut parser = Parser::new(metaframe);
-    assert_eq!(
-        parser.parse_metaframe_get_datagroup_count().unwrap_err(),
-        ParseError::UnexpectedByte
-    );
-    // Give a wrong length approximation
-    let metaframe = "\r1\n*2\n".as_bytes();
-    assert_eq!(
-        Parser::new(metaframe)
-            .parse_metaframe_get_datagroup_count()
-            .unwrap_err(),
-        ParseError::UnexpectedByte
-    );
-}
-
-#[test]
-fn test_query_fail_not_enough() {
-    let query_packet = "*".as_bytes();
-    assert_eq!(
-        Parser::new(query_packet).parse().err().unwrap(),
-        ParseError::NotEnough
-    );
-    let metaframe = "*2".as_bytes();
-    assert_eq!(
-        Parser::new(metaframe)
-            .parse_metaframe_get_datagroup_count()
-            .unwrap_err(),
-        ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_parse_next_string() {
-    let bytes = "5\nsayan\n".as_bytes();
-    let st = Parser::new(bytes).parse_next_string().unwrap();
-    assert_eq!(st, Bytes::from("sayan"));
-}
-
-#[test]
-fn test_parse_next_u64() {
-    let max = 18446744073709551615;
-    assert!(u64::MAX == max);
-    let bytes = "20\n18446744073709551615\n".as_bytes();
-    let our_u64 = Parser::new(bytes).parse_next_u64().unwrap();
-    assert_eq!(our_u64, max);
-    // now overflow the u64
-    let bytes = "21\n184467440737095516156\n".as_bytes();
-    let our_u64 = Parser::new(bytes).parse_next_u64().unwrap_err();
-    assert_eq!(our_u64, ParseError::DatatypeParseFailure);
-}
-
-#[test]
-fn test_parse_next_element_string() {
-    let bytes = "+5\nsayan\n".as_bytes();
-    let next_element = Parser::new(bytes).parse_next_element().unwrap();
-    assert_eq!(next_element, Element::String(Bytes::from("sayan")));
-}
-
-#[test]
-fn test_parse_next_element_string_fail() {
-    let bytes = "+5\nsayan".as_bytes();
-    assert_eq!(
-        Parser::new(bytes).parse_next_element().unwrap_err(),
-        ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_parse_next_element_u64() {
-    let bytes = ":20\n18446744073709551615\n".as_bytes();
-    let our_u64 = Parser::new(bytes).parse_next_element().unwrap();
-    assert_eq!(our_u64, Element::UnsignedInt(u64::MAX));
-}
-
-#[test]
-fn test_parse_next_element_u64_fail() {
-    let bytes = ":20\n18446744073709551615".as_bytes();
-    assert_eq!(
-        Parser::new(bytes).parse_next_element().unwrap_err(),
-        ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_parse_next_element_array() {
-    let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\nbar\n".as_bytes();
-    let mut parser = Parser::new(bytes);
-    let array = parser.parse_next_element().unwrap();
-    assert_eq!(
-        array,
-        Element::Array(vec![
-            Element::String(Bytes::from("MGET".to_owned())),
-            Element::String(Bytes::from("foo".to_owned())),
-            Element::String(Bytes::from("bar".to_owned()))
-        ])
-    );
-    assert_eq!(parser.cursor, bytes.len());
-}
-
-#[test]
-fn test_parse_next_element_array_fail() {
-    // should've been three elements, but there are two!
-    let bytes = "&3\n+4\nMGET\n+3\nfoo\n+3\n".as_bytes();
-    let mut parser = Parser::new(bytes);
-    assert_eq!(
-        parser.parse_next_element().unwrap_err(),
-        ParseError::NotEnough
-    );
-}
-
-#[test]
-fn test_parse_nested_array() {
-    // let's test a nested array
-    let bytes =
-        "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n+6\nreally\n+4\nhard\n"
-            .as_bytes();
-    let mut parser = Parser::new(bytes);
-    let array = parser.parse_next_element().unwrap();
-    assert_eq!(
-        array,
-        Element::Array(vec![
-            Element::String(Bytes::from("ACT".to_owned())),
-            Element::String(Bytes::from("foo".to_owned())),
-            Element::Array(vec![
-                Element::String(Bytes::from("sayan".to_owned())),
-                Element::String(Bytes::from("is".to_owned())),
-                Element::String(Bytes::from("working".to_owned())),
-                Element::Array(vec![
-                    Element::String(Bytes::from("really".to_owned())),
-                    Element::String(Bytes::from("hard".to_owned()))
-                ])
-            ])
-        ])
-    );
-    assert_eq!(parser.cursor, bytes.len());
-}
-
-#[test]
-fn test_parse_multitype_array() {
-    // let's test a nested array
-    let bytes = "&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
-        .as_bytes();
-    let mut parser = Parser::new(bytes);
-    let array = parser.parse_next_element().unwrap();
-    assert_eq!(
-        array,
-        Element::Array(vec![
-            Element::String(Bytes::from("ACT".to_owned())),
-            Element::String(Bytes::from("foo".to_owned())),
-            Element::Array(vec![
-                Element::String(Bytes::from("sayan".to_owned())),
-                Element::String(Bytes::from("is".to_owned())),
-                Element::String(Bytes::from("working".to_owned())),
-                Element::Array(vec![
-                    Element::UnsignedInt(23),
-                    Element::String(Bytes::from("april".to_owned()))
-                ])
-            ])
-        ])
-    );
-    assert_eq!(parser.cursor, bytes.len());
-}
-
-#[test]
-fn test_parse_a_query() {
-    let bytes =
-        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
-            .as_bytes();
-    let parser = Parser::new(bytes);
-    let (resp, forward_by) = parser.parse().unwrap();
-    assert_eq!(
-        resp,
-        Query::SimpleQuery(Element::Array(vec![
-            Element::String(Bytes::from("ACT".to_owned())),
-            Element::String(Bytes::from("foo".to_owned())),
-            Element::Array(vec![
-                Element::String(Bytes::from("sayan".to_owned())),
-                Element::String(Bytes::from("is".to_owned())),
-                Element::String(Bytes::from("working".to_owned())),
-                Element::Array(vec![
-                    Element::UnsignedInt(23),
-                    Element::String(Bytes::from("april".to_owned()))
-                ])
-            ])
-        ]))
-    );
-    assert_eq!(forward_by, bytes.len());
-}
-
-#[test]
-fn test_parse_a_query_fail_moredata() {
-    let bytes =
-        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&1\n:2\n23\n+5\napril\n"
-            .as_bytes();
-    let parser = Parser::new(bytes);
-    assert_eq!(parser.parse().unwrap_err(), ParseError::UnexpectedByte);
-}
-
-#[test]
-fn test_pipelined_query_incomplete() {
-    // this was a pipelined query: we expected two queries but got one!
-    let bytes =
-        "*2\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n"
-            .as_bytes();
-    assert_eq!(
-        Parser::new(bytes).parse().unwrap_err(),
-        ParseError::NotEnough
-    )
-}
-
-#[test]
-fn test_pipelined_query() {
-    let bytes =
-        "*2\n&3\n+3\nACT\n+3\nfoo\n&3\n+5\nsayan\n+2\nis\n+7\nworking\n+4\nHEYA\n".as_bytes();
-    /*
-    (\r2\n*2\n)(&3\n)({+3\nACT\n}{+3\nfoo\n}{[&3\n][+5\nsayan\n][+2\nis\n][+7\nworking\n]})(+4\nHEYA\n)
-    */
-    let (res, forward_by) = Parser::new(bytes).parse().unwrap();
-    assert_eq!(
-        res,
-        Query::PipelinedQuery(vec![
-            Element::Array(vec![
-                Element::String(Bytes::from("ACT".to_owned())),
-                Element::String(Bytes::from("foo".to_owned())),
-                Element::Array(vec![
-                    Element::String(Bytes::from("sayan".to_owned())),
-                    Element::String(Bytes::from("is".to_owned())),
-                    Element::String(Bytes::from("working".to_owned()))
-                ])
-            ]),
-            Element::String(Bytes::from("HEYA".to_owned()))
-        ])
-    );
-    assert_eq!(forward_by, bytes.len());
-}
-
-#[test]
-fn test_query_with_part_of_next_query() {
-    let bytes =
-        "*1\n&3\n+3\nACT\n+3\nfoo\n&4\n+5\nsayan\n+2\nis\n+7\nworking\n&2\n:2\n23\n+5\napril\n*1\n"
-            .as_bytes();
-    let (res, forward_by) = Parser::new(bytes).parse().unwrap();
-    assert_eq!(
-        res,
-        Query::SimpleQuery(Element::Array(vec![
-            Element::String(Bytes::from("ACT".to_owned())),
-            Element::String(Bytes::from("foo".to_owned())),
-            Element::Array(vec![
-                Element::String(Bytes::from("sayan".to_owned())),
-                Element::String(Bytes::from("is".to_owned())),
-                Element::String(Bytes::from("working".to_owned())),
-                Element::Array(vec![
-                    Element::UnsignedInt(23),
-                    Element::String(Bytes::from("april".to_owned()))
-                ])
-            ])
-        ]))
-    );
-    // there are some ingenious folks on this planet who might just go bombing one query after the other
-    // we happily ignore those excess queries and leave it to the next round of parsing
-    assert_eq!(forward_by, bytes.len() - "*1\n".len());
-}
-
-#[test]
-fn test_parse_flat_array() {
-    let bytes = "_3\n+3\nSET\n+5\nHello\n+5\nWorld\n".as_bytes();
-    let res = Parser::new(bytes).parse_next_element().unwrap();
-    assert_eq!(
-        res,
-        Element::FlatArray(vec![
-            Bytes::from("SET".to_owned()),
-            Bytes::from("Hello".to_owned()),
-            Bytes::from("World".to_owned())
-        ])
-    );
-}
-
-#[test]
-fn test_flat_array_incomplete() {
-    let bytes = "*1\n_1\n".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n_1".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n_".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-}
-
-#[test]
-fn test_array_incomplete() {
-    let bytes = "*1\n&1\n".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n&1".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n&".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-}
-
-#[test]
-fn test_string_incomplete() {
-    let bytes = "*1\n+1\n".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n+1".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n+".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-}
-
-#[test]
-fn test_u64_incomplete() {
-    let bytes = "*1\n:1\n".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n:1".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-    let bytes = "*1\n:".as_bytes();
-    let res = Parser::new(bytes).parse().unwrap_err();
-    assert_eq!(res, ParseError::NotEnough);
-}
-
-#[test]
-fn test_ks_sub() {
-    let bytes = [
-        b"*1\n",
-        &[ASCII_CONTROL_SUB_HEADER][..],
-        &[b'5', b'\n'][..],
-        b"sayan\n",
-    ]
-    .concat();
-    assert_eq!(
-        Parser::new(&bytes).parse().unwrap(),
-        (
-            Query::SimpleQuery(Element::SwapKSHeader("sayan".into())),
-            bytes.len()
-        )
-    );
-}
-
-#[test]
-fn test_parse_any_array() {
-    let anyarray = "*1\n~3\n3\nthe\n3\ncat\n6\nmeowed\n".as_bytes();
-    let (query, forward_by) = Parser::new(anyarray).parse().unwrap();
-    assert_eq!(forward_by, anyarray.len());
-    assert_eq!(
-        query,
-        Query::SimpleQuery(Element::AnyArray(vec![
-            "the".into(),
-            "cat".into(),
-            "meowed".into()
-        ]))
-    )
 }

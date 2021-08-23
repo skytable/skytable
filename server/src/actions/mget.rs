@@ -32,14 +32,14 @@ use crate::util::compiler;
 action!(
     /// Run an `MGET` query
     ///
-    fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter) {
+    fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         crate::err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
         let encoding_is_okay = if kve.needs_key_encoding() {
             true
         } else {
             let encoder = kve.get_key_encoder();
-            act.as_ref().iter().all(|k| encoder.is_ok(k))
+            act.as_ref().all(|k| encoder.is_ok(k))
         };
         if compiler::likely(encoding_is_okay) {
             let mut writer = unsafe {
@@ -48,7 +48,7 @@ action!(
             }
             .await?;
             for key in act {
-                match kve.get_cloned_unchecked(&key) {
+                match kve.get_cloned_unchecked(key) {
                     Some(v) => writer.write_element(&v).await?,
                     None => writer.write_null().await?,
                 }

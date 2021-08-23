@@ -33,7 +33,7 @@ use crate::util::compiler;
 
 action!(
     /// Run an MPOP action
-    fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter) {
+    fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
         if registry::state_okay() {
             let kve = kve!(con, handle);
@@ -41,7 +41,7 @@ action!(
                 true
             } else {
                 let encoder = kve.get_key_encoder();
-                act.as_ref().iter().all(|k| encoder.is_ok(k))
+                act.as_ref().all(|k| encoder.is_ok(k))
             };
             if compiler::likely(encoding_is_okay) {
                 let mut writer = unsafe {
@@ -50,7 +50,7 @@ action!(
                 }
                 .await?;
                 for key in act {
-                    match kve.pop_unchecked(&key) {
+                    match kve.pop_unchecked(key) {
                         Some((_key, val)) => writer.write_element(val).await?,
                         None => writer.write_null().await?,
                     }

@@ -29,21 +29,22 @@
 use crate::corestore::memstore::DdlError;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
+use crate::protocol::element::UnsafeElement;
+use crate::protocol::iter::AnyArrayIter;
 use crate::protocol::responses;
-use crate::protocol::Element;
+use crate::protocol::SimpleQuery;
 use crate::{actions, admin};
-use bytes::Bytes;
+use core::hint::unreachable_unchecked;
 mod ddl;
 mod inspect;
 pub mod parser;
 #[cfg(test)]
 mod tests;
 
-use std::vec::IntoIter;
-pub type ActionIter = IntoIter<Bytes>;
+pub type ActionIter<'a> = AnyArrayIter<'a>;
 
 macro_rules! gen_constants_and_matches {
-    ($con:ident, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
+    ($con:expr, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
         mod tags {
             //! This module is a collection of tags/strings used for evaluating queries
             //! and responses
@@ -51,17 +52,16 @@ macro_rules! gen_constants_and_matches {
                 pub const $action: &[u8] = stringify!($action).as_bytes();
             )*
         }
-        let mut first = match $buf.next() {
-            Some(frst) => frst.to_vec(),
+        let first = match $buf.next_uppercase() {
+            Some(frst) => frst,
             None => return $con.write_response(responses::groups::PACKET_ERR).await,
         };
-        first.make_ascii_uppercase();
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
             )*
             _ => {
-                return $con.write_response(responses::groups::UNKNOWN_ACTION).await;
+                $con.write_response(responses::groups::UNKNOWN_ACTION).await?;
             }
         }
     };
@@ -91,57 +91,79 @@ macro_rules! swap_entity {
 }
 
 /// Execute a simple(*) query
-pub async fn execute_simple<T, Strm>(
+pub async fn execute_simple<'a, T: 'a, Strm>(
     db: &mut Corestore,
-    con: &mut T,
-    buf: Element,
+    con: &'a mut T,
+    buf: SimpleQuery,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let buf = match buf {
-        Element::AnyArray(a) => a,
-        _ => return con.write_response(responses::groups::WRONGTYPE_ERR).await,
-    };
-    let mut buf = buf.into_iter();
-    gen_constants_and_matches!(
-        con, buf, db,
-        GET => actions::get::get,
-        SET => actions::set::set,
-        UPDATE => actions::update::update,
-        DEL => actions::del::del,
-        HEYA => actions::heya::heya,
-        EXISTS => actions::exists::exists,
-        MSET => actions::mset::mset,
-        MGET => actions::mget::mget,
-        MUPDATE => actions::mupdate::mupdate,
-        SSET => actions::strong::sset,
-        SDEL => actions::strong::sdel,
-        SUPDATE => actions::strong::supdate,
-        DBSIZE => actions::dbsize::dbsize,
-        FLUSHDB => actions::flushdb::flushdb,
-        USET => actions::uset::uset,
-        KEYLEN => actions::keylen::keylen,
-        MKSNAP => admin::mksnap::mksnap,
-        LSKEYS => actions::lskeys::lskeys,
-        POP => actions::pop::pop,
-        CREATE => ddl::create,
-        DROP => ddl::ddl_drop,
-        USE => self::entity_swap,
-        INSPECT => inspect::inspect,
-        MPOP => actions::mpop::mpop
-    );
+    if !buf.is_any_array() {
+        return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+    }
+    let bufref;
+    let _rawiter;
+    let mut iter;
+    unsafe {
+        // this is the boxed slice
+        bufref = {
+            // SAFETY: execute_simple is called by execute_query which in turn is called
+            // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
+            // ensuring that the source buffer exists as long as the connection does
+            // so this is safe.
+            match buf.into_inner() {
+                UnsafeElement::AnyArray(arr) => arr,
+                _ => unreachable_unchecked(),
+            }
+        };
+        _rawiter = bufref.iter();
+        // this is our final iter
+        iter = {
+            // SAFETY: Again, this is guaranteed to be valid because the `con` is valid
+            AnyArrayIter::new(_rawiter)
+        };
+    }
+    {
+        gen_constants_and_matches!(
+            con, iter, db,
+            GET => actions::get::get,
+            SET => actions::set::set,
+            UPDATE => actions::update::update,
+            DEL => actions::del::del,
+            HEYA => actions::heya::heya,
+            EXISTS => actions::exists::exists,
+            MSET => actions::mset::mset,
+            MGET => actions::mget::mget,
+            MUPDATE => actions::mupdate::mupdate,
+            SSET => actions::strong::sset,
+            SDEL => actions::strong::sdel,
+            SUPDATE => actions::strong::supdate,
+            DBSIZE => actions::dbsize::dbsize,
+            FLUSHDB => actions::flushdb::flushdb,
+            USET => actions::uset::uset,
+            KEYLEN => actions::keylen::keylen,
+            MKSNAP => admin::mksnap::mksnap,
+            LSKEYS => actions::lskeys::lskeys,
+            POP => actions::pop::pop,
+            CREATE => ddl::create,
+            DROP => ddl::ddl_drop,
+            USE => self::entity_swap,
+            INSPECT => inspect::inspect,
+            MPOP => actions::mpop::mpop
+        );
+    }
     Ok(())
 }
 
 action! {
     /// Handle `use <entity>` like queries
-    fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter) {
+    fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         let entity = unsafe {
             // SAFETY: Already checked len
-            act.next().unsafe_unwrap()
+            act.next_unchecked()
         };
         swap_entity!(con, handle, entity);
         Ok(())

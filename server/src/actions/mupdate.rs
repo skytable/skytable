@@ -30,7 +30,7 @@ use crate::util::compiler;
 
 action!(
     /// Run an `MUPDATE` query
-    fn mupdate(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter) {
+    fn mupdate(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
         if is_lowbit_set!(howmany) || howmany == 0 {
             // An odd number of arguments means that the number of keys
@@ -43,9 +43,9 @@ action!(
             true
         } else {
             let encoder = kve.get_encoder();
-            act.as_ref().chunks_exact(2).all(|kv| unsafe {
+            act.chunks_exact(2).all(|kv| unsafe {
                 let (k, v) = (kv.get_unchecked(0), kv.get_unchecked(1));
-                encoder.is_ok(k, v)
+                encoder.is_ok(k.as_slice(), v.as_slice())
             })
         };
         let done_howmany: Option<usize>;
@@ -53,7 +53,8 @@ action!(
             if registry::state_okay() {
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    if kve.update_unchecked(Data::from(key), Data::from(val)) {
+                    if kve.update_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val))
+                    {
                         didmany += 1;
                     }
                 }

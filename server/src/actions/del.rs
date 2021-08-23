@@ -35,14 +35,14 @@ action!(
     ///
     /// Do note that this function is blocking since it acquires a write lock.
     /// It will write an entire datagroup, for this `del` action
-    fn del(handle: &Corestore, con: &mut T, act: ActionIter) {
+    fn del(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
         let encoding_is_okay = if kve.needs_key_encoding() {
             true
         } else {
             let encoder = kve.get_key_encoder();
-            act.as_ref().iter().all(|k| encoder.is_ok(k))
+            act.as_ref().all(|k| encoder.is_ok(k))
         };
         if compiler::likely(encoding_is_okay) {
             let done_howmany: Option<usize>;
@@ -50,7 +50,7 @@ action!(
                 if registry::state_okay() {
                     let mut many = 0;
                     act.for_each(|key| {
-                        if kve.remove_unchecked(&key) {
+                        if kve.remove_unchecked(key) {
                             many += 1
                         }
                     });

@@ -29,7 +29,7 @@ use crate::queryengine::ActionIter;
 
 action!(
     /// Delete all the keys in the database
-    fn flushdb(handle: &Corestore, con: &mut T, mut act: ActionIter) {
+    fn flushdb(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 1);
         if registry::state_okay() {
             if act.len() == 0 {
@@ -37,7 +37,7 @@ action!(
                 get_tbl!(handle, con).truncate_table();
             } else {
                 // flush the entity
-                let raw_entity = unsafe { act.next().unsafe_unwrap() };
+                let raw_entity = unsafe { act.next_unchecked() };
                 let entity = handle_entity!(con, raw_entity);
                 get_tbl!(entity, handle, con).truncate_table();
             }
