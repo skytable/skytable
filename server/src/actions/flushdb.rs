@@ -37,7 +37,7 @@ action!(
                 get_tbl!(handle, con).truncate_table();
             } else {
                 // flush the entity
-                let raw_entity = unsafe { act.next().unsafe_unwrap() };
+                let raw_entity = unsafe { act.next_unchecked() };
                 let entity = handle_entity!(con, raw_entity);
                 get_tbl!(entity, handle, con).truncate_table();
             }

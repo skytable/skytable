@@ -43,8 +43,8 @@ action!(
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     writer.update(
-                        Data::copy_from_slice(act.next().unsafe_unwrap()),
-                        Data::copy_from_slice(act.next().unsafe_unwrap()),
+                        Data::copy_from_slice(act.next_unchecked()),
+                        Data::copy_from_slice(act.next_unchecked()),
                     )
                 } {
                     Ok(true) => Some(true),

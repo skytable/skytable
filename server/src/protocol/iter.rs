@@ -34,10 +34,16 @@ use core::ops::Deref;
 use core::slice::ChunksExact;
 use core::slice::Iter;
 
+/// An iterator over an [`AnyArray`] (an [`UnsafeSlice`]). The validity of the iterator is
+/// left to the caller who has to guarantee:
+/// - Source pointers for the unsafe slice are valid
+/// - Source pointers exist as long as this iterator is used
 pub struct AnyArrayIter<'a> {
     iter: Iter<'a, UnsafeSlice>,
 }
 
+/// Same as [`AnyArrayIter`] with the exception that it directly dereferences to the actual
+/// slice iterator
 pub struct BorrowedAnyArrayIter<'a> {
     iter: Iter<'a, UnsafeSlice>,
 }
@@ -50,29 +56,40 @@ impl<'a> Deref for BorrowedAnyArrayIter<'a> {
 }
 
 impl<'a> AnyArrayIter<'a> {
+    /// Create a new `AnyArrayIter`.
+    ///
+    /// ## Safety
+    /// - Valid source pointers
+    /// - Source pointers exist as long as the iterator is used
     pub const unsafe fn new(iter: Iter<'a, UnsafeSlice>) -> AnyArrayIter<'a> {
         Self { iter }
     }
+    /// Returns a [`ChunksExact`] (similar to [`ChunksExact` provided by core::slice](core::slice::ChunksExact))
     pub fn chunks_exact(&'a self, chunks_exact: usize) -> ChunksExact<'a, UnsafeSlice> {
         self.iter.as_ref().chunks_exact(chunks_exact)
     }
+    /// Returns a borrowed iterator => simply put, advancing the returned iterator does not
+    /// affect the base iterator owned by this object
     pub fn as_ref(&'a self) -> BorrowedAnyArrayIter<'a> {
         BorrowedAnyArrayIter {
             iter: self.iter.as_ref().iter(),
         }
     }
+    /// Returns the next value in uppercase
     pub fn next_uppercase(&mut self) -> Option<Box<[u8]>> {
         self.iter.next().map(|v| unsafe {
             // SAFETY: Only construction is unsafe, forwarding is not
             v.as_slice().to_ascii_uppercase().into_boxed_slice()
         })
     }
+    /// Returns the next value without any checks
     pub unsafe fn next_unchecked(&mut self) -> &'a [u8] {
         match self.next() {
             Some(s) => s,
             None => unreachable_unchecked(),
         }
     }
+    /// Returns the next value without any checks as an owned copy of [`Bytes`]
     pub unsafe fn next_unchecked_bytes(&mut self) -> Bytes {
         Bytes::copy_from_slice(self.next_unchecked())
     }
@@ -130,7 +147,7 @@ fn test_iter() {
         }
     };
     let it = arr.iter();
-    let mut iter =unsafe { AnyArrayIter::new(it)};
+    let mut iter = unsafe { AnyArrayIter::new(it) };
     assert_eq!(iter.next_uppercase().unwrap().as_ref(), "SET".as_bytes());
     assert_eq!(iter.next().unwrap(), "x".as_bytes());
     assert_eq!(iter.next().unwrap(), "100".as_bytes());

@@ -33,7 +33,6 @@ use crate::protocol::element::UnsafeElement;
 use crate::protocol::iter::AnyArrayIter;
 use crate::protocol::responses;
 use crate::protocol::SimpleQuery;
-use crate::protocol::UnsafeSlice;
 use crate::{actions, admin};
 use core::hint::unreachable_unchecked;
 mod ddl;
@@ -53,11 +52,10 @@ macro_rules! gen_constants_and_matches {
                 pub const $action: &[u8] = stringify!($action).as_bytes();
             )*
         }
-        let mut first = match $buf.next_uppercase() {
+        let first = match $buf.next_uppercase() {
             Some(frst) => frst,
             None => return $con.write_response(responses::groups::PACKET_ERR).await,
         };
-        first.make_ascii_uppercase();
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
@@ -105,7 +103,7 @@ where
     if !buf.is_any_array() {
         return con.write_response(responses::groups::WRONGTYPE_ERR).await;
     }
-    let bufref: Box<[UnsafeSlice]>;
+    let bufref;
     let _rawiter;
     let mut iter;
     unsafe {
@@ -165,7 +163,7 @@ action! {
         err_if_len_is!(act, con, not 1);
         let entity = unsafe {
             // SAFETY: Already checked len
-            act.next().unsafe_unwrap()
+            act.next_unchecked()
         };
         swap_entity!(con, handle, entity);
         Ok(())
