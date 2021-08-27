@@ -485,6 +485,78 @@ mod de {
         }
     }
 
+    pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<Data, Vec<Data>>> {
+        if bytes.len() < 8 {
+            // 8B extent not here
+            return None;
+        }
+        // now let's read in the extent
+        unsafe {
+            let mut ptr = bytes.as_ptr();
+            let end_ptr = ptr.add(bytes.len());
+            // get the len
+            let len = transmute_len(ptr);
+            // move ptr ahead by sizeof offset
+            ptr = ptr.offset(8);
+            // allocate a map
+            let map = Coremap::with_capacity(len);
+            // now enter a loop
+            for _ in 0..len {
+                if ptr.add(16) >= end_ptr {
+                    return None;
+                }
+                let keylen = transmute_len(ptr);
+                ptr = ptr.offset(8);
+                if ptr.add(keylen) >= end_ptr {
+                    return None;
+                }
+                // get key
+                let key = Data::copy_from_slice(slice::from_raw_parts(ptr, keylen));
+                // move ptr ahead
+                ptr = ptr.add(keylen);
+                if ptr.add(8) >= end_ptr {
+                    // size of list payload is missing
+                    return None;
+                }
+                // get list payload len
+                let list_payload_extent = transmute_len(ptr);
+                // move ptr ahead
+                ptr = ptr.offset(8);
+                let mut list = Vec::with_capacity(list_payload_extent);
+                for _ in 0..list_payload_extent {
+                    // get element size
+                    if ptr.add(8) >= end_ptr {
+                        // size of list element is missing
+                        return None;
+                    }
+                    let list_element_payload_size = transmute_len(ptr);
+                    // move ptr ahead
+                    ptr = ptr.offset(8);
+
+                    // now get element
+                    if ptr.add(list_element_payload_size) >= end_ptr {
+                        // reached end of allocation without getting element
+                        return None;
+                    }
+                    let element = Data::copy_from_slice(slice::from_raw_parts(
+                        ptr,
+                        list_element_payload_size,
+                    ));
+                    list.push(element);
+                }
+
+                // push it in
+                map.true_if_insert(key, list);
+            }
+            if ptr == end_ptr {
+                Some(map)
+            } else {
+                // someone returned more data
+                None
+            }
+        }
+    }
+
     #[allow(clippy::needless_return)] // Clippy really misunderstands this
     pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         little_endian!({
