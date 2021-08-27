@@ -363,9 +363,10 @@ impl<Inp, UIn, Lv, Lp, Ex> Drop for Workpool<Inp, UIn, Lp, Lv, Ex> {
 
 pub mod utils {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    use rand::distributions::Alphanumeric;
+    use rand::distributions::{Alphanumeric, Standard};
     use std::collections::HashSet;
 
+    /// Generate a random UTF-8 string
     pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
         let rand_string: String = rand
             .sample_iter(&Alphanumeric)
@@ -374,6 +375,35 @@ pub mod utils {
             .collect();
         rand_string
     }
+    /// Generate a vector of random bytes
+    pub fn ran_bytes(len: usize, rand: impl rand::Rng) -> Vec<u8> {
+        rand.sample_iter(&Standard).take(len).collect()
+    }
+    /// Generate multiple vectors of random bytes
+    pub fn generate_random_byte_vector(
+        count: usize,
+        size: usize,
+        mut rng: impl rand::Rng,
+        unique: bool,
+    ) -> Vec<Vec<u8>> {
+        if unique {
+            let mut keys: HashSet<Vec<u8>> = HashSet::with_capacity(count);
+            (0..count).into_iter().for_each(|_| {
+                let mut ran = ran_bytes(size, &mut rng);
+                while keys.contains(&ran) {
+                    ran = ran_bytes(size, &mut rng);
+                }
+                keys.insert(ran);
+            });
+            keys.into_iter().collect()
+        } else {
+            (0..count)
+                .into_iter()
+                .map(|_| ran_bytes(size, &mut rng))
+                .collect()
+        }
+    }
+    /// Generate a vector of random UTF-8 valid strings
     pub fn generate_random_string_vector(
         count: usize,
         size: usize,
