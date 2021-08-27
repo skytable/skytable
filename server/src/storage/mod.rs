@@ -183,9 +183,17 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
 mod se {
     use super::*;
     use crate::corestore::memstore::Keyspace;
+    use crate::IoResult;
+
+    macro_rules! unsafe_sz_byte_repr {
+        ($e:expr) => {
+            raw_byte_repr(&to_64bit_little_endian!($e))
+        };
+    }
+
     #[cfg(test)]
     /// Serialize a map into a _writable_ thing
-    pub fn serialize_map(map: &Coremap<Data, Data>) -> Result<Vec<u8>, std::io::Error> {
+    pub fn serialize_map(map: &Coremap<Data, Data>) -> IoResult<Vec<u8>> {
         /*
         [LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
         */
@@ -196,10 +204,7 @@ mod se {
     }
 
     /// Serialize a map and write it to a provided buffer
-    pub fn raw_serialize_map<W: Write>(
-        map: &Coremap<Data, Data>,
-        w: &mut W,
-    ) -> std::io::Result<()> {
+    pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> IoResult<()> {
         unsafe {
             w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
             // now the keys and values
@@ -215,7 +220,7 @@ mod se {
     }
 
     /// Serialize a set and write it to a provided buffer
-    pub fn raw_serialize_set<W, K, V>(map: &Coremap<K, V>, w: &mut W) -> std::io::Result<()>
+    pub fn raw_serialize_set<W, K, V>(map: &Coremap<K, V>, w: &mut W) -> IoResult<()>
     where
         W: Write,
         K: Eq + Hash + AsRef<[u8]>,
@@ -236,7 +241,7 @@ mod se {
     /// ```text
     /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type][1B: Model type])*
     /// ```
-    pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> std::io::Result<()> {
+    pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> IoResult<()> {
         unsafe {
             // extent
             w.write_all(raw_byte_repr(&to_64bit_little_endian!(keyspace
@@ -251,6 +256,45 @@ mod se {
                 w.write_all(raw_byte_repr(&table.storage_type()))?;
                 // now model type
                 w.write_all(raw_byte_repr(&table.get_model_code()))?;
+            }
+        }
+        Ok(())
+    }
+    pub fn raw_serialize_list<'a, W, T: 'a, U: 'a>(
+        w: &mut W,
+        data: Coremap<Data, T>,
+    ) -> IoResult<()>
+    where
+        W: Write,
+        T: AsRef<[&'a U]>,
+        U: AsRef<[u8]>,
+    {
+        /*
+        [8B: Extent]([8B: Key extent][?B: Key][8B: Max index]([8B:EL_EXTENT][?B: Payload])*)*
+        */
+        unsafe {
+            // Extent
+            w.write_all(unsafe_sz_byte_repr!(data.len()))?;
+            // Enter iter
+            '_1: for key in data.iter() {
+                // key
+                let k = key.key();
+                // list payload
+                let v = key.value().as_ref();
+                // write the key extent
+                w.write_all(unsafe_sz_byte_repr!(k.len()))?;
+                // write the key
+                w.write_all(k)?;
+                // write the list payload extent
+                w.write_all(unsafe_sz_byte_repr!(v.len()))?;
+                // enter list payload iter
+                '_2: for value in v.iter() {
+                    let value = value.as_ref();
+                    // write element extent
+                    w.write_all(unsafe_sz_byte_repr!(value.len()))?;
+                    // write element
+                    w.write_all(value)?;
+                }
             }
         }
         Ok(())
