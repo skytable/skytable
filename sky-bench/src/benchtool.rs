@@ -26,9 +26,10 @@
 
 use crate::report;
 use devtimer::DevTime;
-use libstress::utils::generate_random_string_vector;
+use libstress::utils::generate_random_byte_vector;
 use libstress::PoolConfig;
 use rand::thread_rng;
+use skytable::types::RawString;
 use skytable::Query;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -176,9 +177,8 @@ pub fn runner(
 
     // Create separate connection pools for get and set operations
 
-    let keys: Vec<String> =
-        generate_random_string_vector(max_queries, per_kv_size, &mut rand, true);
-    let values = generate_random_string_vector(max_queries, per_kv_size, &mut rand, false);
+    let keys = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, true);
+    let values = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, false);
     /*
     We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`
     The bytes in each of `set_packs` has a query packet for setting data;
@@ -190,15 +190,15 @@ pub fn runner(
     let set_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| {
             let mut q = Query::from("SET");
-            q.push(&keys[idx]);
-            q.push(&values[idx]);
+            q.push(RawString::from(keys[idx].clone()));
+            q.push(RawString::from(values[idx].clone()));
             q.into_raw_query()
         })
         .collect();
     let get_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| {
             let mut q = Query::from("GET");
-            q.push(&keys[idx]);
+            q.push(RawString::from(keys[idx].clone()));
             q.into_raw_query()
         })
         .collect();
@@ -206,8 +206,8 @@ pub fn runner(
     let update_packs: Vec<Vec<u8>> = (0..max_queries)
         .map(|idx| {
             let mut q = Query::from("UPDATE");
-            q.push(&keys[idx]);
-            q.push(&keys[idx]);
+            q.push(RawString::from(keys[idx].clone()));
+            q.push(RawString::from(keys[idx].clone()));
             q.into_raw_query()
         })
         .collect();
