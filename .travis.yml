@@ -3,6 +3,7 @@ env:
 arch:
   - s390x
 os: linux
+dist: focal
 language: rust
 cache: cargo
 rust:
