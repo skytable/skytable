@@ -1,0 +1,8 @@
+arch:
+  - s390x
+os: linux
+language: rust
+rust:
+  - stable
+script:
+  - make test
