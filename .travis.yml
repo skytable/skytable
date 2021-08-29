@@ -1,7 +1,10 @@
+env:
+  - TARGET=s390x-unknown-linux-gnu
 arch:
   - s390x
 os: linux
 language: rust
+cache: cargo
 rust:
   - stable
 script:
