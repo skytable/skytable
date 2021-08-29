@@ -409,7 +409,7 @@ mod de {
                 // this is what we have left: [KLEN:8B][VLEN:8B]
                 let end_ptr = data.as_ptr().add(data.len());
                 for _ in 0..len {
-                    if (ptr.add(16)) >= end_ptr {
+                    if (ptr.add(16)) > end_ptr {
                         // not enough space
                         return None;
                     }

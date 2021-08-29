@@ -35,6 +35,19 @@ fn test_serialize_deserialize_empty() {
 }
 
 #[test]
+fn test_serialize_deserialize_map_with_empty_elements() {
+    let cmap = Coremap::new();
+    cmap.true_if_insert(Data::from("sayan"), Data::from(""));
+    cmap.true_if_insert(Data::from("sayan's second key"), Data::from(""));
+    cmap.true_if_insert(Data::from("sayan's third key"), Data::from(""));
+    cmap.true_if_insert(Data::from(""), Data::from(""));
+    let ser = se::serialize_map(&cmap).unwrap();
+    let de = de::deserialize_map(ser).unwrap();
+    assert_eq!(de.len(), cmap.len());
+    assert!(cmap.into_iter().all(|(k, v)| de.get(&k).unwrap().eq(&v)));
+}
+
+#[test]
 fn test_ser_de_few_elements() {
     let cmap = Coremap::new();
     cmap.upsert("sayan".into(), "writes code".into());
