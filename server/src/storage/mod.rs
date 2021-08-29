@@ -260,7 +260,7 @@ mod se {
         }
         Ok(())
     }
-    pub fn raw_serialize_list<'a, W, T: 'a, U: 'a>(
+    pub fn raw_serialize_list_map<'a, W, T: 'a, U: 'a>(
         w: &mut W,
         data: Coremap<Data, T>,
     ) -> IoResult<()>
@@ -270,7 +270,7 @@ mod se {
         U: AsRef<[u8]>,
     {
         /*
-        [8B: Extent]([8B: Key extent][?B: Key][8B: Max index]([8B:EL_EXTENT][?B: Payload])*)*
+        [8B: Extent]([8B: Key extent][?B: Key][8B: Max index][?B: Payload])*
         */
         unsafe {
             // Extent
@@ -285,16 +285,34 @@ mod se {
                 w.write_all(unsafe_sz_byte_repr!(k.len()))?;
                 // write the key
                 w.write_all(k)?;
-                // write the list payload extent
-                w.write_all(unsafe_sz_byte_repr!(v.len()))?;
-                // enter list payload iter
-                '_2: for value in v.iter() {
-                    let value = value.as_ref();
-                    // write element extent
-                    w.write_all(unsafe_sz_byte_repr!(value.len()))?;
-                    // write element
-                    w.write_all(value)?;
-                }
+                // write the list payload
+                self::raw_serialize_nested_list(w, v)?;
+            }
+        }
+        Ok(())
+    }
+    /// Serialize a `[[u8]]` (i.e a slice of slices)
+    pub fn raw_serialize_nested_list<'a, W, T: 'a + ?Sized, U: 'a>(
+        w: &mut W,
+        inp: &'a T,
+    ) -> IoResult<()>
+    where
+        T: AsRef<[&'a U]>,
+        U: AsRef<[u8]>,
+        W: Write,
+    {
+        // ([8B:EL_EXTENT][?B: Payload])*
+        let inp = inp.as_ref();
+        unsafe {
+            // write extent
+            w.write_all(unsafe_sz_byte_repr!(inp.len()))?;
+            // now enter loop and write elements
+            for element in inp.iter() {
+                let element = element.as_ref();
+                // write element extent
+                w.write_all(unsafe_sz_byte_repr!(element.len()))?;
+                // write element
+                w.write_all(element)?;
             }
         }
         Ok(())
@@ -514,37 +532,9 @@ mod de {
                 let key = Data::copy_from_slice(slice::from_raw_parts(ptr, keylen));
                 // move ptr ahead
                 ptr = ptr.add(keylen);
-                if ptr.add(8) >= end_ptr {
-                    // size of list payload is missing
-                    return None;
-                }
-                // get list payload len
-                let list_payload_extent = transmute_len(ptr);
-                // move ptr ahead
-                ptr = ptr.offset(8);
-                let mut list = Vec::with_capacity(list_payload_extent);
-                for _ in 0..list_payload_extent {
-                    // get element size
-                    if ptr.add(8) >= end_ptr {
-                        // size of list element is missing
-                        return None;
-                    }
-                    let list_element_payload_size = transmute_len(ptr);
-                    // move ptr ahead
-                    ptr = ptr.offset(8);
-
-                    // now get element
-                    if ptr.add(list_element_payload_size) >= end_ptr {
-                        // reached end of allocation without getting element
-                        return None;
-                    }
-                    let element = Data::copy_from_slice(slice::from_raw_parts(
-                        ptr,
-                        list_element_payload_size,
-                    ));
-                    list.push(element);
-                }
-
+                let (nptr, list) = self::deserialize_nested_list(ptr, end_ptr)?;
+                // update pointers
+                ptr = nptr;
                 // push it in
                 map.true_if_insert(key, list);
             }
@@ -555,6 +545,46 @@ mod de {
                 None
             }
         }
+    }
+
+    /// Deserialize a nested list: `[EXTENT]([EL_EXT][EL])*`
+    ///
+    /// ## Safety
+    ///
+    /// This is unsafe because it doesn't verify the validity of the source ptr and end_ptr
+    pub unsafe fn deserialize_nested_list(
+        mut ptr: *const u8,
+        end_ptr: *const u8,
+    ) -> Option<(*const u8, Vec<Data>)> {
+        if ptr.add(8) >= end_ptr {
+            // size of list payload is missing
+            return None;
+        }
+        // get list payload len
+        let list_payload_extent = transmute_len(ptr);
+        // move ptr ahead
+        ptr = ptr.offset(8);
+        let mut list = Vec::with_capacity(list_payload_extent);
+        for _ in 0..list_payload_extent {
+            // get element size
+            if ptr.add(8) >= end_ptr {
+                // size of list element is missing
+                return None;
+            }
+            let list_element_payload_size = transmute_len(ptr);
+            // move ptr ahead
+            ptr = ptr.offset(8);
+
+            // now get element
+            if ptr.add(list_element_payload_size) >= end_ptr {
+                // reached end of allocation without getting element
+                return None;
+            }
+            let element =
+                Data::copy_from_slice(slice::from_raw_parts(ptr, list_element_payload_size));
+            list.push(element);
+        }
+        Some((ptr, list))
     }
 
     #[allow(clippy::needless_return)] // Clippy really misunderstands this
