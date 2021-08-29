@@ -302,3 +302,40 @@ mod flush_routines {
         assert!(tbl2_ret.get_kvstore().unwrap().len() == 0);
     }
 }
+
+mod list_tests {
+    use super::*;
+    use crate::corestore::Data;
+    #[test]
+    fn test_list_se_de() {
+        let mylist = vec![Data::from("a"), Data::from("b"), Data::from("c")];
+        let mut v = Vec::new();
+        se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
+        let (_ptr, de) =
+            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        assert_eq!(de, mylist);
+    }
+    #[test]
+    fn test_list_se_de_with_empty_element() {
+        let mylist = vec![
+            Data::from("a"),
+            Data::from("b"),
+            Data::from("c"),
+            Data::from(""),
+        ];
+        let mut v = Vec::new();
+        se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
+        let (_ptr, de) =
+            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        assert_eq!(de, mylist);
+    }
+    #[test]
+    fn test_empty_list_se_de() {
+        let mylist: Vec<Data> = vec![];
+        let mut v = Vec::new();
+        se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
+        let (_ptr, de) =
+            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        assert_eq!(de, mylist);
+    }
+}
