@@ -5,4 +5,5 @@ language: rust
 rust:
   - stable
 script:
+  - sudo apt install libhtml-parser-perl
   - make test
