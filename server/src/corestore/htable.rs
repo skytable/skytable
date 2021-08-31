@@ -244,6 +244,12 @@ pub struct Data {
     blob: Bytes,
 }
 
+impl PartialEq<str> for Data {
+    fn eq(&self, oth: &str) -> bool {
+        self.blob.eq(oth)
+    }
+}
+
 impl Data {
     /// Create a new blob from a string
     pub fn from_string(val: String) -> Self {

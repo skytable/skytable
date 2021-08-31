@@ -178,9 +178,6 @@ impl<'a> RawSliceIterBorrowed<'a> {
     fn remaining(&self) -> usize {
         unsafe { self.end_ptr.offset_from(self.cursor) as usize }
     }
-    unsafe fn incr_cursor(&mut self) {
-        self.incr_cursor_by(1)
-    }
     /// Increment the cursor by the provided length
     unsafe fn incr_cursor_by(&mut self, ahead: usize) {
         {

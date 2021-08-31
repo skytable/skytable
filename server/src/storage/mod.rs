@@ -262,7 +262,7 @@ mod se {
     }
     pub fn raw_serialize_list_map<'a, W, T: 'a, U: 'a>(
         w: &mut W,
-        data: Coremap<Data, T>,
+        data: &Coremap<Data, T>,
     ) -> IoResult<()>
     where
         W: Write,

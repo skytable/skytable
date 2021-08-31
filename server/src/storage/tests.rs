@@ -306,7 +306,7 @@ mod flush_routines {
 mod list_tests {
     use super::iter::RawSliceIter;
     use super::{de, se};
-    use crate::corestore::Data;
+    use crate::corestore::{htable::Coremap, Data};
     #[test]
     fn test_list_se_de() {
         let mylist = vec![Data::from("a"), Data::from("b"), Data::from("c")];
@@ -338,5 +338,28 @@ mod list_tests {
         let mut rawiter = RawSliceIter::new(&v);
         let de = { de::deserialize_nested_list(rawiter.get_borrowed_iter()).unwrap() };
         assert_eq!(de, mylist);
+    }
+    #[test]
+    fn test_list_map_se_de() {
+        let mymap = Coremap::new();
+        let vals = vec!["apples", "bananas", "carrots"];
+        let v2 = vals.clone();
+        mymap.true_if_insert(Data::from("mykey"), v2);
+        let mut v = Vec::new();
+        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        let de = de::deserialize_list_map(&v).unwrap();
+        assert_eq!(de.len(), 1);
+        assert_eq!(
+            de.get("mykey".as_bytes()).unwrap().value().clone(),
+            vals.into_iter().map(Data::from).collect::<Vec<Data>>()
+        );
+    }
+    #[test]
+    fn test_list_map_empty_se_de() {
+        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
+        let mut v = Vec::new();
+        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        let de = de::deserialize_list_map(&v).unwrap();
+        assert_eq!(de.len(), 0)
     }
 }
