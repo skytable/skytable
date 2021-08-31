@@ -53,7 +53,6 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::Data;
 use core::hash::Hash;
 use core::mem;
-use core::ptr;
 use core::slice;
 use std::collections::HashSet;
 use std::io::Write;
@@ -64,6 +63,7 @@ mod macros;
 pub mod bytemarks;
 pub mod flush;
 pub mod interface;
+pub mod iter;
 pub mod preload;
 pub mod sengine;
 pub mod unflush;
@@ -320,7 +320,9 @@ mod se {
 }
 
 mod de {
-    use super::*;
+    use super::iter::{RawSliceIter, RawSliceIterBorrowed};
+    use super::{Array, Coremap, Data, Hash, HashSet};
+    use core::ptr;
     use std::collections::HashMap;
 
     pub trait DeserializeFrom {
@@ -342,51 +344,27 @@ mod de {
     where
         T: DeserializeFrom + Eq + Hash,
     {
-        // First read the length header
-        if data.len() < 8 {
-            // so the file doesn't even have the length header? noice, just return
-            None
-        } else {
-            unsafe {
-                // so we have 8B. Just unsafe access and transmute it
-                let len = transmute_len(data.as_ptr());
-                let mut set = HashSet::with_capacity(len);
-                // this is what we have left: [KLEN:8B]*
-                // move 8 bytes ahead since we're done with len
-                let mut ptr = data.as_ptr().add(8);
-                let end_ptr = data.as_ptr().add(data.len());
-                for _ in 0..len {
-                    if (ptr.add(8)) >= end_ptr {
-                        // not enough space and even if there is a len
-                        // there is no value. This is even true for ZSTs
-                        return None;
-                    }
-                    let lenkey = transmute_len(ptr);
-                    ptr = ptr.add(8);
-                    if (ptr.add(lenkey)) > end_ptr {
-                        // not enough data left
-                        return None;
-                    }
-                    if !T::is_expected_len(lenkey) {
-                        return None;
-                    }
-                    // get the key as a raw slice, we've already checked if end_ptr is less
-                    let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
-                    // move the ptr ahead; done with the key
-                    ptr = ptr.add(lenkey);
-                    // push it in
-                    if !set.insert(key) {
-                        // repeat?; that's not what we wanted
-                        return None;
-                    }
-                }
-                if ptr == end_ptr {
-                    Some(set)
-                } else {
-                    // nope, someone gave us more data
-                    None
-                }
+        let mut rawiter = RawSliceIter::new(data);
+        let len = rawiter.next_64bit_integer_to_usize()?;
+        let mut set = HashSet::with_capacity(len);
+        for _ in 0..len {
+            let lenkey = rawiter.next_64bit_integer_to_usize()?;
+            if !T::is_expected_len(lenkey) {
+                return None;
             }
+            // get the key as a raw slice, we've already checked if end_ptr is less
+            let key = T::from_slice(rawiter.next_borrowed_slice(lenkey)?);
+            // push it in
+            if !set.insert(key) {
+                // repeat?; that's not what we wanted
+                return None;
+            }
+        }
+        if rawiter.end_of_allocation() {
+            Some(set)
+        } else {
+            // nope, someone gave us more data
+            None
         }
     }
 
@@ -395,197 +373,90 @@ mod de {
     where
         T: DeserializeFrom + Eq + Hash,
     {
-        // First read the length header
-        if data.len() < 8 {
-            // so the file doesn't even have the length header? noice, just return
-            None
-        } else {
-            unsafe {
-                // so we have 8B. Just unsafe access and transmute it
-                let len = transmute_len(data.as_ptr());
-                let mut set = HashMap::with_capacity(len);
-                // this is what we have left: [KLEN:8B]*
-                // move 8 bytes ahead since we're done with len
-                let mut ptr = data.as_ptr().add(8);
-                let end_ptr = data.as_ptr().add(data.len());
-                for _ in 0..len {
-                    if (ptr.add(8)) >= end_ptr {
-                        // not enough space and even if there is a len
-                        // there is no value. This is even true for ZSTs
-                        return None;
-                    }
-                    let lenkey = transmute_len(ptr);
-                    ptr = ptr.add(8);
-                    if (ptr.add(lenkey + 2)) > end_ptr {
-                        // not enough data left
-                        return None;
-                    }
-                    if !T::is_expected_len(lenkey) {
-                        return None;
-                    }
-                    // get the key as a raw slice, we've already checked if end_ptr is less
-                    let key = T::from_slice(slice::from_raw_parts(ptr, lenkey));
-                    // move the ptr ahead; done with the key
-                    ptr = ptr.add(lenkey);
-                    let bytemark_a = ptr::read(ptr);
-                    ptr = ptr.add(1);
-                    let bytemark_b = ptr::read(ptr);
-                    ptr = ptr.add(1);
-                    // push it in
-                    if set.insert(key, (bytemark_a, bytemark_b)).is_some() {
-                        // repeat?; that's not what we wanted
-                        return None;
-                    }
-                }
-                if ptr == end_ptr {
-                    Some(set)
-                } else {
-                    // nope, someone gave us more data
-                    None
-                }
+        let mut rawiter = RawSliceIter::new(data);
+        // so we have 8B. Just unsafe access and transmute it
+        let len = rawiter.next_64bit_integer_to_usize()?;
+        let mut set = HashMap::with_capacity(len);
+        for _ in 0..len {
+            let lenkey = rawiter.next_64bit_integer_to_usize()?;
+            if !T::is_expected_len(lenkey) {
+                return None;
             }
+            // get the key as a raw slice, we've already checked if end_ptr is less
+            let key = T::from_slice(rawiter.next_borrowed_slice(lenkey)?);
+            let bytemark_a = rawiter.next_8bit_integer()?;
+            let bytemark_b = rawiter.next_8bit_integer()?;
+            // push it in
+            if set.insert(key, (bytemark_a, bytemark_b)).is_some() {
+                // repeat?; that's not what we wanted
+                return None;
+            }
+        }
+        if rawiter.end_of_allocation() {
+            Some(set)
+        } else {
+            // nope, someone gave us more data
+            None
         }
     }
     /// Deserialize a file that contains a serialized map. This also returns the model code
     pub fn deserialize_map(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
-        // First read the length header
-        if data.len() < 8 {
-            // so the file doesn't even have the length/model header? noice, just return
-            None
+        let mut rawiter = RawSliceIter::new(&data);
+        let len = rawiter.next_64bit_integer_to_usize()?;
+        let hm = Coremap::with_capacity(len);
+        for _ in 0..len {
+            let (lenkey, lenval) = rawiter.next_64bit_integer_pair_to_usize()?;
+            let key = rawiter.next_owned_data(lenkey)?;
+            let val = rawiter.next_owned_data(lenval)?;
+            // push it in
+            hm.upsert(key, val);
+        }
+        if rawiter.end_of_allocation() {
+            Some(hm)
         } else {
-            unsafe {
-                /*
-                 UNSAFE(@ohsayan): Everything done here is unsafely safe. We
-                 reinterpret bits of one type as another. What could be worse?
-                 nah, it's not that bad. We know that the byte representations
-                 would be in the way we expect. If the data is corrupted, we
-                 can guarantee that we won't ever read incorrect lengths of data
-                 and we won't read into others' memory (or corrupt our own)
-                */
-                let mut ptr = data.as_ptr();
-                // so we have 8B. Just unsafe access and transmute it; nobody cares
-                let len = transmute_len(ptr);
-                // move 8 bytes ahead since we're done with len
-                ptr = ptr.add(8);
-                let hm = Coremap::with_capacity(len);
-                // this is what we have left: [KLEN:8B][VLEN:8B]
-                let end_ptr = data.as_ptr().add(data.len());
-                for _ in 0..len {
-                    if (ptr.add(16)) >= end_ptr {
-                        // not enough space
-                        return None;
-                    }
-                    let lenkey = transmute_len(ptr);
-                    ptr = ptr.add(8);
-                    let lenval = transmute_len(ptr);
-                    ptr = ptr.add(8);
-                    if (ptr.add(lenkey + lenval)) > end_ptr {
-                        // not enough data left
-                        return None;
-                    }
-                    // get the key as a raw slice, we've already checked if end_ptr is less
-                    let key = Data::copy_from_slice(slice::from_raw_parts(ptr, lenkey));
-                    // move the ptr ahead; done with the key
-                    ptr = ptr.add(lenkey);
-                    let val = Data::copy_from_slice(slice::from_raw_parts(ptr, lenval));
-                    // move the ptr ahead; done with the value
-                    ptr = ptr.add(lenval);
-                    // push it in
-                    hm.upsert(key, val);
-                }
-                if ptr == end_ptr {
-                    Some(hm)
-                } else {
-                    // nope, someone gave us more data
-                    None
-                }
-            }
+            // nope, someone gave us more data
+            None
         }
     }
 
     pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<Data, Vec<Data>>> {
-        if bytes.len() < 8 {
-            // 8B extent not here
-            return None;
+        let mut rawiter = RawSliceIter::new(bytes);
+        // get the len
+        let len = rawiter.next_64bit_integer_to_usize()?;
+        // allocate a map
+        let map = Coremap::with_capacity(len);
+        // now enter a loop
+        for _ in 0..len {
+            let keylen = rawiter.next_64bit_integer_to_usize()?;
+            // get key
+            let key = rawiter.next_owned_data(keylen)?;
+            let borrowed_iter = rawiter.get_borrowed_iter();
+            let list = self::deserialize_nested_list(borrowed_iter)?;
+            // push it in
+            map.true_if_insert(key, list);
         }
-        // now let's read in the extent
-        unsafe {
-            let mut ptr = bytes.as_ptr();
-            let end_ptr = ptr.add(bytes.len());
-            // get the len
-            let len = transmute_len(ptr);
-            // move ptr ahead by sizeof offset
-            ptr = ptr.offset(8);
-            // allocate a map
-            let map = Coremap::with_capacity(len);
-            // now enter a loop
-            for _ in 0..len {
-                if ptr.add(16) >= end_ptr {
-                    return None;
-                }
-                let keylen = transmute_len(ptr);
-                ptr = ptr.offset(8);
-                if ptr.add(keylen) >= end_ptr {
-                    return None;
-                }
-                // get key
-                let key = Data::copy_from_slice(slice::from_raw_parts(ptr, keylen));
-                // move ptr ahead
-                ptr = ptr.add(keylen);
-                let (nptr, list) = self::deserialize_nested_list(ptr, end_ptr)?;
-                // update pointers
-                ptr = nptr;
-                // push it in
-                map.true_if_insert(key, list);
-            }
-            if ptr == end_ptr {
-                Some(map)
-            } else {
-                // someone returned more data
-                None
-            }
+        if rawiter.end_of_allocation() {
+            Some(map)
+        } else {
+            // someone returned more data
+            None
         }
     }
 
     /// Deserialize a nested list: `[EXTENT]([EL_EXT][EL])*`
     ///
-    /// ## Safety
-    ///
-    /// This is unsafe because it doesn't verify the validity of the source ptr and end_ptr
-    pub unsafe fn deserialize_nested_list(
-        mut ptr: *const u8,
-        end_ptr: *const u8,
-    ) -> Option<(*const u8, Vec<Data>)> {
-        if ptr.add(8) > end_ptr {
-            // size of list payload is missing
-            return None;
-        }
+    pub fn deserialize_nested_list<'a>(mut iter: RawSliceIterBorrowed<'a>) -> Option<Vec<Data>> {
         // get list payload len
-        let list_payload_extent = transmute_len(ptr);
-        // move ptr ahead
-        ptr = ptr.offset(8);
+        let list_payload_extent = iter.next_64bit_integer_to_usize()?;
         let mut list = Vec::with_capacity(list_payload_extent);
         for _ in 0..list_payload_extent {
             // get element size
-            if ptr.add(8) > end_ptr {
-                // size of list element is missing
-                return None;
-            }
-            let list_element_payload_size = transmute_len(ptr);
-            // move ptr ahead
-            ptr = ptr.offset(8);
+            let list_element_payload_size = iter.next_64bit_integer_to_usize()?;
             // now get element
-            if ptr.add(list_element_payload_size) > end_ptr {
-                // reached end of allocation without getting element
-                return None;
-            }
-            let element =
-                Data::copy_from_slice(slice::from_raw_parts(ptr, list_element_payload_size));
-            // forward ptr
-            ptr = ptr.add(list_element_payload_size);
+            let element = iter.next_owned_data(list_element_payload_size)?;
             list.push(element);
         }
-        Some((ptr, list))
+        Some(list)
     }
 
     #[allow(clippy::needless_return)] // Clippy really misunderstands this

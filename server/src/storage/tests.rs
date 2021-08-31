@@ -304,15 +304,16 @@ mod flush_routines {
 }
 
 mod list_tests {
-    use super::*;
+    use super::iter::RawSliceIter;
+    use super::{de, se};
     use crate::corestore::Data;
     #[test]
     fn test_list_se_de() {
         let mylist = vec![Data::from("a"), Data::from("b"), Data::from("c")];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
-        let (_ptr, de) =
-            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        let mut rawiter = RawSliceIter::new(&v);
+        let de = { de::deserialize_nested_list(rawiter.get_borrowed_iter()).unwrap() };
         assert_eq!(de, mylist);
     }
     #[test]
@@ -325,8 +326,8 @@ mod list_tests {
         ];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
-        let (_ptr, de) =
-            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        let mut rawiter = RawSliceIter::new(&v);
+        let de = { de::deserialize_nested_list(rawiter.get_borrowed_iter()).unwrap() };
         assert_eq!(de, mylist);
     }
     #[test]
@@ -334,8 +335,8 @@ mod list_tests {
         let mylist: Vec<Data> = vec![];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
-        let (_ptr, de) =
-            unsafe { de::deserialize_nested_list(v.as_ptr(), v.as_ptr().add(v.len())).unwrap() };
+        let mut rawiter = RawSliceIter::new(&v);
+        let de = { de::deserialize_nested_list(rawiter.get_borrowed_iter()).unwrap() };
         assert_eq!(de, mylist);
     }
 }
