@@ -340,11 +340,10 @@ mod list_tests {
         assert_eq!(de, mylist);
     }
     #[test]
-    fn test_list_map_se_de() {
+    fn test_list_map_monoelement_se_de() {
         let mymap = Coremap::new();
         let vals = vec!["apples", "bananas", "carrots"];
-        let v2 = vals.clone();
-        mymap.true_if_insert(Data::from("mykey"), v2);
+        mymap.true_if_insert(Data::from("mykey"), vals.clone());
         let mut v = Vec::new();
         se::raw_serialize_list_map(&mut v, &mymap).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
@@ -352,6 +351,28 @@ mod list_tests {
         assert_eq!(
             de.get("mykey".as_bytes()).unwrap().value().clone(),
             vals.into_iter().map(Data::from).collect::<Vec<Data>>()
+        );
+    }
+    #[test]
+    fn test_list_map_se_de() {
+        let mymap = Coremap::new();
+        let key1: Data = "mykey1".into();
+        let val1 = vec!["apples", "bananas", "carrots"];
+        let key2: Data = "mykey2long".into();
+        let val2 = vec!["code", "coffee", "cats"];
+        mymap.true_if_insert(key1.clone(), val1.clone());
+        mymap.true_if_insert(key2.clone(), val2.clone());
+        let mut v = Vec::new();
+        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        let de = de::deserialize_list_map(&v).unwrap();
+        assert_eq!(de.len(), 2);
+        assert_eq!(
+            de.get(&key1).unwrap().value().clone(),
+            val1.into_iter().map(Data::from).collect::<Vec<Data>>()
+        );
+        assert_eq!(
+            de.get(&key2).unwrap().value().clone(),
+            val2.into_iter().map(Data::from).collect::<Vec<Data>>()
         );
     }
     #[test]
