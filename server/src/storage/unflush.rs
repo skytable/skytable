@@ -63,7 +63,7 @@ pub fn read_table(
     } else {
         // not volatile, so read this in
         let f = fs::read(filepath)?;
-        super::de::deserialize_map(f).ok_or_else(|| bad_data!())?
+        super::de::deserialize_map(&f).ok_or_else(|| bad_data!())?
     };
     let tbl = match model_code {
         bytemarks::BYTEMARK_MODEL_KV_BIN_BIN => {

@@ -400,7 +400,7 @@ mod de {
         }
     }
     /// Deserialize a file that contains a serialized map. This also returns the model code
-    pub fn deserialize_map(data: Vec<u8>) -> Option<Coremap<Data, Data>> {
+    pub fn deserialize_map(data: &[u8]) -> Option<Coremap<Data, Data>> {
         let mut rawiter = RawSliceIter::new(&data);
         let len = rawiter.next_64bit_integer_to_usize()?;
         let hm = Coremap::with_capacity(len);

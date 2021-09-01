@@ -30,7 +30,7 @@ use super::*;
 fn test_serialize_deserialize_empty() {
     let cmap = Coremap::new();
     let ser = se::serialize_map(&cmap).unwrap();
-    let de = de::deserialize_map(ser).unwrap();
+    let de = de::deserialize_map(&ser).unwrap();
     assert!(de.len() == 0);
 }
 
@@ -40,7 +40,7 @@ fn test_ser_de_few_elements() {
     cmap.upsert("sayan".into(), "writes code".into());
     cmap.upsert("supersayan".into(), "writes super code".into());
     let ser = se::serialize_map(&cmap).unwrap();
-    let de = de::deserialize_map(ser).unwrap();
+    let de = de::deserialize_map(&ser).unwrap();
     assert!(de.len() == cmap.len());
     assert!(de
         .iter()
@@ -65,7 +65,7 @@ cfg_test!(
             .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
             .collect();
         let ser = se::serialize_map(&cmap).unwrap();
-        let de = de::deserialize_map(ser).unwrap();
+        let de = de::deserialize_map(&ser).unwrap();
         assert!(de
             .iter()
             .all(|kv| cmap.get(kv.key()).unwrap().eq(kv.value())));
@@ -90,7 +90,7 @@ cfg_test!(
         // random chop
         se.truncate(124);
         // corrupted
-        assert!(de::deserialize_map(se).is_none());
+        assert!(de::deserialize_map(&se).is_none());
     }
     #[test]
     fn test_ser_de_excess_bytes() {
@@ -114,7 +114,7 @@ cfg_test!(
         // random patch
         let patch: Vec<u8> = (0u16..500u16).into_iter().map(|v| (v >> 7) as u8).collect();
         se.extend(patch);
-        assert!(de::deserialize_map(se).is_none());
+        assert!(de::deserialize_map(&se).is_none());
     }
 );
 
@@ -382,5 +382,35 @@ mod list_tests {
         se::raw_serialize_list_map(&mut v, &mymap).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 0)
+    }
+}
+
+mod corruption_tests {
+    use crate::corestore::htable::Coremap;
+    #[test]
+    fn test_corruption_map_basic() {
+        let mymap = Coremap::new();
+        let seresult = super::se::serialize_map(&mymap).unwrap();
+        // now chop it; since this has 8B, let's drop some bytes
+        assert!(super::de::deserialize_map(&seresult[..seresult.len() - 6]).is_none());
+    }
+    #[test]
+    fn test_map_corruption_end_corruption() {
+        let cmap = Coremap::new();
+        cmap.upsert("sayan".into(), "writes code".into());
+        cmap.upsert("supersayan".into(), "writes super code".into());
+        let ser = super::se::serialize_map(&cmap).unwrap();
+        // corrupt the last 16B
+        assert!(super::de::deserialize_map(&ser[..ser.len() - 16]).is_none());
+    }
+    #[test]
+    fn test_map_corruption_midway_corruption() {
+        let cmap = Coremap::new();
+        cmap.upsert("sayan".into(), "writes code".into());
+        cmap.upsert("supersayan".into(), "writes super code".into());
+        let mut ser = super::se::serialize_map(&cmap).unwrap();
+        // middle chop
+        ser.drain(16..ser.len() / 2);
+        assert!(super::de::deserialize_map(&ser).is_none());
     }
 }
