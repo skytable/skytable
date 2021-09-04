@@ -78,6 +78,14 @@ const UTF8_TRANSITION_MAP: [u8; 108] = [
     12, 36, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
 ];
 
+pub fn is_okay_encoded(inp: &[u8]) -> bool {
+    self::is_utf8(inp)
+}
+
+pub const fn is_okay_no_encoding(_inp: &[u8]) -> bool {
+    true
+}
+
 /// This method uses a dual-stream deterministic finite automaton
 /// [(DFA)](https://en.wikipedia.org/wiki/Deterministic_finite_automaton) that is used to validate
 /// UTF-8 bytes that use the encoded finite state machines defined in this module.

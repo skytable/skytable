@@ -31,7 +31,12 @@ use crate::resp::TSYMBOL_BINARY;
 use crate::resp::TSYMBOL_UNICODE;
 use core::borrow::Borrow;
 use core::hash::Hash;
+// do not mess
+#[macro_use]
+mod macros;
+// endof do not mess
 pub mod encoding;
+pub mod listmap;
 
 /// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
 pub struct DoubleEncoder {
@@ -63,24 +68,6 @@ impl SingleEncoder {
     pub const fn get_tsymbol(&self) -> u8 {
         self.v_t
     }
-}
-
-macro_rules! d_encoder {
-    ($fn:expr, $t:expr) => {
-        DoubleEncoder {
-            fn_ptr: $fn,
-            v_t: $t,
-        }
-    };
-}
-
-macro_rules! s_encoder {
-    ($fn:expr, $t:expr) => {
-        SingleEncoder {
-            fn_ptr: $fn,
-            v_t: $t,
-        }
-    };
 }
 
 // DROP impl isn't required as ShardLock's field types need-drop (std::mem)
@@ -155,31 +142,11 @@ impl KVEngine {
     }
     /// Returns an encoder for the key
     pub fn get_key_encoder(&self) -> SingleEncoder {
-        if self.encoded_k {
-            fn e(inp: &[u8]) -> bool {
-                encoding::is_utf8(inp)
-            }
-            s_encoder!(e, TSYMBOL_UNICODE)
-        } else {
-            fn e(_inp: &[u8]) -> bool {
-                true
-            }
-            s_encoder!(e, TSYMBOL_BINARY)
-        }
+        s_encoder_booled!(self.encoded_k)
     }
     /// Returns an encoder for the value
     pub fn get_value_encoder(&self) -> SingleEncoder {
-        if self.encoded_v {
-            fn e(inp: &[u8]) -> bool {
-                encoding::is_utf8(inp)
-            }
-            s_encoder!(e, TSYMBOL_UNICODE)
-        } else {
-            fn e(_inp: &[u8]) -> bool {
-                true
-            }
-            s_encoder!(e, TSYMBOL_BINARY)
-        }
+        s_encoder_booled!(self.encoded_v)
     }
     pub fn len(&self) -> usize {
         self.table.len()
