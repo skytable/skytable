@@ -56,6 +56,7 @@ const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 fn parse_dbtest(
     mut input: syn::ItemFn,
     rng: &mut impl rand::Rng,
+    table_decl: Option<String>,
 ) -> Result<TokenStream, syn::Error> {
     let sig = &mut input.sig;
     let fname = sig.ident.to_string();
@@ -76,6 +77,7 @@ fn parse_dbtest(
             CHARSET[idx] as char
         })
         .collect();
+    let table_decl = table_decl.unwrap_or_else(|| "keymap(str,str)".to_owned());
     let body = quote! {
         let mut con = skytable::AsyncConnection::new("127.0.0.1", 2003).await.unwrap();
         let __create_ks =
@@ -88,7 +90,13 @@ fn parse_dbtest(
             ).await.unwrap();
         let __create_tbl =
             con.run_simple_query(
-                &skytable::query!("create", "table", #rand_string, "keymap(str,str)", "volatile")
+                &skytable::query!(
+                    "create",
+                    "table",
+                    #rand_string,
+                    #table_decl,
+                    "volatile"
+                )
             ).await.unwrap();
         let mut __concat_entity = std::string::String::new();
         __concat_entity.push_str("testsuite:");
@@ -126,7 +134,11 @@ fn parse_dbtest(
 }
 
 /// This function checks if the current function is eligible to be a test
-fn parse_test_sig(input: syn::ItemFn, rng: &mut impl rand::Rng) -> TokenStream {
+fn parse_test_sig(
+    input: syn::ItemFn,
+    rng: &mut impl rand::Rng,
+    table_decl: Option<String>,
+) -> TokenStream {
     for attr in &input.attrs {
         if attr.path.is_ident("test") {
             let msg = "second test attribute is supplied";
@@ -142,7 +154,7 @@ fn parse_test_sig(input: syn::ItemFn, rng: &mut impl rand::Rng) -> TokenStream {
             .to_compile_error()
             .into();
     }
-    parse_dbtest(input, rng).unwrap_or_else(|e| e.to_compile_error().into())
+    parse_dbtest(input, rng, table_decl).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// This function accepts an entire module which comprises of `dbtest` functions.
@@ -159,6 +171,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
     };
     let args = syn::parse_macro_input!(args as syn::AttributeArgs);
     let mut skips = Vec::new();
+    let mut table_decl = None;
     for arg in args {
         if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
             let ident = namevalue.path.get_ident();
@@ -186,6 +199,22 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     .split_whitespace()
                     .map(|val| val.to_string())
                     .collect();
+                }
+                "table" => {
+                    // check if the user wants some special table declaration
+                    let table_decl_lit = namevalue.lit.clone();
+                    let span = table_decl_lit.span();
+                    table_decl = match parse_string(table_decl_lit, span, "table") {
+                        Ok(s) => Some(s),
+                        Err(_) => {
+                            return syn::Error::new_spanned(
+                                namevalue,
+                                "Expected a value for argument `table`",
+                            )
+                            .to_compile_error()
+                            .into();
+                        }
+                    }
                 }
                 x => {
                     let msg = format!("Unknown attribute {} is specified; expected `skip`", x);
@@ -219,7 +248,7 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
                     };
                     continue;
                 }
-                let inp = parse_test_sig(function, &mut rng);
+                let inp = parse_test_sig(function, &mut rng, table_decl.clone());
                 let __tok: syn::ItemFn = syn::parse_macro_input!(inp as syn::ItemFn);
                 let tok = quote! {
                     #__tok
@@ -281,6 +310,22 @@ pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+/// The array macro enables the creation of arrays without the need for initializing all the elements.
+/// The important point to note here is that this is specifically meant for `skyd::corestore::array`
+/// and using it on anything else may cause unexpected behavior. The idea is that you want a `[T; N]`
+/// but you only have `[T; M]` (N > M) elements. The rest elements (N-M) are fine being uninitialized,
+/// but however, typing them in manually might be cumbersome at times. This macro does some "string magic"
+/// to do that for you.
+///
+/// What you need to pass in:
+/// ```ignore
+/// const <IDENTIFIER>: [TY; LEN] = [M elements ...];
+/// ```
+///
+/// What you get is:
+/// ```ignore
+/// const <IDENTIFIER>: [TY; LEN] = [M initialized elements ..., (N-M) unintialized elements];
+/// ```
 pub fn array(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = syn::parse_macro_input!(args as syn::AttributeArgs);
     if !args.is_empty() {

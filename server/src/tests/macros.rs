@@ -1,5 +1,5 @@
 /*
- * Created on Tue Aug 25 2020
+ * Created on Sun Sep 05 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,28 +24,33 @@
  *
 */
 
-//! This module contains automated tests for queries
-
-#[macro_use]
-mod macros;
-mod ddl_tests;
-mod inspect_tests;
-mod kvengine;
-mod kvengine_encoding;
-
-mod ssl {
-    use skytable::aio::TlsConnection;
-    use skytable::{Element, Query};
-    use std::env;
-    #[tokio::test]
-    async fn test_ssl() {
-        let mut path = env::var("ROOT_DIR").expect("ROOT_DIR unset");
-        path.push_str("/cert.pem");
-        let mut con = TlsConnection::new("127.0.0.1", 2004, &path).await.unwrap();
-        let q = Query::from("heya");
+macro_rules! setkeys {
+    ($con:ident, $($key:literal:$value:literal),*) => {
+        let mut q = skytable::Query::new();
+        q.push("MSET");
+        let mut count = 0;
+        $(
+            q.push($key);
+            q.push($value);
+            count += 1;
+        )*
         assert_eq!(
-            con.run_simple_query(&q).await.unwrap(),
-            Element::String("HEY!".to_owned())
+            $con.run_simple_query(&q).await.unwrap(),
+            Element::UnsignedInt(count)
         );
-    }
+    };
+}
+
+macro_rules! push {
+    ($query:expr, $($val:expr),*) => {{
+        $(
+            $query.push($val);
+        )*
+    }};
+}
+
+macro_rules! runeq {
+    ($con:expr, $query:expr, $eq:expr) => {
+        assert_eq!($con.run_simple_query(&$query).await.unwrap(), $eq)
+    };
 }

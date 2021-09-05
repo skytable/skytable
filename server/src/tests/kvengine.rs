@@ -34,22 +34,6 @@
 
 #[sky_macros::dbtest]
 mod __private {
-    macro_rules! setkeys {
-        ($con:ident, $($key:literal:$value:literal),*) => {
-            let mut q = Query::new();
-            q.push("MSET");
-            let mut count = 0;
-            $(
-                q.push($key);
-                q.push(stringify!($value));
-                count += 1;
-            )*
-            assert_eq!(
-                $con.run_simple_query(&q).await.unwrap(),
-                Element::UnsignedInt(count)
-            );
-        };
-    }
     #[cfg(test)]
     use skytable::{types::Array, Element, Query, RespCode};
     /// Test a HEYA query: The server should return HEY!
@@ -876,10 +860,10 @@ mod __private {
     async fn test_flushdb_fqe() {
         setkeys!(
             con,
-            "w":000,
-            "x":100,
-            "y":200,
-            "z":300
+            "w":"000",
+            "x":"100",
+            "y":"200",
+            "z":"300"
         );
         // now flush the database
         let mut query = Query::new();
@@ -1097,9 +1081,9 @@ mod __private {
     async fn test_lskeys_entity() {
         setkeys!(
             con,
-            "x":100,
-            "y":200,
-            "z":300
+            "x":"100",
+            "y":"200",
+            "z":"300"
         );
         query.push("lskeys");
         query.push(&__MYENTITY__);
@@ -1119,9 +1103,9 @@ mod __private {
     async fn test_lskeys_entity_with_count() {
         setkeys!(
             con,
-            "x":100,
-            "y":200,
-            "z":300
+            "x":"100",
+            "y":"200",
+            "z":"300"
         );
         query.push("lskeys");
         query.push(&__MYENTITY__);
@@ -1161,9 +1145,9 @@ mod __private {
     async fn test_mpop_all_success() {
         setkeys!(
             con,
-            "x":100,
-            "y":200,
-            "z":300
+            "x":"100",
+            "y":"200",
+            "z":"300"
         );
         query.push(vec!["mpop", "x", "y", "z"]);
         assert_eq!(
@@ -1178,9 +1162,9 @@ mod __private {
     async fn test_mpop_mixed() {
         setkeys!(
             con,
-            "x":100,
-            "y":200,
-            "z":300
+            "x":"100",
+            "y":"200",
+            "z":"300"
         );
         query.push(vec!["mpop", "apple", "arnold", "x", "madonna", "y", "z"]);
         assert_eq!(
@@ -1205,7 +1189,7 @@ mod __private {
     async fn test_pop_okay() {
         setkeys!(
             con,
-            "x":100
+            "x":"100"
         );
         query.push("pop");
         query.push("x");
