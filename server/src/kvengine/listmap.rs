@@ -55,15 +55,22 @@ impl KVEListMap {
     pub fn get_id_encoder(&self) -> SingleEncoder {
         s_encoder_booled!(self.encoded_id)
     }
+    /// Check if the key is encoded correctly
     pub fn encode_key<T: AsRef<[u8]>>(&self, val: T) -> bool {
         s_encoder!(self.encoded_id)(val.as_ref())
     }
+    /// Check if the element in a list is encoded correctly
+    pub fn encode_value<T: AsRef<[u8]>>(&self, val: T) -> bool {
+        s_encoder!(self.encoded_id)(val.as_ref())
+    }
     borrow_hash_fn! {
+        /// Check the length of a list if it exists
         pub fn {borrow: Data} len(self: &Self, key: &Q) -> Option<usize> {
             self.base.get(key).map(|v| v.read().len())
         }
     }
-    pub fn add_list(&mut self, listname: Data) -> Option<bool> {
+    /// Create and add a new list to the map
+    pub fn add_list(&self, listname: Data) -> Option<bool> {
         if_cold! {
             if (self.encode_key(&listname)) {
                 None
@@ -71,5 +78,9 @@ impl KVEListMap {
                 Some(self.base.true_if_insert(listname, RwLock::new(Vec::new())))
             }
         }
+    }
+    /// Remove a key from the map
+    pub fn remove(&self, listname: &[u8]) -> bool {
+        self.base.true_if_removed(listname)
     }
 }
