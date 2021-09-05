@@ -387,6 +387,7 @@ mod list_tests {
 
 mod corruption_tests {
     use crate::corestore::htable::Coremap;
+    use crate::corestore::Data;
     #[test]
     fn test_corruption_map_basic() {
         let mymap = Coremap::new();
@@ -412,5 +413,31 @@ mod corruption_tests {
         // middle chop
         ser.drain(16..ser.len() / 2);
         assert!(super::de::deserialize_map(&ser).is_none());
+    }
+    #[test]
+    fn test_listmap_corruption_basic() {
+        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
+        mymap.upsert("hello".into(), Vec::from(["hello-1".into()]));
+        // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
+        // sanity test
+        let mut v = Vec::new();
+        super::se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        assert!(super::de::deserialize_list_map(&v).is_some());
+        // now chop "hello-1"
+        assert!(super::de::deserialize_list_map(&v[..v.len() - 7]).is_none());
+    }
+    #[test]
+    fn test_listmap_corruption_midway() {
+        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
+        mymap.upsert("hello".into(), Vec::from(["hello-1".into()]));
+        // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
+        // sanity test
+        let mut v = Vec::new();
+        super::se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        assert!(super::de::deserialize_list_map(&v).is_some());
+        assert_eq!(v.len(), 44);
+        // now chop "7u64" (8+8+5+8+8+7)
+        v.drain(29..37);
+        assert!(super::de::deserialize_list_map(&v).is_none());
     }
 }
