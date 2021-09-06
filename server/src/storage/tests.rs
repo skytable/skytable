@@ -387,7 +387,7 @@ mod list_tests {
                 .collect::<Vec<Data>>()
         );
         assert_eq!(
-            de.get(&key1).unwrap().value().deref().read().clone(),
+            de.get(&key2).unwrap().value().deref().read().clone(),
             val2.into_inner()
                 .into_iter()
                 .map(Data::from)
