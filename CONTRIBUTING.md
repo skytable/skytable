@@ -55,6 +55,18 @@ to next if they don't change things significantly; for example, changes in docum
 however the changes are huge, then they must be created on a separate branch, a pull request opened, the CI suite run and
 finally merged into next.
 
+## Pull request guidelines
+
+### Typo correction or doc updates
+
+The creation of superflous merge requests is generally discouraged. Such examples include the creation of multiple
+PRs to correct single typos, update comments or update docs.
+
+It would be far better if you could fix a considerable subset (if not all) of these issues in one pull request (it's fine to create multiple commits in the same PR).
+This is because we don't want to utilize compute capacity or multiply our git history for changes
+that do not have any behavioral impact. It is recommended that you open up a single PR and correct a substantial subset of these inconsistencies (if not all), while also adding `[skip ci]` or `[ci skip]` in your
+commit messages to avoid triggering the workflows.
+
 ## Steps
 
 1. Fork the repository
@@ -92,4 +104,4 @@ Testing is simple: just run this:
 make test
 ```
 
-> **NOTE**: Make sure port 2003 is not used by any applications and make sure your own instance isn't running on port 2003! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.
+> **NOTE**: Make sure port 2003 and 2004 are not used by any applications. Also, make sure your _own instance_ isn't running on any of these ports; if that is the case, you might end up losing data due to conflicting entity names! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.

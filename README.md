@@ -68,7 +68,7 @@ This project strictly follows semver, however, since this project is currently i
 
 [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064?style=for-the-badge)](https://ohsayan.github.io/skythanks)
 
-**Yes - we need you!** Be it a typo, a bizarre idea, a dirty bug🐞 or an amazing patch - you're welcome to contribute to Skytable! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/skytable/skytable/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
+You are welcome to contribute to Skytable! Beginner friendly issues are marked with the [<img src=https://img.shields.io/badge/L--easy-C71585>](https://github.com/skytable/skytable/labels/L-easy) label. Read the guide [here](./CONTRIBUTING.md).
 
 ## Contributors
 
