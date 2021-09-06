@@ -47,12 +47,12 @@ args:
       value_name: duration
       short: S
       takes_value: true
-      help: Set the BGSAVE duration
+      help: Set the BGSAVE duration in seconds
   - snapevery:
       required: false
       long: snapevery
       value_name: duration
-      help: Set the periodic snapshot duration
+      help: Set the periodic snapshot duration in seconds
       takes_value: true
   - snapkeep:
       required: false
