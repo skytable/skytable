@@ -128,6 +128,10 @@ pub mod oneshot {
                         &mut file,
                         kve.__get_inner_ref(),
                     )?,
+                    _ => {
+                        // TODO(@ohsayan): Implement this
+                        unimplemented!("Listmap se/de has not been implemented")
+                    }
                 }
                 file.sync_all()?;
                 fs::rename(&$path, &$path[..$path.len() - 1])

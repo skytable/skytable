@@ -299,7 +299,7 @@ mod flush_routines {
                 .clone(),
             Data::from("world")
         );
-        assert!(tbl2_ret.get_kvstore().unwrap().len() == 0);
+        assert!(tbl2_ret.get_kvstore().unwrap().__get_inner_ref().len() == 0);
     }
 }
 

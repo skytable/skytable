@@ -40,14 +40,14 @@ pub const BYTEMARK_MODEL_KV_BIN_STR: u8 = 1;
 pub const BYTEMARK_MODEL_KV_STR_STR: u8 = 2;
 /// KVE model bytemark with key:str, val:bin
 pub const BYTEMARK_MODEL_KV_STR_BIN: u8 = 3;
-/// KVE model bytemark with key:binstr, val: list<str>
-pub const BYTEMARK_MODEL_KV_BINSTR_LIST_STR: u8 = 4;
 /// KVE model bytemark with key:binstr, val: list<binstr>
-pub const BYTEMARK_MODEL_KV_BINSTR_LIST_BIN: u8 = 5;
-/// KVE model bytemark with key:str, val: list<str>
-pub const BYTEMARK_MODEL_KV_STR_LIST_STR: u8 = 6;
+pub const BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR: u8 = 4;
+/// KVE model bytemark with key:binstr, val: list<str>
+pub const BYTEMARK_MODEL_KV_BINSTR_LIST_STR: u8 = 5;
 /// KVE model bytemark with key:str, val: list<binstr>
 pub const BYTEMARK_MODEL_KV_STR_LIST_BINSTR: u8 = 6;
+/// KVE model bytemark with key:str, val: list<str>
+pub const BYTEMARK_MODEL_KV_STR_LIST_STR: u8 = 6;
 
 // storage bym
 /// Persistent storage bytemark

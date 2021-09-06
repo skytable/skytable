@@ -28,12 +28,14 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::Data;
 use crate::corestore::KeyspaceResult;
-use crate::kvengine::KVEngine;
+use crate::kvengine::KVTable;
+use crate::kvengine::{listmap::KVEListMap, KVEngine};
 use crate::storage::bytemarks;
 
 #[derive(Debug)]
 pub enum DataModel {
     KV(KVEngine),
+    KVExtListmap(KVEListMap),
 }
 
 // same 8 byte ptrs; any chance of optimizations?
@@ -59,12 +61,14 @@ impl Table {
     }
     pub fn count(&self) -> usize {
         match &self.model_store {
-            DataModel::KV(kv) => kv.len(),
+            DataModel::KV(kv) => kv.kve_len(),
+            DataModel::KVExtListmap(kv) => kv.kve_len(),
         }
     }
     /// Returns this table's _description_
     pub fn describe_self(&self) -> &'static str {
         match self.get_model_code() {
+            // pure KV
             0 if self.is_volatile() => "Keymap { data:(binstr,binstr), volatile:true }",
             0 if !self.is_volatile() => "Keymap { data:(binstr,binstr), volatile:false }",
             1 if self.is_volatile() => "Keymap { data:(binstr,str), volatile:true }",
@@ -73,12 +77,22 @@ impl Table {
             2 if !self.is_volatile() => "Keymap { data:(str,str), volatile:false }",
             3 if self.is_volatile() => "Keymap { data:(str,binstr), volatile:true }",
             3 if !self.is_volatile() => "Keymap { data:(str,binstr), volatile:false }",
+            // KVext => list
+            4 if self.is_volatile() => "Keymap { data:(binstr,list<binstr>), volatile:true }",
+            4 if !self.is_volatile() => "Keymap { data:(binstr,list<binstr>), volatile:false }",
+            5 if self.is_volatile() => "Keymap { data:(binstr,list<str>), volatile:true }",
+            5 if !self.is_volatile() => "Keymap { data:(binstr,list<str>), volatile:false }",
+            6 if self.is_volatile() => "Keymap { data:(str,list<binstr>), volatile:true }",
+            6 if !self.is_volatile() => "Keymap { data:(str,list<binstr>), volatile:false }",
+            7 if self.is_volatile() => "Keymap { data:(str,list<str>), volatile:true }",
+            7 if !self.is_volatile() => "Keymap { data:(str,list<str>), volatile:false }",
             _ => unsafe { impossible!() },
         }
     }
     pub fn truncate_table(&self) {
         match self.model_store {
-            DataModel::KV(ref kv) => kv.truncate_table(),
+            DataModel::KV(ref kv) => kv.kve_clear(),
+            DataModel::KVExtListmap(ref kv) => kv.kve_clear(),
         }
     }
     /// Returns the storage type as an 8-bit uint
@@ -130,29 +144,53 @@ impl Table {
     }
     /// Returns the model code. See [`bytemarks`] for more info
     pub fn get_model_code(&self) -> u8 {
-        match &self.model_store {
-            DataModel::KV(kvs) => {
+        match self.model_store {
+            DataModel::KV(ref kvs) => {
                 /*
                 bin,bin => 0
                 bin,str => 1
                 str,str => 2
                 str,bin => 3
                 */
-                let (kbin, vbin) = kvs.get_encoding();
-                if kbin {
-                    if vbin {
+                let (kenc, venc) = kvs.kve_tuple_encoding();
+                if kenc {
+                    if venc {
                         // both k + v are str
                         bytemarks::BYTEMARK_MODEL_KV_STR_STR
                     } else {
                         // only k is str
                         bytemarks::BYTEMARK_MODEL_KV_STR_BIN
                     }
-                } else if vbin {
+                } else if venc {
                     // k is bin, v is str
                     bytemarks::BYTEMARK_MODEL_KV_BIN_STR
                 } else {
                     // both are bin
                     bytemarks::BYTEMARK_MODEL_KV_BIN_BIN
+                }
+            }
+            DataModel::KVExtListmap(ref kvlistmap) => {
+                /*
+                bin,list<bin> => 4,
+                bin,list<str> => 5,
+                str,list<bin> => 6,
+                str,list<str> => 7
+                */
+                let (kenc, venc) = kvlistmap.kve_tuple_encoding();
+                if kenc {
+                    if venc {
+                        // both K+V
+                        bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR
+                    } else {
+                        // only K
+                        bytemarks::BYTEMARK_MODEL_KV_STR_LIST_BINSTR
+                    }
+                } else if venc {
+                    // only V
+                    bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_STR
+                } else {
+                    // nor K, nor V
+                    bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR
                 }
             }
         }

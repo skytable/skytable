@@ -26,12 +26,14 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+use super::KVTable;
 use super::SingleEncoder;
 use crate::corestore::htable::Coremap;
 use crate::corestore::Data;
 use crate::resp::{TSYMBOL_BINARY, TSYMBOL_UNICODE};
 use parking_lot::RwLock;
 
+#[derive(Debug)]
 pub struct KVEListMap {
     encoded_id: bool,
     encoded_payload_element: bool,
@@ -65,7 +67,7 @@ impl KVEListMap {
     }
     borrow_hash_fn! {
         /// Check the length of a list if it exists
-        pub fn {borrow: Data} len(self: &Self, key: &Q) -> Option<usize> {
+        pub fn {borrow: Data} len_of(self: &Self, key: &Q) -> Option<usize> {
             self.base.get(key).map(|v| v.read().len())
         }
     }
@@ -82,5 +84,23 @@ impl KVEListMap {
     /// Remove a key from the map
     pub fn remove(&self, listname: &[u8]) -> bool {
         self.base.true_if_removed(listname)
+    }
+}
+
+impl<'a> KVTable<'a, Coremap<Data, RwLock<Vec<Data>>>> for KVEListMap {
+    fn kve_len(&self) -> usize {
+        self.base.len()
+    }
+    fn kve_clear(&self) {
+        self.base.clear()
+    }
+    fn kve_key_encoded(&self) -> bool {
+        self.encoded_id
+    }
+    fn kve_payload_encoded(&self) -> bool {
+        self.encoded_payload_element
+    }
+    fn kve_inner_ref(&'a self) -> &'a Coremap<Data, RwLock<Vec<Data>>> {
+        &self.base
     }
 }
