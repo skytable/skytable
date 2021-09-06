@@ -307,6 +307,9 @@ mod list_tests {
     use super::iter::RawSliceIter;
     use super::{de, se};
     use crate::corestore::{htable::Coremap, Data};
+    use crate::kvengine::listmap::LockedVec;
+    use core::ops::Deref;
+    use parking_lot::RwLock;
     #[test]
     fn test_list_se_de() {
         let mylist = vec![Data::from("a"), Data::from("b"), Data::from("c")];
@@ -342,44 +345,60 @@ mod list_tests {
     #[test]
     fn test_list_map_monoelement_se_de() {
         let mymap = Coremap::new();
-        let vals = vec!["apples", "bananas", "carrots"];
-        mymap.true_if_insert(Data::from("mykey"), vals.clone());
+        let vals = lvec!["apples", "bananas", "carrots"];
+        mymap.true_if_insert(Data::from("mykey"), RwLock::new(vals.read().clone()));
         let mut v = Vec::new();
-        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 1);
+        let mykey_value = de
+            .get("mykey".as_bytes())
+            .unwrap()
+            .value()
+            .deref()
+            .read()
+            .clone();
         assert_eq!(
-            de.get("mykey".as_bytes()).unwrap().value().clone(),
-            vals.into_iter().map(Data::from).collect::<Vec<Data>>()
+            mykey_value,
+            vals.into_inner()
+                .into_iter()
+                .map(Data::from)
+                .collect::<Vec<Data>>()
         );
     }
     #[test]
     fn test_list_map_se_de() {
-        let mymap = Coremap::new();
+        let mymap: Coremap<Data, LockedVec> = Coremap::new();
         let key1: Data = "mykey1".into();
-        let val1 = vec!["apples", "bananas", "carrots"];
+        let val1 = lvec!["apples", "bananas", "carrots"];
         let key2: Data = "mykey2long".into();
-        let val2 = vec!["code", "coffee", "cats"];
-        mymap.true_if_insert(key1.clone(), val1.clone());
-        mymap.true_if_insert(key2.clone(), val2.clone());
+        let val2 = lvec!["code", "coffee", "cats"];
+        mymap.true_if_insert(key1.clone(), RwLock::new(val1.read().clone()));
+        mymap.true_if_insert(key2.clone(), RwLock::new(val2.read().clone()));
         let mut v = Vec::new();
-        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 2);
         assert_eq!(
-            de.get(&key1).unwrap().value().clone(),
-            val1.into_iter().map(Data::from).collect::<Vec<Data>>()
+            de.get(&key1).unwrap().value().deref().read().clone(),
+            val1.into_inner()
+                .into_iter()
+                .map(Data::from)
+                .collect::<Vec<Data>>()
         );
         assert_eq!(
-            de.get(&key2).unwrap().value().clone(),
-            val2.into_iter().map(Data::from).collect::<Vec<Data>>()
+            de.get(&key1).unwrap().value().deref().read().clone(),
+            val2.into_inner()
+                .into_iter()
+                .map(Data::from)
+                .collect::<Vec<Data>>()
         );
     }
     #[test]
     fn test_list_map_empty_se_de() {
-        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
+        let mymap: Coremap<Data, LockedVec> = Coremap::new();
         let mut v = Vec::new();
-        se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 0)
     }
@@ -388,6 +407,7 @@ mod list_tests {
 mod corruption_tests {
     use crate::corestore::htable::Coremap;
     use crate::corestore::Data;
+    use crate::kvengine::listmap::LockedVec;
     #[test]
     fn test_corruption_map_basic() {
         let mymap = Coremap::new();
@@ -416,24 +436,24 @@ mod corruption_tests {
     }
     #[test]
     fn test_listmap_corruption_basic() {
-        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
-        mymap.upsert("hello".into(), Vec::from(["hello-1".into()]));
+        let mymap: Coremap<Data, LockedVec> = Coremap::new();
+        mymap.upsert("hello".into(), lvec!("hello-1"));
         // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
         // sanity test
         let mut v = Vec::new();
-        super::se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        super::se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         assert!(super::de::deserialize_list_map(&v).is_some());
         // now chop "hello-1"
         assert!(super::de::deserialize_list_map(&v[..v.len() - 7]).is_none());
     }
     #[test]
     fn test_listmap_corruption_midway() {
-        let mymap: Coremap<Data, Vec<Data>> = Coremap::new();
-        mymap.upsert("hello".into(), Vec::from(["hello-1".into()]));
+        let mymap: Coremap<Data, LockedVec> = Coremap::new();
+        mymap.upsert("hello".into(), lvec!("hello-1"));
         // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
         // sanity test
         let mut v = Vec::new();
-        super::se::raw_serialize_list_map(&mut v, &mymap).unwrap();
+        super::se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         assert!(super::de::deserialize_list_map(&v).is_some());
         assert_eq!(v.len(), 44);
         // now chop "7u64" (8+8+5+8+8+7)

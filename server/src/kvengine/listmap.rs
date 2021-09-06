@@ -33,20 +33,29 @@ use crate::corestore::Data;
 use crate::resp::{TSYMBOL_BINARY, TSYMBOL_UNICODE};
 use parking_lot::RwLock;
 
+pub type LockedVec = RwLock<Vec<Data>>;
+
 #[derive(Debug)]
 pub struct KVEListMap {
     encoded_id: bool,
     encoded_payload_element: bool,
-    base: Coremap<Data, RwLock<Vec<Data>>>,
+    base: Coremap<Data, LockedVec>,
 }
 
 impl KVEListMap {
     /// Create a new KVEListMap. `Encoded ID == encoded key` and `encoded payload == encoded elements`
     pub fn new(encoded_id: bool, encoded_payload_element: bool) -> Self {
+        Self::init_with_data(encoded_id, encoded_payload_element, Coremap::new())
+    }
+    pub fn init_with_data(
+        encoded_id: bool,
+        encoded_payload_element: bool,
+        base: Coremap<Data, LockedVec>,
+    ) -> Self {
         Self {
             encoded_id,
             encoded_payload_element,
-            base: Coremap::new(),
+            base,
         }
     }
     /// Get an encoder instance for the payload elements
@@ -77,7 +86,7 @@ impl KVEListMap {
             if (self.encode_key(&listname)) {
                 None
             } else {
-                Some(self.base.true_if_insert(listname, RwLock::new(Vec::new())))
+                Some(self.base.true_if_insert(listname, LockedVec::default()))
             }
         }
     }

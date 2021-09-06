@@ -33,6 +33,7 @@ use super::interface;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
+use crate::kvengine::KVTable;
 use crate::registry;
 use crate::IoResult;
 
@@ -124,14 +125,14 @@ pub mod oneshot {
                 // fine, this needs to be flushed
                 let mut file = File::create(&$path)?;
                 match $table.get_model_ref() {
-                    DataModel::KV(kve) => super::interface::serialize_map_into_slow_buffer(
+                    DataModel::KV(kve) => super::interface::serialize_into_slow_buffer(
                         &mut file,
-                        kve.__get_inner_ref(),
+                        kve.kve_inner_ref(),
                     )?,
-                    _ => {
-                        // TODO(@ohsayan): Implement this
-                        unimplemented!("Listmap se/de has not been implemented")
-                    }
+                    DataModel::KVExtListmap(kve) => super::interface::serialize_into_slow_buffer(
+                        &mut file,
+                        kve.kve_inner_ref(),
+                    )?,
                 }
                 file.sync_all()?;
                 fs::rename(&$path, &$path[..$path.len() - 1])

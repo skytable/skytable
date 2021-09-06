@@ -28,6 +28,7 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::Data;
 use crate::corestore::KeyspaceResult;
+use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
 use crate::kvengine::{listmap::KVEListMap, KVEngine};
 use crate::storage::bytemarks;
@@ -104,7 +105,7 @@ impl Table {
         self.volatile
     }
     /// Create a new KVE Table with the provided settings
-    pub fn new_kve_with_data(
+    pub fn new_pure_kve_with_data(
         data: Coremap<Data, Data>,
         volatile: bool,
         k_enc: bool,
@@ -113,6 +114,21 @@ impl Table {
         Self {
             volatile,
             model_store: DataModel::KV(KVEngine::init_with_data(k_enc, v_enc, data)),
+        }
+    }
+    pub fn new_kve_listmap_with_data(
+        data: Coremap<Data, LockedVec>,
+        volatile: bool,
+        k_enc: bool,
+        payload_enc: bool,
+    ) -> Self {
+        Self {
+            volatile,
+            model_store: DataModel::KVExtListmap(KVEListMap::init_with_data(
+                k_enc,
+                payload_enc,
+                data,
+            )),
         }
     }
     pub fn new_kve_with_encoding(volatile: bool, k_enc: bool, v_enc: bool) -> Self {
@@ -133,14 +149,14 @@ impl Table {
     }
     /// Create a new kve with default settings but with provided volatile configuration
     pub fn new_kve_with_volatile(volatile: bool) -> Self {
-        Self::new_kve_with_data(Coremap::new(), volatile, false, false)
+        Self::new_pure_kve_with_data(Coremap::new(), volatile, false, false)
     }
     /// Returns the default kve:
     /// - `k_enc`: `false`
     /// - `v_enc`: `false`
     /// - `volatile`: `false`
     pub fn new_default_kve() -> Self {
-        Self::new_kve_with_data(Coremap::new(), false, false, false)
+        Self::new_pure_kve_with_data(Coremap::new(), false, false, false)
     }
     /// Returns the model code. See [`bytemarks`] for more info
     pub fn get_model_code(&self) -> u8 {

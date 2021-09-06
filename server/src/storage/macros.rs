@@ -126,3 +126,11 @@ macro_rules! read_dir_to_col {
             .collect()
     };
 }
+
+#[cfg(test)]
+macro_rules! lvec {
+    ($($item:expr),+ $(,)?) => {{
+        let v = std::vec![$($item.into()),*];
+        parking_lot::RwLock::new(v)
+    }};
+}

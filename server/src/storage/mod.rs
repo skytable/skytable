@@ -183,6 +183,7 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
 mod se {
     use super::*;
     use crate::corestore::memstore::Keyspace;
+    use crate::kvengine::listmap::LockedVec;
     use crate::IoResult;
 
     macro_rules! unsafe_sz_byte_repr {
@@ -260,14 +261,9 @@ mod se {
         }
         Ok(())
     }
-    pub fn raw_serialize_list_map<'a, W, T: 'a, U: 'a>(
-        w: &mut W,
-        data: &Coremap<Data, T>,
-    ) -> IoResult<()>
+    pub fn raw_serialize_list_map<W>(data: &Coremap<Data, LockedVec>, w: &mut W) -> IoResult<()>
     where
         W: Write,
-        T: AsRef<[U]>,
-        U: AsRef<[u8]>,
     {
         /*
         [8B: Extent]([8B: Key extent][?B: Key][8B: Max index][?B: Payload])*
@@ -280,13 +276,14 @@ mod se {
                 // key
                 let k = key.key();
                 // list payload
-                let v = key.value().as_ref();
+                let vread = key.value().read();
+                let v: &Vec<Data> = &vread;
                 // write the key extent
                 w.write_all(unsafe_sz_byte_repr!(k.len()))?;
                 // write the key
                 w.write_all(k)?;
                 // write the list payload
-                self::raw_serialize_nested_list(w, v)?;
+                self::raw_serialize_nested_list(w, &v)?;
             }
         }
         Ok(())
@@ -322,12 +319,34 @@ mod se {
 mod de {
     use super::iter::{RawSliceIter, RawSliceIterBorrowed};
     use super::{Array, Coremap, Data, Hash, HashSet};
+    use crate::kvengine::listmap::LockedVec;
     use core::ptr;
+    use parking_lot::RwLock;
     use std::collections::HashMap;
 
     pub trait DeserializeFrom {
         fn is_expected_len(clen: usize) -> bool;
         fn from_slice(slice: &[u8]) -> Self;
+    }
+
+    pub trait DeserializeInto: Sized {
+        fn from_slice(slice: &[u8]) -> Option<Self>;
+    }
+
+    impl DeserializeInto for Coremap<Data, Data> {
+        fn from_slice(slice: &[u8]) -> Option<Self> {
+            self::deserialize_map(slice)
+        }
+    }
+
+    impl DeserializeInto for Coremap<Data, LockedVec> {
+        fn from_slice(slice: &[u8]) -> Option<Self> {
+            self::deserialize_list_map(slice)
+        }
+    }
+
+    pub fn deserialize_into<T: DeserializeInto>(input: &[u8]) -> Option<T> {
+        T::from_slice(input)
     }
 
     impl<const N: usize> DeserializeFrom for Array<u8, N> {
@@ -401,7 +420,7 @@ mod de {
     }
     /// Deserialize a file that contains a serialized map. This also returns the model code
     pub fn deserialize_map(data: &[u8]) -> Option<Coremap<Data, Data>> {
-        let mut rawiter = RawSliceIter::new(&data);
+        let mut rawiter = RawSliceIter::new(data);
         let len = rawiter.next_64bit_integer_to_usize()?;
         let hm = Coremap::with_capacity(len);
         for _ in 0..len {
@@ -419,7 +438,7 @@ mod de {
         }
     }
 
-    pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<Data, Vec<Data>>> {
+    pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<Data, LockedVec>> {
         let mut rawiter = RawSliceIter::new(bytes);
         // get the len
         let len = rawiter.next_64bit_integer_to_usize()?;
@@ -433,7 +452,7 @@ mod de {
             let borrowed_iter = rawiter.get_borrowed_iter();
             let list = self::deserialize_nested_list(borrowed_iter)?;
             // push it in
-            map.true_if_insert(key, list);
+            map.true_if_insert(key, RwLock::new(list));
         }
         if rawiter.end_of_allocation() {
             Some(map)
@@ -445,7 +464,7 @@ mod de {
 
     /// Deserialize a nested list: `[EXTENT]([EL_EXT][EL])*`
     ///
-    pub fn deserialize_nested_list<'a>(mut iter: RawSliceIterBorrowed<'a>) -> Option<Vec<Data>> {
+    pub fn deserialize_nested_list(mut iter: RawSliceIterBorrowed<'_>) -> Option<Vec<Data>> {
         // get list payload len
         let list_payload_extent = iter.next_64bit_integer_to_usize()?;
         let mut list = Vec::with_capacity(list_payload_extent);
