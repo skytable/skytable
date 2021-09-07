@@ -32,6 +32,11 @@
 //! contains a collection of these
 
 // model
+/*
+ * KVE:
+ * (1) Pure KVE: [0, 3]
+ * (2) KVExt/Listmap: [4, 7]
+*/
 /// KVE model bytemark with key:bin, val:bin
 pub const BYTEMARK_MODEL_KV_BIN_BIN: u8 = 0;
 /// KVE model bytemark with key:bin, val:str
