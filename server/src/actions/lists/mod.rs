@@ -38,6 +38,7 @@ const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
 const REMOVE: &[u8] = "REMOVE".as_bytes();
+const INSERT: &[u8] = "INSERT".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -232,7 +233,7 @@ action! {
                 }
             }
             REMOVE => {
-                err_if_len_is!(act, con, not 2);
+                err_if_len_is!(act, con, not 1);
                 let idx_to_remove = get_numeric_count!();
                 if registry::state_okay() {
                     let maybe_value = listmap.kve_inner_ref().get(listname).map(|list| {
@@ -255,6 +256,30 @@ action! {
                         None => {
                             conwrite!(con, groups::NIL)?;
                         }
+                    }
+                } else {
+                    conwrite!(con, groups::SERVER_ERR)?;
+                }
+            }
+            INSERT => {
+                err_if_len_is!(act, con, not 2);
+                let idx_to_insert_at = get_numeric_count!();
+                let value_to_insert = unsafe { act.next_unchecked_bytes() };
+                if registry::state_okay() {
+                    let maybe_insert = listmap.get(listname).map(|list| {
+                        let mut wlock = list.write();
+                        if idx_to_insert_at < wlock.len() {
+                            // we can insert
+                            wlock.insert(idx_to_insert_at, value_to_insert.into());
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    match maybe_insert {
+                        Some(true) => conwrite!(con, groups::OKAY)?,
+                        Some(false) => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
+                        None => conwrite!(con, groups::NIL)?,
                     }
                 } else {
                     conwrite!(con, groups::SERVER_ERR)?;
