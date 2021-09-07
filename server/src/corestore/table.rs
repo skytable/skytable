@@ -31,7 +31,6 @@ use crate::corestore::KeyspaceResult;
 use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
 use crate::kvengine::{listmap::KVEListMap, KVEngine};
-use crate::storage::bytemarks;
 
 #[derive(Debug)]
 pub enum DataModel {
@@ -191,20 +190,13 @@ impl Table {
                 str,bin => 3
                 */
                 let (kenc, venc) = kvs.kve_tuple_encoding();
-                if kenc {
-                    if venc {
-                        // both k + v are str
-                        bytemarks::BYTEMARK_MODEL_KV_STR_STR
-                    } else {
-                        // only k is str
-                        bytemarks::BYTEMARK_MODEL_KV_STR_BIN
-                    }
-                } else if venc {
-                    // k is bin, v is str
-                    bytemarks::BYTEMARK_MODEL_KV_BIN_STR
+                let ret = kenc as u8 + venc as u8;
+                if ret == 1 {
+                    // somepin going on here
+                    ret + ((kenc as u8) << 1)
                 } else {
-                    // both are bin
-                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN
+                    // not 1; just return (1000_0000 + 1000_0000 || NUL + NUL)
+                    ret
                 }
             }
             DataModel::KVExtListmap(ref kvlistmap) => {
@@ -215,21 +207,7 @@ impl Table {
                 str,list<str> => 7
                 */
                 let (kenc, venc) = kvlistmap.kve_tuple_encoding();
-                if kenc {
-                    if venc {
-                        // both K+V
-                        bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR
-                    } else {
-                        // only K
-                        bytemarks::BYTEMARK_MODEL_KV_STR_LIST_BINSTR
-                    }
-                } else if venc {
-                    // only V
-                    bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_STR
-                } else {
-                    // nor K, nor V
-                    bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR
-                }
+                ((kenc as u8) << 1) + (venc as u8) + 4
             }
         }
     }
