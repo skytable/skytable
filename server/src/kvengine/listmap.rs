@@ -29,10 +29,12 @@
 use super::KVTable;
 use super::SingleEncoder;
 use crate::corestore::htable::Coremap;
+use crate::corestore::map::bref::Ref;
 use crate::corestore::Data;
 use crate::resp::{TSYMBOL_BINARY, TSYMBOL_UNICODE};
 use parking_lot::RwLock;
 
+type Vecref<'a> = Ref<'a, Data, LockedVec>;
 pub type LockedVec = RwLock<Vec<Data>>;
 
 #[derive(Debug)]
@@ -74,10 +76,20 @@ impl KVEListMap {
     pub fn encode_value<T: AsRef<[u8]>>(&self, val: T) -> bool {
         s_encoder!(self.encoded_id)(val.as_ref())
     }
+    pub fn get_payload_tsymbol(&self) -> u8 {
+        if self.encoded_payload_element {
+            TSYMBOL_UNICODE
+        } else {
+            TSYMBOL_BINARY
+        }
+    }
     borrow_hash_fn! {
         /// Check the length of a list if it exists
         pub fn {borrow: Data} len_of(self: &Self, key: &Q) -> Option<usize> {
             self.base.get(key).map(|v| v.read().len())
+        }
+        pub fn {borrow: Data} get(self: &Self, key: &Q) -> Option<Vecref<'_>> {
+            self.base.get(key)
         }
     }
     /// Create and add a new list to the map

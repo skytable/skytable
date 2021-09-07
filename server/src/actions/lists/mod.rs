@@ -29,15 +29,26 @@ use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
+use crate::resp::writer::TypedArrayWriter;
+
+const LEN: &[u8] = "LEN".as_bytes();
+
+macro_rules! listmap {
+    ($tbl:expr, $con:expr) => {
+        match $tbl.get_model_ref() {
+            DataModel::KVExtListmap(lm) => lm,
+            _ => return conwrite!($con, groups::WRONG_MODEL),
+        }
+    };
+}
 
 action! {
+    /// Handle an `LSET` query for the list model
+    /// Syntax: `LSET <listname> <values ...>`
     fn lset(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, lt 1);
         let table = get_tbl!(handle, con);
-        let listmap = match table.get_model_ref() {
-            DataModel::KVExtListmap(lm) => lm,
-            _ => return conwrite!(con, groups::WRONG_MODEL)
-        };
+        let listmap = listmap!(table, con);
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.kve_inner_ref();
         let did = if let Some(entry) = list.fresh_entry(listname.into()) {
@@ -51,6 +62,51 @@ action! {
             conwrite!(con, groups::OKAY)?;
         } else {
             conwrite!(con, groups::OVERWRITE_ERR)?;
+        }
+        Ok(())
+    }
+
+    /// Handle an `LGET` query for the list model (KVExt)
+    /// ## Syntax
+    /// - `LGET <mylist>` will return the full list
+    /// - `LGET <mylist> LEN` will return the length of the list
+    /// - `LGET <mylist> LIMIT <limit>` will return a maximum of `limit` elements
+    /// - `LGET <mylist> VALUEAT <index>` will return the value at the provided index
+    /// if it exists
+    fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
+        err_if_len_is!(act, con, lt 1);
+        let table = get_tbl!(handle, con);
+        let listmap = listmap!(table, con);
+        // get the list name
+        let listname = unsafe { act.next_unchecked() };
+        // now let us see what we need to do
+        match act.next_uppercase().as_ref() {
+            None => {
+                // just return everything in the list
+                let items: Vec<Data> = if let Some(list) = listmap.get(listname) {
+                    list.value().read().iter().cloned().collect()
+                } else {
+                    return conwrite!(con, groups::NIL);
+                };
+                let mut typed_array_writer = unsafe {
+                    TypedArrayWriter::new(con, listmap.get_payload_tsymbol(), items.len())
+                }.await?;
+                for item in items {
+                    typed_array_writer.write_element(item).await?;
+                }
+            }
+            Some(subaction) => {
+                match subaction.as_ref() {
+                    LEN => {
+                        if let Some(len) = listmap.len_of(listname) {
+                            conwrite!(con, len)?;
+                        } else {
+                            conwrite!(con, groups::NIL)?;
+                        }
+                    }
+                    _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
+                }
+            }
         }
         Ok(())
     }

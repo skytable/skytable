@@ -66,9 +66,7 @@ action! {
         }
         Ok(())
     }
-}
 
-action! {
     /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
@@ -95,9 +93,7 @@ action! {
         }
         Ok(())
     }
-}
 
-action! {
     /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);

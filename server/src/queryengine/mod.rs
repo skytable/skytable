@@ -152,7 +152,8 @@ where
             USE => self::entity_swap,
             INSPECT => inspect::inspect,
             MPOP => actions::mpop::mpop,
-            LSET => actions::lists::lset
+            LSET => actions::lists::lset,
+            LGET => actions::lists::lget
         );
     }
     Ok(())
