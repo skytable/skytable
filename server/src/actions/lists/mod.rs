@@ -35,6 +35,7 @@ use crate::resp::writer::TypedArrayWriter;
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();
+const CLEAR: &[u8] = "CLEAR".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -65,17 +66,21 @@ action! {
         let listmap = listmap!(table, con);
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.kve_inner_ref();
-        let did = if let Some(entry) = list.fresh_entry(listname.into()) {
-            let v: Vec<Data> = act.map(Data::copy_from_slice).collect();
-            entry.insert(LockedVec::new(v));
-            true
+        if registry::state_okay() {
+            let did = if let Some(entry) = list.fresh_entry(listname.into()) {
+                let v: Vec<Data> = act.map(Data::copy_from_slice).collect();
+                entry.insert(LockedVec::new(v));
+                true
+            } else {
+                false
+            };
+            if did {
+                conwrite!(con, groups::OKAY)?;
+            } else {
+                conwrite!(con, groups::OVERWRITE_ERR)?;
+            }
         } else {
-            false
-        };
-        if did {
-            conwrite!(con, groups::OKAY)?;
-        } else {
-            conwrite!(con, groups::OVERWRITE_ERR)?;
+            conwrite!(con, groups::SERVER_ERR)?;
         }
         Ok(())
     }
@@ -159,6 +164,43 @@ action! {
                     _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Handle `LMOD` queries
+    /// ## Syntax
+    /// - `LMOD <mylist> push <value>`
+    /// - `LMOD <mylist> pop <optional idx>`
+    /// - `LMOD <mylist> insert <index> <value>`
+    /// - `LMOD <mylist> remove <index>`
+    /// - `LMOD <mylist> clear`
+    fn lmod(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
+        err_if_len_is!(act, con, lt 2);
+        let table = get_tbl!(handle, con);
+        let listmap = listmap!(table, con);
+        // get the list name
+        let listname = unsafe { act.next_unchecked() };
+        // now let us see what we need to do
+        match unsafe { act.next_uppercase_unchecked() }.as_ref() {
+            CLEAR => {
+                let list = match listmap.kve_inner_ref().get(listname) {
+                    Some(l) => l,
+                    _ => return conwrite!(con, groups::NIL),
+                };
+                let okay = if registry::state_okay() {
+                    list.write().clear();
+                    true
+                } else {
+                    false
+                };
+                if okay {
+                    conwrite!(con, groups::OKAY)?;
+                } else {
+                    conwrite!(con, groups::SERVER_ERR)?;
+                }
+            }
+            _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
         }
         Ok(())
     }

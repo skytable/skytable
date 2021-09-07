@@ -153,7 +153,8 @@ where
             INSPECT => inspect::inspect,
             MPOP => actions::mpop::mpop,
             LSET => actions::lists::lset,
-            LGET => actions::lists::lget
+            LGET => actions::lists::lget,
+            LMOD => actions::lists::lmod
         );
     }
     Ok(())
