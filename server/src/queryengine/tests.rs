@@ -281,6 +281,31 @@ mod parser_ddl_tests {
             responses::groups::TOO_MANY_ARGUMENTS
         );
     }
+
+    #[test]
+    fn test_bad_key_type() {
+        let mut it = bi!("myverycooltbl", "keymap(list<str>, str)");
+        assert_eq!(
+            parse_table_args_test(&mut it).unwrap_err(),
+            responses::groups::BAD_TYPE_FOR_KEY
+        );
+        let mut it = bi!("myverycooltbl", "keymap(list<binstr>, binstr)");
+        assert_eq!(
+            parse_table_args_test(&mut it).unwrap_err(),
+            responses::groups::BAD_TYPE_FOR_KEY
+        );
+        // for consistency checks
+        let mut it = bi!("myverycooltbl", "keymap(list<str>, binstr)");
+        assert_eq!(
+            parse_table_args_test(&mut it).unwrap_err(),
+            responses::groups::BAD_TYPE_FOR_KEY
+        );
+        let mut it = bi!("myverycooltbl", "keymap(list<binstr>, str)");
+        assert_eq!(
+            parse_table_args_test(&mut it).unwrap_err(),
+            responses::groups::BAD_TYPE_FOR_KEY
+        );
+    }
 }
 
 mod entity_parser_tests {

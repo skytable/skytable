@@ -135,6 +135,8 @@ pub(super) fn parse_table_args(
         (BINSTR, LIST_STR) => 5,
         (STR, LIST_BINSTR) => 6,
         (STR, LIST_STR) => 7,
+        // KVExt bad keytypes (we can't use lists as keys for obvious reasons)
+        (LIST_STR, _) | (LIST_BINSTR, _) => return Err(responses::groups::BAD_TYPE_FOR_KEY),
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
     Ok((
@@ -225,14 +227,18 @@ pub(super) fn parse_table_args_test(
     let key_ty = key_ty.as_bytes();
     let val_ty = val_ty.as_bytes();
     let model_code: u8 = match (key_ty, val_ty) {
+        // pure KVE
         (BINSTR, BINSTR) => 0,
         (BINSTR, STR) => 1,
         (STR, STR) => 2,
         (STR, BINSTR) => 3,
+        // KVExt listmap
         (BINSTR, LIST_BINSTR) => 4,
         (BINSTR, LIST_STR) => 5,
         (STR, LIST_BINSTR) => 6,
         (STR, LIST_STR) => 7,
+        // KVExt bad keytypes (we can't use lists as keys for obvious reasons)
+        (LIST_STR, _) | (LIST_BINSTR, _) => return Err(responses::groups::BAD_TYPE_FOR_KEY),
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
     Ok((
