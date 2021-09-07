@@ -51,6 +51,18 @@ pub struct Table {
 }
 
 impl Table {
+    pub const fn from_kve(kve: KVEngine, volatile: bool) -> Self {
+        Self {
+            model_store: DataModel::KV(kve),
+            volatile,
+        }
+    }
+    pub const fn from_kve_listmap(kve: KVEListMap, volatile: bool) -> Self {
+        Self {
+            model_store: DataModel::KVExtListmap(kve),
+            volatile,
+        }
+    }
     /// Get the key/value store if the table is a key/value store
     pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
         #[allow(irrefutable_let_patterns)]
@@ -143,10 +155,12 @@ impl Table {
             };
         }
         let ret = match code {
+            // pure kve
             0 => pkve!(false, false),
             1 => pkve!(false, true),
             2 => pkve!(true, true),
             3 => pkve!(true, false),
+            // kvext: listmap
             4 => listmap!(false, false),
             5 => listmap!(false, true),
             6 => listmap!(true, false),
