@@ -101,6 +101,8 @@ pub mod groups {
     pub const KEYSPACE_NOT_EMPTY: &[u8] = "!18\nkeyspace-not-empty\n".as_bytes();
     /// Bad type supplied in a DDL query for the key
     pub const BAD_TYPE_FOR_KEY: &[u8] = "!16\nbad-type-for-key\n".as_bytes();
+    /// The index for the provided list was non-existent
+    pub const LISTMAP_BAD_INDEX: &[u8] = "!9\nbad-list-index\n".as_bytes();
 }
 
 pub mod full_responses {

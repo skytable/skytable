@@ -91,6 +91,9 @@ impl KVEListMap {
         pub fn {borrow: Data} get(self: &Self, key: &Q) -> Option<Vecref<'_>> {
             self.base.get(key)
         }
+        pub fn {borrow: Data} get_cloned(self: &Self, key: &Q, count: usize) -> Option<Vec<Data>> {
+            self.base.get(key).map(|v| v.read().iter().take(count).cloned().collect())
+        }
     }
     /// Create and add a new list to the map
     pub fn add_list(&self, listname: Data) -> Option<bool> {

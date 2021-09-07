@@ -29,15 +29,29 @@ use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
+use crate::resp::writer;
 use crate::resp::writer::TypedArrayWriter;
 
 const LEN: &[u8] = "LEN".as_bytes();
+const LIMIT: &[u8] = "LIMIT".as_bytes();
+const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
         match $tbl.get_model_ref() {
             DataModel::KVExtListmap(lm) => lm,
             _ => return conwrite!($con, groups::WRONG_MODEL),
+        }
+    };
+}
+
+macro_rules! writelist {
+    ($con:expr, $listmap:expr, $items:expr) => {
+        let mut typed_array_writer =
+            unsafe { TypedArrayWriter::new($con, $listmap.get_payload_tsymbol(), $items.len()) }
+                .await?;
+        for item in $items {
+            typed_array_writer.write_element(item).await?;
         }
     };
 }
@@ -80,6 +94,14 @@ action! {
         // get the list name
         let listname = unsafe { act.next_unchecked() };
         // now let us see what we need to do
+        macro_rules! get_numeric_count {
+            () => {
+                match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
+                    Ok(int) => int,
+                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                }
+            };
+        }
         match act.next_uppercase().as_ref() {
             None => {
                 // just return everything in the list
@@ -88,12 +110,7 @@ action! {
                 } else {
                     return conwrite!(con, groups::NIL);
                 };
-                let mut typed_array_writer = unsafe {
-                    TypedArrayWriter::new(con, listmap.get_payload_tsymbol(), items.len())
-                }.await?;
-                for item in items {
-                    typed_array_writer.write_element(item).await?;
-                }
+                writelist!(con, listmap, items);
             }
             Some(subaction) => {
                 match subaction.as_ref() {
@@ -102,6 +119,41 @@ action! {
                             conwrite!(con, len)?;
                         } else {
                             conwrite!(con, groups::NIL)?;
+                        }
+                    }
+                    LIMIT => {
+                        err_if_len_is!(act, con, not 1);
+                        let count = get_numeric_count!();
+                        let items = if let Some(keys) = listmap.get_cloned(listname, count) {
+                            keys
+                        } else {
+                            return conwrite!(con, groups::NIL);
+                        };
+                        writelist!(con, listmap, items);
+                    }
+                    VALUEAT => {
+                        err_if_len_is!(act, con, not 1);
+                        let idx = get_numeric_count!();
+                        let maybe_value = listmap.get(listname).map(|list| {
+                            let readlist = list.read();
+                            let get = readlist.get(idx).cloned();
+                            get
+                        });
+                        match maybe_value {
+                            Some(Some(value)) => {
+                                unsafe {
+                                    // tsymbol is verified
+                                    writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &value).await?;
+                                }
+                            },
+                            Some(None) => {
+                                // bad index
+                                conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                            },
+                            None => {
+                                // not found
+                                conwrite!(con, groups::NIL)?;
+                            }
                         }
                     }
                     _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
