@@ -36,6 +36,7 @@ const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 const CLEAR: &[u8] = "CLEAR".as_bytes();
+const PUSH: &[u8] = "PUSH".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -184,6 +185,7 @@ action! {
         // now let us see what we need to do
         match unsafe { act.next_uppercase_unchecked() }.as_ref() {
             CLEAR => {
+                err_if_len_is!(act, con, not 0);
                 let list = match listmap.kve_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
@@ -193,6 +195,26 @@ action! {
                     true
                 } else {
                     false
+                };
+                if okay {
+                    conwrite!(con, groups::OKAY)?;
+                } else {
+                    conwrite!(con, groups::SERVER_ERR)?;
+                }
+            }
+            PUSH => {
+                err_if_len_is!(act, con, not 1);
+                let list = match listmap.kve_inner_ref().get(listname) {
+                    Some(l) => l,
+                    _ => return conwrite!(con, groups::NIL),
+                };
+                let okay = unsafe {
+                    if registry::state_okay() {
+                        list.write().push(act.next_unchecked_bytes().into());
+                        true
+                    } else {
+                        false
+                    }
                 };
                 if okay {
                     conwrite!(con, groups::OKAY)?;
