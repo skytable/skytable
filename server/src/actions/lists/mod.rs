@@ -37,6 +37,7 @@ const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
+const REMOVE: &[u8] = "REMOVE".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -182,6 +183,14 @@ action! {
         let listmap = listmap!(table, con);
         // get the list name
         let listname = unsafe { act.next_unchecked() };
+        macro_rules! get_numeric_count {
+            () => {
+                match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
+                    Ok(int) => int,
+                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                }
+            };
+        }
         // now let us see what we need to do
         match unsafe { act.next_uppercase_unchecked() }.as_ref() {
             CLEAR => {
@@ -218,6 +227,35 @@ action! {
                 };
                 if okay {
                     conwrite!(con, groups::OKAY)?;
+                } else {
+                    conwrite!(con, groups::SERVER_ERR)?;
+                }
+            }
+            REMOVE => {
+                err_if_len_is!(act, con, not 2);
+                let idx_to_remove = get_numeric_count!();
+                if registry::state_okay() {
+                    let maybe_value = listmap.kve_inner_ref().get(listname).map(|list| {
+                        let mut wlock = list.write();
+                        if idx_to_remove < wlock.len() {
+                            wlock.remove(idx_to_remove);
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    match maybe_value {
+                        Some(true) => {
+                            // we removed the value
+                            conwrite!(con, groups::OKAY)?;
+                        }
+                        Some(false) => {
+                            conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                        }
+                        None => {
+                            conwrite!(con, groups::NIL)?;
+                        }
+                    }
                 } else {
                     conwrite!(con, groups::SERVER_ERR)?;
                 }
