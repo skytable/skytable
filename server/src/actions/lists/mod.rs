@@ -39,6 +39,7 @@ const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
 const REMOVE: &[u8] = "REMOVE".as_bytes();
 const INSERT: &[u8] = "INSERT".as_bytes();
+const POP: &[u8] = "POP".as_bytes();
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -279,6 +280,44 @@ action! {
                     match maybe_insert {
                         Some(true) => conwrite!(con, groups::OKAY)?,
                         Some(false) => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
+                        None => conwrite!(con, groups::NIL)?,
+                    }
+                } else {
+                    conwrite!(con, groups::SERVER_ERR)?;
+                }
+            }
+            POP => {
+                err_if_len_is!(act, con, gt 1);
+                let idx = if act.len() == 1 {
+                    // we have an idx
+                    Some(get_numeric_count!())
+                } else {
+                    // no idx
+                    None
+                };
+                if registry::state_okay() {
+                    let maybe_pop = listmap.get(listname).map(|list| {
+                        let mut wlock = list.write();
+                        if let Some(idx) = idx {
+                            if idx < wlock.len() {
+                                // so we can pop
+                                Some(wlock.remove(idx))
+                            } else {
+                                None
+                            }
+                        } else {
+                            wlock.pop()
+                        }
+                    });
+                    match maybe_pop {
+                        Some(Some(val)) => {
+                            unsafe {
+                                writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &val).await?;
+                            }
+                        }
+                        Some(None) => {
+                            conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                        }
                         None => conwrite!(con, groups::NIL)?,
                     }
                 } else {
