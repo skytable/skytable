@@ -70,6 +70,7 @@ pub fn read_table(
         }};
     }
     let tbl = match model_code {
+        // pure KVE
         0 | 1 | 2 | 3 => {
             let data = decode!();
             macro_rules! pkve {
@@ -85,6 +86,7 @@ pub fn read_table(
                 _ => unsafe { impossible!() },
             }
         }
+        // KVExt: listmap
         4 | 5 | 6 | 7 => {
             let data = decode!();
             macro_rules! listmap {

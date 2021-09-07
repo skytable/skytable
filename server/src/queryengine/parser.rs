@@ -35,13 +35,18 @@ use crate::util::Unwrappable;
 use core::str;
 use regex::Regex;
 
+type LazyRegexFn = Lazy<Regex, fn() -> Regex>;
+
 const KEYMAP: &[u8] = "keymap".as_bytes();
 const BINSTR: &[u8] = "binstr".as_bytes();
 const STR: &[u8] = "str".as_bytes();
+const LIST_STR: &[u8] = "list<str>".as_bytes();
+const LIST_BINSTR: &[u8] = "list<binstr>".as_bytes();
 
-pub(super) static VALID_CONTAINER_NAME: Lazy<Regex, fn() -> Regex> =
-    Lazy::new(|| Regex::new("^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap());
-
+pub(super) static VALID_CONTAINER_NAME: LazyRegexFn =
+    LazyRegexFn::new(|| Regex::new("^[a-zA-Z_][a-zA-Z_0-9]*$").unwrap());
+pub(super) static VALID_TYPENAME: LazyRegexFn =
+    LazyRegexFn::new(|| Regex::new("^<[a-zA-Z][a-zA-Z0-9]+[^>\\s]?>{1}$").unwrap());
 pub(super) fn parse_table_args(
     act: &mut ActionIter,
 ) -> Result<(OwnedEntityGroup, u8), &'static [u8]> {
@@ -104,18 +109,32 @@ pub(super) fn parse_table_args(
     }
     let key_ty = unsafe { model_args.get_unchecked(0) };
     let val_ty = unsafe { model_args.get_unchecked(1) };
-    if compiler::unlikely(
-        !VALID_CONTAINER_NAME.is_match(key_ty) || !VALID_CONTAINER_NAME.is_match(val_ty),
-    ) {
+    let valid_key_ty = if let Some(idx) = key_ty.chars().position(|v| v.eq(&'<')) {
+        VALID_CONTAINER_NAME.is_match(&key_ty[..idx]) && VALID_TYPENAME.is_match(&key_ty[idx..])
+    } else {
+        VALID_CONTAINER_NAME.is_match(key_ty)
+    };
+    let valid_val_ty = if let Some(idx) = val_ty.chars().position(|v| v.eq(&'<')) {
+        VALID_CONTAINER_NAME.is_match(&val_ty[..idx]) && VALID_TYPENAME.is_match(&val_ty[idx..])
+    } else {
+        VALID_CONTAINER_NAME.is_match(val_ty)
+    };
+    if compiler::unlikely(!(valid_key_ty || valid_val_ty)) {
         return Err(responses::groups::BAD_EXPRESSION);
     }
     let key_ty = key_ty.as_bytes();
     let val_ty = val_ty.as_bytes();
     let model_code: u8 = match (key_ty, val_ty) {
+        // pure KVE
         (BINSTR, BINSTR) => 0,
         (BINSTR, STR) => 1,
         (STR, STR) => 2,
         (STR, BINSTR) => 3,
+        // KVExt: listmap
+        (BINSTR, LIST_BINSTR) => 4,
+        (BINSTR, LIST_STR) => 5,
+        (STR, LIST_BINSTR) => 6,
+        (STR, LIST_STR) => 7,
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
     Ok((
@@ -190,9 +209,17 @@ pub(super) fn parse_table_args_test(
     }
     let key_ty = unsafe { model_args.get_unchecked(0) };
     let val_ty = unsafe { model_args.get_unchecked(1) };
-    if compiler::unlikely(
-        !VALID_CONTAINER_NAME.is_match(key_ty) || !VALID_CONTAINER_NAME.is_match(val_ty),
-    ) {
+    let valid_key_ty = if let Some(idx) = key_ty.chars().position(|v| v.eq(&'<')) {
+        VALID_CONTAINER_NAME.is_match(&key_ty[..idx]) && VALID_TYPENAME.is_match(&key_ty[idx..])
+    } else {
+        VALID_CONTAINER_NAME.is_match(key_ty)
+    };
+    let valid_val_ty = if let Some(idx) = val_ty.chars().position(|v| v.eq(&'<')) {
+        VALID_CONTAINER_NAME.is_match(&val_ty[..idx]) && VALID_TYPENAME.is_match(&val_ty[idx..])
+    } else {
+        VALID_CONTAINER_NAME.is_match(val_ty)
+    };
+    if compiler::unlikely(!valid_key_ty || !valid_val_ty) {
         return Err(responses::groups::BAD_EXPRESSION);
     }
     let key_ty = key_ty.as_bytes();
@@ -202,6 +229,10 @@ pub(super) fn parse_table_args_test(
         (BINSTR, STR) => 1,
         (STR, STR) => 2,
         (STR, BINSTR) => 3,
+        (BINSTR, LIST_BINSTR) => 4,
+        (BINSTR, LIST_STR) => 5,
+        (STR, LIST_BINSTR) => 6,
+        (STR, LIST_STR) => 7,
         _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
     };
     Ok((

@@ -131,18 +131,26 @@ impl Table {
             )),
         }
     }
-    pub fn new_kve_with_encoding(volatile: bool, k_enc: bool, v_enc: bool) -> Self {
-        Self {
-            volatile,
-            model_store: DataModel::KV(KVEngine::init(k_enc, v_enc)),
-        }
-    }
     pub fn from_model_code(code: u8, volatile: bool) -> Option<Self> {
+        macro_rules! pkve {
+            ($kenc:expr, $venc:expr) => {
+                Self::new_pure_kve_with_data(Coremap::new(), volatile, $kenc, $venc)
+            };
+        }
+        macro_rules! listmap {
+            ($kenc:expr, $penc:expr) => {
+                Self::new_kve_listmap_with_data(Coremap::new(), volatile, $kenc, $penc)
+            };
+        }
         let ret = match code {
-            0 => Self::new_kve_with_encoding(volatile, false, false),
-            1 => Self::new_kve_with_encoding(volatile, false, true),
-            2 => Self::new_kve_with_encoding(volatile, true, true),
-            3 => Self::new_kve_with_encoding(volatile, true, false),
+            0 => pkve!(false, false),
+            1 => pkve!(false, true),
+            2 => pkve!(true, true),
+            3 => pkve!(true, false),
+            4 => listmap!(false, false),
+            5 => listmap!(false, true),
+            6 => listmap!(true, false),
+            7 => listmap!(true, true),
             _ => return None,
         };
         Some(ret)

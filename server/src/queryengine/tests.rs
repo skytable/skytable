@@ -32,7 +32,7 @@ mod parser_ddl_tests {
     use crate::protocol::responses;
     #[test]
     fn test_table_args_valid() {
-        // create table [mytbl keymap(str, str)]
+        // binstr, binstr
         let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,binstr)")].into_iter();
         let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
         assert_eq!(tbl_name, unsafe {
@@ -40,6 +40,7 @@ mod parser_ddl_tests {
         });
         assert_eq!(mcode, 0);
 
+        // binstr, str
         let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,str)")].into_iter();
         let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
         assert_eq!(tbl_name, unsafe {
@@ -47,6 +48,7 @@ mod parser_ddl_tests {
         });
         assert_eq!(mcode, 1);
 
+        // str, str
         let mut it = vec![byt!("mytbl"), byt!("keymap(str,str)")].into_iter();
         let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
         assert_eq!(tbl_name, unsafe {
@@ -54,12 +56,46 @@ mod parser_ddl_tests {
         });
         assert_eq!(mcode, 2);
 
+        // str, binstr
         let mut it = vec![byt!("mytbl"), byt!("keymap(str,binstr)")].into_iter();
         let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
         assert_eq!(tbl_name, unsafe {
             (Some(ObjectID::from_slice("mytbl")), None)
         });
         assert_eq!(mcode, 3);
+
+        // now test kvext: listmap
+        // binstr, list<binstr>
+        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,list<binstr>)")].into_iter();
+        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
+        assert_eq!(mcode, 4);
+
+        // binstr, list<str>
+        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,list<str>)")].into_iter();
+        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
+        assert_eq!(mcode, 5);
+
+        // str, list<binstr>
+        let mut it = vec![byt!("mytbl"), byt!("keymap(str,list<binstr>)")].into_iter();
+        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
+        assert_eq!(mcode, 6);
+
+        // binstr, list<binstr>
+        let mut it = vec![byt!("mytbl"), byt!("keymap(str,list<str>)")].into_iter();
+        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
+        assert_eq!(tbl_name, unsafe {
+            (Some(ObjectID::from_slice("mytbl")), None)
+        });
+        assert_eq!(mcode, 7);
     }
     #[test]
     fn test_table_bad_ident() {
