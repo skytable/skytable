@@ -82,6 +82,14 @@ impl<'a> AnyArrayIter<'a> {
             v.as_slice().to_ascii_uppercase().into_boxed_slice()
         })
     }
+    pub unsafe fn next_uppercase_unchecked(&mut self) -> Box<[u8]> {
+        match self.next_uppercase() {
+            Some(s) => s,
+            None => {
+                impossible!()
+            }
+        }
+    }
     /// Returns the next value without any checks
     pub unsafe fn next_unchecked(&mut self) -> &'a [u8] {
         match self.next() {

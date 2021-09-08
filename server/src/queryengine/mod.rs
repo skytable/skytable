@@ -151,7 +151,10 @@ where
             DROP => ddl::ddl_drop,
             USE => self::entity_swap,
             INSPECT => inspect::inspect,
-            MPOP => actions::mpop::mpop
+            MPOP => actions::mpop::mpop,
+            LSET => actions::lists::lset,
+            LGET => actions::lists::lget,
+            LMOD => actions::lists::lmod
         );
     }
     Ok(())

@@ -28,12 +28,14 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::Data;
 use crate::corestore::KeyspaceResult;
-use crate::kvengine::KVEngine;
-use crate::storage::bytemarks;
+use crate::kvengine::listmap::LockedVec;
+use crate::kvengine::KVTable;
+use crate::kvengine::{listmap::KVEListMap, KVEngine};
 
 #[derive(Debug)]
 pub enum DataModel {
     KV(KVEngine),
+    KVExtListmap(KVEListMap),
 }
 
 // same 8 byte ptrs; any chance of optimizations?
@@ -48,6 +50,18 @@ pub struct Table {
 }
 
 impl Table {
+    pub const fn from_kve(kve: KVEngine, volatile: bool) -> Self {
+        Self {
+            model_store: DataModel::KV(kve),
+            volatile,
+        }
+    }
+    pub const fn from_kve_listmap(kve: KVEListMap, volatile: bool) -> Self {
+        Self {
+            model_store: DataModel::KVExtListmap(kve),
+            volatile,
+        }
+    }
     /// Get the key/value store if the table is a key/value store
     pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
         #[allow(irrefutable_let_patterns)]
@@ -59,12 +73,14 @@ impl Table {
     }
     pub fn count(&self) -> usize {
         match &self.model_store {
-            DataModel::KV(kv) => kv.len(),
+            DataModel::KV(kv) => kv.kve_len(),
+            DataModel::KVExtListmap(kv) => kv.kve_len(),
         }
     }
     /// Returns this table's _description_
     pub fn describe_self(&self) -> &'static str {
         match self.get_model_code() {
+            // pure KV
             0 if self.is_volatile() => "Keymap { data:(binstr,binstr), volatile:true }",
             0 if !self.is_volatile() => "Keymap { data:(binstr,binstr), volatile:false }",
             1 if self.is_volatile() => "Keymap { data:(binstr,str), volatile:true }",
@@ -73,12 +89,22 @@ impl Table {
             2 if !self.is_volatile() => "Keymap { data:(str,str), volatile:false }",
             3 if self.is_volatile() => "Keymap { data:(str,binstr), volatile:true }",
             3 if !self.is_volatile() => "Keymap { data:(str,binstr), volatile:false }",
+            // KVext => list
+            4 if self.is_volatile() => "Keymap { data:(binstr,list<binstr>), volatile:true }",
+            4 if !self.is_volatile() => "Keymap { data:(binstr,list<binstr>), volatile:false }",
+            5 if self.is_volatile() => "Keymap { data:(binstr,list<str>), volatile:true }",
+            5 if !self.is_volatile() => "Keymap { data:(binstr,list<str>), volatile:false }",
+            6 if self.is_volatile() => "Keymap { data:(str,list<binstr>), volatile:true }",
+            6 if !self.is_volatile() => "Keymap { data:(str,list<binstr>), volatile:false }",
+            7 if self.is_volatile() => "Keymap { data:(str,list<str>), volatile:true }",
+            7 if !self.is_volatile() => "Keymap { data:(str,list<str>), volatile:false }",
             _ => unsafe { impossible!() },
         }
     }
     pub fn truncate_table(&self) {
         match self.model_store {
-            DataModel::KV(ref kv) => kv.truncate_table(),
+            DataModel::KV(ref kv) => kv.kve_clear(),
+            DataModel::KVExtListmap(ref kv) => kv.kve_clear(),
         }
     }
     /// Returns the storage type as an 8-bit uint
@@ -90,7 +116,7 @@ impl Table {
         self.volatile
     }
     /// Create a new KVE Table with the provided settings
-    pub fn new_kve_with_data(
+    pub fn new_pure_kve_with_data(
         data: Coremap<Data, Data>,
         volatile: bool,
         k_enc: bool,
@@ -101,59 +127,87 @@ impl Table {
             model_store: DataModel::KV(KVEngine::init_with_data(k_enc, v_enc, data)),
         }
     }
-    pub fn new_kve_with_encoding(volatile: bool, k_enc: bool, v_enc: bool) -> Self {
+    pub fn new_kve_listmap_with_data(
+        data: Coremap<Data, LockedVec>,
+        volatile: bool,
+        k_enc: bool,
+        payload_enc: bool,
+    ) -> Self {
         Self {
             volatile,
-            model_store: DataModel::KV(KVEngine::init(k_enc, v_enc)),
+            model_store: DataModel::KVExtListmap(KVEListMap::init_with_data(
+                k_enc,
+                payload_enc,
+                data,
+            )),
         }
     }
     pub fn from_model_code(code: u8, volatile: bool) -> Option<Self> {
+        macro_rules! pkve {
+            ($kenc:expr, $venc:expr) => {
+                Self::new_pure_kve_with_data(Coremap::new(), volatile, $kenc, $venc)
+            };
+        }
+        macro_rules! listmap {
+            ($kenc:expr, $penc:expr) => {
+                Self::new_kve_listmap_with_data(Coremap::new(), volatile, $kenc, $penc)
+            };
+        }
         let ret = match code {
-            0 => Self::new_kve_with_encoding(volatile, false, false),
-            1 => Self::new_kve_with_encoding(volatile, false, true),
-            2 => Self::new_kve_with_encoding(volatile, true, true),
-            3 => Self::new_kve_with_encoding(volatile, true, false),
+            // pure kve
+            0 => pkve!(false, false),
+            1 => pkve!(false, true),
+            2 => pkve!(true, true),
+            3 => pkve!(true, false),
+            // kvext: listmap
+            4 => listmap!(false, false),
+            5 => listmap!(false, true),
+            6 => listmap!(true, false),
+            7 => listmap!(true, true),
             _ => return None,
         };
         Some(ret)
     }
     /// Create a new kve with default settings but with provided volatile configuration
     pub fn new_kve_with_volatile(volatile: bool) -> Self {
-        Self::new_kve_with_data(Coremap::new(), volatile, false, false)
+        Self::new_pure_kve_with_data(Coremap::new(), volatile, false, false)
     }
     /// Returns the default kve:
     /// - `k_enc`: `false`
     /// - `v_enc`: `false`
     /// - `volatile`: `false`
     pub fn new_default_kve() -> Self {
-        Self::new_kve_with_data(Coremap::new(), false, false, false)
+        Self::new_pure_kve_with_data(Coremap::new(), false, false, false)
     }
     /// Returns the model code. See [`bytemarks`] for more info
     pub fn get_model_code(&self) -> u8 {
-        match &self.model_store {
-            DataModel::KV(kvs) => {
+        match self.model_store {
+            DataModel::KV(ref kvs) => {
                 /*
                 bin,bin => 0
                 bin,str => 1
                 str,str => 2
                 str,bin => 3
                 */
-                let (kbin, vbin) = kvs.get_encoding();
-                if kbin {
-                    if vbin {
-                        // both k + v are str
-                        bytemarks::BYTEMARK_MODEL_KV_STR_STR
-                    } else {
-                        // only k is str
-                        bytemarks::BYTEMARK_MODEL_KV_STR_BIN
-                    }
-                } else if vbin {
-                    // k is bin, v is str
-                    bytemarks::BYTEMARK_MODEL_KV_BIN_STR
+                let (kenc, venc) = kvs.kve_tuple_encoding();
+                let ret = kenc as u8 + venc as u8;
+                if ret == 1 {
+                    // somepin going on here
+                    ret + ((kenc as u8) << 1)
                 } else {
-                    // both are bin
-                    bytemarks::BYTEMARK_MODEL_KV_BIN_BIN
+                    // not 1; just return (1000_0000 + 1000_0000 || NUL + NUL)
+                    ret
                 }
+            }
+            DataModel::KVExtListmap(ref kvlistmap) => {
+                /*
+                bin,list<bin> => 4,
+                bin,list<str> => 5,
+                str,list<bin> => 6,
+                str,list<str> => 7
+                */
+                let (kenc, venc) = kvlistmap.kve_tuple_encoding();
+                ((kenc as u8) << 1) + (venc as u8) + 4
             }
         }
     }

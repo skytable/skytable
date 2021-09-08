@@ -30,6 +30,7 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::htable::Data;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
+use crate::kvengine::listmap::LockedVec;
 use crate::registry;
 use crate::IoResult;
 use std::collections::HashSet;
@@ -41,6 +42,22 @@ pub const DIR_SNAPROOT: &str = "data/snaps";
 pub const DIR_RSNAPROOT: &str = "data/rsnap";
 pub const DIR_BACKUPS: &str = "data/backups";
 pub const DIR_ROOT: &str = "data";
+
+pub trait DiskWritable {
+    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()>;
+}
+
+impl<'a> DiskWritable for &'a Coremap<Data, Data> {
+    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()> {
+        super::se::raw_serialize_map(self, writer)
+    }
+}
+
+impl<'a> DiskWritable for &'a Coremap<Data, LockedVec> {
+    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()> {
+        super::se::raw_serialize_list_map(self, writer)
+    }
+}
 
 /// This creates the root directory structure:
 /// ```
@@ -124,12 +141,12 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
 /// Uses a buffered writer under the hood to improve write performance as the provided
 /// writable interface might be very slow. The buffer does flush once done, however, it
 /// is important that you fsync yourself!
-pub fn serialize_map_into_slow_buffer<T: Write>(
+pub fn serialize_into_slow_buffer<T: Write, U: DiskWritable>(
     buffer: &mut T,
-    map: &Coremap<Data, Data>,
+    writable_item: U,
 ) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
-    super::se::raw_serialize_map(map, &mut buffer)?;
+    writable_item.write_self(&mut buffer)?;
     buffer.flush()?;
     Ok(())
 }

@@ -57,26 +57,50 @@ pub fn read_table(
     model_code: u8,
 ) -> IoResult<Table> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
-    let data = if volatile {
-        // no need to read anything; table is volatile and has no file
-        Coremap::new()
-    } else {
-        // not volatile, so read this in
-        let f = fs::read(filepath)?;
-        super::de::deserialize_map(f).ok_or_else(|| bad_data!())?
-    };
+    macro_rules! decode {
+        () => {{
+            let data = if volatile {
+                Coremap::new()
+            } else {
+                // not volatile, so read this in
+                let f = fs::read(filepath)?;
+                super::de::deserialize_into(&f).ok_or_else(|| bad_data!())?
+            };
+            data
+        }};
+    }
     let tbl = match model_code {
-        bytemarks::BYTEMARK_MODEL_KV_BIN_BIN => {
-            Table::new_kve_with_data(data, volatile, false, false)
+        // pure KVE
+        0 | 1 | 2 | 3 => {
+            let data = decode!();
+            macro_rules! pkve {
+                ($kenc:literal, $venc:literal) => {
+                    Table::new_pure_kve_with_data(data, volatile, $kenc, $venc)
+                };
+            }
+            match model_code {
+                bytemarks::BYTEMARK_MODEL_KV_BIN_BIN => pkve!(false, false),
+                bytemarks::BYTEMARK_MODEL_KV_BIN_STR => pkve!(false, true),
+                bytemarks::BYTEMARK_MODEL_KV_STR_STR => pkve!(true, true),
+                bytemarks::BYTEMARK_MODEL_KV_STR_BIN => pkve!(true, false),
+                _ => unsafe { impossible!() },
+            }
         }
-        bytemarks::BYTEMARK_MODEL_KV_BIN_STR => {
-            Table::new_kve_with_data(data, volatile, false, true)
-        }
-        bytemarks::BYTEMARK_MODEL_KV_STR_STR => {
-            Table::new_kve_with_data(data, volatile, true, true)
-        }
-        bytemarks::BYTEMARK_MODEL_KV_STR_BIN => {
-            Table::new_kve_with_data(data, volatile, true, false)
+        // KVExt: listmap
+        4 | 5 | 6 | 7 => {
+            let data = decode!();
+            macro_rules! listmap {
+                ($kenc:literal, $penc:literal) => {
+                    Table::new_kve_listmap_with_data(data, volatile, $kenc, $penc)
+                };
+            }
+            match model_code {
+                bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR => listmap!(false, false),
+                bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_STR => listmap!(false, true),
+                bytemarks::BYTEMARK_MODEL_KV_STR_LIST_BINSTR => listmap!(true, false),
+                bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR => listmap!(true, true),
+                _ => unsafe { impossible!() },
+            }
         }
         _ => return Err(IoError::from(ErrorKind::Unsupported)),
     };

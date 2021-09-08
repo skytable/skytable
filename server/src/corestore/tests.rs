@@ -119,3 +119,51 @@ mod memstore_keyspace_tests {
         assert!(ms.force_drop_keyspace(obj).is_ok());
     }
 }
+
+mod modelcode_tests {
+    use super::super::table::Table;
+    use crate::kvengine::listmap::KVEListMap;
+    use crate::kvengine::KVEngine;
+    #[test]
+    fn test_model_code_pure_kve() {
+        // binstr, binstr
+        let kv1 = KVEngine::init(false, false);
+        // binstr, str
+        let kv2 = KVEngine::init(false, true);
+        // str, str
+        let kv3 = KVEngine::init(true, true);
+        // str, binstr
+        let kv4 = KVEngine::init(true, false);
+
+        // now check
+        let tbl1 = Table::from_kve(kv1, false);
+        assert_eq!(tbl1.get_model_code(), 0);
+        let tbl2 = Table::from_kve(kv2, false);
+        assert_eq!(tbl2.get_model_code(), 1);
+        let tbl3 = Table::from_kve(kv3, false);
+        assert_eq!(tbl3.get_model_code(), 2);
+        let tbl4 = Table::from_kve(kv4, false);
+        assert_eq!(tbl4.get_model_code(), 3);
+    }
+    #[test]
+    fn test_model_code_kvext_listmap() {
+        // binstr, list<binstr>
+        let l1 = KVEListMap::new(false, false);
+        // binstr, list<str>
+        let l2 = KVEListMap::new(false, true);
+        // str, list<binstr>
+        let l3 = KVEListMap::new(true, false);
+        // str, list<str>
+        let l4 = KVEListMap::new(true, true);
+
+        // now check
+        let tbl1 = Table::from_kve_listmap(l1, false);
+        assert_eq!(tbl1.get_model_code(), 4);
+        let tbl2 = Table::from_kve_listmap(l2, false);
+        assert_eq!(tbl2.get_model_code(), 5);
+        let tbl3 = Table::from_kve_listmap(l3, false);
+        assert_eq!(tbl3.get_model_code(), 6);
+        let tbl4 = Table::from_kve_listmap(l4, false);
+        assert_eq!(tbl4.get_model_code(), 7);
+    }
+}

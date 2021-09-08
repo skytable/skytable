@@ -31,7 +31,47 @@ use crate::resp::TSYMBOL_BINARY;
 use crate::resp::TSYMBOL_UNICODE;
 use core::borrow::Borrow;
 use core::hash::Hash;
+// do not mess
+#[macro_use]
+mod macros;
+// endof do not mess
 pub mod encoding;
+pub mod listmap;
+
+pub trait KVTable<'a, T> {
+    /// Get the number of entries in a given KVE table
+    fn kve_len(&self) -> usize;
+    /// Truncate a given KVE table
+    fn kve_clear(&self);
+    /// Get (kenc, venc) for a given KVE table
+    fn kve_tuple_encoding(&self) -> (bool, bool) {
+        (self.kve_key_encoded(), self.kve_payload_encoded())
+    }
+    /// Get kenc for a given KVE table
+    fn kve_key_encoded(&self) -> bool;
+    /// Get venc for a given KVE table
+    fn kve_payload_encoded(&self) -> bool;
+    /// Get a reference to the inner table for a given KVE Table
+    fn kve_inner_ref(&'a self) -> &'a T;
+}
+
+impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
+    fn kve_len(&self) -> usize {
+        self.table.len()
+    }
+    fn kve_clear(&self) {
+        self.table.clear()
+    }
+    fn kve_key_encoded(&self) -> bool {
+        self.encoded_k
+    }
+    fn kve_payload_encoded(&self) -> bool {
+        self.encoded_v
+    }
+    fn kve_inner_ref(&'a self) -> &'a Coremap<Data, Data> {
+        &self.table
+    }
+}
 
 /// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
 pub struct DoubleEncoder {
@@ -63,24 +103,6 @@ impl SingleEncoder {
     pub const fn get_tsymbol(&self) -> u8 {
         self.v_t
     }
-}
-
-macro_rules! d_encoder {
-    ($fn:expr, $t:expr) => {
-        DoubleEncoder {
-            fn_ptr: $fn,
-            v_t: $t,
-        }
-    };
-}
-
-macro_rules! s_encoder {
-    ($fn:expr, $t:expr) => {
-        SingleEncoder {
-            fn_ptr: $fn,
-            v_t: $t,
-        }
-    };
 }
 
 // DROP impl isn't required as ShardLock's field types need-drop (std::mem)
@@ -155,34 +177,11 @@ impl KVEngine {
     }
     /// Returns an encoder for the key
     pub fn get_key_encoder(&self) -> SingleEncoder {
-        if self.encoded_k {
-            fn e(inp: &[u8]) -> bool {
-                encoding::is_utf8(inp)
-            }
-            s_encoder!(e, TSYMBOL_UNICODE)
-        } else {
-            fn e(_inp: &[u8]) -> bool {
-                true
-            }
-            s_encoder!(e, TSYMBOL_BINARY)
-        }
+        s_encoder_booled!(self.encoded_k)
     }
     /// Returns an encoder for the value
     pub fn get_value_encoder(&self) -> SingleEncoder {
-        if self.encoded_v {
-            fn e(inp: &[u8]) -> bool {
-                encoding::is_utf8(inp)
-            }
-            s_encoder!(e, TSYMBOL_UNICODE)
-        } else {
-            fn e(_inp: &[u8]) -> bool {
-                true
-            }
-            s_encoder!(e, TSYMBOL_BINARY)
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.table.len()
+        s_encoder_booled!(self.encoded_v)
     }
     pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
         &self.table

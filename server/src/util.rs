@@ -149,28 +149,28 @@ macro_rules! assert_hmeq {
 ///
 macro_rules! action {
     (
-        $(#[$attr:meta])*
+        $($(#[$attr:meta])*
         fn $fname:ident($($argname:ident: $argty:ty),*)
-        $block:block
+        $block:block)*
     ) => {
-            $(#[$attr])*
+            $($(#[$attr])*
             pub async fn $fname<'a, T: 'a, Strm>($($argname: $argty,)*) -> std::io::Result<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block
+                $block)*
     };
     (
-        $(#[$attr:meta])*
+        $($(#[$attr:meta])*
         fn $fname:ident($argone:ident: $argonety:ty, $argtwo:ident: $argtwoty:ty, mut $argthree:ident: $argthreety:ty)
-        $block:block
+        $block:block)*
     ) => {
-            $(#[$attr])*
+            $($(#[$attr])*
             pub async fn $fname<'a, T: 'a, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block
+                $block)*
     };
 }
 
@@ -203,6 +203,13 @@ pub mod compiler {
     pub const fn cold_err<T>(v: T) -> T {
         v
     }
+    #[inline(always)]
+    pub const fn hot<T>(v: T) -> T {
+        if false {
+            cold()
+        }
+        v
+    }
 
     pub unsafe fn extend_lifetime<'a, 'b, T>(inp: &'a T) -> &'b T {
         mem::transmute(inp)
@@ -230,4 +237,19 @@ macro_rules! do_sleep {
     ($dur:literal s) => {{
         std::thread::sleep(std::time::Duration::from_secs($dur));
     }};
+}
+
+/// This macro makes the first `if` expression cold (and its corresponding block) while
+/// making the else expression hot
+macro_rules! if_cold {
+    (
+        if ($coldexpr:expr) $coldblock:block
+        else $hotblock:block
+    ) => {
+        if $crate::util::compiler::unlikely($coldexpr) {
+            $crate::util::compiler::cold_err($coldblock)
+        } else {
+            $crate::util::compiler::hot($hotblock)
+        }
+    };
 }

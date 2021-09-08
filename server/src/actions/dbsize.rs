@@ -31,10 +31,7 @@ action!(
     fn dbsize(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 1);
         if act.len() == 0 {
-            let len;
-            {
-                len = kve!(con, handle).len();
-            }
+            let len = get_tbl!(handle, con).count();
             con.write_response(len).await?;
         } else {
             let raw_entity = unsafe { act.next().unsafe_unwrap() };

@@ -38,7 +38,7 @@ pub const KEYSPACE: &[u8] = "KEYSPACE".as_bytes();
 const VOLATILE: &[u8] = "volatile".as_bytes();
 const FORCE_REMOVE: &[u8] = "force".as_bytes();
 
-action!(
+action! {
     /// Handle `create table <tableid> <model>(args)` and `create keyspace <ksid>`
     /// like queries
     fn create(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
@@ -56,9 +56,7 @@ action!(
         }
         Ok(())
     }
-);
 
-action!(
     /// Handle `drop table <tableid>` and `drop keyspace <ksid>`
     /// like queries
     fn ddl_drop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
@@ -76,9 +74,7 @@ action!(
         }
         Ok(())
     }
-);
 
-action!(
     /// We should have `<tableid> <model>(args)`
     fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(con, act.len() > 3 || act.len() < 2);
@@ -120,9 +116,7 @@ action!(
         }
         Ok(())
     }
-);
 
-action!(
     /// We should have `<ksid>`
     fn create_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
@@ -159,9 +153,7 @@ action!(
             None => return con.write_response(responses::groups::ACTION_ERR).await,
         }
     }
-);
 
-action! {
     /// Drop a table (`<tblid>` only)
     fn drop_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
@@ -192,9 +184,7 @@ action! {
         }
         Ok(())
     }
-}
 
-action! {
     /// Drop a keyspace (`<ksid>` only)
     fn drop_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
