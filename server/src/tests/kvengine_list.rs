@@ -245,4 +245,46 @@ mod __private {
         let q = query!("lmod", "mylist", "remove", "a", "b");
         runeq!(con, q, Element::RespCode(RespCode::ActionError));
     }
+    // lmod insert
+    /// lmod insert (okay)
+    async fn test_lmod_insert_okay() {
+        lset!(con, "mylist", "a", "c");
+        let q = query!("lmod", "mylist", "insert", "1", "b");
+        runeq!(con, q, Element::RespCode(RespCode::Okay));
+        let q = query!("lget", "mylist");
+        assert_skyhash_arrayeq!(str, con, q, "a", "b", "c");
+    }
+    /// lmod insert (bad index; present + nil)
+    async fn test_lmod_insert_bad_index() {
+        // nil
+        let q = query!("lmod", "mylist", "insert", "1badindex", "b");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+        // present
+        lset!(con, "mylist", "a", "c");
+        let q = query!("lmod", "mylist", "insert", "1badindex", "b");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+    }
+    /// lmod insert (syntax error)
+    async fn test_lmod_insert_syntax_error() {
+        let q = query!("lmod", "mylist", "insert", "1");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+        let q = query!("lmod", "mylist", "insert");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
+    /// lmod insert (present; non-existent index)
+    async fn test_lmod_insert_non_existent_index() {
+        lset!(con, "mylist", "a", "b");
+        let q = query!(
+            "lmod",
+            "mylist",
+            "insert",
+            "125",
+            "my-value-that-will-never-go-in"
+        );
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
+        )
+    }
 }
