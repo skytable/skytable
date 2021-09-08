@@ -287,4 +287,35 @@ mod __private {
             Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
         )
     }
+
+    // sanity tests
+    async fn test_get_model_error() {
+        query.push("GET");
+        query.push("mylist");
+        runeq!(
+            con,
+            query,
+            Element::RespCode(RespCode::ErrorString("wrong-model".to_owned()))
+        );
+    }
+    async fn test_set_model_error() {
+        query.push("SET");
+        query.push("mylist");
+        query.push("myvalue");
+        runeq!(
+            con,
+            query,
+            Element::RespCode(RespCode::ErrorString("wrong-model".to_owned()))
+        );
+    }
+    async fn test_update_model_error() {
+        query.push("UPDATE");
+        query.push("mylist");
+        query.push("myvalue");
+        runeq!(
+            con,
+            query,
+            Element::RespCode(RespCode::ErrorString("wrong-model".to_owned()))
+        );
+    }
 }
