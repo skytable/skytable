@@ -54,3 +54,28 @@ macro_rules! runeq {
         assert_eq!($con.run_simple_query(&$query).await.unwrap(), $eq)
     };
 }
+
+macro_rules! assert_skyhash_arrayeq {
+    (str, $con:expr, $query:expr, $($val:expr),*) => {
+        runeq!(
+            $con,
+            $query,
+            skytable::Element::Array(skytable::types::Array::Str(
+                vec![
+                    $(Some($val.into()),)*
+                ]
+            ))
+        )
+    };
+    (bin, $con:expr, $query:expr, $($val:expr),*) => {
+        runeq!(
+            $con,
+            $query,
+            skytable::Element::Array(skytable::types::Array::Bin(
+                vec![
+                    $(Some($val.into()),)*
+                ]
+            ))
+        )
+    };
+}

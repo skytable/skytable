@@ -71,7 +71,7 @@ fn parse_dbtest(
         return Err(syn::Error::new_spanned(sig.fn_token, msg));
     }
     sig.asyncness = None;
-    let rand_string: String = (0..30)
+    let rand_string: String = (0..64)
         .map(|_| {
             let idx = rng.gen_range(0..CHARSET.len());
             CHARSET[idx] as char
@@ -288,8 +288,10 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// All tests will clean up all values once a single test is over. **These tests should not
 /// be run in multi-threaded environments because they often use the same keys**
 /// ## _Ghost_ values
-/// This macro gives a `skytable::AsyncConnection` accessible by the `con` variable and a mutable
-/// `skytable::Query` accessible by the `query` variable
+/// This macro gives:
+/// - a `skytable::AsyncConnection` accessible by the `con` variable
+/// - a mutable `skytable::Query` accessible by the `query` variable
+/// - the current entity, accessible by `__MYENTITY__`
 ///
 /// ## Requirements
 ///
@@ -304,6 +306,12 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// has led to making this a _convention_.
 /// So let's say we have a module `kvengine` in which we have our tests. So, we'll have to wrap around all these test functions
 /// in a module `__private` within `kvengine`
+///
+/// ## Collisions
+///
+/// The sample space for table name generation is so large (in the order of 4.3 to the 50) that collisions
+/// are practially impossible. Hence we do not bother with a global random string table and instead proceed
+/// to generate tables randomly at the point of invocation
 ///
 pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
     parse_test_module(args, item)
