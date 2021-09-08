@@ -118,4 +118,104 @@ mod __private {
         let q = query!("lget", "mylist", "valueat", "0");
         runeq!(con, q, Element::String("v1".to_owned()));
     }
+    /// lget valueat (non-existent index)
+    async fn test_lget_with_valueat_non_existent_index() {
+        lset!(con, "mylist", "v1");
+        let q = query!("lget", "mylist", "valueat", "1");
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
+        )
+    }
+    /// lget valueat (invalid index)
+    async fn test_lget_with_valueat_bad_index() {
+        lset!(con, "mylist", "v1");
+        let q = query!("lget", "mylist", "valueat", "1a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype))
+    }
+    /// lget valueat (nil)
+    async fn test_lget_with_valueat_nil() {
+        let q = query!("lget", "mybadlist", "valueat", "2");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+    /// lget valueat (nil + bad index)
+    async fn test_lget_with_bad_index_but_nil_key() {
+        let q = query!("lget", "mybadlist", "valueat", "2a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+    }
+    /// lget valueat (syntax error)
+    async fn test_lget_with_valueat_syntax_error() {
+        let q = query!("lget", "mybadlist", "valueat", "2", "3");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
+
+    // lmod tests
+    // lmod push
+    /// lmod push (okay)
+    async fn test_lmod_push_okay() {
+        lset!(con, "mylist");
+        let q = query!("lmod", "mylist", "push", "v1");
+        runeq!(con, q, Element::RespCode(RespCode::Okay));
+    }
+    /// lmod push (nil)
+    async fn test_lmod_push_nil() {
+        let q = query!("lmod", "mylist", "push", "v1");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+    /// lmod push (syntax error)
+    async fn test_lmod_syntax_error() {
+        let q = query!("lmod", "mylist", "push");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
+    // lmod pop
+    /// lmod pop (okay)
+    async fn test_lmod_pop_noindex_okay() {
+        lset!(con, "mylist", "value");
+        let q = query!("lmod", "mylist", "pop");
+        runeq!(con, q, Element::String("value".to_owned()));
+    }
+    /// lmod pop (good index; okay)
+    async fn test_lmod_pop_goodindex_okay() {
+        lset!(con, "mylist", "value1", "value2");
+        let q = query!("lmod", "mylist", "pop", "1");
+        runeq!(con, q, Element::String("value2".to_owned()));
+    }
+    /// lmod pop (bad index + existent key & non-existent key)
+    async fn test_lmod_pop_badindex_fail() {
+        lset!(con, "mylist", "v1", "v2");
+        let q = query!("lmod", "mylist", "pop", "12badidx");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+
+        // this is post-execution; so the error must be pointed out first
+        let q = query!("lmod", "mymissinglist", "pop", "12badidx");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+    }
+    /// lmod pop (nil)
+    async fn test_lmod_pop_nil() {
+        let q = query!("lmod", "mylist", "pop");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+    /// lmod pop (syntax error)
+    async fn test_lmod_pop_syntax_error() {
+        let q = query!("lmod", "mylist", "pop", "whatthe", "whatthe2");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
+    // lmod clear
+    /// lmod clear (okay)
+    async fn test_lmod_clear_okay() {
+        lset!(con, "mylist", "v1", "v2");
+        let q = query!("lmod", "mylist", "clear");
+        runeq!(con, q, Element::RespCode(RespCode::Okay));
+    }
+    /// lmod clear (nil)
+    async fn test_lmod_clear_nil() {
+        let q = query!("lmod", "mylist", "clear");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+    /// lmod clear (syntax error)
+    async fn test_lmod_clear_syntax_error() {
+        let q = query!("lmod", "mylist", "clear", "unneeded arg");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
 }
