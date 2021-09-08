@@ -53,6 +53,15 @@ pub trait KVTable<'a, T> {
     fn kve_payload_encoded(&self) -> bool;
     /// Get a reference to the inner table for a given KVE Table
     fn kve_inner_ref(&'a self) -> &'a T;
+    fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>;
+    fn kve_get_key_encoder(&self) -> SingleEncoder {
+        s_encoder_booled!(self.kve_key_encoded())
+    }
+    fn kve_get_payload_encoder(&self) -> SingleEncoder {
+        s_encoder_booled!(self.kve_payload_encoded())
+    }
 }
 
 impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
@@ -70,6 +79,12 @@ impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
     }
     fn kve_inner_ref(&'a self) -> &'a Coremap<Data, Data> {
         &self.table
+    }
+    fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+    {
+        self.table.true_if_removed(input)
     }
 }
 

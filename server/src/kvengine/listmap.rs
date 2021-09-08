@@ -32,6 +32,8 @@ use crate::corestore::htable::Coremap;
 use crate::corestore::map::bref::Ref;
 use crate::corestore::Data;
 use crate::resp::{TSYMBOL_BINARY, TSYMBOL_UNICODE};
+use core::borrow::Borrow;
+use core::hash::Hash;
 use parking_lot::RwLock;
 
 type Vecref<'a> = Ref<'a, Data, LockedVec>;
@@ -48,6 +50,12 @@ impl KVEListMap {
     /// Create a new KVEListMap. `Encoded ID == encoded key` and `encoded payload == encoded elements`
     pub fn new(encoded_id: bool, encoded_payload_element: bool) -> Self {
         Self::init_with_data(encoded_id, encoded_payload_element, Coremap::new())
+    }
+    pub const fn payload_needs_encoding(&self) -> bool {
+        self.encoded_payload_element
+    }
+    pub const fn id_needs_encoding(&self) -> bool {
+        self.encoded_id
     }
     pub fn init_with_data(
         encoded_id: bool,
@@ -126,5 +134,11 @@ impl<'a> KVTable<'a, Coremap<Data, RwLock<Vec<Data>>>> for KVEListMap {
     }
     fn kve_inner_ref(&'a self) -> &'a Coremap<Data, RwLock<Vec<Data>>> {
         &self.base
+    }
+    fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+    {
+        self.base.true_if_removed(input)
     }
 }

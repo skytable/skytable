@@ -27,7 +27,9 @@
 //! # `DEL` queries
 //! This module provides functions to work with `DEL` queries
 
+use crate::corestore::table::DataModel;
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::KVTable;
 use crate::util::compiler;
 
 action!(
@@ -37,35 +39,49 @@ action!(
     /// It will write an entire datagroup, for this `del` action
     fn del(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
-        let kve = kve!(con, handle);
-        let encoding_is_okay = if kve.needs_key_encoding() {
-            true
-        } else {
-            let encoder = kve.get_key_encoder();
-            act.as_ref().all(|k| encoder.is_ok(k))
-        };
-        if compiler::likely(encoding_is_okay) {
-            let done_howmany: Option<usize>;
-            {
-                if registry::state_okay() {
-                    let mut many = 0;
-                    act.for_each(|key| {
-                        if kve.remove_unchecked(key) {
-                            many += 1
-                        }
-                    });
-                    done_howmany = Some(many);
+        let table = get_tbl!(handle, con);
+        macro_rules! remove {
+            ($engine:expr) => {{
+                let encoding_is_okay = if $engine.kve_key_encoded() {
+                    let encoder = $engine.kve_get_key_encoder();
+                    act.as_ref().all(|k| encoder.is_ok(k))
                 } else {
-                    done_howmany = None;
+                    true
+                };
+                if compiler::likely(encoding_is_okay) {
+                    let done_howmany: Option<usize>;
+                    {
+                        if registry::state_okay() {
+                            let mut many = 0;
+                            act.for_each(|key| {
+                                if $engine.kve_remove(key) {
+                                    many += 1
+                                }
+                            });
+                            done_howmany = Some(many);
+                        } else {
+                            done_howmany = None;
+                        }
+                    }
+                    if let Some(done_howmany) = done_howmany {
+                        con.write_response(done_howmany).await
+                    } else {
+                        con.write_response(responses::groups::SERVER_ERR).await
+                    }
+                } else {
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
                 }
+            }};
+        }
+        match table.get_model_ref() {
+            DataModel::KV(kve) => {
+                remove!(kve)
             }
-            if let Some(done_howmany) = done_howmany {
-                con.write_response(done_howmany).await
-            } else {
-                con.write_response(responses::groups::SERVER_ERR).await
+            DataModel::KVExtListmap(kvlmap) => {
+                remove!(kvlmap)
             }
-        } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
+            #[allow(unreachable_patterns)]
+            _ => conwrite!(con, groups::WRONG_MODEL),
         }
     }
 );
