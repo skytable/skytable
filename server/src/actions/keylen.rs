@@ -24,9 +24,7 @@
  *
 */
 
-use crate::corestore::table::DataModel;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::KVTable;
 
 action!(
     /// Run a `KEYLEN` query
@@ -35,11 +33,14 @@ action!(
     fn keylen(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, not 1);
         let res: Option<usize> = {
-            let tbl = get_tbl!(handle, con);
-            let key = unsafe { act.next_unchecked() };
-            match tbl.get_model_ref() {
-                DataModel::KV(kv) => kv.kve_keylen(key),
-                DataModel::KVExtListmap(kv) => kv.kve_keylen(key),
+            let reader = kve!(con, handle);
+            unsafe {
+                // UNSAFE(@ohsayan): this is completely safe as we've already checked
+                // the number of arguments is one
+                match reader.get(act.next_unchecked()) {
+                    Ok(v) => v.map(|b| b.len()),
+                    Err(_) => None,
+                }
             }
         };
         if let Some(value) = res {

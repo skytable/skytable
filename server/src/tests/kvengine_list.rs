@@ -287,6 +287,23 @@ mod __private {
             Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
         )
     }
+    /// del <list> (existent; non-existent)
+    async fn test_list_del() {
+        // try an existent key
+        lset!(con, "mylist", "v1", "v2");
+        let q = query!("del", "mylist");
+        runeq!(con, q, Element::UnsignedInt(1));
+        // try the now non-existent key
+        let q = query!("del", "mylist");
+        runeq!(con, q, Element::UnsignedInt(0));
+    }
+    /// exists <list> (existent; non-existent)
+    async fn test_list_exists() {
+        lset!(con, "mylist");
+        lset!(con, "myotherlist");
+        let q = query!("exists", "mylist", "myotherlist", "badlist");
+        runeq!(con, q, Element::UnsignedInt(2));
+    }
 
     // sanity tests
     async fn test_get_model_error() {
