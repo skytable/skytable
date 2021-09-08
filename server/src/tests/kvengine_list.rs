@@ -112,4 +112,10 @@ mod __private {
         let q = query!("lget", "mysuperlist", "len");
         runeq!(con, q, Element::RespCode(RespCode::NotFound));
     }
+    /// lget valueat
+    async fn test_lget_with_valueat_okay() {
+        lset!(con, "mylist", "v1");
+        let q = query!("lget", "mylist", "valueat", "0");
+        runeq!(con, q, Element::String("v1".to_owned()));
+    }
 }

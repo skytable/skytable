@@ -419,7 +419,7 @@ impl<T, const N: usize> Array<T, N> {
                     ptr = ptr.add(1);
                     // tell the guard to increment
                     guard.incr(1);
-                    if end_ptr == ptr {
+                    if end_ptr < ptr {
                         // our current ptr points to the end of the allocation
                         // oh no, time for corruption, if the user says so
                         panic!("Overflowed stack area.")
@@ -609,4 +609,27 @@ fn test_array_overflow() {
 fn test_array_overflow_iter() {
     let mut arr: Array<char, 5> = Array::new();
     arr.extend("123456".chars());
+}
+
+#[test]
+fn test_array_clone() {
+    let mut arr: Array<u8, 64> = Array::new();
+    arr.extend(
+        "qHwRsmyBYHbqyHfdShOfVSayVUmeKlEagvJoGuTyvaCqpsfFkZabeuqmVeiKbJxV"
+            .as_bytes()
+            .to_owned(),
+    );
+    let myclone = arr.clone();
+    assert_eq!(arr, myclone);
+}
+
+#[test]
+#[should_panic]
+fn test_array_extend_fail() {
+    let mut arr: Array<u8, 64> = Array::new();
+    arr.extend(
+        "qHwRsmyBYHbqyHfdShOfVSayVUmeKlEagvJoGuTyvaCqpsfFkZabeuqmVeiKbJxV_"
+            .as_bytes()
+            .to_owned(),
+    );
 }
