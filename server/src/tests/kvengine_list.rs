@@ -218,4 +218,31 @@ mod __private {
         let q = query!("lmod", "mylist", "clear", "unneeded arg");
         runeq!(con, q, Element::RespCode(RespCode::ActionError));
     }
+    // lmod remove
+    /// lmod remove (okay)
+    async fn test_lmod_remove_okay() {
+        lset!(con, "mylist", "v1");
+        let q = query!("lmod", "mylist", "remove", "0");
+        runeq!(con, q, Element::RespCode(RespCode::Okay));
+    }
+    /// lmod remove (nil)
+    async fn test_lmod_remove_nil() {
+        let q = query!("lmod", "mylist", "remove", "0");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+    /// lmod remove (bad index; nil + existent)
+    async fn test_lmod_remove_bad_index() {
+        // non-existent key + bad idx
+        let q = query!("lmod", "mylist", "remove", "1a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+        // existent key + bad idx
+        lset!(con, "mylist");
+        let q = query!("lmod", "mylist", "remove", "1a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+    }
+    /// lmod remove (syntax error)
+    async fn test_lmod_remove_syntax_error() {
+        let q = query!("lmod", "mylist", "remove", "a", "b");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
 }
