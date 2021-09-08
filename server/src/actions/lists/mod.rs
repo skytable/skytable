@@ -124,6 +124,7 @@ action! {
             Some(subaction) => {
                 match subaction.as_ref() {
                     LEN => {
+                        err_if_len_is!(act, con, not 0);
                         if let Some(len) = listmap.len_of(listname) {
                             conwrite!(con, len)?;
                         } else {

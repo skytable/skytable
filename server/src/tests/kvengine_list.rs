@@ -71,7 +71,7 @@ mod __private {
     /// lget limit
     async fn test_lget_list_with_limit() {
         lset!(con, "mysuperlist", "elementa", "elementb", "elementc");
-        let q = query!("lget", "mylist", "LIMIT", "2");
+        let q = query!("lget", "mysuperlist", "LIMIT", "2");
         assert_skyhash_arrayeq!(str, con, q, "elementa", "elementb");
     }
     /// lget bad limit
@@ -83,7 +83,7 @@ mod __private {
     /// lget huge limit
     async fn test_lget_with_huge_limit() {
         lset!(con, "mysuperlist", "elementa", "elementb", "elementc");
-        let q = query!("lget", "mylist", "LIMIT", "100");
+        let q = query!("lget", "mysuperlist", "LIMIT", "100");
         assert_skyhash_arrayeq!(str, con, q, "elementa", "elementb", "elementc");
     }
     /// lget syntax error
