@@ -99,9 +99,9 @@ impl KVEListMap {
     pub fn add_list(&self, listname: Data) -> Option<bool> {
         if_cold! {
             if (self.encode_key(&listname)) {
-                None
-            } else {
                 Some(self.base.true_if_insert(listname, LockedVec::default()))
+            } else {
+                None
             }
         }
     }

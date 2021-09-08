@@ -210,6 +210,10 @@ mod bytemark_set_tests {
                 ObjectID::from_slice("supersafe"),
                 Table::new_kve_with_volatile(false),
             );
+            ks.create_table(
+                ObjectID::from_slice("safelist"),
+                Table::new_kve_listmap_with_data(Coremap::new(), false, true, true),
+            );
         }
         let mut v = Vec::new();
         se::raw_serialize_partmap(&mut v, &ks).unwrap();
@@ -232,6 +236,13 @@ mod bytemark_set_tests {
                     bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
                 ),
             );
+            expected.insert(
+                ObjectID::from_slice("safelist"),
+                (
+                    bytemarks::BYTEMARK_STORAGE_PERSISTENT,
+                    bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR,
+                ),
+            );
         }
         assert_hmeq!(expected, ret);
     }
@@ -240,11 +251,15 @@ mod bytemark_set_tests {
 mod flush_routines {
     use crate::corestore::memstore::Keyspace;
     use crate::corestore::memstore::ObjectID;
+    use crate::corestore::table::DataModel;
     use crate::corestore::table::Table;
     use crate::corestore::Data;
+    use crate::kvengine::listmap::LockedVec;
+    use crate::storage::bytemarks;
+    use crate::storage::Coremap;
     use std::fs;
     #[test]
-    fn test_flush_unflush_table() {
+    fn test_flush_unflush_table_pure_kve() {
         let tbl = Table::new_default_kve();
         tbl.get_kvstore()
             .unwrap()
@@ -256,7 +271,9 @@ mod flush_routines {
         fs::create_dir_all("data/ks/myks1").unwrap();
         super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
-        let ret = super::unflush::read_table(&ksid, &tblid, false, 0).unwrap();
+        let ret =
+            super::unflush::read_table(&ksid, &tblid, false, bytemarks::BYTEMARK_MODEL_KV_BIN_BIN)
+                .unwrap();
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
@@ -267,6 +284,40 @@ mod flush_routines {
             Data::from("world")
         );
     }
+
+    #[test]
+    fn test_flush_unflush_table_kvext_listmap() {
+        let tbl = Table::new_kve_listmap_with_data(Coremap::new(), false, true, true);
+        if let DataModel::KVExtListmap(kvl) = tbl.get_model_ref() {
+            kvl.add_list("mylist".into());
+            let list = kvl.get("mylist".as_bytes()).unwrap();
+            list.write().push("mysupervalue".into());
+        } else {
+            panic!("Bad model!");
+        }
+        let tblid = unsafe { ObjectID::from_slice("mylists1") };
+        let ksid = unsafe { ObjectID::from_slice("mylistyks") };
+        // create the temp dir for this test
+        fs::create_dir_all("data/ks/mylistyks").unwrap();
+        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        // now that it's flushed, let's read the table using and unflush routine
+        let ret = super::unflush::read_table(
+            &ksid,
+            &tblid,
+            false,
+            bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR,
+        )
+        .unwrap();
+        assert!(!ret.is_volatile());
+        if let DataModel::KVExtListmap(kvl) = ret.get_model_ref() {
+            let list = kvl.get("mylist".as_bytes()).unwrap();
+            let lread = list.read();
+            assert_eq!(lread.len(), 1);
+            assert_eq!(lread[0].as_ref(), "mysupervalue".as_bytes());
+        } else {
+            panic!("Bad model!");
+        }
+    }
     #[test]
     fn test_flush_unflush_keyspace() {
         // create the temp dir for this test
@@ -274,7 +325,9 @@ mod flush_routines {
         let ksid = unsafe { ObjectID::from_slice("myks_1") };
         let tbl1 = unsafe { ObjectID::from_slice("mytbl_1") };
         let tbl2 = unsafe { ObjectID::from_slice("mytbl_2") };
+        let list_tbl = unsafe { ObjectID::from_slice("mylist_1") };
         let ks = Keyspace::empty();
+
         // a persistent table
         let mytbl = Table::new_default_kve();
         mytbl
@@ -283,12 +336,24 @@ mod flush_routines {
             .set("hello".into(), "world".into())
             .unwrap();
         ks.create_table(tbl1.clone(), mytbl);
+
+        // and a table with lists
+        let cmap = Coremap::new();
+        cmap.true_if_insert("mylist".into(), LockedVec::new(vec!["myvalue".into()]));
+        let my_list_tbl = Table::new_kve_listmap_with_data(cmap, false, true, true);
+        ks.create_table(list_tbl.clone(), my_list_tbl);
+
         // and a volatile table
         ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true));
+
+        // now flush it
         super::flush::flush_keyspace_full(&ksid, &ks).unwrap();
         let ret = super::unflush::read_keyspace(&ksid).unwrap();
         let tbl1_ret = ret.get(&tbl1).unwrap();
         let tbl2_ret = ret.get(&tbl2).unwrap();
+        let tbl3_ret_list = ret.get(&list_tbl).unwrap();
+        // should be a persistent table with the value we set
+        assert_eq!(tbl1_ret.count(), 1);
         assert_eq!(
             tbl1_ret
                 .get_kvstore()
@@ -299,7 +364,22 @@ mod flush_routines {
                 .clone(),
             Data::from("world")
         );
-        assert!(tbl2_ret.get_kvstore().unwrap().__get_inner_ref().len() == 0);
+        // should be a volatile table with no values
+        assert_eq!(tbl2_ret.count(), 0);
+        assert!(tbl2_ret.is_volatile());
+        // should have a list with the `myvalue` element
+        assert_eq!(tbl3_ret_list.count(), 1);
+        if let DataModel::KVExtListmap(kvl) = tbl3_ret_list.get_model_ref() {
+            assert_eq!(
+                kvl.get("mylist".as_bytes()).unwrap().read()[0].as_ref(),
+                "myvalue".as_bytes()
+            );
+        } else {
+            panic!(
+                "Wrong model. Expected listmap, got: {}",
+                tbl3_ret_list.get_model_code()
+            );
+        }
     }
 }
 
