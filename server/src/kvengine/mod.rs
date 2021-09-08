@@ -73,6 +73,22 @@ pub trait KVTable<'a, T> {
     fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
     where
         Data: Borrow<Q>;
+    /// Get the tsymbol for the KVE key
+    fn kve_key_tsymbol(&self) -> u8 {
+        if self.kve_key_encoded() {
+            TSYMBOL_UNICODE
+        } else {
+            TSYMBOL_BINARY
+        }
+    }
+    /// Get the tsymbol for the KVE payload
+    fn kve_payload_tsymbol(&self) -> u8 {
+        if self.kve_payload_encoded() {
+            TSYMBOL_UNICODE
+        } else {
+            TSYMBOL_BINARY
+        }
+    }
 }
 
 impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {

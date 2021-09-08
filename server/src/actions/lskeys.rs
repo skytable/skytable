@@ -24,10 +24,11 @@
  *
 */
 
-use crate::corestore::memstore::DdlError;
+use crate::corestore::table::DataModel;
+use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::KVTable;
 use crate::resp::writer::TypedArrayWriter;
-use bytes::Bytes;
 
 const DEFAULT_COUNT: usize = 10;
 
@@ -65,13 +66,14 @@ action!(
             };
             (get_tbl!(entity, handle, con), count)
         };
-        let kve = match table.get_kvstore() {
-            Ok(kv) => kv,
-            Err(DdlError::WrongModel) => return conwrite!(con, responses::groups::WRONG_MODEL),
-            Err(_) => unsafe { impossible!() },
+        let tsymbol = match table.get_model_ref() {
+            DataModel::KV(kv) => kv.kve_payload_tsymbol(),
+            DataModel::KVExtListmap(kv) => kv.kve_payload_tsymbol(),
         };
-        let items: Vec<Bytes> = kve.__get_inner_ref().get_keys(count);
-        let tsymbol = kve.get_kt();
+        let items: Vec<Data> = match table.get_model_ref() {
+            DataModel::KV(kv) => kv.kve_inner_ref().get_keys(count),
+            DataModel::KVExtListmap(kv) => kv.kve_inner_ref().get_keys(count),
+        };
         let mut writer = unsafe {
             // SAFETY: We have checked kty ourselves
             TypedArrayWriter::new(con, tsymbol, items.len())

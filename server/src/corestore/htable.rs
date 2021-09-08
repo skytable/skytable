@@ -178,13 +178,13 @@ impl<K: Eq + Hash, V: Clone> Coremap<K, V> {
     }
 }
 
-impl Coremap<Data, Data> {
+impl<K: Eq + Hash + Clone, V> Coremap<K, V> {
     /// Returns atleast `count` number of keys from the hashtable
-    pub fn get_keys(&self, count: usize) -> Vec<Bytes> {
+    pub fn get_keys(&self, count: usize) -> Vec<K> {
         let mut v = Vec::with_capacity(count);
         self.iter()
             .take(count)
-            .map(|kv| kv.key().get_blob().clone())
+            .map(|kv| kv.key().clone())
             .for_each(|key| v.push(key));
         v
     }
