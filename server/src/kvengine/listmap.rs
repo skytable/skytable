@@ -141,4 +141,16 @@ impl<'a> KVTable<'a, Coremap<Data, RwLock<Vec<Data>>>> for KVEListMap {
     {
         self.base.true_if_removed(input)
     }
+    fn kve_exists<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+    {
+        self.base.contains_key(input)
+    }
+    fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
+    where
+        Data: Borrow<Q>,
+    {
+        self.base.get(input).map(|v| v.key().len())
+    }
 }

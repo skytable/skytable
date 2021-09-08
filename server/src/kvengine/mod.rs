@@ -53,15 +53,26 @@ pub trait KVTable<'a, T> {
     fn kve_payload_encoded(&self) -> bool;
     /// Get a reference to the inner table for a given KVE Table
     fn kve_inner_ref(&'a self) -> &'a T;
+    /// Remove a key from the KVE
     fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
     where
         Data: Borrow<Q>;
+    /// Get the key encoder
     fn kve_get_key_encoder(&self) -> SingleEncoder {
         s_encoder_booled!(self.kve_key_encoded())
     }
+    /// Get the payload encoder
     fn kve_get_payload_encoder(&self) -> SingleEncoder {
         s_encoder_booled!(self.kve_payload_encoded())
     }
+    /// Check if the KVE contains a certain key
+    fn kve_exists<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>;
+    /// Get the length of a certain key in the KVE
+    fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
+    where
+        Data: Borrow<Q>;
 }
 
 impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
@@ -85,6 +96,18 @@ impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
         Data: Borrow<Q>,
     {
         self.table.true_if_removed(input)
+    }
+    fn kve_exists<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
+    where
+        Data: Borrow<Q>,
+    {
+        self.table.contains_key(input)
+    }
+    fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
+    where
+        Data: Borrow<Q>,
+    {
+        self.table.get(input).map(|v| v.key().len())
     }
 }
 

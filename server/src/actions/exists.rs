@@ -27,7 +27,9 @@
 //! # `EXISTS` queries
 //! This module provides functions to work with `EXISTS` queries
 
+use crate::corestore::table::DataModel;
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::KVTable;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 
@@ -36,24 +38,32 @@ action!(
     fn exists(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
         err_if_len_is!(act, con, eq 0);
         let mut how_many_of_them_exist = 0usize;
-        let kve = kve!(con, handle);
-        let encoding_is_okay = if kve.needs_key_encoding() {
-            true
-        } else {
-            let encoder = kve.get_key_encoder();
-            act.as_ref().all(|k| encoder.is_ok(k))
-        };
-        if compiler::likely(encoding_is_okay) {
-            {
-                act.for_each(|key| {
-                    if kve.exists_unchecked(key) {
-                        how_many_of_them_exist += 1;
-                    }
-                });
-            }
-            con.write_response(how_many_of_them_exist).await?;
-        } else {
-            conwrite!(con, groups::ENCODING_ERROR)?;
+        macro_rules! exists {
+            ($engine:expr) => {{
+                let encoding_is_okay = if $engine.kve_key_encoded() {
+                    let encoder = $engine.kve_get_key_encoder();
+                    act.as_ref().all(|k| encoder.is_ok(k))
+                } else {
+                    true
+                };
+                if compiler::likely(encoding_is_okay) {
+                    act.for_each(|key| {
+                        if $engine.kve_exists(key) {
+                            how_many_of_them_exist += 1;
+                        }
+                    });
+                    conwrite!(con, how_many_of_them_exist)?;
+                } else {
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+                }
+            }};
+        }
+        let tbl = get_tbl!(handle, con);
+        match tbl.get_model_ref() {
+            DataModel::KV(kve) => exists!(kve),
+            DataModel::KVExtListmap(kve) => exists!(kve),
+            #[allow(unreachable_patterns)]
+            _ => conwrite!(con, groups::WRONG_MODEL)?,
         }
         Ok(())
     }
