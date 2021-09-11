@@ -24,6 +24,8 @@
  *
 */
 
+use crate::corestore::booltable::BoolTable;
+use crate::corestore::booltable::NicheLUT;
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
@@ -40,6 +42,10 @@ const PUSH: &[u8] = "PUSH".as_bytes();
 const REMOVE: &[u8] = "REMOVE".as_bytes();
 const INSERT: &[u8] = "INSERT".as_bytes();
 const POP: &[u8] = "POP".as_bytes();
+
+const OKAY_OVW_BLUT: BoolTable = BoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
+const OKAY_BADIDX_NIL_NLUT: NicheLUT =
+    NicheLUT::new(groups::NIL, groups::OKAY, groups::LISTMAP_BAD_INDEX);
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {
@@ -78,11 +84,7 @@ action! {
             } else {
                 false
             };
-            if did {
-                conwrite!(con, groups::OKAY)?;
-            } else {
-                conwrite!(con, groups::OVERWRITE_ERR)?;
-            }
+            conwrite!(con, OKAY_OVW_BLUT[did])?;
         } else {
             conwrite!(con, groups::SERVER_ERR)?;
         }
@@ -208,11 +210,7 @@ action! {
                 } else {
                     false
                 };
-                if okay {
-                    conwrite!(con, groups::OKAY)?;
-                } else {
-                    conwrite!(con, groups::SERVER_ERR)?;
-                }
+                conwrite!(con, OKAY_OVW_BLUT[okay])?;
             }
             PUSH => {
                 err_if_len_is!(act, con, not 1);
@@ -228,11 +226,7 @@ action! {
                         false
                     }
                 };
-                if okay {
-                    conwrite!(con, groups::OKAY)?;
-                } else {
-                    conwrite!(con, groups::SERVER_ERR)?;
-                }
+                conwrite!(con, OKAY_OVW_BLUT[okay])?;
             }
             REMOVE => {
                 err_if_len_is!(act, con, not 1);
@@ -247,18 +241,7 @@ action! {
                             false
                         }
                     });
-                    match maybe_value {
-                        Some(true) => {
-                            // we removed the value
-                            conwrite!(con, groups::OKAY)?;
-                        }
-                        Some(false) => {
-                            conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
-                        }
-                        None => {
-                            conwrite!(con, groups::NIL)?;
-                        }
-                    }
+                    conwrite!(con, OKAY_BADIDX_NIL_NLUT[maybe_value])?;
                 } else {
                     conwrite!(con, groups::SERVER_ERR)?;
                 }
@@ -278,11 +261,7 @@ action! {
                             false
                         }
                     });
-                    match maybe_insert {
-                        Some(true) => conwrite!(con, groups::OKAY)?,
-                        Some(false) => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
-                        None => conwrite!(con, groups::NIL)?,
-                    }
+                    conwrite!(con, OKAY_BADIDX_NIL_NLUT[maybe_insert])?;
                 } else {
                     conwrite!(con, groups::SERVER_ERR)?;
                 }

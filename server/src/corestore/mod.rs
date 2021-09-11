@@ -47,6 +47,7 @@ use libsky::TResult;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub mod array;
+pub mod booltable;
 pub mod buffers;
 pub mod htable;
 pub mod iarray;

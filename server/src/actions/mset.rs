@@ -53,9 +53,9 @@ action!(
             if registry::state_okay() {
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    if kve.set_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val)) {
-                        didmany += 1;
-                    }
+                    didmany += kve
+                        .set_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val))
+                        as usize;
                 }
                 done_howmany = Some(didmany);
             } else {
