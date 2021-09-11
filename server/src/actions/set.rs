@@ -28,11 +28,14 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::corestore;
+use crate::corestore::booltable::BoolTable;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 use corestore::Data;
+
+const SET_BOOLTABLE: BoolTable = BoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
 
 action!(
     /// Run a `SET` query
@@ -55,11 +58,7 @@ action!(
                 }
             };
             if let Some(did_we) = did_we {
-                if did_we {
-                    con.write_response(responses::groups::OKAY).await?;
-                } else {
-                    con.write_response(responses::groups::OVERWRITE_ERR).await?;
-                }
+                conwrite!(con, SET_BOOLTABLE[did_we])?;
             } else {
                 compiler::cold_err(con.write_response(responses::groups::ENCODING_ERROR)).await?;
             }

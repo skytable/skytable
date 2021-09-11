@@ -28,9 +28,12 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
+use crate::corestore::booltable::BoolTable;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::util::compiler;
+
+const UPDATE_BOOLTABLE: BoolTable = BoolTable::new(groups::OKAY, groups::NIL);
 
 action!(
     /// Run an `UPDATE` query
@@ -53,11 +56,7 @@ action!(
                 }
             };
             if let Some(did_we) = did_we {
-                if did_we {
-                    con.write_response(responses::groups::OKAY).await?;
-                } else {
-                    con.write_response(responses::groups::NIL).await?;
-                }
+                con.write_response(UPDATE_BOOLTABLE[did_we]).await?;
             } else {
                 compiler::cold_err(con.write_response(responses::groups::ENCODING_ERROR)).await?;
             }
