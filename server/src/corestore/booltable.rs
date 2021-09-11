@@ -34,7 +34,7 @@ pub struct BoolTable {
 impl BoolTable {
     pub const fn new(if_true: &'static [u8], if_false: &'static [u8]) -> Self {
         Self {
-            base: [if_true, if_false],
+            base: [if_false, if_true],
         }
     }
 }
