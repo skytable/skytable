@@ -29,7 +29,7 @@
 
 use crate::corestore::table::DataModel;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::KVTable;
+use crate::kvengine::{encoding::ENCODING_LUT_ITER, KVTable};
 use crate::util::compiler;
 
 action!(
@@ -42,12 +42,7 @@ action!(
         let table = get_tbl!(handle, con);
         macro_rules! remove {
             ($engine:expr) => {{
-                let encoding_is_okay = if $engine.kve_key_encoded() {
-                    let encoder = $engine.kve_get_key_encoder();
-                    act.as_ref().all(|k| encoder.is_ok(k))
-                } else {
-                    true
-                };
+                let encoding_is_okay = ENCODING_LUT_ITER[$engine.kve_key_encoded()](act.as_ref());
                 if compiler::likely(encoding_is_okay) {
                     let done_howmany: Option<usize>;
                     {

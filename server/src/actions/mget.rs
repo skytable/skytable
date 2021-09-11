@@ -25,6 +25,7 @@
 */
 
 use crate::dbnet::connection::prelude::*;
+use crate::kvengine::{encoding::ENCODING_LUT_ITER, KVTable};
 use crate::queryengine::ActionIter;
 use crate::resp::writer::TypedArrayWriter;
 use crate::util::compiler;
@@ -35,12 +36,7 @@ action!(
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         crate::err_if_len_is!(act, con, eq 0);
         let kve = kve!(con, handle);
-        let encoding_is_okay = if kve.needs_key_encoding() {
-            true
-        } else {
-            let encoder = kve.get_key_encoder();
-            act.as_ref().all(|k| encoder.is_ok(k))
-        };
+        let encoding_is_okay = ENCODING_LUT_ITER[kve.kve_key_encoded()](act.as_ref());
         if compiler::likely(encoding_is_okay) {
             let mut writer = unsafe {
                 // SAFETY: We are getting the value type ourselves

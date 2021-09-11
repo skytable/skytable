@@ -26,22 +26,25 @@
 
 use core::ops::Index;
 
+pub type BytesBoolTable = BoolTable<&'static [u8]>;
+pub type BytesNicheLUT = NicheLUT<&'static [u8]>;
+
 /// A two-value boolean LUT
-pub struct BoolTable {
-    base: [&'static [u8]; 2],
+pub struct BoolTable<T> {
+    base: [T; 2],
 }
 
-impl BoolTable {
+impl<T> BoolTable<T> {
     /// Supply values in the order: `if_true` and `if_false`
-    pub const fn new(if_true: &'static [u8], if_false: &'static [u8]) -> Self {
+    pub const fn new(if_true: T, if_false: T) -> Self {
         Self {
             base: [if_false, if_true],
         }
     }
 }
 
-impl Index<bool> for BoolTable {
-    type Output = &'static [u8];
+impl<T> Index<bool> for BoolTable<T> {
+    type Output = T;
     fn index(&self, index: bool) -> &Self::Output {
         unsafe { &*self.base.as_ptr().add(index as usize) }
     }
@@ -51,17 +54,13 @@ impl Index<bool> for BoolTable {
 /// structure
 ///
 /// **Warning:** This is a terrible opt and only works on the Rust ABI
-pub struct NicheLUT {
-    base: [&'static [u8]; 3],
+pub struct NicheLUT<T> {
+    base: [T; 3],
 }
 
-impl NicheLUT {
+impl<T> NicheLUT<T> {
     /// Supply values in the following order: [`if_none`, `if_true`, `if_false`]
-    pub const fn new(
-        if_none: &'static [u8],
-        if_true: &'static [u8],
-        if_false: &'static [u8],
-    ) -> Self {
+    pub const fn new(if_none: T, if_true: T, if_false: T) -> Self {
         Self {
             // 0 == S(F); 1 == S(T); 2 == NULL
             base: [if_false, if_true, if_none],
@@ -69,8 +68,8 @@ impl NicheLUT {
     }
 }
 
-impl Index<Option<bool>> for NicheLUT {
-    type Output = &'static [u8];
+impl<T> Index<Option<bool>> for NicheLUT<T> {
+    type Output = T;
     fn index(&self, idx: Option<bool>) -> &Self::Output {
         unsafe {
             &*self

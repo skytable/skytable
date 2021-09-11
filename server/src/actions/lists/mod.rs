@@ -24,8 +24,8 @@
  *
 */
 
-use crate::corestore::booltable::BoolTable;
-use crate::corestore::booltable::NicheLUT;
+use crate::corestore::booltable::BytesBoolTable;
+use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
@@ -43,9 +43,9 @@ const REMOVE: &[u8] = "REMOVE".as_bytes();
 const INSERT: &[u8] = "INSERT".as_bytes();
 const POP: &[u8] = "POP".as_bytes();
 
-const OKAY_OVW_BLUT: BoolTable = BoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
-const OKAY_BADIDX_NIL_NLUT: NicheLUT =
-    NicheLUT::new(groups::NIL, groups::OKAY, groups::LISTMAP_BAD_INDEX);
+const OKAY_OVW_BLUT: BytesBoolTable = BytesBoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
+const OKAY_BADIDX_NIL_NLUT: BytesNicheLUT =
+    BytesNicheLUT::new(groups::NIL, groups::OKAY, groups::LISTMAP_BAD_INDEX);
 
 macro_rules! listmap {
     ($tbl:expr, $con:expr) => {

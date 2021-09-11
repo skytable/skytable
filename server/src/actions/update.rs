@@ -28,11 +28,12 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::corestore::booltable::NicheLUT;
+use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 
-const UPDATE_NLUT: NicheLUT = NicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::NIL);
+const UPDATE_NLUT: BytesNicheLUT =
+    BytesNicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::NIL);
 
 action!(
     /// Run an `UPDATE` query

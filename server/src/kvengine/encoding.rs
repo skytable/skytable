@@ -54,6 +54,12 @@
  * - Sayan N. <ohsayan@outlook.com> (July, 2021)
 */
 
+use crate::corestore::booltable::BoolTable;
+use crate::protocol::iter::BorrowedAnyArrayIter;
+
+pub const ENCODING_LUT_ITER: BoolTable<fn(BorrowedAnyArrayIter) -> bool> =
+    BoolTable::new(is_okay_encoded_iter, is_okay_no_encoding_iter);
+
 /// This table maps bytes to character classes that helps us reduce the size of the
 /// transition table and generate bitmasks
 const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
@@ -77,6 +83,14 @@ const UTF8_TRANSITION_MAP: [u8; 108] = [
     12, 12, 12, 12, 12, 12, 12, 36, 12, 36, 12, 12, 12, 36, 12, 12, 12, 12, 12, 36, 12, 36, 12, 12,
     12, 36, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
 ];
+
+pub fn is_okay_encoded_iter(mut inp: BorrowedAnyArrayIter<'_>) -> bool {
+    inp.all(|v| self::is_okay_encoded(v))
+}
+
+pub const fn is_okay_no_encoding_iter(_inp: BorrowedAnyArrayIter<'_>) -> bool {
+    true
+}
 
 pub fn is_okay_encoded(inp: &[u8]) -> bool {
     self::is_utf8(inp)

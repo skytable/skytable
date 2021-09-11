@@ -28,13 +28,13 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::corestore;
-use crate::corestore::booltable::NicheLUT;
+use crate::corestore::booltable::BytesNicheLUT;
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
 use corestore::Data;
 
-const SET_NLUT: NicheLUT =
-    NicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::OVERWRITE_ERR);
+const SET_NLUT: BytesNicheLUT =
+    BytesNicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::OVERWRITE_ERR);
 
 action!(
     /// Run a `SET` query
