@@ -28,12 +28,11 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::corestore::booltable::BoolTable;
+use crate::corestore::booltable::NicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::util::compiler;
 
-const UPDATE_BOOLTABLE: BoolTable = BoolTable::new(groups::OKAY, groups::NIL);
+const UPDATE_NLUT: NicheLUT = NicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::NIL);
 
 action!(
     /// Run an `UPDATE` query
@@ -55,11 +54,7 @@ action!(
                     Err(()) => None,
                 }
             };
-            if let Some(did_we) = did_we {
-                con.write_response(UPDATE_BOOLTABLE[did_we]).await?;
-            } else {
-                compiler::cold_err(con.write_response(responses::groups::ENCODING_ERROR)).await?;
-            }
+            conwrite!(con, UPDATE_NLUT[did_we])?;
         } else {
             conwrite!(con, groups::SERVER_ERR)?;
         }

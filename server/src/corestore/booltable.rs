@@ -32,6 +32,7 @@ pub struct BoolTable {
 }
 
 impl BoolTable {
+    /// Supply values in the order: `if_true` and `if_false`
     pub const fn new(if_true: &'static [u8], if_false: &'static [u8]) -> Self {
         Self {
             base: [if_false, if_true],
@@ -43,5 +44,52 @@ impl Index<bool> for BoolTable {
     type Output = &'static [u8];
     fn index(&self, index: bool) -> &Self::Output {
         unsafe { self.base.get_unchecked(index as usize) }
+    }
+}
+
+/// A LUT based on niche values, especially built to support the `Option<bool>` optimized
+/// structure
+///
+/// **Warning:** This is a terrible opt and only works on the Rust ABI
+pub struct NicheLUT {
+    base: [&'static [u8]; 3],
+}
+
+impl NicheLUT {
+    /// Supply values in the following order: [`if_none`, `if_true`, `if_false`]
+    pub const fn new(
+        if_none: &'static [u8],
+        if_true: &'static [u8],
+        if_false: &'static [u8],
+    ) -> Self {
+        Self {
+            // 0 == S(F); 1 == S(T); 2 == NULL
+            base: [if_false, if_true, if_none],
+        }
+    }
+}
+
+impl Index<Option<bool>> for NicheLUT {
+    type Output = &'static [u8];
+    fn index(&self, idx: Option<bool>) -> &Self::Output {
+        unsafe {
+            self.base
+                .get_unchecked(*(&idx as *const _ as *const u8) as usize)
+        }
+    }
+}
+
+#[test]
+fn niche_optim_sanity_test() {
+    let none: Option<bool> = None;
+    let some_t: Option<bool> = Some(true);
+    let some_f: Option<bool> = Some(false);
+    unsafe {
+        let r_some_f = &some_f as *const _ as *const u8;
+        let r_some_t = &some_t as *const _ as *const u8;
+        let r_none = &none as *const _ as *const u8;
+        assert_eq!(*r_some_f, 0);
+        assert_eq!(*r_some_t, 1);
+        assert_eq!(*r_none, 2);
     }
 }
