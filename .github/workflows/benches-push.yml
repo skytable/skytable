@@ -1,0 +1,25 @@
+name: Update benches (push)
+
+on:
+  push:
+    branches:
+      - "next"
+
+jobs:
+  request-bench:
+    name: Add request for updating bench
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone perf repo
+        run: git clone https://github.com/skytable/perf.git
+      - name: Configure git
+        run: |
+          git config --global user.name "Glydr"
+          git config --global user.email "${{ secrets.GLYDR_MAIL }}"
+      - name: Add request and push
+        run: |
+          cd perf
+          printf "\ntarget/release/skyreport update next" >> requests.txt
+          git add .
+          git commit -m "Add update request for next" -m "Triggered by $GITHUB_SHA"
+          git push https://glydr:${{ secrets.GLYDR }}@github.com/skytable/perf.git --all
