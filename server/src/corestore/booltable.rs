@@ -43,7 +43,7 @@ impl BoolTable {
 impl Index<bool> for BoolTable {
     type Output = &'static [u8];
     fn index(&self, index: bool) -> &Self::Output {
-        unsafe { self.base.get_unchecked(index as usize) }
+        unsafe { &*self.base.as_ptr().add(index as usize) }
     }
 }
 
@@ -73,8 +73,10 @@ impl Index<Option<bool>> for NicheLUT {
     type Output = &'static [u8];
     fn index(&self, idx: Option<bool>) -> &Self::Output {
         unsafe {
-            self.base
-                .get_unchecked(*(&idx as *const _ as *const u8) as usize)
+            &*self
+                .base
+                .as_ptr()
+                .add(*(&idx as *const _ as *const u8) as usize)
         }
     }
 }
