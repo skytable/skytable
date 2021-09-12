@@ -55,10 +55,18 @@
 */
 
 use crate::corestore::booltable::BoolTable;
+use crate::corestore::booltable::TwoBitLUT;
+use crate::protocol::iter::AnyArrayIter;
 use crate::protocol::iter::BorrowedAnyArrayIter;
 
 pub const ENCODING_LUT_ITER: BoolTable<fn(BorrowedAnyArrayIter) -> bool> =
     BoolTable::new(is_okay_encoded_iter, is_okay_no_encoding_iter);
+pub const ENCODING_LUT_ITER_PAIR: TwoBitLUT<fn(&AnyArrayIter) -> bool> = TwoBitLUT::new(
+    pair_is_okay_encoded_iter_ff,
+    pair_is_okay_encoded_iter_ft,
+    pair_is_okay_encoded_iter_tf,
+    pair_is_okay_encoded_iter_tt,
+);
 
 /// This table maps bytes to character classes that helps us reduce the size of the
 /// transition table and generate bitmasks
@@ -83,6 +91,53 @@ const UTF8_TRANSITION_MAP: [u8; 108] = [
     12, 12, 12, 12, 12, 12, 12, 36, 12, 36, 12, 12, 12, 36, 12, 12, 12, 12, 12, 36, 12, 36, 12, 12,
     12, 36, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
 ];
+
+pub const fn pair_is_okay_encoded_iter_ff(_inp: &AnyArrayIter<'_>) -> bool {
+    true
+}
+
+pub fn pair_is_okay_encoded_iter_ft(inp: &AnyArrayIter<'_>) -> bool {
+    unsafe {
+        let mut vptr = inp.as_ptr().add(1);
+        let eptr = inp.as_ptr().add(inp.len());
+        let mut state = true;
+        while vptr < eptr && state {
+            state = self::is_utf8((*vptr).as_slice());
+            // only forward values
+            vptr = vptr.add(2);
+        }
+        state
+    }
+}
+
+pub fn pair_is_okay_encoded_iter_tf(inp: &AnyArrayIter<'_>) -> bool {
+    unsafe {
+        let mut kptr = inp.as_ptr();
+        let eptr = kptr.add(inp.len());
+        let mut state = true;
+        while kptr < eptr && state {
+            state = self::is_utf8((*kptr).as_slice());
+            // only forward keys
+            kptr = kptr.add(2);
+        }
+        state
+    }
+}
+
+pub fn pair_is_okay_encoded_iter_tt(inp: &AnyArrayIter<'_>) -> bool {
+    unsafe {
+        let mut kptr = inp.as_ptr();
+        let mut vptr = inp.as_ptr().add(1);
+        let eptr = kptr.add(inp.len());
+        let mut state = true;
+        while vptr < eptr && state {
+            state = self::is_utf8((*kptr).as_slice()) && self::is_utf8((*vptr).as_slice());
+            kptr = kptr.add(2);
+            vptr = vptr.add(2);
+        }
+        state
+    }
+}
 
 pub fn is_okay_encoded_iter(mut inp: BorrowedAnyArrayIter<'_>) -> bool {
     inp.all(|v| self::is_okay_encoded(v))

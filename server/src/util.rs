@@ -253,3 +253,13 @@ macro_rules! if_cold {
         }
     };
 }
+
+#[cfg(test)]
+macro_rules! tmut_bool {
+    ($e:expr) => {
+        unsafe { *(&$e as *const _ as *const bool) }
+    };
+    ($a:expr, $b:expr) => {
+        (tmut_bool!($a), tmut_bool!($b))
+    };
+}

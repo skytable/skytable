@@ -24,6 +24,12 @@
  *
 */
 
+/*
+    ⚠⚠⚠⚠ A WORD OF WARNING ⚠⚠⚠⚠
+    This module contains some dark stuff (and asumptions) about type layouts and/or representations,
+    things which can change from time to time. Do not rely on any of this!
+*/
+
 use core::ops::Index;
 
 pub type BytesBoolTable = BoolTable<&'static [u8]>;
@@ -93,4 +99,48 @@ fn niche_optim_sanity_test() {
         assert_eq!(*r_some_t, 1);
         assert_eq!(*r_none, 2);
     }
+}
+
+/// A 2-bit indexed boolean LUT
+pub struct TwoBitLUT<T> {
+    base: [T; 4],
+}
+
+type Bit = bool;
+type TwoBitIndex = (Bit, Bit);
+
+impl<T> TwoBitLUT<T> {
+    /// Supply values in the following order:
+    /// - 1st unset, 2nd unset
+    /// - 1st unset, 2nd set
+    /// - 1st set, 2nd unset
+    /// - 1st set, 2nd set
+    pub const fn new(ff: T, ft: T, tf: T, tt: T) -> Self {
+        Self {
+            base: [ff, ft, tf, tt],
+        }
+    }
+}
+
+impl<T> Index<TwoBitIndex> for TwoBitLUT<T> {
+    type Output = T;
+    fn index(&self, (bit_a, bit_b): TwoBitIndex) -> &Self::Output {
+        unsafe {
+            &*self
+                .base
+                .as_ptr()
+                .add((((bit_a as u8) << 1) + (bit_b as u8)) as usize)
+        }
+    }
+}
+
+#[test]
+fn test_two_bit_indexed_lut() {
+    let (bit_a, bit_b) = tmut_bool!(0, 0);
+    let twobitlut = TwoBitLUT::new('a', 'b', 'c', 'd');
+    // the operators, are just for sanity
+    assert_eq!('d', twobitlut[(!bit_a, !bit_b)]);
+    assert_eq!('c', twobitlut[(!bit_a, bit_b)]);
+    assert_eq!('b', twobitlut[(bit_a, !bit_b)]);
+    assert_eq!('a', twobitlut[(bit_a, bit_b)]);
 }

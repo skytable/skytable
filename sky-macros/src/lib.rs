@@ -225,15 +225,6 @@ fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     }
-    let modname = &input.ident;
-    if *modname != "__private" {
-        return syn::Error::new_spanned(
-            modname,
-            "By convention, all the modules using the `dbtest` macro have to be called `__private`",
-        )
-        .to_compile_error()
-        .into();
-    }
     let mut result = quote! {};
     let mut rng = rand::thread_rng();
     for item in content {
@@ -300,12 +291,6 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// `features` set to full
 /// - should have the `skytable` crate as a dependency and should have the `features` set to `async` and version
 /// upstreamed to `next` on skytable/client-rust
-///
-/// ## Conventions
-/// Since `proc_macro` cannot accept _file-linked_ modules and only accepts inline modules, we have made a workaround, which
-/// has led to making this a _convention_.
-/// So let's say we have a module `kvengine` in which we have our tests. So, we'll have to wrap around all these test functions
-/// in a module `__private` within `kvengine`
 ///
 /// ## Collisions
 ///

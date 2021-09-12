@@ -75,6 +75,10 @@ impl<'a> AnyArrayIter<'a> {
             iter: self.iter.as_ref().iter(),
         }
     }
+    /// Returns the starting ptr of the `AnyArray`
+    pub unsafe fn as_ptr(&self) -> *const UnsafeSlice {
+        self.iter.as_ref().as_ptr()
+    }
     /// Returns the next value in uppercase
     pub fn next_uppercase(&mut self) -> Option<Box<[u8]>> {
         self.iter.next().map(|v| unsafe {
