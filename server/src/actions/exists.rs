@@ -43,9 +43,7 @@ action!(
                 let encoding_is_okay = ENCODING_LUT_ITER[$engine.kve_key_encoded()](act.as_ref());
                 if compiler::likely(encoding_is_okay) {
                     act.for_each(|key| {
-                        if $engine.kve_exists(key) {
-                            how_many_of_them_exist += 1;
-                        }
+                        how_many_of_them_exist += $engine.kve_exists(key) as usize;
                     });
                     conwrite!(con, how_many_of_them_exist)?;
                 } else {

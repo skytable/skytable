@@ -49,9 +49,7 @@ action!(
                         if registry::state_okay() {
                             let mut many = 0;
                             act.for_each(|key| {
-                                if $engine.kve_remove(key) {
-                                    many += 1
-                                }
+                                many += $engine.kve_remove(key) as usize;
                             });
                             done_howmany = Some(many);
                         } else {
