@@ -250,11 +250,12 @@ where
     /// Write a response to the stream
     fn write_response<'r, 's>(
         &'r mut self,
-        streamer: impl Writable + 's + Send,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+        streamer: impl Writable + 's + Send + Sync,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Sync + Send + 's>>
     where
         'r: 's,
         Self: Send + 's,
+        Self: Sync,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -272,7 +273,7 @@ where
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Send + Sync + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -290,7 +291,7 @@ where
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Send + Sync + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -310,7 +311,7 @@ where
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Send + Sync + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -327,11 +328,11 @@ where
     /// success response and an error response
     fn close_conn_with_error<'r, 's>(
         &'r mut self,
-        resp: impl Writable + 's + Send,
+        resp: impl Writable + 's + Send + Sync,
     ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Send + Sync + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -453,7 +454,7 @@ where
 
 impl<T, Strm> ConnectionHandler<T, Strm>
 where
-    T: ProtocolConnectionExt<Strm> + Send,
+    T: ProtocolConnectionExt<Strm> + Send + Sync,
     Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
 {
     pub fn new(

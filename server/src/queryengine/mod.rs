@@ -97,7 +97,7 @@ pub async fn execute_simple<'a, T: 'a, Strm>(
     buf: SimpleQuery,
 ) -> std::io::Result<()>
 where
-    T: ProtocolConnectionExt<Strm>,
+    T: ProtocolConnectionExt<Strm> + Send + Sync,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     if !buf.is_any_array() {

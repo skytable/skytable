@@ -362,8 +362,7 @@ pub fn array(args: TokenStream, item: TokenStream) -> TokenStream {
                         // so we have two parts, let's look at the second part: [ty; len]
                         let starts_ends =
                             declarations[1].starts_with('[') && declarations[1].ends_with(']');
-                        let ret: Vec<&str> = declarations[1].split(';').collect();
-                        if ret.len() != 2 || starts_ends {
+                        if declarations[1].split(';').count() != 2 || starts_ends {
                             syn::Error::new_spanned(declaration, "Expected [T; N]")
                                 .to_compile_error()
                                 .into()

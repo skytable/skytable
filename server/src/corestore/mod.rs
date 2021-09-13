@@ -338,7 +338,11 @@ impl Corestore {
     }
 
     /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query<T, Strm>(&mut self, query: Query, con: &mut T) -> TResult<()>
+    pub async fn execute_query<T: Send + Sync, Strm>(
+        &mut self,
+        query: Query,
+        con: &mut T,
+    ) -> TResult<()>
     where
         T: ProtocolConnectionExt<Strm>,
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
