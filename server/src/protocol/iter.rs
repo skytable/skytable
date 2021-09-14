@@ -68,6 +68,10 @@ impl<'a> AnyArrayIter<'a> {
     pub fn chunks_exact(&'a self, chunks_exact: usize) -> ChunksExact<'a, UnsafeSlice> {
         self.iter.as_ref().chunks_exact(chunks_exact)
     }
+    /// Check if the iter is empty
+    pub fn is_empty(&self) -> bool {
+        self.as_ref().len() == 0
+    }
     /// Returns a borrowed iterator => simply put, advancing the returned iterator does not
     /// affect the base iterator owned by this object
     pub fn as_ref(&'a self) -> BorrowedAnyArrayIter<'a> {

@@ -34,7 +34,7 @@ action!(
     ///
     fn mksnap(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let engine = handle.get_engine();
-        if act.len() == 0 {
+        if act.is_empty() {
             // traditional mksnap
             match engine.mksnap(handle.clone_store()).await {
                 0 => conwrite!(con, groups::OKAY)?,

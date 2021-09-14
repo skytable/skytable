@@ -30,7 +30,7 @@ action!(
     /// Returns the number of keys in the database
     fn dbsize(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 1);
-        if act.len() == 0 {
+        if act.is_empty() {
             let len = get_tbl!(handle, con).count();
             con.write_response(len).await?;
         } else {

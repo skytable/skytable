@@ -32,7 +32,7 @@ action!(
     fn flushdb(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 1);
         if registry::state_okay() {
-            if act.len() == 0 {
+            if act.is_empty() {
                 // flush the current table
                 get_tbl!(handle, con).truncate_table();
             } else {

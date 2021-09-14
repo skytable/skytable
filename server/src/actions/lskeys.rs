@@ -36,7 +36,7 @@ action!(
     /// Run an `LSKEYS` query
     fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, gt 3);
-        let (table, count) = if act.len() == 0 {
+        let (table, count) = if act.is_empty() {
             (get_tbl!(handle, con), DEFAULT_COUNT)
         } else if act.len() == 1 {
             // two args, could either be count or an entity
