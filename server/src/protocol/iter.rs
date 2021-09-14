@@ -70,7 +70,7 @@ impl<'a> AnyArrayIter<'a> {
     }
     /// Check if the iter is empty
     pub fn is_empty(&self) -> bool {
-        self.as_ref().len() == 0
+        ExactSizeIterator::len(self) == 0
     }
     /// Returns a borrowed iterator => simply put, advancing the returned iterator does not
     /// affect the base iterator owned by this object
