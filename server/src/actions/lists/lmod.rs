@@ -25,16 +25,12 @@
 */
 
 use super::{writer, OKAY_BADIDX_NIL_NLUT};
-use crate::corestore::booltable::BoolTable;
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding::ENCODING_LUT;
 use crate::kvengine::KVTable;
 use crate::util::compiler;
-
-pub const OKAY_SERVER_ERR_BLUT: BoolTable<&'static [u8]> =
-    BoolTable::new(groups::OKAY, groups::SERVER_ERR);
 
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
@@ -74,11 +70,11 @@ action! {
                 };
                 let okay = if registry::state_okay() {
                     list.write().clear();
-                    true
+                    groups::OKAY
                 } else {
-                    false
+                    groups::SERVER_ERR
                 };
-                conwrite!(con, OKAY_SERVER_ERR_BLUT[okay])?;
+                conwrite!(con, okay)?;
             }
             PUSH => {
                 err_if_len_is!(act, con, not 1);
