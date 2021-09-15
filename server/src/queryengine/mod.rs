@@ -154,7 +154,7 @@ where
             MPOP => actions::mpop::mpop,
             LSET => actions::lists::lset,
             LGET => actions::lists::lget,
-            LMOD => actions::lists::lmod
+            LMOD => actions::lists::lmod::lmod
         );
     }
     Ok(())
