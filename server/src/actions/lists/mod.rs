@@ -29,10 +29,11 @@ use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
+use crate::kvengine::{encoding::ENCODING_LUT, listmap::LockedVec};
 use crate::resp::writer;
 use crate::resp::writer::TypedArrayWriter;
+use crate::util::compiler;
 
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
@@ -218,15 +219,21 @@ action! {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
                 };
-                let okay = unsafe {
+                let bts = unsafe { act.next_unchecked() };
+                let ret = if compiler::likely(ENCODING_LUT[listmap.kve_payload_encoded()](bts)) {
                     if registry::state_okay() {
-                        list.write().push(act.next_unchecked_bytes().into());
-                        true
+                        // good to try and insert
+                        list.write().push(Data::copy_from_slice(bts));
+                        groups::OKAY
                     } else {
-                        false
+                        // server broken; server err
+                        groups::SERVER_ERR
                     }
+                } else {
+                    // encoding failed; uh
+                    groups::ENCODING_ERROR
                 };
-                conwrite!(con, OKAY_OVW_BLUT[okay])?;
+                conwrite!(con, ret)?;
             }
             REMOVE => {
                 err_if_len_is!(act, con, not 1);
@@ -249,22 +256,31 @@ action! {
             INSERT => {
                 err_if_len_is!(act, con, not 2);
                 let idx_to_insert_at = get_numeric_count!();
-                let value_to_insert = unsafe { act.next_unchecked_bytes() };
-                if registry::state_okay() {
-                    let maybe_insert = listmap.get(listname).map(|list| {
-                        let mut wlock = list.write();
-                        if idx_to_insert_at < wlock.len() {
-                            // we can insert
-                            wlock.insert(idx_to_insert_at, value_to_insert.into());
-                            true
-                        } else {
-                            false
-                        }
-                    });
-                    conwrite!(con, OKAY_BADIDX_NIL_NLUT[maybe_insert])?;
+                let bts = unsafe { act.next_unchecked() };
+                let ret = if compiler::likely(ENCODING_LUT[listmap.kve_payload_encoded()](bts)) {
+                    if registry::state_okay() {
+                        // okay state, good to insert
+                        let maybe_insert = listmap.get(listname).map(|list| {
+                            let mut wlock = list.write();
+                            if idx_to_insert_at < wlock.len() {
+                                // we can insert
+                                wlock.insert(idx_to_insert_at, Data::copy_from_slice(bts));
+                                true
+                            } else {
+                                // oops, out of bounds
+                                false
+                            }
+                        });
+                        OKAY_BADIDX_NIL_NLUT[maybe_insert]
+                    } else {
+                        // flush broken; server err
+                        groups::SERVER_ERR
+                    }
                 } else {
-                    conwrite!(con, groups::SERVER_ERR)?;
-                }
+                    // encoding failed, uh
+                    groups::ENCODING_ERROR
+                };
+                conwrite!(con, ret)?;
             }
             POP => {
                 err_if_len_is!(act, con, gt 1);
