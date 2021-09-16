@@ -36,7 +36,7 @@ macro_rules! push_self {
 
 macro_rules! lut {
     ($e:expr) => {
-        *PAIR_MAP_LUT.get_unchecked(($e) as usize)
+        ucidx!(PAIR_MAP_LUT, $e)
     };
 }
 

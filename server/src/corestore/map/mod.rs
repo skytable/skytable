@@ -397,11 +397,11 @@ impl<'a, K, V: Clone, S: BuildHasher> Skymap<K, V, S> {
 impl<'a, K: 'a, V: 'a, S> Skymap<K, V, S> {
     /// Get a rlock to a certain stripe
     unsafe fn get_rshard_unchecked(&'a self, shard: usize) -> SRlock<'a, K, V> {
-        self.shards.get_unchecked(shard).read()
+        ucidx!(self.shards, shard).read()
     }
     /// Get a wlock to a certain stripe
     unsafe fn get_wshard_unchecked(&'a self, shard: usize) -> SWlock<'a, K, V> {
-        self.shards.get_unchecked(shard).write()
+        ucidx!(self.shards, shard).write()
     }
 }
 

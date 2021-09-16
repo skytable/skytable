@@ -41,7 +41,7 @@ action!(
         } else if act.len() == 1 {
             // two args, could either be count or an entity
             let nextret = unsafe { act.next_unchecked() };
-            if unsafe { nextret.get_unchecked(0) }.is_ascii_digit() {
+            if unsafe { ucidx!(nextret, 0) }.is_ascii_digit() {
                 // noice, this is a number; let's try to parse it
                 let count = if let Ok(cnt) = String::from_utf8_lossy(nextret).parse::<usize>() {
                     cnt

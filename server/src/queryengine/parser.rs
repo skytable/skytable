@@ -63,8 +63,9 @@ pub(super) fn parse_table_args(
     if compiler::unlikely(splits.len() != 2) {
         return Err(responses::groups::BAD_EXPRESSION);
     }
-    let model_name_split = unsafe { splits.get_unchecked(0) };
-    let model_args_split = unsafe { splits.get_unchecked(1) };
+
+    let model_name_split = unsafe { ucidx!(splits, 0) };
+    let model_args_split = unsafe { ucidx!(splits, 1) };
 
     // model name has to have at least one char while model args should have
     // atleast `)` 1 chars (for example if the model takes no arguments: `smh()`)
@@ -77,12 +78,8 @@ pub(super) fn parse_table_args(
         return Err(responses::groups::UNKNOWN_MODEL);
     }
 
-    let non_bracketed_end = unsafe {
-        *model_args_split
-            .as_bytes()
-            .get_unchecked(model_args_split.len() - 1)
-            != b')'
-    };
+    let non_bracketed_end =
+        unsafe { ucidx!(*model_args_split.as_bytes(), model_args_split.len() - 1) != b')' };
 
     if compiler::unlikely(non_bracketed_end) {
         return Err(responses::groups::BAD_EXPRESSION);
@@ -107,8 +104,8 @@ pub(super) fn parse_table_args(
             }
         });
     }
-    let key_ty = unsafe { model_args.get_unchecked(0) };
-    let val_ty = unsafe { model_args.get_unchecked(1) };
+    let key_ty = unsafe { ucidx!(model_args, 0) };
+    let val_ty = unsafe { ucidx!(model_args, 1) };
     let valid_key_ty = if let Some(idx) = key_ty.chars().position(|v| v.eq(&'<')) {
         VALID_CONTAINER_NAME.is_match(&key_ty[..idx]) && VALID_TYPENAME.is_match(&key_ty[idx..])
     } else {
@@ -165,8 +162,8 @@ pub(super) fn parse_table_args_test(
     if compiler::unlikely(splits.len() != 2) {
         return Err(responses::groups::BAD_EXPRESSION);
     }
-    let model_name_split = unsafe { splits.get_unchecked(0) };
-    let model_args_split = unsafe { splits.get_unchecked(1) };
+    let model_name_split = unsafe { ucidx!(splits, 0) };
+    let model_args_split = unsafe { ucidx!(splits, 1) };
 
     // model name has to have at least one char while model args should have
     // atleast `)` 1 chars (for example if the model takes no arguments: `smh()`)
@@ -179,12 +176,8 @@ pub(super) fn parse_table_args_test(
         return Err(responses::groups::UNKNOWN_MODEL);
     }
 
-    let non_bracketed_end = unsafe {
-        *model_args_split
-            .as_bytes()
-            .get_unchecked(model_args_split.len() - 1)
-            != b')'
-    };
+    let non_bracketed_end =
+        unsafe { ucidx!(*model_args_split.as_bytes(), model_args_split.len() - 1) != b')' };
 
     if compiler::unlikely(non_bracketed_end) {
         return Err(responses::groups::BAD_EXPRESSION);
@@ -209,8 +202,8 @@ pub(super) fn parse_table_args_test(
             }
         });
     }
-    let key_ty = unsafe { model_args.get_unchecked(0) };
-    let val_ty = unsafe { model_args.get_unchecked(1) };
+    let key_ty = unsafe { ucidx!(model_args, 0) };
+    let val_ty = unsafe { ucidx!(model_args, 1) };
     let valid_key_ty = if let Some(idx) = key_ty.chars().position(|v| v.eq(&'<')) {
         VALID_CONTAINER_NAME.is_match(&key_ty[..idx]) && VALID_TYPENAME.is_match(&key_ty[idx..])
     } else {
@@ -254,7 +247,7 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<BorrowedEntityGroup, &'st
     unsafe {
         if y.len() == 1 {
             // just ks
-            let ksret = y.get_unchecked(0);
+            let ksret = &ucidx!(y, 0);
             #[allow(clippy::if_same_then_else)]
             if compiler::unlikely(ksret.len() > 64 || ksret.is_empty()) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
@@ -269,8 +262,8 @@ pub fn get_query_entity<'a>(input: &'a [u8]) -> Result<BorrowedEntityGroup, &'st
             }
         } else if y.len() == 2 {
             // tbl + ns
-            let ksret = y.get_unchecked(0);
-            let tblret = y.get_unchecked(1);
+            let ksret = &ucidx!(y, 0);
+            let tblret = &ucidx!(y, 1);
             if compiler::unlikely(ksret.len() > 64 || tblret.len() > 64) {
                 Err(responses::groups::BAD_CONTAINER_NAME)
             } else if compiler::unlikely(tblret.is_empty() || ksret.is_empty()) {

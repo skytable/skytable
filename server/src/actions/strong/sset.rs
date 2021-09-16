@@ -79,8 +79,8 @@ pub(super) fn snapshot_and_insert(
     let key_iter_stat_ok;
     {
         key_iter_stat_ok = act.chunks_exact(2).all(|kv| unsafe {
-            let key = kv.get_unchecked(0).as_slice();
-            let value = kv.get_unchecked(1).as_slice();
+            let key = ucidx!(kv, 0).as_slice();
+            let value = ucidx!(kv, 1).as_slice();
             if compiler::likely(encoder.is_ok(key, value)) {
                 lowtable.get(key).is_none()
             } else {
@@ -130,8 +130,8 @@ pub(super) fn snapshot_and_insert_test(
     let key_iter_stat_ok;
     {
         key_iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
-            let key = kv.get_unchecked(0);
-            let value = kv.get_unchecked(1);
+            let key = &ucidx!(kv, 0);
+            let value = &ucidx!(kv, 1);
             if compiler::likely(encoder.is_ok(key, value)) {
                 lowtable.get(key).is_none()
             } else {

@@ -84,8 +84,8 @@ pub(super) fn snapshot_and_update(
     {
         // snapshot the values at this point in time
         iter_stat_ok = act.chunks_exact(2).all(|kv| unsafe {
-            let key = kv.get_unchecked(0).as_slice();
-            let value = kv.get_unchecked(1).as_slice();
+            let key = ucidx!(kv, 0).as_slice();
+            let value = ucidx!(kv, 1).as_slice();
             if compiler::likely(encoder.is_ok(key, value)) {
                 if let Some(snapshot) = kve.take_snapshot(key) {
                     snapshots.push(snapshot);
@@ -150,8 +150,8 @@ pub(super) fn snapshot_and_update_test(
     {
         // snapshot the values at this point in time
         iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
-            let key = kv.get_unchecked(0);
-            let value = kv.get_unchecked(1);
+            let key = &ucidx!(kv, 0);
+            let value = &ucidx!(kv, 1);
             if compiler::likely(encoder.is_ok(key, value)) {
                 if let Some(snapshot) = kve.take_snapshot(key) {
                     snapshots.push(snapshot);
