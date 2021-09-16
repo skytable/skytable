@@ -284,3 +284,9 @@ macro_rules! tmut_bool {
         (tmut_bool!($a), tmut_bool!($b))
     };
 }
+
+macro_rules! ucidx {
+    ($base:ident, $idx:expr) => {
+        *($base.as_ptr().add($idx as usize))
+    };
+}

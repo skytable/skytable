@@ -72,7 +72,7 @@ pub const ENCODING_LUT: BoolTable<fn(&[u8]) -> bool> =
 
 /// This table maps bytes to character classes that helps us reduce the size of the
 /// transition table and generate bitmasks
-const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
+static UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -86,7 +86,7 @@ const UTF8_MAP_BYTE_TO_CHAR_CLASS: [u8; 256] = [
 
 /// This table is a transition table that maps the combination of a state of the
 /// automaton and a char class to a state
-const UTF8_TRANSITION_MAP: [u8; 108] = [
+static UTF8_TRANSITION_MAP: [u8; 108] = [
     0, 12, 24, 36, 60, 96, 84, 12, 12, 12, 48, 72, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
     12, 0, 12, 12, 12, 12, 12, 0, 12, 0, 12, 12, 12, 24, 12, 12, 12, 12, 12, 24, 12, 24, 12, 12,
     12, 12, 12, 12, 12, 12, 12, 24, 12, 12, 12, 12, 12, 24, 12, 12, 12, 12, 12, 12, 12, 24, 12, 12,
@@ -157,6 +157,18 @@ pub const fn is_okay_no_encoding(_inp: &[u8]) -> bool {
     true
 }
 
+macro_rules! utf_transition {
+    ($idx:expr) => {
+        ucidx!(UTF8_TRANSITION_MAP, $idx)
+    };
+}
+
+macro_rules! utfmap {
+    ($idx:expr) => {
+        ucidx!(UTF8_MAP_BYTE_TO_CHAR_CLASS, $idx)
+    };
+}
+
 /// This method uses a dual-stream deterministic finite automaton
 /// [(DFA)](https://en.wikipedia.org/wiki/Deterministic_finite_automaton) that is used to validate
 /// UTF-8 bytes that use the encoded finite state machines defined in this module.
@@ -170,7 +182,7 @@ pub fn is_utf8(bytes: impl AsRef<[u8]>) -> bool {
     let bytes = bytes.as_ref();
     let mut half = bytes.len() / 2;
     unsafe {
-        while *bytes.get_unchecked(half) <= 0xBF && *bytes.get_unchecked(half) >= 0x80 && half > 0 {
+        while ucidx!(bytes, half) <= 0xBF && ucidx!(bytes, half) >= 0x80 && half > 0 {
             half -= 1;
         }
     }
@@ -179,17 +191,8 @@ pub fn is_utf8(bytes: impl AsRef<[u8]>) -> bool {
     let mut j = half;
     while i < half {
         unsafe {
-            fsm_state_1 = *UTF8_TRANSITION_MAP.get_unchecked(
-                (fsm_state_1
-                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS
-                        .get_unchecked((*bytes.get_unchecked(i)) as usize)))
-                    as usize,
-            );
-            fsm_state_2 = *UTF8_TRANSITION_MAP.get_unchecked(
-                (fsm_state_2
-                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS.get_unchecked(*bytes.get_unchecked(j) as usize)))
-                    as usize,
-            );
+            fsm_state_1 = utf_transition!((fsm_state_1 + (utfmap!((ucidx!(bytes, i))))));
+            fsm_state_2 = utf_transition!((fsm_state_2 + (utfmap!(ucidx!(bytes, j)))));
         }
         i += 1;
         j += 1;
@@ -197,12 +200,7 @@ pub fn is_utf8(bytes: impl AsRef<[u8]>) -> bool {
     let mut j = half * 2;
     while j < bytes.len() {
         unsafe {
-            fsm_state_2 = *UTF8_TRANSITION_MAP.get_unchecked(
-                (fsm_state_2
-                    + (UTF8_MAP_BYTE_TO_CHAR_CLASS
-                        .get_unchecked((*bytes.get_unchecked(j)) as usize)))
-                    as usize,
-            );
+            fsm_state_2 = utf_transition!((fsm_state_2 + (utfmap!(ucidx!(bytes, j)))));
         }
         j += 1;
     }
