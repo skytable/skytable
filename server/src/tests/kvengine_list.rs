@@ -149,7 +149,62 @@ mod __private {
         let q = query!("lget", "mybadlist", "valueat", "2", "3");
         runeq!(con, q, Element::RespCode(RespCode::ActionError));
     }
-
+    // lget last
+    /// lget last with one element
+    async fn test_lget_last_with_last_one_element() {
+        lset!(con, "mylist", "a");
+        let q = query!("lget", "mylist", "last");
+        runeq!(con, q, Element::String("a".to_owned()));
+    }
+    /// lget last with multiple elements
+    async fn test_lget_last_with_last_many_elements() {
+        lset!(con, "mylist", "a", "b", "c");
+        let q = query!("lget", "mylist", "last");
+        runeq!(con, q, Element::String("c".to_owned()));
+    }
+    /// lget last with empty list
+    async fn test_lget_last_with_empty_list() {
+        lset!(con, "mylist", "a");
+        let q = query!("lget", "mylist", "last");
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("list-is-empty".to_owned()))
+        );
+    }
+    /// lget last syntax error
+    async fn test_lget_last_syntax_error() {
+        let q = query!("lget", "mylist", "last", "abcd");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
+    // lget first
+    /// lget first with one element
+    async fn test_lget_first_with_last_one_element() {
+        lset!(con, "mylist", "a");
+        let q = query!("lget", "mylist", "first");
+        runeq!(con, q, Element::String("a".to_owned()));
+    }
+    /// lget first with multiple elements
+    async fn test_lget_first_with_last_many_elements() {
+        lset!(con, "mylist", "a", "b", "c");
+        let q = query!("lget", "mylist", "first");
+        runeq!(con, q, Element::String("a".to_owned()));
+    }
+    /// lget first with empty list
+    async fn test_lget_first_with_empty_list() {
+        lset!(con, "mylist", "a");
+        let q = query!("lget", "mylist", "first");
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("list-is-empty".to_owned()))
+        );
+    }
+    /// lget last syntax error
+    async fn test_lget_first_syntax_error() {
+        let q = query!("lget", "mylist", "first", "abcd");
+        runeq!(con, q, Element::RespCode(RespCode::ActionError));
+    }
     // lmod tests
     // lmod push
     /// lmod push (okay)
