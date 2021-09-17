@@ -27,6 +27,7 @@
 #[macro_use]
 mod macros;
 // modules
+pub mod lget;
 pub mod lmod;
 
 use crate::corestore::booltable::BytesBoolTable;
@@ -37,11 +38,6 @@ use crate::dbnet::connection::prelude::*;
 use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
 use crate::resp::writer;
-use crate::resp::writer::TypedArrayWriter;
-
-const LEN: &[u8] = "LEN".as_bytes();
-const LIMIT: &[u8] = "LIMIT".as_bytes();
-const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 
 const OKAY_OVW_BLUT: BytesBoolTable = BytesBoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
 const OKAY_BADIDX_NIL_NLUT: BytesNicheLUT =
@@ -67,90 +63,6 @@ action! {
             conwrite!(con, OKAY_OVW_BLUT[did])?;
         } else {
             conwrite!(con, groups::SERVER_ERR)?;
-        }
-        Ok(())
-    }
-
-    /// Handle an `LGET` query for the list model (KVExt)
-    /// ## Syntax
-    /// - `LGET <mylist>` will return the full list
-    /// - `LGET <mylist> LEN` will return the length of the list
-    /// - `LGET <mylist> LIMIT <limit>` will return a maximum of `limit` elements
-    /// - `LGET <mylist> VALUEAT <index>` will return the value at the provided index
-    /// if it exists
-    fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, lt 1);
-        let table = get_tbl!(handle, con);
-        let listmap = listmap!(table, con);
-        // get the list name
-        let listname = unsafe { act.next_unchecked() };
-        // now let us see what we need to do
-        macro_rules! get_numeric_count {
-            () => {
-                match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
-                    Ok(int) => int,
-                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
-                }
-            };
-        }
-        match act.next_uppercase().as_ref() {
-            None => {
-                // just return everything in the list
-                let items: Vec<Data> = if let Some(list) = listmap.get(listname) {
-                    list.value().read().iter().cloned().collect()
-                } else {
-                    return conwrite!(con, groups::NIL);
-                };
-                writelist!(con, listmap, items);
-            }
-            Some(subaction) => {
-                match subaction.as_ref() {
-                    LEN => {
-                        err_if_len_is!(act, con, not 0);
-                        if let Some(len) = listmap.len_of(listname) {
-                            conwrite!(con, len)?;
-                        } else {
-                            conwrite!(con, groups::NIL)?;
-                        }
-                    }
-                    LIMIT => {
-                        err_if_len_is!(act, con, not 1);
-                        let count = get_numeric_count!();
-                        let items = if let Some(keys) = listmap.get_cloned(listname, count) {
-                            keys
-                        } else {
-                            return conwrite!(con, groups::NIL);
-                        };
-                        writelist!(con, listmap, items);
-                    }
-                    VALUEAT => {
-                        err_if_len_is!(act, con, not 1);
-                        let idx = get_numeric_count!();
-                        let maybe_value = listmap.get(listname).map(|list| {
-                            let readlist = list.read();
-                            let get = readlist.get(idx).cloned();
-                            get
-                        });
-                        match maybe_value {
-                            Some(Some(value)) => {
-                                unsafe {
-                                    // tsymbol is verified
-                                    writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &value).await?;
-                                }
-                            },
-                            Some(None) => {
-                                // bad index
-                                conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
-                            },
-                            None => {
-                                // not found
-                                conwrite!(con, groups::NIL)?;
-                            }
-                        }
-                    }
-                    _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
-                }
-            }
         }
         Ok(())
     }
