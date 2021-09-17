@@ -43,6 +43,8 @@ action! {
     /// - `LGET <mylist> LEN` will return the length of the list
     /// - `LGET <mylist> LIMIT <limit>` will return a maximum of `limit` elements
     /// - `LGET <mylist> VALUEAT <index>` will return the value at the provided index
+    /// - `LGET <mylist> FIRST` will return the first item
+    /// - `LGET <mylist> LAST` will return the last item
     /// if it exists
     fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
         err_if_len_is!(act, con, lt 1);

@@ -164,7 +164,7 @@ mod __private {
     }
     /// lget last with empty list
     async fn test_lget_last_with_empty_list() {
-        lset!(con, "mylist", "a");
+        lset!(con, "mylist");
         let q = query!("lget", "mylist", "last");
         runeq!(
             con,
@@ -192,7 +192,7 @@ mod __private {
     }
     /// lget first with empty list
     async fn test_lget_first_with_empty_list() {
-        lset!(con, "mylist", "a");
+        lset!(con, "mylist");
         let q = query!("lget", "mylist", "first");
         runeq!(
             con,
