@@ -103,6 +103,7 @@ pub mod groups {
     pub const BAD_TYPE_FOR_KEY: &[u8] = "!16\nbad-type-for-key\n".as_bytes();
     /// The index for the provided list was non-existent
     pub const LISTMAP_BAD_INDEX: &[u8] = "!14\nbad-list-index\n".as_bytes();
+    pub const LISTMAP_LIST_IS_EMPTY: &[u8] = "!13\nlist-is-empty\n".as_bytes();
 }
 
 pub mod full_responses {

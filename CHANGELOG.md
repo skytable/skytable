@@ -2,6 +2,36 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.7.1
+
+### Additions
+
+- Added the list data type
+- Added actions for lists:
+  - `LSET <list> <values> ...`
+  - `LGET`
+    - `LGET <list>`
+    - `LGET <list> LEN`
+    - `LGET <list> VALUEAT <idx>`
+    - `LGET <list> LIMIT <limit>`
+    - `LGET <list> FIRST`
+    - `LGET <list> LAST`
+  - `LMOD`
+    - `LMOD <list> push <value>`
+    - `LMOD <list> insert <index> <value>`
+    - `LMOD <list> pop <optional index>`
+    - `LMOD <list> remove <index>`
+    - `LMOD <list> clear`
+- Added creation of lists:
+  - `CREATE TABLE <entity> keymap(type,list<type>)`
+- Added compatibility of `DEL`, `EXISTS` and `LSKEYS` with lists
+
+### Improvements
+
+- Reduced memory usage in `sky-bench`
+- Reduced allocations in Skyhash (`skyd`) protocol implementation
+- Misc. fixes in internal structures (`skyd`)
+
 ## Version 0.7.0
 
 ### Additions
