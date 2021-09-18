@@ -185,7 +185,8 @@ fn print_rcode(rcode: RespCode, idx: Option<usize>) {
         RespCode::OverwriteError => write_err!(idx, "Overwrite Error"),
         RespCode::PacketError => write_err!(idx, "Packet Error"),
         RespCode::ServerError => write_err!(idx, "Server Error"),
-        _ => write_err!(idx, "Unknown Error"),
+        RespCode::UnknownDataType => write_err!(idx, "Unknown data type"),
+        _ => write_err!(idx, "Unknown error"),
     }
 }
 
