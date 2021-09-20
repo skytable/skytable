@@ -463,9 +463,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.101"
+version = "0.2.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cb00336871be5ed2c8ed44b60ae9959dc5b9f08539422ed43f09e34ecaeba21"
+checksum = "a2a5ac8f984bfcf3a823267e5fde638acc3325f6496633a5da6bb6eb2171e103"
 
 [[package]]
 name = "libsky"
@@ -473,7 +473,7 @@ version = "0.7.0"
 dependencies = [
  "lazy_static",
  "regex",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "termcolor",
 ]
 
@@ -894,9 +894,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.67"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f9e390c27c3c0ce8bc5d725f6e4d30a29d26659494aa4b17535f7522c5c950"
+checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
 dependencies = [
  "itoa",
  "ryu",
@@ -943,7 +943,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
 ]
 
 [[package]]
@@ -954,7 +954,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust.git)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust.git)",
 ]
 
 [[package]]
@@ -991,7 +991,7 @@ dependencies = [
  "regex",
  "serde",
  "sky_macros",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -1006,14 +1006,14 @@ dependencies = [
  "crossterm",
  "libsky",
  "rustyline",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
 ]
 
 [[package]]
 name = "skytable"
-version = "0.5.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#35404164df68abb892da04fc3cf0f2df18c3250a"
+version = "0.6.0"
+source = "git+https://github.com/skytable/client-rust?branch=next#06de6c85930e8e4b19dbbb8c2bd378594c98b493"
 dependencies = [
  "bytes",
  "openssl",
@@ -1023,8 +1023,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.5.0"
-source = "git+https://github.com/skytable/client-rust.git#35404164df68abb892da04fc3cf0f2df18c3250a"
+version = "0.6.0"
+source = "git+https://github.com/skytable/client-rust.git#06de6c85930e8e4b19dbbb8c2bd378594c98b493"
 
 [[package]]
 name = "slab"
@@ -1055,7 +1055,7 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "skytable 0.5.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "sysinfo",
 ]
 
@@ -1180,9 +1180,9 @@ checksum = "8895849a949e7845e06bd6dc1aa51731a103c42707010a5b591c0038fb73385b"
 
 [[package]]
 name = "unicode-width"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9337591893a19b88d8d87f2cec1e73fad5cdfd10e5a6f349f498ad6ea2ffb1e3"
+checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
 
 [[package]]
 name = "unicode-xid"
