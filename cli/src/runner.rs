@@ -23,6 +23,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+use core::fmt;
 use core::future::Future;
 use core::pin::Pin;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
@@ -61,12 +62,21 @@ impl AsyncSocket for aio::TlsConnection {
     }
 }
 
-macro_rules! write_string {
+macro_rules! write_str {
     ($st:ident) => {
         println!("\"{}\"", $st)
     };
     ($idx:ident, $st:ident) => {
         println!("({}) \"{}\"", $idx, $st)
+    };
+}
+
+macro_rules! write_binstr {
+    ($st:ident) => {
+        println!("{}", BinaryData($st));
+    };
+    ($idx:ident, $st:ident) => {
+        println!("({}) {}", $idx, BinaryData($st));
     };
 }
 
@@ -110,12 +120,6 @@ macro_rules! write_err {
     };
 }
 
-macro_rules! str {
-    ($in:expr) => {
-        String::from_utf8_lossy(&$in)
-    };
-}
-
 macro_rules! write_okay {
     () => {
         crossterm::execute!(
@@ -151,10 +155,9 @@ impl<T: AsyncSocket> Runner<T> {
         let query = libsky::turn_into_query(unescaped_items);
         match self.con.run_simple_query(query).await {
             Ok(resp) => match resp {
-                Element::String(st) => write_string!(st),
+                Element::String(st) => write_str!(st),
                 Element::Binstr(st) => {
-                    let st = String::from_utf8_lossy(&st);
-                    write_string!(st)
+                    write_binstr!(st);
                 }
                 Element::Array(Array::Bin(brr)) => print_bin_array(brr),
                 Element::Array(Array::Str(srr)) => print_str_array(srr),
@@ -191,8 +194,7 @@ fn print_bin_array(bin_array: Vec<Option<Vec<u8>>>) {
         let idx = idx + 1;
         match elem {
             Some(ele) => {
-                let st = String::from_utf8_lossy(&ele);
-                println!("({}) {}", idx, st)
+                write_binstr!(idx, ele);
             }
             None => print_rcode(RespCode::NotFound, Some(idx)),
         }
@@ -204,7 +206,7 @@ fn print_str_array(str_array: Vec<Option<String>>) {
         let idx = idx + 1;
         match elem {
             Some(ele) => {
-                println!("({}) {}", idx, ele)
+                write_str!(idx, ele);
             }
             None => print_rcode(RespCode::NotFound, Some(idx)),
         }
@@ -215,10 +217,9 @@ fn write_flat_array(flat_array: Vec<FlatElement>) {
     for (idx, item) in flat_array.into_iter().enumerate() {
         let idx = idx + 1;
         match item {
-            FlatElement::String(st) => write_string!(idx, st),
+            FlatElement::String(st) => write_str!(idx, st),
             FlatElement::Binstr(st) => {
-                let st = str!(st);
-                write_string!(idx, st)
+                write_binstr!(idx, st)
             }
             FlatElement::RespCode(rc) => print_rcode(rc, Some(idx)),
             FlatElement::UnsignedInt(int) => write_int!(int, idx),
@@ -231,12 +232,43 @@ fn print_array(array: Vec<Element>) {
     for (idx, item) in array.into_iter().enumerate() {
         let idx = idx + 1;
         match item {
-            Element::String(st) => write_string!(idx, st),
+            Element::String(st) => write_str!(idx, st),
             Element::RespCode(rc) => print_rcode(rc, Some(idx)),
             Element::UnsignedInt(int) => write_int!(idx, int),
             Element::Array(Array::Bin(brr)) => print_bin_array(brr),
             Element::Array(Array::Str(srr)) => print_str_array(srr),
             _ => eskysh!("Nested arrays cannot be printed just yet"),
         }
+    }
+}
+
+pub struct BinaryData(Vec<u8>);
+
+impl fmt::Display for BinaryData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "b\"")?;
+        for b in self.0.iter() {
+            let b = *b;
+            // See this: https://doc.rust-lang.org/reference/tokens.html#byte-escapes
+            // this idea was borrowed from the Bytes crate
+            if b == b'\n' {
+                write!(f, "\\n")?;
+            } else if b == b'\r' {
+                write!(f, "\\r")?;
+            } else if b == b'\t' {
+                write!(f, "\\t")?;
+            } else if b == b'\\' || b == b'"' {
+                write!(f, "\\{}", b as char)?;
+            } else if b == b'\0' {
+                write!(f, "\\0")?;
+            // ASCII printable
+            } else if b >= 0x20 && b < 0x7f {
+                write!(f, "{}", b as char)?;
+            } else {
+                write!(f, "\\x{:02x}", b)?;
+            }
+        }
+        write!(f, "\"")?;
+        Ok(())
     }
 }
