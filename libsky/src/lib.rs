@@ -65,7 +65,19 @@ macro_rules! option_unwrap_or {
 pub fn split_into_args(q: &str) -> Vec<String> {
     let args: Vec<String> = RE
         .find_iter(q)
-        .map(|val| val.as_str().replace("'", "").replace("\"", ""))
+        .map(|val| {
+            let mut v = val.as_str();
+            let mut chars = v.chars();
+            let first = chars.nth(0);
+            let last = chars.last();
+            if let Some('"' | '\'') = first {
+                v = &v[1..];
+            }
+            if let Some('"' | '\'') = last {
+                v = &v[..v.len()];
+            }
+            v.to_owned()
+        })
         .collect();
     args
 }

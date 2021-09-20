@@ -31,6 +31,11 @@ All changes in this project will be noted in this file.
 - Reduced memory usage in `sky-bench`
 - Reduced allocations in Skyhash (`skyd`) protocol implementation
 - Misc. fixes in internal structures (`skyd`)
+- Improvements in printing of binary strings in `skysh`
+
+### Fixes
+
+- Fixed unexpected removal of single and double quotes from input strings in `skysh`
 
 ## Version 0.7.0
 
