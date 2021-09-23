@@ -68,7 +68,7 @@ pub fn split_into_args(q: &str) -> Vec<String> {
         .map(|val| {
             let mut v = val.as_str();
             let mut chars = v.chars();
-            let first = chars.nth(0);
+            let first = chars.next();
             let last = chars.last();
             if let Some('"' | '\'') = first {
                 v = &v[1..];

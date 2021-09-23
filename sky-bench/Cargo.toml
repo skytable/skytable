@@ -2,17 +2,17 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
 name = "sky-bench"
-version = "0.7.0"
+version = "0.7.1-alpha.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # internal deps
-libstress = {path = "../libstress"}
-skytable = {git = "https://github.com/skytable/client-rust", branch = "next"}
+libstress = { path = "../libstress" }
+skytable = { git = "https://github.com/skytable/client-rust", branch = "next" }
 # external deps
-clap = {version = "2.33.3", features = ["yaml"]}
+clap = { version = "2.33.3", features = ["yaml"] }
 devtimer = "4.0.1"
 rand = "0.8.4"
-serde = {version = "1.0.130", features = ["derive"]}
+serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.68"
