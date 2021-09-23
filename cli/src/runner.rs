@@ -252,6 +252,7 @@ impl fmt::Display for BinaryData {
             let b = *b;
             // See this: https://doc.rust-lang.org/reference/tokens.html#byte-escapes
             // this idea was borrowed from the Bytes crate
+            #[allow(clippy::manual_range_contains)]
             if b == b'\n' {
                 write!(f, "\\n")?;
             } else if b == b'\r' {
