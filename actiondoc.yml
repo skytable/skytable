@@ -187,7 +187,7 @@ keyvalue:
         `LGET` can be used to access the items in a list. Through the sub-actions provided by `lget`,
          you can access multiple or individual elements in lists.
       subactions:
-        - name: LGET <list>
+        - name: LGET
           complexity: O(n)
           accept: [AnyArray]
           syntax: [LGET <list>]
@@ -195,3 +195,33 @@ keyvalue:
             Returns all the values contained in a the provided list, if it exists in the current
             table.
           return: [Typed Array, Rcode 1]
+        - name: limit
+          complexity: O(n)
+          accept: [AnyArray]
+          syntax: [LGET <list> limit <limit>]
+          desc: Returns a maximum of `limit` values from the provided list, if it exists in the current table
+          return: [Typed Array, Rcode 1]
+        - name: len
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LGET <list> len]
+          desc: Returns the length of the list
+          return: [Integer, Rcode 1]
+        - name: valueat
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LGET <list> valueat <index>]
+          desc: Returns the element present at the provided `index`, if it exists in the given list.
+          return: [String, binstr, Rcode 1, list-bad-index]
+        - name: first
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LGET <list> first]
+          desc: Returns the first element present in the list, if it exists.
+          return: [String, binstr, Rcode 1, list-is-empty]
+        - name: last
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LGET <list> last]
+          desc: Returns the last element present in the list, if it exists.
+          return: [String, binstr, Rcode 1, list-is-empty]
