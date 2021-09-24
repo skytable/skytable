@@ -31,6 +31,7 @@
 # the docbuilder expects:
 # 'name': str, 'complexity': str, 'accept': [str]
 # 'return': [str], 'syntax': [str], 'desc': str
+
 global:
   - name: HEYA
     complexity: O(1)
@@ -225,3 +226,54 @@ keyvalue:
           syntax: [LGET <list> last]
           desc: Returns the last element present in the list, if it exists.
           return: [String, binstr, Rcode 1, list-is-empty]
+    - name: LMOD
+      desc: "`LMOD` can be used to mutate the elements in a list"
+      subactions:
+        - name: push
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LMOD <list> push <value>]
+          desc: Appends the element to the end of the provided list
+          return: [Rcode 0, Rcode 1, Rcode 5]
+        - name: insert
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LMOD <list> insert <index> <value>]
+          desc: |
+            Inserts the element to the provided index, if it is valid while shifting elements
+            to the right if required
+          return: [Rcode 0, Rcode 1, Rcode 5, bad-list-index]
+        - name: pop
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LMOD <list> pop, LMOD <list> pop <index>]
+          desc: |
+            Removes the element from the end of the list if no index is provided or from the provided
+            index while shifting elements to the right if required.
+          return: [String, Binstr, Rcode 0, Rcode 1, Rcode 5, bad-list-index]
+        - name: remove
+          complexity: O(1)
+          accept: [AnyArray]
+          syntax: [LMOD <list> remove <index>]
+          desc: |
+            Removes the element at the provided index from the list, shifting elements to the right
+            if required.
+          return: [Rcode 0, Rcode 1, Rcode 5, bad-list-index]
+        - name: clear
+          complexity: O(n)
+          accept: [AnyArray]
+          syntax: [LMOD <list> clear]
+          desc: |
+            Removes all the elements present in the list
+          return: [Rcode 0, Rcode 1, Rcode 5]
+    - name: LSET
+      desc: "`LSET` can be used to create lists"
+      subactions:
+        - name: LSET
+          complexity: O(n)
+          accept: [AnyArray]
+          syntax: [LSET <list>, LSET <list> <value1> <value2> ...]
+          desc: |
+            Creates a list with the provided values, or simply creates an empty list if it doesn't
+            already exist in the table.
+          return: [Rcode 0, Rcode 1, Rcode 5]
