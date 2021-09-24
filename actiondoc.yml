@@ -227,7 +227,8 @@ keyvalue:
           desc: Returns the last element present in the list, if it exists.
           return: [String, binstr, Rcode 1, list-is-empty]
     - name: LMOD
-      desc: "`LMOD` can be used to mutate the elements in a list"
+      desc: |
+        `LMOD` can be used to mutate the elements in a list
       subactions:
         - name: push
           complexity: O(1)
@@ -267,7 +268,8 @@ keyvalue:
             Removes all the elements present in the list
           return: [Rcode 0, Rcode 1, Rcode 5]
     - name: LSET
-      desc: "`LSET` can be used to create lists"
+      desc: |
+        `LSET` can be used to create empty lists or lists with the provided values.
       subactions:
         - name: LSET
           complexity: O(n)
