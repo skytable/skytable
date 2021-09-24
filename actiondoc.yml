@@ -184,14 +184,14 @@ keyvalue:
   lists:
     - name: LGET
       desc: |
-	  	  `LGET` can be used to access the items in a list. Through the sub-actions provided by `lget`,
-        you can access multiple or individual elements in lists.
+        `LGET` can be used to access the items in a list. Through the sub-actions provided by `lget`,
+         you can access multiple or individual elements in lists.
       subactions:
-      - name: LGET <list>
-        complexity: O(n)
-        accept: [AnyArray]
-        syntax: [LGET <list>]
-        desc: |
-          Returns all the values contained in a the provided list, if it exists in the current
-          table.
-        return: [Typed Array, Rcode 1]
+        - name: LGET <list>
+          complexity: O(n)
+          accept: [AnyArray]
+          syntax: [LGET <list>]
+          desc: |
+            Returns all the values contained in a the provided list, if it exists in the current
+            table.
+          return: [Typed Array, Rcode 1]
