@@ -194,11 +194,11 @@ impl SnapshotConfig {
     }
 }
 
-/// A `ParsedConfig` which can be used by main::check_args_or_connect() to bind
+/// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
 #[derive(Debug, PartialEq)]
-pub struct ParsedConfig {
+pub struct ConfigurationSet {
     /// If `noart` is set to true, no terminal artwork should be displayed
     noart: bool,
     /// The BGSAVE configuration
@@ -211,14 +211,14 @@ pub struct ParsedConfig {
     pub maxcon: usize,
 }
 
-impl ParsedConfig {
-    /// Create a new `ParsedConfig` from a given file in `location`
+impl ConfigurationSet {
+    /// Create a new `ConfigurationSet` from a given file in `location`
     pub fn new_from_file(location: String) -> Result<Self, ConfigError> {
         let file = fs::read_to_string(location)?;
-        let r = toml::from_str(&file).map(ParsedConfig::from_config)?;
+        let r = toml::from_str(&file).map(ConfigurationSet::from_config)?;
         Ok(r)
     }
-    /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
+    /// Create a `ConfigurationSet` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
     fn from_config(cfg_info: cfgfile::Config) -> Self {
         let mut cfg = Self::default();
@@ -272,12 +272,12 @@ impl ParsedConfig {
         cfg
     }
     #[cfg(test)]
-    /// Create a new `ParsedConfig` from a `TOML` string
+    /// Create a new `ConfigurationSet` from a `TOML` string
     pub fn new_from_toml_str(tomlstr: String) -> tests::TResult<Self> {
-        Ok(ParsedConfig::from_config(toml::from_str(&tomlstr)?))
+        Ok(ConfigurationSet::from_config(toml::from_str(&tomlstr)?))
     }
     #[cfg(test)]
-    /// Create a new `ParsedConfig` with all the fields
+    /// Create a new `ConfigurationSet` with all the fields
     pub const fn new(
         noart: bool,
         bgsave: BGSave,
@@ -285,7 +285,7 @@ impl ParsedConfig {
         ports: PortConfig,
         maxcon: usize,
     ) -> Self {
-        ParsedConfig {
+        ConfigurationSet {
             noart,
             bgsave,
             snapshot,
@@ -293,7 +293,7 @@ impl ParsedConfig {
             maxcon,
         }
     }
-    /// Create a default `ParsedConfig` with the following setup defaults:
+    /// Create a default `ConfigurationSet` with the following setup defaults:
     /// - `host`: 127.0.0.1
     /// - `port` : 2003
     /// - `noart` : false
@@ -301,7 +301,7 @@ impl ParsedConfig {
     /// - `bgsave_duration` : 120
     /// - `ssl` : disabled
     pub const fn default() -> Self {
-        ParsedConfig {
+        ConfigurationSet {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
@@ -322,11 +322,11 @@ impl ParsedConfig {
 /// The second field in the tuple is for the restore file, if there was any
 #[derive(Debug)]
 pub enum ConfigType {
-    Def(ParsedConfig, Option<String>),
-    Custom(ParsedConfig, Option<String>),
+    Def(ConfigurationSet, Option<String>),
+    Custom(ConfigurationSet, Option<String>),
 }
 
-/// This function returns a  `ConfigType<ParsedConfig>`
+/// This function returns a  `ConfigType<ConfigurationSet>`
 ///
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
@@ -344,7 +344,7 @@ fn get_config_file_or_return_cfg_from_matches(
     let no_cli_args = matches.args.is_empty();
     if no_cli_args {
         // that means we need to use the default config
-        return Ok(ConfigType::Def(ParsedConfig::default(), None));
+        return Ok(ConfigType::Def(ConfigurationSet::default(), None));
     }
 
     // Check if there is a config file
@@ -367,8 +367,8 @@ fn get_config_file_or_return_cfg_from_matches(
     ret.map(|v| ConfigType::Custom(v, restorefile))
 }
 
-fn validate_config_file(configfile: String) -> Result<ParsedConfig, ConfigError> {
-    match ParsedConfig::new_from_file(configfile) {
+fn validate_config_file(configfile: String) -> Result<ConfigurationSet, ConfigError> {
+    match ConfigurationSet::new_from_file(configfile) {
         Ok(cfg) => {
             if cfg.bgsave.is_disabled() {
                 log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
@@ -393,8 +393,8 @@ fn validate_config_file(configfile: String) -> Result<ParsedConfig, ConfigError>
     }
 }
 
-fn parse_cli_args(matches: ArgMatches) -> Result<ParsedConfig, ConfigError> {
-    let mut cfg = ParsedConfig::default();
+fn parse_cli_args(matches: ArgMatches) -> Result<ConfigurationSet, ConfigError> {
+    let mut cfg = ConfigurationSet::default();
     // Check flags
     let sslonly = matches.is_present("sslonly");
     let noart = matches.is_present("noart");

@@ -26,7 +26,7 @@
 
 use super::cfgerr::{ConfigError, ERR_CONFLICT};
 use super::{
-    BGSave, IpAddr, ParsedConfig, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4,
+    BGSave, IpAddr, ConfigurationSet, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4,
     MAXIMUM_CONNECTION_LIMIT,
 };
 use clap::{load_yaml, App};
@@ -44,8 +44,8 @@ fn test_config_toml_okayport() {
     port = 2003
 "#
     .to_owned();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(cfg, ParsedConfig::default(),);
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
+    assert_eq!(cfg, ConfigurationSet::default(),);
 }
 /// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
 fn get_toml_from_examples_dir(filename: String) -> TResult<String> {
@@ -66,21 +66,21 @@ fn test_config_toml_badport() {
     port = 20033002
 "#
     .to_owned();
-    let cfg = ParsedConfig::new_from_toml_str(file);
+    let cfg = ConfigurationSet::new_from_toml_str(file);
     assert!(cfg.is_err());
 }
 
 #[test]
 fn test_config_file_ok() {
     let file = get_toml_from_examples_dir("skyd.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
-    assert_eq!(cfg, ParsedConfig::default());
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
+    assert_eq!(cfg, ConfigurationSet::default());
 }
 
 #[test]
 fn test_config_file_err() {
     let file = get_toml_from_examples_dir("skyd.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_file(file);
+    let cfg = ConfigurationSet::new_from_file(file);
     assert!(cfg.is_err());
 }
 #[test]
@@ -90,17 +90,17 @@ fn test_args() {
     let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
     let filename = matches.value_of("config").unwrap();
     assert_eq!("../examples/config-files/skyd.toml", filename);
-    let cfg = ParsedConfig::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
-    assert_eq!(cfg, ParsedConfig::default());
+    let cfg = ConfigurationSet::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
+    assert_eq!(cfg, ConfigurationSet::default());
 }
 
 #[test]
 fn test_config_file_noart() {
     let file = get_toml_from_examples_dir("secure-noart.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             noart: true,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
@@ -113,10 +113,10 @@ fn test_config_file_noart() {
 #[test]
 fn test_config_file_ipv6() {
     let file = get_toml_from_examples_dir("ipv6.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
@@ -132,10 +132,10 @@ fn test_config_file_ipv6() {
 #[test]
 fn test_config_file_template() {
     let file = get_toml_from_examples_dir("template.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig::new(
+        ConfigurationSet::new(
             false,
             BGSave::default(),
             SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
@@ -156,17 +156,17 @@ fn test_config_file_template() {
 #[test]
 fn test_config_file_bad_bgsave_section() {
     let file = get_toml_from_examples_dir("badcfg2.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file);
+    let cfg = ConfigurationSet::new_from_toml_str(file);
     assert!(cfg.is_err());
 }
 
 #[test]
 fn test_config_file_custom_bgsave() {
     let file = get_toml_from_examples_dir("withcustombgsave.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             noart: false,
             bgsave: BGSave::new(true, 600),
             snapshot: SnapshotConfig::default(),
@@ -183,10 +183,10 @@ fn test_config_file_bgsave_enabled_only() {
      * In that case, we will default to the 120 second duration
      */
     let file = get_toml_from_examples_dir("bgsave-justenabled.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             noart: false,
             bgsave: BGSave::default(),
             snapshot: SnapshotConfig::default(),
@@ -203,10 +203,10 @@ fn test_config_file_bgsave_every_only() {
      * In that case, it means BGSAVE is enabled and set to `every` seconds
      */
     let file = get_toml_from_examples_dir("bgsave-justevery.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             noart: false,
             bgsave: BGSave::new(true, 600),
             snapshot: SnapshotConfig::default(),
@@ -219,10 +219,10 @@ fn test_config_file_bgsave_every_only() {
 #[test]
 fn test_config_file_snapshot() {
     let file = get_toml_from_examples_dir("snapshot.toml".to_owned()).unwrap();
-    let cfg = ParsedConfig::new_from_toml_str(file).unwrap();
+    let cfg = ConfigurationSet::new_from_toml_str(file).unwrap();
     assert_eq!(
         cfg,
-        ParsedConfig {
+        ConfigurationSet {
             snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
             bgsave: BGSave::default(),
             noart: false,

@@ -40,6 +40,7 @@ pub enum ConfigError {
     SyntaxError(toml::de::Error),
     CfgError(&'static str),
     CliArgErr(&'static str),
+    EnvArgParseFailure(String),
 }
 
 impl PartialEq for ConfigError {
@@ -50,6 +51,7 @@ impl PartialEq for ConfigError {
             (SyntaxError(a), SyntaxError(b)) => a == b,
             (CfgError(a), CfgError(b)) => a == b,
             (CliArgErr(a), CliArgErr(b)) => a == b,
+            (EnvArgParseFailure(a), EnvArgParseFailure(b)) => a == b,
             _ => false,
         }
     }
@@ -64,6 +66,7 @@ impl fmt::Display for ConfigError {
             }
             ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
             ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
+            ConfigError::EnvArgParseFailure(e) => write!(f, "Environment variable error: {}", e),
         }
     }
 }
