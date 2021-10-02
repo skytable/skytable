@@ -40,7 +40,7 @@ mod cfgfile;
 #[cfg(test)]
 mod tests;
 // self imports
-use self::cfgerr::ConfigError;
+use self::cfgerr::{ConfigError, ERR_CONFLICT};
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const DEFAULT_SSL_PORT: u16 = 2004;
@@ -320,6 +320,7 @@ impl ParsedConfig {
 /// - We used the default configuration (`Def`)
 ///
 /// The second field in the tuple is for the restore file, if there was any
+#[derive(Debug)]
 pub enum ConfigType {
     Def(ParsedConfig, Option<String>),
     Custom(ParsedConfig, Option<String>),
@@ -333,6 +334,13 @@ pub enum ConfigType {
 pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
+    self::get_config_file_or_return_cfg_from_matches(matches)
+}
+
+// this method simply allows us to simplify tests for conflicts
+fn get_config_file_or_return_cfg_from_matches(
+    matches: ArgMatches,
+) -> Result<ConfigType, ConfigError> {
     let no_cli_args = matches.args.is_empty();
     if no_cli_args {
         // that means we need to use the default config
@@ -350,9 +358,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
             || (restorefile.is_some() && matches.args.len() > 2)
         {
             // nope, more args were passed; error
-            return Err(ConfigError::CfgError(
-                "Either use command line arguments or use a configuration file",
-            ));
+            return Err(ConfigError::CfgError(ERR_CONFLICT));
         }
         validate_config_file(filename.to_owned())
     } else {

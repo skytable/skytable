@@ -24,6 +24,9 @@
  *
 */
 
+pub(super) const ERR_CONFLICT: &str =
+    "Either use command line arguments or use a configuration file";
+
 use std::fmt;
 #[derive(Debug)]
 /// Type of configuration error:
@@ -37,6 +40,19 @@ pub enum ConfigError {
     SyntaxError(toml::de::Error),
     CfgError(&'static str),
     CliArgErr(&'static str),
+}
+
+impl PartialEq for ConfigError {
+    fn eq(&self, oth: &Self) -> bool {
+        use ConfigError::*;
+        match (self, oth) {
+            (OSError(a), OSError(b)) => a.kind() == b.kind(),
+            (SyntaxError(a), SyntaxError(b)) => a == b,
+            (CfgError(a), CfgError(b)) => a == b,
+            (CliArgErr(a), CliArgErr(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for ConfigError {

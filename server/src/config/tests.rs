@@ -24,6 +24,7 @@
  *
 */
 
+use super::cfgerr::{ConfigError, ERR_CONFLICT};
 use super::{
     BGSave, IpAddr, ParsedConfig, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4,
     MAXIMUM_CONNECTION_LIMIT,
@@ -229,4 +230,36 @@ fn test_config_file_snapshot() {
             maxcon: MAXIMUM_CONNECTION_LIMIT
         }
     );
+}
+
+#[test]
+fn test_cli_args_conflict() {
+    let cfg_layout = load_yaml!("../cli.yml");
+    let cli_args = ["--sslonly", "-c config.toml"];
+    let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+    let err = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
+    assert_eq!(err, ConfigError::CfgError(ERR_CONFLICT));
+}
+
+#[test]
+fn test_cli_args_conflict_with_restore_file_okay() {
+    let cfg_layout = load_yaml!("../cli.yml");
+    let cli_args = ["--restore somedir", "-c config.toml"];
+    let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+    let ret = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
+    // this should only compain about the missing dir but not about conflict
+    assert_eq!(
+        ret,
+        ConfigError::OSError(std::io::Error::from(std::io::ErrorKind::NotFound))
+    );
+}
+
+#[test]
+fn test_cli_args_conflict_with_restore_file_fail() {
+    let cfg_layout = load_yaml!("../cli.yml");
+    let cli_args = ["--restore somedir", "-c config.toml", "--nosave"];
+    let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+    let ret = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
+    // this should only compain about the missing dir but not about conflict
+    assert_eq!(ret, ConfigError::CfgError(ERR_CONFLICT));
 }
