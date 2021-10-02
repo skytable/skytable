@@ -28,7 +28,6 @@
 
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 use serde::Deserialize;
-use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
@@ -221,11 +220,11 @@ impl ParsedConfig {
     pub fn new_from_file(location: String) -> Result<Self, ConfigError> {
         let file = match fs::read_to_string(location) {
             Ok(f) => f,
-            Err(e) => return Err(ConfigError::OSError(e.into())),
+            Err(e) => return Err(ConfigError::OSError(e)),
         };
         match toml::from_str(&file) {
             Ok(cfgfile) => Ok(ParsedConfig::from_config(cfgfile)),
-            Err(e) => Err(ConfigError::SyntaxError(e.into())),
+            Err(e) => Err(ConfigError::SyntaxError(e)),
         }
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
@@ -347,8 +346,8 @@ pub enum ConfigType<T, U> {
 /// but logically incorrect (`CfgError`)
 /// - The command line arguments have an invalid value/invalid values (`CliArgError`)
 pub enum ConfigError {
-    OSError(Box<dyn Error>),
-    SyntaxError(Box<dyn Error>),
+    OSError(std::io::Error),
+    SyntaxError(toml::de::Error),
     CfgError(&'static str),
     CliArgErr(&'static str),
 }
