@@ -27,27 +27,21 @@
 //! This module provides tools to handle configuration files and settings
 
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
+use clap::{load_yaml, App};
 use serde::Deserialize;
-use std::fmt;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
 // modules
+#[macro_use]
+mod macros;
 mod cfgfile;
 #[cfg(test)]
 mod tests;
+// self imports
+use self::cfgerror::ConfigError;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const DEFAULT_SSL_PORT: u16 = 2004;
-
-macro_rules! cli_parse_or_default_or_err {
-    ($parsewhat:expr, $default:expr, $except:expr $(,)?) => {
-        match $parsewhat.map(|v| v.parse()) {
-            Some(Ok(v)) => v,
-            Some(Err(_)) => return Err(ConfigError::CliArgErr($except)),
-            None => $default,
-        }
-    };
-}
 
 /// The BGSAVE configuration
 ///
@@ -230,60 +224,52 @@ impl ParsedConfig {
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
     fn from_config(cfg_info: cfgfile::Config) -> Self {
-        ParsedConfig {
-            noart: option_unwrap_or!(cfg_info.server.noart, false),
-            bgsave: if let Some(bgsave) = cfg_info.bgsave {
-                match (bgsave.enabled, bgsave.every) {
-                    // TODO: Show a warning that there are unused keys
-                    (Some(enabled), Some(every)) => BGSave::new(enabled, every),
-                    (Some(enabled), None) => BGSave::new(enabled, 120),
-                    (None, Some(every)) => BGSave::new(true, every),
-                    (None, None) => BGSave::default(),
+        let mut cfg = Self::default();
+        set_if_exists!(cfg_info.server.noart, cfg.noart);
+        if let Some(bgsave) = cfg_info.bgsave {
+            let bgsave_ret = match (bgsave.enabled, bgsave.every) {
+                // TODO: Show a warning that there are unused keys
+                (Some(enabled), Some(every)) => BGSave::new(enabled, every),
+                (Some(enabled), None) => BGSave::new(enabled, 120),
+                (None, Some(every)) => BGSave::new(true, every),
+                (None, None) => BGSave::default(),
+            };
+            cfg.bgsave = bgsave_ret;
+        }
+        if let Some(snapshot) = cfg_info.snapshot {
+            cfg.snapshot = SnapshotConfig::Enabled(SnapshotPref::new(
+                snapshot.every,
+                snapshot.atmost,
+                option_unwrap_or!(snapshot.failsafe, true),
+            ));
+        }
+        if let Some(sslopts) = cfg_info.ssl {
+            let portcfg = if option_unwrap_or!(sslopts.only, false) {
+                PortConfig::SecureOnly {
+                    ssl: SslOpts {
+                        key: sslopts.key,
+                        chain: sslopts.chain,
+                        port: sslopts.port,
+                        passfile: sslopts.passin,
+                    },
+                    host: cfg_info.server.host,
                 }
             } else {
-                BGSave::default()
-            },
-            snapshot: cfg_info
-                .snapshot
-                .map(|snapshot| {
-                    SnapshotConfig::Enabled(SnapshotPref::new(
-                        snapshot.every,
-                        snapshot.atmost,
-                        option_unwrap_or!(snapshot.failsafe, true),
-                    ))
-                })
-                .unwrap_or_else(SnapshotConfig::default),
-            ports: if let Some(sslopts) = cfg_info.ssl {
-                if option_unwrap_or!(sslopts.only, false) {
-                    PortConfig::SecureOnly {
-                        ssl: SslOpts {
-                            key: sslopts.key,
-                            chain: sslopts.chain,
-                            port: sslopts.port,
-                            passfile: sslopts.passin,
-                        },
-                        host: cfg_info.server.host,
-                    }
-                } else {
-                    PortConfig::Multi {
-                        ssl: SslOpts {
-                            key: sslopts.key,
-                            chain: sslopts.chain,
-                            port: sslopts.port,
-                            passfile: sslopts.passin,
-                        },
-                        host: cfg_info.server.host,
-                        port: cfg_info.server.port,
-                    }
-                }
-            } else {
-                PortConfig::InsecureOnly {
+                PortConfig::Multi {
+                    ssl: SslOpts {
+                        key: sslopts.key,
+                        chain: sslopts.chain,
+                        port: sslopts.port,
+                        passfile: sslopts.passin,
+                    },
                     host: cfg_info.server.host,
                     port: cfg_info.server.port,
                 }
-            },
-            maxcon: option_unwrap_or!(cfg_info.server.maxclient, MAXIMUM_CONNECTION_LIMIT),
+            };
+            cfg.ports = portcfg;
         }
+        set_if_exists!(cfg_info.server.maxclient, cfg.maxcon);
+        cfg
     }
     #[cfg(test)]
     /// Create a new `ParsedConfig` from a `TOML` string
@@ -328,39 +314,12 @@ impl ParsedConfig {
     }
 }
 
-use clap::{load_yaml, App};
-
 /// The type of configuration:
 /// - We either used a custom configuration file given to us by the user (`Custom`) OR
 /// - We used the default configuration (`Def`)
 pub enum ConfigType<T, U> {
     Def(T, Option<U>),
     Custom(T, Option<U>),
-}
-
-#[derive(Debug)]
-/// Type of configuration error:
-/// - The config file was not found (`OSError`)
-/// - The config file was invalid (`SyntaxError`)
-/// - The config file has an invalid value, which is syntatically correct
-/// but logically incorrect (`CfgError`)
-/// - The command line arguments have an invalid value/invalid values (`CliArgError`)
-pub enum ConfigError {
-    OSError(std::io::Error),
-    SyntaxError(toml::de::Error),
-    CfgError(&'static str),
-    CliArgErr(&'static str),
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::OSError(e) => writeln!(f, "error: {}", e),
-            ConfigError::SyntaxError(e) => writeln!(f, "syntax error in configuration file: {}", e),
-            ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
-            ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
-        }
-    }
 }
 
 /// This function returns a  `ConfigType<ParsedConfig>`
@@ -569,5 +528,35 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
         }
     } else {
         Ok(ConfigType::Def(ParsedConfig::default(), restorefile))
+    }
+}
+
+mod cfgerror {
+    use std::fmt;
+    #[derive(Debug)]
+    /// Type of configuration error:
+    /// - The config file was not found (`OSError`)
+    /// - The config file was invalid (`SyntaxError`)
+    /// - The config file has an invalid value, which is syntatically correct
+    /// but logically incorrect (`CfgError`)
+    /// - The command line arguments have an invalid value/invalid values (`CliArgError`)
+    pub enum ConfigError {
+        OSError(std::io::Error),
+        SyntaxError(toml::de::Error),
+        CfgError(&'static str),
+        CliArgErr(&'static str),
+    }
+
+    impl fmt::Display for ConfigError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                ConfigError::OSError(e) => writeln!(f, "error: {}", e),
+                ConfigError::SyntaxError(e) => {
+                    writeln!(f, "syntax error in configuration file: {}", e)
+                }
+                ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
+                ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
+            }
+        }
     }
 }
