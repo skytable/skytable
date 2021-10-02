@@ -32,38 +32,22 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
-mod env;
+// modules
+mod cfgfile;
 #[cfg(test)]
 mod tests;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const DEFAULT_SSL_PORT: u16 = 2004;
 
-/// This struct is an _object representation_ used for parsing the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct Config {
-    /// The `server` key
-    server: ConfigKeyServer,
-    /// The `bgsave` key
-    bgsave: Option<ConfigKeyBGSAVE>,
-    /// The snapshot key
-    snapshot: Option<ConfigKeySnapshot>,
-    /// SSL configuration
-    ssl: Option<KeySslOpts>,
-}
-
-/// The BGSAVE section in the config file
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct ConfigKeyBGSAVE {
-    /// Whether BGSAVE is enabled or not
-    ///
-    /// If this key is missing, then we can assume that BGSAVE is enabled
-    enabled: Option<bool>,
-    /// The duration after which BGSAVE should start
-    ///
-    /// If this is the only key specified, then it is clear that BGSAVE is enabled
-    /// and the duration is `every`
-    every: Option<u64>,
+macro_rules! cli_parse_or_default_or_err {
+    ($parsewhat:expr, $default:expr, $except:expr $(,)?) => {
+        match $parsewhat.map(|v| v.parse()) {
+            Some(Ok(v)) => v,
+            Some(Err(_)) => return Err(ConfigError::CliArgErr($except)),
+            None => $default,
+        }
+    };
 }
 
 /// The BGSAVE configuration
@@ -97,33 +81,6 @@ impl BGSave {
     pub const fn is_disabled(&self) -> bool {
         matches!(self, BGSave::Disabled)
     }
-}
-
-/// This struct represents the `server` key in the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct ConfigKeyServer {
-    /// The host key is any valid IPv4/IPv6 address
-    host: IpAddr,
-    /// The port key is any valid port
-    port: u16,
-    /// The noart key is an `Option`al boolean value which is set to true
-    /// for secure environments to disable terminal artwork
-    noart: Option<bool>,
-    /// The maximum number of clients
-    maxclient: Option<usize>,
-}
-
-/// The snapshot section in the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct ConfigKeySnapshot {
-    /// After how many seconds should the snapshot be created
-    every: u64,
-    /// The maximum number of snapshots to keep
-    ///
-    /// If atmost is set to `0`, then all the snapshots will be kept
-    atmost: usize,
-    /// Prevent writes to the database if snapshotting fails
-    failsafe: Option<bool>,
 }
 
 /// Port configuration
@@ -172,15 +129,6 @@ impl PortConfig {
     pub const fn new_multi(host: IpAddr, port: u16, ssl: SslOpts) -> Self {
         PortConfig::Multi { host, port, ssl }
     }
-}
-
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct KeySslOpts {
-    key: String,
-    chain: String,
-    port: u16,
-    only: Option<bool>,
-    passin: Option<String>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -282,7 +230,7 @@ impl ParsedConfig {
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
-    fn from_config(cfg_info: Config) -> Self {
+    fn from_config(cfg_info: cfgfile::Config) -> Self {
         ParsedConfig {
             noart: option_unwrap_or!(cfg_info.server.noart, false),
             bgsave: if let Some(bgsave) = cfg_info.bgsave {
@@ -464,48 +412,26 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     // were supplied
     if cli_has_overrideable_args {
         // This means that there are some command-line args that we need to parse
-        let port: u16 = match port {
-            Some(p) => match p.parse() {
-                Ok(parsed) => parsed,
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--port`. Expected an unsigned 16-bit integer",
-                    ))
-                }
-            },
-            None => 2003,
-        };
-        let host: IpAddr = match host {
-            Some(h) => match h.parse() {
-                Ok(h) => h,
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address",
-                    ));
-                }
-            },
-            None => "127.0.0.1".parse().unwrap(),
-        };
-        let sslport: u16 = match sslport.map(|port| port.parse()) {
-            Some(Ok(port)) => port,
-            Some(Err(_)) => {
-                return Err(ConfigError::CliArgErr(
-                    "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer",
-                ))
-            }
-            None => DEFAULT_SSL_PORT,
-        };
-        let maxcon: usize = match maxcon {
-            Some(limit) => match limit.parse() {
-                Ok(l) => l,
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--maxcon`. Expected a valid positive integer",
-                    ));
-                }
-            },
-            None => MAXIMUM_CONNECTION_LIMIT,
-        };
+        let port: u16 = cli_parse_or_default_or_err!(
+            port,
+            2003,
+            "Invalid value for `--port`. Expected an unsigned 16-bit integer"
+        );
+        let host: IpAddr = cli_parse_or_default_or_err!(
+            host,
+            DEFAULT_IPV4,
+            "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address"
+        );
+        let sslport: u16 = cli_parse_or_default_or_err!(
+            sslport,
+            DEFAULT_SSL_PORT,
+            "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer"
+        );
+        let maxcon: usize = cli_parse_or_default_or_err!(
+            maxcon,
+            MAXIMUM_CONNECTION_LIMIT,
+            "Invalid value for `--maxcon`. Expected a valid positive integer"
+        );
         let bgsave = if nosave {
             if saveduration.is_some() {
                 // If there is both `nosave` and `saveduration` - the arguments aren't logically correct!
