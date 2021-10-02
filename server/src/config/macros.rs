@@ -28,8 +28,18 @@ macro_rules! cli_parse_or_default_or_err {
     ($parsewhat:expr, $default:expr, $except:expr $(,)?) => {
         match $parsewhat.map(|v| v.parse()) {
             Some(Ok(v)) => v,
-            Some(Err(_)) => return Err(self::cfgerror::ConfigError::CliArgErr($except)),
+            Some(Err(_)) => return Err(self::cfgerr::ConfigError::CliArgErr($except)),
             None => $default,
+        }
+    };
+}
+
+macro_rules! cli_setparse_or_err {
+    ($setwhat:expr, $parsewhat:expr, $except:expr $(,)?) => {
+        match $parsewhat.map(|v| v.parse()) {
+            Some(Ok(v)) => $setwhat = v,
+            Some(Err(_)) => return Err(self::cfgerr::ConfigError::CliArgErr($except)),
+            _ => {}
         }
     };
 }
@@ -39,5 +49,11 @@ macro_rules! set_if_exists {
         if let Some(testwhat) = $testwhat {
             $trywhat = testwhat;
         }
+    };
+}
+
+macro_rules! ret_cli_err {
+    ($what:expr) => {
+        return Err(self::cfgerr::ConfigError::CliArgErr($what));
     };
 }

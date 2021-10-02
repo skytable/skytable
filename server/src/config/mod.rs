@@ -27,6 +27,7 @@
 //! This module provides tools to handle configuration files and settings
 
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
+use clap::ArgMatches;
 use clap::{load_yaml, App};
 use serde::Deserialize;
 use std::fs;
@@ -34,11 +35,12 @@ use std::net::{IpAddr, Ipv4Addr};
 // modules
 #[macro_use]
 mod macros;
+mod cfgerr;
 mod cfgfile;
 #[cfg(test)]
 mod tests;
 // self imports
-use self::cfgerror::ConfigError;
+use self::cfgerr::ConfigError;
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const DEFAULT_SSL_PORT: u16 = 2004;
@@ -212,14 +214,9 @@ pub struct ParsedConfig {
 impl ParsedConfig {
     /// Create a new `ParsedConfig` from a given file in `location`
     pub fn new_from_file(location: String) -> Result<Self, ConfigError> {
-        let file = match fs::read_to_string(location) {
-            Ok(f) => f,
-            Err(e) => return Err(ConfigError::OSError(e)),
-        };
-        match toml::from_str(&file) {
-            Ok(cfgfile) => Ok(ParsedConfig::from_config(cfgfile)),
-            Err(e) => Err(ConfigError::SyntaxError(e)),
-        }
+        let file = fs::read_to_string(location)?;
+        let r = toml::from_str(&file).map(ParsedConfig::from_config)?;
+        Ok(r)
     }
     /// Create a `ParsedConfig` instance from a `Config` object, which is a parsed
     /// TOML file (represented as an object)
@@ -276,6 +273,7 @@ impl ParsedConfig {
     pub fn new_from_toml_str(tomlstr: String) -> tests::TResult<Self> {
         Ok(ParsedConfig::from_config(toml::from_str(&tomlstr)?))
     }
+    #[cfg(test)]
     /// Create a new `ParsedConfig` with all the fields
     pub const fn new(
         noart: bool,
@@ -317,9 +315,11 @@ impl ParsedConfig {
 /// The type of configuration:
 /// - We either used a custom configuration file given to us by the user (`Custom`) OR
 /// - We used the default configuration (`Def`)
-pub enum ConfigType<T, U> {
-    Def(T, Option<U>),
-    Custom(T, Option<U>),
+///
+/// The second field in the tuple is for the restore file, if there was any
+pub enum ConfigType {
+    Def(ParsedConfig, Option<String>),
+    Custom(ParsedConfig, Option<String>),
 }
 
 /// This function returns a  `ConfigType<ParsedConfig>`
@@ -327,16 +327,70 @@ pub enum ConfigType<T, U> {
 /// This parses a configuration file if it is supplied as a command line argument
 /// or it returns the default configuration. **If** the configuration file
 /// contains an error, then this returns it as an `Err` variant
-pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String>, ConfigError> {
+pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
+    let no_cli_args = matches.args.is_empty();
+    if no_cli_args {
+        // that means we need to use the default config
+        return Ok(ConfigType::Def(ParsedConfig::default(), None));
+    }
+
+    // Check if there is a config file
+    let filename = matches.value_of("config");
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
+    let ret = if let Some(filename) = filename {
+        // so we have a config file; let's confirm that we don't have any other arguments
+        // either no restore file and len greater than 1; or restore file is some, and args greater
+        // than 2
+        if (restorefile.is_none() && matches.args.len() > 1)
+            || (restorefile.is_some() && matches.args.len() > 2)
+        {
+            // nope, more args were passed; error
+            return Err(ConfigError::CfgError(
+                "Either use command line arguments or use a configuration file",
+            ));
+        }
+        validate_config_file(filename.to_owned())
+    } else {
+        parse_cli_args(matches)
+    };
+    ret.map(|v| ConfigType::Custom(v, restorefile))
+}
+
+fn validate_config_file(configfile: String) -> Result<ParsedConfig, ConfigError> {
+    match ParsedConfig::new_from_file(configfile) {
+        Ok(cfg) => {
+            if cfg.bgsave.is_disabled() {
+                log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
+            }
+            if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
+                if e.every == 0 {
+                    return Err(ConfigError::CfgError(
+                        "The snapshot duration has to be greater than 0!",
+                    ));
+                }
+            }
+            if let BGSave::Enabled(dur) = &cfg.bgsave {
+                if *dur == 0 {
+                    return Err(ConfigError::CfgError(
+                        "The BGSAVE duration has to be greater than 0!",
+                    ));
+                }
+            }
+            Ok(cfg)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_cli_args(matches: ArgMatches) -> Result<ParsedConfig, ConfigError> {
+    let mut cfg = ParsedConfig::default();
     // Check flags
     let sslonly = matches.is_present("sslonly");
     let noart = matches.is_present("noart");
     let nosave = matches.is_present("nosave");
-    // Check options
-    let filename = matches.value_of("config");
+    // check options
     let host = matches.value_of("host");
     let port = matches.value_of("port");
     let sslport = matches.value_of("sslport");
@@ -348,215 +402,123 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType<ParsedConfig, String
     let sslchain = matches.value_of("sslchain");
     let maxcon = matches.value_of("maxcon");
     let passfile = matches.value_of("tlspassin");
-    let cli_has_overrideable_args = host.is_some()
-        || port.is_some()
-        || noart
-        || nosave
-        || snapevery.is_some()
-        || snapkeep.is_some()
-        || saveduration.is_some()
-        || sslchain.is_some()
-        || sslkey.is_some()
-        || maxcon.is_some()
-        || custom_ssl_port
-        || passfile.is_some()
-        || sslonly;
-    if filename.is_some() && cli_has_overrideable_args {
-        return Err(ConfigError::CfgError(
-            "Either use command line arguments or use a configuration file",
-        ));
-    }
-    // At this point we're sure that either a configuration file or command-line arguments
-    // were supplied
-    if cli_has_overrideable_args {
-        // This means that there are some command-line args that we need to parse
-        let port: u16 = cli_parse_or_default_or_err!(
-            port,
-            2003,
-            "Invalid value for `--port`. Expected an unsigned 16-bit integer"
-        );
-        let host: IpAddr = cli_parse_or_default_or_err!(
-            host,
-            DEFAULT_IPV4,
-            "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address"
-        );
-        let sslport: u16 = cli_parse_or_default_or_err!(
-            sslport,
-            DEFAULT_SSL_PORT,
-            "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer"
-        );
-        let maxcon: usize = cli_parse_or_default_or_err!(
-            maxcon,
-            MAXIMUM_CONNECTION_LIMIT,
-            "Invalid value for `--maxcon`. Expected a valid positive integer"
-        );
-        let bgsave = if nosave {
-            if saveduration.is_some() {
-                // If there is both `nosave` and `saveduration` - the arguments aren't logically correct!
-                // How would we run BGSAVE in a given `saveduration` if it is disabled? Return an error
-                return Err(ConfigError::CliArgErr("Invalid options for BGSAVE. Either supply `--nosave` or `--saveduration` or nothing"));
-            }
-            // It is our responsibility to keep the user aware of bad settings, so we'll send a warning
-            log::warn!("BGSAVE is disabled. You might lose data if the host crashes");
-            BGSave::Disabled
-        } else if let Some(duration) = saveduration.map(|dur| dur.parse()) {
-            // A duration is specified for BGSAVE, so use it
-            match duration {
-                Ok(duration) => BGSave::new(true, duration),
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--saveduration`. Expected an unsigned 64-bit integer",
-                    ))
-                }
-            }
-        } else {
-            // There's no `nosave` and no `saveduration` - cool; we'll use the default configuration
-            BGSave::default()
-        };
-        let snapevery: Option<u64> = match snapevery {
-            Some(dur) => match dur.parse() {
-                Ok(dur) => Some(dur),
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--snapevery`. Expected an unsigned 64-bit integer",
-                    ))
-                }
-            },
-            None => None,
-        };
-        let snapkeep: Option<usize> = match snapkeep {
-            Some(maxtop) => match maxtop.parse() {
-                Ok(maxtop) => Some(maxtop),
-                Err(_) => {
-                    return Err(ConfigError::CliArgErr(
-                        "Invalid value for `--snapkeep`. Expected an unsigned 64-bit integer",
-                    ))
-                }
-            },
-            None => None,
-        };
-        let failsafe = if let Ok(failsafe) = option_unwrap_or!(
-            matches
-                .value_of("stop-write-on-fail")
-                .map(|val| val.parse::<bool>()),
-            Ok(true)
-        ) {
-            failsafe
-        } else {
-            return Err(ConfigError::CliArgErr(
-                "Please provide a boolean `true` or `false` value to --stop-write-on-fail",
-            ));
-        };
-        let snapcfg = match (snapevery, snapkeep) {
-            (Some(every), Some(keep)) => {
-                SnapshotConfig::Enabled(SnapshotPref::new(every, keep, failsafe))
-            }
-            (Some(_), None) => {
-                return Err(ConfigError::CliArgErr(
-                    "No value supplied for `--snapkeep`. When you supply `--snapevery`, you also need to specify `--snapkeep`"
-                ));
-            }
-            (None, Some(_)) => {
-                return Err(ConfigError::CliArgErr(
-                    "No value supplied for `--snapevery`. When you supply `--snapkeep`, you also need to specify `--snapevery`"
-                ));
-            }
-            (None, None) => SnapshotConfig::Disabled,
-        };
-        let portcfg = match (
-            sslkey.map(|val| val.to_owned()),
-            sslchain.map(|val| val.to_owned()),
-        ) {
-            (None, None) => {
-                if sslonly {
-                    return Err(ConfigError::CliArgErr(
-                        "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
-                    ));
-                } else {
-                    if custom_ssl_port {
-                        log::warn!("Ignoring value for `--sslport` as TLS was not enabled");
-                    }
-                    PortConfig::new_insecure_only(host, port)
-                }
-            }
-            (Some(key), Some(chain)) => {
-                if sslonly {
-                    PortConfig::new_secure_only(
-                        host,
-                        SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
-                    )
-                } else {
-                    PortConfig::new_multi(
-                        host,
-                        port,
-                        SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
-                    )
-                }
-            }
-            _ => {
-                return Err(ConfigError::CliArgErr(
-                    "To use SSL, pass values for both --sslkey and --sslchain",
-                ));
-            }
-        };
-        let cfg = ParsedConfig::new(noart, bgsave, snapcfg, portcfg, maxcon);
-        return Ok(ConfigType::Custom(cfg, restorefile));
-    }
-    if let Some(filename) = filename {
-        match ParsedConfig::new_from_file(filename.to_owned()) {
-            Ok(cfg) => {
-                if cfg.bgsave.is_disabled() {
-                    log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
-                }
-                if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
-                    if e.every == 0 {
-                        return Err(ConfigError::CfgError(
-                            "The snapshot duration has to be greater than 0!",
-                        ));
-                    }
-                }
-                if let BGSave::Enabled(dur) = &cfg.bgsave {
-                    if *dur == 0 {
-                        return Err(ConfigError::CfgError(
-                            "The BGSAVE duration has to be greater than 0!",
-                        ));
-                    }
-                }
-                Ok(ConfigType::Custom(cfg, restorefile))
-            }
-            Err(e) => Err(e),
+
+    cfg.noart = noart;
+    let port: u16 = cli_parse_or_default_or_err!(
+        port,
+        2003,
+        "Invalid value for `--port`. Expected an unsigned 16-bit integer"
+    );
+    let host: IpAddr = cli_parse_or_default_or_err!(
+        host,
+        DEFAULT_IPV4,
+        "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address"
+    );
+    let sslport: u16 = cli_parse_or_default_or_err!(
+        sslport,
+        DEFAULT_SSL_PORT,
+        "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer"
+    );
+    cli_setparse_or_err!(
+        cfg.maxcon,
+        maxcon,
+        "Invalid value for `--maxcon`. Expected a valid positive integer"
+    );
+    if nosave {
+        if saveduration.is_some() {
+            // If there is both `nosave` and `saveduration` - the arguments aren't logically correct!
+            // How would we run BGSAVE in a given `saveduration` if it is disabled? Return an error
+            ret_cli_err!("Invalid options for BGSAVE. Either supply `--nosave` or `--saveduration` or nothing");
         }
+        // It is our responsibility to keep the user aware of bad settings, so we'll send a warning
+        log::warn!("BGSAVE is disabled. You might lose data if the host crashes");
+        cfg.bgsave = BGSave::Disabled;
+    } else if let Some(dur) = saveduration {
+        // A duration is specified for BGSAVE, so use it
+        cfg.bgsave = match dur.parse() {
+            Ok(duration) => BGSave::new(true, duration),
+            Err(_) => {
+                ret_cli_err!(
+                    "Invalid value for `--saveduration`. Expected an unsigned 64-bit integer"
+                )
+            }
+        };
+    }
+    // check snapshot configuration
+    let snapevery: Option<u64> = match snapevery {
+        Some(dur) => match dur.parse() {
+            Ok(dur) => Some(dur),
+            Err(_) => {
+                ret_cli_err!("Invalid value for `--snapevery`. Expected an unsigned 64-bit integer")
+            }
+        },
+        None => None,
+    };
+    let snapkeep: Option<usize> = match snapkeep {
+        Some(maxtop) => match maxtop.parse() {
+            Ok(maxtop) => Some(maxtop),
+            Err(_) => {
+                ret_cli_err!("Invalid value for `--snapkeep`. Expected an unsigned 64-bit integer")
+            }
+        },
+        None => None,
+    };
+    let failsafe = if let Ok(failsafe) = option_unwrap_or!(
+        matches
+            .value_of("stop-write-on-fail")
+            .map(|val| val.parse::<bool>()),
+        Ok(true)
+    ) {
+        failsafe
     } else {
-        Ok(ConfigType::Def(ParsedConfig::default(), restorefile))
-    }
-}
-
-mod cfgerror {
-    use std::fmt;
-    #[derive(Debug)]
-    /// Type of configuration error:
-    /// - The config file was not found (`OSError`)
-    /// - The config file was invalid (`SyntaxError`)
-    /// - The config file has an invalid value, which is syntatically correct
-    /// but logically incorrect (`CfgError`)
-    /// - The command line arguments have an invalid value/invalid values (`CliArgError`)
-    pub enum ConfigError {
-        OSError(std::io::Error),
-        SyntaxError(toml::de::Error),
-        CfgError(&'static str),
-        CliArgErr(&'static str),
-    }
-
-    impl fmt::Display for ConfigError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                ConfigError::OSError(e) => writeln!(f, "error: {}", e),
-                ConfigError::SyntaxError(e) => {
-                    writeln!(f, "syntax error in configuration file: {}", e)
+        ret_cli_err!("Please provide a boolean `true` or `false` value to --stop-write-on-fail");
+    };
+    cfg.snapshot = match (snapevery, snapkeep) {
+        (Some(every), Some(keep)) => {
+            SnapshotConfig::Enabled(SnapshotPref::new(every, keep, failsafe))
+        }
+        (None, None) => SnapshotConfig::Disabled,
+        _ => {
+            ret_cli_err!(
+                "No value supplied for `--snapevery`. When you supply `--snapkeep`, you also need to specify `--snapevery`"
+            )
+        }
+    };
+    // check port config
+    let portcfg = match (
+        sslkey.map(|val| val.to_owned()),
+        sslchain.map(|val| val.to_owned()),
+    ) {
+        (None, None) => {
+            if sslonly {
+                ret_cli_err!(
+                    "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
+                );
+            } else {
+                if custom_ssl_port {
+                    log::warn!("Ignoring value for `--sslport` as TLS was not enabled");
                 }
-                ConfigError::CfgError(e) => write!(f, "Configuration error: {}", e),
-                ConfigError::CliArgErr(e) => write!(f, "Argument error: {}", e),
+                PortConfig::new_insecure_only(host, port)
             }
         }
-    }
+        (Some(key), Some(chain)) => {
+            if sslonly {
+                PortConfig::new_secure_only(
+                    host,
+                    SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
+                )
+            } else {
+                PortConfig::new_multi(
+                    host,
+                    port,
+                    SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
+                )
+            }
+        }
+        _ => {
+            ret_cli_err!("To use SSL, pass values for both --sslkey and --sslchain");
+        }
+    };
+    cfg.ports = portcfg;
+    Ok(cfg)
 }
