@@ -241,7 +241,7 @@ impl ParsedConfig {
             ));
         }
         if let Some(sslopts) = cfg_info.ssl {
-            let portcfg = if option_unwrap_or!(sslopts.only, false) {
+            let portcfg = if sslopts.only.unwrap_or_default() {
                 PortConfig::SecureOnly {
                     ssl: SslOpts {
                         key: sslopts.key,
@@ -264,6 +264,9 @@ impl ParsedConfig {
                 }
             };
             cfg.ports = portcfg;
+        } else {
+            // make sure we check for portcfg for non-TLS connections
+            cfg.ports = PortConfig::new_insecure_only(cfg_info.server.host, cfg_info.server.port);
         }
         set_if_exists!(cfg_info.server.maxclient, cfg.maxcon);
         cfg
