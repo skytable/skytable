@@ -354,9 +354,10 @@ fn get_config_file_or_return_cfg_from_matches(
         // so we have a config file; let's confirm that we don't have any other arguments
         // either no restore file and len greater than 1; or restore file is some, and args greater
         // than 2
-        if (restorefile.is_none() && matches.args.len() > 1)
-            || (restorefile.is_some() && matches.args.len() > 2)
-        {
+        let is_conflict = restorefile.is_none()
+            && (matches.args.len() > 1 || matches.subcommand.is_some())
+            || restorefile.is_some() && (matches.args.len() > 2 || matches.subcommand.is_some());
+        if is_conflict {
             // nope, more args were passed; error
             return Err(ConfigError::CfgError(ERR_CONFLICT));
         }

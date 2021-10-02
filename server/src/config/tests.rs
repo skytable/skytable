@@ -26,8 +26,8 @@
 
 use super::cfgerr::{ConfigError, ERR_CONFLICT};
 use super::{
-    BGSave, IpAddr, ConfigurationSet, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4,
-    MAXIMUM_CONNECTION_LIMIT,
+    BGSave, ConfigurationSet, IpAddr, PortConfig, SnapshotConfig, SnapshotPref, SslOpts,
+    DEFAULT_IPV4, MAXIMUM_CONNECTION_LIMIT,
 };
 use clap::{load_yaml, App};
 pub(super) use libsky::TResult;
@@ -90,7 +90,8 @@ fn test_args() {
     let matches = App::from_yaml(cfg_layout).get_matches_from(cmdlineargs);
     let filename = matches.value_of("config").unwrap();
     assert_eq!("../examples/config-files/skyd.toml", filename);
-    let cfg = ConfigurationSet::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
+    let cfg =
+        ConfigurationSet::new_from_toml_str(std::fs::read_to_string(filename).unwrap()).unwrap();
     assert_eq!(cfg, ConfigurationSet::default());
 }
 
@@ -235,7 +236,7 @@ fn test_config_file_snapshot() {
 #[test]
 fn test_cli_args_conflict() {
     let cfg_layout = load_yaml!("../cli.yml");
-    let cli_args = ["--sslonly", "-c config.toml"];
+    let cli_args = ["skyd", "--nosave", "-c config.toml"];
     let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
     let err = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
     assert_eq!(err, ConfigError::CfgError(ERR_CONFLICT));
@@ -244,7 +245,7 @@ fn test_cli_args_conflict() {
 #[test]
 fn test_cli_args_conflict_with_restore_file_okay() {
     let cfg_layout = load_yaml!("../cli.yml");
-    let cli_args = ["--restore somedir", "-c config.toml"];
+    let cli_args = ["skyd", "--restore", "somedir", "-c", "config.toml"];
     let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
     let ret = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
     // this should only compain about the missing dir but not about conflict
@@ -257,7 +258,14 @@ fn test_cli_args_conflict_with_restore_file_okay() {
 #[test]
 fn test_cli_args_conflict_with_restore_file_fail() {
     let cfg_layout = load_yaml!("../cli.yml");
-    let cli_args = ["--restore somedir", "-c config.toml", "--nosave"];
+    let cli_args = [
+        "skyd",
+        "--restore",
+        "somedir",
+        "-c",
+        "config.toml",
+        "--nosave",
+    ];
     let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
     let ret = super::get_config_file_or_return_cfg_from_matches(matches).unwrap_err();
     // this should only compain about the missing dir but not about conflict
