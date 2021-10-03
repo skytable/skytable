@@ -350,7 +350,7 @@ fn get_config_file_or_return_cfg_from_matches(
     // Check if there is a config file
     let filename = matches.value_of("config");
     let restorefile = matches.value_of("restore").map(|v| v.to_string());
-    let ret = if let Some(filename) = filename {
+    let cfg = if let Some(filename) = filename {
         // so we have a config file; let's confirm that we don't have any other arguments
         // either no restore file and len greater than 1; or restore file is some, and args greater
         // than 2
@@ -361,37 +361,29 @@ fn get_config_file_or_return_cfg_from_matches(
             // nope, more args were passed; error
             return Err(ConfigError::CfgError(ERR_CONFLICT));
         }
-        validate_config_file(filename.to_owned())
+        ConfigurationSet::new_from_file(filename.to_owned())
     } else {
         parse_cli_args(matches)
-    };
-    ret.map(|v| ConfigType::Custom(v, restorefile))
-}
-
-fn validate_config_file(configfile: String) -> Result<ConfigurationSet, ConfigError> {
-    match ConfigurationSet::new_from_file(configfile) {
-        Ok(cfg) => {
-            if cfg.bgsave.is_disabled() {
-                log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
-            }
-            if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
-                if e.every == 0 {
-                    return Err(ConfigError::CfgError(
-                        "The snapshot duration has to be greater than 0!",
-                    ));
-                }
-            }
-            if let BGSave::Enabled(dur) = &cfg.bgsave {
-                if *dur == 0 {
-                    return Err(ConfigError::CfgError(
-                        "The BGSAVE duration has to be greater than 0!",
-                    ));
-                }
-            }
-            Ok(cfg)
-        }
-        Err(e) => Err(e),
+    }?;
+    // now validate
+    if cfg.bgsave.is_disabled() {
+        log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
     }
+    if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
+        if e.every == 0 {
+            return Err(ConfigError::CfgError(
+                "The snapshot duration has to be greater than 0!",
+            ));
+        }
+    }
+    if let BGSave::Enabled(dur) = &cfg.bgsave {
+        if *dur == 0 {
+            return Err(ConfigError::CfgError(
+                "The BGSAVE duration has to be greater than 0!",
+            ));
+        }
+    }
+    Ok(ConfigType::Custom(cfg, restorefile))
 }
 
 fn parse_cli_args(matches: ArgMatches) -> Result<ConfigurationSet, ConfigError> {
