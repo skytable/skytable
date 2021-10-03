@@ -25,6 +25,7 @@ All changes in this project will be noted in this file.
 - Added creation of lists:
   - `CREATE TABLE <entity> keymap(type,list<type>)`
 - Added compatibility of `DEL`, `EXISTS` and `LSKEYS` with lists
+- Added support for configuration via environment variables
 
 ### Improvements
 

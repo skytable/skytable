@@ -290,3 +290,33 @@ macro_rules! ucidx {
         *($base.as_ptr().add($idx as usize))
     };
 }
+
+#[macro_export]
+macro_rules! def {
+    (
+        $(#[$attr:meta])*
+        $vis:vis struct $ident:ident {
+            $(
+                $(#[$fattr:meta])*
+                $field:ident: $ty:ty = $defexpr:expr
+            ),* $(,)?
+        }
+    ) => {
+        $(#[$attr])*
+        $vis struct $ident {
+            $(
+                $(#[$fattr])*
+                $field: $ty,
+            )*
+        }
+        impl ::core::default::Default for $ident {
+            fn default() -> Self {
+                Self {
+                    $(
+                        $field: $defexpr,
+                    )*
+                }
+            }
+        }
+    };
+}
