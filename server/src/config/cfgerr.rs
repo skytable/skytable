@@ -24,10 +24,12 @@
  *
 */
 
-pub(super) const ERR_CONFLICT: &str =
-    "Either use command line arguments or use a configuration file";
-
+use super::cfgenv::EnvError;
 use std::fmt;
+
+pub(super) const ERR_CONFLICT: &str =
+    "Either use command line arguments, environment variables or a configuration file";
+
 #[derive(Debug)]
 /// Type of configuration error:
 /// - The config file was not found (`OSError`)
@@ -80,5 +82,14 @@ impl From<toml::de::Error> for ConfigError {
 impl From<std::io::Error> for ConfigError {
     fn from(derr: std::io::Error) -> Self {
         Self::OSError(derr)
+    }
+}
+
+impl From<EnvError> for ConfigError {
+    fn from(err: EnvError) -> Self {
+        match err {
+            EnvError::CfgError(e) => Self::CfgError(e),
+            EnvError::ParseError(e) => Self::EnvArgParseFailure(e),
+        }
     }
 }

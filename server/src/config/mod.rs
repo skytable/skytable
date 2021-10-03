@@ -35,6 +35,7 @@ use std::net::{IpAddr, Ipv4Addr};
 // modules
 #[macro_use]
 mod macros;
+mod cfgenv;
 mod cfgerr;
 mod cfgfile;
 #[cfg(test)]
@@ -44,6 +45,7 @@ use self::cfgerr::{ConfigError, ERR_CONFLICT};
 
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 const DEFAULT_SSL_PORT: u16 = 2004;
+const DEFAULT_PORT: u16 = 2003;
 
 /// The BGSAVE configuration
 ///
@@ -109,7 +111,7 @@ impl PortConfig {
     pub const fn default() -> PortConfig {
         PortConfig::InsecureOnly {
             host: DEFAULT_IPV4,
-            port: tests::DEFAULT_PORT,
+            port: DEFAULT_PORT,
         }
     }
 }
@@ -341,8 +343,9 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
 fn get_config_file_or_return_cfg_from_matches(
     matches: ArgMatches,
 ) -> Result<ConfigType, ConfigError> {
-    let no_cli_args = matches.args.is_empty();
-    if no_cli_args {
+    let no_cli_args = matches.args.is_empty(); // check env args
+    let env_args = cfgenv::get_env_config()?;
+    if no_cli_args && env_args.is_none() {
         // that means we need to use the default config
         return Ok(ConfigType::Def(ConfigurationSet::default(), None));
     }
@@ -354,16 +357,27 @@ fn get_config_file_or_return_cfg_from_matches(
         // so we have a config file; let's confirm that we don't have any other arguments
         // either no restore file and len greater than 1; or restore file is some, and args greater
         // than 2
-        let is_conflict = restorefile.is_none()
-            && (matches.args.len() > 1 || matches.subcommand.is_some())
-            || restorefile.is_some() && (matches.args.len() > 2 || matches.subcommand.is_some());
+        let is_conflict = (restorefile.is_none()
+            && (matches.args.len() > 1 || matches.subcommand.is_some()))
+            || (restorefile.is_some() && (matches.args.len() > 2 || matches.subcommand.is_some()));
+        let is_conflict = is_conflict || env_args.is_some();
         if is_conflict {
             // nope, more args were passed; error
             return Err(ConfigError::CfgError(ERR_CONFLICT));
         }
         ConfigurationSet::new_from_file(filename.to_owned())
     } else {
-        parse_cli_args(matches)
+        if env_args.is_some() && !matches.args.is_empty() {
+            // so we have env args and some CLI args? that's a conflict
+            return Err(ConfigError::CfgError(ERR_CONFLICT));
+        }
+        if let Some(env_args) = env_args {
+            // we are sure that we just have env args
+            Ok(env_args)
+        } else {
+            // we are sure that we just have CLI args
+            parse_cli_args(matches)
+        }
     }?;
     // now validate
     if cfg.bgsave.is_disabled() {
@@ -518,7 +532,7 @@ fn parse_cli_args(matches: ArgMatches) -> Result<ConfigurationSet, ConfigError> 
             }
         }
         _ => {
-            ret_cli_err!("To use SSL, pass values for both --sslkey and --sslchain");
+            ret_cli_err!("To use TLS, pass values for both --sslkey and --sslchain");
         }
     };
     cfg.ports = portcfg;

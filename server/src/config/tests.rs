@@ -27,14 +27,12 @@
 use super::cfgerr::{ConfigError, ERR_CONFLICT};
 use super::{
     BGSave, ConfigurationSet, IpAddr, PortConfig, SnapshotConfig, SnapshotPref, SslOpts,
-    DEFAULT_IPV4, MAXIMUM_CONNECTION_LIMIT,
+    DEFAULT_IPV4, DEFAULT_PORT, MAXIMUM_CONNECTION_LIMIT,
 };
 use clap::{load_yaml, App};
 pub(super) use libsky::TResult;
 use std::fs;
 use std::net::Ipv6Addr;
-
-pub(super) const DEFAULT_PORT: u16 = 2003;
 
 #[test]
 fn test_config_toml_okayport() {
