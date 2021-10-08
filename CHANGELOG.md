@@ -37,6 +37,7 @@ All changes in this project will be noted in this file.
 ### Fixes
 
 - Fixed unexpected removal of single and double quotes from input strings in `skysh`
+- Fixed incorrect removal of quotes from input strings in `skysh`
 
 ## Version 0.7.0
 

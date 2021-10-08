@@ -70,11 +70,16 @@ pub fn split_into_args(q: &str) -> Vec<String> {
             let mut chars = v.chars();
             let first = chars.next();
             let last = chars.last();
-            if let Some('"' | '\'') = first {
+            if let Some('"') = first {
                 v = &v[1..];
-            }
-            if let Some('"' | '\'') = last {
-                v = &v[..v.len()];
+                if let Some('"') = last {
+                    v = &v[..v.len()];
+                }
+            } else if let Some('\'') = first {
+                v = &v[1..];
+                if let Some('\'') = last {
+                    v = &v[..v.len()];
+                }
             }
             v.to_owned()
         })
