@@ -469,7 +469,7 @@ checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libsky"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "lazy_static",
  "regex",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "libstress"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "sky-bench"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "clap",
  "devtimer",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "sky-migrate"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "bincode",
  "clap",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "sky_macros"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "skyd"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "ahash",
  "bincode",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "skysh"
-version = "0.7.1-alpha.1"
+version = "0.7.1"
 dependencies = [
  "clap",
  "crossterm",
