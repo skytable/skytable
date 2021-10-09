@@ -32,7 +32,6 @@
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
 pub mod util;
-use skytable::Query;
 use std::error::Error;
 /// A generic result
 pub type TResult<T> = Result<T, Box<dyn Error>>;
@@ -42,12 +41,6 @@ pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The URL
 pub static URL: &str = "https://github.com/skytable/skytable";
-
-use std::str::FromStr;
-
-lazy_static::lazy_static! {
-    static ref RE: regex::Regex = regex::Regex::from_str(r#"("[^"]*"|'[^']*'|[\S]+)+"#).unwrap();
-}
 
 #[macro_export]
 /// Don't use unwrap_or but use this macro as the optimizer fails to optimize away usages
@@ -60,41 +53,4 @@ macro_rules! option_unwrap_or {
             None => $fallback,
         }
     };
-}
-
-pub fn split_into_args(q: &str) -> Vec<String> {
-    let args: Vec<String> = RE
-        .find_iter(q)
-        .map(|val| {
-            let mut v = val.as_str();
-            let mut chars = v.chars();
-            let first = chars.next();
-            let last = chars.last();
-            if let Some('"') = first {
-                v = &v[1..];
-                if let Some('"') = last {
-                    v = &v[..v.len()];
-                }
-            } else if let Some('\'') = first {
-                v = &v[1..];
-                if let Some('\'') = last {
-                    v = &v[..v.len()];
-                }
-            }
-            v.to_owned()
-        })
-        .collect();
-    args
-}
-
-pub fn turn_into_query(q: &str) -> Query {
-    let mut query = Query::new();
-    split_into_args(q).into_iter().for_each(|arg| {
-        query.push(arg);
-    });
-    query
-}
-
-pub fn into_raw_query(q: &str) -> Vec<u8> {
-    turn_into_query(q).into_raw_query()
 }

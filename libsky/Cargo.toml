@@ -1,17 +1,11 @@
 [package]
-name = "libsky"
-version = "0.7.1"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2018"
+name = "libsky"
+version = "0.7.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# internal deps
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
-    "dbg",
-], default-features = false }
 # external deps
-lazy_static = "1.4.0"
 termcolor = "1.1.2"
-regex = "1.5.4"

@@ -471,9 +471,6 @@ checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 name = "libsky"
 version = "0.7.1"
 dependencies = [
- "lazy_static",
- "regex",
- "skytable 0.6.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "termcolor",
 ]
 
