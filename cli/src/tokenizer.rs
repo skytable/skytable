@@ -34,14 +34,12 @@ use skytable::{types::RawString, Query};
 #[derive(Debug)]
 pub enum TokenizerError {
     QuoteMismatch(String),
-    BadExpression(String),
 }
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::QuoteMismatch(expr) => write!(f, "mismatched quotes near end of: `{}`", expr),
-            Self::BadExpression(expr) => write!(f, "bad expression near end of: `{}`", expr),
         }
     }
 }
@@ -51,7 +49,6 @@ pub trait SequentialQuery {
     fn new() -> Self;
 }
 
-#[cfg(test)]
 impl SequentialQuery for Vec<String> {
     fn push(&mut self, input: &[u8]) {
         Vec::push(self, String::from_utf8_lossy(input).to_string())
@@ -83,12 +80,6 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
     }
     while let Some(tok) = it.next() {
         match tok {
-            // numbers? nope
-            b'0'..=b'9' => {
-                return Err(TokenizerError::BadExpression(
-                    String::from_utf8_lossy(&inp[..pos!()]).to_string(),
-                ));
-            }
             b'\'' => {
                 // hmm, quotes; let's see where it ends
                 let pos = pos!();

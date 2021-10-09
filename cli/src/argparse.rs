@@ -40,6 +40,7 @@ use std::io::stdout;
 use std::process;
 use std::process::exit;
 const ADDR: &str = "127.0.0.1";
+const SKYSH_BLANK: &str = "       ";
 
 macro_rules! inner_eval {
     ($runner:expr, $matches:expr) => {
@@ -62,7 +63,7 @@ macro_rules! inner_repl {
         let _ = editor.load_history(".sky_history");
         loop {
             match editor.readline("skysh> ") {
-                Ok(line) => match line.to_lowercase().as_str() {
+                Ok(mut line) => match line.to_lowercase().as_str() {
                     "exit" => break,
                     "clear" => {
                         let mut stdout = stdout();
@@ -73,9 +74,23 @@ macro_rules! inner_repl {
                         continue;
                     }
                     _ => {
-                        if !line.is_empty() {
-                            $runner.run_query(&line).await
+                        if line.is_empty() {
+                            continue;
                         }
+                        while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
+                            // continuation on next line
+                            let cl = match editor.readline(SKYSH_BLANK) {
+                                Ok(l) => l,
+                                Err(ReadlineError::Interrupted) => break,
+                                Err(err) => {
+                                    eprintln!("Failed to read line with error: {}", err);
+                                    exit(1);
+                                }
+                            };
+                            line = line.trim_end_matches(r#" \"#).to_string();
+                            line.extend(cl.chars());
+                        }
+                        $runner.run_query(&line).await
                     }
                 },
                 Err(ReadlineError::Interrupted) => break,
