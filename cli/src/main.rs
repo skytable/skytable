@@ -29,6 +29,7 @@
 
 mod argparse;
 mod runner;
+mod tokenizer;
 
 #[tokio::main]
 async fn main() {

@@ -23,6 +23,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+use crate::tokenizer;
 use core::fmt;
 use core::future::Future;
 use core::pin::Pin;
@@ -91,32 +92,20 @@ macro_rules! write_int {
 
 macro_rules! write_err {
     ($idx:expr, $err:ident) => {
-        crossterm::execute!(
-            std::io::stdout(),
-            SetForegroundColor(Color::Red),
-            Print(if let Some(idx) = $idx {
+        err!(if let Some(idx) = $idx {
+            format!("({}) ({})\n", idx, $err)
+        } else {
+            format!("({})\n", $err)
+        })
+    };
+    ($idx:ident, $err:literal) => {
+        err!(
+            (if let Some(idx) = $idx {
                 format!("({}) ({})\n", idx, $err)
             } else {
                 format!("({})\n", $err)
-            }),
-            ResetColor
+            })
         )
-        .expect("Failed to write to stdout")
-    };
-    ($idx:ident, $err:literal) => {
-        crossterm::execute!(
-            std::io::stdout(),
-            SetForegroundColor(Color::Red),
-            Print(
-                (if let Some(idx) = $idx {
-                    format!("({}) ({})\n", idx, $err)
-                } else {
-                    format!("({})\n", $err)
-                })
-            ),
-            ResetColor
-        )
-        .expect("Failed to write to stdout")
     };
 }
 
@@ -141,6 +130,18 @@ macro_rules! write_okay {
     };
 }
 
+macro_rules! err {
+    ($input:expr) => {
+        crossterm::execute!(
+            std::io::stdout(),
+            SetForegroundColor(Color::Red),
+            Print($input),
+            ResetColor
+        )
+        .expect("Failed to write to stdout")
+    };
+}
+
 macro_rules! eskysh {
     ($e:expr) => {
         eprintln!("[SKYSH ERROR] {}", $e)
@@ -152,7 +153,13 @@ impl<T: AsyncSocket> Runner<T> {
         Runner { con }
     }
     pub async fn run_query(&mut self, unescaped_items: &str) {
-        let query = libsky::turn_into_query(unescaped_items);
+        let query: Query = match tokenizer::get_query(unescaped_items.as_bytes()) {
+            Ok(q) => q,
+            Err(e) => {
+                err!(format!("[Syntax Error: {}]\n", e));
+                return;
+            }
+        };
         match self.con.run_simple_query(query).await {
             Ok(resp) => match resp {
                 Element::String(st) => write_str!(st),
