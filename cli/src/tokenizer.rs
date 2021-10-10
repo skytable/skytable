@@ -79,7 +79,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
             inp.len() - it.len()
         };
     }
-    while let Some(tok) = it.next() {
+    'outer: while let Some(tok) = it.next() {
         match tok {
             b'\'' => {
                 // hmm, quotes; let's see where it ends
@@ -117,13 +117,18 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                 let start = pos!() - 1;
                 let mut end = start;
                 // alpha? cool, go on
-                while let Some(tok) = it.peek() {
-                    if **tok == b' ' {
-                        it.next();
-                        break;
-                    } else {
-                        end += 1;
-                        it.next();
+                'inner: while let Some(tok) = it.peek() {
+                    match **tok {
+                        b' ' => {
+                            it.next();
+                            break;
+                        }
+                        b'\'' | b'"' => continue 'outer,
+                        _ => {
+                            end += 1;
+                            it.next();
+                            continue 'inner;
+                        }
                     }
                 }
                 end += 1;

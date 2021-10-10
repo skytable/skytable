@@ -24,7 +24,7 @@
  *
 */
 
-use crate::tokenizer::get_query;
+use crate::tokenizer::{get_query, TokenizerError};
 
 #[test]
 fn test_basic_tokenization() {
@@ -128,4 +128,11 @@ fn test_extra_whitespace() {
         ret,
         vec!["set".to_owned(), "x".to_owned(), "100".to_owned()]
     );
+}
+
+#[test]
+fn test_singly_quoted() {
+    let input = "set tables' wth".as_bytes();
+    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    assert_eq!(ret, TokenizerError::QuoteMismatch(" wth".to_owned()));
 }
