@@ -83,11 +83,11 @@ macro_rules! inner_repl {
                                 Ok(l) => l,
                                 Err(ReadlineError::Interrupted) => break,
                                 Err(err) => {
-                                    eprintln!("Failed to read line with error: {}", err);
+                                    eprintln!("ERROR: Failed to read line with error: {}", err);
                                     exit(1);
                                 }
                             };
-                            line = line.trim_end_matches(r#" \"#).to_string();
+                            line = line[line.len() - 2..].to_string();
                             line.extend(cl.chars());
                         }
                         $runner.run_query(&line).await
@@ -95,13 +95,13 @@ macro_rules! inner_repl {
                 },
                 Err(ReadlineError::Interrupted) => break,
                 Err(err) => {
-                    eprintln!("Failed to read line with error: {}", err);
+                    eprintln!("ERROR: Failed to read line with error: {}", err);
                     exit(1);
                 }
             }
         }
         if let Err(e) = editor.save_history(".sky_history") {
-            eprintln!("Failed to save history with error: '{}'", e);
+            eprintln!("ERROR: Failed to save history with error: '{}'", e);
         }
     };
 }

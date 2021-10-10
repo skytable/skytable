@@ -2,6 +2,13 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Improvements
+
+- `skysh` now handles special character strings more reliably
+- `skysh` now supports splitting a command across multiple lines
+
 ## Version 0.7.1
 
 ### Additions
