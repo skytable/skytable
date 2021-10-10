@@ -30,6 +30,9 @@
 mod argparse;
 mod runner;
 mod tokenizer;
+// tests
+#[cfg(test)]
+mod tests;
 
 #[tokio::main]
 async fn main() {

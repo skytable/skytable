@@ -31,7 +31,7 @@
 use core::fmt;
 use skytable::{types::RawString, Query};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenizerError {
     QuoteMismatch(String),
 }
@@ -49,6 +49,7 @@ pub trait SequentialQuery {
     fn new() -> Self;
 }
 
+#[cfg(test)]
 impl SequentialQuery for Vec<String> {
     fn push(&mut self, input: &[u8]) {
         Vec::push(self, String::from_utf8_lossy(input).to_string())
