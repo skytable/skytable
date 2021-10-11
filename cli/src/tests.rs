@@ -134,7 +134,7 @@ fn test_extra_whitespace() {
 fn test_singly_quoted() {
     let input = "set tables' wth".as_bytes();
     let ret = get_query::<Vec<String>>(input).unwrap_err();
-    assert_eq!(ret, TokenizerError::QuoteMismatch(" wth".to_owned()));
+    assert_eq!(ret, TokenizerError::ExpectedWhitespace("tables".to_owned()));
 }
 
 #[test]

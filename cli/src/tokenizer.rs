@@ -96,7 +96,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
             }
         };
     }
-    'outer: while let Some(tok) = it.next() {
+    while let Some(tok) = it.next() {
         match tok {
             b'\'' => {
                 // hmm, quotes; let's see where it ends
@@ -140,9 +140,13 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                     match **tok {
                         b' ' => {
                             it.next();
-                            break;
+                            break 'inner;
                         }
-                        b'\'' | b'"' => continue 'outer,
+                        b'\'' | b'"' => {
+                            return Err(TokenizerError::ExpectedWhitespace(
+                                String::from_utf8_lossy(&inp[start..pos!()]).to_string(),
+                            ))
+                        }
                         _ => {
                             end += 1;
                             it.next();
