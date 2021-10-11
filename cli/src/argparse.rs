@@ -40,7 +40,9 @@ use std::io::stdout;
 use std::process;
 use std::process::exit;
 const ADDR: &str = "127.0.0.1";
-const SKYSH_BLANK: &str = "       ";
+const SKYSH_BLANK: &str = "     > ";
+const SKYSH_PROMPT: &str = "skysh> ";
+const SKYSH_HISTORY_FILE: &str = ".sky_history";
 
 macro_rules! inner_eval {
     ($runner:expr, $matches:expr) => {
@@ -60,9 +62,9 @@ macro_rules! inner_repl {
         let mut editor = Editor::<()>::new();
         editor.set_auto_add_history(true);
         editor.set_history_ignore_dups(true);
-        let _ = editor.load_history(".sky_history");
+        let _ = editor.load_history(SKYSH_HISTORY_FILE);
         loop {
-            match editor.readline("skysh> ") {
+            match editor.readline(SKYSH_PROMPT) {
                 Ok(mut line) => match line.to_lowercase().as_str() {
                     "exit" => break,
                     "clear" => {
@@ -87,7 +89,7 @@ macro_rules! inner_repl {
                                     exit(1);
                                 }
                             };
-                            line = line[line.len() - 2..].to_string();
+                            line = line[..line.len() - 2].to_string();
                             line.extend(cl.chars());
                         }
                         $runner.run_query(&line).await
@@ -100,7 +102,7 @@ macro_rules! inner_repl {
                 }
             }
         }
-        if let Err(e) = editor.save_history(".sky_history") {
+        if let Err(e) = editor.save_history(SKYSH_HISTORY_FILE) {
             eprintln!("ERROR: Failed to save history with error: '{}'", e);
         }
     };

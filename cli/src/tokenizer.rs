@@ -53,7 +53,7 @@ pub trait SequentialQuery {
     fn new() -> Self;
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 impl SequentialQuery for Vec<String> {
     fn push(&mut self, input: &[u8]) {
         Vec::push(self, String::from_utf8_lossy(input).to_string())
