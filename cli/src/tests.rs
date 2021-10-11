@@ -136,3 +136,17 @@ fn test_singly_quoted() {
     let ret = get_query::<Vec<String>>(input).unwrap_err();
     assert_eq!(ret, TokenizerError::QuoteMismatch(" wth".to_owned()));
 }
+
+#[test]
+fn test_text_after_quote_nospace() {
+    let input = "get 'rust'ferris".as_bytes();
+    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    assert_eq!(ret, TokenizerError::ExpectedWhitespace("rust'".to_owned()));
+}
+
+#[test]
+fn test_text_after_double_quote_nospace() {
+    let input = r#"get "rust"ferris"#.as_bytes();
+    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    assert_eq!(ret, TokenizerError::ExpectedWhitespace("rust\"".to_owned()));
+}

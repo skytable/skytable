@@ -34,12 +34,16 @@ use skytable::{types::RawString, Query};
 #[derive(Debug, PartialEq)]
 pub enum TokenizerError {
     QuoteMismatch(String),
+    ExpectedWhitespace(String),
 }
 
 impl fmt::Display for TokenizerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::QuoteMismatch(expr) => write!(f, "mismatched quotes near end of: `{}`", expr),
+            Self::ExpectedWhitespace(expr) => {
+                write!(f, "expected whitespace near end of: `{}`", expr)
+            }
         }
     }
 }
@@ -69,14 +73,27 @@ impl SequentialQuery for Query {
 }
 
 pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
-    if inp.is_empty() {
-        panic!("Input is empty");
-    }
+    assert!(!inp.is_empty(), "Input is empty");
     let mut query = T::new();
     let mut it = inp.iter().peekable();
     macro_rules! pos {
         () => {
             inp.len() - it.len()
+        };
+    }
+    macro_rules! expect_whitespace {
+        ($start:expr) => {
+            match it.peek() {
+                Some(b) => match **b {
+                    b' ' => {}
+                    _ => {
+                        return Err(TokenizerError::ExpectedWhitespace(
+                            String::from_utf8_lossy(&inp[$start..pos!()]).to_string(),
+                        ))
+                    }
+                },
+                None => {}
+            }
         };
     }
     'outer: while let Some(tok) = it.next() {
@@ -94,6 +111,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                         ));
                     }
                 }
+                expect_whitespace!(pos);
             }
             b'"' => {
                 // hmm, quotes; let's see where it ends
@@ -108,6 +126,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                         ));
                     }
                 }
+                expect_whitespace!(pos);
             }
             b' ' => {
                 // this just prevents control from being handed to the wildcard
