@@ -96,7 +96,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
             }
         };
     }
-    while let Some(tok) = it.next() {
+    'outer: while let Some(tok) = it.next() {
         match tok {
             b'\'' => {
                 // hmm, quotes; let's see where it ends
@@ -132,6 +132,10 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                 // this just prevents control from being handed to the wildcard
                 continue;
             }
+            b'#' => {
+                // so this is an inline comment; skip until newline
+                let _ = it.position(|x| *x == b'\n');
+            }
             _ => {
                 let start = pos!() - 1;
                 let mut end = start;
@@ -147,6 +151,7 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                                 String::from_utf8_lossy(&inp[start..pos!()]).to_string(),
                             ))
                         }
+                        b'#' => continue 'outer,
                         _ => {
                             end += 1;
                             it.next();

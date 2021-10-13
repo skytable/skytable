@@ -26,10 +26,14 @@
 
 use crate::tokenizer::{get_query, TokenizerError};
 
+fn query_from(input: &[u8]) -> Result<Vec<String>, TokenizerError> {
+    get_query(input)
+}
+
 #[test]
 fn test_basic_tokenization() {
     let input = "set x 100".as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec!["set".to_owned(), "x".to_owned(), "100".to_owned()]
@@ -39,7 +43,7 @@ fn test_basic_tokenization() {
 #[test]
 fn test_single_quote_tokens() {
     let input = "set 'x with a whitespace' 100".as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec![
@@ -53,7 +57,7 @@ fn test_single_quote_tokens() {
 #[test]
 fn test_double_quote_tokens() {
     let input = r#"set "x with a whitespace" 100"#.as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec![
@@ -67,7 +71,7 @@ fn test_double_quote_tokens() {
 #[test]
 fn test_single_and_double_quote_tokens() {
     let input = r#"set "x with a whitespace" 'y with a whitespace'"#.as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec![
@@ -81,7 +85,7 @@ fn test_single_and_double_quote_tokens() {
 #[test]
 fn test_multiple_single_quote_tokens() {
     let input = r#"'set' 'x with a whitespace' 'y with a whitespace'"#.as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec![
@@ -95,7 +99,7 @@ fn test_multiple_single_quote_tokens() {
 #[test]
 fn test_multiple_double_quote_tokens() {
     let input = r#""set" "x with a whitespace" "y with a whitespace""#.as_bytes();
-    let ret: Vec<String> = get_query(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec![
@@ -109,21 +113,21 @@ fn test_multiple_double_quote_tokens() {
 #[test]
 fn test_missing_single_quote() {
     let input = r#"'get' 'x with a whitespace"#.as_bytes();
-    let ret = format!("{}", get_query::<Vec<String>>(input).unwrap_err());
+    let ret = format!("{}", query_from(input).unwrap_err());
     assert_eq!(ret, "mismatched quotes near end of: `x with a whitespace`");
 }
 
 #[test]
 fn test_missing_double_quote() {
     let input = r#"'get' "x with a whitespace"#.as_bytes();
-    let ret = format!("{}", get_query::<Vec<String>>(input).unwrap_err());
+    let ret = format!("{}", query_from(input).unwrap_err());
     assert_eq!(ret, "mismatched quotes near end of: `x with a whitespace`");
 }
 
 #[test]
 fn test_extra_whitespace() {
     let input = "set  x  '100'".as_bytes();
-    let ret = get_query::<Vec<String>>(input).unwrap();
+    let ret = query_from(input).unwrap();
     assert_eq!(
         ret,
         vec!["set".to_owned(), "x".to_owned(), "100".to_owned()]
@@ -133,20 +137,51 @@ fn test_extra_whitespace() {
 #[test]
 fn test_singly_quoted() {
     let input = "set tables' wth".as_bytes();
-    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    let ret = query_from(input).unwrap_err();
     assert_eq!(ret, TokenizerError::ExpectedWhitespace("tables".to_owned()));
 }
 
 #[test]
 fn test_text_after_quote_nospace() {
     let input = "get 'rust'ferris".as_bytes();
-    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    let ret = query_from(input).unwrap_err();
     assert_eq!(ret, TokenizerError::ExpectedWhitespace("rust'".to_owned()));
 }
 
 #[test]
 fn test_text_after_double_quote_nospace() {
     let input = r#"get "rust"ferris"#.as_bytes();
-    let ret = get_query::<Vec<String>>(input).unwrap_err();
+    let ret = query_from(input).unwrap_err();
     assert_eq!(ret, TokenizerError::ExpectedWhitespace("rust\"".to_owned()));
+}
+
+#[test]
+fn test_inline_comment() {
+    let input = "set x 100 # sets x to 100".as_bytes();
+    let ret = query_from(input).unwrap();
+    assert_eq!(
+        ret,
+        vec!["set".to_owned(), "x".to_owned(), "100".to_owned()]
+    )
+}
+
+#[test]
+fn test_full_comment() {
+    let input = "# what is going on?".as_bytes();
+    let ret = query_from(input).unwrap();
+    assert!(ret.is_empty());
+}
+
+#[test]
+fn test_ignore_comment() {
+    let input = "set x \"# ooh la la\"".as_bytes();
+    assert_eq!(
+        query_from(input).unwrap(),
+        vec!["set".to_owned(), "x".to_owned(), "# ooh la la".to_owned()]
+    );
+    let input = "set x \"#\"".as_bytes();
+    assert_eq!(
+        query_from(input).unwrap(),
+        vec!["set".to_owned(), "x".to_owned(), "#".to_owned()]
+    );
 }
