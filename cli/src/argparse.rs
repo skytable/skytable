@@ -57,19 +57,27 @@ macro_rules! inner_eval {
 }
 
 macro_rules! inner_repl {
-    ($runner:expr) => {
+    ($runner:expr, $lplt:lifetime) => {
         println!("Skytable v{} | {}", VERSION, URL);
         let mut editor = Editor::<()>::new();
         editor.set_auto_add_history(true);
         editor.set_history_ignore_dups(true);
+        editor.bind_sequence(
+            rustyline::KeyEvent(
+                rustyline::KeyCode::BracketedPasteStart,
+                rustyline::Modifiers::NONE,
+            ),
+            rustyline::Cmd::Noop,
+        );
         let _ = editor.load_history(SKYSH_HISTORY_FILE);
-        loop {
+        $lplt: loop {
             match editor.readline(SKYSH_PROMPT) {
                 Ok(mut line) => match line.to_lowercase().as_str() {
                     "exit" => break,
                     "clear" => {
                         let mut stdout = stdout();
-                        execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
+                        execute!(stdout, Clear(ClearType::All))
+                            .expect("Failed to clear screen");
                         execute!(stdout, cursor::MoveTo(0, 0))
                             .expect("Failed to move cursor to origin");
                         drop(stdout); // aggressively drop stdout
@@ -79,11 +87,15 @@ macro_rules! inner_repl {
                         if line.is_empty() {
                             continue;
                         }
-                        while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
+                        if (line.as_bytes()[0]) == b'#' {
+                            continue;
+                        }
+                        while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#)
+                        {
                             // continuation on next line
                             let cl = match editor.readline(SKYSH_BLANK) {
                                 Ok(l) => l,
-                                Err(ReadlineError::Interrupted) => break,
+                                Err(ReadlineError::Interrupted) => break $lplt,
                                 Err(err) => {
                                     eprintln!("ERROR: Failed to read line with error: {}", err);
                                     exit(1);
@@ -138,7 +150,7 @@ pub async fn start_repl() {
         let mut runner = Runner::new(con);
         inner_eval!(runner, matches);
         println!("Connected to skyhash-secure://{}:{}", host, port);
-        inner_repl!(runner);
+        inner_repl!(runner, 'tls);
     } else {
         let con = match AsyncConnection::new(host, port).await {
             Ok(c) => c,
@@ -150,7 +162,7 @@ pub async fn start_repl() {
         let mut runner = Runner::new(con);
         inner_eval!(runner, matches);
         println!("Connected to skyhash://{}:{}", host, port);
-        inner_repl!(runner);
+        inner_repl!(runner, 'insecure);
     }
     println!("Goodbye!");
 }

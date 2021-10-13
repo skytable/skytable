@@ -77,7 +77,7 @@ macro_rules! write_binstr {
         println!("{}", BinaryData($st));
     };
     ($idx:ident, $st:ident) => {
-        println!("({}) {}", $idx, BinaryData($st));
+        println!("({}) {}", $idx, BinaryData($st))
     };
 }
 
