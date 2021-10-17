@@ -51,6 +51,7 @@ use self::element::{UnsafeElement, UnsafeFlatElement};
 use crate::util::Unwrappable;
 use core::fmt;
 use core::hint::unreachable_unchecked;
+use core::ops;
 use core::slice;
 
 const ASCII_UNDERSCORE: u8 = b'_';
@@ -241,6 +242,16 @@ impl PipelineQuery {
     /// pointers valid
     const unsafe fn new(inner: Box<[UnsafeElement]>) -> PipelineQuery {
         Self { inner }
+    }
+    pub const fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+impl ops::Deref for PipelineQuery {
+    type Target = [UnsafeElement];
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 

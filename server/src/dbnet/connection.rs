@@ -284,6 +284,23 @@ where
             ret
         })
     }
+    /// Write the length of the pipeline query (*)
+    fn write_pipeline_query_header<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + Sync + 's,
+    {
+        Box::pin(async move {
+            let slf = self;
+            slf.write_response([b'*']).await?;
+            slf.write_response(len).await?;
+            slf.write_response([b'\n']).await?;
+            Ok(())
+        })
+    }
     /// Write the flat array length (`_<size>\n`)
     fn write_flat_array_length<'r, 's>(
         &'r mut self,
