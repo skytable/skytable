@@ -54,6 +54,6 @@ macro_rules! set_if_exists {
 
 macro_rules! ret_cli_err {
     ($what:expr) => {
-        return Err(self::cfgerr::ConfigError::CliArgErr($what));
+        return Err(self::cfgerr::ConfigError::CliArgErr($what))
     };
 }

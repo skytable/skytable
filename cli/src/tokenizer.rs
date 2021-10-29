@@ -34,6 +34,7 @@ use skytable::{types::RawString, Query};
 #[derive(Debug, PartialEq)]
 pub enum TokenizerError {
     QuoteMismatch(String),
+    BacktickMismatch(String),
     ExpectedWhitespace(String),
 }
 
@@ -43,6 +44,9 @@ impl fmt::Display for TokenizerError {
             Self::QuoteMismatch(expr) => write!(f, "mismatched quotes near end of: `{}`", expr),
             Self::ExpectedWhitespace(expr) => {
                 write!(f, "expected whitespace near end of: `{}`", expr)
+            }
+            Self::BacktickMismatch(expr) => {
+                write!(f, "mismatched backticks near end of: `{}`", expr)
             }
         }
     }
@@ -122,6 +126,21 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                     None => {
                         let end = pos!();
                         return Err(TokenizerError::QuoteMismatch(
+                            String::from_utf8_lossy(&inp[pos..end]).to_string(),
+                        ));
+                    }
+                }
+                expect_whitespace!(pos);
+            }
+            b'`' => {
+                // hmm, backtick? let's look for the end
+                let pos = pos!();
+                let qidx = it.position(|x| *x == b'`');
+                match qidx {
+                    Some(idx) => query.push(&inp[pos..idx + pos]),
+                    None => {
+                        let end = pos!();
+                        return Err(TokenizerError::BacktickMismatch(
                             String::from_utf8_lossy(&inp[pos..end]).to_string(),
                         ));
                     }
