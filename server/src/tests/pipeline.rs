@@ -51,4 +51,18 @@ mod tests {
             ]
         );
     }
+    // although an error is simply just a response, but we'll still add a test for sanity
+    async fn test_pipeline_with_error() {
+        let pipe = Pipeline::new()
+            .add(query!("heya"))
+            .add(query!("get", "x", "y"));
+        let ret = con.run_pipeline(pipe).await.unwrap();
+        assert_eq!(
+            ret,
+            vec![
+                Element::String("HEY!".to_owned()),
+                Element::RespCode(RespCode::ActionError)
+            ]
+        );
+    }
 }
