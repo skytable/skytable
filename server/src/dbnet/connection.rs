@@ -36,6 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
+use crate::corestore::buffers::Integer64;
 use crate::corestore::Corestore;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
@@ -296,7 +297,9 @@ where
         Box::pin(async move {
             let slf = self;
             slf.write_response([b'*']).await?;
-            slf.write_response(len).await?;
+            slf.get_mut_stream()
+                .write_all(&Integer64::init(len as u64))
+                .await?;
             slf.write_response([b'\n']).await?;
             Ok(())
         })

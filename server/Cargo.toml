@@ -9,7 +9,7 @@ version = "0.7.1"
 # internal deps
 libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", default-features = false }
+skytable = { git = "https://github.com/skytable/client-rust", branch = "pipelines", default-features = false }
 # external deps
 ahash = "0.7.5"
 bytes = "1.1.0"
@@ -44,7 +44,7 @@ libstress = { path = "../libstress" }
 skytable = { git = "https://github.com/skytable/client-rust", features = [
   "async",
   "aio-ssl",
-], default-features = false, branch = "next" }
+], default-features = false, branch = "pipelines" }
 # external deps
 bincode = "1.3.3"
 rand = "0.8.4"

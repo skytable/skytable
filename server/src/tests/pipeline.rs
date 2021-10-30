@@ -1,5 +1,5 @@
 /*
- * Created on Tue Aug 25 2020
+ * Created on Sat Oct 30 2021
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,30 +24,31 @@
  *
 */
 
-//! This module contains automated tests for queries
-
-#[macro_use]
-mod macros;
-mod ddl_tests;
-mod inspect_tests;
-mod kvengine;
-mod kvengine_encoding;
-mod kvengine_list;
-mod pipeline;
-
-mod ssl {
-    use skytable::aio::TlsConnection;
-    use skytable::{Element, Query};
-    use std::env;
-    #[tokio::test]
-    async fn test_ssl() {
-        let mut path = env::var("ROOT_DIR").expect("ROOT_DIR unset");
-        path.push_str("/cert.pem");
-        let mut con = TlsConnection::new("127.0.0.1", 2004, &path).await.unwrap();
-        let q = Query::from("heya");
+#[sky_macros::dbtest]
+mod tests {
+    use skytable::{query, Element, Pipeline, RespCode};
+    async fn test_pipeline_heya_echo() {
+        let pipe = Pipeline::new()
+            .add(query!("heya", "first"))
+            .add(query!("heya", "second"));
+        let ret = con.run_pipeline(pipe).await.unwrap();
         assert_eq!(
-            con.run_simple_query(&q).await.unwrap(),
-            Element::String("HEY!".to_owned())
+            ret,
+            vec![
+                Element::String("first".to_owned()),
+                Element::String("second".to_owned())
+            ]
+        )
+    }
+    async fn test_pipeline_basic() {
+        let pipe = Pipeline::new().add(query!("heya")).add(query!("get", "x"));
+        let ret = con.run_pipeline(pipe).await.unwrap();
+        assert_eq!(
+            ret,
+            vec![
+                Element::String("HEY!".to_owned()),
+                Element::RespCode(RespCode::NotFound)
+            ]
         );
     }
 }
