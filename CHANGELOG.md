@@ -4,6 +4,10 @@ All changes in this project will be noted in this file.
 
 ## Unreleased
 
+### Additions
+
+- Pipelined queries are now supported
+
 ### Improvements
 
 - `skysh`:

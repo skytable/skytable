@@ -146,7 +146,4 @@ pub mod full_responses {
     pub const R_SNAPSHOT_ILLEGAL_NAME: &[u8] = "*1\n!25\nerr-invalid-snapshot-name\n".as_bytes();
     /// Access after termination signal (other error)
     pub const R_ERR_ACCESS_AFTER_TERMSIG: &[u8] = "*1\n!24\nerr-access-after-termsig\n".as_bytes();
-    /// Pipelines are currently not supported
-    // TODO(@ohsayan): Remove this once we implement pipelines
-    pub const R_PIPELINE_UNSUPPORTED: &[u8] = "*1\n!26\npipeline-not-supported-yet".as_bytes();
 }

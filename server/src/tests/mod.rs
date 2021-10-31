@@ -33,6 +33,7 @@ mod inspect_tests;
 mod kvengine;
 mod kvengine_encoding;
 mod kvengine_list;
+mod pipeline;
 
 mod ssl {
     use skytable::aio::TlsConnection;

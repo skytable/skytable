@@ -56,6 +56,12 @@ pub enum UnsafeFlatElement {
     String(UnsafeSlice),
 }
 
+impl UnsafeElement {
+    pub const fn is_any_array(&self) -> bool { 
+        matches!(self, Self::AnyArray(_))
+    }
+}
+
 // test impls are for our tests
 #[cfg(test)]
 impl UnsafeElement {

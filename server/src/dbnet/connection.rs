@@ -36,6 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
+use crate::corestore::buffers::Integer64;
 use crate::corestore::Corestore;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
@@ -282,6 +283,25 @@ where
                 Ok(())
             };
             ret
+        })
+    }
+    /// Write the length of the pipeline query (*)
+    fn write_pipeline_query_header<'r, 's>(
+        &'r mut self,
+        len: usize,
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    where
+        'r: 's,
+        Self: Send + Sync + 's,
+    {
+        Box::pin(async move {
+            let slf = self;
+            slf.write_response([b'*']).await?;
+            slf.get_mut_stream()
+                .write_all(&Integer64::init(len as u64))
+                .await?;
+            slf.write_response([b'\n']).await?;
+            Ok(())
         })
     }
     /// Write the flat array length (`_<size>\n`)

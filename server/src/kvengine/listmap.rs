@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
 use super::KVTable;
 use super::SingleEncoder;
 use crate::corestore::htable::Coremap;

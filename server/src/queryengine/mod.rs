@@ -32,6 +32,7 @@ use crate::dbnet::connection::prelude::*;
 use crate::protocol::element::UnsafeElement;
 use crate::protocol::iter::AnyArrayIter;
 use crate::protocol::responses;
+use crate::protocol::PipelineQuery;
 use crate::protocol::SimpleQuery;
 use crate::{actions, admin};
 use core::hint::unreachable_unchecked;
@@ -90,19 +91,28 @@ macro_rules! swap_entity {
     };
 }
 
-/// Execute a simple(*) query
-pub async fn execute_simple<'a, T: 'a, Strm>(
+action! {
+    //// Execute a simple query
+    fn execute_simple(db: &mut Corestore,con: &mut T, buf: SimpleQuery) {
+        if buf.is_any_array() {
+            unsafe {
+                self::execute_stage(db, con, &buf.into_inner()).await
+            }
+        } else {
+            con.write_response(responses::groups::WRONGTYPE_ERR).await
+        }
+    }
+}
+
+async fn execute_stage<'a, T: 'a, Strm>(
     db: &mut Corestore,
     con: &'a mut T,
-    buf: SimpleQuery,
+    buf: &UnsafeElement,
 ) -> std::io::Result<()>
 where
     T: ProtocolConnectionExt<Strm> + Send + Sync,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    if !buf.is_any_array() {
-        return con.write_response(responses::groups::WRONGTYPE_ERR).await;
-    }
     let bufref;
     let _rawiter;
     let mut iter;
@@ -113,7 +123,7 @@ where
             // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
             // ensuring that the source buffer exists as long as the connection does
             // so this is safe.
-            match buf.into_inner() {
+            match buf {
                 UnsafeElement::AnyArray(arr) => arr,
                 _ => unreachable_unchecked(),
             }
@@ -169,6 +179,20 @@ action! {
             act.next_unchecked()
         };
         swap_entity!(con, handle, entity);
+        Ok(())
+    }
+}
+
+action! {
+    /// Execute a basic pipelined query
+    fn execute_pipeline(handle: &mut Corestore, con: &mut T, pipeline: PipelineQuery) {
+        for stage in pipeline.iter() {
+            if stage.is_any_array() {
+                self::execute_stage(handle, con, stage).await?;
+            } else {
+                con.write_response(responses::groups::WRONGTYPE_ERR).await?;
+            }
+        }
         Ok(())
     }
 }
