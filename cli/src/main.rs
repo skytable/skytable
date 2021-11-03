@@ -27,6 +27,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
 
+#[macro_use]
+mod macros;
 mod argparse;
 mod runner;
 mod tokenizer;

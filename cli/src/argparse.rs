@@ -34,91 +34,11 @@ use libsky::VERSION;
 use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
-use skytable::aio::TlsConnection;
-use skytable::AsyncConnection;
 use std::io::stdout;
-use std::process;
-use std::process::exit;
 const ADDR: &str = "127.0.0.1";
 const SKYSH_BLANK: &str = "     > ";
 const SKYSH_PROMPT: &str = "skysh> ";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";
-
-macro_rules! inner_eval {
-    ($runner:expr, $matches:expr) => {
-        if let Some(eval_expr) = $matches.value_of("eval") {
-            if eval_expr.is_empty() {
-                return;
-            }
-            $runner.run_query(&eval_expr).await;
-            return;
-        }
-    };
-}
-
-macro_rules! inner_repl {
-    ($runner:expr, $lplt:lifetime) => {
-        println!("Skytable v{} | {}", VERSION, URL);
-        let mut editor = Editor::<()>::new();
-        editor.set_auto_add_history(true);
-        editor.set_history_ignore_dups(true);
-        editor.bind_sequence(
-            rustyline::KeyEvent(
-                rustyline::KeyCode::BracketedPasteStart,
-                rustyline::Modifiers::NONE,
-            ),
-            rustyline::Cmd::Noop,
-        );
-        let _ = editor.load_history(SKYSH_HISTORY_FILE);
-        $lplt: loop {
-            match editor.readline(SKYSH_PROMPT) {
-                Ok(mut line) => match line.to_lowercase().as_str() {
-                    "exit" => break,
-                    "clear" => {
-                        let mut stdout = stdout();
-                        execute!(stdout, Clear(ClearType::All))
-                            .expect("Failed to clear screen");
-                        execute!(stdout, cursor::MoveTo(0, 0))
-                            .expect("Failed to move cursor to origin");
-                        drop(stdout); // aggressively drop stdout
-                        continue;
-                    }
-                    _ => {
-                        if line.is_empty() {
-                            continue;
-                        }
-                        if (line.as_bytes()[0]) == b'#' {
-                            continue;
-                        }
-                        while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#)
-                        {
-                            // continuation on next line
-                            let cl = match editor.readline(SKYSH_BLANK) {
-                                Ok(l) => l,
-                                Err(ReadlineError::Interrupted) => break $lplt,
-                                Err(err) => {
-                                    eprintln!("ERROR: Failed to read line with error: {}", err);
-                                    exit(1);
-                                }
-                            };
-                            line = line[..line.len() - 2].to_string();
-                            line.extend(cl.chars());
-                        }
-                        $runner.run_query(&line).await
-                    }
-                },
-                Err(ReadlineError::Interrupted) => break,
-                Err(err) => {
-                    eprintln!("ERROR: Failed to read line with error: {}", err);
-                    exit(1);
-                }
-            }
-        }
-        if let Err(e) = editor.save_history(SKYSH_HISTORY_FILE) {
-            eprintln!("ERROR: Failed to save history with error: '{}'", e);
-        }
-    };
-}
 
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
@@ -132,37 +52,74 @@ pub async fn start_repl() {
     let port = match matches.value_of("port") {
         Some(p) => match p.parse::<u16>() {
             Ok(p) => p,
-            Err(_) => {
-                eprintln!("ERROR: Invalid port");
-                process::exit(0x01);
-            }
+            Err(_) => fatal!("Invalid port"),
         },
         None => 2003,
     };
-    if let Some(sslcert) = matches.value_of("cert") {
-        let con = match TlsConnection::new(host, port, sslcert).await {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("ERROR: {}", e);
-                process::exit(0x01);
-            }
-        };
-        let mut runner = Runner::new(con);
-        inner_eval!(runner, matches);
-        println!("Connected to skyhash-secure://{}:{}", host, port);
-        inner_repl!(runner, 'tls);
-    } else {
-        let con = match AsyncConnection::new(host, port).await {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("ERROR: {}", e);
-                process::exit(0x01);
-            }
-        };
-        let mut runner = Runner::new(con);
-        inner_eval!(runner, matches);
-        println!("Connected to skyhash://{}:{}", host, port);
-        inner_repl!(runner, 'insecure);
+    let mut editor = Editor::<()>::new();
+    editor.set_auto_add_history(true);
+    editor.set_history_ignore_dups(true);
+    editor.bind_sequence(
+        rustyline::KeyEvent(
+            rustyline::KeyCode::BracketedPasteStart,
+            rustyline::Modifiers::NONE,
+        ),
+        rustyline::Cmd::Noop,
+    );
+    let _ = editor.load_history(SKYSH_HISTORY_FILE);
+    let con = match matches.value_of("cert") {
+        Some(cert) => Runner::new_secure(host, port, cert).await,
+        None => Runner::new_insecure(host, port).await,
+    };
+    let mut runner = match con {
+        Ok(c) => c,
+        Err(e) => fatal!("Failed to connect to server with error: {}", e),
+    };
+    if let Some(eval_expr) = matches.value_of("eval") {
+        if !eval_expr.is_empty() {
+            runner.run_query(eval_expr).await;
+        }
+        return;
+    }
+    println!("Skytable v{} | {}", VERSION, URL);
+    'outer: loop {
+        match editor.readline(SKYSH_PROMPT) {
+            Ok(mut line) => match line.to_lowercase().as_str() {
+                "exit" => break,
+                "clear" => {
+                    let mut stdout = stdout();
+                    execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
+                    execute!(stdout, cursor::MoveTo(0, 0))
+                        .expect("Failed to move cursor to origin");
+                    drop(stdout); // aggressively drop stdout
+                    continue;
+                }
+                _ => {
+                    if line.is_empty() {
+                        continue;
+                    }
+                    if (line.as_bytes()[0]) == b'#' {
+                        continue;
+                    }
+                    while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
+                        // continuation on next line
+                        let cl = match editor.readline(SKYSH_BLANK) {
+                            Ok(l) => l,
+                            Err(ReadlineError::Interrupted) => break 'outer,
+                            Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
+                        };
+                        line = line[..line.len() - 2].to_string();
+                        line.extend(cl.chars());
+                    }
+                    runner.run_query(&line).await
+                }
+            },
+            Err(ReadlineError::Interrupted) => break,
+            Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
+        }
+    }
+    if let Err(e) = editor.save_history(SKYSH_HISTORY_FILE) {
+        eprintln!("ERROR: Failed to save history with error: '{}'", e);
     }
     println!("Goodbye!");
 }
