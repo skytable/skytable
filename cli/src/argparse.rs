@@ -35,6 +35,7 @@ use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
 use std::io::stdout;
+use std::process;
 const ADDR: &str = "127.0.0.1";
 const SKYSH_BLANK: &str = "     > ";
 const SKYSH_PROMPT: &str = "skysh> ";
@@ -79,7 +80,7 @@ pub async fn start_repl() {
         if !eval_expr.is_empty() {
             runner.run_query(eval_expr).await;
         }
-        return;
+        process::exit(0x00);
     }
     println!("Skytable v{} | {}", VERSION, URL);
     'outer: loop {
@@ -103,11 +104,7 @@ pub async fn start_repl() {
                     }
                     while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
                         // continuation on next line
-                        let cl = match editor.readline(SKYSH_BLANK) {
-                            Ok(l) => l,
-                            Err(ReadlineError::Interrupted) => break 'outer,
-                            Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
-                        };
+                        let cl = readln!(editor, 'outer);
                         line = line[..line.len() - 2].to_string();
                         line.extend(cl.chars());
                     }
@@ -118,8 +115,10 @@ pub async fn start_repl() {
             Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
         }
     }
-    if let Err(e) = editor.save_history(SKYSH_HISTORY_FILE) {
-        eprintln!("ERROR: Failed to save history with error: '{}'", e);
-    }
-    println!("Goodbye!");
+    editor
+        .save_history(SKYSH_HISTORY_FILE)
+        .map_err(|e| {
+            fatal!("ERROR: Failed to save history with error: '{}'", e);
+        })
+        .unwrap();
 }

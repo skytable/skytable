@@ -119,3 +119,13 @@ macro_rules! fatal {
         ::std::process::exit(0x01)
     }};
 }
+
+macro_rules! readln {
+    ($editor:expr, $lt:lifetime) => {
+        match $editor.readline(SKYSH_BLANK) {
+            Ok(l) => l,
+            Err(ReadlineError::Interrupted) => break $lt,
+            Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
+        }
+    };
+}

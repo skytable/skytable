@@ -39,4 +39,5 @@ mod tests;
 #[tokio::main]
 async fn main() {
     argparse::start_repl().await;
+    println!("Goodbye!");
 }
