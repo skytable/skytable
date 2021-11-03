@@ -136,7 +136,7 @@ impl<T> Index<TwoBitIndex> for TwoBitLUT<T> {
 
 #[test]
 fn test_two_bit_indexed_lut() {
-    let (bit_a, bit_b) = tmut_bool!(0, 0);
+    let (bit_a, bit_b) = unsafe { tmut_bool!(0, 0) };
     let twobitlut = TwoBitLUT::new('a', 'b', 'c', 'd');
     // the operators, are just for sanity
     assert_eq!('d', twobitlut[(!bit_a, !bit_b)]);

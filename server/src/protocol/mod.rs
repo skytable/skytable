@@ -40,6 +40,9 @@
 pub mod element;
 pub mod iter;
 pub mod responses;
+bench! {
+    mod benches;
+}
 #[cfg(test)]
 mod tests;
 // endof modules
