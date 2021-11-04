@@ -74,6 +74,12 @@ Apart from these, you can use the following shell commands:
 
 With Skytable in your hands, the sky is the only limit on what you can create!"#;
 
+const SKY_WELCOME: &str = "
+Welcome to Skytable's interactive shell (REPL) environment. For usage and help
+within the shell, you can run `!help` anytime. Now that you have Skytable in
+your hands, the sky is the only limit on what you can create!
+";
+
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
 /// Anything that is entered following a return, is parsed into a query and is
@@ -119,7 +125,7 @@ pub async fn start_repl() {
         Ok(_) => {}
         Err(e) => match e {
             rustyline::error::ReadlineError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                println!("{}", HELP_TEXT)
+                println!("{}", SKY_WELCOME)
             }
             _ => fatal!("Failed to read history file with error: {}", e),
         },
