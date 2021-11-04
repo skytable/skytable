@@ -121,10 +121,10 @@ macro_rules! fatal {
 }
 
 macro_rules! readln {
-    ($editor:expr, $lt:lifetime) => {
+    ($editor:expr) => {
         match $editor.readline(SKYSH_BLANK) {
             Ok(l) => l,
-            Err(ReadlineError::Interrupted) => break $lt,
+            Err(ReadlineError::Interrupted) => return,
             Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
         }
     };

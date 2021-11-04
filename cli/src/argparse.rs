@@ -83,7 +83,7 @@ pub async fn start_repl() {
         process::exit(0x00);
     }
     println!("Skytable v{} | {}", VERSION, URL);
-    'outer: loop {
+    loop {
         match editor.readline(SKYSH_PROMPT) {
             Ok(mut line) => match line.to_lowercase().as_str() {
                 "exit" => break,
@@ -104,8 +104,8 @@ pub async fn start_repl() {
                     }
                     while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
                         // continuation on next line
-                        let cl = readln!(editor, 'outer);
-                        line = line[..line.len() - 2].to_string();
+                        let cl = readln!(editor);
+                        line.drain(line.len() - 2..);
                         line.extend(cl.chars());
                     }
                     runner.run_query(&line).await
