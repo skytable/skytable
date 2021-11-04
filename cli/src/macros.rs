@@ -105,7 +105,7 @@ macro_rules! err {
 
 macro_rules! eskysh {
     ($e:expr) => {
-        eprintln!("[SKYSH ERROR] {}", $e)
+        err!(format!("[SKYSH ERROR] {}\n", $e))
     };
 }
 
@@ -116,6 +116,7 @@ macro_rules! fatal {
     }};
     ($e:expr, $desc:expr) => {{
         err!(format!($e, $desc));
+        println!();
         ::std::process::exit(0x01)
     }};
 }

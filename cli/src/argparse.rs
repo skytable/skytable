@@ -41,6 +41,39 @@ const SKYSH_BLANK: &str = "     > ";
 const SKYSH_PROMPT: &str = "skysh> ";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";
 
+const HELP_TEXT: &str = r#"
+███████ ██   ██ ██    ██ ████████  █████  ██████  ██      ███████
+██      ██  ██   ██  ██     ██    ██   ██ ██   ██ ██      ██
+███████ █████     ████      ██    ███████ ██████  ██      █████
+     ██ ██  ██     ██       ██    ██   ██ ██   ██ ██      ██
+███████ ██   ██    ██       ██    ██   ██ ██████  ███████ ███████
+
+Welcome to Skytable's interactive shell (REPL) environment. Using the Skytable
+shell, you can create, read, update or delete data on your remote Skytable
+instance. When you connect to your database instance, you'll be connected to
+the `default` table in the `default` keyspace. This table has binary keys and
+binary values as the default data type. Here's a brief guide on doing some
+everyday tasks:
+
+(1) Running actions
+================================================================================
+An action is like a shell command: it starts with a name and contains arguments!
+To run actions, simply type them out, like "set x 100" or "inspect table mytbl"
+and hit enter.
+
+(2) Running shell commands
+================================================================================
+Shell commands are those which are provided by `skysh` and are not supported by
+the server. These enable you to do convenient things like:
+- "exit": exits the shell
+- "clear": clears the terminal screen
+
+Apart from these, you can use the following shell commands:
+- "!help": Brings up this help menu
+- "?<command name>": Describes what the built-in shell command is for
+
+With Skytable in your hands, the sky is the only limit on what you can create!"#;
+
 /// This creates a REPL on the command line and also parses command-line arguments
 ///
 /// Anything that is entered following a return, is parsed into a query and is
@@ -67,7 +100,6 @@ pub async fn start_repl() {
         ),
         rustyline::Cmd::Noop,
     );
-    let _ = editor.load_history(SKYSH_HISTORY_FILE);
     let con = match matches.value_of("cert") {
         Some(cert) => Runner::new_secure(host, port, cert).await,
         None => Runner::new_insecure(host, port).await,
@@ -83,6 +115,15 @@ pub async fn start_repl() {
         process::exit(0x00);
     }
     println!("Skytable v{} | {}", VERSION, URL);
+    match editor.load_history(SKYSH_HISTORY_FILE) {
+        Ok(_) => {}
+        Err(e) => match e {
+            rustyline::error::ReadlineError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                println!("{}", HELP_TEXT)
+            }
+            _ => fatal!("Failed to read history file with error: {}", e),
+        },
+    }
     loop {
         match editor.readline(SKYSH_PROMPT) {
             Ok(mut line) => match line.to_lowercase().as_str() {
@@ -95,12 +136,37 @@ pub async fn start_repl() {
                     drop(stdout); // aggressively drop stdout
                     continue;
                 }
+                "help" => {
+                    println!("To get help, run `!help`");
+                    continue;
+                }
                 _ => {
                     if line.is_empty() {
                         continue;
                     }
-                    if (line.as_bytes()[0]) == b'#' {
-                        continue;
+                    match line.as_bytes()[0] {
+                        b'#' => continue,
+                        b'!' => {
+                            // handle a shell command
+                            match &line.as_bytes()[1..] {
+                                b"" => eskysh!("Bad shell command"),
+                                b"help" => println!("{}", HELP_TEXT),
+                                _ => eskysh!("Unknown shell command"),
+                            }
+                            continue;
+                        }
+                        b'?' => {
+                            // handle explanation for a shell command
+                            match &line.as_bytes()[1..] {
+                                b"" => eskysh!("Bad shell command"),
+                                b"help" => println!("`!help` shows the help menu"),
+                                b"exit" => println!("`exit` ends the shell session"),
+                                b"clear" => println!("`clear` clears the terminal screen"),
+                                _ => eskysh!("Unknown shell command"),
+                            }
+                            continue;
+                        }
+                        _ => {}
                     }
                     while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
                         // continuation on next line
