@@ -284,13 +284,6 @@ jobs:
           aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
           aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
           aws configure set default.s3.signature_version s3v4
-      - name: Get cache
-        run: |
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress s3://cache/skytable-linux-arm64.tar.zst target.tar.zst
-          tar -I zstd -xf target.tar.zst
-          rm target.tar.zst
-          echo "LASTHASH=$(cat target/LASTHASH 2>/dev/null)" >> $GITHUB_ENV
-        continue-on-error: true
       - name: Install Rust
         run: |
           curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -302,19 +295,6 @@ jobs:
       - name: Stress test
         run: make stress
         if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
-      - name: Save cache
-        env:
-          NEWHASH: ${{ hashFiles('Cargo.lock') }}
-          LASTHASH: ${{ env.LASTHASH }}
-        run: |
-          if [[ ${NEWHASH} != ${LASTHASH} ]]; then
-            echo "Freshening cache"
-            tar --zstd -cf target.tar.zst target
-            aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp --no-progress target.tar.zst s3://cache/skytable-linux-arm64.tar.zst
-            echo "Finished freshening cache"
-          else
-            echo "Cache hit occurred. Not saving cache"
-          fi
       - name: Save artifacts
         run: |
           cargo build -j16 --target aarch64-unknown-linux-gnu
