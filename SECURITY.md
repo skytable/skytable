@@ -53,10 +53,10 @@ who need to deploy a fix.
 
 ## PGP
 
-Our PGP public key can be found [here](https://keys.openpgp.org/vks/v1/by-fingerprint/6A34A114D40D7918906AEA0111855CAA2A2EA924).
+Our PGP public key can be found [here](https://keys.openpgp.org/vks/v1/by-fingerprint/DA60821CD47EDCC9FF4702AF66F326F3B98EAF90).
 To encrypt your ZIP file:
 ```sh
-wget https://keys.openpgp.org/vks/v1/by-fingerprint/6A34A114D40D7918906AEA0111855CAA2A2EA924 -O skytable.pgp  # download the key
+wget https://keys.openpgp.org/vks/v1/by-fingerprint/DA60821CD47EDCC9FF4702AF66F326F3B98EAF90 -O skytable.pgp  # download the key
 gpg --import skytable.pgp                                                                                     # import the key
 gpg --output <ZIPFILE>.encrypted.zip --encrypt <ZIPFILE>.zip --recipient nandansayan@outlook.com              # encrypt the archive
 ```
