@@ -25,6 +25,7 @@
 */
 
 use crate::runner::Runner;
+use crate::tokenizer;
 use clap::load_yaml;
 use clap::App;
 use crossterm::terminal::{Clear, ClearType};
@@ -34,6 +35,8 @@ use libsky::VERSION;
 use readline::config::Configurer;
 use readline::{error::ReadlineError, Editor};
 use rustyline as readline;
+use skytable::Pipeline;
+use skytable::Query;
 use std::io::stdout;
 use std::process;
 const ADDR: &str = "127.0.0.1";
@@ -69,6 +72,7 @@ the server. These enable you to do convenient things like:
 - "clear": clears the terminal screen
 
 Apart from these, you can use the following shell commands:
+- "!pipe": Lets you create a pipeline. Terminate with a semicolon (`;`)
 - "!help": Brings up this help menu
 - "?<command name>": Describes what the built-in shell command is for
 
@@ -132,57 +136,84 @@ pub async fn start_repl() {
     }
     loop {
         match editor.readline(SKYSH_PROMPT) {
-            Ok(mut line) => match line.to_lowercase().as_str() {
-                "exit" => break,
-                "clear" => {
-                    let mut stdout = stdout();
-                    execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
-                    execute!(stdout, cursor::MoveTo(0, 0))
-                        .expect("Failed to move cursor to origin");
-                    drop(stdout); // aggressively drop stdout
-                    continue;
+            Ok(mut line) => {
+                macro_rules! tokenize {
+                    ($inp:expr) => {
+                        match tokenizer::get_query($inp) {
+                            Ok(q) => q,
+                            Err(e) => {
+                                eskysh!(e);
+                                continue;
+                            }
+                        }
+                    };
+                    () => {
+                        tokenize!(line.as_bytes())
+                    };
                 }
-                "help" => {
-                    println!("To get help, run `!help`");
-                    continue;
-                }
-                _ => {
-                    if line.is_empty() {
+                match line.to_lowercase().as_str() {
+                    "exit" => break,
+                    "clear" => {
+                        clear_screen();
                         continue;
                     }
-                    match line.as_bytes()[0] {
-                        b'#' => continue,
-                        b'!' => {
-                            // handle a shell command
-                            match &line.as_bytes()[1..] {
-                                b"" => eskysh!("Bad shell command"),
-                                b"help" => println!("{}", HELP_TEXT),
-                                _ => eskysh!("Unknown shell command"),
-                            }
+                    "help" => {
+                        println!("To get help, run `!help`");
+                        continue;
+                    }
+                    _ => {
+                        if line.is_empty() {
                             continue;
                         }
-                        b'?' => {
-                            // handle explanation for a shell command
-                            match &line.as_bytes()[1..] {
-                                b"" => eskysh!("Bad shell command"),
-                                b"help" => println!("`!help` shows the help menu"),
-                                b"exit" => println!("`exit` ends the shell session"),
-                                b"clear" => println!("`clear` clears the terminal screen"),
-                                _ => eskysh!("Unknown shell command"),
+                        match line.as_bytes()[0] {
+                            b'#' => continue,
+                            b'!' => {
+                                match &line.as_bytes()[1..] {
+                                    b"" => eskysh!("Bad shell command"),
+                                    b"help" => println!("{}", HELP_TEXT),
+                                    b"pipe" => {
+                                        // so we need to handle a pipeline
+                                        let mut pipeline = Pipeline::new();
+                                        line = readln!(editor);
+                                        loop {
+                                            if !line.is_empty() {
+                                                if *(line.as_bytes().last().unwrap()) == b';' {
+                                                    break;
+                                                } else {
+                                                    let q: Query = tokenize!();
+                                                    pipeline.push(q);
+                                                }
+                                            }
+                                            line = readln!(editor);
+                                        }
+                                        if line.len() > 1 {
+                                            line.drain(line.len() - 1..);
+                                            let q: Query = tokenize!();
+                                            pipeline.push(q);
+                                        }
+                                        runner.run_pipeline(pipeline).await;
+                                    }
+                                    _ => eskysh!("Unknown shell command"),
+                                }
+                                continue;
                             }
-                            continue;
+                            b'?' => {
+                                // handle explanation for a shell command
+                                print_help(&line);
+                                continue;
+                            }
+                            _ => {}
                         }
-                        _ => {}
+                        while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
+                            // continuation on next line
+                            let cl = readln!(editor);
+                            line.drain(line.len() - 2..);
+                            line.extend(cl.chars());
+                        }
+                        runner.run_query(&line).await
                     }
-                    while line.len() >= 2 && line[line.len() - 2..].as_bytes().eq(br#" \"#) {
-                        // continuation on next line
-                        let cl = readln!(editor);
-                        line.drain(line.len() - 2..);
-                        line.extend(cl.chars());
-                    }
-                    runner.run_query(&line).await
                 }
-            },
+            }
             Err(ReadlineError::Interrupted) => break,
             Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
         }
@@ -193,4 +224,22 @@ pub async fn start_repl() {
             fatal!("ERROR: Failed to save history with error: '{}'", e);
         })
         .unwrap();
+}
+
+fn print_help(line: &str) {
+    match &line.as_bytes()[1..] {
+        b"" => eskysh!("Bad shell command"),
+        b"help" => println!("`!help` shows the help menu"),
+        b"exit" => println!("`exit` ends the shell session"),
+        b"clear" => println!("`clear` clears the terminal screen"),
+        b"pipe" | b"!pipe" => println!("`!pipe` lets you run pipelines using the shell"),
+        _ => eskysh!("Unknown shell command"),
+    }
+}
+
+fn clear_screen() {
+    let mut stdout = stdout();
+    execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
+    execute!(stdout, cursor::MoveTo(0, 0)).expect("Failed to move cursor to origin");
+    drop(stdout); // aggressively drop stdout
 }

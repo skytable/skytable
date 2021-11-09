@@ -29,6 +29,7 @@ use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
 use skytable::error::Error;
 use skytable::types::Array;
 use skytable::types::FlatElement;
+use skytable::Pipeline;
 use skytable::Query;
 use skytable::{aio, Element, RespCode};
 
@@ -48,6 +49,24 @@ impl Runner {
         let con = aio::TlsConnection::new(host, port, cert).await?;
         Ok(Self::Secure(con))
     }
+    pub async fn run_pipeline(&mut self, pipeline: Pipeline) {
+        let ret = match self {
+            Self::Insecure(con) => con.run_pipeline(pipeline).await,
+            Self::Secure(con) => con.run_pipeline(pipeline).await,
+        };
+        let retok = match ret {
+            Ok(r) => r,
+            Err(e) => fatal!("An I/O error occurred while querying: {}", e),
+        };
+        for (idx, resp) in retok
+            .into_iter()
+            .enumerate()
+            .map(|(idx, resp)| (idx + 1, resp))
+        {
+            println!("[Response {}]", idx);
+            print_element(resp);
+        }
+    }
     pub async fn run_query(&mut self, unescaped: &str) {
         let query: Query = match tokenizer::get_query(unescaped.as_bytes()) {
             Ok(q) => q,
@@ -61,19 +80,23 @@ impl Runner {
             Self::Secure(con) => con.run_simple_query(&query).await,
         };
         match ret {
-            Ok(resp) => match resp {
-                Element::String(st) => write_str!(st),
-                Element::Binstr(st) => write_binstr!(st),
-                Element::Array(Array::Bin(brr)) => print_bin_array(brr),
-                Element::Array(Array::Str(srr)) => print_str_array(srr),
-                Element::RespCode(r) => print_rcode(r, None),
-                Element::UnsignedInt(int) => write_int!(int),
-                Element::Array(Array::Flat(frr)) => write_flat_array(frr),
-                Element::Array(Array::Recursive(a)) => print_array(a),
-                _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
-            },
+            Ok(resp) => print_element(resp),
             Err(e) => fatal!("An I/O error occurred while querying: {}", e),
         }
+    }
+}
+
+fn print_element(el: Element) {
+    match el {
+        Element::String(st) => write_str!(st),
+        Element::Binstr(st) => write_binstr!(st),
+        Element::Array(Array::Bin(brr)) => print_bin_array(brr),
+        Element::Array(Array::Str(srr)) => print_str_array(srr),
+        Element::RespCode(r) => print_rcode(r, None),
+        Element::UnsignedInt(int) => write_int!(int),
+        Element::Array(Array::Flat(frr)) => write_flat_array(frr),
+        Element::Array(Array::Recursive(a)) => print_array(a),
+        _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
     }
 }
 

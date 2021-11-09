@@ -394,9 +394,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.106"
+version = "0.2.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a60553f9a9e039a333b4e9b20573b9e9b9c0bb3a11e201ccc48ef4283456d673"
+checksum = "fbe5e23404da5b4f555ef85ebed98fb4083e55a00c317800bc2a50ede9f3d219"
 
 [[package]]
 name = "libsky"
@@ -810,9 +810,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
 dependencies = [
  "itoa",
  "ryu",
@@ -859,7 +859,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "skytable 0.6.1 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.2-alpha.2 (git+https://github.com/skytable/client-rust?branch=next)",
 ]
 
 [[package]]
@@ -870,7 +870,7 @@ dependencies = [
  "clap",
  "env_logger",
  "log",
- "skytable 0.6.1 (git+https://github.com/skytable/client-rust.git)",
+ "skytable 0.6.2-alpha.2 (git+https://github.com/skytable/client-rust.git)",
 ]
 
 [[package]]
@@ -907,7 +907,7 @@ dependencies = [
  "regex",
  "serde",
  "sky_macros",
- "skytable 0.6.1 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.2-alpha.2 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -922,14 +922,14 @@ dependencies = [
  "crossterm",
  "libsky",
  "rustyline",
- "skytable 0.6.1 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.2-alpha.2 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
 ]
 
 [[package]]
 name = "skytable"
-version = "0.6.1"
-source = "git+https://github.com/skytable/client-rust?branch=next#9a34fd825a22d172e61786783c7c4606b6e38e8a"
+version = "0.6.2-alpha.2"
+source = "git+https://github.com/skytable/client-rust?branch=next#43ab1e47903a3772657351bc5dea64cc4258f491"
 dependencies = [
  "bytes",
  "openssl",
@@ -939,8 +939,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.6.1"
-source = "git+https://github.com/skytable/client-rust.git#9a34fd825a22d172e61786783c7c4606b6e38e8a"
+version = "0.6.2-alpha.2"
+source = "git+https://github.com/skytable/client-rust.git#43ab1e47903a3772657351bc5dea64cc4258f491"
 
 [[package]]
 name = "smallvec"
@@ -965,7 +965,7 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "skytable 0.6.1 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.6.2-alpha.2 (git+https://github.com/skytable/client-rust?branch=next)",
  "sysinfo",
 ]
 
