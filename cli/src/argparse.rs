@@ -39,9 +39,8 @@ use skytable::Pipeline;
 use skytable::Query;
 use std::io::stdout;
 use std::process;
+
 const ADDR: &str = "127.0.0.1";
-const SKYSH_BLANK: &str = "     > ";
-const SKYSH_PROMPT: &str = "skysh> ";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";
 
 const HELP_TEXT: &str = r#"
@@ -90,6 +89,20 @@ your hands, the sky is the only limit on what you can create!
 /// written to the socket (which is either `localhost:2003` or it is determined by
 /// command line parameters)
 pub async fn start_repl() {
+    let mut skysh_blank: String = "                     > ".to_owned();
+    let mut skysh_prompt: String = "skysh@default:default> ".to_owned();
+    let mut did_swap = false;
+
+    macro_rules! readln {
+        ($editor:expr) => {
+            match $editor.readline(&skysh_blank) {
+                Ok(l) => l,
+                Err(ReadlineError::Interrupted) => return,
+                Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
+            }
+        };
+    }
+
     let cfg_layout = load_yaml!("./cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
     let host = libsky::option_unwrap_or!(matches.value_of("host"), ADDR);
@@ -118,6 +131,18 @@ pub async fn start_repl() {
         Ok(c) => c,
         Err(e) => fatal!("Failed to connect to server with error: {}", e),
     };
+
+    macro_rules! checkswap {
+        () => {
+            if did_swap {
+                // noice, we need to poll for the location of the new entity
+                runner
+                    .check_entity(&mut skysh_blank, &mut skysh_prompt)
+                    .await;
+            }
+        };
+    }
+
     if let Some(eval_expr) = matches.value_of("eval") {
         if !eval_expr.is_empty() {
             runner.run_query(eval_expr).await;
@@ -135,7 +160,7 @@ pub async fn start_repl() {
         },
     }
     loop {
-        match editor.readline(SKYSH_PROMPT) {
+        match editor.readline(&skysh_prompt) {
             Ok(mut line) => {
                 macro_rules! tokenize {
                     ($inp:expr) => {
@@ -176,6 +201,10 @@ pub async fn start_repl() {
                                         let mut pipeline = Pipeline::new();
                                         line = readln!(editor);
                                         loop {
+                                            did_swap = line
+                                                .get(..3)
+                                                .map(|v| v.eq_ignore_ascii_case("use"))
+                                                .unwrap_or(did_swap);
                                             if !line.is_empty() {
                                                 if *(line.as_bytes().last().unwrap()) == b';' {
                                                     break;
@@ -192,6 +221,7 @@ pub async fn start_repl() {
                                             pipeline.push(q);
                                         }
                                         runner.run_pipeline(pipeline).await;
+                                        checkswap!();
                                     }
                                     _ => eskysh!("Unknown shell command"),
                                 }
@@ -210,7 +240,12 @@ pub async fn start_repl() {
                             line.drain(line.len() - 2..);
                             line.extend(cl.chars());
                         }
-                        runner.run_query(&line).await
+                        did_swap = line
+                            .get(..3)
+                            .map(|v| v.eq_ignore_ascii_case("use"))
+                            .unwrap_or(did_swap);
+                        runner.run_query(&line).await;
+                        checkswap!();
                     }
                 }
             }

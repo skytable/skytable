@@ -84,6 +84,46 @@ impl Runner {
             Err(e) => fatal!("An I/O error occurred while querying: {}", e),
         }
     }
+    pub async fn check_entity(&mut self, blank: &mut String, prompt: &mut String) {
+        let query: Query = tokenizer::get_query(b"whereami").unwrap();
+        let ret = match self {
+            Self::Insecure(con) => con.run_simple_query(&query).await,
+            Self::Secure(con) => con.run_simple_query(&query).await,
+        };
+        let ret = match ret {
+            Ok(resp) => resp,
+            Err(e) => fatal!("An I/O error occurred while querying: {}", e),
+        };
+        match ret {
+            Element::Array(Array::Flat(frr)) => match frr.len() {
+                1 => {
+                    let elem = match &frr[0] {
+                        FlatElement::String(st) => st,
+                        _ => fatal!("The server returned an unexpected response while checking entity state"),
+                    };
+                    *blank = format!("      {blank}> ", blank = " ".repeat(elem.len()));
+                    *prompt = format!("skysh@{ks}> ", ks = elem);
+                }
+                2 => {
+                    let ks = match &frr[0] {
+                        FlatElement::String(st) => st,
+                        _ => fatal!("The server returned an unexpected response while checking entity state"),
+                    };
+                    let tbl = match &frr[1] {
+                        FlatElement::String(st) => st,
+                        _ => fatal!("The server returned an unexpected response while checking entity state"),
+                    };
+                    *blank = format!("      {blank}> ", blank = " ".repeat(ks.len() + tbl.len() + 1));
+                    *prompt = format!("skysh@{ks}:{tbl}> ", ks = ks, tbl = tbl);
+                }
+                count => fatal!(
+                    "The server returned {} IDs while checking entity state",
+                    count
+                ),
+            },
+            _ => fatal!("The server returned the wrong data type for entity state check"),
+        }
+    }
 }
 
 fn print_element(el: Element) {
