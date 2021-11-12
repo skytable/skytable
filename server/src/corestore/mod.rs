@@ -95,16 +95,44 @@ impl<'a> From<BorrowedEntityGroupRaw<'a>> for BorrowedEntityGroup<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ConnectionEntityState {
+    /// the current table for a connection
+    table: Option<(ObjectID, Arc<Table>)>,
+    /// the current keyspace for a connection
+    ks: Option<(ObjectID, Arc<Keyspace>)>,
+}
+
+impl ConnectionEntityState {
+    fn default(ks: Arc<Keyspace>, tbl: Arc<Table>) -> Self {
+        Self {
+            table: Some((DEFAULT.clone(), tbl)),
+            ks: Some((DEFAULT.clone(), ks)),
+        }
+    }
+    fn set_ks(&mut self, ks: Arc<Keyspace>, ksid: ObjectID) {
+        self.ks = Some((ksid, ks));
+        self.table = None;
+    }
+    fn set_table(&mut self, ks: Arc<Keyspace>, ksid: ObjectID, tbl: Arc<Table>, tblid: ObjectID) {
+        self.ks = Some((ksid, ks));
+        self.table = Some((tblid, tbl));
+    }
+    fn get_id_pack(&self) -> (Option<&ObjectID>, Option<&ObjectID>) {
+        (
+            self.ks.as_ref().map(|(id, _)| id),
+            self.table.as_ref().map(|(id, _)| id),
+        )
+    }
+}
+
 /// The top level abstraction for the in-memory store. This is free to be shared across
 /// threads, cloned and well, whatever. Most importantly, clones have an independent container
 /// state that is the state of one connection and its container state preferences are never
 /// synced across instances. This is important (see the impl for more info)
 #[derive(Debug, Clone)]
 pub struct Corestore {
-    /// the default keyspace for this instance of the object
-    cks: Option<Arc<Keyspace>>,
-    /// the current table for this instance of the object
-    ctable: Option<Arc<Table>>,
+    estate: ConnectionEntityState,
     /// an atomic reference to the actual backing storage
     store: Arc<Memstore>,
     /// the snapshot engine
@@ -125,8 +153,7 @@ impl Corestore {
         let cks = unsafe { store.get_keyspace_atomic_ref(&DEFAULT).unsafe_unwrap() };
         let ctable = unsafe { cks.get_table_atomic_ref(&DEFAULT).unsafe_unwrap() };
         Self {
-            cks: Some(cks),
-            ctable: Some(ctable),
+            estate: ConnectionEntityState::default(cks, ctable),
             store: Arc::new(store),
             sengine,
         }
@@ -148,10 +175,9 @@ impl Corestore {
                 va: Some(ks),
                 vb: None,
             } => match self.store.get_keyspace_atomic_ref(ks) {
-                Some(ksref) => {
-                    self.cks = Some(ksref);
-                    self.ctable = None;
-                }
+                Some(ksref) => self
+                    .estate
+                    .set_ks(ksref, unsafe { ObjectID::from_slice(ks) }),
                 None => return Err(DdlError::ObjectNotFound),
             },
             // Switch to the provided table in the given keyspace
@@ -160,7 +186,14 @@ impl Corestore {
                 vb: Some(tbl),
             } => match self.store.get_keyspace_atomic_ref(ks) {
                 Some(kspace) => match kspace.get_table_atomic_ref(tbl) {
-                    Some(tblref) => self.ctable = Some(tblref),
+                    Some(tblref) => unsafe {
+                        self.estate.set_table(
+                            kspace,
+                            ObjectID::from_slice(ks),
+                            tblref,
+                            ObjectID::from_slice(tbl),
+                        )
+                    },
                     None => return Err(DdlError::ObjectNotFound),
                 },
                 None => return Err(DdlError::ObjectNotFound),
@@ -192,8 +225,8 @@ impl Corestore {
             BorrowedEntityGroup {
                 va: Some(tbl),
                 vb: None,
-            } => match &self.cks {
-                Some(ks) => match ks.get_table_atomic_ref(tbl) {
+            } => match &self.estate.ks {
+                Some((_, ks)) => match ks.get_table_atomic_ref(tbl) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
@@ -203,16 +236,15 @@ impl Corestore {
         }
     }
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
-        self.ctable.clone()
+        self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
     }
-
     /// Get the key/value store
     ///
     /// `Err`s are propagated if the target table has an incorrect table or if
     /// the default table is unset
     pub fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
-        match &self.ctable {
-            Some(tbl) => match tbl.get_kvstore() {
+        match &self.estate.table {
+            Some((_, tbl)) => match tbl.get_kvstore() {
                 Ok(kvs) => Ok(kvs),
                 _ => Err(DdlError::WrongModel),
             },
@@ -240,8 +272,8 @@ impl Corestore {
         match entity {
             // Important: create table <tblname> is only ks
             (Some(tblid), None) => {
-                ret = match &self.cks {
-                    Some(ks) => {
+                ret = match &self.estate.ks {
+                    Some((_, ks)) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
                             if ks.create_table(tblid, tbl) {
@@ -290,8 +322,8 @@ impl Corestore {
             BorrowedEntityGroup {
                 va: Some(tblid),
                 vb: None,
-            } => match &self.cks {
-                Some(ks) => ks.drop_table(tblid),
+            } => match &self.estate.ks {
+                Some((_, ks)) => ks.drop_table(tblid),
                 None => Err(DdlError::DefaultNotFound),
             },
             BorrowedEntityGroup {
@@ -362,5 +394,8 @@ impl Corestore {
     }
     pub fn strong_count(&self) -> usize {
         Arc::strong_count(&self.store)
+    }
+    pub fn get_ids(&self) -> (Option<&ObjectID>, Option<&ObjectID>) {
+        self.estate.get_id_pack()
     }
 }

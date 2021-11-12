@@ -50,6 +50,7 @@ pub mod set;
 pub mod strong;
 pub mod update;
 pub mod uset;
+pub mod whereami;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
