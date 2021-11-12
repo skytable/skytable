@@ -64,6 +64,13 @@ global:
     syntax: [FLUSHDB, FLUSHDB <entity>]
     desc: Removes all entries stored in the current table or in the provided entity
     return: [Rcode 0, Rcode 5]
+  - name: WHEREAMI
+    complexity: O(1)
+    accept: [AnyArray]
+    syntax: [WHEREAMI]
+    desc: |
+      Returns a flat array with either the name of the current keyspace as the first element or if a default table
+      is set, then it returns the keyspace name as the first element and the table name as the second element
 keyvalue:
   generic:
     - name: DEL
