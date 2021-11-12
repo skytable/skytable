@@ -27,7 +27,8 @@
 #[sky_macros::dbtest]
 mod __private {
     use libstress::utils;
-    use skytable::{Element, Query, RespCode};
+    use skytable::types::{Array, FlatElement};
+    use skytable::{query, Element, Query, RespCode};
     async fn test_create_keyspace() {
         let mut rng = rand::thread_rng();
         let ksname = utils::rand_alphastring(10, &mut rng);
@@ -168,5 +169,39 @@ mod __private {
             con.run_simple_query(&query).await.unwrap(),
             Element::RespCode(RespCode::ActionError)
         )
+    }
+    async fn test_whereami() {
+        let mykeyspace: Vec<&str> = __MYENTITY__.split(':').collect::<Vec<&str>>();
+        query.push("whereami");
+        assert_eq!(
+            con.run_simple_query(&query).await.unwrap(),
+            Element::Array(Array::Flat(vec![
+                FlatElement::String(mykeyspace[0].to_owned()),
+                FlatElement::String(mykeyspace[1].to_owned())
+            ]))
+        );
+        runeq!(
+            con,
+            query!("use", "default"),
+            Element::RespCode(RespCode::Okay)
+        );
+        runeq!(
+            con,
+            query!("whereami"),
+            Element::Array(Array::Flat(vec![FlatElement::String("default".to_owned())]))
+        );
+        runeq!(
+            con,
+            query!("use", "default:default"),
+            Element::RespCode(RespCode::Okay)
+        );
+        runeq!(
+            con,
+            query!("whereami"),
+            Element::Array(Array::Flat(vec![
+                FlatElement::String("default".to_owned()),
+                FlatElement::String("default".to_owned())
+            ]))
+        );
     }
 }

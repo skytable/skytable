@@ -6,11 +6,12 @@ All changes in this project will be noted in this file.
 
 ### Additions
 
-- Pipelined queries are now supported
-
-### Improvements
-
+- `skyd`:
+  - Pipelined queries are now supported
+  - The `whereami` action was added which lets one find out which entity the current connection
+    is connected to
 - `skysh`:
+  - now shows the current entity in the prompt
   - handles special character strings more reliably
   - now supports splitting a command across multiple lines
   - now supports multi-line pastes

@@ -30,6 +30,8 @@
 //! of the actions supported by Skytable
 //!
 
+#[macro_use]
+mod macros;
 pub mod dbsize;
 pub mod del;
 pub mod exists;
@@ -48,6 +50,7 @@ pub mod set;
 pub mod strong;
 pub mod update;
 pub mod uset;
+pub mod whereami;
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
@@ -64,79 +67,4 @@ pub mod heya {
             }
         }
     );
-}
-
-/*
- Don't modulo because it's an L1 miss and an L2 hit. Use lowbit checks to check for parity
-*/
-
-#[macro_export]
-/// endian independent check to see if the lowbit is set or not. Returns true if the lowbit
-/// is set. this is undefined to be applied on signed values on one's complement targets
-macro_rules! is_lowbit_set {
-    ($v:expr) => {
-        $v & 1 == 1
-    };
-}
-
-#[macro_export]
-/// endian independent check to see if the lowbit is unset or not. Returns true if the lowbit
-/// is unset. this is undefined to be applied on signed values on one's complement targets
-macro_rules! is_lowbit_unset {
-    ($v:expr) => {
-        $v & 1 == 0
-    };
-}
-
-#[macro_export]
-macro_rules! err_if_len_is {
-    ($buf:ident, $con:ident, eq $len:literal) => {
-        if $buf.len() == $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, not $len:literal) => {
-        if $buf.len() != $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, gt $len:literal) => {
-        if $buf.len() > $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, lt $len:literal) => {
-        if $buf.len() < $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, gt_or_eq $len:literal) => {
-        if $buf.len() >= $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, lt_or_eq $len:literal) => {
-        if $buf.len() <= $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($con:ident, $expr:expr) => {
-        if $expr {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
 }

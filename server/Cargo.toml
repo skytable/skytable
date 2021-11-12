@@ -36,7 +36,7 @@ winapi = { version = "0.3.9", features = ["fileapi"] }
 
 [target.'cfg(unix)'.build-dependencies]
 # external deps
-cc = "1.0.71"
+cc = "1.0.72"
 
 [dev-dependencies]
 # internal deps
@@ -51,7 +51,7 @@ rand = "0.8.4"
 tokio = { version = "1.13.0", features = ["test-util"] }
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.106"
+libc = "0.2.107"
 
 [features]
 nightly = []
