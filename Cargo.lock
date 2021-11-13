@@ -810,9 +810,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
+checksum = "e277c495ac6cd1a01a58d0a0c574568b4d1ddf14f59965c6a58b8d96400b54f3"
 dependencies = [
  "itoa",
  "ryu",
@@ -929,7 +929,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.6.2-alpha.2"
-source = "git+https://github.com/skytable/client-rust?branch=next#0cf07e341b4da9fa452a92571ffd5ec5d3e02c5a"
+source = "git+https://github.com/skytable/client-rust?branch=next#7298a522e1a298788b222be0b676a6cbf1179c97"
 dependencies = [
  "bytes",
  "openssl",
@@ -940,7 +940,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.6.2-alpha.2"
-source = "git+https://github.com/skytable/client-rust.git#0cf07e341b4da9fa452a92571ffd5ec5d3e02c5a"
+source = "git+https://github.com/skytable/client-rust.git#7298a522e1a298788b222be0b676a6cbf1179c97"
 
 [[package]]
 name = "smallvec"

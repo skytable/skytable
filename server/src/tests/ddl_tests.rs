@@ -175,9 +175,9 @@ mod __private {
         query.push("whereami");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Element::Array(Array::Str(vec![
-                Some(mykeyspace[0].to_owned()),
-                Some(mykeyspace[1].to_owned())
+            Element::Array(Array::NonNullStr(vec![
+                mykeyspace[0].to_owned(),
+                mykeyspace[1].to_owned()
             ]))
         );
         runeq!(
@@ -188,7 +188,7 @@ mod __private {
         runeq!(
             con,
             query!("whereami"),
-            Element::Array(Array::Str(vec![Some("default".to_owned())]))
+            Element::Array(Array::NonNullStr(vec!["default".to_owned()]))
         );
         runeq!(
             con,
@@ -198,9 +198,9 @@ mod __private {
         runeq!(
             con,
             query!("whereami"),
-            Element::Array(Array::Str(vec![
-                Some("default".to_owned()),
-                Some("default".to_owned())
+            Element::Array(Array::NonNullStr(vec![
+                "default".to_owned(),
+                "default".to_owned()
             ]))
         );
     }
