@@ -95,25 +95,18 @@ impl Runner {
             Err(e) => fatal!("An I/O error occurred while querying: {}", e),
         };
         match ret {
-            Element::Array(Array::Flat(frr)) => match frr.len() {
+            Element::Array(Array::NonNullStr(srr)) => match srr.len() {
                 1 => {
-                    let elem = match &frr[0] {
-                        FlatElement::String(st) => st,
-                        _ => fatal!("The server returned an unexpected response while checking entity state"),
-                    };
-                    *blank = format!("      {blank}> ", blank = " ".repeat(elem.len()));
-                    *prompt = format!("skysh@{ks}> ", ks = elem);
+                    *blank = format!("      {blank}> ", blank = " ".repeat(srr[0].len()));
+                    *prompt = format!("skysh@{ks}> ", ks = srr[0]);
                 }
                 2 => {
-                    let ks = match &frr[0] {
-                        FlatElement::String(st) => st,
-                        _ => fatal!("The server returned an unexpected response while checking entity state"),
-                    };
-                    let tbl = match &frr[1] {
-                        FlatElement::String(st) => st,
-                        _ => fatal!("The server returned an unexpected response while checking entity state"),
-                    };
-                    *blank = format!("      {blank}> ", blank = " ".repeat(ks.len() + tbl.len() + 1));
+                    let ks = &srr[0];
+                    let tbl = &srr[1];
+                    *blank = format!(
+                        "      {blank}> ",
+                        blank = " ".repeat(ks.len() + tbl.len() + 1)
+                    );
                     *prompt = format!("skysh@{ks}:{tbl}> ", ks = ks, tbl = tbl);
                 }
                 count => fatal!(
@@ -136,6 +129,8 @@ fn print_element(el: Element) {
         Element::UnsignedInt(int) => write_int!(int),
         Element::Array(Array::Flat(frr)) => write_flat_array(frr),
         Element::Array(Array::Recursive(a)) => print_array(a),
+        Element::Array(Array::NonNullBin(nbrr)) => print_array_nonnull_bin(nbrr),
+        Element::Array(Array::NonNullStr(nsrr)) => print_array_nonnull_str(nsrr),
         _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
     }
 }
@@ -176,6 +171,20 @@ fn print_str_array(str_array: Vec<Option<String>>) {
             }
             None => print_rcode(RespCode::NotFound, Some(idx)),
         }
+    })
+}
+
+fn print_array_nonnull_str(str_array: Vec<String>) {
+    str_array.into_iter().enumerate().for_each(|(idx, elem)| {
+        let idx = idx + 1;
+        write_str!(idx, elem)
+    })
+}
+
+fn print_array_nonnull_bin(str_array: Vec<Vec<u8>>) {
+    str_array.into_iter().enumerate().for_each(|(idx, elem)| {
+        let idx = idx + 1;
+        write_binstr!(idx, elem)
     })
 }
 
