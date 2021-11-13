@@ -178,3 +178,55 @@ where
         Ok(())
     }
 }
+
+#[derive(Debug)]
+/// A writer for a non-null typed array, which is a singly-typed array which either
+/// has a typed element or a `NULL`
+pub struct NonNullArrayWriter<'a, T, Strm> {
+    con: &'a mut T,
+    _owned: PhantomData<Strm>,
+}
+
+impl<'a, T, Strm> NonNullArrayWriter<'a, T, Strm>
+where
+    T: ProtocolConnectionExt<Strm>,
+    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+{
+    /// Create a new `typedarraywriter`. This will write the tsymbol and
+    /// the array length
+    pub async unsafe fn new(
+        con: &'a mut T,
+        tsymbol: u8,
+        len: usize,
+    ) -> IoResult<NonNullArrayWriter<'a, T, Strm>> {
+        {
+            let stream = unsafe { con.raw_stream() };
+            // first write @<tsymbol>
+            stream.write_all(&[b'^', tsymbol]).await?;
+            let bytes = Integer64::from(len);
+            // now write len
+            stream.write_all(&bytes).await?;
+            // first LF
+            stream.write_all(&[b'\n']).await?;
+        }
+        Ok(Self {
+            con,
+            _owned: PhantomData,
+        })
+    }
+    /// Write an element
+    pub async fn write_element(&mut self, bytes: impl AsRef<[u8]>) -> IoResult<()> {
+        let stream = unsafe { self.con.raw_stream() };
+        let bytes = bytes.as_ref();
+        // write len
+        let len = Integer64::from(bytes.len());
+        stream.write_all(&len).await?;
+        // now LF
+        stream.write_all(&[b'\n']).await?;
+        // now element
+        stream.write_all(bytes).await?;
+        // now final LF
+        stream.write_all(&[b'\n']).await?;
+        Ok(())
+    }
+}

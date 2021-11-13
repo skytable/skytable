@@ -69,8 +69,9 @@ global:
     accept: [AnyArray]
     syntax: [WHEREAMI]
     desc: |
-      Returns a flat array with either the name of the current keyspace as the first element or if a default table
+      Returns an array with either the name of the current keyspace as the first element or if a default table
       is set, then it returns the keyspace name as the first element and the table name as the second element
+    return: [Non-null array]
 keyvalue:
   generic:
     - name: DEL

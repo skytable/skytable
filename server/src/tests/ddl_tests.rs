@@ -27,7 +27,7 @@
 #[sky_macros::dbtest]
 mod __private {
     use libstress::utils;
-    use skytable::types::{Array, FlatElement};
+    use skytable::types::Array;
     use skytable::{query, Element, Query, RespCode};
     async fn test_create_keyspace() {
         let mut rng = rand::thread_rng();
@@ -175,9 +175,9 @@ mod __private {
         query.push("whereami");
         assert_eq!(
             con.run_simple_query(&query).await.unwrap(),
-            Element::Array(Array::Flat(vec![
-                FlatElement::String(mykeyspace[0].to_owned()),
-                FlatElement::String(mykeyspace[1].to_owned())
+            Element::Array(Array::Str(vec![
+                Some(mykeyspace[0].to_owned()),
+                Some(mykeyspace[1].to_owned())
             ]))
         );
         runeq!(
@@ -188,7 +188,7 @@ mod __private {
         runeq!(
             con,
             query!("whereami"),
-            Element::Array(Array::Flat(vec![FlatElement::String("default".to_owned())]))
+            Element::Array(Array::Str(vec![Some("default".to_owned())]))
         );
         runeq!(
             con,
@@ -198,9 +198,9 @@ mod __private {
         runeq!(
             con,
             query!("whereami"),
-            Element::Array(Array::Flat(vec![
-                FlatElement::String("default".to_owned()),
-                FlatElement::String("default".to_owned())
+            Element::Array(Array::Str(vec![
+                Some("default".to_owned()),
+                Some("default".to_owned())
             ]))
         );
     }
