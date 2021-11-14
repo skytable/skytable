@@ -2,12 +2,15 @@
 
 All changes in this project will be noted in this file.
 
-## Unreleased
+## Version 0.7.2
 
 ### Additions
 
 - `skyd`:
-  - Pipelined queries are now supported
+  - Pipelined queries are now supported:
+    - Saves bandwidth
+    - Reduces latency
+  - The new non-null typed array type was added
   - The `whereami` action was added which lets one find out which entity the current connection
     is connected to
 - `skysh`:
