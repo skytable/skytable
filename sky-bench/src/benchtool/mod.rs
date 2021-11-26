@@ -24,7 +24,7 @@
  *
 */
 
-use crate::report;
+use crate::report::AggregatedReport;
 use devtimer::DevTime;
 use libstress::utils::generate_random_byte_vector;
 use libstress::PoolConfig;
@@ -33,80 +33,14 @@ use skytable::types::RawString;
 use skytable::Query;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+mod validation;
 
-/// Just a sweet `*1\n`
-const SIMPLE_QUERY_SIZE: usize = 3;
+use self::validation::SIMPLE_QUERY_SIZE;
 
-/// For a dataframe, this returns the dataframe size for array responses.
-///
-/// For example,
-/// ```text
-/// &<n>\n
-/// (<tsymbol><size>\n<element>)*
-/// ```
-#[allow(dead_code)] // TODO(@ohsayan): Remove this lint
-pub fn calculate_array_dataframe_size(element_count: usize, per_element_size: usize) -> usize {
-    let mut s = 0;
-    s += 1; // `&`
-    s += element_count.to_string().len(); // `<n>`
-    s += 1; // `\n`
-    let mut subsize = 0;
-    subsize += 1; // `+`
-    subsize += per_element_size.to_string().len(); // `<n>`
-    subsize += 1; // `\n`
-    subsize += per_element_size; // the element size itself
-    subsize += 1; // `\n`
-    s += subsize * element_count;
-    s
-}
-
-/// For a monoelement dataframe, this returns the size:
-/// ```text
-/// <tsymbol><size>\n
-/// <element>\n
-/// ```
-///
-/// For an `okay` respcode, it will look like this:
-/// ```text
-/// !1\n
-/// 0\n
-/// ```
-pub fn calculate_monoelement_dataframe_size(per_element_size: usize) -> usize {
-    let mut s = 0;
-    s += 1; // the tsymbol (always one byte)
-    s += per_element_size.to_string().len(); // the bytes in size string
-    s += 1; // the LF
-    s += per_element_size; // the element itself
-    s += 1; // the final LF
-    s
-}
-
-#[test]
-fn test_monoelement_calculation() {
-    assert_eq!(calculate_monoelement_dataframe_size(1), 5);
-}
-
-/// Returns the metaframe size
-/// ```text
-/// *<n>\n
-/// ```
-#[allow(dead_code)] // TODO(@ohsayan): Remove this lint
-pub fn calculate_metaframe_size(queries: usize) -> usize {
-    if queries == 1 {
-        SIMPLE_QUERY_SIZE
-    } else {
-        let mut s = 0;
-        s += 1; // `*`
-        s += queries.to_string().len(); // the bytes in size string
-        s += 1; // `\n`
-        s
-    }
-}
-
-#[test]
-fn test_simple_query_metaframe_size() {
-    assert_eq!(calculate_metaframe_size(1), SIMPLE_QUERY_SIZE);
-}
+const NOTICE_INIT_BENCH: &str = "Finished sanity test. Initializing benchmark ...";
+const NOTICE_INIT_COMPLETE: &str = "Initialization complete! Benchmark started";
+const CONFIG_TABLE_MODEL: &str = "keymap(binstr,binstr)";
+const CONFIG_TABLE_VOLATILITY: &str = "volatile";
 
 /// Run the benchmark tool
 pub fn runner(
@@ -125,28 +59,22 @@ pub fn runner(
         err!(format!("Sanity test failed with error: {}", e));
     }
     if !json_out {
-        println!("Finished sanity test. Initializing benchmark ...");
+        println!("{}", NOTICE_INIT_BENCH);
         println!("Connections: {}", max_connections);
         println!("Queries: {}", max_queries);
         println!("Data size (key+value): {} bytes", (per_kv_size * 2));
     }
+
     let host = hoststr!(host, port);
     let mut rand = thread_rng();
-
-    let temp_table = libstress::utils::rand_alphastring(10, &mut rand);
-    let create_table = Query::from("create")
-        .arg("table")
-        .arg(&temp_table)
-        .arg("keymap(binstr,binstr)")
-        .arg("volatile")
-        .into_raw_query();
+    let temp_table = init_temp_table(&mut rand, &host);
     let switch_table = Query::from("use")
         .arg(format!("default:{}", &temp_table))
         .into_raw_query();
-    let mut create_table_connection = TcpStream::connect(&host).unwrap();
 
     // an okay response code size: `*1\n!1\n0\n`:
-    let response_okay_size = calculate_monoelement_dataframe_size(1) + SIMPLE_QUERY_SIZE;
+    let response_okay_size =
+        validation::calculate_monoelement_dataframe_size(1) + SIMPLE_QUERY_SIZE;
 
     let pool_config = PoolConfig::new(
         max_connections,
@@ -170,15 +98,11 @@ pub fn runner(
         Some(max_queries),
     );
 
-    // create table
-    create_table_connection.write_all(&create_table).unwrap();
-    let mut v = vec![0; response_okay_size];
-    let _ = create_table_connection.read_exact(&mut v).unwrap();
-
     // Create separate connection pools for get and set operations
 
     let keys = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, true);
     let values = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, false);
+
     /*
     We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`
     The bytes in each of `set_packs` has a query packet for setting data;
@@ -211,13 +135,15 @@ pub fn runner(
             q.into_raw_query()
         })
         .collect();
+
     if !json_out {
         println!("Per-packet size (GET): {} bytes", get_packs[0].len());
         println!("Per-packet size (SET): {} bytes", set_packs[0].len());
         println!("Per-packet size (UPDATE): {} bytes", update_packs[0].len());
-        println!("Initialization complete! Benchmark started");
+        println!("{}", NOTICE_INIT_COMPLETE);
     }
-    let mut report = report::AggregatedReport::new(3, runs, max_queries);
+
+    let mut report = AggregatedReport::new(3, runs, max_queries);
     for i in 1..runs + 1 {
         let mut dt = DevTime::new_complex();
         // clone in the keys
@@ -232,10 +158,8 @@ pub fn runner(
         setpool.execute_and_finish_iter(set_packs);
         dt.stop_timer("SET").unwrap();
 
-        // TODO: Update the getpool to use correct sizes
-        // bench GET
         let get_response_packet_size =
-            calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
+            validation::calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
         let getpool =
             pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
                 sock.write_all(&packet).unwrap();
@@ -270,7 +194,27 @@ pub fn runner(
         dt.iter()
             .for_each(|(name, timer)| report.insert(name, timer.time_in_nanos().unwrap()));
     }
-    if json_out {
+    print_results(json_out, report);
+}
+
+fn init_temp_table(rand: &mut impl rand::Rng, host: &str) -> String {
+    let temp_table = libstress::utils::rand_alphastring(10, rand);
+    let create_table = Query::from("create")
+        .arg("table")
+        .arg(&temp_table)
+        .arg(CONFIG_TABLE_MODEL)
+        .arg(CONFIG_TABLE_VOLATILITY)
+        .into_raw_query();
+    let mut create_table_connection = TcpStream::connect(host).unwrap();
+    // create table
+    create_table_connection.write_all(&create_table).unwrap();
+    let mut v = [0u8; 8];
+    let _ = create_table_connection.read_exact(&mut v).unwrap();
+    temp_table
+}
+
+fn print_results(flag_json: bool, report: AggregatedReport) {
+    if flag_json {
         let serialized = report.into_json();
         println!("{}", serialized);
     } else {
