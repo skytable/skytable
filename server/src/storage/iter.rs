@@ -30,7 +30,7 @@
  nah, it's not that bad. We know that the byte representations
  would be in the way we expect. If the data is corrupted, we
  can guarantee that we won't ever read incorrect lengths of data
- and we won't read into others' memory (or corrupt our own)
+ and we won't read into others' memory (or corrupt our own).
 */
 
 use crate::storage::Data;
@@ -40,6 +40,27 @@ use core::slice;
 
 const SIZE_64BIT: usize = mem::size_of::<u64>();
 const SIZE_128BIT: usize = SIZE_64BIT * 2;
+
+/// This contains the fn ptr to decode bytes wrt to the host's endian. For example, if you're on an LE machine and
+/// you're reading data from a BE machine, then simply set the endian to big. This only affects the first read and not
+/// subsequent ones (unless you switch between machines of different endian, obviously)
+static mut NATIVE_ENDIAN_READER: unsafe fn(*const u8) -> usize = super::de::transmute_len_le;
+
+/// Use this to set the current endian to LE.
+///
+/// ## Safety
+/// Make sure this is run from a single thread only! If not, good luck
+pub(super) unsafe fn endian_set_little() {
+    NATIVE_ENDIAN_READER = super::de::transmute_len_le;
+}
+
+/// Use this to set the current endian to BE.
+///
+/// ## Safety
+/// Make sure this is run from a single thread only! If not, good luck
+pub(super) unsafe fn endian_set_big() {
+    NATIVE_ENDIAN_READER = super::de::transmute_len_be;
+}
 
 /// A raw slice iterator by using raw pointers
 #[derive(Debug)]
@@ -84,7 +105,7 @@ impl<'a> RawSliceIter<'a> {
         } else {
             unsafe {
                 // sweet, something is left
-                let l = super::de::transmute_len(self.cursor);
+                let l = NATIVE_ENDIAN_READER(self.cursor);
                 // now forward the cursor
                 self.incr_cursor_by(SIZE_64BIT);
                 Some(l)
@@ -109,9 +130,9 @@ impl<'a> RawSliceIter<'a> {
             None
         } else {
             unsafe {
-                let v1 = super::de::transmute_len(self.cursor);
+                let v1 = NATIVE_ENDIAN_READER(self.cursor);
                 self.incr_cursor_by(SIZE_64BIT);
-                let v2 = super::de::transmute_len(self.cursor);
+                let v2 = NATIVE_ENDIAN_READER(self.cursor);
                 self.incr_cursor_by(SIZE_64BIT);
                 Some((v1, v2))
             }
@@ -189,7 +210,7 @@ impl<'a> RawSliceIterBorrowed<'a> {
             None
         } else {
             unsafe {
-                let size = super::de::transmute_len(self.cursor);
+                let size = NATIVE_ENDIAN_READER(self.cursor);
                 self.incr_cursor_by(SIZE_64BIT);
                 Some(size)
             }

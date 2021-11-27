@@ -39,7 +39,8 @@
 //!
 //! ## Endianness
 //!
-//! All sizes are stored in little endian. How everything else is stored is not worth
+//! All sizes are stored in native endian. If a dataset is imported from a system from a different endian, it is
+//! simply translated into the host's native endian. How everything else is stored is not worth
 //! discussing here. Byte swaps just need one instruction on most architectures
 //!
 //! ## Safety
@@ -172,7 +173,7 @@ mod tests;
 
 /// Get the raw bytes of anything.
 ///
-/// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS
+/// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS (especially when you think about padding)
 unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
     {
         let ptr: *const u8 = mem::transmute(len);
@@ -478,8 +479,19 @@ mod de {
         Some(list)
     }
 
-    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    #[cfg(test)]
+    #[cfg(target_pointer_width = "32")]
     pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
+        little_endian! {{
+            return self::transmute_len_le(start_ptr);
+        }};
+        big_endian! {{
+            return self::transmute_len_be(start_ptr);
+        }}
+    }
+
+    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    pub(super) unsafe fn transmute_len_le(start_ptr: *const u8) -> usize {
         little_endian!({
             // So we have an LE target
             is_64_bit!({
@@ -510,6 +522,52 @@ mod de {
             });
             not_64_bit!({
                 // 32-bit big endian
+                let ret: u64 = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order and lossy cast
+                let ret = (ret.swap_bytes()) as usize;
+                // check if overflow
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
+        });
+    }
+
+    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    pub(super) unsafe fn transmute_len_be(start_ptr: *const u8) -> usize {
+        big_endian!({
+            // So we have a BE target
+            is_64_bit!({
+                // 64-bit BE
+                return ptr::read_unaligned(start_ptr.cast());
+            });
+            not_64_bit!({
+                // 32-bit BE
+                let ret1: u64 = ptr::read_unaligned(start_ptr.cast());
+                // lossy cast
+                let ret = ret1 as usize;
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
+        });
+
+        little_endian!({
+            // so we have an LE target
+            is_64_bit!({
+                // 64-bit little endian
+                let ret: usize = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order
+                return ret.swap_bytes();
+            });
+            not_64_bit!({
+                // 32-bit little endian
                 let ret: u64 = ptr::read_unaligned(start_ptr.cast());
                 // swap byte order and lossy cast
                 let ret = (ret.swap_bytes()) as usize;

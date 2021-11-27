@@ -46,11 +46,14 @@ pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;
 
 // our version and endian are based on nibbles
 
+const META_SEGMENT_LE: u8 = 0b1000_0000;
+const META_SEGMENT_BE: u8 = 0b1000_0001;
+
 #[cfg(target_endian = "little")]
-const META_SEGMENT: u8 = 0b1000_0000;
+const META_SEGMENT: u8 = META_SEGMENT_LE;
 
 #[cfg(target_endian = "big")]
-const META_SEGMENT: u8 = 0b1000_0001;
+const META_SEGMENT: u8 = META_SEGMENT_BE;
 
 /// Generate the `PRELOAD` disk file for this instance
 /// ```text
@@ -76,8 +79,14 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
     // first read in the meta segment
     unsafe {
         let meta_segment: u8 = ptr::read(preload.as_ptr());
-        if meta_segment != META_SEGMENT {
-            return Err(IoError::from(ErrorKind::Unsupported));
+        match meta_segment {
+            META_SEGMENT_BE => {
+                super::iter::endian_set_big();
+            }
+            META_SEGMENT_LE => {
+                super::iter::endian_set_little();
+            }
+            _ => return Err(IoError::from(ErrorKind::Unsupported)),
         }
     }
     // all checks complete; time to decode
