@@ -189,7 +189,7 @@ mod se {
 
     macro_rules! unsafe_sz_byte_repr {
         ($e:expr) => {
-            raw_byte_repr(&to_64bit_little_endian!($e))
+            raw_byte_repr(&to_64bit_native_endian!($e))
         };
     }
 
@@ -208,12 +208,12 @@ mod se {
     /// Serialize a map and write it to a provided buffer
     pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> IoResult<()> {
         unsafe {
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
                 let (k, v) = (kv.key(), kv.value());
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(k.len())))?;
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(v.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(k.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(v.len())))?;
                 w.write_all(k)?;
                 w.write_all(v)?;
             }
@@ -228,11 +228,11 @@ mod se {
         K: Eq + Hash + AsRef<[u8]>,
     {
         unsafe {
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
                 let key = kv.key().as_ref();
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(key.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(key.len())))?;
                 w.write_all(key)?;
             }
         }
@@ -246,12 +246,12 @@ mod se {
     pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> IoResult<()> {
         unsafe {
             // extent
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(keyspace
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(keyspace
                 .tables
                 .len())))?;
             for table in keyspace.tables.iter() {
                 // partition ID len
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(table.key().len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(table.key().len())))?;
                 // parition ID
                 w.write_all(table.key())?;
                 // now storage type

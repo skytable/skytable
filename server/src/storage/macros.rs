@@ -60,15 +60,7 @@ macro_rules! is_64_bit {
     };
 }
 
-#[cfg(target_endian = "big")]
-macro_rules! to_64bit_little_endian {
-    ($e:expr) => {
-        ($e as u64).swap_bytes()
-    };
-}
-
-#[cfg(target_endian = "little")]
-macro_rules! to_64bit_little_endian {
+macro_rules! to_64bit_native_endian {
     ($e:expr) => {
         ($e as u64)
     };
