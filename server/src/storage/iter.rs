@@ -44,7 +44,7 @@ const SIZE_128BIT: usize = SIZE_64BIT * 2;
 /// This contains the fn ptr to decode bytes wrt to the host's endian. For example, if you're on an LE machine and
 /// you're reading data from a BE machine, then simply set the endian to big. This only affects the first read and not
 /// subsequent ones (unless you switch between machines of different endian, obviously)
-static mut NATIVE_ENDIAN_READER: unsafe fn(*const u8) -> usize = super::de::transmute_len_le;
+static mut NATIVE_ENDIAN_READER: unsafe fn(*const u8) -> usize = super::de::transmute_len;
 
 /// Use this to set the current endian to LE.
 ///

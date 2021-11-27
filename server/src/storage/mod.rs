@@ -479,8 +479,6 @@ mod de {
         Some(list)
     }
 
-    #[cfg(test)]
-    #[cfg(target_pointer_width = "32")]
     pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         little_endian! {{
             return self::transmute_len_le(start_ptr);

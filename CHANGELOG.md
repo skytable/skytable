@@ -2,6 +2,12 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Additions
+
+- Added support for system native endian storage (backward compatible)
+
 ## Version 0.7.2
 
 ### Additions
