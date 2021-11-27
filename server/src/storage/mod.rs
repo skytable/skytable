@@ -39,7 +39,8 @@
 //!
 //! ## Endianness
 //!
-//! All sizes are stored in little endian. How everything else is stored is not worth
+//! All sizes are stored in native endian. If a dataset is imported from a system from a different endian, it is
+//! simply translated into the host's native endian. How everything else is stored is not worth
 //! discussing here. Byte swaps just need one instruction on most architectures
 //!
 //! ## Safety
@@ -172,7 +173,7 @@ mod tests;
 
 /// Get the raw bytes of anything.
 ///
-/// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS
+/// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS (especially when you think about padding)
 unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
     {
         let ptr: *const u8 = mem::transmute(len);
@@ -188,7 +189,7 @@ mod se {
 
     macro_rules! unsafe_sz_byte_repr {
         ($e:expr) => {
-            raw_byte_repr(&to_64bit_little_endian!($e))
+            raw_byte_repr(&to_64bit_native_endian!($e))
         };
     }
 
@@ -207,12 +208,12 @@ mod se {
     /// Serialize a map and write it to a provided buffer
     pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> IoResult<()> {
         unsafe {
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
                 let (k, v) = (kv.key(), kv.value());
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(k.len())))?;
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(v.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(k.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(v.len())))?;
                 w.write_all(k)?;
                 w.write_all(v)?;
             }
@@ -227,11 +228,11 @@ mod se {
         K: Eq + Hash + AsRef<[u8]>,
     {
         unsafe {
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(map.len())))?;
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
                 let key = kv.key().as_ref();
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(key.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(key.len())))?;
                 w.write_all(key)?;
             }
         }
@@ -245,12 +246,12 @@ mod se {
     pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> IoResult<()> {
         unsafe {
             // extent
-            w.write_all(raw_byte_repr(&to_64bit_little_endian!(keyspace
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(keyspace
                 .tables
                 .len())))?;
             for table in keyspace.tables.iter() {
                 // partition ID len
-                w.write_all(raw_byte_repr(&to_64bit_little_endian!(table.key().len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(table.key().len())))?;
                 // parition ID
                 w.write_all(table.key())?;
                 // now storage type
@@ -478,8 +479,17 @@ mod de {
         Some(list)
     }
 
-    #[allow(clippy::needless_return)] // Clippy really misunderstands this
     pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
+        little_endian! {{
+            return self::transmute_len_le(start_ptr);
+        }};
+        big_endian! {{
+            return self::transmute_len_be(start_ptr);
+        }}
+    }
+
+    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    pub(super) unsafe fn transmute_len_le(start_ptr: *const u8) -> usize {
         little_endian!({
             // So we have an LE target
             is_64_bit!({
@@ -510,6 +520,52 @@ mod de {
             });
             not_64_bit!({
                 // 32-bit big endian
+                let ret: u64 = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order and lossy cast
+                let ret = (ret.swap_bytes()) as usize;
+                // check if overflow
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
+        });
+    }
+
+    #[allow(clippy::needless_return)] // Clippy really misunderstands this
+    pub(super) unsafe fn transmute_len_be(start_ptr: *const u8) -> usize {
+        big_endian!({
+            // So we have a BE target
+            is_64_bit!({
+                // 64-bit BE
+                return ptr::read_unaligned(start_ptr.cast());
+            });
+            not_64_bit!({
+                // 32-bit BE
+                let ret1: u64 = ptr::read_unaligned(start_ptr.cast());
+                // lossy cast
+                let ret = ret1 as usize;
+                if ret > (isize::MAX as usize) {
+                    // this is a backup method for us incase a giant 48-bit address is
+                    // somehow forced to be read on this machine
+                    panic!("RT panic: Very high size for current pointer width");
+                }
+                return ret;
+            });
+        });
+
+        little_endian!({
+            // so we have an LE target
+            is_64_bit!({
+                // 64-bit little endian
+                let ret: usize = ptr::read_unaligned(start_ptr.cast());
+                // swap byte order
+                return ret.swap_bytes();
+            });
+            not_64_bit!({
+                // 32-bit little endian
                 let ret: u64 = ptr::read_unaligned(start_ptr.cast());
                 // swap byte order and lossy cast
                 let ret = (ret.swap_bytes()) as usize;
