@@ -4,6 +4,10 @@ All changes in this project will be noted in this file.
 
 ## Unreleased
 
+### Fixes
+
+- Fixed infinite wait (loop) when sample space for key generation is not large enough
+
 ### Additions
 
 - Added support for system native endian storage (backward compatible)

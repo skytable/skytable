@@ -62,6 +62,13 @@ macro_rules! err {
         std::process::exit(0x01);
     }};
 }
+pub fn possible_permutations(r: usize) -> usize {
+    let mut ret = 1usize;
+    for i in (256 - r + 1)..=256 {
+        ret *= i;
+    }
+    ret
+}
 
 /// Returns the number of queries/sec
 pub fn calc(reqs: usize, time: u128) -> f64 {

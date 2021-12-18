@@ -25,6 +25,7 @@
 */
 
 use crate::report::AggregatedReport;
+use crate::util;
 use devtimer::DevTime;
 use libstress::utils::generate_random_byte_vector;
 use libstress::PoolConfig;
@@ -52,12 +53,18 @@ pub fn runner(
     json_out: bool,
     runs: usize,
 ) {
+    if util::possible_permutations(per_kv_size) < max_queries {
+        err!("Too low sample space for given k/v size and query count. Try a higher k/v size.");
+    }
+
     if !json_out {
         println!("Running sanity test ...");
     }
+
     if let Err(e) = sanity_test!(host, port) {
         err!(format!("Sanity test failed with error: {}", e));
     }
+
     if !json_out {
         println!("{}", NOTICE_INIT_BENCH);
         println!("Connections: {}", max_connections);
