@@ -343,7 +343,7 @@ pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
 fn get_config_file_or_return_cfg_from_matches(
     matches: ArgMatches,
 ) -> Result<ConfigType, ConfigError> {
-    let no_cli_args = matches.args.is_empty(); // check env args
+    let no_cli_args = matches.args.is_empty(); // check cli args
     let env_args = cfgenv::get_env_config()?;
     if no_cli_args && env_args.is_none() {
         // that means we need to use the default config
