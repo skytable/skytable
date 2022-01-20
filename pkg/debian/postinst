@@ -1,15 +1,15 @@
 #!/bin/sh -e
 
+systemctl daemon-reload
+
 if [ $1 = "install" ]; then
     systemctl enable skyd
-    systemctl start skyd
 fi
 
 if [ $1 = "upgrade" ]; then
-    echo "Upgrade complete. Stopping and restarting process ..."
-    systemctl daemon-reload
     systemctl stop skyd
-    systemctl start skyd
 fi
+
+systemctl start skyd
 
 #DEBHELPER#
