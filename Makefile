@@ -101,6 +101,10 @@ endif
 	@echo "Installing any additional dependencies"
 	@echo "===================================================================="
 	@$(ADDITIONAL_SOFTWARE)
+deb: release
+	@echo "===================================================================="
+	@echo "Building Debian package (optimized)"
+	@cargo deb $(TARGET_ARG) --manifest-path=server/Cargo.toml --output .
 build: .pre
 	@echo "===================================================================="
 	@echo "Building all binaries in debug mode (unoptimized)"
