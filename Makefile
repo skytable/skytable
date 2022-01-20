@@ -104,6 +104,8 @@ endif
 deb: release
 	@echo "===================================================================="
 	@echo "Building Debian package (optimized)"
+	@echo "===================================================================="
+	@cargo $(TARGET_ARG) install cargo-deb
 	@cargo deb $(TARGET_ARG) --manifest-path=server/Cargo.toml --output .
 build: .pre
 	@echo "===================================================================="
