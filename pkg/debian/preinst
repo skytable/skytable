@@ -1,0 +1,20 @@
+#!/bin/sh -e
+
+SKY_DIR=/var/lib/skytable
+
+# create the data directory
+if [ ! -e $SKY_DIR ]; then
+    mkdir $SKY_DIR
+elif [ ! -d $SKY_DIR ]; then
+    echo "ERROR: /var/lib/skytable exists but it is not a directory" 1>&2
+    return 1
+fi
+
+if [ $1 = "install" ]; then
+    # add the `skytable` user
+    adduser --system --group skytable
+    # change ownership
+    chown skytable:skytable /var/lib/skytable
+fi
+
+#DEBHELPER#

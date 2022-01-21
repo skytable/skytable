@@ -55,3 +55,36 @@ libc = "0.2.112"
 
 [features]
 nightly = []
+
+[package.metadata.deb]
+name = "skytable"
+maintainer = "Sayan Nandan <nandansayan@outlook.com>"
+copyright = "2020, Sayan Nandan <nandansayan@outlook.com>"
+license-file = ["../LICENSE", "0"]
+maintainer-scripts = "../pkg/debian/"
+extended-description-file = "pkg/debian/description.txt"
+depends = "$auto"
+section = "database"
+priority = "optional"
+assets = [
+  [
+    "target/release/skyd",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "target/release/skysh",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "target/release/sky-bench",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "../pkg/common/skyd.service",
+    "/etc/systemd/system/skyd.service",
+    "644",
+  ],
+]

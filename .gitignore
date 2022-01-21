@@ -10,3 +10,5 @@ snapstore.partmap
 .DS_Store
 .sky_history
 .sky_pid
+.devcontainer
+*.deb

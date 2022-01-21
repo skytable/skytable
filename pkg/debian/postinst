@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+systemctl daemon-reload
+
+if [ $1 = "install" ]; then
+    systemctl enable skyd
+fi
+
+if [ $1 = "upgrade" ]; then
+    systemctl stop skyd
+fi
+
+systemctl start skyd
+
+#DEBHELPER#

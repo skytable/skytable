@@ -72,11 +72,24 @@ jobs:
           TARGET: ${{ matrix.rust }}
           ARTIFACT: ${{ matrix.artifact }}
           VERSION: ${{ steps.get_version.outputs.VERSION }}
-      - name: Upload assets
+
+      - name: Build Linux packages
+        run: |
+          make deb
+          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+        if: runner.os == 'Linux'
+
+      - name: Upload assets (bundles)
         uses: actions/upload-artifact@v2
         with:
           name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
           path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+
+      - name: Upload assets (Linux packages)
+        uses: actions/upload-artifact@v2
+        with:
+          name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+        if: runner.os == 'Linux'
 
   build_32bit:
     name: Build artifacts (32-bit)
@@ -142,11 +155,24 @@ jobs:
           TARGET: ${{ matrix.rust }}
           ARTIFACT: ${{ matrix.artifact }}
           VERSION: ${{ steps.get_version.outputs.VERSION }}
-      - name: Upload assets
+
+      - name: Build Linux packages
+        run: |
+          make deb
+          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+        if: runner.os == 'Linux'
+
+      - name: Upload assets (binaries)
         uses: actions/upload-artifact@v2
         with:
           name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
           path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
+
+      - name: Upload assets (Linux packages)
+        uses: actions/upload-artifact@v2
+        with:
+          name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+        if: runner.os == 'Linux'
 
   build_musl:
     name: Build Linux x86_64-musl (Tier 2)
@@ -191,8 +217,11 @@ jobs:
       - name: Install Rust
         run: rustup target add x86_64-unknown-linux-musl
 
-      - name: Make bundle
-        run: make bundle
+      - name: Make bundle and packages
+        run: |
+          make bundle
+          make deb
+          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
         env:
           RUST_BACKTRACE: 1
           TARGET: x86_64-unknown-linux-musl
@@ -203,6 +232,12 @@ jobs:
         with:
           name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
           path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
+
+      - name: Upload assets (Linux packages)
+        uses: actions/upload-artifact@v2
+        with:
+          name: skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
+
   build-arm64:
     name: Build artifacts (self-hosted-arm64-native)
     runs-on: self-hosted
@@ -227,15 +262,19 @@ jobs:
         run: |
           echo "using version tag ${GITHUB_REF:10}"
           echo ::set-output name=version::"${GITHUB_REF:10}"
-      - name: Make bundle
+      - name: Make bundle and packages
         env:
           TARGET: aarch64-unknown-linux-gnu
           VERSION: ${{ steps.get_version.outputs.VERSION }}
           ARTIFACT: aarch64-linux-gnu
-        run: make bundle
-      - name: Upload bundle
+        run: |
+          make bundle
+          make deb
+          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb
+      - name: Upload bundle and packages
         run: |
           aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip s3://releases/${{ steps.get_version.outputs.VERSION }}/
+          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb s3://releases/${{ steps.get_version.outputs.VERSION }}/
 
   release:
     name: Release
@@ -260,9 +299,12 @@ jobs:
       - name: Download ARM64 bundle
         run: |
           wget https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip
+          wget https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb
         working-directory: artifacts
       - name: Upload release binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.get_version.outputs.VERSION }}
-        run: hub release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$TAG_NAME"
+        run: |
+          hub release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$TAG_NAME"
+          hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$TAG_NAME"
