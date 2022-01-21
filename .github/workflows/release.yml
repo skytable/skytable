@@ -77,7 +77,7 @@ jobs:
         run: |
           make deb
           mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: ${{ matrix.os }} == "ubuntu-latest"
+        if: runner.os == 'Linux'
 
       - name: Upload assets (bundles)
         uses: actions/upload-artifact@v2
@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: ${{ matrix.os }} == "ubuntu-latest"
+        if: runner.os == 'Linux'
 
   build_32bit:
     name: Build artifacts (32-bit)
@@ -160,7 +160,7 @@ jobs:
         run: |
           make deb
           mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: ${{ matrix.os }} == "ubuntu-latest"
+        if: runner.os == 'Linux'
 
       - name: Upload assets (binaries)
         uses: actions/upload-artifact@v2
@@ -172,7 +172,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: ${{ matrix.os }} == "ubuntu-latest"
+        if: runner.os == 'Linux'
 
   build_musl:
     name: Build Linux x86_64-musl (Tier 2)
@@ -237,7 +237,6 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
-        if: ${{ matrix.os }} == "ubuntu-latest"
 
   build-arm64:
     name: Build artifacts (self-hosted-arm64-native)
