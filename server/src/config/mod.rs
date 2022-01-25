@@ -38,6 +38,7 @@ mod macros;
 mod cfgenv;
 mod cfgerr;
 mod cfgfile;
+mod eval;
 #[cfg(test)]
 mod tests;
 // self imports
