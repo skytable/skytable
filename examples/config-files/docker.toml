@@ -1,0 +1,6 @@
+# this is the default configuration file for Docker images. Modify it as required
+[server]
+host = "127.0.0.1"
+port = 2003
+noart = true
+maxcon = 50000

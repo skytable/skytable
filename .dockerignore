@@ -3,3 +3,4 @@
 
 # Only include the skyd binary
 !target/release/skyd
+!examples/config-files/docker.toml
