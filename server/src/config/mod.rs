@@ -40,6 +40,7 @@ mod cfgerr;
 mod cfgfile;
 // TODO: Upgrade to use these modules
 mod cfg2;
+mod cfgenv2;
 mod eval;
 #[cfg(test)]
 mod tests;
