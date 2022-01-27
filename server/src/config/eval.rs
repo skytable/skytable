@@ -31,42 +31,99 @@ const EMSG_FILE: &str = "Configuration file";
 const EMSG_CLI: &str = "Command line arguments";
 const TAB: &str = "    ";
 
-#[derive(Debug, PartialEq)]
-pub struct ErrorStack {
+#[derive(Debug)]
+struct FeedbackStack {
     stack: Vec<String>,
-    init: &'static str,
+    feedback_type: &'static str,
+    feedback_source: &'static str,
 }
 
-impl ErrorStack {
-    pub fn new(init: &'static str) -> Self {
+impl FeedbackStack {
+    fn new(feedback_source: &'static str, feedback_type: &'static str) -> Self {
         Self {
-            init,
             stack: Vec::new(),
+            feedback_type,
+            feedback_source,
         }
     }
-    pub fn epush(&mut self, e: impl ToString) {
-        self.stack.push(e.to_string())
-    }
 }
 
-impl fmt::Display for ErrorStack {
+impl fmt::Display for FeedbackStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} errors:\n", self.init)?;
+        write!(f, "{} {}:\n", self.feedback_source, self.feedback_type)?;
         for err in self.stack.iter() {
-            write!(f, "{}- {}", TAB, err)?;
+            writeln!(f, "{}- {}", TAB, err)?;
         }
         Ok(())
     }
 }
 
+#[derive(Debug)]
+pub struct ErrorStack {
+    feedback: FeedbackStack,
+}
+
+impl ErrorStack {
+    pub fn new(err_source: &'static str) -> Self {
+        Self {
+            feedback: FeedbackStack::new(err_source, "errors"),
+        }
+    }
+    pub fn epush(&mut self, e: impl ToString) {
+        self.feedback.stack.push(e.to_string())
+    }
+}
+
+impl fmt::Display for ErrorStack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.feedback)
+    }
+}
+
 #[test]
-fn errorstact_fmt() {
+fn errorstack_fmt() {
     const EXPECTED: &str = "\
 Environment errors:
     - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer
 ";
     let mut estk = ErrorStack::new(EMSG_ENV);
     estk.epush("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
-    let fmt = format!("{}\n", estk);
+    let fmt = format!("{}", estk);
+    assert_eq!(fmt, EXPECTED);
+}
+
+#[derive(Debug)]
+pub struct WarningStack {
+    feedback: FeedbackStack,
+}
+
+impl WarningStack {
+    pub fn new(warning_source: &'static str) -> Self {
+        Self {
+            feedback: FeedbackStack::new(warning_source, "warnings"),
+        }
+    }
+    pub fn wpush(&mut self, w: impl ToString) {
+        self.feedback.stack.push(w.to_string())
+    }
+}
+
+impl fmt::Display for WarningStack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.feedback)
+    }
+}
+
+#[test]
+fn warningstack_fmt() {
+    const EXPECTED: &str = "\
+Environment warnings:
+    - BGSAVE is disabled. You may lose data if the host crashes
+    - The setting for `maxcon` is too high
+";
+    let mut wstk = WarningStack::new(EMSG_ENV);
+    wstk.wpush("BGSAVE is disabled. You may lose data if the host crashes");
+    wstk.wpush("The setting for `maxcon` is too high");
+    let fmt = format!("{}", wstk);
     assert_eq!(fmt, EXPECTED);
 }
