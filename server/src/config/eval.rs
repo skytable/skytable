@@ -24,7 +24,8 @@
  *
 */
 
-use std::fmt;
+use core::fmt;
+use core::ops;
 
 const EMSG_ENV: &str = "Environment";
 const EMSG_FILE: &str = "Configuration file";
@@ -32,7 +33,7 @@ const EMSG_CLI: &str = "Command line arguments";
 const TAB: &str = "    ";
 
 #[derive(Debug)]
-struct FeedbackStack {
+pub struct FeedbackStack {
     stack: Vec<String>,
     feedback_type: &'static str,
     feedback_source: &'static str,
@@ -45,6 +46,12 @@ impl FeedbackStack {
             feedback_type,
             feedback_source,
         }
+    }
+    pub fn push(&mut self, f: impl ToString) {
+        self.stack.push(f.to_string())
+    }
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
     }
 }
 
@@ -69,14 +76,24 @@ impl ErrorStack {
             feedback: FeedbackStack::new(err_source, "errors"),
         }
     }
-    pub fn epush(&mut self, e: impl ToString) {
-        self.feedback.stack.push(e.to_string())
-    }
 }
 
 impl fmt::Display for ErrorStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.feedback)
+    }
+}
+
+impl ops::Deref for ErrorStack {
+    type Target = FeedbackStack;
+    fn deref(&self) -> &Self::Target {
+        &self.feedback
+    }
+}
+
+impl ops::DerefMut for ErrorStack {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.feedback
     }
 }
 
@@ -87,7 +104,7 @@ Environment errors:
     - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer
 ";
     let mut estk = ErrorStack::new(EMSG_ENV);
-    estk.epush("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
+    estk.push("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
     let fmt = format!("{}", estk);
     assert_eq!(fmt, EXPECTED);
 }
@@ -103,8 +120,18 @@ impl WarningStack {
             feedback: FeedbackStack::new(warning_source, "warnings"),
         }
     }
-    pub fn wpush(&mut self, w: impl ToString) {
-        self.feedback.stack.push(w.to_string())
+}
+
+impl ops::Deref for WarningStack {
+    type Target = FeedbackStack;
+    fn deref(&self) -> &Self::Target {
+        &self.feedback
+    }
+}
+
+impl ops::DerefMut for WarningStack {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.feedback
     }
 }
 
@@ -122,8 +149,8 @@ Environment warnings:
     - The setting for `maxcon` is too high
 ";
     let mut wstk = WarningStack::new(EMSG_ENV);
-    wstk.wpush("BGSAVE is disabled. You may lose data if the host crashes");
-    wstk.wpush("The setting for `maxcon` is too high");
+    wstk.push("BGSAVE is disabled. You may lose data if the host crashes");
+    wstk.push("The setting for `maxcon` is too high");
     let fmt = format!("{}", wstk);
     assert_eq!(fmt, EXPECTED);
 }

@@ -38,7 +38,9 @@ mod macros;
 mod cfgenv;
 mod cfgerr;
 mod cfgfile;
+// TODO: Upgrade to use these modules
 mod eval;
+mod cfg2;
 #[cfg(test)]
 mod tests;
 // self imports
