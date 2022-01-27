@@ -39,8 +39,8 @@ mod cfgenv;
 mod cfgerr;
 mod cfgfile;
 // TODO: Upgrade to use these modules
-mod eval;
 mod cfg2;
+mod eval;
 #[cfg(test)]
 mod tests;
 // self imports
@@ -128,6 +128,27 @@ impl PortConfig {
     }
     pub const fn new_multi(host: IpAddr, port: u16, ssl: SslOpts) -> Self {
         PortConfig::Multi { host, port, ssl }
+    }
+    pub fn get_host(&self) -> IpAddr {
+        match self {
+            Self::InsecureOnly { host, .. }
+            | Self::SecureOnly { host, .. }
+            | Self::Multi { host, .. } => *host,
+        }
+    }
+    pub fn upgrade_to_tls(&mut self, ssl: SslOpts) {
+        match self {
+            Self::InsecureOnly { host, port } => {
+                *self = Self::Multi {
+                    host: *host,
+                    port: *port,
+                    ssl,
+                }
+            }
+            Self::SecureOnly { .. } | Self::Multi { .. } => {
+                panic!("Port config is already upgraded to TLS")
+            }
+        }
     }
 }
 
