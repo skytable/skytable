@@ -63,6 +63,10 @@ fn server_tcp_fail_host() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SERVER_HOST`. Expected an IPv4/IPv6 address"
+    );
 }
 
 #[test]
@@ -80,6 +84,10 @@ fn server_tcp_fail_port() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SERVER_PORT`. Expected a 16-bit positive integer"
+    );
 }
 
 #[test]
@@ -97,6 +105,14 @@ fn server_tcp_fail_both() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SERVER_HOST`. Expected an IPv4/IPv6 address"
+    );
+    assert_eq!(
+        cfgset.estack[1],
+        "Bad value for `SKY_SERVER_PORT`. Expected a 16-bit positive integer"
+    );
 }
 
 // noart
@@ -115,6 +131,10 @@ fn server_noart_fail() {
     cfgset.server_noart(Some("truee"), "SKY_SYSTEM_NOART");
     assert!(cfgset.cfg.is_artful());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SYSTEM_NOART`. Expected true/false"
+    );
     assert!(cfgset.is_mutated());
 }
 
@@ -133,6 +153,10 @@ fn server_maxcon_fail() {
     cfgset.server_maxcon(Some("12345A"), "SKY_SYSTEM_MAXCON");
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SYSTEM_MAXCON`. Expected a positive integer greater than zero"
+    );
     assert_eq!(cfgset.cfg.maxcon, 50000);
 }
 
@@ -162,6 +186,10 @@ fn bgsave_fail() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_BGSAVE_ENABLED`. Expected true/false"
+    );
     assert_eq!(cfgset.cfg.bgsave, BGSave::Enabled(128));
 }
 
@@ -199,6 +227,10 @@ fn snapshot_fail() {
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
     assert_eq!(
+        cfgset.estack[0],
+        "Bad value for `SKY_SNAPSHOT_FAILSAFE`. Expected true/false"
+    );
+    assert_eq!(
         cfgset.cfg.snapshot,
         SnapshotConfig::Enabled(SnapshotPref::new(3600, 0, true))
     );
@@ -217,6 +249,10 @@ fn snapshot_fail_with_missing_required_values() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.estack[0],
+        "To use snapshots, pass values for both `SKY_SNAPSHOT_EVERY` and `SKY_SNAPSHOT_ATMOST`"
+    );
     assert_eq!(cfgset.cfg.snapshot, SnapshotConfig::Disabled);
 }
 
@@ -352,14 +388,7 @@ mod cfg_file_tests {
     fn test_config_file_ok() {
         let file = get_toml_from_examples_dir("skyd.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
-        assert_eq!(cfg, ConfigurationSet::default());
-    }
-
-    #[test]
-    fn test_config_file_err() {
-        let file = get_toml_from_examples_dir("skyd.toml").unwrap();
-        let cfg = cfgset_from_toml_str(file);
-        assert!(cfg.is_err());
+        assert_eq!(cfg.cfg, ConfigurationSet::default());
     }
 
     #[test]
@@ -367,7 +396,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("secure-noart.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 noart: true,
                 bgsave: BGSave::default(),
@@ -383,7 +412,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("ipv6.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 noart: false,
                 bgsave: BGSave::default(),
@@ -402,7 +431,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("template.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet::new(
                 false,
                 BGSave::default(),
@@ -433,7 +462,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("withcustombgsave.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 noart: false,
                 bgsave: BGSave::new(true, 600),
@@ -453,7 +482,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("bgsave-justenabled.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 noart: false,
                 bgsave: BGSave::default(),
@@ -473,7 +502,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("bgsave-justevery.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 noart: false,
                 bgsave: BGSave::new(true, 600),
@@ -489,7 +518,7 @@ mod cfg_file_tests {
         let file = get_toml_from_examples_dir("snapshot.toml").unwrap();
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
-            cfg,
+            cfg.cfg,
             ConfigurationSet {
                 snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
                 bgsave: BGSave::default(),
@@ -497,6 +526,46 @@ mod cfg_file_tests {
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT
             }
+        );
+    }
+}
+
+mod cli_arg_tests {
+    use crate::config::{cfgcli, PortConfig};
+    use clap::{load_yaml, App};
+    #[test]
+    fn cli_args_okay() {
+        let cfg_layout = load_yaml!("../cli.yml");
+        let cli_args = ["skyd", "--host", "127.0.0.2"];
+        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let ret = cfgcli::parse_cli_args(matches);
+        assert_eq!(
+            ret.cfg.ports,
+            PortConfig::new_insecure_only("127.0.0.2".parse().unwrap(), 2003)
+        );
+        assert!(ret.is_mutated());
+        assert!(ret.is_okay());
+    }
+    #[test]
+    fn cli_args_okay_no_mut() {
+        let cfg_layout = load_yaml!("../cli.yml");
+        let cli_args = ["skyd", "--restore", "/some/restore/path"];
+        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let ret = cfgcli::parse_cli_args(matches);
+        assert!(!ret.is_mutated());
+        assert!(ret.is_okay());
+    }
+    #[test]
+    fn cli_args_fail() {
+        let cfg_layout = load_yaml!("../cli.yml");
+        let cli_args = ["skyd", "--port", "port2003"];
+        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let ret = cfgcli::parse_cli_args(matches);
+        assert!(ret.is_mutated());
+        assert!(!ret.is_okay());
+        assert_eq!(
+            ret.estack[0],
+            "Bad value for `--port`. Expected a 16-bit positive integer"
         );
     }
 }
@@ -702,7 +771,7 @@ mod try_from_config_source_impls {
             _mut_base_test_expected(
                 pass,
                 OptString::new_null(),
-                IS_PRESENT,
+                IS_ABSENT,
                 NO_MUTATION_FAILURE,
                 NOT_MUTATED,
             );

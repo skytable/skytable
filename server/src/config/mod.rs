@@ -251,7 +251,7 @@ impl Configset {
     /// Push an error onto the error stack
     fn epush(&mut self, field_key: StaticStr, expected: StaticStr) {
         self.estack
-            .push(format!("Bad value for `{field_key}`. Expected ${expected}",))
+            .push(format!("Bad value for `{field_key}`. Expected {expected}",))
     }
     /// Check if no errors have occurred
     pub fn is_okay(&self) -> bool {
@@ -323,6 +323,20 @@ impl Configset {
             self
         } else {
             other
+        }
+    }
+    /// Turns self into a Result that can be used by config::get_config()
+    pub fn into_result(self, restore_file: Option<String>) -> Result<ConfigType, ConfigError> {
+        if self.is_okay() {
+            // no errors, sweet
+            if self.is_mutated() {
+                let Self { cfg, wstack, .. } = self;
+                Ok(ConfigType::new_custom(cfg, restore_file, wstack))
+            } else {
+                Ok(ConfigType::new_default(restore_file))
+            }
+        } else {
+            Err(ConfigError::from(self.estack))
         }
     }
 }
@@ -539,14 +553,8 @@ pub fn get_config() -> Result<ConfigType, ConfigError> {
 
     // get config from file
     let cfg_from_file = if let Some(file) = matches.value_of("config") {
-        let file = match fs::read(file) {
-            Ok(f) => f,
-            Err(e) => return Err(ConfigError::OSError(e)),
-        };
-        let cfg_file: ConfigFile = match toml::from_slice(&file) {
-            Ok(cfg) => cfg,
-            Err(e) => return Err(ConfigError::ConfigFileParseError(e)),
-        };
+        let file = fs::read(file)?;
+        let cfg_file: ConfigFile = toml::from_slice(&file)?;
         Some(cfgfile::from_file(cfg_file))
     } else {
         None
@@ -569,16 +577,8 @@ pub fn get_config() -> Result<ConfigType, ConfigError> {
         // no configuration, use default
         Ok(ConfigType::new_default(restore_file))
     } else {
-        let final_config = if let Some(cfg) = cfg_from_file {
-            cfg
-        } else {
-            cfg_from_env.and_then(cfg_from_cli)
-        };
-        if final_config.is_okay() {
-            let Configset { cfg, wstack, .. } = final_config;
-            return Ok(ConfigType::new_custom(cfg, restore_file, wstack));
-        } else {
-            return Err(ConfigError::CfgError(final_config.estack));
-        }
+        cfg_from_file
+            .unwrap_or(cfg_from_env.and_then(cfg_from_cli))
+            .into_result(restore_file)
     }
 }

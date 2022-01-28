@@ -72,6 +72,18 @@ impl fmt::Display for FeedbackStack {
     }
 }
 
+impl ops::Deref for FeedbackStack {
+    type Target = Vec<String>;
+    fn deref(&self) -> &Self::Target {
+        &self.stack
+    }
+}
+impl ops::DerefMut for FeedbackStack {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.stack
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ErrorStack {
     feedback: FeedbackStack,
@@ -184,6 +196,24 @@ impl PartialEq for ConfigError {
             (Self::Conflict, Self::Conflict) => true,
             _ => false,
         }
+    }
+}
+
+impl From<std::io::Error> for ConfigError {
+    fn from(e: std::io::Error) -> Self {
+        Self::OSError(e)
+    }
+}
+
+impl From<toml::de::Error> for ConfigError {
+    fn from(e: toml::de::Error) -> Self {
+        Self::ConfigFileParseError(e)
+    }
+}
+
+impl From<ErrorStack> for ConfigError {
+    fn from(e: ErrorStack) -> Self {
+        Self::CfgError(e)
     }
 }
 
