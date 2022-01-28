@@ -57,7 +57,7 @@ pub enum UnsafeFlatElement {
 }
 
 impl UnsafeElement {
-    pub const fn is_any_array(&self) -> bool { 
+    pub const fn is_any_array(&self) -> bool {
         matches!(self, Self::AnyArray(_))
     }
 }

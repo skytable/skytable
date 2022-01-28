@@ -31,6 +31,7 @@ use core::str::FromStr;
 use std::env::VarError;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
+
 // internal modules
 mod cfgcli;
 mod cfgenv;
@@ -39,6 +40,7 @@ mod definitions;
 mod feedback;
 #[cfg(test)]
 mod tests;
+
 // internal imports
 use self::cfgfile::Config as ConfigFile;
 pub use self::definitions::*;
@@ -149,7 +151,7 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// Since we have conflicting trait implementations, we define a custom `Option<String>` type
 pub struct OptString {
     base: Option<String>,
@@ -157,6 +159,12 @@ pub struct OptString {
 
 impl OptString {
     pub const fn new_null() -> Self {
+        Self { base: None }
+    }
+}
+
+impl Default for OptString {
+    fn default() -> Self {
         Self { base: None }
     }
 }

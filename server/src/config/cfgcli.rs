@@ -29,12 +29,13 @@ use clap::ArgMatches;
 
 /// A flag. The flag is said to be set if `self.set` is true and unset if `self.set` is false. However,
 /// if the flag is set, the value of SWITCH determines what value it is set to
-struct Flag<const SWITCH: bool> {
+#[derive(Copy, Clone)]
+pub(super) struct Flag<const SWITCH: bool> {
     set: bool,
 }
 
 impl<const SWITCH: bool> Flag<SWITCH> {
-    fn new(set: bool) -> Self {
+    pub(super) fn new(set: bool) -> Self {
         Self { set }
     }
 }
