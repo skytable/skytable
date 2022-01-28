@@ -25,6 +25,7 @@
 */
 
 use super::{BGSave, Configset, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4};
+
 pub(super) use libsky::TResult;
 use std::fs;
 
@@ -313,8 +314,16 @@ fn get_toml_from_examples_dir(filename: &str) -> TResult<String> {
 mod cfg_file_tests {
     use super::get_toml_from_examples_dir;
     use crate::config::{
-        cfgfile, ConfigurationSet, PortConfig, SnapshotConfig, SnapshotPref, SslOpts,
+        cfgfile, BGSave, Configset, ConfigurationSet, PortConfig, SnapshotConfig, SnapshotPref,
+        SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
     };
+    use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
+    use std::net::{IpAddr, Ipv6Addr};
+
+    fn cfgset_from_toml_str(file: String) -> Result<Configset, toml::de::Error> {
+        let toml = toml::from_str(&file)?;
+        Ok(cfgfile::from_file(toml))
+    }
 
     #[test]
     fn config_file_okay() {
@@ -337,6 +346,158 @@ mod cfg_file_tests {
         );
         // check
         assert_eq!(cfg_from_file.cfg, expected);
+    }
+
+    #[test]
+    fn test_config_file_ok() {
+        let file = get_toml_from_examples_dir("skyd.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(cfg, ConfigurationSet::default());
+    }
+
+    #[test]
+    fn test_config_file_err() {
+        let file = get_toml_from_examples_dir("skyd.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file);
+        assert!(cfg.is_err());
+    }
+
+    #[test]
+    fn test_config_file_noart() {
+        let file = get_toml_from_examples_dir("secure-noart.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                noart: true,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_ipv6() {
+        let file = get_toml_from_examples_dir("ipv6.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                noart: false,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::new_insecure_only(
+                    IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
+                    DEFAULT_PORT
+                ),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_template() {
+        let file = get_toml_from_examples_dir("template.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet::new(
+                false,
+                BGSave::default(),
+                SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
+                PortConfig::new_secure_only(
+                    DEFAULT_IPV4,
+                    SslOpts::new(
+                        "/path/to/keyfile.pem".into(),
+                        "/path/to/chain.pem".into(),
+                        2004,
+                        Some("/path/to/cert/passphrase.txt".to_owned())
+                    )
+                ),
+                MAXIMUM_CONNECTION_LIMIT
+            )
+        );
+    }
+
+    #[test]
+    fn test_config_file_bad_bgsave_section() {
+        let file = get_toml_from_examples_dir("badcfg2.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file);
+        assert!(cfg.is_err());
+    }
+
+    #[test]
+    fn test_config_file_custom_bgsave() {
+        let file = get_toml_from_examples_dir("withcustombgsave.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                noart: false,
+                bgsave: BGSave::new(true, 600),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        );
+    }
+
+    #[test]
+    fn test_config_file_bgsave_enabled_only() {
+        /*
+         * This test demonstrates a case where the user just said that BGSAVE is enabled.
+         * In that case, we will default to the 120 second duration
+         */
+        let file = get_toml_from_examples_dir("bgsave-justenabled.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                noart: false,
+                bgsave: BGSave::default(),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        )
+    }
+
+    #[test]
+    fn test_config_file_bgsave_every_only() {
+        /*
+         * This test demonstrates a case where the user just gave the value for every
+         * In that case, it means BGSAVE is enabled and set to `every` seconds
+         */
+        let file = get_toml_from_examples_dir("bgsave-justevery.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                noart: false,
+                bgsave: BGSave::new(true, 600),
+                snapshot: SnapshotConfig::default(),
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        )
+    }
+
+    #[test]
+    fn test_config_file_snapshot() {
+        let file = get_toml_from_examples_dir("snapshot.toml").unwrap();
+        let cfg = cfgset_from_toml_str(file).unwrap();
+        assert_eq!(
+            cfg,
+            ConfigurationSet {
+                snapshot: SnapshotConfig::Enabled(SnapshotPref::new(3600, 4, true)),
+                bgsave: BGSave::default(),
+                noart: false,
+                ports: PortConfig::default(),
+                maxcon: MAXIMUM_CONNECTION_LIMIT
+            }
+        );
     }
 }
 

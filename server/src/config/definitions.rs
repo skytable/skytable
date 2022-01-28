@@ -77,6 +77,21 @@ pub struct ConfigurationSet {
 }
 
 impl ConfigurationSet {
+    pub const fn new(
+        noart: bool,
+        bgsave: BGSave,
+        snapshot: SnapshotConfig,
+        ports: PortConfig,
+        maxcon: usize,
+    ) -> Self {
+        Self {
+            noart,
+            bgsave,
+            snapshot,
+            ports,
+            maxcon,
+        }
+    }
     /// Create a default `ConfigurationSet` with the following setup defaults:
     /// - `host`: 127.0.0.1
     /// - `port` : 2003
@@ -85,13 +100,13 @@ impl ConfigurationSet {
     /// - `bgsave_duration` : 120
     /// - `ssl` : disabled
     pub const fn default() -> Self {
-        ConfigurationSet {
-            noart: false,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
-            maxcon: MAXIMUM_CONNECTION_LIMIT,
-        }
+        Self::new(
+            false,
+            BGSave::default(),
+            SnapshotConfig::default(),
+            PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
+            MAXIMUM_CONNECTION_LIMIT,
+        )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
     pub const fn is_artful(&self) -> bool {
