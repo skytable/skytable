@@ -42,6 +42,7 @@ mod cfgfile;
 mod cfg2;
 mod cfgcli2;
 mod cfgenv2;
+mod cfgfile2;
 mod eval;
 #[cfg(test)]
 mod tests;

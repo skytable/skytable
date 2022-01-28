@@ -124,16 +124,26 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
 }
 
 #[derive(Debug)]
+/// Since we have conflicting trait implementations, we define a custom `Option<String>` type
 pub struct OptString {
     base: Option<String>,
 }
 
 impl OptString {
+    pub const fn new(base: Option<String>) -> Self {
+        Self { base }
+    }
     pub const fn new_null() -> Self {
         Self { base: None }
     }
     pub fn finish(self) -> Option<String> {
         self.base
+    }
+}
+
+impl From<Option<String>> for OptString {
+    fn from(base: Option<String>) -> Self {
+        Self { base }
     }
 }
 
@@ -143,6 +153,24 @@ impl FromStr for OptString {
         Ok(Self {
             base: Some(st.to_string()),
         })
+    }
+}
+
+impl TryFromConfigSource<OptString> for OptString {
+    fn is_present(&self) -> bool {
+        self.base.is_some()
+    }
+    fn mutate_failed(self, target: &mut OptString, trip: &mut bool) -> bool {
+        if let Some(v) = self.base {
+            target.base = Some(v);
+            *trip = true;
+        }
+        false
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<OptString> {
+        self.base
+            .map(|v| ConfigSourceParseResult::Okay(OptString { base: Some(v) }))
+            .unwrap_or(ConfigSourceParseResult::Okay(OptString::new_null()))
     }
 }
 
@@ -179,9 +207,14 @@ impl Configset {
     pub fn new_cli() -> Self {
         Self::_new(Self::EMSG_CLI)
     }
-    /// Create a new configset for a config file
+    /// Create a new configset for config files
     pub fn new_file() -> Self {
-        Self::_new(Self::EMSG_FILE)
+        Self {
+            did_mutate: true,
+            cfg: ConfigurationSet::default(),
+            estack: ErrorStack::new(Self::EMSG_FILE),
+            wstack: WarningStack::new(Self::EMSG_FILE),
+        }
     }
     /// Mark the configset mutated
     fn mutated(&mut self) {
@@ -425,7 +458,7 @@ impl Configset {
                     "path to TLS cert passphrase",
                 );
 
-                let sslopts = SslOpts::new(key, cert, port, tls_pass.finish());
+                let sslopts = SslOpts::new(key, cert, port, tls_pass.base);
                 // now check if TLS only
                 if tls_only {
                     let host = self.cfg.ports.get_host();
