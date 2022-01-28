@@ -52,7 +52,7 @@ pub(super) fn get_env_config() -> Configset {
     fenv!(bgsave_settings, SKY_BGSAVE_ENABLED, SKY_BGSAVE_DURATION);
     // snapshot settings
     fenv!(
-        snasphot_settings,
+        snapshot_settings,
         SKY_SNAPSHOT_DURATION,
         SKY_SNAPSHOT_KEEP,
         SKY_SNAPSHOT_FAILSAFE

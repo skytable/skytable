@@ -324,7 +324,7 @@ impl Configset {
         } else {
             if has_custom_duration {
                 self.wstack.push(format!(
-                    "Specifying ${nduration_key} is useless when BGSAVE is disabled"
+                    "Specifying `${nduration_key}` is useless when BGSAVE is disabled"
                 ));
             }
             self.wstack
@@ -335,7 +335,7 @@ impl Configset {
 
 // snapshot settings
 impl Configset {
-    pub fn snasphot_settings(
+    pub fn snapshot_settings(
         &mut self,
         nevery: impl TryFromConfigSource<u64>,
         nevery_key: StaticStr,
@@ -353,7 +353,7 @@ impl Configset {
                     let mut _failsafe = true;
                     self.try_mutate(nfailsafe, &mut _failsafe, nfailsafe_key, "true/false");
                     self.wstack.push(format!(
-                        "Specifying ${nfailsafe_key} is usless when snapshots are disabled"
+                        "Specifying `${nfailsafe_key}` is usless when snapshots are disabled"
                     ));
                 }
             }
@@ -379,7 +379,7 @@ impl Configset {
                     SnapshotConfig::Enabled(SnapshotPref::new(every, atmost, failsafe));
             }
             (false, true) | (true, false) => self.estack.push(format!(
-                "To use snapshots, pass values for both ${nevery_key} and ${natmost_key}"
+                "To use snapshots, pass values for both `${nevery_key}` and `${natmost_key}`"
             )),
         }
     }
