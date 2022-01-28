@@ -27,7 +27,7 @@
 use super::cfg2::Configset;
 
 /// Returns the environment configuration
-pub(super) fn get_env_config() -> Configset {
+pub(super) fn parse_env_config() -> Configset {
     let mut defset = Configset::new_env();
     macro_rules! fenv {
         (

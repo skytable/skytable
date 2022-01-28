@@ -47,7 +47,7 @@ impl TryFromConfigSource<bool> for Flag {
             *trip = true;
             *target_value = true;
         }
-        true
+        false
     }
     fn try_parse(self) -> ConfigSourceParseResult<bool> {
         ConfigSourceParseResult::Okay(self.flag_set)
@@ -74,6 +74,12 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
         matches.value_of("port"),
         "--port"
     );
+    fcli!(
+        server_noart,
+        Flag::new(matches.is_present("noart")),
+        "--noart"
+    );
+    fcli!(server_maxcon, matches.value_of("maxcon"), "--maxcon");
     // bgsave settings
     fcli!(
         bgsave_settings,
