@@ -293,6 +293,27 @@ impl Configset {
             self.epush(field_key, expected)
         }
     }
+    /// This method can be used to chain configurations to ultimately return the first modified configuration
+    /// that occurs. For example: `cfg_file.and_then(cfg_cli).and_then(cfg_env)`; it will return the first
+    /// modified Configset
+    ///
+    /// ## Panics
+    /// This method will panic if both the provided sets are mutated. Hence, you need to check beforehand that
+    /// there is no conflict
+    pub fn and_then(self, other: Self) -> Self {
+        if self.is_mutated() {
+            if other.is_mutated() {
+                panic!(
+                    "Double mutation: {env_a} and {env_b}",
+                    env_a = self.estack.source(),
+                    env_b = other.estack.source()
+                );
+            }
+            self
+        } else {
+            other
+        }
+    }
 }
 
 // server settings

@@ -47,6 +47,9 @@ impl FeedbackStack {
             feedback_source,
         }
     }
+    pub fn source(&self) -> &'static str {
+        self.feedback_source
+    }
     pub fn push(&mut self, f: impl ToString) {
         self.stack.push(f.to_string())
     }
