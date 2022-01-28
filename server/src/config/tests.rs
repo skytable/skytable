@@ -24,10 +24,12 @@
  *
 */
 
-use super::{Configset, PortConfig, DEFAULT_IPV4};
+use super::{BGSave, Configset, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4};
 pub(super) use libsky::TResult;
 use std::fs;
 
+// server tests
+// TCP
 #[test]
 fn server_tcp() {
     let mut cfgset = Configset::new_env();
@@ -91,6 +93,197 @@ fn server_tcp_fail_both() {
     );
     assert!(cfgset.is_mutated());
     assert!(!cfgset.is_okay());
+}
+// noart
+#[test]
+fn server_noart_okay() {
+    let mut cfgset = Configset::new_env();
+    cfgset.server_noart(Some("true"), "SKY_SYSTEM_NOART");
+    assert!(!cfgset.cfg.is_artful());
+    assert!(cfgset.is_okay());
+    assert!(cfgset.is_mutated());
+}
+#[test]
+fn server_noart_fail() {
+    let mut cfgset = Configset::new_env();
+    cfgset.server_noart(Some("truee"), "SKY_SYSTEM_NOART");
+    assert!(cfgset.cfg.is_artful());
+    assert!(!cfgset.is_okay());
+    assert!(cfgset.is_mutated());
+}
+#[test]
+fn server_maxcon_okay() {
+    let mut cfgset = Configset::new_env();
+    cfgset.server_maxcon(Some("12345"), "SKY_SYSTEM_MAXCON");
+    assert!(cfgset.is_mutated());
+    assert!(cfgset.is_okay());
+    assert_eq!(cfgset.cfg.maxcon, 12345);
+}
+#[test]
+fn server_maxcon_fail() {
+    let mut cfgset = Configset::new_env();
+    cfgset.server_maxcon(Some("12345A"), "SKY_SYSTEM_MAXCON");
+    assert!(cfgset.is_mutated());
+    assert!(!cfgset.is_okay());
+    assert_eq!(cfgset.cfg.maxcon, 50000);
+}
+
+// bgsave settings
+#[test]
+fn bgsave_okay() {
+    let mut cfgset = Configset::new_env();
+    cfgset.bgsave_settings(
+        Some("true"),
+        "SKY_BGSAVE_ENABLED",
+        Some("128"),
+        "SKY_BGSAVE_DURATION",
+    );
+    assert!(cfgset.is_mutated());
+    assert!(cfgset.is_okay());
+    assert_eq!(cfgset.cfg.bgsave, BGSave::Enabled(128));
+}
+#[test]
+fn bgsave_fail() {
+    let mut cfgset = Configset::new_env();
+    cfgset.bgsave_settings(
+        Some("truee"),
+        "SKY_BGSAVE_ENABLED",
+        Some("128"),
+        "SKY_BGSAVE_DURATION",
+    );
+    assert!(cfgset.is_mutated());
+    assert!(!cfgset.is_okay());
+    assert_eq!(cfgset.cfg.bgsave, BGSave::Enabled(128));
+}
+
+// snapshot settings
+#[test]
+fn snapshot_okay() {
+    let mut cfgset = Configset::new_env();
+    cfgset.snapshot_settings(
+        Some("3600"),
+        "SKY_SNAPSHOT_EVERY",
+        Some("0"),
+        "SKY_SNAPSHOT_ATMOST",
+        Some("false"),
+        "SKY_SNAPSHOT_FAILSAFE",
+    );
+    assert!(cfgset.is_mutated());
+    assert!(cfgset.is_okay());
+    assert_eq!(
+        cfgset.cfg.snapshot,
+        SnapshotConfig::Enabled(SnapshotPref::new(3600, 0, false))
+    );
+}
+#[test]
+fn snapshot_fail() {
+    let mut cfgset = Configset::new_env();
+    cfgset.snapshot_settings(
+        Some("3600"),
+        "SKY_SNAPSHOT_EVERY",
+        Some("0"),
+        "SKY_SNAPSHOT_ATMOST",
+        Some("falsee"),
+        "SKY_SNAPSHOT_FAILSAFE",
+    );
+    assert!(cfgset.is_mutated());
+    assert!(!cfgset.is_okay());
+    assert_eq!(
+        cfgset.cfg.snapshot,
+        SnapshotConfig::Enabled(SnapshotPref::new(3600, 0, true))
+    );
+}
+#[test]
+fn snapshot_fail_with_missing_required_values() {
+    let mut cfgset = Configset::new_env();
+    cfgset.snapshot_settings(
+        Some("3600"),
+        "SKY_SNAPSHOT_EVERY",
+        None,
+        "SKY_SNAPSHOT_ATMOST",
+        None,
+        "SKY_SNAPSHOT_FAILSAFE",
+    );
+    assert!(cfgset.is_mutated());
+    assert!(!cfgset.is_okay());
+    assert_eq!(cfgset.cfg.snapshot, SnapshotConfig::Disabled);
+}
+
+// TLS settings
+#[test]
+fn tls_settings_okay() {
+    let mut cfg = Configset::new_env();
+    cfg.tls_settings(
+        Some("key.pem"),
+        "SKY_TLS_KEY",
+        Some("cert.pem"),
+        "SKY_TLS_CERT",
+        Some("2005"),
+        "SKY_TLS_PORT",
+        Some("false"),
+        "SKY_TLS_ONLY",
+        None,
+        "SKY_TLS_PASSIN",
+    );
+    assert!(cfg.is_mutated());
+    assert!(cfg.is_okay());
+    assert_eq!(cfg.cfg.ports, {
+        let mut pf = PortConfig::default();
+        pf.upgrade_to_tls(SslOpts::new(
+            "key.pem".to_owned(),
+            "cert.pem".to_owned(),
+            2005,
+            None,
+        ));
+        pf
+    });
+}
+#[test]
+fn tls_settings_fail() {
+    let mut cfg = Configset::new_env();
+    cfg.tls_settings(
+        Some("key.pem"),
+        "SKY_TLS_KEY",
+        Some("cert.pem"),
+        "SKY_TLS_CERT",
+        Some("A2005"),
+        "SKY_TLS_PORT",
+        Some("false"),
+        "SKY_TLS_ONLY",
+        None,
+        "SKY_TLS_PASSIN",
+    );
+    assert!(cfg.is_mutated());
+    assert!(!cfg.is_okay());
+    assert_eq!(cfg.cfg.ports, {
+        let mut pf = PortConfig::default();
+        pf.upgrade_to_tls(SslOpts::new(
+            "key.pem".to_owned(),
+            "cert.pem".to_owned(),
+            2004,
+            None,
+        ));
+        pf
+    });
+}
+#[test]
+fn tls_settings_fail_with_missing_required_values() {
+    let mut cfg = Configset::new_env();
+    cfg.tls_settings(
+        Some("key.pem"),
+        "SKY_TLS_KEY",
+        None,
+        "SKY_TLS_CERT",
+        Some("2005"),
+        "SKY_TLS_PORT",
+        Some("false"),
+        "SKY_TLS_ONLY",
+        None,
+        "SKY_TLS_PASSIN",
+    );
+    assert!(cfg.is_mutated());
+    assert!(!cfg.is_okay());
+    assert_eq!(cfg.cfg.ports, PortConfig::default());
 }
 
 /// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`

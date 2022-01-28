@@ -286,7 +286,10 @@ impl Configset {
                 needs_error = !validation_fn(&ok);
                 *target = ok;
             }
-            ConfigSourceParseResult::ParseFailure => needs_error = true,
+            ConfigSourceParseResult::ParseFailure => {
+                self.mutated();
+                needs_error = true
+            }
             ConfigSourceParseResult::Absent => {}
         }
         if needs_error {
