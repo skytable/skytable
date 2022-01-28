@@ -115,14 +115,15 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
     }
     fn mutate_failed(self, target_value: &mut T, trip: &mut bool) -> bool {
         match self {
-            Ok(s) => s
-                .parse()
-                .map(|v| {
-                    *trip = true;
-                    *target_value = v;
-                    false
-                })
-                .unwrap_or(true),
+            Ok(s) => {
+                *trip = true;
+                s.parse()
+                    .map(|v| {
+                        *target_value = v;
+                        false
+                    })
+                    .unwrap_or(true)
+            }
             Err(e) => {
                 if matches!(e, VarError::NotPresent) {
                     false
@@ -241,9 +242,8 @@ impl Configset {
     }
     /// Push an error onto the error stack
     fn epush(&mut self, field_key: StaticStr, expected: StaticStr) {
-        self.estack.push(format!(
-            "Bad value for `${field_key}`. Expected ${expected}",
-        ))
+        self.estack
+            .push(format!("Bad value for `{field_key}`. Expected ${expected}",))
     }
     /// Check if no errors have occurred
     pub fn is_okay(&self) -> bool {
@@ -378,7 +378,7 @@ impl Configset {
         } else {
             if has_custom_duration {
                 self.wstack.push(format!(
-                    "Specifying `${nduration_key}` is useless when BGSAVE is disabled"
+                    "Specifying `{nduration_key}` is useless when BGSAVE is disabled"
                 ));
             }
             self.wstack
@@ -407,7 +407,7 @@ impl Configset {
                     let mut _failsafe = DEFAULT_SNAPSHOT_FAILSAFE;
                     self.try_mutate(nfailsafe, &mut _failsafe, nfailsafe_key, "true/false");
                     self.wstack.push(format!(
-                        "Specifying `${nfailsafe_key}` is usless when snapshots are disabled"
+                        "Specifying `{nfailsafe_key}` is usless when snapshots are disabled"
                     ));
                 }
             }
@@ -432,9 +432,13 @@ impl Configset {
                 self.cfg.snapshot =
                     SnapshotConfig::Enabled(SnapshotPref::new(every, atmost, failsafe));
             }
-            (false, true) | (true, false) => self.estack.push(format!(
-                "To use snapshots, pass values for both `${nevery_key}` and `${natmost_key}`"
-            )),
+            (false, true) | (true, false) => {
+                // no changes, but still attempted to change
+                self.mutated();
+                self.estack.push(format!(
+                    "To use snapshots, pass values for both `{nevery_key}` and `{natmost_key}`"
+                ))
+            }
         }
     }
 }
@@ -490,22 +494,26 @@ impl Configset {
                 }
             }
             (true, false) | (false, true) => {
+                self.mutated();
                 self.estack.push(format!(
-                    "To use TLS, pass values for both `${nkey_key}` and `${ncert_key}`"
+                    "To use TLS, pass values for both `{nkey_key}` and `{ncert_key}`"
                 ));
             }
             (false, false) => {
                 if nport.is_present() {
+                    self.mutated();
                     self.wstack
-                        .push("Specifying `${nport_key}` is pointless when TLS is disabled");
+                        .push("Specifying `{nport_key}` is pointless when TLS is disabled");
                 }
                 if nonly.is_present() {
+                    self.mutated();
                     self.wstack
-                        .push("Specifying `${nonly_key}` is pointless when TLS is disabled");
+                        .push("Specifying `{nonly_key}` is pointless when TLS is disabled");
                 }
                 if npass.is_present() {
+                    self.mutated();
                     self.wstack
-                        .push("Specifying `${npass_key}` is pointless when TLS is disabled");
+                        .push("Specifying `{npass_key}` is pointless when TLS is disabled");
                 }
             }
         }

@@ -108,7 +108,7 @@ impl ops::DerefMut for ErrorStack {
 fn errorstack_fmt() {
     const EXPECTED: &str = "\
 Environment errors:
-    - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer
+    - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer\
 ";
     let mut estk = ErrorStack::new(EMSG_ENV);
     estk.push("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
@@ -128,7 +128,9 @@ impl WarningStack {
         }
     }
     pub fn print_warnings(&self) {
-        log::warn!("{}", self);
+        if !self.feedback.is_empty() {
+            log::warn!("{}", self);
+        }
     }
 }
 
@@ -156,7 +158,7 @@ fn warningstack_fmt() {
     const EXPECTED: &str = "\
 Environment warnings:
     - BGSAVE is disabled. You may lose data if the host crashes
-    - The setting for `maxcon` is too high
+    - The setting for `maxcon` is too high\
 ";
     let mut wstk = WarningStack::new(EMSG_ENV);
     wstk.push("BGSAVE is disabled. You may lose data if the host crashes");
