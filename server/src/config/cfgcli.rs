@@ -24,33 +24,38 @@
  *
 */
 
-use super::cfg2::{ConfigSourceParseResult, Configset, TryFromConfigSource};
+use super::{ConfigSourceParseResult, Configset, TryFromConfigSource};
 use clap::ArgMatches;
 
-#[derive(Clone, Copy)]
-struct Flag {
-    flag_set: bool,
+/// A flag. The flag is said to be set if `self.set` is true and unset if `self.set` is false. However,
+/// if the flag is set, the value of SWITCH determines what value it is set to
+struct Flag<const SWITCH: bool> {
+    set: bool,
 }
 
-impl Flag {
-    const fn new(flag_set: bool) -> Self {
-        Self { flag_set }
+impl<const SWITCH: bool> Flag<SWITCH> {
+    fn new(set: bool) -> Self {
+        Self { set }
     }
 }
 
-impl TryFromConfigSource<bool> for Flag {
+impl<const SWITCH: bool> TryFromConfigSource<bool> for Flag<SWITCH> {
     fn is_present(&self) -> bool {
-        self.flag_set
+        self.set
     }
-    fn mutate_failed(self, target_value: &mut bool, trip: &mut bool) -> bool {
-        if self.is_present() {
+    fn mutate_failed(self, target: &mut bool, trip: &mut bool) -> bool {
+        if self.set {
             *trip = true;
-            *target_value = true;
+            *target = SWITCH;
         }
         false
     }
     fn try_parse(self) -> ConfigSourceParseResult<bool> {
-        ConfigSourceParseResult::Okay(self.flag_set)
+        if self.set {
+            ConfigSourceParseResult::Okay(SWITCH)
+        } else {
+            ConfigSourceParseResult::Absent
+        }
     }
 }
 
@@ -76,14 +81,14 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
     );
     fcli!(
         server_noart,
-        Flag::new(matches.is_present("noart")),
+        Flag::<true>::new(matches.is_present("noart")),
         "--noart"
     );
     fcli!(server_maxcon, matches.value_of("maxcon"), "--maxcon");
     // bgsave settings
     fcli!(
         bgsave_settings,
-        Flag::new(!matches.is_present("nosave")),
+        Flag::<false>::new(matches.is_present("nosave")),
         "--nosave",
         matches.value_of("saveduration"),
         "--saveduration"
@@ -107,7 +112,7 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
         "--sslchain",
         matches.value_of("sslport"),
         "--sslport",
-        Flag::new(matches.is_present("sslonly")),
+        Flag::<true>::new(matches.is_present("sslonly")),
         "--sslonly",
         matches.value_of("tlspass"),
         "--tlspassin"

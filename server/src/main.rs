@@ -46,8 +46,6 @@ use std::thread;
 use std::time;
 #[macro_use]
 mod util;
-#[macro_use]
-extern crate libsky;
 mod actions;
 mod admin;
 mod arbiter;
@@ -169,28 +167,28 @@ use self::config::{BGSave, PortConfig, SnapshotConfig};
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
 fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>, usize) {
-    let cfg = config::get_config_file_or_return_cfg();
-    let binding_and_cfg = match cfg {
-        Ok(config::ConfigType::Custom(cfg, file)) => {
+    match config::get_config() {
+        Ok(cfg) => {
             if cfg.is_artful() {
                 println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
             } else {
                 println!("Skytable v{} | {}", VERSION, URL);
             }
-            log::info!("Using settings from supplied configuration");
-            (cfg.ports, cfg.bgsave, cfg.snapshot, file, cfg.maxcon)
-        }
-        Ok(config::ConfigType::Def(cfg, file)) => {
-            println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
-            log::warn!("No configuration file supplied. Using default settings");
-            (cfg.ports, cfg.bgsave, cfg.snapshot, file, cfg.maxcon)
+            if cfg.is_custom() {
+                log::info!("Using settings from supplied configuration");
+            } else {
+                log::warn!("No configuration file supplied. Using default settings");
+            }
+            // print warnings if any
+            cfg.print_warnings();
+            let (cfg, restore) = cfg.finish();
+            (cfg.ports, cfg.bgsave, cfg.snapshot, restore, cfg.maxcon)
         }
         Err(e) => {
             log::error!("{}", e);
             std::process::exit(0x01);
         }
-    };
-    binding_and_cfg
+    }
 }
 
 /// On startup, we attempt to check if a `.sky_pid` file exists. If it does, then

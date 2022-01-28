@@ -1,5 +1,5 @@
 /*
- * Created on Tue Sep 01 2020
+ * Created on Thu Jan 27 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,544 +24,542 @@
  *
 */
 
-//! This module provides tools to handle configuration files and settings
-
-use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
-use clap::ArgMatches;
+// external imports
 use clap::{load_yaml, App};
-use serde::Deserialize;
+// std imports
+use core::str::FromStr;
+use std::env::VarError;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
-// modules
-#[macro_use]
-mod macros;
+// internal modules
+mod cfgcli;
 mod cfgenv;
-mod cfgerr;
 mod cfgfile;
-// TODO: Upgrade to use these modules
-mod cfg2;
-mod cfgcli2;
-mod cfgenv2;
-mod cfgfile2;
-mod eval;
+mod definitions;
+mod feedback;
 #[cfg(test)]
 mod tests;
-// self imports
-use self::cfgerr::{ConfigError, ERR_CONFLICT};
+// internal imports
+use self::cfgfile::Config as ConfigFile;
+pub use self::definitions::*;
+use self::feedback::{ConfigError, ErrorStack, WarningStack};
+use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 
+// server defaults
 const DEFAULT_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-const DEFAULT_SSL_PORT: u16 = 2004;
 const DEFAULT_PORT: u16 = 2003;
+// bgsave defaults
+const DEFAULT_BGSAVE_DURATION: u64 = 120;
+// snapshot defaults
+const DEFAULT_SNAPSHOT_FAILSAFE: bool = true;
+// TLS defaults
+const DEFAULT_SSL_PORT: u16 = 2004;
 
-/// The BGSAVE configuration
-///
-/// If BGSAVE is enabled, then the duration (corresponding to `every`) is wrapped in the `Enabled`
-/// variant. Otherwise, the `Disabled` variant is to be used
-#[derive(PartialEq, Debug)]
-pub enum BGSave {
-    Enabled(u64),
-    Disabled,
-}
+type StaticStr = &'static str;
 
-impl BGSave {
-    /// Create a new BGSAVE configuration with all the fields
-    pub const fn new(enabled: bool, every: u64) -> Self {
-        if enabled {
-            BGSave::Enabled(every)
-        } else {
-            BGSave::Disabled
-        }
-    }
-    /// The default BGSAVE configuration
-    ///
-    /// Defaults:
-    /// - `enabled`: true
-    /// - `every`: 120
-    pub const fn default() -> Self {
-        BGSave::new(true, 120)
-    }
-    /// If `self` is a `Disabled` variant, then BGSAVE has been disabled by the user
-    pub const fn is_disabled(&self) -> bool {
-        matches!(self, BGSave::Disabled)
-    }
-}
-
-/// Port configuration
-///
-/// This enumeration determines whether the ports are:
-/// - `Multi`: This means that the database server will be listening to both
-/// SSL **and** non-SSL requests
-/// - `SecureOnly` : This means that the database server will only accept SSL requests
-/// and will not even activate the non-SSL socket
-/// - `InsecureOnly` : This indicates that the server would only accept non-SSL connections
-/// and will not even activate the SSL socket
-#[derive(Debug, PartialEq)]
-pub enum PortConfig {
-    SecureOnly {
-        host: IpAddr,
-        ssl: SslOpts,
-    },
-    Multi {
-        host: IpAddr,
-        port: u16,
-        ssl: SslOpts,
-    },
-    InsecureOnly {
-        host: IpAddr,
-        port: u16,
-    },
-}
-
-#[cfg(test)]
-impl PortConfig {
-    pub const fn default() -> PortConfig {
-        PortConfig::InsecureOnly {
-            host: DEFAULT_IPV4,
-            port: DEFAULT_PORT,
-        }
-    }
-}
-
-impl PortConfig {
-    pub const fn new_secure_only(host: IpAddr, ssl: SslOpts) -> Self {
-        PortConfig::SecureOnly { host, ssl }
-    }
-    pub const fn new_insecure_only(host: IpAddr, port: u16) -> Self {
-        PortConfig::InsecureOnly { host, port }
-    }
-    pub const fn new_multi(host: IpAddr, port: u16, ssl: SslOpts) -> Self {
-        PortConfig::Multi { host, port, ssl }
-    }
-    pub fn get_host(&self) -> IpAddr {
-        match self {
-            Self::InsecureOnly { host, .. }
-            | Self::SecureOnly { host, .. }
-            | Self::Multi { host, .. } => *host,
-        }
-    }
-    pub fn upgrade_to_tls(&mut self, ssl: SslOpts) {
-        match self {
-            Self::InsecureOnly { host, port } => {
-                *self = Self::Multi {
-                    host: *host,
-                    port: *port,
-                    ssl,
-                }
-            }
-            Self::SecureOnly { .. } | Self::Multi { .. } => {
-                panic!("Port config is already upgraded to TLS")
-            }
-        }
-    }
-}
-
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct SslOpts {
-    pub key: String,
-    pub chain: String,
-    pub port: u16,
-    pub passfile: Option<String>,
-}
-
-impl SslOpts {
-    pub const fn new(key: String, chain: String, port: u16, passfile: Option<String>) -> Self {
-        SslOpts {
-            key,
-            chain,
-            port,
-            passfile,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-/// The snapshot configuration
-///
-pub struct SnapshotPref {
-    /// Capture a snapshot `every` seconds
-    pub every: u64,
-    /// The maximum numeber of snapshots to be kept
-    pub atmost: usize,
-    /// Lock writes if snapshotting fails
-    pub poison: bool,
-}
-
-impl SnapshotPref {
-    /// Create a new a new `SnapshotPref` instance
-    pub const fn new(every: u64, atmost: usize, poison: bool) -> Self {
-        SnapshotPref {
-            every,
-            atmost,
-            poison,
-        }
-    }
-    /// Returns `every,almost` as a tuple for pattern matching
-    pub const fn decompose(self) -> (u64, usize, bool) {
-        (self.every, self.atmost, self.poison)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-/// Snapshotting configuration
-///
-/// The variant `Enabled` directly carries a `ConfigKeySnapshot` object that
-/// is parsed from the configuration file, The variant `Disabled` is a ZST, and doesn't
-/// hold any data
-pub enum SnapshotConfig {
-    /// Snapshotting is enabled: this variant wraps around a `SnapshotPref`
-    /// object
-    Enabled(SnapshotPref),
-    /// Snapshotting is disabled
-    Disabled,
-}
-
-impl SnapshotConfig {
-    /// Snapshots are disabled by default, so `SnapshotConfig::Disabled` is the
-    /// default configuration
-    pub const fn default() -> Self {
-        SnapshotConfig::Disabled
-    }
-}
-
-/// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
-/// to a `TcpListener` and show the corresponding terminal output for the given
-/// configuration
-#[derive(Debug, PartialEq)]
-pub struct ConfigurationSet {
-    /// If `noart` is set to true, no terminal artwork should be displayed
-    noart: bool,
-    /// The BGSAVE configuration
-    pub bgsave: BGSave,
-    /// The snapshot configuration
-    pub snapshot: SnapshotConfig,
-    /// Port configuration
-    pub ports: PortConfig,
-    /// The maximum number of connections
-    pub maxcon: usize,
-}
-
-impl ConfigurationSet {
-    /// Create a new `ConfigurationSet` from a given file in `location`
-    pub fn new_from_file(location: String) -> Result<Self, ConfigError> {
-        let file = fs::read_to_string(location)?;
-        let r = toml::from_str(&file).map(ConfigurationSet::from_config)?;
-        Ok(r)
-    }
-    /// Create a `ConfigurationSet` instance from a `Config` object, which is a parsed
-    /// TOML file (represented as an object)
-    fn from_config(cfg_info: cfgfile::Config) -> Self {
-        let mut cfg = Self::default();
-        set_if_exists!(cfg_info.server.noart, cfg.noart);
-        if let Some(bgsave) = cfg_info.bgsave {
-            let bgsave_ret = match (bgsave.enabled, bgsave.every) {
-                // TODO: Show a warning that there are unused keys
-                (Some(enabled), Some(every)) => BGSave::new(enabled, every),
-                (Some(enabled), None) => BGSave::new(enabled, 120),
-                (None, Some(every)) => BGSave::new(true, every),
-                (None, None) => BGSave::default(),
-            };
-            cfg.bgsave = bgsave_ret;
-        }
-        if let Some(snapshot) = cfg_info.snapshot {
-            cfg.snapshot = SnapshotConfig::Enabled(SnapshotPref::new(
-                snapshot.every,
-                snapshot.atmost,
-                option_unwrap_or!(snapshot.failsafe, true),
-            ));
-        }
-        if let Some(sslopts) = cfg_info.ssl {
-            let portcfg = if sslopts.only.unwrap_or_default() {
-                PortConfig::SecureOnly {
-                    ssl: SslOpts {
-                        key: sslopts.key,
-                        chain: sslopts.chain,
-                        port: sslopts.port,
-                        passfile: sslopts.passin,
-                    },
-                    host: cfg_info.server.host,
-                }
-            } else {
-                PortConfig::Multi {
-                    ssl: SslOpts {
-                        key: sslopts.key,
-                        chain: sslopts.chain,
-                        port: sslopts.port,
-                        passfile: sslopts.passin,
-                    },
-                    host: cfg_info.server.host,
-                    port: cfg_info.server.port,
-                }
-            };
-            cfg.ports = portcfg;
-        } else {
-            // make sure we check for portcfg for non-TLS connections
-            cfg.ports = PortConfig::new_insecure_only(cfg_info.server.host, cfg_info.server.port);
-        }
-        set_if_exists!(cfg_info.server.maxclient, cfg.maxcon);
-        cfg
-    }
-    #[cfg(test)]
-    /// Create a new `ConfigurationSet` from a `TOML` string
-    pub fn new_from_toml_str(tomlstr: String) -> tests::TResult<Self> {
-        Ok(ConfigurationSet::from_config(toml::from_str(&tomlstr)?))
-    }
-    #[cfg(test)]
-    /// Create a new `ConfigurationSet` with all the fields
-    pub const fn new(
-        noart: bool,
-        bgsave: BGSave,
-        snapshot: SnapshotConfig,
-        ports: PortConfig,
-        maxcon: usize,
-    ) -> Self {
-        ConfigurationSet {
-            noart,
-            bgsave,
-            snapshot,
-            ports,
-            maxcon,
-        }
-    }
-    /// Create a default `ConfigurationSet` with the following setup defaults:
-    /// - `host`: 127.0.0.1
-    /// - `port` : 2003
-    /// - `noart` : false
-    /// - `bgsave_enabled` : true
-    /// - `bgsave_duration` : 120
-    /// - `ssl` : disabled
-    pub const fn default() -> Self {
-        ConfigurationSet {
-            noart: false,
-            bgsave: BGSave::default(),
-            snapshot: SnapshotConfig::default(),
-            ports: PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
-            maxcon: MAXIMUM_CONNECTION_LIMIT,
-        }
-    }
-    /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
-    pub const fn is_artful(&self) -> bool {
-        !self.noart
-    }
-}
-
-/// The type of configuration:
-/// - We either used a custom configuration file given to us by the user (`Custom`) OR
-/// - We used the default configuration (`Def`)
-///
-/// The second field in the tuple is for the restore file, if there was any
 #[derive(Debug)]
-pub enum ConfigType {
-    Def(ConfigurationSet, Option<String>),
-    Custom(ConfigurationSet, Option<String>),
+/// An enum representing the outcome of a parse operation for a specific configuration item from a
+/// specific configuration source
+pub enum ConfigSourceParseResult<T> {
+    Okay(T),
+    Absent,
+    ParseFailure,
 }
 
-/// This function returns a  `ConfigType<ConfigurationSet>`
-///
-/// This parses a configuration file if it is supplied as a command line argument
-/// or it returns the default configuration. **If** the configuration file
-/// contains an error, then this returns it as an `Err` variant
-pub fn get_config_file_or_return_cfg() -> Result<ConfigType, ConfigError> {
+/// A trait for configuration sources. Any type implementing this trait is considered to be a valid
+/// source for configuration
+pub trait TryFromConfigSource<T: Sized>: Sized {
+    /// Check if the value is present
+    fn is_present(&self) -> bool;
+    /// Attempt to mutate the value if present. If any error occurs
+    /// while parsing the value, return true. Else return false if all went well.
+    /// Here:
+    /// - `target_value`: is a mutable reference to the target var
+    /// - `trip`: is a mutable ref to a bool that will be set to true if a value is present
+    /// (whether parseable or not)
+    fn mutate_failed(self, target_value: &mut T, trip: &mut bool) -> bool;
+    /// Attempt to parse the value into the target type
+    fn try_parse(self) -> ConfigSourceParseResult<T>;
+}
+
+impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Option<&'a str> {
+    fn is_present(&self) -> bool {
+        self.is_some()
+    }
+    fn mutate_failed(self, target_value: &mut T, trip: &mut bool) -> bool {
+        self.map(|slf| {
+            *trip = true;
+            match slf.parse() {
+                Ok(p) => {
+                    *target_value = p;
+                    false
+                }
+                Err(_) => true,
+            }
+        })
+        .unwrap_or(false)
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<T> {
+        self.map(|s| {
+            s.parse()
+                .map(|ret| ConfigSourceParseResult::Okay(ret))
+                .unwrap_or(ConfigSourceParseResult::ParseFailure)
+        })
+        .unwrap_or(ConfigSourceParseResult::Absent)
+    }
+}
+
+impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
+    fn is_present(&self) -> bool {
+        !matches!(self, Err(VarError::NotPresent))
+    }
+    fn mutate_failed(self, target_value: &mut T, trip: &mut bool) -> bool {
+        match self {
+            Ok(s) => s
+                .parse()
+                .map(|v| {
+                    *trip = true;
+                    *target_value = v;
+                    false
+                })
+                .unwrap_or(true),
+            Err(e) => {
+                if matches!(e, VarError::NotPresent) {
+                    false
+                } else {
+                    // yes, we got the var but failed to parse it into unicode; so trip
+                    *trip = true;
+                    true
+                }
+            }
+        }
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<T> {
+        match self {
+            Ok(s) => s
+                .parse()
+                .map(|v| ConfigSourceParseResult::Okay(v))
+                .unwrap_or(ConfigSourceParseResult::ParseFailure),
+            Err(e) => match e {
+                VarError::NotPresent => ConfigSourceParseResult::Absent,
+                VarError::NotUnicode(_) => ConfigSourceParseResult::ParseFailure,
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Since we have conflicting trait implementations, we define a custom `Option<String>` type
+pub struct OptString {
+    base: Option<String>,
+}
+
+impl OptString {
+    pub const fn new_null() -> Self {
+        Self { base: None }
+    }
+}
+
+impl From<Option<String>> for OptString {
+    fn from(base: Option<String>) -> Self {
+        Self { base }
+    }
+}
+
+impl FromStr for OptString {
+    type Err = ();
+    fn from_str(st: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            base: Some(st.to_string()),
+        })
+    }
+}
+
+impl TryFromConfigSource<OptString> for OptString {
+    fn is_present(&self) -> bool {
+        self.base.is_some()
+    }
+    fn mutate_failed(self, target: &mut OptString, trip: &mut bool) -> bool {
+        if let Some(v) = self.base {
+            target.base = Some(v);
+            *trip = true;
+        }
+        false
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<OptString> {
+        self.base
+            .map(|v| ConfigSourceParseResult::Okay(OptString { base: Some(v) }))
+            .unwrap_or(ConfigSourceParseResult::Okay(OptString::new_null()))
+    }
+}
+
+#[derive(Debug)]
+/// A high-level configuration set that automatically handles errors, warnings and provides a convenient [`Result`]
+/// type that can be used
+pub struct Configset {
+    did_mutate: bool,
+    cfg: ConfigurationSet,
+    estack: ErrorStack,
+    wstack: WarningStack,
+}
+
+impl Configset {
+    const EMSG_ENV: StaticStr = "Environment";
+    const EMSG_CLI: StaticStr = "CLI arguments";
+    const EMSG_FILE: StaticStr = "Configuration file";
+
+    /// Internal ctor for a given feedback source. We do not want to expose this to avoid
+    /// erroneous feedback source names
+    fn _new(feedback_source: StaticStr) -> Self {
+        Self {
+            did_mutate: false,
+            cfg: ConfigurationSet::default(),
+            estack: ErrorStack::new(feedback_source),
+            wstack: WarningStack::new(feedback_source),
+        }
+    }
+    /// Create a new configset for environment variables
+    pub fn new_env() -> Self {
+        Self::_new(Self::EMSG_ENV)
+    }
+    /// Create a new configset for CLI args
+    pub fn new_cli() -> Self {
+        Self::_new(Self::EMSG_CLI)
+    }
+    /// Create a new configset for config files
+    pub fn new_file() -> Self {
+        Self {
+            did_mutate: true,
+            cfg: ConfigurationSet::default(),
+            estack: ErrorStack::new(Self::EMSG_FILE),
+            wstack: WarningStack::new(Self::EMSG_FILE),
+        }
+    }
+    /// Mark the configset mutated
+    fn mutated(&mut self) {
+        self.did_mutate = true;
+    }
+    /// Push an error onto the error stack
+    fn epush(&mut self, field_key: StaticStr, expected: StaticStr) {
+        self.estack.push(format!(
+            "Bad value for `${field_key}`. Expected ${expected}",
+        ))
+    }
+    /// Check if no errors have occurred
+    pub fn is_okay(&self) -> bool {
+        self.estack.is_empty()
+    }
+    /// Check if the configset was mutated
+    pub fn is_mutated(&self) -> bool {
+        self.did_mutate
+    }
+    /// Attempt to mutate with a target `TryFromConfigSource` type, and push in any error that occurs
+    /// using the given diagnostic info
+    fn try_mutate<T>(
+        &mut self,
+        new: impl TryFromConfigSource<T>,
+        target: &mut T,
+        field_key: StaticStr,
+        expected: StaticStr,
+    ) {
+        if new.mutate_failed(target, &mut self.did_mutate) {
+            self.epush(field_key, expected)
+        }
+    }
+    /// Attempt to mutate with a target `TryFromConfigSource` type, and push in any error that occurs
+    /// using the given diagnostic info while checking the correctly parsed type using the provided validation
+    /// closure for any additional validation check that goes beyond type correctness
+    fn try_mutate_with_condcheck<T, F>(
+        &mut self,
+        new: impl TryFromConfigSource<T>,
+        target: &mut T,
+        field_key: StaticStr,
+        expected: StaticStr,
+        validation_fn: F,
+    ) where
+        F: Fn(&T) -> bool,
+    {
+        let mut needs_error = false;
+        match new.try_parse() {
+            ConfigSourceParseResult::Okay(ok) => {
+                self.mutated();
+                needs_error = !validation_fn(&ok);
+                *target = ok;
+            }
+            ConfigSourceParseResult::ParseFailure => needs_error = true,
+            ConfigSourceParseResult::Absent => {}
+        }
+        if needs_error {
+            self.epush(field_key, expected)
+        }
+    }
+    /// This method can be used to chain configurations to ultimately return the first modified configuration
+    /// that occurs. For example: `cfg_file.and_then(cfg_cli).and_then(cfg_env)`; it will return the first
+    /// modified Configset
+    ///
+    /// ## Panics
+    /// This method will panic if both the provided sets are mutated. Hence, you need to check beforehand that
+    /// there is no conflict
+    pub fn and_then(self, other: Self) -> Self {
+        if self.is_mutated() {
+            if other.is_mutated() {
+                panic!(
+                    "Double mutation: {env_a} and {env_b}",
+                    env_a = self.estack.source(),
+                    env_b = other.estack.source()
+                );
+            }
+            self
+        } else {
+            other
+        }
+    }
+}
+
+// server settings
+impl Configset {
+    pub fn server_tcp(
+        &mut self,
+        nhost: impl TryFromConfigSource<IpAddr>,
+        nhost_key: StaticStr,
+        nport: impl TryFromConfigSource<u16>,
+        nport_key: StaticStr,
+    ) {
+        let mut host = DEFAULT_IPV4;
+        let mut port = DEFAULT_PORT;
+        self.try_mutate(nhost, &mut host, nhost_key, "an IPv4/IPv6 address");
+        self.try_mutate(nport, &mut port, nport_key, "a 16-bit positive integer");
+        self.cfg.ports = PortConfig::new_insecure_only(host, port);
+    }
+    pub fn server_noart(&mut self, nart: impl TryFromConfigSource<bool>, nart_key: StaticStr) {
+        let mut noart = false;
+        self.try_mutate(nart, &mut noart, nart_key, "true/false");
+        self.cfg.noart = noart;
+    }
+    pub fn server_maxcon(
+        &mut self,
+        nmaxcon: impl TryFromConfigSource<usize>,
+        nmaxcon_key: StaticStr,
+    ) {
+        let mut maxcon = MAXIMUM_CONNECTION_LIMIT;
+        self.try_mutate_with_condcheck(
+            nmaxcon,
+            &mut maxcon,
+            nmaxcon_key,
+            "a positive integer greater than zero",
+            |max| *max > 0,
+        );
+        self.cfg.maxcon = maxcon;
+    }
+}
+
+// bgsave settings
+impl Configset {
+    pub fn bgsave_settings(
+        &mut self,
+        nenabled: impl TryFromConfigSource<bool>,
+        nenabled_key: StaticStr,
+        nduration: impl TryFromConfigSource<u64>,
+        nduration_key: StaticStr,
+    ) {
+        let mut enabled = true;
+        let mut duration = DEFAULT_BGSAVE_DURATION;
+        let has_custom_duration = nduration.is_present();
+        self.try_mutate(nenabled, &mut enabled, nenabled_key, "true/false");
+        self.try_mutate_with_condcheck(
+            nduration,
+            &mut duration,
+            nduration_key,
+            "a positive integer greater than zero",
+            |dur| *dur > 0,
+        );
+        if enabled {
+            self.cfg.bgsave = BGSave::Enabled(duration);
+        } else {
+            if has_custom_duration {
+                self.wstack.push(format!(
+                    "Specifying `${nduration_key}` is useless when BGSAVE is disabled"
+                ));
+            }
+            self.wstack
+                .push("BGSAVE is disabled. You may lose data if the host crashes");
+        }
+    }
+}
+
+// snapshot settings
+impl Configset {
+    pub fn snapshot_settings(
+        &mut self,
+        nevery: impl TryFromConfigSource<u64>,
+        nevery_key: StaticStr,
+        natmost: impl TryFromConfigSource<usize>,
+        natmost_key: StaticStr,
+        nfailsafe: impl TryFromConfigSource<bool>,
+        nfailsafe_key: StaticStr,
+    ) {
+        match (nevery.is_present(), natmost.is_present()) {
+            (false, false) => {
+                // noice, disabled
+                if nfailsafe.is_present() {
+                    // this mutation is pointless, but it is just for the sake of making sure
+                    // that the `failsafe` key has a proper boolean, no matter if it is pointless
+                    let mut _failsafe = DEFAULT_SNAPSHOT_FAILSAFE;
+                    self.try_mutate(nfailsafe, &mut _failsafe, nfailsafe_key, "true/false");
+                    self.wstack.push(format!(
+                        "Specifying `${nfailsafe_key}` is usless when snapshots are disabled"
+                    ));
+                }
+            }
+            (true, true) => {
+                let mut every = 0;
+                let mut atmost = 0;
+                let mut failsafe = DEFAULT_SNAPSHOT_FAILSAFE;
+                self.try_mutate_with_condcheck(
+                    nevery,
+                    &mut every,
+                    nevery_key,
+                    "an integer greater than 0",
+                    |dur| *dur > 0,
+                );
+                self.try_mutate(
+                    natmost,
+                    &mut atmost,
+                    natmost_key,
+                    "a positive integer. 0 indicates that all snapshots will be kept",
+                );
+                self.try_mutate(nfailsafe, &mut failsafe, nfailsafe_key, "true/false");
+                self.cfg.snapshot =
+                    SnapshotConfig::Enabled(SnapshotPref::new(every, atmost, failsafe));
+            }
+            (false, true) | (true, false) => self.estack.push(format!(
+                "To use snapshots, pass values for both `${nevery_key}` and `${natmost_key}`"
+            )),
+        }
+    }
+}
+
+// TLS settings
+impl Configset {
+    pub fn tls_settings(
+        &mut self,
+        nkey: impl TryFromConfigSource<String>,
+        nkey_key: StaticStr,
+        ncert: impl TryFromConfigSource<String>,
+        ncert_key: StaticStr,
+        nport: impl TryFromConfigSource<u16>,
+        nport_key: StaticStr,
+        nonly: impl TryFromConfigSource<bool>,
+        nonly_key: StaticStr,
+        npass: impl TryFromConfigSource<OptString>,
+        npass_key: StaticStr,
+    ) {
+        match (nkey.is_present(), ncert.is_present()) {
+            (true, true) => {
+                // get the cert details
+                let mut key = String::new();
+                let mut cert = String::new();
+                self.try_mutate(nkey, &mut key, nkey_key, "path to private key file");
+                self.try_mutate(ncert, &mut cert, ncert_key, "path to TLS certificate file");
+
+                // now get port info
+                let mut port = DEFAULT_SSL_PORT;
+                self.try_mutate(nport, &mut port, nport_key, "a positive 16-bit integer");
+
+                // now check if TLS only
+                let mut tls_only = false;
+                self.try_mutate(nonly, &mut tls_only, nonly_key, "true/false");
+
+                // check if we have a TLS cert
+                let mut tls_pass = OptString::new_null();
+                self.try_mutate(
+                    npass,
+                    &mut tls_pass,
+                    npass_key,
+                    "path to TLS cert passphrase",
+                );
+
+                let sslopts = SslOpts::new(key, cert, port, tls_pass.base);
+                // now check if TLS only
+                if tls_only {
+                    let host = self.cfg.ports.get_host();
+                    self.cfg.ports = PortConfig::new_secure_only(host, sslopts)
+                } else {
+                    // multi. go and upgrade existing
+                    self.cfg.ports.upgrade_to_tls(sslopts);
+                }
+            }
+            (true, false) | (false, true) => {
+                self.estack.push(format!(
+                    "To use TLS, pass values for both `${nkey_key}` and `${ncert_key}`"
+                ));
+            }
+            (false, false) => {
+                if nport.is_present() {
+                    self.wstack
+                        .push("Specifying `${nport_key}` is pointless when TLS is disabled");
+                }
+                if nonly.is_present() {
+                    self.wstack
+                        .push("Specifying `${nonly_key}` is pointless when TLS is disabled");
+                }
+                if npass.is_present() {
+                    self.wstack
+                        .push("Specifying `${npass_key}` is pointless when TLS is disabled");
+                }
+            }
+        }
+    }
+}
+
+pub fn get_config() -> Result<ConfigType, ConfigError> {
+    // initialize clap because that will let us check for CLI/file configs
     let cfg_layout = load_yaml!("../cli.yml");
     let matches = App::from_yaml(cfg_layout).get_matches();
-    self::get_config_file_or_return_cfg_from_matches(matches)
-}
+    let restore_file = matches.value_of("restore").map(|v| v.to_string());
 
-// this method simply allows us to simplify tests for conflicts
-fn get_config_file_or_return_cfg_from_matches(
-    matches: ArgMatches,
-) -> Result<ConfigType, ConfigError> {
-    let no_cli_args = matches.args.is_empty(); // check cli args
-    let env_args = cfgenv::get_env_config()?;
-    if no_cli_args && env_args.is_none() {
-        // that means we need to use the default config
-        return Ok(ConfigType::Def(ConfigurationSet::default(), None));
-    }
-
-    // Check if there is a config file
-    let filename = matches.value_of("config");
-    let restorefile = matches.value_of("restore").map(|v| v.to_string());
-    let cfg = if let Some(filename) = filename {
-        // so we have a config file; let's confirm that we don't have any other arguments
-        // either no restore file and len greater than 1; or restore file is some, and args greater
-        // than 2
-        let is_conflict = (restorefile.is_none()
-            && (matches.args.len() > 1 || matches.subcommand.is_some()))
-            || (restorefile.is_some() && (matches.args.len() > 2 || matches.subcommand.is_some()));
-        let is_conflict = is_conflict || env_args.is_some();
-        if is_conflict {
-            // nope, more args were passed; error
-            return Err(ConfigError::CfgError(ERR_CONFLICT));
-        }
-        ConfigurationSet::new_from_file(filename.to_owned())
-    } else {
-        if env_args.is_some() && !matches.args.is_empty() {
-            // so we have env args and some CLI args? that's a conflict
-            return Err(ConfigError::CfgError(ERR_CONFLICT));
-        }
-        if let Some(env_args) = env_args {
-            // we are sure that we just have env args
-            Ok(env_args)
-        } else {
-            // we are sure that we just have CLI args
-            parse_cli_args(matches)
-        }
-    }?;
-    // now validate
-    if cfg.bgsave.is_disabled() {
-        log::warn!("BGSAVE is disabled: If this system crashes unexpectedly, it may lead to the loss of data");
-    }
-    if let SnapshotConfig::Enabled(e) = &cfg.snapshot {
-        if e.every == 0 {
-            return Err(ConfigError::CfgError(
-                "The snapshot duration has to be greater than 0!",
-            ));
-        }
-    }
-    if let BGSave::Enabled(dur) = &cfg.bgsave {
-        if *dur == 0 {
-            return Err(ConfigError::CfgError(
-                "The BGSAVE duration has to be greater than 0!",
-            ));
-        }
-    }
-    Ok(ConfigType::Custom(cfg, restorefile))
-}
-
-fn parse_cli_args(matches: ArgMatches) -> Result<ConfigurationSet, ConfigError> {
-    let mut cfg = ConfigurationSet::default();
-    // Check flags
-    let sslonly = matches.is_present("sslonly");
-    let noart = matches.is_present("noart");
-    let nosave = matches.is_present("nosave");
-    // check options
-    let host = matches.value_of("host");
-    let port = matches.value_of("port");
-    let sslport = matches.value_of("sslport");
-    let custom_ssl_port = sslport.is_some();
-    let snapevery = matches.value_of("snapevery");
-    let snapkeep = matches.value_of("snapkeep");
-    let saveduration = matches.value_of("saveduration");
-    let sslkey = matches.value_of("sslkey");
-    let sslchain = matches.value_of("sslchain");
-    let maxcon = matches.value_of("maxcon");
-    let passfile = matches.value_of("tlspassin");
-
-    cfg.noart = noart;
-    let port: u16 = cli_parse_or_default_or_err!(
-        port,
-        2003,
-        "Invalid value for `--port`. Expected an unsigned 16-bit integer"
-    );
-    let host: IpAddr = cli_parse_or_default_or_err!(
-        host,
-        DEFAULT_IPV4,
-        "Invalid value for `--host`. Expected a valid IPv4 or IPv6 address"
-    );
-    let sslport: u16 = cli_parse_or_default_or_err!(
-        sslport,
-        DEFAULT_SSL_PORT,
-        "Invalid value for `--sslport`. Expected a valid unsigned 16-bit integer"
-    );
-    cli_setparse_or_err!(
-        cfg.maxcon,
-        maxcon,
-        "Invalid value for `--maxcon`. Expected a valid positive integer"
-    );
-    if nosave {
-        if saveduration.is_some() {
-            // If there is both `nosave` and `saveduration` - the arguments aren't logically correct!
-            // How would we run BGSAVE in a given `saveduration` if it is disabled? Return an error
-            ret_cli_err!("Invalid options for BGSAVE. Either supply `--nosave` or `--saveduration` or nothing");
-        }
-        // It is our responsibility to keep the user aware of bad settings, so we'll send a warning
-        log::warn!("BGSAVE is disabled. You might lose data if the host crashes");
-        cfg.bgsave = BGSave::Disabled;
-    } else if let Some(dur) = saveduration {
-        // A duration is specified for BGSAVE, so use it
-        cfg.bgsave = match dur.parse() {
-            Ok(duration) => BGSave::new(true, duration),
-            Err(_) => {
-                ret_cli_err!(
-                    "Invalid value for `--saveduration`. Expected an unsigned 64-bit integer"
-                )
-            }
+    // get config from file
+    let cfg_from_file = if let Some(file) = matches.value_of("config") {
+        let file = match fs::read(file) {
+            Ok(f) => f,
+            Err(e) => return Err(ConfigError::OSError(e)),
         };
-    }
-    // check snapshot configuration
-    let snapevery: Option<u64> = match snapevery {
-        Some(dur) => match dur.parse() {
-            Ok(dur) => Some(dur),
-            Err(_) => {
-                ret_cli_err!("Invalid value for `--snapevery`. Expected an unsigned 64-bit integer")
-            }
-        },
-        None => None,
-    };
-    let snapkeep: Option<usize> = match snapkeep {
-        Some(maxtop) => match maxtop.parse() {
-            Ok(maxtop) => Some(maxtop),
-            Err(_) => {
-                ret_cli_err!("Invalid value for `--snapkeep`. Expected an unsigned 64-bit integer")
-            }
-        },
-        None => None,
-    };
-    let failsafe = if let Ok(failsafe) = option_unwrap_or!(
-        matches
-            .value_of("stop-write-on-fail")
-            .map(|val| val.parse::<bool>()),
-        Ok(true)
-    ) {
-        failsafe
+        let cfg_file: ConfigFile = match toml::from_slice(&file) {
+            Ok(cfg) => cfg,
+            Err(e) => return Err(ConfigError::ConfigFileParseError(e)),
+        };
+        Some(cfgfile::from_file(cfg_file))
     } else {
-        ret_cli_err!("Please provide a boolean `true` or `false` value to --stop-write-on-fail");
+        None
     };
-    cfg.snapshot = match (snapevery, snapkeep) {
-        (Some(every), Some(keep)) => {
-            SnapshotConfig::Enabled(SnapshotPref::new(every, keep, failsafe))
+
+    // get config from CLI
+    let cfg_from_cli = cfgcli::parse_cli_args(matches);
+    // get config from env
+    let cfg_from_env = cfgenv::parse_env_config();
+    // calculate the number of config sources
+    let cfg_degree = cfg_from_cli.is_mutated() as u8
+        + cfg_from_env.is_mutated() as u8
+        + cfg_from_file.is_some() as u8;
+    // if degree is more than 1, there is a conflict
+    let has_conflict = cfg_degree > 1;
+    if has_conflict {
+        return Err(ConfigError::Conflict);
+    }
+    if cfg_degree == 0 {
+        // no configuration, use default
+        Ok(ConfigType::new_default(restore_file))
+    } else {
+        let final_config = if let Some(cfg) = cfg_from_file {
+            cfg
+        } else {
+            cfg_from_env.and_then(cfg_from_cli)
+        };
+        if final_config.is_okay() {
+            let Configset { cfg, wstack, .. } = final_config;
+            return Ok(ConfigType::new_custom(cfg, restore_file, wstack));
+        } else {
+            return Err(ConfigError::CfgError(final_config.estack));
         }
-        (None, None) => SnapshotConfig::Disabled,
-        _ => {
-            ret_cli_err!(
-                "No value supplied for `--snapevery`. When you supply `--snapkeep`, you also need to specify `--snapevery`"
-            )
-        }
-    };
-    // check port config
-    let portcfg = match (
-        sslkey.map(|val| val.to_owned()),
-        sslchain.map(|val| val.to_owned()),
-    ) {
-        (None, None) => {
-            if sslonly {
-                ret_cli_err!(
-                    "You mast pass values for both --sslkey and --sslchain to use the --sslonly flag"
-                );
-            } else {
-                if custom_ssl_port {
-                    log::warn!("Ignoring value for `--sslport` as TLS was not enabled");
-                }
-                PortConfig::new_insecure_only(host, port)
-            }
-        }
-        (Some(key), Some(chain)) => {
-            if sslonly {
-                PortConfig::new_secure_only(
-                    host,
-                    SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
-                )
-            } else {
-                PortConfig::new_multi(
-                    host,
-                    port,
-                    SslOpts::new(key, chain, sslport, passfile.map(|v| v.to_string())),
-                )
-            }
-        }
-        _ => {
-            ret_cli_err!("To use TLS, pass values for both --sslkey and --sslchain");
-        }
-    };
-    cfg.ports = portcfg;
-    Ok(cfg)
+    }
 }

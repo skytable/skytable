@@ -24,15 +24,17 @@
  *
 */
 
+// external imports
+use toml::de::Error as TomlError;
+// std imports
 use core::fmt;
 use core::ops;
 
+#[cfg(test)]
 const EMSG_ENV: &str = "Environment";
-const EMSG_FILE: &str = "Configuration file";
-const EMSG_CLI: &str = "Command line arguments";
 const TAB: &str = "    ";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct FeedbackStack {
     stack: Vec<String>,
     feedback_type: &'static str,
@@ -60,15 +62,17 @@ impl FeedbackStack {
 
 impl fmt::Display for FeedbackStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}:\n", self.feedback_source, self.feedback_type)?;
-        for err in self.stack.iter() {
-            writeln!(f, "{}- {}", TAB, err)?;
+        if !self.is_empty() {
+            write!(f, "{} {}:", self.feedback_source, self.feedback_type)?;
+            for err in self.stack.iter() {
+                write!(f, "\n{}- {}", TAB, err)?;
+            }
         }
         Ok(())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ErrorStack {
     feedback: FeedbackStack,
 }
@@ -112,7 +116,7 @@ Environment errors:
     assert_eq!(fmt, EXPECTED);
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct WarningStack {
     feedback: FeedbackStack,
 }
@@ -122,6 +126,9 @@ impl WarningStack {
         Self {
             feedback: FeedbackStack::new(warning_source, "warnings"),
         }
+    }
+    pub fn print_warnings(&self) {
+        log::warn!("{}", self);
     }
 }
 
@@ -156,4 +163,38 @@ Environment warnings:
     wstk.push("The setting for `maxcon` is too high");
     let fmt = format!("{}", wstk);
     assert_eq!(fmt, EXPECTED);
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    OSError(std::io::Error),
+    CfgError(ErrorStack),
+    ConfigFileParseError(TomlError),
+    Conflict,
+}
+
+impl PartialEq for ConfigError {
+    fn eq(&self, oth: &Self) -> bool {
+        match (self, oth) {
+            (Self::OSError(lhs), Self::OSError(rhs)) => lhs.to_string() == rhs.to_string(),
+            (Self::CfgError(lhs), Self::CfgError(rhs)) => lhs == rhs,
+            (Self::ConfigFileParseError(lhs), Self::ConfigFileParseError(rhs)) => lhs == rhs,
+            (Self::Conflict, Self::Conflict) => true,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ConfigFileParseError(e) => write!(f, "Configuration file parse failed: {}", e),
+            Self::OSError(e) => write!(f, "OS Error: {}", e),
+            Self::CfgError(e) => write!(f, "{}", e),
+            Self::Conflict => write!(
+                f,
+                "Conflict error: Either provide CLI args, environment variables or a config file for configuration"
+            ),
+        }
+    }
 }
