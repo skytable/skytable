@@ -262,9 +262,9 @@ Environment errors:
     #[test]
     fn warningstack_fmt() {
         const EXPECTED: &str = "\
-    Environment warnings:
-        - BGSAVE is disabled. You may lose data if the host crashes
-        - The setting for `maxcon` is too high\
+Environment warnings:
+    - BGSAVE is disabled. You may lose data if the host crashes
+    - The setting for `maxcon` is too high\
     ";
         let mut wstk = WarningStack::new(EMSG_ENV);
         wstk.push("BGSAVE is disabled. You may lose data if the host crashes");
