@@ -63,6 +63,14 @@ mod unix {
                 }
             }
         }
+        /// Returns the current limit
+        pub const fn current(&self) -> u64 {
+            self.cur
+        }
+        /// Returns the max limit
+        pub const fn max(&self) -> u64 {
+            self.max
+        }
     }
 
     #[test]

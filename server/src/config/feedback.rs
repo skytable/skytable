@@ -119,18 +119,6 @@ impl ops::DerefMut for ErrorStack {
     }
 }
 
-#[test]
-fn errorstack_fmt() {
-    const EXPECTED: &str = "\
-Environment errors:
-    - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer\
-";
-    let mut estk = ErrorStack::new(EMSG_ENV);
-    estk.push("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
-    let fmt = format!("{}", estk);
-    assert_eq!(fmt, EXPECTED);
-}
-
 #[derive(Debug, PartialEq)]
 pub struct WarningStack {
     feedback: FeedbackStack,
@@ -166,20 +154,6 @@ impl fmt::Display for WarningStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.feedback)
     }
-}
-
-#[test]
-fn warningstack_fmt() {
-    const EXPECTED: &str = "\
-Environment warnings:
-    - BGSAVE is disabled. You may lose data if the host crashes
-    - The setting for `maxcon` is too high\
-";
-    let mut wstk = WarningStack::new(EMSG_ENV);
-    wstk.push("BGSAVE is disabled. You may lose data if the host crashes");
-    wstk.push("The setting for `maxcon` is too high");
-    let fmt = format!("{}", wstk);
-    assert_eq!(fmt, EXPECTED);
 }
 
 #[derive(Debug)]
@@ -249,11 +223,18 @@ fn evaluate_prod_settings(cfg: Configset) -> Result<Configset, ConfigError> {
         estack.push("Either multi-socket (TCP and TLS) or TLS only must be enabled");
     }
     // now check maxcon
-    #[cfg(unix)]
-    if ResourceLimit::get()?.is_over_limit(cfg.cfg.maxcon) {
-        estack.push(
+    if cfg!(unix) {
+        let rlim = ResourceLimit::get()?;
+        if rlim.is_over_limit(cfg.cfg.maxcon) {
+            estack.push(
             "The value for maximum connections exceeds available resources to the server process",
-        );
+            );
+            estack.push(
+                format!(
+                "The current process is set to a resource limit of {current} and can be set to a maximum limit of {max} in the OS",
+                current=rlim.current(),max=rlim.max()
+            ));
+        }
     }
     if estack.is_empty() {
         Ok(cfg)
@@ -262,22 +243,52 @@ fn evaluate_prod_settings(cfg: Configset) -> Result<Configset, ConfigError> {
     }
 }
 
-#[test]
-fn prod_mode_error_fmt() {
-    let mut estack = ErrorStack::new(EMSG_PROD);
-    estack.push("BGSAVE must be enabled");
-    estack.push("Snapshots must be failsafe");
-    estack.push("Either multi-socket (TCP and TLS) or TLS-only mode must be enabled");
-    estack.push(
-        "The value for maximum connections exceeds available resources to the server process",
-    );
-    let e = ConfigError::ProdError(estack);
-    const EXPECTED: &str = "\
+#[cfg(test)]
+mod test {
+    use super::{ConfigError, ErrorStack, WarningStack, EMSG_ENV, EMSG_PROD};
+
+    #[test]
+    fn errorstack_fmt() {
+        const EXPECTED: &str = "\
+Environment errors:
+    - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer\
+";
+        let mut estk = ErrorStack::new(EMSG_ENV);
+        estk.push("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");
+        let fmt = format!("{}", estk);
+        assert_eq!(fmt, EXPECTED);
+    }
+
+    #[test]
+    fn warningstack_fmt() {
+        const EXPECTED: &str = "\
+    Environment warnings:
+        - BGSAVE is disabled. You may lose data if the host crashes
+        - The setting for `maxcon` is too high\
+    ";
+        let mut wstk = WarningStack::new(EMSG_ENV);
+        wstk.push("BGSAVE is disabled. You may lose data if the host crashes");
+        wstk.push("The setting for `maxcon` is too high");
+        let fmt = format!("{}", wstk);
+        assert_eq!(fmt, EXPECTED);
+    }
+    #[test]
+    fn prod_mode_error_fmt() {
+        let mut estack = ErrorStack::new(EMSG_PROD);
+        estack.push("BGSAVE must be enabled");
+        estack.push("Snapshots must be failsafe");
+        estack.push("Either multi-socket (TCP and TLS) or TLS-only mode must be enabled");
+        estack.push(
+            "The value for maximum connections exceeds available resources to the server process",
+        );
+        let e = ConfigError::ProdError(estack);
+        const EXPECTED: &str = "\
 You have invalid configuration for production mode. Production mode errors:
     - BGSAVE must be enabled
     - Snapshots must be failsafe
     - Either multi-socket (TCP and TLS) or TLS-only mode must be enabled
     - The value for maximum connections exceeds available resources to the server process\
 ";
-    assert_eq!(format!("{}", e), EXPECTED);
+        assert_eq!(format!("{}", e), EXPECTED);
+    }
 }
