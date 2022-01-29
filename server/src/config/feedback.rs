@@ -29,6 +29,7 @@ use toml::de::Error as TomlError;
 // std imports
 use core::fmt;
 use core::ops;
+use std::io::Error as IoError;
 
 #[cfg(test)]
 const EMSG_ENV: &str = "Environment";
@@ -181,7 +182,7 @@ Environment warnings:
 
 #[derive(Debug)]
 pub enum ConfigError {
-    OSError(std::io::Error),
+    OSError(IoError),
     CfgError(ErrorStack),
     ConfigFileParseError(TomlError),
     Conflict,
@@ -199,8 +200,8 @@ impl PartialEq for ConfigError {
     }
 }
 
-impl From<std::io::Error> for ConfigError {
-    fn from(e: std::io::Error) -> Self {
+impl From<IoError> for ConfigError {
+    fn from(e: IoError) -> Self {
         Self::OSError(e)
     }
 }
@@ -229,4 +230,29 @@ impl fmt::Display for ConfigError {
             ),
         }
     }
+}
+
+#[cfg(unix)]
+/// Returns the number of open files
+fn get_ulimit() -> Result<usize, IoError> {
+    use libc::rlimit;
+    use libc::RLIMIT_NOFILE;
+    unsafe {
+        let rlim = rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        let ret = libc::getrlimit(RLIMIT_NOFILE, &rlim as *const _ as *mut _);
+        if ret != 0 {
+            Err(IoError::last_os_error())
+        } else {
+            Ok(rlim.rlim_cur as usize)
+        }
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn test_ulimit() {
+    get_ulimit().unwrap();
 }
