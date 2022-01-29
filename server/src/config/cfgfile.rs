@@ -24,7 +24,7 @@
  *
 */
 
-use super::{ConfigSourceParseResult, Configset, OptString, TryFromConfigSource};
+use super::{ConfigSourceParseResult, Configset, Modeset, OptString, TryFromConfigSource};
 use serde::Deserialize;
 use std::net::IpAddr;
 
@@ -53,6 +53,8 @@ pub struct ConfigKeyServer {
     pub(super) noart: Option<bool>,
     /// The maximum number of clients
     pub(super) maxclient: Option<usize>,
+    /// The deployment mode
+    pub(super) mode: Option<Modeset>,
 }
 
 /// The BGSAVE section in the config file
@@ -170,6 +172,7 @@ pub fn from_file(file: ConfigFile) -> Configset {
     );
     set.server_maxcon(Optional::from(server.maxclient), "server.maxcon");
     set.server_noart(Optional::from(server.noart), "server.noart");
+    set.server_mode(Optional::from(server.mode), "server.mode");
     // bgsave settings
     if let Some(bgsave) = bgsave {
         let ConfigKeyBGSAVE { enabled, every } = bgsave;

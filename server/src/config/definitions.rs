@@ -24,10 +24,14 @@
  *
 */
 
-use super::feedback::WarningStack;
-use super::{DEFAULT_IPV4, DEFAULT_PORT};
+use super::{feedback::WarningStack, DEFAULT_IPV4, DEFAULT_PORT};
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
-use serde::Deserialize;
+use core::fmt;
+use core::str::FromStr;
+use serde::{
+    de::{self, Deserializer, Visitor},
+    Deserialize,
+};
 use std::net::IpAddr;
 
 /// The BGSAVE configuration
@@ -78,6 +82,8 @@ pub struct ConfigurationSet {
     pub ports: PortConfig,
     /// The maximum number of connections
     pub maxcon: usize,
+    /// The deployment mode
+    pub mode: Modeset,
 }
 
 impl ConfigurationSet {
@@ -87,6 +93,7 @@ impl ConfigurationSet {
         snapshot: SnapshotConfig,
         ports: PortConfig,
         maxcon: usize,
+        mode: Modeset,
     ) -> Self {
         Self {
             noart,
@@ -94,6 +101,7 @@ impl ConfigurationSet {
             snapshot,
             ports,
             maxcon,
+            mode,
         }
     }
     /// Create a default `ConfigurationSet` with the following setup defaults:
@@ -110,6 +118,7 @@ impl ConfigurationSet {
             SnapshotConfig::default(),
             PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
             MAXIMUM_CONNECTION_LIMIT,
+            Modeset::User,
         )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -261,7 +270,7 @@ type RestoreFile = Option<String>;
 /// - The default configuration
 /// - A custom supplied configuration
 pub struct ConfigType {
-    config: ConfigurationSet,
+    pub(super) config: ConfigurationSet,
     restore: RestoreFile,
     is_custom: bool,
     warnings: Option<WarningStack>,
@@ -304,5 +313,66 @@ impl ConfigType {
     }
     pub fn new_default(restore: RestoreFile) -> Self {
         Self::_new(ConfigurationSet::default(), restore, false, None)
+    }
+    /// Check if the current deploy mode is prod
+    pub const fn is_prod_mode(&self) -> bool {
+        matches!(self.config.mode, Modeset::Prod)
+    }
+    pub fn wpush(&mut self, w: impl ToString) {
+        match self.warnings.as_mut() {
+            Some(stack) => stack.push(w),
+            None => {
+                self.warnings = {
+                    let mut wstack = WarningStack::new("");
+                    wstack.push(w);
+                    Some(wstack)
+                };
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Modeset {
+    User,
+    Prod,
+}
+
+impl FromStr for Modeset {
+    type Err = ();
+    fn from_str(st: &str) -> Result<Modeset, Self::Err> {
+        match st {
+            "user" => Ok(Modeset::User),
+            "prod" => Ok(Modeset::Prod),
+            _ => Err(()),
+        }
+    }
+}
+
+struct ModesetVisitor;
+
+impl<'de> Visitor<'de> for ModesetVisitor {
+    type Value = Modeset;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Expecting a string with the deployment mode")
+    }
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        match value {
+            "user" => Ok(Modeset::User),
+            "prod" => Ok(Modeset::Prod),
+            _ => return Err(E::custom(format!("Bad value `{value}` for modeset"))),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Modeset {
+    fn deserialize<D>(deserializer: D) -> Result<Modeset, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(ModesetVisitor)
     }
 }

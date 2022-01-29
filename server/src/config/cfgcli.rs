@@ -85,6 +85,7 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
         Flag::<true>::new(matches.is_present("noart")),
         "--noart"
     );
+    fcli!(server_mode, matches.value_of("mode"), "--mode");
     fcli!(server_maxcon, matches.value_of("maxcon"), "--maxcon");
     // bgsave settings
     fcli!(

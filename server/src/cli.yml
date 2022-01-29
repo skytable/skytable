@@ -102,6 +102,13 @@ args:
       takes_value: true
       help: Set the maximum number of connections
       value_name: maxcon
+  - mode:
+      required: false
+      long: mode
+      takes_value: true
+      short: m
+      help: Sets the deployment type
+      value_name: mode
 subcommands:
   - upgrade:
       about: Upgrades old datsets to the latest format supported by this server edition

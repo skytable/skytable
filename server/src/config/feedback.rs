@@ -31,7 +31,7 @@ use core::fmt;
 use core::ops;
 use std::io::Error as IoError;
 // internal imports
-use super::{Configset, SnapshotConfig, SnapshotPref};
+use super::{ConfigurationSet, SnapshotConfig, SnapshotPref};
 #[cfg(unix)]
 use crate::util::os::ResourceLimit;
 
@@ -206,26 +206,26 @@ impl fmt::Display for ConfigError {
 }
 
 /// Check if the settings are suitable for use in production mode
-fn evaluate_prod_settings(cfg: Configset) -> Result<Configset, ConfigError> {
+pub(super) fn evaluate_prod_settings(cfg: &ConfigurationSet) -> Result<(), ConfigError> {
     let mut estack = ErrorStack::new(EMSG_PROD);
     // first check BGSAVE
-    if cfg.cfg.bgsave.is_disabled() {
+    if cfg.bgsave.is_disabled() {
         estack.push("BGSAVE must be enabled");
     }
     // now check snapshot settings (failsafe)
-    if let SnapshotConfig::Enabled(SnapshotPref { poison, .. }) = cfg.cfg.snapshot {
+    if let SnapshotConfig::Enabled(SnapshotPref { poison, .. }) = cfg.snapshot {
         if !poison {
             estack.push("Snapshots must be failsafe");
         }
     }
     // now check TLS settings
-    if cfg.cfg.ports.insecure_only() {
+    if cfg.ports.insecure_only() {
         estack.push("Either multi-socket (TCP and TLS) or TLS only must be enabled");
     }
     // now check maxcon
     if cfg!(unix) {
         let rlim = ResourceLimit::get()?;
-        if rlim.is_over_limit(cfg.cfg.maxcon) {
+        if rlim.is_over_limit(cfg.maxcon) {
             estack.push(
             "The value for maximum connections exceeds available resources to the server process",
             );
@@ -237,7 +237,7 @@ fn evaluate_prod_settings(cfg: Configset) -> Result<Configset, ConfigError> {
         }
     }
     if estack.is_empty() {
-        Ok(cfg)
+        Ok(())
     } else {
         Err(ConfigError::ProdError(estack))
     }

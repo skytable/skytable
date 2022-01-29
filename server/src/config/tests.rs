@@ -350,8 +350,8 @@ fn get_toml_from_examples_dir(filename: &str) -> TResult<String> {
 mod cfg_file_tests {
     use super::get_toml_from_examples_dir;
     use crate::config::{
-        cfgfile, BGSave, Configset, ConfigurationSet, PortConfig, SnapshotConfig, SnapshotPref,
-        SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
+        cfgfile, BGSave, Configset, ConfigurationSet, Modeset, PortConfig, SnapshotConfig,
+        SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
     };
     use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
     use std::net::{IpAddr, Ipv6Addr};
@@ -402,7 +402,8 @@ mod cfg_file_tests {
                 bgsave: BGSave::default(),
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         );
     }
@@ -421,7 +422,8 @@ mod cfg_file_tests {
                     IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0x1)),
                     DEFAULT_PORT
                 ),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         );
     }
@@ -445,7 +447,8 @@ mod cfg_file_tests {
                         Some("/path/to/cert/passphrase.txt".to_owned())
                     )
                 ),
-                MAXIMUM_CONNECTION_LIMIT
+                MAXIMUM_CONNECTION_LIMIT,
+                Modeset::User,
             )
         );
     }
@@ -468,7 +471,8 @@ mod cfg_file_tests {
                 bgsave: BGSave::new(true, 600),
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         );
     }
@@ -488,7 +492,8 @@ mod cfg_file_tests {
                 bgsave: BGSave::default(),
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         )
     }
@@ -508,7 +513,8 @@ mod cfg_file_tests {
                 bgsave: BGSave::new(true, 600),
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         )
     }
@@ -524,7 +530,8 @@ mod cfg_file_tests {
                 bgsave: BGSave::default(),
                 noart: false,
                 ports: PortConfig::default(),
-                maxcon: MAXIMUM_CONNECTION_LIMIT
+                maxcon: MAXIMUM_CONNECTION_LIMIT,
+                mode: Modeset::User
             }
         );
     }
@@ -776,5 +783,43 @@ mod try_from_config_source_impls {
                 NOT_MUTATED,
             );
         }
+    }
+}
+
+mod modeset_de {
+    use crate::config::Modeset;
+    use serde::Deserialize;
+
+    #[derive(Deserialize, Debug)]
+    struct Example {
+        mode: Modeset,
+    }
+
+    #[test]
+    fn deserialize_modeset_prod_okay() {
+        #[derive(Deserialize, Debug)]
+        struct Example {
+            mode: Modeset,
+        }
+        let toml = r#"mode="prod""#;
+        let x: Example = toml::from_str(toml).unwrap();
+        assert_eq!(x.mode, Modeset::Prod);
+    }
+
+    #[test]
+    fn deserialize_modeset_user_okay() {
+        let toml = r#"mode="user""#;
+        let x: Example = toml::from_str(toml).unwrap();
+        assert_eq!(x.mode, Modeset::User);
+    }
+
+    #[test]
+    fn deserialize_modeset_fail() {
+        let toml = r#"mode="superuser""#;
+        let e = toml::from_str::<Example>(toml).unwrap_err();
+        assert_eq!(
+            e.to_string(),
+            "Bad value `superuser` for modeset for key `mode` at line 1 column 6"
+        );
     }
 }

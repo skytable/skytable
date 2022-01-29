@@ -214,7 +214,7 @@ pub struct Configset {
 
 impl Configset {
     const EMSG_ENV: StaticStr = "Environment";
-    const EMSG_CLI: StaticStr = "CLI arguments";
+    const EMSG_CLI: StaticStr = "CLI";
     const EMSG_FILE: StaticStr = "Configuration file";
 
     /// Internal ctor for a given feedback source. We do not want to expose this to avoid
@@ -327,16 +327,22 @@ impl Configset {
     }
     /// Turns self into a Result that can be used by config::get_config()
     pub fn into_result(self, restore_file: Option<String>) -> Result<ConfigType, ConfigError> {
-        if self.is_okay() {
+        let mut target = if self.is_okay() {
             // no errors, sweet
             if self.is_mutated() {
                 let Self { cfg, wstack, .. } = self;
-                Ok(ConfigType::new_custom(cfg, restore_file, wstack))
+                ConfigType::new_custom(cfg, restore_file, wstack)
             } else {
-                Ok(ConfigType::new_default(restore_file))
+                ConfigType::new_default(restore_file)
             }
         } else {
-            Err(ConfigError::ProdError(self.estack))
+            return Err(ConfigError::CfgError(self.estack));
+        };
+        if target.is_prod_mode() {
+            self::feedback::evaluate_prod_settings(&target.config).map(|_| target)
+        } else {
+            target.wpush("Running in `user` mode. Set mode to `prod` in production");
+            Ok(target)
         }
     }
 }
@@ -375,6 +381,16 @@ impl Configset {
             |max| *max > 0,
         );
         self.cfg.maxcon = maxcon;
+    }
+    pub fn server_mode(&mut self, nmode: impl TryFromConfigSource<Modeset>, nmode_key: StaticStr) {
+        let mut modeset = Modeset::User;
+        self.try_mutate(
+            nmode,
+            &mut modeset,
+            nmode_key,
+            "a string with 'user' or 'prod'",
+        );
+        self.cfg.mode = modeset;
     }
 }
 
@@ -527,18 +543,21 @@ impl Configset {
             (false, false) => {
                 if nport.is_present() {
                     self.mutated();
-                    self.wstack
-                        .push("Specifying `{nport_key}` is pointless when TLS is disabled");
+                    self.wstack.push(format!(
+                        "Specifying `{nport_key}` is pointless when TLS is disabled"
+                    ));
                 }
                 if nonly.is_present() {
                     self.mutated();
-                    self.wstack
-                        .push("Specifying `{nonly_key}` is pointless when TLS is disabled");
+                    self.wstack.push(format!(
+                        "Specifying `{nonly_key}` is pointless when TLS is disabled"
+                    ));
                 }
                 if npass.is_present() {
                     self.mutated();
-                    self.wstack
-                        .push("Specifying `{npass_key}` is pointless when TLS is disabled");
+                    self.wstack.push(format!(
+                        "Specifying `{npass_key}` is pointless when TLS is disabled"
+                    ));
                 }
             }
         }

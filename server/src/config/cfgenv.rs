@@ -48,6 +48,7 @@ pub(super) fn parse_env_config() -> Configset {
     fenv!(server_tcp, SKY_SYSTEM_HOST, SKY_SYSTEM_PORT);
     fenv!(server_noart, SKY_SYSTEM_NOART);
     fenv!(server_maxcon, SKY_SYSTEM_MAXCON);
+    fenv!(server_mode, SKY_DEPLOY_MODE);
     // bgsave settings
     fenv!(bgsave_settings, SKY_BGSAVE_ENABLED, SKY_BGSAVE_DURATION);
     // snapshot settings
