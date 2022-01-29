@@ -56,7 +56,10 @@ mod unix {
                 if ret != 0 {
                     Err(IoError::last_os_error())
                 } else {
-                    Ok(ResourceLimit::new(rlim.rlim_cur, rlim.rlim_max))
+                    Ok(ResourceLimit::new(
+                        rlim.rlim_cur.into(),
+                        rlim.rlim_max.into(),
+                    ))
                 }
             }
         }
