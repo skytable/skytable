@@ -10,6 +10,7 @@ All changes in this project will be noted in this file.
 
 ### Additions
 
+- Added `dev/prod` mode for making sure that the recommended production settings are used
 - Added support for system native endian storage (backward compatible)
 
 ## Version 0.7.2

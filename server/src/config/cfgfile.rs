@@ -24,6 +24,7 @@
  *
 */
 
+use super::{ConfigSourceParseResult, Configset, Modeset, OptString, TryFromConfigSource};
 use serde::Deserialize;
 use std::net::IpAddr;
 
@@ -52,6 +53,8 @@ pub struct ConfigKeyServer {
     pub(super) noart: Option<bool>,
     /// The maximum number of clients
     pub(super) maxclient: Option<usize>,
+    /// The deployment mode
+    pub(super) mode: Option<Modeset>,
 }
 
 /// The BGSAVE section in the config file
@@ -88,4 +91,135 @@ pub struct KeySslOpts {
     pub(super) port: u16,
     pub(super) only: Option<bool>,
     pub(super) passin: Option<String>,
+}
+
+/// A custom non-null type for config files
+pub struct NonNull<T> {
+    val: T,
+}
+
+impl<T> From<T> for NonNull<T> {
+    fn from(val: T) -> Self {
+        Self { val }
+    }
+}
+
+impl<T> TryFromConfigSource<T> for NonNull<T> {
+    fn is_present(&self) -> bool {
+        true
+    }
+    fn mutate_failed(self, target: &mut T, trip: &mut bool) -> bool {
+        *target = self.val;
+        *trip = true;
+        false
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<T> {
+        ConfigSourceParseResult::Okay(self.val)
+    }
+}
+
+pub struct Optional<T> {
+    base: Option<T>,
+}
+
+impl<T> Optional<T> {
+    pub const fn some(val: T) -> Self {
+        Self { base: Some(val) }
+    }
+}
+
+impl<T> From<Option<T>> for Optional<T> {
+    fn from(base: Option<T>) -> Self {
+        Self { base }
+    }
+}
+
+impl<T> TryFromConfigSource<T> for Optional<T> {
+    fn is_present(&self) -> bool {
+        self.base.is_some()
+    }
+    fn mutate_failed(self, target: &mut T, trip: &mut bool) -> bool {
+        if let Some(v) = self.base {
+            *trip = true;
+            *target = v;
+        }
+        false
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<T> {
+        match self.base {
+            Some(v) => ConfigSourceParseResult::Okay(v),
+            None => ConfigSourceParseResult::Absent,
+        }
+    }
+}
+
+type ConfigFile = Config;
+
+pub fn from_file(file: ConfigFile) -> Configset {
+    let mut set = Configset::new_file();
+    let ConfigFile {
+        server,
+        bgsave,
+        snapshot,
+        ssl,
+    } = file;
+    // server settings
+    set.server_tcp(
+        Optional::some(server.host),
+        "server.host",
+        Optional::some(server.port),
+        "server.port",
+    );
+    set.server_maxcon(Optional::from(server.maxclient), "server.maxcon");
+    set.server_noart(Optional::from(server.noart), "server.noart");
+    set.server_mode(Optional::from(server.mode), "server.mode");
+    // bgsave settings
+    if let Some(bgsave) = bgsave {
+        let ConfigKeyBGSAVE { enabled, every } = bgsave;
+        set.bgsave_settings(
+            Optional::from(enabled),
+            "bgsave.enabled",
+            Optional::from(every),
+            "bgsave.every",
+        );
+    }
+    // snapshot settings
+    if let Some(snapshot) = snapshot {
+        let ConfigKeySnapshot {
+            every,
+            atmost,
+            failsafe,
+        } = snapshot;
+        set.snapshot_settings(
+            NonNull::from(every),
+            "snapshot.every",
+            NonNull::from(atmost),
+            "snapshot.atmost",
+            Optional::from(failsafe),
+            "snapshot.failsafe",
+        );
+    }
+    // TLS settings
+    if let Some(tls) = ssl {
+        let KeySslOpts {
+            key,
+            chain,
+            port,
+            only,
+            passin,
+        } = tls;
+        set.tls_settings(
+            NonNull::from(key),
+            "ssl.key",
+            NonNull::from(chain),
+            "ssl.chain",
+            NonNull::from(port),
+            "ssl.port",
+            Optional::from(only),
+            "ssl.only",
+            OptString::from(passin),
+            "ssl.passin",
+        );
+    }
+    set
 }

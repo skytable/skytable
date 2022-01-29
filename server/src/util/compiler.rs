@@ -1,5 +1,5 @@
 /*
- * Created on Sat Oct 02 2021
+ * Created on Sat Jan 29 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,36 +24,45 @@
  *
 */
 
-macro_rules! cli_parse_or_default_or_err {
-    ($parsewhat:expr, $default:expr, $except:expr $(,)?) => {
-        match $parsewhat.map(|v| v.parse()) {
-            Some(Ok(v)) => v,
-            Some(Err(_)) => return Err(self::cfgerr::ConfigError::CliArgErr($except)),
-            None => $default,
-        }
-    };
+//! Dark compiler arts and hackery to defy the normal. Use at your own
+//! risk
+
+use core::mem;
+
+#[cold]
+#[inline(never)]
+pub const fn cold() {}
+
+pub const fn likely(b: bool) -> bool {
+    if !b {
+        cold()
+    }
+    b
 }
 
-macro_rules! cli_setparse_or_err {
-    ($setwhat:expr, $parsewhat:expr, $except:expr $(,)?) => {
-        match $parsewhat.map(|v| v.parse()) {
-            Some(Ok(v)) => $setwhat = v,
-            Some(Err(_)) => return Err(self::cfgerr::ConfigError::CliArgErr($except)),
-            _ => {}
-        }
-    };
+pub const fn unlikely(b: bool) -> bool {
+    if b {
+        cold()
+    }
+    b
 }
 
-macro_rules! set_if_exists {
-    ($testwhat:expr, $trywhat:expr) => {
-        if let Some(testwhat) = $testwhat {
-            $trywhat = testwhat;
-        }
-    };
+#[cold]
+#[inline(never)]
+pub const fn cold_err<T>(v: T) -> T {
+    v
+}
+#[inline(always)]
+pub const fn hot<T>(v: T) -> T {
+    if false {
+        cold()
+    }
+    v
 }
 
-macro_rules! ret_cli_err {
-    ($what:expr) => {
-        return Err(self::cfgerr::ConfigError::CliArgErr($what))
-    };
+pub const unsafe fn extend_lifetime<'a, 'b, T>(inp: &'a T) -> &'b T {
+    mem::transmute(inp)
+}
+pub unsafe fn extend_lifetime_mut<'a, 'b, T>(inp: &'a mut T) -> &'b mut T {
+    mem::transmute(inp)
 }
