@@ -57,6 +57,10 @@ impl BGSave {
     pub const fn default() -> Self {
         BGSave::new(true, 120)
     }
+    /// Check if BGSAVE is disabled
+    pub const fn is_disabled(&self) -> bool {
+        matches!(self, Self::Disabled)
+    }
 }
 
 /// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
@@ -176,6 +180,9 @@ impl PortConfig {
                 panic!("Port config is already upgraded to TLS")
             }
         }
+    }
+    pub const fn insecure_only(&self) -> bool {
+        matches!(self, Self::InsecureOnly { .. })
     }
 }
 

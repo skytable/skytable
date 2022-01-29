@@ -30,9 +30,14 @@ use toml::de::Error as TomlError;
 use core::fmt;
 use core::ops;
 use std::io::Error as IoError;
+// internal imports
+use super::{Configset, SnapshotConfig, SnapshotPref};
+#[cfg(unix)]
+use crate::util::os::ResourceLimit;
 
 #[cfg(test)]
 const EMSG_ENV: &str = "Environment";
+const EMSG_PROD: &str = "Production mode";
 const TAB: &str = "    ";
 
 #[derive(Debug, PartialEq)]
@@ -55,9 +60,6 @@ impl FeedbackStack {
     }
     pub fn push(&mut self, f: impl ToString) {
         self.stack.push(f.to_string())
-    }
-    pub fn is_empty(&self) -> bool {
-        self.stack.is_empty()
     }
 }
 
@@ -186,6 +188,7 @@ pub enum ConfigError {
     CfgError(ErrorStack),
     ConfigFileParseError(TomlError),
     Conflict,
+    ProdError(ErrorStack),
 }
 
 impl PartialEq for ConfigError {
@@ -195,6 +198,7 @@ impl PartialEq for ConfigError {
             (Self::CfgError(lhs), Self::CfgError(rhs)) => lhs == rhs,
             (Self::ConfigFileParseError(lhs), Self::ConfigFileParseError(rhs)) => lhs == rhs,
             (Self::Conflict, Self::Conflict) => true,
+            (Self::ProdError(lhs), Self::ProdError(rhs)) => lhs == rhs,
             _ => false,
         }
     }
@@ -212,12 +216,6 @@ impl From<toml::de::Error> for ConfigError {
     }
 }
 
-impl From<ErrorStack> for ConfigError {
-    fn from(e: ErrorStack) -> Self {
-        Self::CfgError(e)
-    }
-}
-
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -228,31 +226,58 @@ impl fmt::Display for ConfigError {
                 f,
                 "Conflict error: Either provide CLI args, environment variables or a config file for configuration"
             ),
+            Self::ProdError(e) => write!(f, "You have invalid configuration for production mode. {}", e)
         }
     }
 }
 
-#[cfg(unix)]
-/// Returns the number of open files
-fn get_ulimit() -> Result<usize, IoError> {
-    use libc::rlimit;
-    use libc::RLIMIT_NOFILE;
-    unsafe {
-        let rlim = rlimit {
-            rlim_cur: 0,
-            rlim_max: 0,
-        };
-        let ret = libc::getrlimit(RLIMIT_NOFILE, &rlim as *const _ as *mut _);
-        if ret != 0 {
-            Err(IoError::last_os_error())
-        } else {
-            Ok(rlim.rlim_cur as usize)
+/// Check if the settings are suitable for use in production mode
+fn evaluate_prod_settings(cfg: Configset) -> Result<Configset, ConfigError> {
+    let mut estack = ErrorStack::new(EMSG_PROD);
+    // first check BGSAVE
+    if cfg.cfg.bgsave.is_disabled() {
+        estack.push("BGSAVE must be enabled");
+    }
+    // now check snapshot settings (failsafe)
+    if let SnapshotConfig::Enabled(SnapshotPref { poison, .. }) = cfg.cfg.snapshot {
+        if !poison {
+            estack.push("Snapshots must be failsafe");
         }
+    }
+    // now check TLS settings
+    if cfg.cfg.ports.insecure_only() {
+        estack.push("Either multi-socket (TCP and TLS) or TLS only must be enabled");
+    }
+    // now check maxcon
+    #[cfg(unix)]
+    if ResourceLimit::get()?.is_over_limit(cfg.cfg.maxcon) {
+        estack.push(
+            "The value for maximum connections exceeds available resources to the server process",
+        );
+    }
+    if estack.is_empty() {
+        Ok(cfg)
+    } else {
+        Err(ConfigError::ProdError(estack))
     }
 }
 
 #[test]
-#[cfg(unix)]
-fn test_ulimit() {
-    get_ulimit().unwrap();
+fn prod_mode_error_fmt() {
+    let mut estack = ErrorStack::new(EMSG_PROD);
+    estack.push("BGSAVE must be enabled");
+    estack.push("Snapshots must be failsafe");
+    estack.push("Either multi-socket (TCP and TLS) or TLS-only mode must be enabled");
+    estack.push(
+        "The value for maximum connections exceeds available resources to the server process",
+    );
+    let e = ConfigError::ProdError(estack);
+    const EXPECTED: &str = "\
+You have invalid configuration for production mode. Production mode errors:
+    - BGSAVE must be enabled
+    - Snapshots must be failsafe
+    - Either multi-socket (TCP and TLS) or TLS-only mode must be enabled
+    - The value for maximum connections exceeds available resources to the server process\
+";
+    assert_eq!(format!("{}", e), EXPECTED);
 }

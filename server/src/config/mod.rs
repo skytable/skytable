@@ -336,7 +336,7 @@ impl Configset {
                 Ok(ConfigType::new_default(restore_file))
             }
         } else {
-            Err(ConfigError::from(self.estack))
+            Err(ConfigError::ProdError(self.estack))
         }
     }
 }

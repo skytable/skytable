@@ -27,6 +27,7 @@
 #[macro_use]
 mod macros;
 pub mod compiler;
+pub mod os;
 
 /// # Unsafe unwrapping
 ///
