@@ -403,7 +403,7 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         );
     }
@@ -423,7 +423,7 @@ mod cfg_file_tests {
                     DEFAULT_PORT
                 ),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         );
     }
@@ -448,7 +448,7 @@ mod cfg_file_tests {
                     )
                 ),
                 MAXIMUM_CONNECTION_LIMIT,
-                Modeset::User,
+                Modeset::Dev,
             )
         );
     }
@@ -472,7 +472,7 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         );
     }
@@ -493,7 +493,7 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         )
     }
@@ -514,7 +514,7 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         )
     }
@@ -531,7 +531,7 @@ mod cfg_file_tests {
                 noart: false,
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::User
+                mode: Modeset::Dev
             }
         );
     }
@@ -808,9 +808,9 @@ mod modeset_de {
 
     #[test]
     fn deserialize_modeset_user_okay() {
-        let toml = r#"mode="user""#;
+        let toml = r#"mode="dev""#;
         let x: Example = toml::from_str(toml).unwrap();
-        assert_eq!(x.mode, Modeset::User);
+        assert_eq!(x.mode, Modeset::Dev);
     }
 
     #[test]

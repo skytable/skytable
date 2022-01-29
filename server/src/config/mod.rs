@@ -383,7 +383,7 @@ impl Configset {
         self.cfg.maxcon = maxcon;
     }
     pub fn server_mode(&mut self, nmode: impl TryFromConfigSource<Modeset>, nmode_key: StaticStr) {
-        let mut modeset = Modeset::User;
+        let mut modeset = Modeset::Dev;
         self.try_mutate(
             nmode,
             &mut modeset,

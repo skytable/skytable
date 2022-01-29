@@ -229,6 +229,10 @@ fn check_rlimit_or_err(_: usize, _: &mut ErrorStack) -> Result<(), ConfigError> 
 /// Check if the settings are suitable for use in production mode
 pub(super) fn evaluate_prod_settings(cfg: &ConfigurationSet) -> Result<(), ConfigError> {
     let mut estack = ErrorStack::new(EMSG_PROD);
+    // check `noart`
+    if cfg.is_artful() {
+        estack.push("Terminal artwork should be disabled");
+    }
     // first check BGSAVE
     if cfg.bgsave.is_disabled() {
         estack.push("BGSAVE must be enabled");

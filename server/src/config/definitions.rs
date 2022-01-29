@@ -118,7 +118,7 @@ impl ConfigurationSet {
             SnapshotConfig::default(),
             PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
             MAXIMUM_CONNECTION_LIMIT,
-            Modeset::User,
+            Modeset::Dev,
         )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -334,7 +334,7 @@ impl ConfigType {
 
 #[derive(Debug, PartialEq)]
 pub enum Modeset {
-    User,
+    Dev,
     Prod,
 }
 
@@ -342,7 +342,7 @@ impl FromStr for Modeset {
     type Err = ();
     fn from_str(st: &str) -> Result<Modeset, Self::Err> {
         match st {
-            "user" => Ok(Modeset::User),
+            "dev" => Ok(Modeset::Dev),
             "prod" => Ok(Modeset::Prod),
             _ => Err(()),
         }
@@ -361,7 +361,7 @@ impl<'de> Visitor<'de> for ModesetVisitor {
         E: de::Error,
     {
         match value {
-            "user" => Ok(Modeset::User),
+            "dev" => Ok(Modeset::Dev),
             "prod" => Ok(Modeset::Prod),
             _ => return Err(E::custom(format!("Bad value `{value}` for modeset"))),
         }
