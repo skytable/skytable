@@ -205,6 +205,27 @@ impl fmt::Display for ConfigError {
     }
 }
 
+#[cfg(unix)]
+fn check_rlimit_or_err(current: usize, estack: &mut ErrorStack) -> Result<(), ConfigError> {
+    let rlim = ResourceLimit::get()?;
+    if rlim.is_over_limit(current) {
+        estack.push(
+            "The value for maximum connections exceeds available resources to the server process",
+        );
+        estack.push(
+                format!(
+                "The current process is set to a resource limit of {current} and can be set to a maximum limit of {max} in the OS",
+                current=rlim.current(),max=rlim.max()
+            ));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn check_rlimit_or_err(_: usize, _: &mut ErrorStack) -> Result<(), ConfigError> {
+    Ok(())
+}
+
 /// Check if the settings are suitable for use in production mode
 pub(super) fn evaluate_prod_settings(cfg: &ConfigurationSet) -> Result<(), ConfigError> {
     let mut estack = ErrorStack::new(EMSG_PROD);
@@ -222,20 +243,7 @@ pub(super) fn evaluate_prod_settings(cfg: &ConfigurationSet) -> Result<(), Confi
     if cfg.ports.insecure_only() {
         estack.push("Either multi-socket (TCP and TLS) or TLS only must be enabled");
     }
-    // now check maxcon
-    if cfg!(unix) {
-        let rlim = ResourceLimit::get()?;
-        if rlim.is_over_limit(cfg.maxcon) {
-            estack.push(
-            "The value for maximum connections exceeds available resources to the server process",
-            );
-            estack.push(
-                format!(
-                "The current process is set to a resource limit of {current} and can be set to a maximum limit of {max} in the OS",
-                current=rlim.current(),max=rlim.max()
-            ));
-        }
-    }
+    check_rlimit_or_err(cfg.maxcon, &mut estack)?;
     if estack.is_empty() {
         Ok(())
     } else {
