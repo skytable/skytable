@@ -24,14 +24,13 @@
  *
 */
 
-use crate::config::BGSave;
+use crate::config::ConfigurationSet;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
 use crate::corestore::Corestore;
 use crate::dbnet::{self, Terminator};
 use crate::services;
 use crate::storage::sengine::SnapshotEngine;
-use crate::PortConfig;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -65,16 +64,19 @@ impl Future for UnixTerminationSignal {
 
 /// Start the server waiting for incoming connections or a termsig
 pub async fn run(
-    ports: PortConfig,
-    bgsave_cfg: BGSave,
-    snapshot_cfg: SnapshotConfig,
-    _restore_filepath: Option<String>,
-    maxcon: usize,
+    ConfigurationSet {
+        ports,
+        bgsave,
+        snapshot,
+        maxcon,
+        ..
+    }: ConfigurationSet,
+    restore_filepath: Option<String>,
 ) -> Result<Corestore, String> {
     // Intialize the broadcast channel
     let (signal, _) = broadcast::channel(1);
     let engine;
-    match &snapshot_cfg {
+    match &snapshot {
         SnapshotConfig::Enabled(SnapshotPref { atmost, .. }) => {
             engine = SnapshotEngine::new(*atmost);
             engine
@@ -86,19 +88,22 @@ pub async fn run(
         }
     }
     let engine = Arc::new(engine);
+    // restore data
+    services::restore_data(restore_filepath)
+        .map_err(|e| format!("Failed to restore data from backup with error: {}", e))?;
     let db = Corestore::init_with_snapcfg(engine.clone())
         .map_err(|e| format!("Error while initializing database: {}", e))?;
 
     // initialize the background services
     let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
         db.clone(),
-        bgsave_cfg,
+        bgsave,
         Terminator::new(signal.subscribe()),
     ));
     let snapshot_handle = tokio::spawn(services::snapshot::snapshot_service(
         engine,
         db.clone(),
-        snapshot_cfg,
+        snapshot,
         Terminator::new(signal.subscribe()),
     ));
 

@@ -252,7 +252,7 @@ pub async fn connect(
     db: Corestore,
     signal: broadcast::Sender<()>,
 ) -> Result<MultiListener, String> {
-    let climit = Arc::new(Semaphore::const_new(maxcon));
+    let climit = Arc::new(Semaphore::new(maxcon));
     let server = match ports {
         PortConfig::InsecureOnly { host, port } => MultiListener::new_insecure_only(
             BaseListener::init(&db, host, port, climit.clone(), signal.clone())

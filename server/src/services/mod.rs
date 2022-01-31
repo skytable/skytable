@@ -26,3 +26,13 @@
 
 pub mod bgsave;
 pub mod snapshot;
+use crate::util::os;
+use crate::IoResult;
+
+pub fn restore_data(src: Option<String>) -> IoResult<()> {
+    if let Some(src) = src {
+        // hmm, so restore it
+        os::recursive_copy(src, "data")?;
+    }
+    Ok(())
+}

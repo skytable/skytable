@@ -78,3 +78,67 @@ mod unix {
         let _ = ResourceLimit::get().unwrap();
     }
 }
+
+use crate::IoResult;
+use std::fs;
+use std::path::Path;
+
+/// Recursively copy files from the given `src` to the provided `dest`
+pub fn recursive_copy(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> IoResult<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        match entry.file_type()? {
+            ft if ft.is_dir() => {
+                // this is a directory, so we'll recursively create it and its contents
+                recursive_copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
+            _ => {
+                // this directory has files (or symlinks?)
+                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn rcopy_okay() {
+    let dir_paths = [
+        "testdata/backups",
+        "testdata/ks/default",
+        "testdata/ks/system",
+        "testdata/rsnaps",
+        "testdata/snaps",
+    ];
+    let file_paths = [
+        "testdata/ks/default/default",
+        "testdata/ks/default/PARTMAP",
+        "testdata/ks/PRELOAD",
+        "testdata/ks/system/PARTMAP",
+    ];
+    let new_file_paths = [
+        "my-backups/ks/default/default",
+        "my-backups/ks/default/PARTMAP",
+        "my-backups/ks/PRELOAD",
+        "my-backups/ks/system/PARTMAP",
+    ];
+    let x = move || -> IoResult<()> {
+        for dir in dir_paths {
+            fs::create_dir_all(dir)?;
+        }
+        for file in file_paths {
+            fs::File::create(file)?;
+        }
+        Ok(())
+    };
+    x().unwrap();
+    // now copy all files inside testdata/* to my-backups/*
+    recursive_copy("testdata", "my-backups").unwrap();
+    new_file_paths
+        .iter()
+        .for_each(|path| assert!(Path::new(path).exists()));
+    // now remove the directories
+    fs::remove_dir_all("testdata").unwrap();
+    fs::remove_dir_all("my-backups").unwrap();
+}

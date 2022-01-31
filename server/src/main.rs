@@ -95,22 +95,13 @@ fn main() {
         .enable_all()
         .build()
         .unwrap();
-    let (ports, bgsave_config, snapshot_config, restore_filepath, maxcon) =
-        check_args_and_get_cfg();
+    let (cfg, restore_file) = check_args_and_get_cfg();
     // check if any other process is using the data directory and lock it if not (else error)
     // important: create the pid_file just here and nowhere else because check_args can also
     // involve passing --help or wrong arguments which can falsely create a PID file
     let pid_file = run_pre_startup_tasks();
-    let db: Result<corestore::Corestore, String> = runtime.block_on(async move {
-        arbiter::run(
-            ports,
-            bgsave_config,
-            snapshot_config,
-            restore_filepath,
-            maxcon,
-        )
-        .await
-    });
+    let db: Result<corestore::Corestore, String> =
+        runtime.block_on(async move { arbiter::run(cfg, restore_file).await });
     // Make sure all background workers terminate
     drop(runtime);
     let db = match db {
@@ -162,11 +153,11 @@ pub fn pre_shutdown_cleanup(mut pid_file: FileLock, mr: Option<&Memstore>) {
     }
 }
 
-use self::config::{BGSave, PortConfig, SnapshotConfig};
+use self::config::ConfigurationSet;
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server
-fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<String>, usize) {
+fn check_args_and_get_cfg() -> (ConfigurationSet, Option<String>) {
     match config::get_config() {
         Ok(cfg) => {
             if cfg.is_artful() {
@@ -181,8 +172,7 @@ fn check_args_and_get_cfg() -> (PortConfig, BGSave, SnapshotConfig, Option<Strin
             }
             // print warnings if any
             cfg.print_warnings();
-            let (cfg, restore) = cfg.finish();
-            (cfg.ports, cfg.bgsave, cfg.snapshot, restore, cfg.maxcon)
+            cfg.finish()
         }
         Err(e) => {
             log::error!("{}", e);
