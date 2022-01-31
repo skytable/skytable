@@ -33,6 +33,7 @@ pub fn restore_data(src: Option<String>) -> IoResult<()> {
     if let Some(src) = src {
         // hmm, so restore it
         os::recursive_copy(src, "data")?;
+        log::info!("Successfully restored data from snapshot");
     }
     Ok(())
 }

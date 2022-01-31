@@ -14,8 +14,8 @@ args:
       short: r
       required: false
       long: restore
-      value_name: snapshotfile
-      help: Restores data from a previous snapshot
+      value_name: backupdir
+      help: Restores data from a previous snapshot made in the provided directory
       takes_value: true
   - host:
       short: h
@@ -109,14 +109,3 @@ args:
       short: m
       help: Sets the deployment type
       value_name: mode
-subcommands:
-  - upgrade:
-      about: Upgrades old datsets to the latest format supported by this server edition
-      args:
-        - format:
-            short: f
-            long: from
-            takes_value: true
-            value_name: format
-            required: true
-            help: The format of the old files which need to be upgraded

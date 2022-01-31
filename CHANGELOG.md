@@ -7,6 +7,10 @@ All changes in this project will be noted in this file.
 ### Fixes
 
 - Fixed infinite wait (loop) when sample space for key generation is not large enough
+- Removed `upgrade` subcommand from `skyd` which was removed in 0.7, but was erroneously accepted in the CLI
+  parameters
+- Restored ability to use `--restore <backupdir>` to restore data from previous snapshots which was silently
+  ignored
 
 ### Additions
 
@@ -194,6 +198,7 @@ All changes in this project will be noted in this file.
 - All actions now accept the `AnyArray` type introduced in Skyhash 1.1
 - `POP` now accepts one key while `MPOP` accepts multiple keys
 - Disk storage format has changed
+- The `upgrade` subcommand has been removed
 
 ## Version 0.6.4 [2021-08-05]
 
