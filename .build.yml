@@ -1,7 +1,21 @@
+kind: pipeline
+type: docker
+name: Test on Linux (ARM64)
+
+platform:
+  os: linux
+  arch: arm64
+
+steps:
+  - name: Build
+    image: rust
+    commands:
+      - apt update && apt-get install libhtml-parser-perl -y
+      - make test
 ---
 kind: pipeline
 type: docker
-name: default
+name: Test on Linux (x86_64)
 
 steps:
   - name: test
