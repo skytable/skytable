@@ -15,15 +15,7 @@ jobs:
     needs:
       - test_64bit
       - test_32bit
-      - test-arm64
     steps:
-      - name: Download ARM64 artifact
-        run: wget http://releases.skytable.io/everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
-      - name: Upload ARM64 artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
-          path: ${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
       - name: Finish Tier 1 Tests
         run: exit 0
   test_64bit:
@@ -270,33 +262,3 @@ jobs:
         with:
           name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
           path: dist
-  test-arm64:
-    name: Test (self-hosted-arm64-native)
-    runs-on: self-hosted
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - name: Set up tools
-        run: |
-          sudo apt update && sudo apt install awscli zip zstd perl libhtml-parser-perl -y
-          aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
-          aws configure set default.s3.signature_version s3v4
-      - name: Install Rust
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo $HOME/.cargo/bin >> $GITHUB_PATH
-      - name: Test
-        run: make test
-        env:
-          TARGET: aarch64-unknown-linux-gnu
-      - name: Stress test
-        run: make stress
-        if: "contains(toJSON(github.event.commits.*.msg), '[stress-ci]')"
-      - name: Save artifacts
-        run: |
-          cargo build -j16 --target aarch64-unknown-linux-gnu
-          zip -j dist.zip target/aarch64-unknown-linux-gnu/debug/skyd target/aarch64-unknown-linux-gnu/debug/skysh target/aarch64-unknown-linux-gnu/debug/sky-bench
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp dist.zip s3://everycommit/${{ github.sha }}-aarch64-unknown-linux-gnu-builds.zip
