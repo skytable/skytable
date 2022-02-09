@@ -4,6 +4,12 @@ All changes in this project will be noted in this file.
 
 ## Unreleased
 
+### Additions
+
+- Added `dev/prod` mode for making sure that the recommended production settings are used
+- Added support for system native endian storage (backward compatible)
+- Added `range` to `lget` to get subarrays
+
 ### Fixes
 
 - Fixed infinite wait (loop) when sample space for key generation is not large enough
@@ -11,11 +17,6 @@ All changes in this project will be noted in this file.
   parameters
 - Restored ability to use `--restore <backupdir>` to restore data from previous snapshots which was silently
   ignored
-
-### Additions
-
-- Added `dev/prod` mode for making sure that the recommended production settings are used
-- Added support for system native endian storage (backward compatible)
 
 ## Version 0.7.2
 
