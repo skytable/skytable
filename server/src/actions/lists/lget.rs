@@ -196,7 +196,7 @@ action! {
                                     None => conwrite!(con, groups::NIL)?,
                                 }
                             }
-                            None => conwrite!(con, groups::ACTION_ERR)?,
+                            None => aerr!(con),
                         }
                     }
                     _ => conwrite!(con, groups::UNKNOWN_ACTION)?,

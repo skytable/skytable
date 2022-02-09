@@ -380,7 +380,7 @@ mod __private {
         runeq!(
             con,
             q,
-            Element::RespCode(RespCode::ErrorString("listmap-bad-index".to_owned()))
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
         )
     }
 
@@ -396,20 +396,20 @@ mod __private {
         runeq!(
             con,
             q,
-            Element::RespCode(RespCode::ErrorString("listmap-bad-index".to_owned()))
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
         )
     }
 
     async fn test_list_range_parse_fail() {
-        let q = query!("lget", "mylist", "1", "2a");
+        let q = query!("lget", "mylist", "range", "1", "2a");
         runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
-        let q = query!("lget", "mylist", "2a");
+        let q = query!("lget", "mylist", "range", "2a");
         runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
         // now do the same with an existing key
         lset!(con, "mylist", "a", "b", "c");
-        let q = query!("lget", "mylist", "1", "2a");
+        let q = query!("lget", "mylist", "range", "1", "2a");
         runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
-        let q = query!("lget", "mylist", "2a");
+        let q = query!("lget", "mylist", "range", "2a");
         runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
     }
 
