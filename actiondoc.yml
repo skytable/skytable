@@ -221,7 +221,7 @@ keyvalue:
           accept: [AnyArray]
           syntax: [LGET <list> valueat <index>]
           desc: Returns the element present at the provided `index`, if it exists in the given list.
-          return: [String, binstr, Rcode 1, list-bad-index]
+          return: [String, binstr, Rcode 1, bad-list-index]
         - name: first
           complexity: O(1)
           accept: [AnyArray]
@@ -234,6 +234,14 @@ keyvalue:
           syntax: [LGET <list> last]
           desc: Returns the last element present in the list, if it exists.
           return: [String, binstr, Rcode 1, list-is-empty]
+        - name: range
+          complexity: O(n)
+          accept: [AnyArray]
+          syntax: [LGET <list> range <start>, LGET <list> range <start> <stop>]
+          desc: |
+            Returns items in the given range. If no value for `stop` is provided, all the elements from that
+            index are returned. If a value for `stop` is provided, then a subarray is returned
+          return: [Typed Array, Rcode 1, bad-list-index]
     - name: LMOD
       desc: |
         `LMOD` can be used to mutate the elements in a list

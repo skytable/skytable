@@ -12,3 +12,4 @@ snapstore.partmap
 .sky_pid
 .devcontainer
 *.deb
+*.pem

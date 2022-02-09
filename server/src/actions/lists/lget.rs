@@ -35,6 +35,27 @@ const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();
 const LAST: &[u8] = "LAST".as_bytes();
 const FIRST: &[u8] = "FIRST".as_bytes();
+const RANGE: &[u8] = "RANGE".as_bytes();
+
+struct Range {
+    start: usize,
+    stop: Option<usize>,
+}
+
+impl Range {
+    pub fn new(start: usize) -> Self {
+        Self { start, stop: None }
+    }
+    pub fn set_stop(&mut self, stop: usize) {
+        self.stop = Some(stop);
+    }
+    pub fn into_vec(self, slice: &[Data]) -> Option<Vec<Data>> {
+        match slice.get(self.start..self.stop.unwrap_or(slice.len())) {
+            Some(slc) => Some(slc.iter().cloned().collect()),
+            None => None,
+        }
+    }
+}
 
 action! {
     /// Handle an `LGET` query for the list model (KVExt)
@@ -145,6 +166,37 @@ action! {
                             },
                             Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
                             None => conwrite!(con, groups::NIL)?,
+                        }
+                    }
+                    RANGE => {
+                        match act.next_string_owned() {
+                            Some(start) => {
+                                let start: usize = match start.parse() {
+                                    Ok(v) => v,
+                                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                                };
+                                let mut range = Range::new(start);
+                                if let Some(stop) = act.next_string_owned() {
+                                    let stop: usize = match stop.parse() {
+                                        Ok(v) => v,
+                                        Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                                    };
+                                    range.set_stop(stop);
+                                };
+                                match listmap.get(listname) {
+                                    Some(list) => {
+                                        let ret = range.into_vec(&list.read());
+                                        match ret {
+                                            Some(ret) => {
+                                                writelist!(con, listmap, ret);
+                                            },
+                                            None => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
+                                        }
+                                    }
+                                    None => conwrite!(con, groups::NIL)?,
+                                }
+                            }
+                            None => aerr!(con),
                         }
                     }
                     _ => conwrite!(con, groups::UNKNOWN_ACTION)?,

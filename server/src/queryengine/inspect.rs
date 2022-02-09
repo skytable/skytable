@@ -62,7 +62,7 @@ action! {
                     _ => conwrite!(con, responses::groups::UNKNOWN_INSPECT_QUERY)?,
                 }
             }
-            None => aerr!(con, aerr),
+            None => aerr!(con),
         }
         Ok(())
     }
@@ -89,7 +89,7 @@ action! {
                     writer.write_element(tbl).await?;
                 }
             },
-            None => aerr!(con, aerr),
+            None => aerr!(con),
         }
         Ok(())
     }
@@ -102,7 +102,7 @@ action! {
                 let entity = handle_entity!(con, entity);
                 conwrite!(con, get_tbl!(entity, handle, con).describe_self())?;
             },
-            None => aerr!(con, aerr),
+            None => aerr!(con),
         }
         Ok(())
     }

@@ -137,7 +137,7 @@ macro_rules! conwrite {
 
 #[macro_export]
 macro_rules! aerr {
-    ($con:expr, aerr) => {
+    ($con:expr) => {
         return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR)
     };
 }

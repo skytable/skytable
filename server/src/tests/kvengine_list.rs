@@ -360,6 +360,59 @@ mod __private {
         runeq!(con, q, Element::UnsignedInt(2));
     }
 
+    // tests for range
+    async fn test_list_range_nil() {
+        let q = query!("lget", "sayan", "range", "1", "10");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+        let q = query!("lget", "sayan", "range", "1");
+        runeq!(con, q, Element::RespCode(RespCode::NotFound));
+    }
+
+    async fn test_list_range_bounded_okay() {
+        lset!(con, "mylist", "1", "2", "3", "4", "5");
+        let q = query!("lget", "mylist", "range", "0", "5");
+        assert_skyhash_arrayeq!(str, con, q, "1", "2", "3", "4", "5");
+    }
+
+    async fn test_list_range_bounded_fail() {
+        lset!(con, "mylist", "1", "2", "3", "4", "5");
+        let q = query!("lget", "mylist", "range", "0", "165");
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
+        )
+    }
+
+    async fn test_list_range_unbounded_okay() {
+        lset!(con, "mylist", "1", "2", "3", "4", "5");
+        let q = query!("lget", "mylist", "range", "0");
+        assert_skyhash_arrayeq!(str, con, q, "1", "2", "3", "4", "5");
+    }
+
+    async fn test_list_range_unbounded_fail() {
+        lset!(con, "mylist", "1", "2", "3", "4", "5");
+        let q = query!("lget", "mylist", "range", "165");
+        runeq!(
+            con,
+            q,
+            Element::RespCode(RespCode::ErrorString("bad-list-index".to_owned()))
+        )
+    }
+
+    async fn test_list_range_parse_fail() {
+        let q = query!("lget", "mylist", "range", "1", "2a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+        let q = query!("lget", "mylist", "range", "2a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+        // now do the same with an existing key
+        lset!(con, "mylist", "a", "b", "c");
+        let q = query!("lget", "mylist", "range", "1", "2a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+        let q = query!("lget", "mylist", "range", "2a");
+        runeq!(con, q, Element::RespCode(RespCode::Wrongtype));
+    }
+
     // sanity tests
     async fn test_get_model_error() {
         query.push("GET");
