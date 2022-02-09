@@ -109,6 +109,12 @@ impl<'a> AnyArrayIter<'a> {
     pub unsafe fn next_unchecked_bytes(&mut self) -> Bytes {
         Bytes::copy_from_slice(self.next_unchecked())
     }
+    pub fn map_next<T>(&mut self, cls: fn(&[u8]) -> T) -> Option<T> {
+        self.next().map(|v| cls(v))
+    }
+    pub fn next_string_owned(&mut self) -> Option<String> {
+        self.map_next(|v| String::from_utf8_lossy(&v).to_string())
+    }
 }
 
 impl<'a> Iterator for AnyArrayIter<'a> {
