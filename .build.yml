@@ -10,15 +10,14 @@ steps:
   - name: Test
     image: rust
     commands:
-      - apt update && apt-get install libhtml-parser-perl -y
+      - apt update && apt-get install libhtml-parser-perl zip -y
       - make test
-  - name: Bundle artifact
-    image: alpine
-    commands:
-      - apk add zip
       - >
         zip -j aarch64-unknown-linux-gnu-builds.zip
         target/debug/skyd target/debug/skysh target/debug/sky-bench
+    when:
+      event:
+        - push
   - name: Upload artifacts
     image: plugins/s3
     settings:
@@ -32,6 +31,31 @@ steps:
       path_style: true
       endpoint:
         from_secret: storage_s3_url
+    when:
+      event:
+        - push
+  - name: Package release
+    image: rust
+    environment:
+      ARTIFACT: aarch64-linux-gnu
+    commands:
+      - make bundle
+      - make deb
+      - mv *.deb skytable-${DRONE_TAG}-$ARTIFACT.deb
+    when:
+      event:
+        - tag
+  - name: Release bundle
+    image: plugins/github-release
+    settings:
+      api_key:
+        from_secret: github_token
+      files:
+        - "*.deb"
+        - "*.zip"
+    when:
+      event:
+        - tag
 
 ---
 kind: pipeline

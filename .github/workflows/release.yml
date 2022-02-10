@@ -238,51 +238,12 @@ jobs:
         with:
           name: skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
 
-  build-arm64:
-    name: Build artifacts (self-hosted-arm64-native)
-    runs-on: self-hosted
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - name: Set up tools
-        run: |
-          sudo apt update && sudo apt install awscli zip zstd -y
-          aws configure set aws_access_key_id ${{ secrets.STORAGE_ACCESS_KEY }}
-          aws configure set aws_secret_access_key ${{ secrets.STORAGE_ACCESS_SECRET }}
-          aws configure set default.s3.signature_version s3v4
-      - name: Install Rust
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo $HOME/.cargo/bin >> $GITHUB_PATH
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
-      - name: Make bundle and packages
-        env:
-          TARGET: aarch64-unknown-linux-gnu
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
-          ARTIFACT: aarch64-linux-gnu
-        run: |
-          make bundle
-          make deb
-          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb
-      - name: Upload bundle and packages
-        run: |
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip s3://releases/${{ steps.get_version.outputs.VERSION }}/
-          aws --endpoint-url ${{ secrets.STORAGE_ACCESS_URL }} s3 cp skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb s3://releases/${{ steps.get_version.outputs.VERSION }}/
-
   release:
     name: Release
     needs:
       - build_64bit
       - build_32bit
       - build_musl
-      - build-arm64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -296,11 +257,6 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           path: artifacts
-      - name: Download ARM64 bundle
-        run: |
-          wget https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/sky-bundle-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.zip
-          wget https://releases.skytable.io/release/${{ steps.get_version.outputs.VERSION }}/skytable-${{ steps.get_version.outputs.VERSION }}-aarch64-linux-gnu.deb
-        working-directory: artifacts
       - name: Upload release binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
