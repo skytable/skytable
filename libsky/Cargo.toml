@@ -2,7 +2,7 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "libsky"
-version = "0.7.2"
+version = "0.7.3-alpha.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
