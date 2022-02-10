@@ -1,3 +1,4 @@
+# pipeline for testing on ARM64
 kind: pipeline
 type: docker
 name: Test on Linux (ARM64)
@@ -5,19 +6,19 @@ name: Test on Linux (ARM64)
 platform:
   os: linux
   arch: arm64
+trigger:
+  event:
+    - push
 
 steps:
   - name: Test
     image: rust
     commands:
-      - apt update && apt-get install libhtml-parser-perl zip -y
+      - apt-get update && apt-get install libhtml-parser-perl zip -y
       - make test
       - >
         zip -j aarch64-unknown-linux-gnu-builds.zip
         target/debug/skyd target/debug/skysh target/debug/sky-bench
-    when:
-      event:
-        - push
   - name: Upload artifacts
     image: plugins/s3
     settings:
@@ -31,21 +32,34 @@ steps:
       path_style: true
       endpoint:
         from_secret: storage_s3_url
-    when:
-      event:
-        - push
+
+---
+# pipeline for building release packages
+kind: pipeline
+type: docker
+name: Release
+
+platform:
+  os: linux
+  arch: arm64
+trigger:
+  event:
+    - tag
+
+steps:
   - name: Package release
     image: rust
     environment:
       ARTIFACT: aarch64-linux-gnu
     commands:
+      - apt-get update && apt-get install zip -y
       - make bundle
       - make deb
       - mv *.deb skytable-${DRONE_TAG}-$ARTIFACT.deb
     when:
       event:
         - tag
-  - name: Release bundle
+  - name: Upload packages
     image: plugins/github-release
     settings:
       api_key:
@@ -58,6 +72,7 @@ steps:
         - tag
 
 ---
+# pipeline for testing on Linux x86_64
 kind: pipeline
 type: docker
 name: Test on Linux (x86_64)
