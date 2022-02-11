@@ -197,15 +197,15 @@ dependencies = [
 
 [[package]]
 name = "crossterm"
-version = "0.22.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c85525306c4291d1b73ce93c8acf9c339f9b213aef6c1d85c3830cbf1c16325c"
+checksum = "77b75a27dc8d220f1f8521ea69cd55a34d720a200ebb3a624d9aa19193d3b432"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
  "libc",
  "mio",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -464,14 +464,14 @@ checksum = "e74d72e0f9b65b5b4ca49a346af3976df0f9c61d550727f349ecd559f251a26c"
 
 [[package]]
 name = "libsky"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "termcolor",
 ]
 
 [[package]]
 name = "libstress"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "sky-bench"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "clap",
  "devtimer",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "sky-migrate"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "bincode",
  "clap",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "sky_macros"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1012,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "skyd"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "ahash",
  "bincode",
@@ -1043,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "skysh"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 dependencies = [
  "clap",
  "crossterm",

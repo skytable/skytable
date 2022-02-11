@@ -3,7 +3,7 @@ authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 build = "build.rs"
 edition = "2021"
 name = "skyd"
-version = "0.7.3-alpha.1"
+version = "0.7.3-alpha.2"
 
 [dependencies]
 # internal deps
@@ -51,7 +51,7 @@ rand = "0.8.4"
 tokio = { version = "1.16.1", features = ["test-util"] }
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.116"
+libc = "0.2.117"
 
 [features]
 nightly = []
