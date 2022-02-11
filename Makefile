@@ -115,7 +115,7 @@ bundle: release-bundle
 	@${SEP}
 	@echo "Building and packaging bundle (release) ..."
 	@${ARCHIVE}
-	@-${RENAME_ARTIFACT}
+	@${RENAME_ARTIFACT}
 	@${SEP}
 test: .pre
 	@${SEP}
@@ -139,4 +139,12 @@ clean:
 	@${SEP}
 	@echo "Cleaning up target folder ..."
 	cargo clean
+	@${SEP}
+deb: release-bundle
+	@${SEP}
+	@echo "Making a debian package (release) ..."
+	@echo "Installing tools for packaging ..."
+	@cargo install cargo-deb
+	@echo "Packaging ..."
+	@cargo deb $(TARGET_ARG) --manifest-path=server/Cargo.toml --output .
 	@${SEP}

@@ -55,7 +55,6 @@ steps:
       - apt-get update && apt-get install zip -y
       - make bundle
       - make deb
-      - mv *.deb skytable-${DRONE_TAG}-$ARTIFACT.deb
     when:
       event:
         - tag
