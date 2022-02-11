@@ -10,7 +10,7 @@ edition = "2021"
 # internal deps
 libsky = { path = "../libsky" }
 skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
-    "async",
+    "aio",
     "aio-sslv",
 ], default-features = false }
 # external deps

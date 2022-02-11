@@ -42,7 +42,7 @@ cc = "1.0.72"
 # internal deps
 libstress = { path = "../libstress" }
 skytable = { git = "https://github.com/skytable/client-rust", features = [
-  "async",
+  "aio",
   "aio-ssl",
 ], default-features = false, branch = "next" }
 # external deps

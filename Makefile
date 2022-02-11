@@ -1,168 +1,142 @@
+# set ROOT_DIR as our test suite uses it
 export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-ADDITIONAL_SOFTWARE=
-# (DEF) Either prepare --target triple-x-y OR have an empty value
-TARGET_ARG =
+# no additional software note
+NO_ADDITIONAL_SOFTWARE := echo "No additional software required for this target"
+# target argument
+TARGET_ARG :=
+# target folder path
+TARGET_FOLDER := target/
+# additional software installation
+ADDITIONAL_SOFTWARE := 
+# update variables depending on target
 ifneq ($(origin TARGET),undefined)
-TARGET_ARG +=--target ${TARGET}
-ifeq ($(TARGET),x86_64-unknown-linux-musl)
-# we need musl-tools for 64-bit musl targets
-ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install musl-tools -y
-endif
-ifeq ($(TARGET),i686-unknown-linux-gnu)
-# we need gcc-multilib on 32-bit linux targets
-ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install gcc-multilib -y
-endif
+  ifeq ($(TARGET),x86_64-unknown-linux-musl)
+    # for MUSL builds, we need to install musl-tools
+    ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install musl-tools -y
+  else ifeq ($(TARGET),i686-unknown-linux-gnu)
+    # for 32-bit we need multilib
+    ADDITIONAL_SOFTWARE += sudo apt-get update && sudo apt install gcc-multilib -y
+  else
+    ADDITIONAL_SOFTWARE += ${NO_ADDITIONAL_SOFTWARE}
+  endif
+TARGET_ARG += --target ${TARGET}
+TARGET_FOLDER := $(addsuffix ${TARGET}/,${TARGET_FOLDER})
+else
+ADDITIONAL_SOFTWARE += ${NO_ADDITIONAL_SOFTWARE}
 endif
 
-# (DEF) display a message if no additional packages are required for this target
-ifeq ($(ADDITIONAL_SOFTWARE),)
-ADDITIONAL_SOFTWARE += echo "info: No additional software required for this target"
-endif
+TARGET_FOLDER := $(addsuffix release/,${TARGET_FOLDER})
+# cargo build
+CBUILD := cargo build $(TARGET_ARG)
+# cargo test
+CTEST := cargo test $(TARGET_ARG)
 
-BUILD_VERBOSE = cargo build --verbose $(TARGET_ARG)
+# binary file paths
+BINARY_SKYSH := $(TARGET_FOLDER)skysh
+BINARY_SKYD := $(TARGET_FOLDER)skyd
+BINARY_SKYBENCH := $(TARGET_FOLDER)sky-bench
+BINARY_SKYMIGRATE := $(TARGET_FOLDER)sky-migrate
+# archive command
+ARCHIVE :=
+# start background server command
+START_SERVER := cargo run $(TARGET_ARG) -p skyd -- --noart --sslchain cert.pem --sslkey key.pem
+STOP_SERVER :=
 
-# (DEF) Create empty commands
-STOP_SERVER =
-BUILD_COMMAND =
-BUILD_SERVER_COMMAND =
-TEST_COMMAND =
-RELEASE_COMMAND =
-START_COMMAND =
-
-# (DEF) Add cmd /c for windows due to OpenSSL issues or just add cargo run for non-windows
 ifeq ($(OS),Windows_NT)
-# export windows specifc rustflags
-export RUSTFLAGS = -Ctarget-feature=+crt-static
-# add command to use cmd because OpenSSL can't build on Windows bash
-BUILD_COMMAND += cmd /C set RUSTFLAGS = -Ctarget-feature=+crt-static
-# same thing here
-BUILD_SERVER_COMMAND += cmd /C
-TEST_COMMAND += cmd /C
-STOP_SERVER += taskkill.exe /F /IM skyd.exe
-RELEASE_COMMAND += cmd /C
-START_COMMAND += cmd /C START /B
+  # on windows, so we need exe
+  ARCHIVE += 7z a ourbundle.zip $(BINARY_SKYSH).exe $(BINARY_SKYD).exe $(BINARY_SKYBENCH).exe $(BINARY_SKYMIGRATE).exe
+  # also add RUSTFLAGS
+  export RUSTFLAGS = -Ctarget-feature=+crt-static
+  # now add start command
+  START_SERVER := cmd /C START /B $(START_SERVER) 
+  # windows is funky with OpenSSL, so add these
+  CBUILD := cmd /C $(CBUILD)
+  CTEST := cmd /C $(CTEST)
+  # finally add stop command
+  STOP_SERVER := taskkill.exe /F /IM skyd.exe
 else
-STOP_SERVER += pkill skyd
-# make sure to set executable permissions
+  # not windows, so archive is easy
+  ARCHIVE += zip -j ourbundle.zip $(BINARY_SKYSH) $(BINARY_SKYD) $(BINARY_SKYBENCH) $(BINARY_SKYMIGRATE)
+  # now add start command
+  START_SERVER := $(START_SERVER) &
+  # add stop command
+  STOP_SERVER := pkill skyd
 endif
 
-# (DEF) Assemble the commands 
-BUILD_SERVER_COMMAND += $(BUILD_VERBOSE)
-BUILD_SERVER_COMMAND += -p skyd
-RELEASE_SERVER_COMMAND =
-RELEASE_SERVER_COMMAND += $(BUILD_SERVER_COMMAND)
-RELEASE_SERVER_COMMAND += --release
-RELEASE_COMMAND += cargo build --release $(TARGET_ARG)
-BUILD_COMMAND += $(BUILD_VERBOSE)
-TEST_COMMAND += cargo test $(TARGET_ARG)
-START_COMMAND += cargo run $(TARGET_ARG) -p skyd
-START_COMMAND_RELEASE =
-START_COMMAND_RELEASE += ${START_COMMAND}
-START_COMMAND_RELEASE += --release
-START_COMMAND += -- --noart --nosave
-START_COMMAND += --sslchain cert.pem --sslkey key.pem
-START_COMMAND_RELEASE += -- --noart --nosave
-ifneq ($(OS),Windows_NT)
-START_COMMAND += &
-START_COMMAND_RELEASE += &
-endif
-# (DEF) Prepare release bundle commands
-BUNDLE=
-ifeq ($(origin TARGET),undefined)
-# no target defined. but check for windows
-ifeq ($(OS),Windows_NT)
-# windows, so we need exe
-BUNDLE += cd target/release &&
-BUNDLE += 7z a ../../../bundle.zip skysh.exe skyd.exe sky-bench.exe sky-migrate.exe
+# update the archive command if we have a version and artifact name
+RENAME_ARTIFACT :=
+ifneq ($(origin ARTIFACT),undefined)
+  # so we have an artifact name
+  ifneq ($(origin VERSION),undefined)
+    # we also have the version name
+	RENAME_ARTIFACT := sky-bundle-${VERSION}-${ARTIFACT}.zip
+  else
+    # no version name
+	RENAME_ARTIFACT := sky-bundle-${ARTIFACT}.zip
+  endif
 else
-# not windows, so no exe
-BUNDLE+=zip -j bundle.zip target/release/skysh target/release/skyd target/release/sky-bench target/release/sky-migrate
+  # no artifact (hack)
+  RENAME_ARTIFACT := bundle.zip
 endif
-else
-# target was defined, but check for windows
-ifeq ($(OS),Windows_NT)
-# windows, so we need exe
-BUNDLE += cd target/${TARGET}/release &&
-BUNDLE+=7z a ../../../sky-bundle-${VERSION}-${ARTIFACT}.zip skysh.exe skyd.exe sky-bench.exe sky-migrate.exe
-else
-# not windows, so no exe
-ifneq ($(origin CARGO_TARGET_DIR),undefined)
-# target defined and target dir. use this instead of target/
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip ${CARGO_TARGET_DIR}/${TARGET}/release/skysh ${CARGO_TARGET_DIR}/${TARGET}/release/skyd ${CARGO_TARGET_DIR}/${TARGET}/release/sky-bench ${CARGO_TARGET_DIR}/${TARGET}/release/sky-migrate
-else
-# just the plain old target/${TARGET} path
-BUNDLE+=zip -j sky-bundle-${VERSION}-${ARTIFACT}.zip target/${TARGET}/release/skysh target/${TARGET}/release/skyd target/${TARGET}/release/sky-bench target/${TARGET}/release/sky-migrate
-endif
-endif
-endif
+
+RENAME_ARTIFACT := $(addprefix mv ourbundle.zip ,${RENAME_ARTIFACT})
+
+# cargo build (debug)
+DEBUG := $(CBUILD)
+# cargo test
+TEST := $(CTEST)
+# cargo build (release)
+RELEASE := $(CBUILD) --release
+# cargo build (release) for skyd,skysh,sky-migrate and sky-bench
+RELEASE_BUNDLE := $(RELEASE) -p skyd -p sky-bench -p skysh -p sky-migrate
+SEP=echo "============================================================"
 
 .pre:
-	@echo "===================================================================="
-	@echo "Installing any additional dependencies"
-	@echo "===================================================================="
-	@$(ADDITIONAL_SOFTWARE)
-deb: release
-	@echo "===================================================================="
-	@echo "Building Debian package (optimized)"
-	@echo "===================================================================="
-	@cargo $(TARGET_ARG) install cargo-deb
-	@cargo deb $(TARGET_ARG) --manifest-path=server/Cargo.toml --output .
+	@${SEP}
+	@echo "Installing additional dependencies ..."
+	@${ADDITIONAL_SOFTWARE}
+	@${SEP}
 build: .pre
-	@echo "===================================================================="
-	@echo "Building all binaries in debug mode (unoptimized)"
-	@echo "===================================================================="
-	@$(BUILD_COMMAND)
-.build-server: .pre
-	@echo "===================================================================="
-	@echo "Building server binary in debug mode (unoptimized)"
-	@echo "===================================================================="
-	@$(BUILD_SERVER_COMMAND)
+	@${SEP}
+	@echo "Building all binaries (debug) ..."
+	@${DEBUG}
+	@${SEP}
 release: .pre
-	@echo "===================================================================="
-	@echo "Building all binaries in release mode (optimized)"
-	@echo "===================================================================="
-	cargo build --release --verbose $(TARGET_ARG)
-.release-server:
-	@echo "===================================================================="
-	@echo "Building server binary in release mode (optimized)"
-	@echo "===================================================================="
-	@$(RELEASE_SERVER_COMMAND)
-test: .build-server
-	@echo "===================================================================="
-	@echo "Starting database server in background"
-	@echo "===================================================================="
+	@${SEP}
+	@echo "Building all binaries (release) ..."
+	@${RELEASE}
+	@${SEP}
+release-bundle: .pre
+	@${SEP}
+	@echo "Building binaries for packaging (release) ..."
+	@${RELEASE_BUNDLE}
+	@${SEP}
+bundle: release-bundle
+	@${SEP}
+	@echo "Building and packaging bundle (release) ..."
+	@${ARCHIVE}
+	@-${RENAME_ARTIFACT}
+	@${SEP}
+test: .pre
+	@${SEP}
+	@echo "Building and starting server in debug mode ..."
+	@${CBUILD} -p skyd
 	@chmod +x ci/ssl.sh && bash ci/ssl.sh
-	@${START_COMMAND}
-# sleep for 5s to let the server start up
-	@sleep 5
-	@echo "===================================================================="
-	@echo "Running all tests"
-	@echo "===================================================================="
-	cargo test $(TARGET_ARG)
-	@$(STOP_SERVER)
-	@sleep 2
+	@${START_SERVER}
+	@echo "Sleeping for 10 seconds to let the server start up ..."
+	@sleep 10
+	@echo "Finished sleeping"
+	@${SEP}
+	@${SEP}
+	@echo "Running all tests ..."
+	@${TEST}
+	@echo "Waiting for server to shut down ..."
+	@${STOP_SERVER}
+	@echo "Removing temporary files ..."
 	@rm -f .sky_pid cert.pem key.pem
-stress: .release-server
-	@echo "===================================================================="
-	@echo "Starting database server in background"
-	@echo "===================================================================="
-	@chmod +x ci/ssl.sh && bash ci/ssl.sh
-	@${START_COMMAND_RELEASE}
-# sleep for 5s to let the server start up
-	@sleep 5
-	cargo run $(TARGET_ARG) --release -p stress-test
-	@echo "===================================================================="
-	@echo "Stress testing (all)"
-	@echo "===================================================================="
-	@$(STOP_SERVER)
-	@rm -f .sky_pid cert.pem key.pem
-bundle: release
-	@echo "===================================================================="
-	@echo "Creating bundle for platform"
-	@echo "===================================================================="
-	@$(BUNDLE)
+	@${SEP}
 clean:
-	@echo "===================================================================="
-	@echo "Cleaning up target folder"
-	@echo "===================================================================="
+	@${SEP}
+	@echo "Cleaning up target folder ..."
 	cargo clean
+	@${SEP}
