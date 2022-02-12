@@ -28,6 +28,7 @@
 mod macros;
 pub mod compiler;
 pub mod os;
+use std::process;
 
 /// # Unsafe unwrapping
 ///
@@ -61,4 +62,8 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
             None => impossible!(),
         }
     }
+}
+
+pub fn exit_error() -> ! {
+    process::exit(0x01)
 }

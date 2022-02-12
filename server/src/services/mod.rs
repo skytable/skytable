@@ -26,6 +26,9 @@
 
 pub mod bgsave;
 pub mod snapshot;
+use crate::corestore::memstore::Memstore;
+use crate::diskstore::flock::FileLock;
+use crate::storage;
 use crate::util::os;
 use crate::IoResult;
 
@@ -36,4 +39,19 @@ pub fn restore_data(src: Option<String>) -> IoResult<()> {
         log::info!("Successfully restored data from snapshot");
     }
     Ok(())
+}
+
+pub fn pre_shutdown_cleanup(mut pid_file: FileLock, mr: Option<&Memstore>) -> bool {
+    if let Err(e) = pid_file.unlock() {
+        log::error!("Shutdown failure: Failed to unlock pid file: {}", e);
+        return false;
+    }
+    if let Some(mr) = mr {
+        log::info!("Compacting tree");
+        if let Err(e) = storage::interface::cleanup_tree(mr) {
+            log::error!("Failed to compact tree: {}", e);
+            return false;
+        }
+    }
+    true
 }

@@ -34,16 +34,13 @@
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
-use crate::corestore::memstore::Memstore;
 use crate::diskstore::flock::FileLock;
+pub use crate::util::exit_error;
 use env_logger::Builder;
-use libsky::util::terminal;
 use libsky::URL;
 use libsky::VERSION;
 use std::env;
 use std::process;
-use std::thread;
-use std::time;
 #[macro_use]
 mod util;
 mod actions;
@@ -109,48 +106,12 @@ fn main() {
         Err(e) => {
             // uh oh, something happened while starting up
             log::error!("{}", e);
-            pre_shutdown_cleanup(pid_file, None);
+            services::pre_shutdown_cleanup(pid_file, None);
             process::exit(1);
         }
     };
-    assert_eq!(
-        db.strong_count(),
-        1,
-        "Maybe the compiler reordered the drop causing more than one instance of Corestore to live at this point"
-    );
     log::info!("Stopped accepting incoming connections");
-    loop {
-        // Keep looping until we successfully write the in-memory table to disk
-        match services::bgsave::run_bgsave(&db) {
-            Ok(_) => {
-                log::info!("Successfully saved data to disk");
-                break;
-            }
-            Err(e) => {
-                log::error!(
-                    "Failed to write data with error '{}'. Attempting to retry in 10s",
-                    e
-                );
-            }
-        }
-        thread::sleep(time::Duration::from_secs(10));
-    }
-    pre_shutdown_cleanup(pid_file, Some(db.get_store()));
-    terminal::write_info("Goodbye :)\n").unwrap();
-}
-
-pub fn pre_shutdown_cleanup(mut pid_file: FileLock, mr: Option<&Memstore>) {
-    if let Err(e) = pid_file.unlock() {
-        log::error!("Shutdown failure: Failed to unlock pid file: {}", e);
-        process::exit(0x01);
-    }
-    if let Some(mr) = mr {
-        log::info!("Compacting tree");
-        if let Err(e) = storage::interface::cleanup_tree(mr) {
-            log::error!("Failed to compact tree: {}", e);
-            process::exit(0x01);
-        }
-    }
+    arbiter::finalize_shutdown(db, pid_file);
 }
 
 use self::config::ConfigurationSet;

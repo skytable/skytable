@@ -13,6 +13,8 @@ All changes in this project will be noted in this file.
 ### Fixes
 
 - Fixed infinite wait (loop) when sample space for key generation is not large enough
+- Fixed infinite save-on-termination loop. Now loop uses a threshold and on 4 subsequent `SIGINT` signals,
+  it will quit forcefully
 - Removed `upgrade` subcommand from `skyd` which was removed in 0.7, but was erroneously accepted in the CLI
   parameters
 - Restored ability to use `--restore <backupdir>` to restore data from previous snapshots which was silently

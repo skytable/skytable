@@ -53,6 +53,7 @@ pub const fn cold_err<T>(v: T) -> T {
     v
 }
 #[inline(always)]
+#[allow(unused)]
 pub const fn hot<T>(v: T) -> T {
     if false {
         cold()

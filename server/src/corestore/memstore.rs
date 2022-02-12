@@ -157,9 +157,6 @@ pub enum DdlError {
 pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
-    /// the snapshot configuration
-    /// A **virtual lock** on the preload file
-    preload_lock: QuickLock<()>,
 }
 
 impl Memstore {
@@ -167,14 +164,10 @@ impl Memstore {
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
-            preload_lock: QuickLock::new(()),
         }
     }
     pub fn init_with_all(keyspaces: Coremap<ObjectID, Arc<Keyspace>>) -> Self {
-        Self {
-            keyspaces,
-            preload_lock: QuickLock::new(()),
-        }
+        Self { keyspaces }
     }
     /// Create a new in-memory table with the default keyspace and the default
     /// tables. So, whenever you're calling this, this is what you get:
@@ -202,7 +195,6 @@ impl Memstore {
                 n.true_if_insert(SYSTEM, Arc::new(Keyspace::empty()));
                 n
             },
-            preload_lock: QuickLock::new(()),
         }
     }
     /// Get an atomic reference to a keyspace
@@ -308,6 +300,7 @@ pub struct Keyspace {
     /// the tables
     pub tables: Coremap<ObjectID, Arc<Table>>,
     /// the replication strategy for this keyspace
+    #[allow(dead_code)] // TODO: Remove this once we're ready with replication
     replication_strategy: cluster::ReplicationStrategy,
     /// A **virtual lock** on the partmap for this keyspace
     partmap_lock: QuickLock<()>,
