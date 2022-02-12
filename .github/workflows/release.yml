@@ -8,6 +8,7 @@ name: Release
 env:
   GITHUB_REF: "${{ github.ref }}"
   CARGO_TERM_COLOR: always
+  VERSION: ${GITHUB_REF:10}
 
 jobs:
   build_64bit:
@@ -28,37 +29,14 @@ jobs:
             rust: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v2
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
+      - uses: actions/cache@v2
+        name: Restore cache
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
-
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.rust }}-${{ hashFiles('**/lockfiles') }}
 
       - name: Install Rust
         run: |
@@ -71,25 +49,21 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
           ARTIFACT: ${{ matrix.artifact }}
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          VERSION: ${{ env.VERSION }}
 
       - name: Build Linux packages
         run: |
           make deb
-          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+          mv *.deb skytable-${{ env.VERSION }}-${{ matrix.artifact }}.deb
         if: runner.os == 'Linux'
 
-      - name: Upload assets (bundles)
+      - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
-          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
-
-      - name: Upload assets (Linux packages)
-        uses: actions/upload-artifact@v2
-        with:
-          name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: runner.os == 'Linux'
+          name: |
+            *.zip
+            *.deb
+          path: packages
 
   build_32bit:
     name: Build artifacts (32-bit)
@@ -106,45 +80,29 @@ jobs:
             os: windows-latest
             artifact: i686-windows
             rust: i686-pc-windows-msvc
+          - build: linux
+            os: ubuntu-latest
+            rust: x86_64-unknown-linux-musl
+            artifact: x86_64-linux-musl
 
     steps:
       - uses: actions/checkout@v2
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
+      - uses: actions/cache@v2
+        name: Restore cache
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
-
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.rust }}-${{ hashFiles('**/lockfiles') }}
 
       - name: Install 32-bit tools (Linux)
         run: sudo apt update && sudo apt install gcc-multilib -y
         if: runner.os == 'Linux'
 
+      - name: Install MUSL tools
+        run: sudo apt update && sudo apt install musl-tools -y
+        if: matrix.rust == 'x86_64-unknown-linux-musl'
       - name: Install Rust
         run: rustup target add ${{ matrix.rust }}
 
@@ -154,105 +112,30 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
           ARTIFACT: ${{ matrix.artifact }}
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
+          VERSION: ${{ env.VERSION }}
 
       - name: Build Linux packages
         run: |
           make deb
-          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
+          mv *.deb skytable-${{ env.VERSION }}-${{ matrix.artifact }}.deb
         if: runner.os == 'Linux'
 
-      - name: Upload assets (binaries)
-        uses: actions/upload-artifact@v2
-        with:
-          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
-          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.zip
-
-      - name: Upload assets (Linux packages)
-        uses: actions/upload-artifact@v2
-        with:
-          name: skytable-${{ steps.get_version.outputs.VERSION }}-${{ matrix.artifact }}.deb
-        if: runner.os == 'Linux'
-
-  build_musl:
-    name: Build Linux x86_64-musl (Tier 2)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/registry
-          key: x86_64-unknown-linux-musl	-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            x86_64-unknown-linux-musl-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: x86_64-unknown-linux-musl-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            x86_64-unknown-linux-musl-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: x86_64-unknown-linux-musl-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            x86_64-unknown-linux-musl-target-
-
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
-
-      - name: Install MUSL tools
-        run: sudo apt update && sudo apt install musl-tools -y
-
-      - name: Install Rust
-        run: rustup target add x86_64-unknown-linux-musl
-
-      - name: Make bundle and packages
-        run: |
-          make bundle
-          make deb
-          mv *.deb skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
-        env:
-          RUST_BACKTRACE: 1
-          TARGET: x86_64-unknown-linux-musl
-          ARTIFACT: x86_64-linux-musl
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
-          path: sky-bundle-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.zip
-
-      - name: Upload assets (Linux packages)
-        uses: actions/upload-artifact@v2
-        with:
-          name: skytable-${{ steps.get_version.outputs.VERSION }}-x86_64-linux-musl.deb
+          name: |
+            *.zip
+            *.deb
+          path: packages
 
   release:
     name: Release
     needs:
       - build_64bit
       - build_32bit
-      - build_musl
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
       - name: Download all artifacts
         uses: actions/download-artifact@v2
         with:
@@ -260,7 +143,7 @@ jobs:
       - name: Upload release binaries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get_version.outputs.VERSION }}
+          TAG_NAME: ${{ env.VERSION }}
         run: |
           hub release edit $(find . -type f -name "*.zip" -printf "-a %p ") -m "" "$TAG_NAME"
           hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$TAG_NAME"

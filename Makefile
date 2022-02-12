@@ -146,5 +146,5 @@ deb: release-bundle
 	@echo "Installing tools for packaging ..."
 	@cargo install cargo-deb
 	@echo "Packaging ..."
-	@cargo deb $(TARGET_ARG) --manifest-path=server/Cargo.toml --output .
+	@cargo deb $(TARGET_ARG) --no-build --manifest-path=server/Cargo.toml --output skytable-${VERSION}-${ARTIFACT}.deb
 	@${SEP}
