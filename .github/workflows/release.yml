@@ -27,6 +27,11 @@ jobs:
           - os: windows-latest
             artifact: x86_64-windows
             rust: x86_64-pc-windows-msvc
+    env:
+      RUST_BACKTRACE: 1
+      TARGET: ${{ matrix.rust }}
+      ARTIFACT: ${{ matrix.artifact }}
+      VERSION: ${{ env.VERSION }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -45,16 +50,9 @@ jobs:
 
       - name: Make bundle
         run: make bundle
-        env:
-          RUST_BACKTRACE: 1
-          TARGET: ${{ matrix.rust }}
-          ARTIFACT: ${{ matrix.artifact }}
-          VERSION: ${{ env.VERSION }}
 
       - name: Build Linux packages
-        run: |
-          make deb
-          mv *.deb skytable-${{ env.VERSION }}-${{ matrix.artifact }}.deb
+        run: make deb
         if: runner.os == 'Linux'
 
       - name: Upload assets
@@ -84,7 +82,11 @@ jobs:
             os: ubuntu-latest
             rust: x86_64-unknown-linux-musl
             artifact: x86_64-linux-musl
-
+    env:
+      RUST_BACKTRACE: 1
+      TARGET: ${{ matrix.rust }}
+      ARTIFACT: ${{ matrix.artifact }}
+      VERSION: ${{ env.VERSION }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -108,16 +110,9 @@ jobs:
 
       - name: Make bundle
         run: make bundle
-        env:
-          RUST_BACKTRACE: 1
-          TARGET: ${{ matrix.rust }}
-          ARTIFACT: ${{ matrix.artifact }}
-          VERSION: ${{ env.VERSION }}
 
       - name: Build Linux packages
-        run: |
-          make deb
-          mv *.deb skytable-${{ env.VERSION }}-${{ matrix.artifact }}.deb
+        run: make deb
         if: runner.os == 'Linux'
 
       - name: Upload assets
