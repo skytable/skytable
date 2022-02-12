@@ -76,6 +76,10 @@ steps:
 kind: pipeline
 type: docker
 name: Test on Linux (x86_64)
+trigger:
+  event:
+    exclude:
+      - tag
 
 steps:
   - name: Test

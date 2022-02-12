@@ -28,7 +28,7 @@ jobs:
             artifact: x86_64-linux-gnu
           - rust: x86_64-unknown-linux-musl
             os: ubuntu-latest
-            artifact: x86_64-linux-gnu
+            artifact: x86_64-linux-musl
           - rust: x86_64-apple-darwin
             os: macos-latest
             artifact: x86_64-macos
@@ -48,7 +48,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ matrix.rust }}-${{ hashFiles('**/lockfiles') }}
+          key: ${{ matrix.rust }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |
