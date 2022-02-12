@@ -57,11 +57,6 @@ impl<'a, K, V> Ref<'a, K, V> {
     pub const fn value(&self) -> &V {
         self.v
     }
-    /// Get a ref to the key/value pair
-    pub const fn pair(&self) -> (&K, &V) {
-        let Self { k, v, .. } = self;
-        (k, v)
-    }
 }
 
 impl<'a, K, V> Deref for Ref<'a, K, V> {
@@ -77,18 +72,14 @@ unsafe impl<'a, K: Sync, V: Sync> Sync for Ref<'a, K, V> {}
 /// A r/w ref to a bucket
 pub struct RefMut<'a, K, V> {
     _g: RwLockWriteGuard<'a, LowMap<K, V>>,
-    k: &'a K,
+    _k: &'a K,
     v: &'a mut V,
 }
 
 impl<'a, K, V> RefMut<'a, K, V> {
     /// Create a new ref
     pub(super) fn new(_g: RwLockWriteGuard<'a, LowMap<K, V>>, k: &'a K, v: &'a mut V) -> Self {
-        Self { _g, k, v }
-    }
-    /// Get a ref to the key
-    pub const fn key(&self) -> &K {
-        self.k
+        Self { _g, _k: k, v }
     }
     /// Get a ref to the value
     pub const fn value(&self) -> &V {
@@ -97,11 +88,6 @@ impl<'a, K, V> RefMut<'a, K, V> {
     /// Get a mutable ref to the value
     pub fn value_mut(&mut self) -> &mut V {
         self.v
-    }
-    /// Get a ref to the k/v pair
-    pub fn pair(&mut self) -> (&K, &V) {
-        let Self { k, v, .. } = self;
-        (k, v)
     }
 }
 
@@ -143,10 +129,6 @@ impl<'a, K: Hash + Eq, V, S: BuildHasher> OccupiedEntry<'a, K, V, S> {
             key,
             hasher,
         }
-    }
-    /// Get a ref to the key
-    pub fn key(&self) -> &K {
-        self.elem.0
     }
     /// Get a ref to the value
     pub fn value(&self) -> &V {
@@ -197,14 +179,6 @@ impl<'a, K: Hash + Eq, V, S: BuildHasher> VacantEntry<'a, K, V, S> {
             RefMut::new(self.guard, kptr, vptr)
         }
     }
-    /// Turns self into a key (effectively freeing up the entry for another thread)
-    pub fn into_key(self) -> K {
-        self.key
-    }
-    /// Get a ref to the key
-    pub fn key(&self) -> &K {
-        &self.key
-    }
 }
 
 /// An entry, either occupied or vacant
@@ -213,13 +187,12 @@ pub enum Entry<'a, K, V, S = RandomState> {
     Vacant(VacantEntry<'a, K, V, S>),
 }
 
+#[cfg(test)]
 impl<'a, K, V, S> Entry<'a, K, V, S> {
-    /// Check if an entry is occupied
-    pub const fn is_occupied(&self) -> bool {
+    pub fn is_occupied(&self) -> bool {
         matches!(self, Self::Occupied(_))
     }
-    /// Check if an entry is vacant
-    pub const fn is_vacant(&self) -> bool {
+    pub fn is_vacant(&self) -> bool {
         matches!(self, Self::Vacant(_))
     }
 }
@@ -244,11 +217,6 @@ impl<'a, K, V> RefMulti<'a, K, V> {
     pub const fn value(&self) -> &V {
         self.v
     }
-    /// Get a ref to the k/v pair
-    pub const fn pair(&self) -> (&K, &V) {
-        let Self { k, v, .. } = self;
-        (k, v)
-    }
 }
 
 impl<'a, K, V> Deref for RefMulti<'a, K, V> {
@@ -264,18 +232,14 @@ unsafe impl<'a, K: Send, V: Send> Send for RefMulti<'a, K, V> {}
 /// A shared r/w ref to a bucket
 pub struct RefMultiMut<'a, K, V> {
     _g: Arc<RwLockWriteGuard<'a, LowMap<K, V>>>,
-    k: &'a K,
+    _k: &'a K,
     v: &'a mut V,
 }
 
 impl<'a, K, V> RefMultiMut<'a, K, V> {
     /// Create a new shared r/w ref
     pub fn new(_g: Arc<RwLockWriteGuard<'a, LowMap<K, V>>>, k: &'a K, v: &'a mut V) -> Self {
-        Self { _g, k, v }
-    }
-    /// Get a ref to the key
-    pub const fn key(&self) -> &K {
-        self.k
+        Self { _g, _k: k, v }
     }
     /// Get a ref to the value
     pub const fn value(&self) -> &V {
@@ -284,16 +248,6 @@ impl<'a, K, V> RefMultiMut<'a, K, V> {
     /// Get a mutable ref to the value
     pub fn value_mut(&mut self) -> &mut V {
         self.v
-    }
-    /// Get a ref to the k/v pair
-    pub fn pair(&self) -> (&K, &V) {
-        let Self { k, v, .. } = self;
-        (k, v)
-    }
-    /// Get a mutable ref to the k/v (k, mut v) pair
-    pub fn pair_mut(&mut self) -> (&K, &mut V) {
-        let Self { k, v, .. } = self;
-        (k, v)
     }
 }
 

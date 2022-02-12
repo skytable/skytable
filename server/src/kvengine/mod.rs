@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)] // TODO(@ohsayan): Plonk this
+
 use crate::corestore::htable::Coremap;
 use crate::corestore::htable::Data;
 use crate::corestore::map::bref::Ref;

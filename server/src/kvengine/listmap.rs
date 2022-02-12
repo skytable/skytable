@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)] // TODO(@ohsayan): Plonk this
+
 use super::KVTable;
 use super::SingleEncoder;
 use crate::corestore::htable::Coremap;

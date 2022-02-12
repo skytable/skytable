@@ -140,6 +140,7 @@ pub struct BorrowedIterMut<'a, K, V, S> {
     citer: Option<BorrowedIterGroupMut<'a, K, V>>,
 }
 
+#[allow(unused)] // TODO(@ohsayan): Plonk this
 impl<'a, K, V, S> BorrowedIterMut<'a, K, V, S> {
     pub const fn new(map: &'a Skymap<K, V, S>) -> Self {
         Self {

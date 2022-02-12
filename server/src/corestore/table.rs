@@ -50,12 +50,14 @@ pub struct Table {
 }
 
 impl Table {
+    #[cfg(test)]
     pub const fn from_kve(kve: KVEngine, volatile: bool) -> Self {
         Self {
             model_store: DataModel::KV(kve),
             volatile,
         }
     }
+    #[cfg(test)]
     pub const fn from_kve_listmap(kve: KVEListMap, volatile: bool) -> Self {
         Self {
             model_store: DataModel::KVExtListmap(kve),
@@ -169,6 +171,7 @@ impl Table {
         Some(ret)
     }
     /// Create a new kve with default settings but with provided volatile configuration
+    #[cfg(test)]
     pub fn new_kve_with_volatile(volatile: bool) -> Self {
         Self::new_pure_kve_with_data(Coremap::new(), volatile, false, false)
     }

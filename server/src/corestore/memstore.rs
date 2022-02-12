@@ -54,6 +54,8 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
+#![allow(unused)] // TODO(@ohsayan): Plonk this
+
 use super::KeyspaceResult;
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;

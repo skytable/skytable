@@ -177,6 +177,11 @@ fn spawn_task(tx: Sender<bool>, db: Corestore, do_sleep: bool) -> JoinHandle<()>
 }
 
 pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
+    assert_eq!(
+        corestore.strong_count(),
+        1,
+        "Correctness error. finalize_shutdown called before dropping server runtime"
+    );
     let rt = tokio::runtime::Builder::new_multi_thread()
         .thread_name("server-final")
         .enable_all()

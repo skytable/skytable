@@ -25,6 +25,7 @@
 */
 
 #![allow(clippy::manual_map)] // avoid LLVM bloat
+#![allow(unused)] // TODO(@ohsayan): Plonk this
 
 use crate::util::compiler;
 use core::borrow::Borrow;

@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(unused)] // TODO(@ohsayan): Plonk this
+
 use crate::corestore::map::{
     bref::{Entry, OccupiedEntry, Ref, VacantEntry},
     iter::{BorrowedIter, OwnedIter},
