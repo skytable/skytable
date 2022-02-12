@@ -6,9 +6,8 @@ on:
 name: Release
 
 env:
-  GITHUB_REF: "${{ github.ref }}"
   CARGO_TERM_COLOR: always
-  VERSION: ${GITHUB_REF:10}
+  VERSION: ${{ github.ref_name }}
 
 jobs:
   build_64bit:
@@ -31,7 +30,6 @@ jobs:
       RUST_BACKTRACE: 1
       TARGET: ${{ matrix.rust }}
       ARTIFACT: ${{ matrix.artifact }}
-      VERSION: ${{ env.VERSION }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -58,35 +56,31 @@ jobs:
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: |
+          path: |
             *.zip
             *.deb
-          path: packages
+          name: packages
 
   build_32bit:
     name: Build artifacts (32-bit)
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [linux, windows]
+        os: [ubuntu-latest, windows-latest]
         include:
-          - build: linux
-            os: ubuntu-latest
+          - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
             artifact: i686-linux-gnu
-          - build: windows
-            os: windows-latest
+          - os: windows-latest
             artifact: i686-windows
             rust: i686-pc-windows-msvc
-          - build: linux
-            os: ubuntu-latest
+          - os: ubuntu-latest
             rust: x86_64-unknown-linux-musl
             artifact: x86_64-linux-musl
     env:
       RUST_BACKTRACE: 1
       TARGET: ${{ matrix.rust }}
       ARTIFACT: ${{ matrix.artifact }}
-      VERSION: ${{ env.VERSION }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v2
@@ -118,10 +112,10 @@ jobs:
       - name: Upload assets
         uses: actions/upload-artifact@v2
         with:
-          name: |
+          path: |
             *.zip
             *.deb
-          path: packages
+          name: packages
 
   release:
     name: Release
