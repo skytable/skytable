@@ -51,6 +51,7 @@ steps:
     image: rust
     environment:
       ARTIFACT: aarch64-linux-gnu
+      VERSION: ${DRONE_TAG}
     commands:
       - apt-get update && apt-get install zip -y
       - make bundle

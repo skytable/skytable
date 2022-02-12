@@ -15,17 +15,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust:
+          [
+            x86_64-unknown-linux-gnu,
+            x86_64-unknown-linux-musl,
+            x86_64-apple-darwin,
+            x86_64-pc-windows-msvc,
+          ]
         include:
-          - os: ubuntu-latest
+          - rust: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
             artifact: x86_64-linux-gnu
-            rust: x86_64-unknown-linux-gnu
-          - os: macos-latest
+          - rust: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: x86_64-linux-gnu
+          - rust: x86_64-apple-darwin
+            os: macos-latest
             artifact: x86_64-macos
-            rust: x86_64-apple-darwin
-          - os: windows-latest
+          - rust: x86_64-pc-windows-msvc
+            os: windows-latest
             artifact: x86_64-windows
-            rust: x86_64-pc-windows-msvc
     env:
       RUST_BACKTRACE: 1
       TARGET: ${{ matrix.rust }}
@@ -45,6 +54,10 @@ jobs:
         run: |
           rustup default stable
           rustup target add ${{ matrix.rust }}
+
+      - name: Install MUSL tools
+        run: sudo apt update && sudo apt install musl-tools -y
+        if: matrix.rust == 'x86_64-unknown-linux-musl'
 
       - name: Make bundle
         run: make bundle
@@ -74,9 +87,7 @@ jobs:
           - os: windows-latest
             artifact: i686-windows
             rust: i686-pc-windows-msvc
-          - os: ubuntu-latest
-            rust: x86_64-unknown-linux-musl
-            artifact: x86_64-linux-musl
+
     env:
       RUST_BACKTRACE: 1
       TARGET: ${{ matrix.rust }}
@@ -96,9 +107,6 @@ jobs:
         run: sudo apt update && sudo apt install gcc-multilib -y
         if: runner.os == 'Linux'
 
-      - name: Install MUSL tools
-        run: sudo apt update && sudo apt install musl-tools -y
-        if: matrix.rust == 'x86_64-unknown-linux-musl'
       - name: Install Rust
         run: rustup target add ${{ matrix.rust }}
 
