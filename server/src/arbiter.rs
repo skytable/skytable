@@ -202,16 +202,16 @@ pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
         };
         let mut threshold = TERMSIG_THRESHOLD;
         macro_rules! check_threshold {
-            () => {
+            () => {{
+                threshold -= 1;
                 if threshold == 0 {
                     log::error!("SIGTERM received but failed to flush data. Quitting because threshold exceeded");
                     break false;
                 } else {
                     log::error!("SIGTERM received but failed to flush data. Threshold is at {threshold}");
-                    threshold -= 1;
                     continue;
                 }
-            };
+            }};
         }
         loop {
             #[cfg(not(unix))]
