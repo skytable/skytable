@@ -166,7 +166,10 @@ fn spawn_task(tx: Sender<bool>, db: Corestore, do_sleep: bool) -> JoinHandle<()>
             sleep(Duration::from_secs(10));
         }
         let ret = match crate::services::bgsave::run_bgsave(&db) {
-            Ok(()) => true,
+            Ok(()) => {
+                log::info!("Save before termination successful");
+                true
+            }
             Err(e) => {
                 log::error!("Failed to run save on termination: {e}");
                 false
@@ -192,32 +195,57 @@ pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
         let db = dbc;
         let (tx, mut rx) = mpsc::channel::<bool>(1);
         spawn_task(tx.clone(), db.clone(), false);
+        let spawn_again = || {
+            // we failed, so we better sleep
+            // now spawn it again to see the state
+            spawn_task(tx.clone(), db.clone(), true)
+        };
         let mut threshold = TERMSIG_THRESHOLD;
+        macro_rules! check_threshold {
+            () => {
+                if threshold == 0 {
+                    log::error!("SIGTERM received but failed to flush data. Quitting because threshold exceeded");
+                    break false;
+                } else {
+                    log::error!("SIGTERM received but failed to flush data. Threshold is at {threshold}");
+                    threshold -= 1;
+                    continue;
+                }
+            };
+        }
         loop {
+            #[cfg(not(unix))]
             tokio::select! {
                 ret = rx.recv() => {
                     if ret.unwrap() {
                         // that's good to go
-                        log::info!("Save before termination successful");
                         break true;
                     } else {
-                        let txc = tx.clone();
-                        let dbc = db.clone();
-                        // we failed, so we better sleep
-                        // now spawn it again to see the state
-                        spawn_task(txc, dbc, true);
+                        spawn_again();
                     }
                 }
-                _ = ctrl_c() => {
-                    if threshold == 0 {
-                        log::error!("SIGTERM received but failed to flush data. Quitting because threshold exceeded");
-                        break false;
+                _ = ctrl_c() => check_threshold!(),
+            }
+            #[cfg(unix)]
+            let sigterm = match UnixTerminationSignal::init() {
+                Ok(sig) => sig,
+                Err(e) => {
+                    log::error!("Failed to bind to signal: {e}");
+                    break false;
+                }
+            };
+            #[cfg(unix)]
+            tokio::select! {
+                ret = rx.recv() => {
+                    if ret.unwrap() {
+                        // that's good to go
+                        break true;
                     } else {
-                        log::error!("SIGTERM received but failed to flush data. Threshold is at {threshold}");
-                        threshold -= 1;
-                        continue;
+                        spawn_again();
                     }
                 }
+                _ = ctrl_c() => check_threshold!(),
+                _ = sigterm => check_threshold!(),
             }
         }
     });
