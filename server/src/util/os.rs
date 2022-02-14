@@ -26,6 +26,8 @@
 
 #[cfg(unix)]
 pub use unix::*;
+#[cfg(windows)]
+pub use windows::*;
 
 #[cfg(unix)]
 mod unix {
@@ -76,6 +78,69 @@ mod unix {
     #[test]
     fn test_ulimit() {
         let _ = ResourceLimit::get().unwrap();
+    }
+
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::signal::unix::{signal, Signal, SignalKind};
+
+    pub struct TerminationSignal {
+        sigint: Signal,
+        sigterm: Signal,
+    }
+
+    impl TerminationSignal {
+        pub fn init() -> crate::IoResult<Self> {
+            let sigint = signal(SignalKind::interrupt())?;
+            let sigterm = signal(SignalKind::terminate())?;
+            Ok(Self { sigint, sigterm })
+        }
+    }
+
+    impl Future for TerminationSignal {
+        type Output = Option<()>;
+        fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
+            let int = self.sigint.poll_recv(ctx);
+            let term = self.sigterm.poll_recv(ctx);
+            match (int, term) {
+                // when either of them have closed or received a signal, return
+                (Poll::Ready(p), _) | (_, Poll::Ready(p)) => Poll::Ready(p),
+                _ => Poll::Pending,
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+mod windows {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::signal::windows::{ctrl_break, ctrl_c, CtrlBreak, CtrlC};
+
+    pub struct TerminationSignal {
+        ctrl_c: CtrlC,
+        ctrl_break: CtrlBreak,
+    }
+    impl TerminationSignal {
+        pub fn init() -> crate::IoResult<Self> {
+            let ctrl_c = ctrl_c()?;
+            let ctrl_break = ctrl_break()?;
+            Ok(Self { ctrl_c, ctrl_break })
+        }
+    }
+    impl Future for TerminationSignal {
+        type Output = Option<()>;
+        fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
+            let ctrl_c = self.ctrl_c.poll_recv(ctx);
+            let ctrl_break = self.ctrl_break.poll_recv(ctx);
+            match (ctrl_c, ctrl_break) {
+                // if any of them are ready or closed, simply return
+                (Poll::Ready(p), _) | (_, Poll::Ready(p)) => Poll::Ready(p),
+                _ => Poll::Pending,
+            }
+        }
     }
 }
 

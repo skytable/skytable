@@ -32,11 +32,11 @@ use crate::dbnet::{self, Terminator};
 use crate::diskstore::flock::FileLock;
 use crate::services;
 use crate::storage::sengine::SnapshotEngine;
+use crate::util::os::TerminationSignal;
 use libsky::util::terminal;
 use std::sync::Arc;
 use std::thread::sleep;
 use tokio::{
-    signal::ctrl_c,
     sync::{
         broadcast,
         mpsc::{self, Sender},
@@ -46,34 +46,6 @@ use tokio::{
 };
 
 const TERMSIG_THRESHOLD: usize = 3;
-
-#[cfg(unix)]
-use core::{future::Future, pin::Pin, task::Context, task::Poll};
-#[cfg(unix)]
-use tokio::signal::unix::{signal as fnsignal, Signal, SignalKind};
-#[cfg(unix)]
-/// Object to bind to unix-specific signals
-pub struct UnixTerminationSignal {
-    sigterm: Signal,
-}
-
-#[cfg(unix)]
-impl UnixTerminationSignal {
-    pub fn init() -> Result<Self, String> {
-        let sigterm = fnsignal(SignalKind::terminate())
-            .map_err(|e| format!("Failed to bind to signal with: {}", e))?;
-        Ok(Self { sigterm })
-    }
-}
-
-#[cfg(unix)]
-impl Future for UnixTerminationSignal {
-    type Output = Option<()>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.sigterm.poll_recv(ctx)
-    }
-}
 
 /// Start the server waiting for incoming connections or a termsig
 pub async fn run(
@@ -120,32 +92,13 @@ pub async fn run(
         Terminator::new(signal.subscribe()),
     ));
 
-    // bind the ctrlc handler
-    let sig = tokio::signal::ctrl_c();
-
     // start the server (single or multiple listeners)
     let mut server = dbnet::connect(ports, maxcon, db.clone(), signal.clone()).await?;
 
-    #[cfg(not(unix))]
-    {
-        // Non-unix, usually Windows specific signal handling.
-        // FIXME(@ohsayan): For now, let's just
-        // bother with ctrl+c, we'll move ahead as users require them
-        tokio::select! {
-            _ = server.run_server() => {}
-            _ = sig => {}
-        }
-    }
-    #[cfg(unix)]
-    {
-        let sigterm = UnixTerminationSignal::init()?;
-        // apart from CTRLC, the only other thing we care about is SIGTERM
-        // FIXME(@ohsayan): Maybe we should respond to SIGHUP too?
-        tokio::select! {
-            _ = server.run_server() => {},
-            _ = sig => {},
-            _ = sigterm => {}
-        }
+    let termsig = TerminationSignal::init().map_err(|e| e.to_string())?;
+    tokio::select! {
+        _ = server.run_server() => {},
+        _ = termsig => {}
     }
 
     log::info!("Signalling all workers to shut down");
@@ -201,40 +154,14 @@ pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
             spawn_task(tx.clone(), db.clone(), true)
         };
         let mut threshold = TERMSIG_THRESHOLD;
-        macro_rules! check_threshold {
-            () => {{
-                threshold -= 1;
-                if threshold == 0 {
-                    log::error!("SIGTERM received but failed to flush data. Quitting because threshold exceeded");
-                    break false;
-                } else {
-                    log::error!("SIGTERM received but failed to flush data. Threshold is at {threshold}");
-                    continue;
-                }
-            }};
-        }
         loop {
-            #[cfg(not(unix))]
-            tokio::select! {
-                ret = rx.recv() => {
-                    if ret.unwrap() {
-                        // that's good to go
-                        break true;
-                    } else {
-                        spawn_again();
-                    }
-                }
-                _ = ctrl_c() => check_threshold!(),
-            }
-            #[cfg(unix)]
-            let sigterm = match UnixTerminationSignal::init() {
+            let termsig = match TerminationSignal::init().map_err(|e| e.to_string()) {
                 Ok(sig) => sig,
                 Err(e) => {
-                    log::error!("Failed to bind to signal: {e}");
-                    break false;
+                    log::error!("Failed to bind to signal with error: {e}");
+                    crate::exit_error();
                 }
             };
-            #[cfg(unix)]
             tokio::select! {
                 ret = rx.recv() => {
                     if ret.unwrap() {
@@ -244,8 +171,16 @@ pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
                         spawn_again();
                     }
                 }
-                _ = ctrl_c() => check_threshold!(),
-                _ = sigterm => check_threshold!(),
+                _ = termsig => {
+                    threshold -= 1;
+                    if threshold == 0 {
+                        log::error!("Termination signal received but failed to flush data. Quitting because threshold exceeded");
+                        break false;
+                    } else {
+                        log::error!("Termination signal received but failed to flush data. Threshold is at {threshold}");
+                        continue;
+                    }
+                },
             }
         }
     });
