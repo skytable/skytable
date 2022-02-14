@@ -3,7 +3,7 @@ authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 build = "build.rs"
 edition = "2021"
 name = "skyd"
-version = "0.7.3-alpha.3"
+version = "0.7.3"
 
 [dependencies]
 # internal deps
