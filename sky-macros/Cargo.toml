@@ -13,5 +13,5 @@ proc-macro = true
 # external deps
 proc-macro2 = "1.0.36"
 quote = "1.0.15"
-rand = "0.8.4"
+rand = "0.8.5"
 syn = { version = "1.0.86", features = ["full"] }
