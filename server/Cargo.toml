@@ -3,7 +3,7 @@ authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 build = "build.rs"
 edition = "2021"
 name = "skyd"
-version = "0.7.3-alpha.3"
+version = "0.7.3"
 
 [dependencies]
 # internal deps
@@ -47,7 +47,7 @@ skytable = { git = "https://github.com/skytable/client-rust", features = [
 ], default-features = false, branch = "next" }
 # external deps
 bincode = "1.3.3"
-rand = "0.8.4"
+rand = "0.8.5"
 tokio = { version = "1.16.1", features = ["test-util"] }
 [target.'cfg(unix)'.dependencies]
 # external deps
@@ -59,7 +59,7 @@ nightly = []
 [package.metadata.deb]
 name = "skytable"
 maintainer = "Sayan Nandan <nandansayan@outlook.com>"
-copyright = "2020, Sayan Nandan <nandansayan@outlook.com>"
+copyright = "2022, Sayan Nandan <nandansayan@outlook.com>"
 license-file = ["../LICENSE", "0"]
 maintainer-scripts = "../pkg/debian/"
 extended-description-file = "pkg/debian/description.txt"

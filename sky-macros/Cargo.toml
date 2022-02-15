@@ -2,7 +2,7 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "sky_macros"
-version = "0.7.3-alpha.3"
+version = "0.7.3"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,5 +13,5 @@ proc-macro = true
 # external deps
 proc-macro2 = "1.0.36"
 quote = "1.0.15"
-rand = "0.8.4"
+rand = "0.8.5"
 syn = { version = "1.0.86", features = ["full"] }
