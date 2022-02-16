@@ -29,6 +29,7 @@ use crate::dbnet::BaseListener;
 use crate::dbnet::Terminator;
 use crate::protocol;
 use bytes::BytesMut;
+use core::cell::Cell;
 use libsky::TResult;
 use libsky::BUF_CAP;
 pub use protocol::ParseResult;
@@ -68,7 +69,27 @@ where
     }
 }
 
-// We'll use the idea of gracefully shutting down from tokio
+pub struct TcpBackoff {
+    current: Cell<u8>,
+}
+
+impl TcpBackoff {
+    const MAX_BACKOFF: u8 = 64;
+    pub const fn new() -> Self {
+        Self {
+            current: Cell::new(1),
+        }
+    }
+    pub async fn spin(&self) {
+        // we can guarantee that this won't wrap around beyond u8::MAX because we always
+        // check if we `should_disconnect` before sleeping and spinning
+        time::sleep(Duration::from_secs(self.current.get() as u64)).await;
+        self.current.set(self.current.get() << 1);
+    }
+    pub fn should_disconnect(&self) -> bool {
+        self.current.get() > Self::MAX_BACKOFF
+    }
+}
 
 /// A listener
 pub struct Listener {
@@ -78,23 +99,20 @@ pub struct Listener {
 impl Listener {
     /// Accept an incoming connection
     async fn accept(&mut self) -> TResult<TcpStream> {
-        // We will steal the idea of Ethernet's backoff for connection errors
-        let mut backoff = 1;
+        let backoff = TcpBackoff::new();
         loop {
             match self.base.listener.accept().await {
                 // We don't need the bindaddr
                 Ok((stream, _)) => return Ok(stream),
                 Err(e) => {
-                    if backoff > 64 {
+                    if backoff.should_disconnect() {
                         // Too many retries, goodbye user
                         return Err(e.into());
                     }
                 }
             }
-            // Wait for the `backoff` duration
-            time::sleep(Duration::from_secs(backoff)).await;
-            // We're using exponential backoff
-            backoff *= 2;
+            // spin to wait for the backoff duration
+            backoff.spin().await;
         }
     }
     /// Run the server
