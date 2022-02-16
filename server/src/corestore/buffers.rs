@@ -374,6 +374,12 @@ impl<const N: usize> From<usize> for Integer64BufferRaw<N> {
     }
 }
 
+impl<const N: usize> From<u64> for Integer64BufferRaw<N> {
+    fn from(val: u64) -> Self {
+        Self::init(val)
+    }
+}
+
 impl<const N: usize> Deref for Integer64BufferRaw<N> {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {

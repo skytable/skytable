@@ -9,7 +9,6 @@ version = "0.7.3"
 # internal deps
 libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", default-features = false }
 # external deps
 ahash = "0.7.6"
 bytes = "1.1.0"
