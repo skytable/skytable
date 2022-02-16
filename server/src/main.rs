@@ -137,7 +137,7 @@ fn check_args_and_get_cfg() -> (ConfigurationSet, Option<String>) {
         }
         Err(e) => {
             log::error!("{}", e);
-            std::process::exit(0x01);
+            crate::exit_error();
         }
     }
 }
@@ -155,12 +155,12 @@ fn run_pre_startup_tasks() -> FileLock {
         Ok(fle) => fle,
         Err(e) => {
             log::error!("Startup failure: Failed to lock pid file: {}", e);
-            process::exit(0x01);
+            crate::exit_error();
         }
     };
     if let Err(e) = file.write(process::id().to_string().as_bytes()) {
         log::error!("Startup failure: Failed to write to pid file: {}", e);
-        process::exit(0x01);
+        crate::exit_error();
     }
     file
 }

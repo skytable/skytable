@@ -31,7 +31,7 @@
 //! the primitives that are defined here
 //!
 
-use core::hint::spin_loop as let_the_cpu_relax;
+use super::backoff::Backoff;
 use std::cell::UnsafeCell;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -87,6 +87,7 @@ impl<T> QuickLock<T> {
     }
     /// Enter a _busy loop_ waiting to get an unlock. Behold, this is blocking!
     pub fn lock(&self) -> QLGuard<'_, T> {
+        let backoff = Backoff::new();
         loop {
             let ret = self.lock_state.compare_exchange_weak(
                 false,
@@ -102,7 +103,7 @@ impl<T> QuickLock<T> {
                     }
                 }
             }
-            let_the_cpu_relax()
+            backoff.snooze();
         }
     }
 }

@@ -30,6 +30,8 @@ pub mod compiler;
 pub mod os;
 use std::process;
 
+const EXITCODE_ONE: i32 = 0x01;
+
 /// # Unsafe unwrapping
 ///
 /// This trait provides a method `unsafe_unwrap` that is potentially unsafe and has
@@ -65,5 +67,5 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
 }
 
 pub fn exit_error() -> ! {
-    process::exit(0x01)
+    process::exit(EXITCODE_ONE)
 }

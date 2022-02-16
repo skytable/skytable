@@ -24,7 +24,7 @@
  *
 */
 
-use core::hint::spin_loop as let_the_cpu_relax;
+use super::backoff::Backoff;
 use core::mem;
 use core::ops::Deref;
 use core::ptr;
@@ -73,12 +73,14 @@ where
         // it's null, so it's useless
 
         // hold on until someone is trying to init
+        let backoff = Backoff::new();
         while self
             .init_state
             .compare_exchange(false, true, ORD_SEQ, ORD_SEQ)
             .is_err()
         {
-            let_the_cpu_relax();
+            // wait until the other thread finishes
+            backoff.snooze();
         }
         /*
          see the value before the last store. while we were one the loop,
