@@ -25,6 +25,7 @@
 */
 
 use super::connection::ConnectionHandler;
+use super::tcp::TcpBackoff;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::tcp::Connection;
 use crate::dbnet::BaseListener;
@@ -37,7 +38,6 @@ use std::fs;
 use std::io::Error as IoError;
 use std::pin::Pin;
 use tokio::net::TcpStream;
-use tokio::time::{self, Duration};
 use tokio_openssl::SslStream;
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
@@ -84,7 +84,7 @@ impl SslListener {
         })
     }
     async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
-        let mut backoff = 1;
+        let backoff = TcpBackoff::new();
         loop {
             match self.base.listener.accept().await {
                 // We don't need the bindaddr
@@ -97,16 +97,14 @@ impl SslListener {
                     return Ok(stream);
                 }
                 Err(e) => {
-                    if backoff > 64 {
+                    if backoff.should_disconnect() {
                         // Too many retries, goodbye user
                         return Err(e.into());
                     }
                 }
             }
             // Wait for the `backoff` duration
-            time::sleep(Duration::from_secs(backoff)).await;
-            // We're using exponential backoff
-            backoff *= 2;
+            backoff.spin().await;
         }
     }
     pub async fn run(&mut self) -> TResult<()> {
