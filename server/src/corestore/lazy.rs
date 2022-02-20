@@ -30,7 +30,6 @@ use core::ops::Deref;
 use core::ptr;
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::AtomicU8;
 use core::sync::atomic::Ordering;
 
 const ORD_ACQ: Ordering = Ordering::Acquire;
@@ -208,62 +207,46 @@ cfg_test!(
     }
 );
 
-/// A "cell" that can be initialized once
+/// A "cell" that can be initialized once using a single atomic
 pub struct Once<T> {
     value: AtomicPtr<T>,
-    state: AtomicU8,
 }
 
 impl<T> Once<T> {
-    const BIT_UNSET: u8 = 0b0000_0000;
-    const BIT_WAIT: u8 = 0b0000_0001;
-    const BIT_SET: u8 = 0b0000_0011;
     pub const fn new() -> Self {
         Self {
             value: AtomicPtr::new(ptr::null_mut()),
-            state: AtomicU8::new(Self::BIT_UNSET),
         }
     }
     pub fn with_value(val: T) -> Self {
         Self {
             value: AtomicPtr::new(Box::into_raw(Box::new(val))),
-            state: AtomicU8::new(Self::BIT_SET),
         }
     }
     pub fn get(&self) -> Option<&T> {
-        // synchronizes with the store for BIT_SET; syncs with store for value ptr
-        if self.state.load(ORD_ACQ) == Self::BIT_SET {
-            unsafe { Some(&*self.value.load(ORD_ACQ)) }
-        } else {
+        // synchronizes with the store for value ptr
+        let ptr = self.value.load(ORD_ACQ);
+        if ptr.is_null() {
             None
+        } else {
+            unsafe { Some(&*self.value.load(ORD_ACQ)) }
         }
     }
     pub fn set(&self, val: T) -> bool {
-        // synchronizes with the store for state
-        let snapshot = self.state.load(ORD_ACQ);
-        if snapshot == Self::BIT_UNSET {
+        // synchronizes with the store for set
+        let snapshot = self.value.load(ORD_ACQ);
+        if snapshot.is_null() {
             // let's try to init this
-            let r = self.state.compare_exchange(
-                snapshot,
-                Self::BIT_WAIT,
-                // we must use release ordering to sync with the acq
+            let vptr = Box::into_raw(Box::new(val));
+            // if malloc fails, that's fine because there will be no cas
+            let r = self.value.compare_exchange(
+                snapshot, vptr, // we must use release ordering to sync with the acq
                 ORD_REL,
                 // on failure simply use relaxed because we don't use the value anyways
                 // -- so why bother stressing out the processor?
                 ORD_RLX,
             );
-            if r.is_ok() {
-                // proceed to init
-                let v = Box::into_raw(Box::new(val));
-                // sync with the load for get()
-                self.value.store(v, ORD_REL);
-                // release to sync with get()'s Acquire on ptr
-                assert_eq!(self.state.swap(Self::BIT_SET, ORD_REL), Self::BIT_WAIT);
-                true
-            } else {
-                // someone else initialized it already
-                false
-            }
+            r.is_ok()
         } else {
             false
         }
@@ -272,26 +255,9 @@ impl<T> Once<T> {
 
 impl<T> Drop for Once<T> {
     fn drop(&mut self) {
-        match self.state.load(ORD_ACQ) {
-            Self::BIT_UNSET => {}
-            Self::BIT_SET => {
-                // so we're set, let's destroy the value
-                let ptr = self.value.load(ORD_ACQ);
-                unsafe {
-                    drop(Box::from_raw(ptr));
-                }
-            }
-            _ => {
-                let backoff = Backoff::new();
-                // someone is trying to init. wait for them to finish
-                while self.state.load(ORD_ACQ) != Self::BIT_SET {
-                    backoff.snooze();
-                }
-                // they're done with init, so we can destroy it
-                unsafe {
-                    drop(Box::from_raw(self.value.load(ORD_ACQ)));
-                }
-            }
+        let snapshot = self.value.load(ORD_ACQ);
+        if !snapshot.is_null() {
+            unsafe { mem::drop(Box::from_raw(snapshot)) }
         }
     }
 }
@@ -312,14 +278,19 @@ fn once_set_get_some() {
     let once: Arc<Once<u8>> = Arc::new(Once::new());
     let t1 = once.clone();
     let t2 = once.clone();
+    let t3 = once.clone();
     let hdl1 = thread::spawn(move || {
         assert!(t1.set(10));
     });
     thread::sleep(Duration::from_secs(3));
     let hdl2 = thread::spawn(move || {
-        assert_eq!(*t2.get().unwrap(), 10);
+        assert!(!t2.set(10));
+    });
+    let hdl3 = thread::spawn(move || {
+        assert_eq!(*t3.get().unwrap(), 10);
     });
     assert_eq!(*once.get().unwrap(), 10);
     hdl1.join().unwrap();
     hdl2.join().unwrap();
+    hdl3.join().unwrap();
 }
