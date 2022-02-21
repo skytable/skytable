@@ -49,6 +49,7 @@ pub mod array;
 pub mod backoff;
 pub mod booltable;
 pub mod buffers;
+pub mod heap_array;
 pub mod htable;
 pub mod iarray;
 pub mod lazy;

@@ -262,6 +262,15 @@ impl<T> Drop for Once<T> {
     }
 }
 
+impl<T> From<Option<T>> for Once<T> {
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(v) => Self::with_value(v),
+            None => Self::new(),
+        }
+    }
+}
+
 #[test]
 fn once_get_none() {
     let once: Once<u8> = Once::new();
