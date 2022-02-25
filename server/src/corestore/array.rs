@@ -282,7 +282,7 @@ impl<T, const N: usize> Array<T, N> {
     }
     pub fn try_from_slice(slice: impl AsRef<[T]>) -> Option<Self> {
         let slice = slice.as_ref();
-        if slice.len() != N {
+        if slice.len() > N {
             None
         } else {
             Some(unsafe { Self::from_slice(slice) })
