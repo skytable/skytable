@@ -199,6 +199,10 @@ impl Memstore {
             },
         }
     }
+    /// Get a reference to the system keyspace
+    pub fn get_system_keyspace(&self) -> Arc<Keyspace> {
+        self.get_keyspace_atomic_ref(&SYSTEM).unwrap()
+    }
     /// Get an atomic reference to a keyspace
     pub fn get_keyspace_atomic_ref<Q>(&self, keyspace_identifier: &Q) -> Option<Arc<Keyspace>>
     where

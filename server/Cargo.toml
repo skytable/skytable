@@ -25,6 +25,8 @@ serde = { version = "1.0.136", features = ["derive"] }
 tokio = { version = "1.16.1", features = ["full"] }
 tokio-openssl = "0.6.3"
 toml = "0.5.8"
+rcrypt = "0.4.0"
+base64 = "0.13.0"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps

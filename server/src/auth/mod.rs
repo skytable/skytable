@@ -26,34 +26,57 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
-use crate::corestore::heap_array::HeapArray;
-use crate::corestore::lazy::Once;
-use crate::corestore::map::Skymap;
-use openssl::rand::rand_bytes;
+/*
+ * For our authn/authz, we have two important keys:
+ * - The origin key: This is the key saved in the configuration file that can also be
+ * used as the "recovery key" in the event the "root key" is lost. To claim the root
+ * account, one needs this key. This is a variable width key with a maximum size of
+ * 64
+ * - The root key: This is the superuser key that can be used to create/deny other
+ * accounts. On claiming the root account, this key is issued
+ *
+ * When the root account is claimed, it can be used to create "standard users". Standard
+ * users have access to everything but the ability to create/revoke other users
+*/
 
+use crate::corestore::array::Array;
+use crate::corestore::htable::Coremap;
+use core::mem::MaybeUninit;
+use std::sync::Arc;
+
+mod keys;
+#[cfg(test)]
+mod tests;
+
+// constants
 /// Size of an authn key in bytes
-const AUTHKEY_SIZE: usize = 64;
+const AUTHKEY_SIZE: usize = 40;
+/// Size of an authn ID in bytes
+const AUTHID_SIZE: usize = 40;
+#[sky_macros::array]
+const USER_ROOT_ARRAY: [MaybeUninit<u8>; 40] = [b'r', b'o', b'o', b't'];
+/// The root user
+const USER_ROOT: AuthID = unsafe { AuthID::from_const(USER_ROOT_ARRAY, 4) };
 
 /// An authn ID
-type AuthID = HeapArray;
+type AuthID = Array<u8, AUTHID_SIZE>;
 /// An authn key
-type Authkey = [u8; AUTHKEY_SIZE];
-/// An authn key that can only be assigned to once
-type OnceAuthkey = Once<Authkey>;
+pub type Authkey = [u8; AUTHKEY_SIZE];
 /// Result of an auth operation
 type AuthResult<T> = Result<T, AuthError>;
 
 /// The authn/authz provider
+///
 pub struct AuthProvider {
-    /// the origin key
-    origin: OnceAuthkey,
-    /// the root key
-    root: OnceAuthkey,
+    origin: Option<Authkey>,
+    /// the current user
+    whoami: Option<AuthID>,
     /// a map of standard users
-    standard: Skymap<AuthID, Authkey>,
+    standard: Arc<Coremap<AuthID, Authkey>>,
 }
 
 /// Auth erros
+#[derive(PartialEq, Debug)]
 pub enum AuthError {
     /// The auth slot was already claimed
     AlreadyClaimed,
@@ -61,40 +84,72 @@ pub enum AuthError {
     BadCredentials,
     /// Auth is disabled
     Disabled,
+    /// The action is not available to the current account
+    PermissionDenied,
+    /// The user is anonymous and doesn't have the right to execute this
+    Anonymous,
 }
 
 impl AuthProvider {
-    pub fn new(
-        origin: Option<Authkey>,
-        root: Option<Authkey>,
-        standard: Skymap<AuthID, Authkey>,
-    ) -> Self {
+    pub fn new(standard: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
         Self {
-            origin: OnceAuthkey::from(origin),
-            root: OnceAuthkey::from(root),
             standard,
+            whoami: None,
+            origin,
         }
     }
-    /// Claim the root account
-    pub fn claim_root(&self, origin: &[u8]) -> AuthResult<Authkey> {
-        match self.origin.get() {
-            Some(orig) if orig.eq(origin) => {
-                let id = Self::generate_full();
-                let idc = id.clone();
-                if self.root.set(idc) {
-                    Ok(id)
-                } else {
-                    Err(AuthError::AlreadyClaimed)
-                }
+    pub fn claim_root(&self, origin_key: &[u8]) -> AuthResult<String> {
+        let origin = self.get_origin()?;
+        if origin == origin_key {
+            // the origin key was good, let's try claiming root
+            let (key, store) = keys::generate_full();
+            if self.standard.true_if_insert(USER_ROOT, store) {
+                Ok(key)
+            } else {
+                Err(AuthError::AlreadyClaimed)
             }
-            Some(_) => Err(AuthError::BadCredentials),
+        } else {
+            Err(AuthError::BadCredentials)
+        }
+    }
+    fn are_you_root(&self) -> AuthResult<bool> {
+        match self.whoami.as_ref().map(|v| v.eq(&USER_ROOT)) {
+            Some(v) => Ok(v),
+            None => Err(AuthError::Anonymous),
+        }
+    }
+    pub fn claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
+        if self.are_you_root()? {
+            self._claim_user(claimant)
+        } else {
+            Err(AuthError::PermissionDenied)
+        }
+    }
+    fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
+        let (key, store) = keys::generate_full();
+        if self
+            .standard
+            .true_if_insert(Array::try_from_slice(claimant).unwrap(), store)
+        {
+            Ok(key)
+        } else {
+            Err(AuthError::AlreadyClaimed)
+        }
+    }
+    fn get_origin(&self) -> AuthResult<&Authkey> {
+        match self.origin.as_ref() {
+            Some(key) => Ok(key),
             None => Err(AuthError::Disabled),
         }
     }
-    /// Generate an authentication key
-    fn generate_full() -> Authkey {
-        let mut bytes: Authkey = [0u8; AUTHKEY_SIZE];
-        rand_bytes(&mut bytes).unwrap();
-        bytes
+}
+
+impl Clone for AuthProvider {
+    fn clone(&self) -> Self {
+        Self {
+            standard: self.standard.clone(),
+            whoami: None,
+            origin: self.origin,
+        }
     }
 }

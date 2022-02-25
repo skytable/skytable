@@ -212,6 +212,7 @@ pub struct Once<T> {
     value: AtomicPtr<T>,
 }
 
+#[allow(dead_code)] // TODO: Remove this
 impl<T> Once<T> {
     pub const fn new() -> Self {
         Self {
