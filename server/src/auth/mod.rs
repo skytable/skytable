@@ -35,7 +35,7 @@
  * - The root key: This is the superuser key that can be used to create/deny other
  * accounts. On claiming the root account, this key is issued
  *
- * When the root account is claimed, it can be used to create "standard users". Standard
+ * When the root account is claimed, it can be used to create "authmap users". authmap
  * users have access to everything but the ability to create/revoke other users
 */
 
@@ -71,8 +71,8 @@ pub struct AuthProvider {
     origin: Option<Authkey>,
     /// the current user
     whoami: Option<AuthID>,
-    /// a map of standard users
-    standard: Arc<Coremap<AuthID, Authkey>>,
+    /// a map of users
+    authmap: Arc<Coremap<AuthID, Authkey>>,
 }
 
 /// Auth erros
@@ -91,9 +91,9 @@ pub enum AuthError {
 }
 
 impl AuthProvider {
-    pub fn new(standard: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
+    pub fn new(authmap: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
         Self {
-            standard,
+            authmap,
             whoami: None,
             origin,
         }
@@ -103,7 +103,7 @@ impl AuthProvider {
         if origin == origin_key {
             // the origin key was good, let's try claiming root
             let (key, store) = keys::generate_full();
-            if self.standard.true_if_insert(USER_ROOT, store) {
+            if self.authmap.true_if_insert(USER_ROOT, store) {
                 Ok(key)
             } else {
                 Err(AuthError::AlreadyClaimed)
@@ -128,12 +128,29 @@ impl AuthProvider {
     fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
         if self
-            .standard
+            .authmap
             .true_if_insert(Array::try_from_slice(claimant).unwrap(), store)
         {
             Ok(key)
         } else {
             Err(AuthError::AlreadyClaimed)
+        }
+    }
+    pub fn login(&mut self, account: &[u8], token: &[u8]) -> AuthResult<()> {
+        match self
+            .authmap
+            .get(account)
+            .map(|token_hash| keys::verify_key(token, token_hash.as_slice()))
+        {
+            Some(true) => {
+                // great, authenticated
+                self.whoami = Some(Array::try_from_slice(account).unwrap());
+                Ok(())
+            }
+            Some(false) | None => {
+                // imposter!
+                Err(AuthError::BadCredentials)
+            }
         }
     }
     fn get_origin(&self) -> AuthResult<&Authkey> {
@@ -147,7 +164,7 @@ impl AuthProvider {
 impl Clone for AuthProvider {
     fn clone(&self) -> Self {
         Self {
-            standard: self.standard.clone(),
+            authmap: self.authmap.clone(),
             whoami: None,
             origin: self.origin,
         }

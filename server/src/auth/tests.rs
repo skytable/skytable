@@ -38,19 +38,20 @@ mod authn {
     use super::super::{AuthError, AuthProvider};
     use crate::corestore::htable::Coremap;
     use std::sync::Arc;
+
+    const ORIG: &[u8; 40] = b"c4299d190fb9a00626797fcc138c56eae9971664";
+
     #[test]
     fn claim_root_okay() {
-        let orig = b"c4299d190fb9a00626797fcc138c56eae9971664";
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*orig));
-        let _ = provider.claim_root(orig).unwrap();
+        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let _ = provider.claim_root(ORIG).unwrap();
     }
     #[test]
     fn claim_root_wrongkey() {
-        let orig = b"c4299d190fb9a00626797fcc138c56eae9971664";
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*orig));
-        let claim_err = provider.claim_root(&orig[1..]).unwrap_err();
+        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let claim_err = provider.claim_root(&ORIG[1..]).unwrap_err();
         assert_eq!(claim_err, AuthError::BadCredentials);
     }
     #[test]
@@ -63,13 +64,54 @@ mod authn {
     }
     #[test]
     fn claim_root_already_claimed() {
-        let orig = b"c4299d190fb9a00626797fcc138c56eae9971664";
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*orig));
-        let _ = provider.claim_root(orig).unwrap();
+        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let _ = provider.claim_root(ORIG).unwrap();
         assert_eq!(
-            provider.claim_root(orig).unwrap_err(),
+            provider.claim_root(ORIG).unwrap_err(),
             AuthError::AlreadyClaimed
+        );
+    }
+    #[test]
+    fn claim_user_okay_with_login() {
+        let authmap = Arc::new(Coremap::new());
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        // claim root
+        let rootkey = provider.claim_root(ORIG).unwrap();
+        // login as root
+        provider.login(b"root", rootkey.as_bytes()).unwrap();
+        // claim user
+        let _ = provider.claim_user(b"sayan").unwrap();
+    }
+
+    #[test]
+    fn claim_user_fail_not_root_with_login() {
+        let authmap = Arc::new(Coremap::new());
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        // claim root
+        let rootkey = provider.claim_root(ORIG).unwrap();
+        // login as root
+        provider.login(b"root", rootkey.as_bytes()).unwrap();
+        // claim user
+        let userkey = provider.claim_user(b"user").unwrap();
+        // login as user
+        provider.login(b"user", userkey.as_bytes()).unwrap();
+        // now try to claim an user being a non-root account
+        assert_eq!(
+            provider.claim_user(b"otheruser").unwrap_err(),
+            AuthError::PermissionDenied
+        );
+    }
+    #[test]
+    fn claim_user_fail_anonymous() {
+        let authmap = Arc::new(Coremap::new());
+        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        // claim root
+        let _ = provider.claim_root(ORIG).unwrap();
+        // try to claim as an anonymous user
+        assert_eq!(
+            provider.claim_user(b"newuser").unwrap_err(),
+            AuthError::Anonymous
         );
     }
 }
