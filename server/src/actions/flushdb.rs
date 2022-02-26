@@ -34,7 +34,7 @@ action!(
         if registry::state_okay() {
             if act.is_empty() {
                 // flush the current table
-                get_tbl!(handle, con).truncate_table();
+                get_tbl_ref!(handle, con).truncate_table();
             } else {
                 // flush the entity
                 let raw_entity = unsafe { act.next_unchecked() };

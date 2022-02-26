@@ -257,6 +257,9 @@ impl Corestore {
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
     }
+    pub fn get_ctable_ref(&self) -> Option<&Table> {
+        self.estate.table.as_ref().map(|(_, tbl)| tbl.as_ref())
+    }
     /// Returns a table with the provided specification
     pub fn get_table_with<T: DescribeTable>(&self) -> ActionResult<&T::Table> {
         T::get(self)

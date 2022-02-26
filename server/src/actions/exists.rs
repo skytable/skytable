@@ -51,7 +51,7 @@ action!(
                 }
             }};
         }
-        let tbl = get_tbl!(handle, con);
+        let tbl = get_tbl_ref!(handle, con);
         match tbl.get_model_ref() {
             DataModel::KV(kve) => exists!(kve),
             DataModel::KVExtListmap(kve) => exists!(kve),

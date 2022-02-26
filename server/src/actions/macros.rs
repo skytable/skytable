@@ -69,7 +69,7 @@ macro_rules! get_tbl {
         match $store.get_table($entity) {
             Ok(tbl) => tbl,
             Err(DdlError::DefaultNotFound) => {
-                return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET);
+                return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET);
             }
             Err(DdlError::ObjectNotFound) => {
                 return conwrite!(
@@ -83,7 +83,17 @@ macro_rules! get_tbl {
     ($store:expr, $con:expr) => {{
         match $store.get_ctable() {
             Some(tbl) => tbl,
-            None => return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_tbl_ref {
+    ($store:expr, $con:expr) => {{
+        match $store.get_ctable_ref() {
+            Some(tbl) => tbl,
+            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
         }
     }};
 }

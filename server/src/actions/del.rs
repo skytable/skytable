@@ -39,7 +39,7 @@ action!(
     /// It will write an entire datagroup, for this `del` action
     fn del(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
         ensure_length(act.len(), |size| size != 0)?;
-        let table = get_tbl!(handle, con);
+        let table = get_tbl_ref!(handle, con);
         macro_rules! remove {
             ($engine:expr) => {{
                 let encoding_is_okay = ENCODING_LUT_ITER[$engine.kve_key_encoded()](act.as_ref());
