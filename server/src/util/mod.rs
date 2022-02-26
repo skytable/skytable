@@ -71,7 +71,7 @@ pub fn exit_error() -> ! {
 }
 
 /// Returns a Result with the provided error
-#[inline(always)]
+#[inline(never)]
 pub fn err<T, E>(e: impl Into<E>) -> Result<T, E> {
     Err(e.into())
 }

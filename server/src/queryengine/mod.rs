@@ -27,7 +27,6 @@
 //! # The Query Engine
 
 use crate::actions::ActionResult;
-use crate::corestore::memstore::DdlError;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::element::UnsafeElement;
@@ -65,26 +64,6 @@ macro_rules! gen_constants_and_matches {
             _ => {
                 $con.write_response(responses::groups::UNKNOWN_ACTION).await?;
             }
-        }
-    };
-}
-
-macro_rules! swap_entity {
-    ($con:expr, $handle:expr, $entity:expr) => {
-        match $handle.swap_entity(parser::get_query_entity(&$entity)?) {
-            Ok(()) => $con.write_response(responses::groups::OKAY).await?,
-            Err(DdlError::ObjectNotFound) => {
-                $con.write_response(responses::groups::CONTAINER_NOT_FOUND)
-                    .await?
-            }
-            Err(DdlError::DefaultNotFound) => {
-                $con.write_response(responses::groups::DEFAULT_UNSET)
-                    .await?
-            }
-            Err(_) => unsafe {
-                // we know Corestore::swap_entity doesn't return anything else
-                impossible!()
-            },
         }
     };
 }
@@ -177,7 +156,8 @@ action! {
             // SAFETY: Already checked len
             act.next_unchecked()
         };
-        swap_entity!(con, handle, entity);
+        handle.swap_entity(parser::get_query_entity(entity)?)?;
+        con.write_response(groups::OKAY).await?;
         Ok(())
     }
 }
@@ -186,11 +166,8 @@ action! {
     /// Execute a basic pipelined query
     fn execute_pipeline(handle: &mut Corestore, con: &mut T, pipeline: PipelineQuery) {
         for stage in pipeline.iter() {
-            if stage.is_any_array() {
-                self::execute_stage(handle, con, stage).await?;
-            } else {
-                con.write_response(responses::groups::WRONGTYPE_ERR).await?;
-            }
+            ensure_cond_or_err(stage.is_any_array(), groups::WRONGTYPE_ERR)?;
+            self::execute_stage(handle, con, stage).await?;
         }
         Ok(())
     }

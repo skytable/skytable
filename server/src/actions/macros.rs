@@ -65,20 +65,7 @@ macro_rules! aerr {
 #[macro_export]
 macro_rules! get_tbl {
     ($entity:expr, $store:expr, $con:expr) => {{
-        use crate::corestore::memstore::DdlError;
-        match $store.get_table($entity) {
-            Ok(tbl) => tbl,
-            Err(DdlError::DefaultNotFound) => {
-                return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET);
-            }
-            Err(DdlError::ObjectNotFound) => {
-                return conwrite!(
-                    $con,
-                    crate::protocol::responses::groups::CONTAINER_NOT_FOUND
-                );
-            }
-            Err(_) => unsafe { impossible!() },
-        }
+        $store.get_table($entity)?
     }};
     ($store:expr, $con:expr) => {{
         match $store.get_ctable() {

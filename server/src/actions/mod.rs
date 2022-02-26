@@ -50,6 +50,7 @@ pub mod strong;
 pub mod update;
 pub mod uset;
 pub mod whereami;
+use crate::corestore::memstore::DdlError;
 use crate::protocol::responses::groups;
 use crate::util;
 use std::io::Error as IoError;
@@ -73,6 +74,23 @@ impl From<&'static [u8]> for ActionError {
 impl From<IoError> for ActionError {
     fn from(e: IoError) -> Self {
         Self::IoError(e)
+    }
+}
+
+impl From<DdlError> for ActionError {
+    fn from(e: DdlError) -> Self {
+        let ret = match e {
+            DdlError::AlreadyExists => groups::ALREADY_EXISTS,
+            DdlError::DdlTransactionFailure => groups::DDL_TRANSACTIONAL_FAILURE,
+            DdlError::DefaultNotFound => groups::DEFAULT_UNSET,
+            DdlError::NotEmpty => groups::KEYSPACE_NOT_EMPTY,
+            DdlError::NotReady => groups::NOT_READY,
+            DdlError::ObjectNotFound => groups::CONTAINER_NOT_FOUND,
+            DdlError::ProtectedObject => groups::PROTECTED_OBJECT,
+            DdlError::StillInUse => groups::STILL_IN_USE,
+            DdlError::WrongModel => groups::WRONG_MODEL,
+        };
+        Self::ActionError(ret)
     }
 }
 
