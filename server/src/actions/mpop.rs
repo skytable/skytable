@@ -35,9 +35,9 @@ use crate::util::compiler;
 action!(
     /// Run an MPOP action
     fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
-        err_if_len_is!(act, con, eq 0);
+        ensure_length(act.len(), |len| len != 0)?;
         if registry::state_okay() {
-            let kve = kve!(con, handle);
+            let kve = handle.get_table_with::<KVE>()?;
             let encoding_is_okay = ENCODING_LUT_ITER[kve.needs_key_encoding()](act.as_ref());
             if compiler::likely(encoding_is_okay) {
                 let mut writer = unsafe {
@@ -56,7 +56,7 @@ action!(
             }
         } else {
             // don't begin the operation at all if the database is poisoned
-            return con.write_response(responses::groups::SERVER_ERR).await;
+            con.write_response(responses::groups::SERVER_ERR).await?;
         }
         Ok(())
     }

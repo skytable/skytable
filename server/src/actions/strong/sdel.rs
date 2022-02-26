@@ -36,8 +36,8 @@ action! {
     /// This either returns `Okay` if all the keys were `del`eted, or it returns a
     /// `Nil`, which is code `1`
     fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
-        err_if_len_is!(act, con, eq 0);
-        let kve = kve!(con, handle);
+        ensure_length(act.len(), |len| len != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
             // guarantee one check: consistency
             let key_encoder = kve.get_key_encoder();

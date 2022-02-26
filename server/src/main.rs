@@ -42,7 +42,7 @@ use libsky::VERSION;
 use std::env;
 use std::process;
 #[macro_use]
-mod util;
+pub mod util;
 mod actions;
 mod admin;
 mod arbiter;

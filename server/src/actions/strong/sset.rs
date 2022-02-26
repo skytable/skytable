@@ -38,10 +38,8 @@ action! {
     /// `Overwrite Error` or code `2`
     fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
-        if is_lowbit_set!(howmany) || howmany == 0 {
-            return con.write_response(responses::groups::ACTION_ERR).await;
-        }
-        let kve = kve!(con, handle);
+        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
             let encoder = kve.get_encoder();
             let outcome = {

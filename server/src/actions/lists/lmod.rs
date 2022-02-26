@@ -25,7 +25,6 @@
 */
 
 use super::{writer, OKAY_BADIDX_NIL_NLUT};
-use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding::ENCODING_LUT;
@@ -47,9 +46,8 @@ action! {
     /// - `LMOD <mylist> remove <index>`
     /// - `LMOD <mylist> clear`
     fn lmod(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, lt 2);
-        let table = get_tbl!(handle, con);
-        let listmap = listmap!(table, con);
+        ensure_length(act.len(), |len| len > 2)?;
+        let listmap = handle.get_table_with::<KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };
         macro_rules! get_numeric_count {
@@ -63,7 +61,7 @@ action! {
         // now let us see what we need to do
         match unsafe { act.next_uppercase_unchecked() }.as_ref() {
             CLEAR => {
-                err_if_len_is!(act, con, not 0);
+                ensure_length(act.len(), |len| len == 0)?;
                 let list = match listmap.kve_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
@@ -77,7 +75,7 @@ action! {
                 conwrite!(con, okay)?;
             }
             PUSH => {
-                err_if_len_is!(act, con, not 1);
+                ensure_length(act.len(), |len| len == 1)?;
                 let list = match listmap.kve_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
@@ -99,7 +97,7 @@ action! {
                 conwrite!(con, ret)?;
             }
             REMOVE => {
-                err_if_len_is!(act, con, not 1);
+                ensure_length(act.len(), |len| len == 1)?;
                 let idx_to_remove = get_numeric_count!();
                 if registry::state_okay() {
                     let maybe_value = listmap.kve_inner_ref().get(listname).map(|list| {
@@ -117,7 +115,7 @@ action! {
                 }
             }
             INSERT => {
-                err_if_len_is!(act, con, not 2);
+                ensure_length(act.len(), |len| len == 2)?;
                 let idx_to_insert_at = get_numeric_count!();
                 let bts = unsafe { act.next_unchecked() };
                 let ret = if compiler::likely(ENCODING_LUT[listmap.kve_payload_encoded()](bts)) {
@@ -146,7 +144,7 @@ action! {
                 conwrite!(con, ret)?;
             }
             POP => {
-                err_if_len_is!(act, con, gt 1);
+                ensure_length(act.len(), |len| len < 2)?;
                 let idx = if act.len() == 1 {
                     // we have an idx
                     Some(get_numeric_count!())

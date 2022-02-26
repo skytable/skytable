@@ -27,7 +27,6 @@
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::{encoding::ENCODING_LUT_ITER_PAIR, KVTable};
-use crate::protocol::responses;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 
@@ -37,25 +36,21 @@ action!(
     /// This is like "INSERT or UPDATE"
     fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
-        if is_lowbit_set!(howmany) || howmany == 0 {
-            // An odd number of arguments means that the number of keys
-            // is not the same as the number of values, we won't run this
-            // action at all
-            return con.write_response(responses::groups::ACTION_ERR).await;
-        }
-        let kve = kve!(con, handle);
+        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.kve_tuple_encoding()](&act);
         if compiler::likely(encoding_is_okay) {
             if registry::state_okay() {
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     kve.upsert_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val));
                 }
-                conwrite!(con, howmany / 2)
+                conwrite!(con, howmany / 2)?;
             } else {
-                conwrite!(con, groups::SERVER_ERR)
+                conwrite!(con, groups::SERVER_ERR)?;
             }
         } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
+            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
         }
+        Ok(())
     }
 );

@@ -24,13 +24,60 @@
  *
 */
 
+use crate::actions::ActionResult;
 use crate::corestore::htable::Coremap;
-use crate::corestore::memstore::DdlError;
 use crate::corestore::Data;
-use crate::corestore::KeyspaceResult;
+#[cfg(test)]
+use crate::corestore::{memstore::DdlError, KeyspaceResult};
+use crate::dbnet::connection::prelude::Corestore;
 use crate::kvengine::listmap::LockedVec;
 use crate::kvengine::KVTable;
 use crate::kvengine::{listmap::KVEListMap, KVEngine};
+use crate::protocol::responses::groups;
+use crate::util;
+
+pub trait DescribeTable {
+    type Table;
+    fn try_get(table: &Table) -> Option<&Self::Table>;
+    fn get(store: &Corestore) -> ActionResult<&Self::Table> {
+        match store.estate.table {
+            Some((_, ref table)) => {
+                // so we do have a table
+                match Self::try_get(&table) {
+                    Some(tbl) => Ok(tbl),
+                    None => util::err(groups::WRONG_MODEL),
+                }
+            }
+            _ => util::err(groups::DEFAULT_UNSET),
+        }
+    }
+}
+
+pub struct KVE;
+
+impl DescribeTable for KVE {
+    type Table = KVEngine;
+    fn try_get(table: &Table) -> Option<&Self::Table> {
+        if let DataModel::KV(ref kve) = table.model_store {
+            Some(kve)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct KVEList;
+
+impl DescribeTable for KVEList {
+    type Table = KVEListMap;
+    fn try_get(table: &Table) -> Option<&Self::Table> {
+        if let DataModel::KVExtListmap(ref kvl) = table.model_store {
+            Some(kvl)
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum DataModel {
@@ -65,6 +112,7 @@ impl Table {
         }
     }
     /// Get the key/value store if the table is a key/value store
+    #[cfg(test)]
     pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
         #[allow(irrefutable_let_patterns)]
         if let DataModel::KV(kvs) = &self.model_store {

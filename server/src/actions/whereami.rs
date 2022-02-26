@@ -28,8 +28,8 @@ use crate::dbnet::connection::prelude::*;
 use crate::resp::writer::NonNullArrayWriter;
 
 action! {
-    fn whereami(store: &Corestore, con: &mut T, iter: ActionIter<'a>) {
-        err_if_len_is!(iter, con, not 0);
+    fn whereami(store: &Corestore, con: &mut T, act: ActionIter<'a>) {
+        ensure_length(act.len(), |len| len == 0)?;
         match store.get_ids() {
             (Some(ks), Some(tbl)) =>  {
                 let mut writer = unsafe { NonNullArrayWriter::new(con, b'+', 2).await? };

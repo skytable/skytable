@@ -120,7 +120,7 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($($argname: $argty,)*) -> std::io::Result<()>
+            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($($argname: $argty,)*) -> crate::actions::ActionResult<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
@@ -132,7 +132,7 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
+            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> crate::actions::ActionResult<()>
             where
                 T: ProtocolConnectionExt<Strm>,
                 Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

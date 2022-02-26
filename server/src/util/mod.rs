@@ -69,3 +69,8 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
 pub fn exit_error() -> ! {
     process::exit(EXITCODE_ONE)
 }
+
+/// Returns a Result with the provided error
+pub fn err<T, E>(e: impl Into<E>) -> Result<T, E> {
+    Err(e.into())
+}

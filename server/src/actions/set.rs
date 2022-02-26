@@ -39,10 +39,10 @@ const SET_NLUT: BytesNicheLUT =
 action!(
     /// Run a `SET` query
     fn set(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 2);
+        ensure_length(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {
-                let writer = kve!(con, handle);
+                let writer = handle.get_table_with::<KVE>()?;
                 match unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments

@@ -26,6 +26,7 @@
 
 //! # The Query Engine
 
+use crate::actions::ActionResult;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
@@ -55,7 +56,7 @@ macro_rules! gen_constants_and_matches {
         }
         let first = match $buf.next_uppercase() {
             Some(frst) => frst,
-            None => return $con.write_response(responses::groups::PACKET_ERR).await,
+            None => return util::err(groups::PACKET_ERR),
         };
         match first.as_ref() {
             $(
@@ -99,7 +100,7 @@ action! {
                 self::execute_stage(db, con, &buf.into_inner()).await
             }
         } else {
-            con.write_response(responses::groups::WRONGTYPE_ERR).await
+            util::err(groups::WRONGTYPE_ERR)
         }
     }
 }
@@ -108,7 +109,7 @@ async fn execute_stage<'a, T: 'a, Strm>(
     db: &mut Corestore,
     con: &'a mut T,
     buf: &UnsafeElement,
-) -> std::io::Result<()>
+) -> ActionResult<()>
 where
     T: ProtocolConnectionExt<Strm> + Send + Sync,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
@@ -174,7 +175,7 @@ where
 action! {
     /// Handle `use <entity>` like queries
     fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         let entity = unsafe {
             // SAFETY: Already checked len
             act.next_unchecked()

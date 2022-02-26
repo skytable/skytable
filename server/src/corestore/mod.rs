@@ -24,14 +24,15 @@
  *
 */
 
+use crate::actions::ActionResult;
 use crate::corestore::memstore::DdlError;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
 use crate::corestore::memstore::DEFAULT;
+use crate::corestore::table::DescribeTable;
 use crate::corestore::table::Table;
 use crate::dbnet::connection::ProtocolConnectionExt;
-use crate::kvengine::KVEngine;
 use crate::protocol::Query;
 use crate::queryengine;
 use crate::registry;
@@ -42,7 +43,6 @@ use crate::IoResult;
 use core::borrow::Borrow;
 use core::hash::Hash;
 pub use htable::Data;
-use libsky::TResult;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub mod array;
@@ -240,20 +240,10 @@ impl Corestore {
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
     }
-    /// Get the key/value store
-    ///
-    /// `Err`s are propagated if the target table has an incorrect table or if
-    /// the default table is unset
-    pub fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
-        match &self.estate.table {
-            Some((_, tbl)) => match tbl.get_kvstore() {
-                Ok(kvs) => Ok(kvs),
-                _ => Err(DdlError::WrongModel),
-            },
-            None => Err(DdlError::DefaultNotFound),
-        }
+    /// Returns a table with the provided specification
+    pub fn get_table_with<T: DescribeTable>(&self) -> ActionResult<&T::Table> {
+        T::get(self)
     }
-
     /// Create a table: in-memory; **no transactional guarantees**. Two tables can be created
     /// simultaneously, but are never flushed unless we are very lucky. If the global flush
     /// system is close to a flush cycle -- then we are in luck: we pause the flush cycle
@@ -375,7 +365,7 @@ impl Corestore {
         &mut self,
         query: Query,
         con: &mut T,
-    ) -> TResult<()>
+    ) -> ActionResult<()>
     where
         T: ProtocolConnectionExt<Strm>,
         Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,

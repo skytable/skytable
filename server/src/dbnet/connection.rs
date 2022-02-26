@@ -36,6 +36,7 @@
 //! respones in compliance with the Skyhash protocol.
 
 use super::tcp::Connection;
+use crate::actions::ActionError;
 use crate::corestore::buffers::Integer64;
 use crate::corestore::Corestore;
 use crate::dbnet::tcp::BufferedSocketStream;
@@ -76,20 +77,19 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::ProtocolConnectionExt;
+    pub use crate::actions::{ensure_cond_or_err, ensure_length};
     pub use crate::aerr;
     pub use crate::conwrite;
+    pub use crate::corestore::table::{KVEList, KVE};
     pub use crate::corestore::Corestore;
-    pub use crate::default_keyspace;
-    pub use crate::err_if_len_is;
     pub use crate::get_tbl;
     pub use crate::handle_entity;
     pub use crate::is_lowbit_set;
-    pub use crate::kve;
     pub use crate::protocol::responses;
     pub use crate::protocol::responses::groups;
     pub use crate::queryengine::ActionIter;
     pub use crate::registry;
-    pub use crate::util::Unwrappable;
+    pub use crate::util::{self, Unwrappable};
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
@@ -430,7 +430,15 @@ where
             };
             match try_df {
                 Ok(QueryResult::Q((query, advance_by))) => {
-                    self.db.execute_query(query, &mut self.con).await?;
+                    match self.db.execute_query(query, &mut self.con).await {
+                        Ok(()) => {}
+                        Err(ActionError::ActionError(e)) => {
+                            self.con.close_conn_with_error(e).await?;
+                        }
+                        Err(ActionError::IoError(e)) => {
+                            return Err(e.into());
+                        }
+                    }
                     self.con.advance_buffer(advance_by);
                 }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,

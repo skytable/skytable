@@ -43,7 +43,7 @@ action! {
     /// like queries
     fn create(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        err_if_len_is!(act, con, lt 2);
+        ensure_length(act.len(), |size| size > 2)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
@@ -61,7 +61,7 @@ action! {
     /// like queries
     fn ddl_drop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        err_if_len_is!(act, con, lt 2);
+        ensure_length(act.len(), |size| size > 2)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
@@ -77,18 +77,12 @@ action! {
 
     /// We should have `<tableid> <model>(args)`
     fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(con, act.len() > 3 || act.len() < 2);
-        let (table_entity, model_code) = match parser::parse_table_args(&mut act) {
-            Ok(v) => v,
-            Err(e) => return con.write_response(e).await,
-        };
+        ensure_length(act.len(), |size| size > 2 && size < 3)?;
+        let (table_entity, model_code) = parser::parse_table_args(&mut act)?;
         let is_volatile = match act.next() {
             Some(maybe_volatile) => {
-                if maybe_volatile.eq(VOLATILE) {
-                    true
-                } else {
-                    return conwrite!(con, responses::groups::UNKNOWN_PROPERTY);
-                }
+                ensure_cond_or_err(maybe_volatile.eq(VOLATILE), responses::groups::UNKNOWN_PROPERTY)?;
+                true
             }
             None => false,
         };
@@ -119,27 +113,19 @@ action! {
 
     /// We should have `<ksid>`
     fn create_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         match act.next() {
             Some(ksid) => {
-                if !encoding::is_utf8(&ksid) {
-                    return con.write_response(responses::groups::ENCODING_ERROR).await;
-                }
+                ensure_cond_or_err(encoding::is_utf8(&ksid), responses::groups::ENCODING_ERROR)?;
                 let ksid_str = unsafe { str::from_utf8_unchecked(ksid) };
-                if !VALID_CONTAINER_NAME.is_match(ksid_str) {
-                    return con.write_response(responses::groups::BAD_EXPRESSION).await;
-                }
-                if ksid.len() > 64 {
-                    return con
-                        .write_response(responses::groups::CONTAINER_NAME_TOO_LONG)
-                        .await;
-                }
+                ensure_cond_or_err(VALID_CONTAINER_NAME.is_match(ksid_str), responses::groups::BAD_EXPRESSION)?;
+                ensure_cond_or_err(ksid.len() < 64, responses::groups::CONTAINER_NAME_TOO_LONG)?;
                 let ksid = unsafe { ObjectID::from_slice(ksid_str) };
                 if registry::state_okay() {
                     match handle.create_keyspace(ksid) {
-                        Ok(()) => return con.write_response(responses::groups::OKAY).await,
+                        Ok(()) => con.write_response(responses::groups::OKAY).await?,
                         Err(DdlError::AlreadyExists) => {
-                            return con.write_response(responses::groups::ALREADY_EXISTS).await
+                            con.write_response(responses::groups::ALREADY_EXISTS).await?;
                         }
                         Err(_) => unsafe {
                             // we already know that Corestore::create_keyspace doesn't return anything else
@@ -147,22 +133,20 @@ action! {
                         },
                     }
                 } else {
-                    return conwrite!(con, responses::groups::SERVER_ERR);
+                    conwrite!(con, responses::groups::SERVER_ERR)?;
                 }
             }
-            None => return con.write_response(responses::groups::ACTION_ERR).await,
+            None => con.write_response(responses::groups::ACTION_ERR).await?,
         }
+        Ok(())
     }
 
     /// Drop a table (`<tblid>` only)
     fn drop_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |size| size == 1)?;
         match act.next() {
             Some(eg) => {
-                let entity_group = match parser::get_query_entity(eg) {
-                    Ok(egroup) => egroup,
-                    Err(e) => return con.write_response(e).await,
-                };
+                let entity_group = parser::get_query_entity(eg)?;
                 if registry::state_okay() {
                     let ret = match handle.drop_table(entity_group) {
                         Ok(()) => responses::groups::OKAY,
@@ -187,16 +171,16 @@ action! {
 
     /// Drop a keyspace (`<ksid>` only)
     fn drop_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |size| size == 1)?;
         match act.next() {
             Some(ksid) => {
-                if ksid.len() > 64 {
-                    return con.write_response(responses::groups::CONTAINER_NAME_TOO_LONG).await;
-                }
+                ensure_cond_or_err(ksid.len() < 64, responses::groups::CONTAINER_NAME_TOO_LONG)?;
                 let force_remove = match act.next() {
                     Some(bts) if bts.eq(FORCE_REMOVE) => true,
                     None => false,
-                    _ => return conwrite!(con, responses::groups::UNKNOWN_ACTION)
+                    _ => {
+                        return util::err(responses::groups::UNKNOWN_ACTION);
+                    }
                 };
                 if registry::state_okay() {
                     let objid = unsafe {ObjectID::from_slice(ksid)};

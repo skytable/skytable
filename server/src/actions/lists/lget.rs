@@ -24,7 +24,6 @@
  *
 */
 
-use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::resp::writer;
@@ -68,9 +67,8 @@ action! {
     /// - `LGET <mylist> LAST` will return the last item
     /// if it exists
     fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, lt 1);
-        let table = get_tbl!(handle, con);
-        let listmap = listmap!(table, con);
+        ensure_length(act.len(), |len| len > 1)?;
+        let listmap = handle.get_table_with::<KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };
         // now let us see what we need to do
@@ -78,7 +76,7 @@ action! {
             () => {
                 match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
                     Ok(int) => int,
-                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                    Err(_) => return util::err(groups::WRONGTYPE_ERR),
                 }
             };
         }
@@ -95,7 +93,7 @@ action! {
             Some(subaction) => {
                 match subaction.as_ref() {
                     LEN => {
-                        err_if_len_is!(act, con, not 0);
+                        ensure_length(act.len(), |len| len == 0)?;
                         if let Some(len) = listmap.len_of(listname) {
                             conwrite!(con, len)?;
                         } else {
@@ -103,7 +101,7 @@ action! {
                         }
                     }
                     LIMIT => {
-                        err_if_len_is!(act, con, not 1);
+                        ensure_length(act.len(), |len| len == 1)?;
                         let count = get_numeric_count!();
                         let items = if let Some(keys) = listmap.get_cloned(listname, count) {
                             keys
@@ -113,7 +111,7 @@ action! {
                         writelist!(con, listmap, items);
                     }
                     VALUEAT => {
-                        err_if_len_is!(act, con, not 1);
+                        ensure_length(act.len(), |len| len == 1)?;
                         let idx = get_numeric_count!();
                         let maybe_value = listmap.get(listname).map(|list| {
                             let readlist = list.read();
@@ -139,7 +137,7 @@ action! {
                         }
                     }
                     LAST => {
-                        err_if_len_is!(act, con, not 0);
+                        ensure_length(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
                             list.read().last().cloned()
                         });
@@ -154,7 +152,7 @@ action! {
                         }
                     }
                     FIRST => {
-                        err_if_len_is!(act, con, not 0);
+                        ensure_length(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
                             list.read().first().cloned()
                         });
@@ -173,13 +171,13 @@ action! {
                             Some(start) => {
                                 let start: usize = match start.parse() {
                                     Ok(v) => v,
-                                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                                    Err(_) => return util::err(groups::WRONGTYPE_ERR),
                                 };
                                 let mut range = Range::new(start);
                                 if let Some(stop) = act.next_string_owned() {
                                     let stop: usize = match stop.parse() {
                                         Ok(v) => v,
-                                        Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                                        Err(_) => return util::err(groups::WRONGTYPE_ERR),
                                     };
                                     range.set_stop(stop);
                                 };
