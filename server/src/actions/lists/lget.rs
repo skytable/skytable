@@ -67,7 +67,7 @@ action! {
     /// - `LGET <mylist> LAST` will return the last item
     /// if it exists
     fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len > 1)?;
+        ensure_length(act.len(), |len| len != 0)?;
         let listmap = handle.get_table_with::<KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };

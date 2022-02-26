@@ -34,7 +34,7 @@ use crate::util::compiler;
 action!(
     /// Run a `GET` query
     fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 0)?;
+        ensure_length(act.len(), |len| len == 1)?;
         let kve = handle.get_table_with::<KVE>()?;
         unsafe {
             match kve.get_cloned_with_tsymbol(act.next_unchecked()) {

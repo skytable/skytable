@@ -43,7 +43,7 @@ action! {
     /// like queries
     fn create(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        ensure_length(act.len(), |size| size > 2)?;
+        ensure_length(act.len(), |size| size > 1)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
@@ -61,7 +61,7 @@ action! {
     /// like queries
     fn ddl_drop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        ensure_length(act.len(), |size| size > 2)?;
+        ensure_length(act.len(), |size| size > 1)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
@@ -75,9 +75,9 @@ action! {
         Ok(())
     }
 
-    /// We should have `<tableid> <model>(args)`
+    /// We should have `<tableid> <model>(args) properties`
     fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size > 2 && size < 3)?;
+        ensure_length(act.len(), |size| size > 1 && size < 4)?;
         let (table_entity, model_code) = parser::parse_table_args(&mut act)?;
         let is_volatile = match act.next() {
             Some(maybe_volatile) => {

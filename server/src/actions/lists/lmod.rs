@@ -46,7 +46,7 @@ action! {
     /// - `LMOD <mylist> remove <index>`
     /// - `LMOD <mylist> clear`
     fn lmod(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len > 2)?;
+        ensure_length(act.len(), |len| len > 1)?;
         let listmap = handle.get_table_with::<KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };

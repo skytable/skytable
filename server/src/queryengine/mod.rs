@@ -71,23 +71,20 @@ macro_rules! gen_constants_and_matches {
 
 macro_rules! swap_entity {
     ($con:expr, $handle:expr, $entity:expr) => {
-        match parser::get_query_entity(&$entity) {
-            Ok(e) => match $handle.swap_entity(e) {
-                Ok(()) => $con.write_response(responses::groups::OKAY).await?,
-                Err(DdlError::ObjectNotFound) => {
-                    $con.write_response(responses::groups::CONTAINER_NOT_FOUND)
-                        .await?
-                }
-                Err(DdlError::DefaultNotFound) => {
-                    $con.write_response(responses::groups::DEFAULT_UNSET)
-                        .await?
-                }
-                Err(_) => unsafe {
-                    // we know Corestore::swap_entity doesn't return anything else
-                    impossible!()
-                },
+        match $handle.swap_entity(parser::get_query_entity(&$entity)?) {
+            Ok(()) => $con.write_response(responses::groups::OKAY).await?,
+            Err(DdlError::ObjectNotFound) => {
+                $con.write_response(responses::groups::CONTAINER_NOT_FOUND)
+                    .await?
+            }
+            Err(DdlError::DefaultNotFound) => {
+                $con.write_response(responses::groups::DEFAULT_UNSET)
+                    .await?
+            }
+            Err(_) => unsafe {
+                // we know Corestore::swap_entity doesn't return anything else
+                impossible!()
             },
-            Err(e) => $con.write_response(e).await?,
         }
     };
 }

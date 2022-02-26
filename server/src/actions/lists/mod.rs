@@ -46,7 +46,7 @@ action! {
     /// Handle an `LSET` query for the list model
     /// Syntax: `LSET <listname> <values ...>`
     fn lset(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len > 1)?;
+        ensure_length(act.len(), |len| len > 0)?;
         let listmap = handle.get_table_with::<KVEList>()?;
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.kve_inner_ref();

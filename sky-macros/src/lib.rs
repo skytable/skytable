@@ -84,10 +84,23 @@ fn parse_dbtest(
             con.run_simple_query(
                 &skytable::query!("create", "keyspace", "testsuite")
             ).await.unwrap();
+        if !(
+            __create_ks == skytable::Element::RespCode(skytable::RespCode::Okay) ||
+            __create_ks == skytable::Element::RespCode(
+                skytable::RespCode::ErrorString(
+                    skytable::error::errorstring::ERR_ALREADY_EXISTS.to_owned()
+                )
+            )
+        ) {
+            panic!("Failed to create keyspace: {:?}", __create_ks);
+        }
         let __switch_ks =
             con.run_simple_query(
                 &skytable::query!("use", "testsuite")
             ).await.unwrap();
+        if (__switch_ks != skytable::Element::RespCode(skytable::RespCode::Okay)) {
+            panic!("Failed to switch keyspace: {:?}", __switch_ks);
+        }
         let __create_tbl =
             con.run_simple_query(
                 &skytable::query!(
@@ -98,6 +111,9 @@ fn parse_dbtest(
                     "volatile"
                 )
             ).await.unwrap();
+        assert_eq!(
+            __create_tbl, skytable::Element::RespCode(skytable::RespCode::Okay), "Failed to create table"
+        );
         let mut __concat_entity = std::string::String::new();
         __concat_entity.push_str("testsuite:");
         __concat_entity.push_str(&#rand_string);
@@ -106,6 +122,9 @@ fn parse_dbtest(
             con.run_simple_query(
                 &skytable::query!("use", __concat_entity)
             ).await.unwrap();
+        assert_eq!(
+            __switch_entity, skytable::Element::RespCode(skytable::RespCode::Okay), "Failed to switch"
+        );
         let mut query = skytable::Query::new();
         #body
         {

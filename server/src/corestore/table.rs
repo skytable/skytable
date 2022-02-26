@@ -48,7 +48,7 @@ pub trait DescribeTable {
                     None => util::err(groups::WRONG_MODEL),
                 }
             }
-            _ => util::err(groups::DEFAULT_UNSET),
+            None => util::err(groups::DEFAULT_UNSET),
         }
     }
 }

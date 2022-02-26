@@ -41,6 +41,7 @@ use crate::storage::sengine::SnapshotEngine;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use core::borrow::Borrow;
+use core::fmt;
 use core::hash::Hash;
 pub use htable::Data;
 use std::sync::Arc;
@@ -67,11 +68,27 @@ pub type OwnedEntityGroup = OptionTuple<ObjectID>;
 /// A raw borrowed entity (not the struct, but in a tuple form)
 type BorrowedEntityGroupRaw<'a> = OptionTuple<&'a [u8]>;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 /// An entity group borrowed from a byte slice
 pub struct BorrowedEntityGroup<'a> {
     va: Option<&'a [u8]>,
     vb: Option<&'a [u8]>,
+}
+
+impl<'a> fmt::Debug for BorrowedEntityGroup<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn write_if_some(v: Option<&'_ [u8]>) -> String {
+            if let Some(v) = v {
+                format!("{:?}", String::from_utf8_lossy(&v))
+            } else {
+                "None".to_owned()
+            }
+        }
+        f.debug_struct("BorrowedEntityGroup")
+            .field("va", &write_if_some(self.va))
+            .field("vb", &write_if_some(self.vb))
+            .finish()
+    }
 }
 
 impl<'a> BorrowedEntityGroup<'a> {
