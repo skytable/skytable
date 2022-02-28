@@ -29,7 +29,9 @@ use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
 use crate::kvengine::KVEngine;
+use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
+use core::slice::Iter;
 
 action! {
     /// Run an `SSET` query
@@ -42,8 +44,10 @@ action! {
         let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
             let encoder = kve.get_encoder();
-            let outcome = {
-                self::snapshot_and_insert(kve, encoder, act)
+            let outcome = unsafe {
+                // UNSAFE(@ohsayan): The lifetime of `act` guarantees that the
+                // pointers remain valid
+                self::snapshot_and_insert(kve, encoder, act.into_inner())
             };
             match outcome {
                 StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
@@ -67,69 +71,18 @@ action! {
 
 /// Take a consistent snapshot of the database at this current point in time
 /// and then mutate the entries, respecting concurrency guarantees
-pub(super) fn snapshot_and_insert(
-    kve: &KVEngine,
+pub(super) fn snapshot_and_insert<'a, T: 'a + DerefUnsafeSlice>(
+    kve: &'a KVEngine,
     encoder: DoubleEncoder,
-    mut act: ActionIter,
-) -> StrongActionResult {
-    let mut enc_err = false;
-    let lowtable = kve.__get_inner_ref();
-    let key_iter_stat_ok;
-    {
-        key_iter_stat_ok = act.chunks_exact(2).all(|kv| unsafe {
-            let key = ucidx!(kv, 0).as_slice();
-            let value = ucidx!(kv, 1).as_slice();
-            if compiler::likely(encoder.is_ok(key, value)) {
-                lowtable.get(key).is_none()
-            } else {
-                enc_err = true;
-                false
-            }
-        });
-    }
-    cfg_test!({
-        // give the caller 10 seconds to do some crap
-        do_sleep!(10 s);
-    });
-    if compiler::unlikely(enc_err) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
-    }
-    if registry::state_okay() {
-        if key_iter_stat_ok {
-            let _kve = kve;
-            let lowtable = lowtable;
-            // fine, the keys were non-existent when we looked at them
-            while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                if let Some(fresh) = lowtable.fresh_entry(Data::copy_from_slice(key)) {
-                    fresh.insert(Data::copy_from_slice(value));
-                }
-                // we don't care if some other thread initialized the value we checked
-                // it. We expected a fresh entry, so that's what we'll check and use
-            }
-            StrongActionResult::Okay
-        } else {
-            StrongActionResult::OverwriteError
-        }
-    } else {
-        StrongActionResult::ServerError
-    }
-}
-
-/// Take a consistent snapshot of the database at this current point in time
-/// and then mutate the entries, respecting concurrency guarantees
-#[cfg(test)]
-pub(super) fn snapshot_and_insert_test(
-    kve: &KVEngine,
-    encoder: DoubleEncoder,
-    mut act: std::vec::IntoIter<bytes::Bytes>,
+    mut act: Iter<'a, T>,
 ) -> StrongActionResult {
     let mut enc_err = false;
     let lowtable = kve.__get_inner_ref();
     let key_iter_stat_ok;
     {
         key_iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
-            let key = &ucidx!(kv, 0);
-            let value = &ucidx!(kv, 1);
+            let key = ucidx!(kv, 0).deref_slice();
+            let value = ucidx!(kv, 1).deref_slice();
             if compiler::likely(encoder.is_ok(key, value)) {
                 lowtable.get(key).is_none()
             } else {
@@ -151,11 +104,15 @@ pub(super) fn snapshot_and_insert_test(
             let lowtable = lowtable;
             // fine, the keys were non-existent when we looked at them
             while let (Some(key), Some(value)) = (act.next(), act.next()) {
-                if let Some(fresh) = lowtable.fresh_entry(Data::from(key)) {
-                    fresh.insert(Data::from(value));
+                unsafe {
+                    if let Some(fresh) =
+                        lowtable.fresh_entry(Data::copy_from_slice(key.deref_slice()))
+                    {
+                        fresh.insert(Data::copy_from_slice(value.deref_slice()));
+                    }
+                    // we don't care if some other thread initialized the value we checked
+                    // it. We expected a fresh entry, so that's what we'll check and use
                 }
-                // we don't care if some other thread initialized the value we checked
-                // it. We expected a fresh entry, so that's what we'll check and use
             }
             StrongActionResult::Okay
         } else {

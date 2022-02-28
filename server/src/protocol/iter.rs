@@ -31,7 +31,6 @@ use bytes::Bytes;
 use core::hint::unreachable_unchecked;
 use core::iter::FusedIterator;
 use core::ops::Deref;
-use core::slice::ChunksExact;
 use core::slice::Iter;
 
 /// An iterator over an [`AnyArray`] (an [`UnsafeSlice`]). The validity of the iterator is
@@ -63,10 +62,6 @@ impl<'a> AnyArrayIter<'a> {
     /// - Source pointers exist as long as the iterator is used
     pub const unsafe fn new(iter: Iter<'a, UnsafeSlice>) -> AnyArrayIter<'a> {
         Self { iter }
-    }
-    /// Returns a [`ChunksExact`] (similar to [`ChunksExact` provided by core::slice](core::slice::ChunksExact))
-    pub fn chunks_exact(&'a self, chunks_exact: usize) -> ChunksExact<'a, UnsafeSlice> {
-        self.iter.as_ref().chunks_exact(chunks_exact)
     }
     /// Check if the iter is empty
     pub fn is_empty(&self) -> bool {
@@ -114,6 +109,28 @@ impl<'a> AnyArrayIter<'a> {
     }
     pub fn next_string_owned(&mut self) -> Option<String> {
         self.map_next(|v| String::from_utf8_lossy(&v).to_string())
+    }
+    pub unsafe fn into_inner(self) -> Iter<'a, UnsafeSlice> {
+        self.iter
+    }
+}
+
+pub unsafe trait DerefUnsafeSlice {
+    unsafe fn deref_slice(&self) -> &[u8];
+}
+
+unsafe impl DerefUnsafeSlice for UnsafeSlice {
+    #[inline(always)]
+    unsafe fn deref_slice(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+#[cfg(test)]
+unsafe impl DerefUnsafeSlice for Bytes {
+    #[inline(always)]
+    unsafe fn deref_slice(&self) -> &[u8] {
+        self.as_ref()
     }
 }
 

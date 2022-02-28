@@ -28,7 +28,9 @@ use crate::actions::strong::StrongActionResult;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::KVEngine;
 use crate::kvengine::SingleEncoder;
+use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
+use core::slice::Iter;
 
 action! {
     /// Run an `SDEL` query
@@ -41,8 +43,10 @@ action! {
         if registry::state_okay() {
             // guarantee one check: consistency
             let key_encoder = kve.get_key_encoder();
-            let outcome = {
-                self::snapshot_and_del(kve, key_encoder, act)
+            let outcome = unsafe {
+                // UNSAFE(@ohsayan): The lifetime of `act` ensures that the
+                // pointers are still valid
+                self::snapshot_and_del(kve, key_encoder, act.into_inner())
             };
             match outcome {
                 StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
@@ -69,71 +73,21 @@ action! {
 
 /// Snapshot the current status and then delete maintaining concurrency
 /// guarantees
-pub(super) fn snapshot_and_del(
-    kve: &KVEngine,
+pub(super) fn snapshot_and_del<'a, T: 'a + DerefUnsafeSlice>(
+    kve: &'a KVEngine,
     key_encoder: SingleEncoder,
-    act: ActionIter,
-) -> StrongActionResult {
-    let mut snapshots = Vec::with_capacity(act.len());
-    let mut err_enc = false;
-    let iter_stat_ok;
-    {
-        iter_stat_ok = act.as_ref().all(|key| {
-            if compiler::likely(key_encoder.is_ok(key)) {
-                if let Some(snap) = kve.take_snapshot(key) {
-                    snapshots.push(snap);
-                    true
-                } else {
-                    false
-                }
-            } else {
-                err_enc = true;
-                false
-            }
-        });
-    }
-    cfg_test!({
-        // give the caller 10 seconds to do some crap
-        do_sleep!(10 s);
-    });
-    if compiler::unlikely(err_enc) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
-    }
-    if registry::state_okay() {
-        // guarantee upholded: consistency
-        if iter_stat_ok {
-            // nice, all keys exist; let's plonk 'em
-            let kve = kve;
-            let lowtable = kve.__get_inner_ref();
-            act.zip(snapshots).for_each(|(key, snapshot)| {
-                // the check is very important: some thread may have updated the
-                // value after we snapshotted it. In that case, let this key
-                // be whatever the "newer" value is. Since our snapshot is a "happens-before"
-                // thing, this is absolutely fine
-                let _ = lowtable.remove_if(key, |_, val| val.eq(&snapshot));
-            });
-            StrongActionResult::Okay
-        } else {
-            StrongActionResult::Nil
-        }
-    } else {
-        StrongActionResult::ServerError
-    }
-}
-
-/// Snapshot the current status and then delete maintaining concurrency
-/// guarantees
-#[cfg(test)]
-pub(super) fn snapshot_and_del_test(
-    kve: &KVEngine,
-    key_encoder: SingleEncoder,
-    act: std::vec::IntoIter<bytes::Bytes>,
+    act: Iter<'a, T>,
 ) -> StrongActionResult {
     let mut snapshots = Vec::with_capacity(act.len());
     let mut err_enc = false;
     let iter_stat_ok;
     {
         iter_stat_ok = act.as_ref().iter().all(|key| {
+            let key = unsafe {
+                // UNSAFE(@ohsayan): The caller has passed a slice and they should
+                // ensure that it is valid
+                key.deref_slice()
+            };
             if compiler::likely(key_encoder.is_ok(key)) {
                 if let Some(snap) = kve.take_snapshot(key) {
                     snapshots.push(snap);
@@ -161,11 +115,16 @@ pub(super) fn snapshot_and_del_test(
             let kve = kve;
             let lowtable = kve.__get_inner_ref();
             act.zip(snapshots).for_each(|(key, snapshot)| {
+                let key = unsafe {
+                    // UNSAFE(@ohsayan): The caller has passed a slice and they should
+                    // ensure that it is valid
+                    key.deref_slice()
+                };
                 // the check is very important: some thread may have updated the
                 // value after we snapshotted it. In that case, let this key
                 // be whatever the "newer" value is. Since our snapshot is a "happens-before"
                 // thing, this is absolutely fine
-                let _ = lowtable.remove_if(&key, |_, val| val.eq(&snapshot));
+                let _ = lowtable.remove_if(key, |_, val| val.eq(&snapshot));
             });
             StrongActionResult::Okay
         } else {
