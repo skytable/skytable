@@ -28,7 +28,7 @@ use crate::config::BGSave;
 use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
 use crate::registry;
-use crate::storage;
+use crate::storage::{self, flush::Autoflush};
 use libsky::TResult;
 use tokio::time::{self, Duration};
 
@@ -74,7 +74,7 @@ pub async fn bgsave_scheduler(handle: Corestore, bgsave_cfg: BGSave, mut termina
 ///
 /// This function just hides away the BGSAVE blocking section from the _public API_
 pub fn run_bgsave(handle: &Corestore) -> TResult<()> {
-    storage::flush::flush_full(handle.get_store()).map_err(|e| e.into())
+    storage::flush::flush_full(Autoflush, handle.get_store()).map_err(|e| e.into())
 }
 
 /// This just wraps around [`_bgsave_blocking_section`] and prints nice log messages depending on the outcome

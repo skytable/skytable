@@ -30,7 +30,7 @@ use crate::corestore::iarray::IArray;
 use crate::corestore::lazy::Lazy;
 use crate::corestore::lock::QuickLock;
 use crate::corestore::memstore::Memstore;
-use crate::storage::interface::DIR_RSNAPROOT;
+use crate::storage::flush::{RemoteSnapshot, Snapshot};
 use bytes::Bytes;
 use chrono::prelude::Utc;
 use core::fmt;
@@ -94,25 +94,6 @@ pub struct SnapshotEngine {
     remote_lock: QuickLock<()>,
 }
 
-macro_rules! parse_dir {
-    ($queue:expr, $dirname:expr) => {
-        let dir = fs::read_dir($dirname)?;
-        for entry in dir {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let fname = entry.file_name();
-                let name = fname.to_string_lossy();
-                if !SNAP_MATCH.is_match(&name) {
-                    return Err("unknown file in snapshot directory".into());
-                }
-                $queue.lock().push(name.to_string());
-            } else {
-                return Err("unrecognized file in snapshot directory".into());
-            }
-        }
-    };
-}
-
 impl SnapshotEngine {
     /// Returns a fresh, uninitialized snapshot engine instance
     pub const fn new(maxlen: usize) -> Self {
@@ -130,19 +111,34 @@ impl SnapshotEngine {
         }
     }
     pub fn parse_dir(&self) -> SnapshotResult<()> {
-        parse_dir!(self.local_queue, DIR_SNAPROOT);
+        let dir = fs::read_dir(DIR_SNAPROOT)?;
+        for entry in dir {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let fname = entry.file_name();
+                let name = fname.to_string_lossy();
+                if !SNAP_MATCH.is_match(&name) {
+                    return Err("unknown file in snapshot directory".into());
+                }
+                self.local_queue.lock().push(name.to_string());
+            } else {
+                return Err("unrecognized file in snapshot directory".into());
+            }
+        }
         Ok(())
     }
     /// Generate the snapshot name
     fn get_snapname(&self) -> String {
         Utc::now().format("%Y%m%d-%H%M%S").to_string()
     }
-    fn _mksnap_blocking_section(store: &Memstore, name: &str) -> SnapshotResult<()> {
-        super::flush::snap_flush_full(DIR_SNAPROOT, name, store)?;
+    fn _mksnap_blocking_section(store: &Memstore, name: String) -> SnapshotResult<()> {
+        let snapshot = Snapshot::new(name);
+        super::flush::flush_full(snapshot, store)?;
         Ok(())
     }
     fn _rmksnap_blocking_section(store: &Memstore, name: &str) -> SnapshotResult<()> {
-        super::flush::snap_flush_full(DIR_RSNAPROOT, name, store)?;
+        let snapshot = RemoteSnapshot::new(name);
+        super::flush::flush_full(snapshot, store)?;
         Ok(())
     }
     /// Spawns a blocking task on a threadpool for blocking tasks. Returns either of:
@@ -161,7 +157,7 @@ impl SnapshotEngine {
             let nameclone = name.clone();
             let todel = queue.add_new(name);
             let snap_create_result = tokio::task::spawn_blocking(move || {
-                Self::_mksnap_blocking_section(&store, &nameclone)
+                Self::_mksnap_blocking_section(&store, nameclone)
             })
             .await
             .expect("mksnap thread panicked");

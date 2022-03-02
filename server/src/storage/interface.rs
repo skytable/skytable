@@ -32,6 +32,7 @@ use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::kvengine::listmap::LockedVec;
 use crate::registry;
+use crate::storage::flush::StorageTarget;
 use crate::IoResult;
 use std::collections::HashSet;
 use std::fs;
@@ -59,6 +60,16 @@ impl<'a> DiskWritable for &'a Coremap<Data, LockedVec> {
     }
 }
 
+/// Creates the directories for the keyspaces
+pub fn create_tree<T: StorageTarget>(target: &T, memroot: &Memstore) -> IoResult<()> {
+    for ks in memroot.keyspaces.iter() {
+        unsafe {
+            try_dir_ignore_existing!(target.keyspace_target(ks.key().as_str()))?;
+        }
+    }
+    Ok(())
+}
+
 /// This creates the root directory structure:
 /// ```
 /// data/
@@ -71,7 +82,7 @@ impl<'a> DiskWritable for &'a Coremap<Data, LockedVec> {
 /// ```
 ///
 /// If any directories exist, they are simply ignored
-pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
+pub fn create_tree_fresh<T: StorageTarget>(target: &T, memroot: &Memstore) -> IoResult<()> {
     try_dir_ignore_existing!(
         DIR_ROOT,
         DIR_KSROOT,
@@ -79,21 +90,7 @@ pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
         DIR_SNAPROOT,
         DIR_RSNAPROOT
     );
-    for ks in memroot.keyspaces.iter() {
-        unsafe {
-            try_dir_ignore_existing!(concat_path!(DIR_KSROOT, ks.key().as_str()))?;
-        }
-    }
-    Ok(())
-}
-
-pub fn snap_create_tree(snapdir: &str, snapid: &str, memroot: &Memstore) -> IoResult<()> {
-    for ks in memroot.keyspaces.iter() {
-        unsafe {
-            try_dir_ignore_existing!(concat_path!(snapdir, snapid, ks.key().as_str()))?;
-        }
-    }
-    Ok(())
+    self::create_tree(target, memroot)
 }
 
 /// Clean up the tree

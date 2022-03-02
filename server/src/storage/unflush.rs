@@ -33,6 +33,7 @@ use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
 use crate::corestore::table::Table;
+use crate::storage::flush::Autoflush;
 use crate::storage::interface::DIR_KSROOT;
 use crate::storage::preload::LoadedPartfile;
 use crate::storage::Coremap;
@@ -151,13 +152,13 @@ pub fn read_full() -> IoResult<Memstore> {
         */
         // init an empty store
         let store = Memstore::new_default();
-
+        let target = Autoflush;
         // (1) create the tree
-        super::interface::create_tree(&store)?;
+        super::interface::create_tree_fresh(&target, &store)?;
         // (2) create the preload
-        super::flush::oneshot::flush_preload(&store)?;
+        super::flush::oneshot::flush_preload(&target, &store)?;
         // (3) do a full flush
-        super::flush::flush_full(&store)?;
+        super::flush::flush_full(target, &store)?;
         return Ok(store);
     }
     let preload = self::read_preload()?;

@@ -144,11 +144,12 @@ fn test_runtime_panic_32bit_or_lower() {
 mod interface_tests {
     use super::interface::{create_tree, DIR_KSROOT, DIR_SNAPROOT};
     use crate::corestore::memstore::Memstore;
+    use crate::storage::flush::Autoflush;
     use std::fs;
     use std::path::PathBuf;
     #[test]
     fn test_tree() {
-        create_tree(&Memstore::new_default()).unwrap();
+        create_tree(&Autoflush, &Memstore::new_default()).unwrap();
         let read_ks: Vec<String> = fs::read_dir(DIR_KSROOT)
             .unwrap()
             .map(|dir| {
@@ -269,6 +270,7 @@ mod flush_routines {
     use crate::corestore::Data;
     use crate::kvengine::listmap::LockedVec;
     use crate::storage::bytemarks;
+    use crate::storage::flush::Autoflush;
     use crate::storage::Coremap;
     use std::fs;
     #[test]
@@ -282,7 +284,7 @@ mod flush_routines {
         let ksid = unsafe { ObjectID::from_slice("myks1") };
         // create the temp dir for this test
         fs::create_dir_all("data/ks/myks1").unwrap();
-        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
         let ret =
             super::unflush::read_table(&ksid, &tblid, false, bytemarks::BYTEMARK_MODEL_KV_BIN_BIN)
@@ -312,7 +314,7 @@ mod flush_routines {
         let ksid = unsafe { ObjectID::from_slice("mylistyks") };
         // create the temp dir for this test
         fs::create_dir_all("data/ks/mylistyks").unwrap();
-        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
         let ret = super::unflush::read_table(
             &ksid,
@@ -360,7 +362,7 @@ mod flush_routines {
         ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true));
 
         // now flush it
-        super::flush::flush_keyspace_full(&ksid, &ks).unwrap();
+        super::flush::flush_keyspace_full(&Autoflush, &ksid, &ks).unwrap();
         let ret = super::unflush::read_keyspace(&ksid).unwrap();
         let tbl1_ret = ret.get(&tbl1).unwrap();
         let tbl2_ret = ret.get(&tbl2).unwrap();
