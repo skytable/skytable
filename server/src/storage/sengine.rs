@@ -30,7 +30,7 @@ use crate::corestore::iarray::IArray;
 use crate::corestore::lazy::Lazy;
 use crate::corestore::lock::QuickLock;
 use crate::corestore::memstore::Memstore;
-use crate::storage::flush::{RemoteSnapshot, Snapshot};
+use crate::storage::flush::{LocalSnapshot, RemoteSnapshot};
 use bytes::Bytes;
 use chrono::prelude::Utc;
 use core::fmt;
@@ -132,7 +132,7 @@ impl SnapshotEngine {
         Utc::now().format("%Y%m%d-%H%M%S").to_string()
     }
     fn _mksnap_blocking_section(store: &Memstore, name: String) -> SnapshotResult<()> {
-        let snapshot = Snapshot::new(name);
+        let snapshot = LocalSnapshot::new(name);
         super::flush::flush_full(snapshot, store)?;
         Ok(())
     }
@@ -168,7 +168,7 @@ impl SnapshotEngine {
                     log::info!("Successfully created snapshot");
                 }
                 Err(e) => {
-                    log::info!("Failed to create snapshot with error: {}", e);
+                    log::error!("Failed to create snapshot with error: {}", e);
                     // so it failed, remove it from queue
                     let _ = queue.pop_last().unwrap();
                     return 1;

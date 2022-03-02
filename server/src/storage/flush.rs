@@ -38,6 +38,9 @@ use crate::registry;
 use crate::IoResult;
 
 pub trait StorageTarget {
+    /// This storage target needs a reinit of the tree despite no preload trip.
+    /// Exempli gratia: rsnap, snap
+    const NEEDS_TREE_INIT: bool;
     /// The root for this storage target. **Must not be separator terminated!**
     fn root(&self) -> String;
     /// Returns the path to the `PRELOAD_` **temporary file** ($ROOT/PRELOAD)
@@ -76,6 +79,7 @@ pub trait StorageTarget {
 pub struct Autoflush;
 
 impl StorageTarget for Autoflush {
+    const NEEDS_TREE_INIT: bool = false;
     fn root(&self) -> String {
         String::from(interface::DIR_KSROOT)
     }
@@ -93,6 +97,7 @@ impl<'a> RemoteSnapshot<'a> {
 }
 
 impl<'a> StorageTarget for RemoteSnapshot<'a> {
+    const NEEDS_TREE_INIT: bool = true;
     fn root(&self) -> String {
         let mut p = String::from(interface::DIR_RSNAPROOT);
         p.push('/');
@@ -102,17 +107,18 @@ impl<'a> StorageTarget for RemoteSnapshot<'a> {
 }
 
 /// A snapshot storage target
-pub struct Snapshot {
+pub struct LocalSnapshot {
     name: String,
 }
 
-impl Snapshot {
+impl LocalSnapshot {
     pub fn new(name: String) -> Self {
         Self { name }
     }
 }
 
-impl StorageTarget for Snapshot {
+impl StorageTarget for LocalSnapshot {
+    const NEEDS_TREE_INIT: bool = true;
     fn root(&self) -> String {
         let mut p = String::from(interface::DIR_SNAPROOT);
         p.push('/');
@@ -137,7 +143,7 @@ pub fn flush_full<T: StorageTarget>(target: T, store: &Memstore) -> IoResult<()>
     // don't spread it over two atomic accesses because another thread may have updated
     // it in-between. Even if it was untripped, we'll get the expected outcome here: false
     let has_tripped = registry::get_preload_tripswitch().check_and_untrip();
-    if has_tripped {
+    if has_tripped || T::NEEDS_TREE_INIT {
         // re-init the tree as new tables/keyspaces may have been added
         super::interface::create_tree(&target, store)?;
         self::oneshot::flush_preload(&target, store)?;
