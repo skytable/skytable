@@ -142,14 +142,14 @@ fn test_runtime_panic_32bit_or_lower() {
 }
 
 mod interface_tests {
-    use super::interface::{create_tree, DIR_KSROOT, DIR_SNAPROOT};
+    use super::interface::{create_tree_fresh, DIR_KSROOT, DIR_SNAPROOT};
     use crate::corestore::memstore::Memstore;
     use crate::storage::flush::Autoflush;
     use std::fs;
     use std::path::PathBuf;
     #[test]
     fn test_tree() {
-        create_tree(&Autoflush, &Memstore::new_default()).unwrap();
+        create_tree_fresh(&Autoflush, &Memstore::new_default()).unwrap();
         let read_ks: Vec<String> = fs::read_dir(DIR_KSROOT)
             .unwrap()
             .map(|dir| {
