@@ -49,13 +49,74 @@ use std::sync::Arc;
 type PreloadSet = std::collections::HashSet<ObjectID>;
 const PRELOAD_PATH: &str = "data/ks/PRELOAD";
 
+/// A keyspace that can be restored from disk storage
+pub trait UnflushableKeyspace: Sized {
+    /// Unflush routine for a keyspace
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self>;
+}
+
+impl UnflushableKeyspace for Keyspace {
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self> {
+        let ks: Coremap<ObjectID, Arc<Table>> = Coremap::with_capacity(partmap.len());
+        for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
+            if table_storage_type > 1 {
+                return Err(bad_data!());
+            }
+            let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
+            let tbl = self::read_table::<Table>(ksid, &tableid, is_volatile, model_code)?;
+            ks.true_if_insert(tableid, Arc::new(tbl));
+        }
+        Ok(Keyspace::init_with_all_def_strategy(ks))
+    }
+}
+
+/// Tables that can be restored from disk storage
+pub trait UnflushableTable {
+    /// The target table
+    type Table;
+    /// Procedure to restore (deserialize) table from disk storage
+    fn unflush_table(datasource: &[u8], model_code: u8, volatile: bool) -> IoResult<Self::Table>;
+}
+
+impl UnflushableTable for Table {
+    type Table = Table;
+    fn unflush_table(datasource: &[u8], model_code: u8, volatile: bool) -> IoResult<Self::Table> {
+        let ret = match model_code {
+            // pure KVE: [0, 3]
+            x if x < 4 => {
+                let data = decode(datasource, volatile)?;
+                let (k_enc, v_enc) = unsafe {
+                    // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
+                    let key: bool = transmute(model_code >> 1);
+                    let value: bool = transmute(((model_code >> 1) + (model_code & 1)) % 2);
+                    (key, value)
+                };
+                Table::new_pure_kve_with_data(data, volatile, k_enc, v_enc)
+            }
+            // KVExtlistmap: [4, 7]
+            x if x < 8 => {
+                let data = decode(datasource, volatile)?;
+                let (k_enc, v_enc) = unsafe {
+                    // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
+                    let code = model_code - 4;
+                    let key: bool = transmute(code >> 1);
+                    let value: bool = transmute(code % 2);
+                    (key, value)
+                };
+                Table::new_kve_listmap_with_data(data, volatile, k_enc, v_enc)
+            }
+            _ => return Err(IoError::from(ErrorKind::Unsupported)),
+        };
+        Ok(ret)
+    }
+}
+
 #[inline(always)]
-fn decode<T: DeserializeInto>(filepath: impl AsRef<Path>, volatile: bool) -> IoResult<T> {
+fn decode<T: DeserializeInto>(datasource: &[u8], volatile: bool) -> IoResult<T> {
     if volatile {
         Ok(T::new_empty())
     } else {
-        let f = fs::read(filepath)?;
-        super::de::deserialize_into(&f).ok_or_else(|| bad_data!())
+        super::de::deserialize_into(datasource).ok_or_else(|| bad_data!())
     }
 }
 
@@ -63,55 +124,22 @@ fn decode<T: DeserializeInto>(filepath: impl AsRef<Path>, volatile: bool) -> IoR
 ///
 /// This will take care of volatility and the model_code. Just make sure that you pass the proper
 /// keyspace ID and a valid table ID
-pub fn read_table(
+pub fn read_table<T: UnflushableTable>(
     ksid: &ObjectID,
     tblid: &ObjectID,
     volatile: bool,
     model_code: u8,
-) -> IoResult<Table> {
+) -> IoResult<T::Table> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
-    let tbl = match model_code {
-        // pure KVE: [0, 3]
-        x if x < 4 => {
-            let data = decode(filepath, volatile)?;
-            let (k_enc, v_enc) = unsafe {
-                // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
-                let key: bool = transmute(model_code >> 1);
-                let value: bool = transmute(((model_code >> 1) + (model_code & 1)) % 2);
-                (key, value)
-            };
-            Table::new_pure_kve_with_data(data, volatile, k_enc, v_enc)
-        }
-        // KVExtlistmap: [4, 7]
-        x if x < 8 => {
-            let data = decode(filepath, volatile)?;
-            let (k_enc, v_enc) = unsafe {
-                // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
-                let code = model_code - 4;
-                let key: bool = transmute(code >> 1);
-                let value: bool = transmute(code % 2);
-                (key, value)
-            };
-            Table::new_kve_listmap_with_data(data, volatile, k_enc, v_enc)
-        }
-        _ => return Err(IoError::from(ErrorKind::Unsupported)),
-    };
+    let data = fs::read(filepath)?;
+    let tbl = T::unflush_table(&data, model_code, volatile)?;
     Ok(tbl)
 }
 
 /// Read an entire keyspace into a Coremap. You'll need to initialize the rest
-pub fn read_keyspace(ksid: &ObjectID) -> IoResult<Coremap<ObjectID, Arc<Table>>> {
+pub fn read_keyspace<K: UnflushableKeyspace>(ksid: &ObjectID) -> IoResult<K> {
     let partmap = self::read_partmap(ksid)?;
-    let ks: Coremap<ObjectID, Arc<Table>> = Coremap::with_capacity(partmap.len());
-    for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
-        if table_storage_type > 1 {
-            return Err(bad_data!());
-        }
-        let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
-        let tbl = self::read_table(ksid, &tableid, is_volatile, model_code)?;
-        ks.true_if_insert(tableid, Arc::new(tbl));
-    }
-    Ok(ks)
+    K::unflush_keyspace(partmap, ksid)
 }
 
 /// Read the `PARTMAP` for a given keyspace
@@ -155,7 +183,7 @@ pub fn read_full() -> IoResult<Memstore> {
     let preload = self::read_preload()?;
     let ksmap = Coremap::with_capacity(preload.len());
     for ksid in preload {
-        let ks = Keyspace::init_with_all_def_strategy(self::read_keyspace(&ksid)?);
+        let ks = self::read_keyspace::<Keyspace>(&ksid)?;
         ksmap.upsert(ksid, Arc::new(ks));
     }
     Ok(Memstore::init_with_all(ksmap))

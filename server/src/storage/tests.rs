@@ -286,9 +286,13 @@ mod flush_routines {
         fs::create_dir_all("data/ks/myks1").unwrap();
         super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
-        let ret =
-            super::unflush::read_table(&ksid, &tblid, false, bytemarks::BYTEMARK_MODEL_KV_BIN_BIN)
-                .unwrap();
+        let ret = super::unflush::read_table::<Table>(
+            &ksid,
+            &tblid,
+            false,
+            bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+        )
+        .unwrap();
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
@@ -316,7 +320,7 @@ mod flush_routines {
         fs::create_dir_all("data/ks/mylistyks").unwrap();
         super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
-        let ret = super::unflush::read_table(
+        let ret = super::unflush::read_table::<Table>(
             &ksid,
             &tblid,
             false,
@@ -363,10 +367,10 @@ mod flush_routines {
 
         // now flush it
         super::flush::flush_keyspace_full(&Autoflush, &ksid, &ks).unwrap();
-        let ret = super::unflush::read_keyspace(&ksid).unwrap();
-        let tbl1_ret = ret.get(&tbl1).unwrap();
-        let tbl2_ret = ret.get(&tbl2).unwrap();
-        let tbl3_ret_list = ret.get(&list_tbl).unwrap();
+        let ret = super::unflush::read_keyspace::<Keyspace>(&ksid).unwrap();
+        let tbl1_ret = ret.tables.get(&tbl1).unwrap();
+        let tbl2_ret = ret.tables.get(&tbl2).unwrap();
+        let tbl3_ret_list = ret.tables.get(&list_tbl).unwrap();
         // should be a persistent table with the value we set
         assert_eq!(tbl1_ret.count(), 1);
         assert_eq!(
