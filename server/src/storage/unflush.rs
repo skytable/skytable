@@ -71,24 +71,13 @@ impl UnflushableKeyspace for Keyspace {
 }
 
 /// Tables that can be restored from disk storage
-pub trait UnflushableTable {
-    /// The target table
-    type Table;
+pub trait UnflushableTable: Sized {
     /// Procedure to restore (deserialize) table from disk storage
-    fn unflush_table(
-        filepath: impl AsRef<Path>,
-        model_code: u8,
-        volatile: bool,
-    ) -> IoResult<Self::Table>;
+    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self>;
 }
 
 impl UnflushableTable for Table {
-    type Table = Table;
-    fn unflush_table(
-        filepath: impl AsRef<Path>,
-        model_code: u8,
-        volatile: bool,
-    ) -> IoResult<Self::Table> {
+    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self> {
         let ret = match model_code {
             // pure KVE: [0, 3]
             x if x < 4 => {
@@ -138,7 +127,7 @@ pub fn read_table<T: UnflushableTable>(
     tblid: &ObjectID,
     volatile: bool,
     model_code: u8,
-) -> IoResult<T::Table> {
+) -> IoResult<T> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
     let tbl = T::unflush_table(filepath, model_code, volatile)?;
     Ok(tbl)

@@ -262,6 +262,85 @@ mod bytemark_set_tests {
     }
 }
 
+mod bytemark_actual_table_restore {
+    use crate::corestore::{memstore::ObjectID, table::Table};
+    use crate::storage::{
+        flush::{oneshot::flush_table, Autoflush},
+        unflush::read_table,
+    };
+    use std::fs;
+    #[test]
+    fn table_restore_bytemark_kve() {
+        let default_keyspace = ObjectID::try_from_slice(b"actual_kve_restore").unwrap();
+        fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
+        let kve_bin_bin_name = ObjectID::try_from_slice(b"bin_bin").unwrap();
+        let kve_bin_bin = Table::from_model_code(0, false).unwrap();
+        let kve_bin_str_name = ObjectID::try_from_slice(b"bin_str").unwrap();
+        let kve_bin_str = Table::from_model_code(1, false).unwrap();
+        let kve_str_str_name = ObjectID::try_from_slice(b"str_str").unwrap();
+        let kve_str_str = Table::from_model_code(2, false).unwrap();
+        let kve_str_bin_name = ObjectID::try_from_slice(b"str_bin").unwrap();
+        let kve_str_bin = Table::from_model_code(3, false).unwrap();
+        let names: [(&ObjectID, &Table, u8); 4] = [
+            (&kve_bin_bin_name, &kve_bin_bin, 0),
+            (&kve_bin_str_name, &kve_bin_str, 1),
+            (&kve_str_str_name, &kve_str_str, 2),
+            (&kve_str_bin_name, &kve_str_bin, 3),
+        ];
+        // flush each of them
+        for (tablename, table, _) in names {
+            flush_table(&Autoflush, tablename, &default_keyspace, table).unwrap();
+        }
+        let mut read_tables: Vec<Table> = Vec::with_capacity(4);
+        // read each of them
+        for (tableid, _, modelcode) in names {
+            read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
+        }
+        for (index, code) in read_tables
+            .iter()
+            .map(|tbl| tbl.get_model_code())
+            .enumerate()
+        {
+            assert_eq!(index, code as usize);
+        }
+    }
+    #[test]
+    fn table_restore_bytemark_kvlist() {
+        let default_keyspace = ObjectID::try_from_slice(b"actual_kvl_restore").unwrap();
+        fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
+        let kve_bin_listbin_name = ObjectID::try_from_slice(b"bin_listbin").unwrap();
+        let kve_bin_listbin = Table::from_model_code(4, false).unwrap();
+        let kve_bin_liststr_name = ObjectID::try_from_slice(b"bin_liststr").unwrap();
+        let kve_bin_liststr = Table::from_model_code(5, false).unwrap();
+        let kve_str_listbinstr_name = ObjectID::try_from_slice(b"str_listbinstr").unwrap();
+        let kve_str_listbinstr = Table::from_model_code(6, false).unwrap();
+        let kve_str_liststr_name = ObjectID::try_from_slice(b"str_liststr").unwrap();
+        let kve_str_liststr = Table::from_model_code(7, false).unwrap();
+        let names: [(&ObjectID, &Table, u8); 4] = [
+            (&kve_bin_listbin_name, &kve_bin_listbin, 4),
+            (&kve_bin_liststr_name, &kve_bin_liststr, 5),
+            (&kve_str_listbinstr_name, &kve_str_listbinstr, 6),
+            (&kve_str_liststr_name, &kve_str_liststr, 7),
+        ];
+        // flush each of them
+        for (tablename, table, _) in names {
+            flush_table(&Autoflush, tablename, &default_keyspace, table).unwrap();
+        }
+        let mut read_tables: Vec<Table> = Vec::with_capacity(4);
+        // read each of them
+        for (tableid, _, modelcode) in names {
+            read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
+        }
+        for (index, code) in read_tables
+            .iter()
+            .map(|tbl| tbl.get_model_code())
+            .enumerate()
+        {
+            assert_eq!(index + 4, code as usize);
+        }
+    }
+}
+
 mod flush_routines {
     use crate::corestore::memstore::Keyspace;
     use crate::corestore::memstore::ObjectID;
