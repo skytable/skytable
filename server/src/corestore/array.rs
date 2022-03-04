@@ -314,7 +314,7 @@ impl<const N: usize> Array<u8, N> {
     /// This isn't _unsafe_ but it can cause functions expecting pure unicode to
     /// crash if the array contains invalid unicode
     pub unsafe fn as_str(&self) -> &str {
-        str::from_utf8_unchecked(self.as_ref())
+        str::from_utf8_unchecked(self)
     }
 }
 

@@ -75,16 +75,24 @@ pub trait UnflushableTable {
     /// The target table
     type Table;
     /// Procedure to restore (deserialize) table from disk storage
-    fn unflush_table(datasource: &[u8], model_code: u8, volatile: bool) -> IoResult<Self::Table>;
+    fn unflush_table(
+        filepath: impl AsRef<Path>,
+        model_code: u8,
+        volatile: bool,
+    ) -> IoResult<Self::Table>;
 }
 
 impl UnflushableTable for Table {
     type Table = Table;
-    fn unflush_table(datasource: &[u8], model_code: u8, volatile: bool) -> IoResult<Self::Table> {
+    fn unflush_table(
+        filepath: impl AsRef<Path>,
+        model_code: u8,
+        volatile: bool,
+    ) -> IoResult<Self::Table> {
         let ret = match model_code {
             // pure KVE: [0, 3]
             x if x < 4 => {
-                let data = decode(datasource, volatile)?;
+                let data = decode(filepath, volatile)?;
                 let (k_enc, v_enc) = unsafe {
                     // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
                     let key: bool = transmute(model_code >> 1);
@@ -95,7 +103,7 @@ impl UnflushableTable for Table {
             }
             // KVExtlistmap: [4, 7]
             x if x < 8 => {
-                let data = decode(datasource, volatile)?;
+                let data = decode(filepath, volatile)?;
                 let (k_enc, v_enc) = unsafe {
                     // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
                     let code = model_code - 4;
@@ -112,11 +120,12 @@ impl UnflushableTable for Table {
 }
 
 #[inline(always)]
-fn decode<T: DeserializeInto>(datasource: &[u8], volatile: bool) -> IoResult<T> {
+fn decode<T: DeserializeInto>(filepath: impl AsRef<Path>, volatile: bool) -> IoResult<T> {
     if volatile {
         Ok(T::new_empty())
     } else {
-        super::de::deserialize_into(datasource).ok_or_else(|| bad_data!())
+        let data = fs::read(filepath)?;
+        super::de::deserialize_into(&data).ok_or_else(|| bad_data!())
     }
 }
 
@@ -131,8 +140,7 @@ pub fn read_table<T: UnflushableTable>(
     model_code: u8,
 ) -> IoResult<T::Table> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
-    let data = fs::read(filepath)?;
-    let tbl = T::unflush_table(&data, model_code, volatile)?;
+    let tbl = T::unflush_table(filepath, model_code, volatile)?;
     Ok(tbl)
 }
 

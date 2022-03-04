@@ -354,16 +354,16 @@ mod flush_routines {
             .unwrap()
             .set("hello".into(), "world".into())
             .unwrap();
-        ks.create_table(tbl1.clone(), mytbl);
+        assert!(ks.create_table(tbl1.clone(), mytbl));
 
         // and a table with lists
         let cmap = Coremap::new();
         cmap.true_if_insert("mylist".into(), LockedVec::new(vec!["myvalue".into()]));
         let my_list_tbl = Table::new_kve_listmap_with_data(cmap, false, true, true);
-        ks.create_table(list_tbl.clone(), my_list_tbl);
+        assert!(ks.create_table(list_tbl.clone(), my_list_tbl));
 
         // and a volatile table
-        ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true));
+        assert!(ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true)));
 
         // now flush it
         super::flush::flush_keyspace_full(&Autoflush, &ksid, &ks).unwrap();
