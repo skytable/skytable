@@ -242,13 +242,8 @@ impl Table {
                 */
                 let (kenc, venc) = kvs.kve_tuple_encoding();
                 let ret = kenc as u8 + venc as u8;
-                if ret == 1 {
-                    // somepin going on here
-                    ret + ((kenc as u8) << 1)
-                } else {
-                    // not 1; just return (1000_0000 + 1000_0000 || NUL + NUL)
-                    ret
-                }
+                // a little bitmagic goes a long way
+                (ret & 1) + ((kenc as u8) << 1)
             }
             DataModel::KVExtListmap(ref kvlistmap) => {
                 /*

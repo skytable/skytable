@@ -33,11 +33,13 @@ use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
 use crate::corestore::table::Table;
+use crate::storage::de::DeserializeInto;
 use crate::storage::flush::Autoflush;
 use crate::storage::interface::DIR_KSROOT;
 use crate::storage::preload::LoadedPartfile;
 use crate::storage::Coremap;
 use crate::IoResult;
+use core::mem::transmute;
 use std::fs;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -46,6 +48,16 @@ use std::sync::Arc;
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
 const PRELOAD_PATH: &str = "data/ks/PRELOAD";
+
+#[inline(always)]
+fn decode<T: DeserializeInto>(filepath: impl AsRef<Path>, volatile: bool) -> IoResult<T> {
+    if volatile {
+        Ok(T::new_empty())
+    } else {
+        let f = fs::read(filepath)?;
+        super::de::deserialize_into(&f).ok_or_else(|| bad_data!())
+    }
+}
 
 /// Read a given table into a [`Table`] object
 ///
@@ -58,50 +70,29 @@ pub fn read_table(
     model_code: u8,
 ) -> IoResult<Table> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
-    macro_rules! decode {
-        () => {{
-            let data = if volatile {
-                Coremap::new()
-            } else {
-                // not volatile, so read this in
-                let f = fs::read(filepath)?;
-                super::de::deserialize_into(&f).ok_or_else(|| bad_data!())?
-            };
-            data
-        }};
-    }
     let tbl = match model_code {
-        // pure KVE
-        0 | 1 | 2 | 3 => {
-            let data = decode!();
-            macro_rules! pkve {
-                ($kenc:literal, $venc:literal) => {
-                    Table::new_pure_kve_with_data(data, volatile, $kenc, $venc)
-                };
-            }
-            match model_code {
-                bytemarks::BYTEMARK_MODEL_KV_BIN_BIN => pkve!(false, false),
-                bytemarks::BYTEMARK_MODEL_KV_BIN_STR => pkve!(false, true),
-                bytemarks::BYTEMARK_MODEL_KV_STR_STR => pkve!(true, true),
-                bytemarks::BYTEMARK_MODEL_KV_STR_BIN => pkve!(true, false),
-                _ => unsafe { impossible!() },
-            }
+        // pure KVE: [0, 3]
+        x if x < 4 => {
+            let data = decode(filepath, volatile)?;
+            let (k_enc, v_enc) = unsafe {
+                // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
+                let key: bool = transmute(model_code >> 1);
+                let value: bool = transmute(((model_code >> 1) + (model_code & 1)) % 2);
+                (key, value)
+            };
+            Table::new_pure_kve_with_data(data, volatile, k_enc, v_enc)
         }
-        // KVExt: listmap
-        4 | 5 | 6 | 7 => {
-            let data = decode!();
-            macro_rules! listmap {
-                ($kenc:literal, $penc:literal) => {
-                    Table::new_kve_listmap_with_data(data, volatile, $kenc, $penc)
-                };
-            }
-            match model_code {
-                bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR => listmap!(false, false),
-                bytemarks::BYTEMARK_MODEL_KV_BINSTR_LIST_STR => listmap!(false, true),
-                bytemarks::BYTEMARK_MODEL_KV_STR_LIST_BINSTR => listmap!(true, false),
-                bytemarks::BYTEMARK_MODEL_KV_STR_LIST_STR => listmap!(true, true),
-                _ => unsafe { impossible!() },
-            }
+        // KVExtlistmap: [4, 7]
+        x if x < 8 => {
+            let data = decode(filepath, volatile)?;
+            let (k_enc, v_enc) = unsafe {
+                // UNSAFE(@ohsayan): Safe because of the above match. Just a lil bitmagic
+                let code = model_code - 4;
+                let key: bool = transmute(code >> 1);
+                let value: bool = transmute(code % 2);
+                (key, value)
+            };
+            Table::new_kve_listmap_with_data(data, volatile, k_enc, v_enc)
         }
         _ => return Err(IoError::from(ErrorKind::Unsupported)),
     };

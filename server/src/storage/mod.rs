@@ -335,16 +335,23 @@ mod de {
     }
 
     pub trait DeserializeInto: Sized {
+        fn new_empty() -> Self;
         fn from_slice(slice: &[u8]) -> Option<Self>;
     }
 
     impl DeserializeInto for Coremap<Data, Data> {
+        fn new_empty() -> Self {
+            Coremap::new()
+        }
         fn from_slice(slice: &[u8]) -> Option<Self> {
             self::deserialize_map(slice)
         }
     }
 
     impl DeserializeInto for Coremap<Data, LockedVec> {
+        fn new_empty() -> Self {
+            Coremap::new()
+        }
         fn from_slice(slice: &[u8]) -> Option<Self> {
             self::deserialize_list_map(slice)
         }
