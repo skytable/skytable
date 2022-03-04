@@ -30,12 +30,16 @@
 //! the table level
 
 use super::interface;
-use crate::corestore::memstore::Keyspace;
-use crate::corestore::memstore::Memstore;
-use crate::corestore::memstore::ObjectID;
+use crate::corestore::{
+    map::iter::BorrowedIter,
+    memstore::{Keyspace, Memstore, ObjectID},
+    table::{DataModel, Table},
+};
 use crate::kvengine::KVTable;
 use crate::registry;
 use crate::IoResult;
+use std::io::Write;
+use std::sync::Arc;
 
 pub trait StorageTarget {
     /// This storage target needs a reinit of the tree despite no preload trip.
@@ -127,14 +131,53 @@ impl StorageTarget for LocalSnapshot {
     }
 }
 
-/// Flushes the entire **keyspace + partmap**
-pub fn flush_keyspace_full<T: StorageTarget>(
-    target: &T,
-    ksid: &ObjectID,
-    keyspace: &Keyspace,
-) -> IoResult<()> {
-    self::oneshot::flush_partmap(target, ksid, keyspace)?;
-    self::oneshot::flush_keyspace(target, ksid, keyspace)
+/// A keyspace that can be flushed
+pub trait FlushableKeyspace<T: FlushableTable> {
+    /// The number of tables in this keyspace
+    fn table_count(&self) -> usize;
+    /// An iterator to the tables in this keyspace.
+    /// All of them implement [`FlushableTable`]
+    fn get_iter(&self) -> BorrowedIter<'_, ObjectID, Arc<T>>;
+}
+
+impl FlushableKeyspace<Table> for Keyspace {
+    fn table_count(&self) -> usize {
+        self.tables.len()
+    }
+    fn get_iter(&self) -> BorrowedIter<'_, ObjectID, Arc<Table>> {
+        self.tables.iter()
+    }
+}
+
+pub trait FlushableTable {
+    /// Table is volatile
+    fn is_volatile(&self) -> bool;
+    /// Returns the storage code bytemark
+    fn storage_code(&self) -> u8;
+    /// Serializes the table and writes it to the provided buffer
+    fn write_table_to<W: Write>(&self, writer: &mut W) -> IoResult<()>;
+    /// Returns the model code bytemark
+    fn model_code(&self) -> u8;
+}
+
+impl FlushableTable for Table {
+    fn is_volatile(&self) -> bool {
+        self.is_volatile()
+    }
+    fn write_table_to<W: Write>(&self, writer: &mut W) -> IoResult<()> {
+        match self.get_model_ref() {
+            DataModel::KV(ref kve) => super::se::raw_serialize_map(kve.kve_inner_ref(), writer),
+            DataModel::KVExtListmap(ref kvl) => {
+                super::se::raw_serialize_list_map(kvl.kve_inner_ref(), writer)
+            }
+        }
+    }
+    fn storage_code(&self) -> u8 {
+        self.storage_type()
+    }
+    fn model_code(&self) -> u8 {
+        self.get_model_code()
+    }
 }
 
 /// Flush the entire **preload + keyspaces + their partmaps**
@@ -149,9 +192,20 @@ pub fn flush_full<T: StorageTarget>(target: T, store: &Memstore) -> IoResult<()>
         self::oneshot::flush_preload(&target, store)?;
     }
     for keyspace in store.keyspaces.iter() {
-        self::flush_keyspace_full(&target, keyspace.key(), keyspace.value())?;
+        self::flush_keyspace_full(&target, keyspace.key(), keyspace.value().as_ref())?;
     }
     Ok(())
+}
+
+/// Flushes the entire **keyspace + partmap**
+pub fn flush_keyspace_full<T, Tbl, K>(target: &T, ksid: &ObjectID, keyspace: &K) -> IoResult<()>
+where
+    T: StorageTarget,
+    Tbl: FlushableTable,
+    K: FlushableKeyspace<Tbl>,
+{
+    self::oneshot::flush_partmap(target, ksid, keyspace)?;
+    self::oneshot::flush_keyspace(target, ksid, keyspace)
 }
 
 pub mod oneshot {
@@ -161,15 +215,14 @@ pub mod oneshot {
     //! files et al are handled
     //!
     use super::*;
-    use crate::corestore::table::{DataModel, Table};
     use std::fs::{self, File};
 
     /// No `partmap` handling. Just flushes the table to the expected location
-    pub fn flush_table<T: StorageTarget>(
+    pub fn flush_table<T: StorageTarget, U: FlushableTable>(
         target: &T,
         tableid: &ObjectID,
         ksid: &ObjectID,
-        table: &Table,
+        table: &U,
     ) -> IoResult<()> {
         if table.is_volatile() {
             // no flushing needed
@@ -178,36 +231,29 @@ pub mod oneshot {
             let path = unsafe { target.table_target(ksid.as_str(), tableid.as_str()) };
             // fine, this needs to be flushed
             let mut file = File::create(&path)?;
-            match table.get_model_ref() {
-                DataModel::KV(kve) => {
-                    super::interface::serialize_into_slow_buffer(&mut file, kve.kve_inner_ref())?
-                }
-                DataModel::KVExtListmap(kve) => {
-                    super::interface::serialize_into_slow_buffer(&mut file, kve.kve_inner_ref())?
-                }
-            }
+            super::interface::serialize_into_slow_buffer(&mut file, table)?;
             file.sync_all()?;
             fs::rename(&path, &path[..path.len() - 1])
         }
     }
 
     /// Flushes an entire keyspace to the expected location. No `partmap` or `preload` handling
-    pub fn flush_keyspace<T: StorageTarget>(
+    pub fn flush_keyspace<T: StorageTarget, Tbl: FlushableTable, K: FlushableKeyspace<Tbl>>(
         target: &T,
         ksid: &ObjectID,
-        keyspace: &Keyspace,
+        keyspace: &K,
     ) -> IoResult<()> {
-        for table in keyspace.tables.iter() {
-            self::flush_table(target, table.key(), ksid, table.value())?;
+        for table in keyspace.get_iter() {
+            self::flush_table(target, table.key(), ksid, table.value().as_ref())?;
         }
         Ok(())
     }
 
     /// Flushes a single partmap
-    pub fn flush_partmap<T: StorageTarget>(
+    pub fn flush_partmap<T: StorageTarget, Tbl: FlushableTable, K: FlushableKeyspace<Tbl>>(
         target: &T,
         ksid: &ObjectID,
-        keyspace: &Keyspace,
+        keyspace: &K,
     ) -> IoResult<()> {
         let path = unsafe { target.partmap_target(ksid.as_str()) };
         let mut file = File::create(&path)?;

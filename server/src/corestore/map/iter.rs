@@ -82,7 +82,7 @@ type BorrowedIterGroup<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockReadGuard<'a, Low
 type BorrowedIterGroupMut<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockWriteGuard<'a, LowMap<K, V>>>);
 
 /// A borrowed iterator for a [`Skymap`]
-pub struct BorrowedIter<'a, K, V, S = RandomState> {
+pub struct BorrowedIter<'a, K, V, S = ahash::RandomState> {
     map: &'a Skymap<K, V, S>,
     cs: usize,
     citer: Option<BorrowedIterGroup<'a, K, V>>,

@@ -25,13 +25,10 @@
 */
 
 use crate::actions::ActionResult;
-use crate::corestore::memstore::DdlError;
-use crate::corestore::memstore::Keyspace;
-use crate::corestore::memstore::Memstore;
-use crate::corestore::memstore::ObjectID;
-use crate::corestore::memstore::DEFAULT;
-use crate::corestore::table::DescribeTable;
-use crate::corestore::table::Table;
+use crate::corestore::{
+    memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
+    table::{DescribeTable, Table},
+};
 use crate::dbnet::connection::ProtocolConnectionExt;
 use crate::protocol::Query;
 use crate::queryengine;

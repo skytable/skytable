@@ -183,8 +183,9 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
 
 mod se {
     use super::*;
-    use crate::corestore::memstore::Keyspace;
     use crate::kvengine::listmap::LockedVec;
+    use crate::storage::flush::FlushableKeyspace;
+    use crate::storage::flush::FlushableTable;
     use crate::IoResult;
 
     macro_rules! unsafe_sz_byte_repr {
@@ -243,21 +244,24 @@ mod se {
     /// ```text
     /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type][1B: Model type])*
     /// ```
-    pub fn raw_serialize_partmap<W: Write>(w: &mut W, keyspace: &Keyspace) -> IoResult<()> {
+    pub fn raw_serialize_partmap<W: Write, Tbl: FlushableTable, K: FlushableKeyspace<Tbl>>(
+        w: &mut W,
+        keyspace: &K,
+    ) -> IoResult<()> {
         unsafe {
             // extent
-            w.write_all(raw_byte_repr(&to_64bit_native_endian!(keyspace
-                .tables
-                .len())))?;
-            for table in keyspace.tables.iter() {
+            w.write_all(raw_byte_repr(&to_64bit_native_endian!(
+                keyspace.table_count()
+            )))?;
+            for table in keyspace.get_iter() {
                 // partition ID len
                 w.write_all(raw_byte_repr(&to_64bit_native_endian!(table.key().len())))?;
                 // parition ID
                 w.write_all(table.key())?;
                 // now storage type
-                w.write_all(raw_byte_repr(&table.storage_type()))?;
+                w.write_all(raw_byte_repr(&table.storage_code()))?;
                 // now model type
-                w.write_all(raw_byte_repr(&table.get_model_code()))?;
+                w.write_all(raw_byte_repr(&table.model_code()))?;
             }
         }
         Ok(())
