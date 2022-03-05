@@ -189,6 +189,7 @@ mod se {
     use crate::storage::v1::flush::FlushableKeyspace;
     use crate::storage::v1::flush::FlushableTable;
     use crate::IoResult;
+    use core::ops::Deref;
 
     macro_rules! unsafe_sz_byte_repr {
         ($e:expr) => {
@@ -209,16 +210,26 @@ mod se {
     }
 
     /// Serialize a map and write it to a provided buffer
-    pub fn raw_serialize_map<W: Write>(map: &Coremap<Data, Data>, w: &mut W) -> IoResult<()> {
+    pub fn raw_serialize_map<W: Write, T: AsRef<[u8]>, U: AsRef<[u8]>>(
+        map: &Coremap<T, U>,
+        w: &mut W,
+    ) -> IoResult<()>
+    where
+        W: Write,
+        T: AsRef<[u8]> + Hash + Eq,
+        U: AsRef<[u8]>,
+    {
         unsafe {
             w.write_all(raw_byte_repr(&to_64bit_native_endian!(map.len())))?;
             // now the keys and values
             for kv in map.iter() {
                 let (k, v) = (kv.key(), kv.value());
-                w.write_all(raw_byte_repr(&to_64bit_native_endian!(k.len())))?;
-                w.write_all(raw_byte_repr(&to_64bit_native_endian!(v.len())))?;
-                w.write_all(k)?;
-                w.write_all(v)?;
+                let kref = k.as_ref();
+                let vref = v.as_ref();
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(kref.len())))?;
+                w.write_all(raw_byte_repr(&to_64bit_native_endian!(vref.len())))?;
+                w.write_all(kref)?;
+                w.write_all(vref)?;
             }
         }
         Ok(())
@@ -246,10 +257,13 @@ mod se {
     /// ```text
     /// [8B: EXTENT]([8B: LEN][?B: PARTITION ID][1B: Storage type][1B: Model type])*
     /// ```
-    pub fn raw_serialize_partmap<W: Write, Tbl: FlushableTable, K: FlushableKeyspace<Tbl>>(
-        w: &mut W,
-        keyspace: &K,
-    ) -> IoResult<()> {
+    pub fn raw_serialize_partmap<W, U, Tbl, K>(w: &mut W, keyspace: &K) -> IoResult<()>
+    where
+        W: Write,
+        U: Deref<Target = Tbl>,
+        Tbl: FlushableTable,
+        K: FlushableKeyspace<Tbl, U>,
+    {
         unsafe {
             // extent
             w.write_all(raw_byte_repr(&to_64bit_native_endian!(
@@ -359,6 +373,19 @@ mod de {
         }
     }
 
+    impl<T, U> DeserializeInto for Coremap<T, U>
+    where
+        T: Hash + Eq + DeserializeFrom,
+        U: DeserializeFrom,
+    {
+        fn new_empty() -> Self {
+            Coremap::new()
+        }
+        fn from_slice(slice: &[u8]) -> Option<Self> {
+            self::deserialize_map_ctype(slice)
+        }
+    }
+
     pub fn deserialize_into<T: DeserializeInto>(input: &[u8]) -> Option<T> {
         T::from_slice(input)
     }
@@ -370,6 +397,38 @@ mod de {
         fn from_slice(slice: &[u8]) -> Self {
             unsafe { Self::from_slice(slice) }
         }
+    }
+
+    impl<const N: usize> DeserializeFrom for [u8; N] {
+        fn is_expected_len(clen: usize) -> bool {
+            clen == N
+        }
+        fn from_slice(slice: &[u8]) -> Self {
+            slice.try_into().unwrap()
+        }
+    }
+
+    pub fn deserialize_map_ctype<T, U>(data: &[u8]) -> Option<Coremap<T, U>>
+    where
+        T: Eq + Hash + DeserializeFrom,
+        U: DeserializeFrom,
+    {
+        let mut rawiter = RawSliceIter::new(data);
+        let len = rawiter.next_64bit_integer_to_usize()?;
+        let map = Coremap::new();
+        for _ in 0..len {
+            let (lenkey, lenval) = rawiter.next_64bit_integer_pair_to_usize()?;
+            if !(T::is_expected_len(lenkey) && U::is_expected_len(lenval)) {
+                return None;
+            }
+            let key = T::from_slice(rawiter.next_borrowed_slice(lenkey)?);
+            let value = U::from_slice(rawiter.next_borrowed_slice(lenval)?);
+            if !map.true_if_insert(key, value) {
+                // duplicates
+                return None;
+            }
+        }
+        Some(map)
     }
 
     /// Deserialize a set to a custom type

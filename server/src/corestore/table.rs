@@ -25,6 +25,7 @@
 */
 
 use crate::actions::ActionResult;
+use crate::auth::Authmap;
 use crate::corestore::htable::Coremap;
 use crate::corestore::Data;
 #[cfg(test)]
@@ -76,6 +77,29 @@ impl DescribeTable for KVEList {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum SystemDataModel {
+    Auth(Authmap),
+}
+
+#[derive(Debug)]
+pub struct SystemTable {
+    /// data storage
+    data: SystemDataModel,
+}
+
+impl SystemTable {
+    pub const fn get_model_ref(&self) -> &SystemDataModel {
+        &self.data
+    }
+    pub fn new(data: SystemDataModel) -> Self {
+        Self { data }
+    }
+    pub fn new_auth(authmap: Authmap) -> Self {
+        Self::new(SystemDataModel::Auth(authmap))
     }
 }
 

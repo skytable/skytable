@@ -32,6 +32,7 @@ use crate::storage::v1::flush::FlushableKeyspace;
 use crate::storage::v1::flush::FlushableTable;
 use crate::storage::v1::flush::StorageTarget;
 use crate::IoResult;
+use core::ops::Deref;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{BufWriter, Write};
@@ -130,11 +131,12 @@ pub fn serialize_into_slow_buffer<T: Write, U: FlushableTable>(
     Ok(())
 }
 
-pub fn serialize_partmap_into_slow_buffer<T, Tbl, K>(buffer: &mut T, ks: &K) -> IoResult<()>
+pub fn serialize_partmap_into_slow_buffer<T, U, Tbl, K>(buffer: &mut T, ks: &K) -> IoResult<()>
 where
     T: Write,
+    U: Deref<Target = Tbl>,
     Tbl: FlushableTable,
-    K: FlushableKeyspace<Tbl>,
+    K: FlushableKeyspace<Tbl, U>,
 {
     let mut buffer = BufWriter::new(buffer);
     super::se::raw_serialize_partmap(&mut buffer, ks)?;

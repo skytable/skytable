@@ -28,6 +28,8 @@
 mod macros;
 pub mod compiler;
 pub mod os;
+use core::fmt::Debug;
+use core::ops::Deref;
 use std::process;
 
 const EXITCODE_ONE: i32 = 0x01;
@@ -74,4 +76,24 @@ pub fn exit_error() -> ! {
 #[inline(never)]
 pub fn err<T, E>(e: impl Into<E>) -> Result<T, E> {
     Err(e.into())
+}
+
+/// This is used to hack around multiple trait system boundaries
+/// like deref coercion recursions
+#[derive(Debug)]
+pub struct Wrapper<T> {
+    inner: T,
+}
+
+impl<T> Wrapper<T> {
+    pub const fn new(inner: T) -> Self {
+        Self { inner }
+    }
+}
+
+impl<T> Deref for Wrapper<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }

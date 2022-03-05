@@ -64,6 +64,7 @@ type AuthID = Array<u8, AUTHID_SIZE>;
 pub type Authkey = [u8; AUTHKEY_SIZE];
 /// Result of an auth operation
 type AuthResult<T> = Result<T, AuthError>;
+/// Authmap
 pub type Authmap = Arc<Coremap<AuthID, Authkey>>;
 
 /// The authn/authz provider

@@ -32,12 +32,16 @@ use super::bytemarks;
 use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
+use crate::corestore::memstore::SystemKeyspace;
+use crate::corestore::memstore::SYSTEM;
+use crate::corestore::table::SystemTable;
 use crate::corestore::table::Table;
 use crate::storage::v1::de::DeserializeInto;
 use crate::storage::v1::flush::Autoflush;
 use crate::storage::v1::interface::DIR_KSROOT;
 use crate::storage::v1::preload::LoadedPartfile;
 use crate::storage::v1::Coremap;
+use crate::util::Wrapper;
 use crate::IoResult;
 use core::mem::transmute;
 use std::fs;
@@ -67,6 +71,21 @@ impl UnflushableKeyspace for Keyspace {
             ks.true_if_insert(tableid, Arc::new(tbl));
         }
         Ok(Keyspace::init_with_all_def_strategy(ks))
+    }
+}
+
+impl UnflushableKeyspace for SystemKeyspace {
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self> {
+        let ks: Coremap<ObjectID, Wrapper<SystemTable>> = Coremap::with_capacity(partmap.len());
+        for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
+            if table_storage_type > 1 {
+                return Err(bad_data!());
+            }
+            let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
+            let tbl = self::read_table::<SystemTable>(ksid, &tableid, is_volatile, model_code)?;
+            ks.true_if_insert(tableid, Wrapper::new(tbl));
+        }
+        Ok(SystemKeyspace::new(ks))
     }
 }
 
@@ -105,6 +124,19 @@ impl UnflushableTable for Table {
             _ => return Err(IoError::from(ErrorKind::Unsupported)),
         };
         Ok(ret)
+    }
+}
+
+impl UnflushableTable for SystemTable {
+    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self> {
+        match model_code {
+            0 => {
+                // this is the authmap
+                let authmap = decode(filepath, volatile)?;
+                Ok(SystemTable::new_auth(Arc::new(authmap)))
+            }
+            _ => Err(IoError::from(ErrorKind::Unsupported)),
+        }
     }
 }
 
@@ -177,13 +209,16 @@ pub fn read_full() -> IoResult<Memstore> {
         super::flush::flush_full(target, &store)?;
         return Ok(store);
     }
-    let preload = self::read_preload()?;
+    let mut preload = self::read_preload()?;
+    // HACK(@ohsayan): Pop off the preload from the serial read_keyspace list. It will fail
+    assert!(preload.remove(&SYSTEM));
+    let system_keyspace = self::read_keyspace::<SystemKeyspace>(&SYSTEM)?;
     let ksmap = Coremap::with_capacity(preload.len());
     for ksid in preload {
         let ks = self::read_keyspace::<Keyspace>(&ksid)?;
         ksmap.upsert(ksid, Arc::new(ks));
     }
-    Ok(Memstore::init_with_all(ksmap))
+    Ok(Memstore::init_with_all(ksmap, system_keyspace))
 }
 
 /// Check if the data/ks/PRELOAD file exists (if not: we're on a new instance)

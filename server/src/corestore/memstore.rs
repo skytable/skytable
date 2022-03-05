@@ -60,11 +60,14 @@ use super::KeyspaceResult;
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
 use crate::corestore::lock::{QLGuard, QuickLock};
+use crate::corestore::table::SystemTable;
 use crate::corestore::table::Table;
 use crate::registry;
+use crate::util::Wrapper;
 use core::borrow::Borrow;
 use core::hash::Hash;
 use core::mem::MaybeUninit;
+use core::ops::Deref;
 use std::sync::Arc;
 
 #[sky_macros::array]
@@ -159,6 +162,8 @@ pub enum DdlError {
 pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
+    /// the system keyspace with the system tables
+    pub system: SystemKeyspace,
 }
 
 impl Memstore {
@@ -166,10 +171,14 @@ impl Memstore {
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
+            system: SystemKeyspace::new(Coremap::new()),
         }
     }
-    pub fn init_with_all(keyspaces: Coremap<ObjectID, Arc<Keyspace>>) -> Self {
-        Self { keyspaces }
+    pub fn init_with_all(
+        keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
+        system: SystemKeyspace,
+    ) -> Self {
+        Self { keyspaces, system }
     }
     /// Create a new in-memory table with the default keyspace and the default
     /// tables. So, whenever you're calling this, this is what you get:
@@ -194,9 +203,11 @@ impl Memstore {
             keyspaces: {
                 let n = Coremap::new();
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
+                // HACK(@ohsayan): This just ensures that the record is in the preload
                 n.true_if_insert(SYSTEM, Arc::new(Keyspace::empty()));
                 n
             },
+            system: SystemKeyspace::new(Coremap::new()),
         }
     }
     /// Get a reference to the system keyspace
@@ -297,6 +308,18 @@ impl Memstore {
                 None => Err(DdlError::ObjectNotFound),
             }
         }
+    }
+}
+
+/// System keyspace
+#[derive(Debug)]
+pub struct SystemKeyspace {
+    pub tables: Coremap<ObjectID, Wrapper<SystemTable>>,
+}
+
+impl SystemKeyspace {
+    pub const fn new(tables: Coremap<ObjectID, Wrapper<SystemTable>>) -> Self {
+        Self { tables }
     }
 }
 
