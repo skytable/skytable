@@ -28,7 +28,7 @@ use crate::config::SnapshotConfig;
 use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
 use crate::registry;
-use crate::storage::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::SnapshotEngine;
 use std::sync::Arc;
 use tokio::time::{self, Duration};
 

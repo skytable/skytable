@@ -28,9 +28,9 @@
 
 use crate::corestore::memstore::Memstore;
 use crate::registry;
-use crate::storage::flush::FlushableKeyspace;
-use crate::storage::flush::FlushableTable;
-use crate::storage::flush::StorageTarget;
+use crate::storage::v1::flush::FlushableKeyspace;
+use crate::storage::v1::flush::FlushableTable;
+use crate::storage::v1::flush::StorageTarget;
 use crate::IoResult;
 use std::collections::HashSet;
 use std::fs;

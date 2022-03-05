@@ -31,7 +31,7 @@ use crate::corestore::Corestore;
 use crate::dbnet::{self, Terminator};
 use crate::diskstore::flock::FileLock;
 use crate::services;
-use crate::storage::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::os::TerminationSignal;
 use libsky::util::terminal;
 use std::sync::Arc;

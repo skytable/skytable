@@ -34,7 +34,7 @@ use crate::protocol::Query;
 use crate::queryengine;
 use crate::registry;
 use crate::storage;
-use crate::storage::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use core::borrow::Borrow;

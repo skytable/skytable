@@ -30,7 +30,7 @@ use crate::corestore::iarray::IArray;
 use crate::corestore::lazy::Lazy;
 use crate::corestore::lock::QuickLock;
 use crate::corestore::memstore::Memstore;
-use crate::storage::flush::{LocalSnapshot, RemoteSnapshot};
+use crate::storage::v1::flush::{LocalSnapshot, RemoteSnapshot};
 use bytes::Bytes;
 use chrono::prelude::Utc;
 use core::fmt;

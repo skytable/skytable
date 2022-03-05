@@ -64,6 +64,7 @@ type AuthID = Array<u8, AUTHID_SIZE>;
 pub type Authkey = [u8; AUTHKEY_SIZE];
 /// Result of an auth operation
 type AuthResult<T> = Result<T, AuthError>;
+pub type Authmap = Arc<Coremap<AuthID, Authkey>>;
 
 /// The authn/authz provider
 ///
@@ -72,7 +73,7 @@ pub struct AuthProvider {
     /// the current user
     whoami: Option<AuthID>,
     /// a map of users
-    authmap: Arc<Coremap<AuthID, Authkey>>,
+    authmap: Authmap,
 }
 
 /// Auth erros

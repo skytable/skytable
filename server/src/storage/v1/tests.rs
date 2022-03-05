@@ -144,7 +144,7 @@ fn test_runtime_panic_32bit_or_lower() {
 mod interface_tests {
     use super::interface::{create_tree_fresh, DIR_KSROOT, DIR_SNAPROOT};
     use crate::corestore::memstore::Memstore;
-    use crate::storage::flush::Autoflush;
+    use crate::storage::v1::flush::Autoflush;
     use std::fs;
     use std::path::PathBuf;
     #[test]
@@ -269,7 +269,7 @@ mod bytemark_actual_table_restore {
         Data,
     };
     use crate::kvengine::{listmap::LockedVec, KVTable};
-    use crate::storage::{
+    use crate::storage::v1::{
         flush::{oneshot::flush_table, Autoflush},
         unflush::read_table,
     };
@@ -404,9 +404,9 @@ mod flush_routines {
     use crate::corestore::table::Table;
     use crate::corestore::Data;
     use crate::kvengine::listmap::LockedVec;
-    use crate::storage::bytemarks;
-    use crate::storage::flush::Autoflush;
-    use crate::storage::Coremap;
+    use crate::storage::v1::bytemarks;
+    use crate::storage::v1::flush::Autoflush;
+    use crate::storage::v1::Coremap;
     use std::fs;
     #[test]
     fn test_flush_unflush_table_pure_kve() {
