@@ -263,11 +263,35 @@ mod bytemark_set_tests {
 }
 
 mod bytemark_actual_table_restore {
-    use crate::corestore::{memstore::ObjectID, table::Table};
+    use crate::corestore::{
+        memstore::ObjectID,
+        table::{DescribeTable, KVEList, Table, KVE},
+        Data,
+    };
+    use crate::kvengine::{listmap::LockedVec, KVTable};
     use crate::storage::{
         flush::{oneshot::flush_table, Autoflush},
         unflush::read_table,
     };
+
+    macro_rules! insert {
+        ($table:ident, $k:expr, $v:expr) => {
+            assert!(gtable::<KVE>(&$table)
+                .set(Data::from($k), Data::from($v))
+                .unwrap())
+        };
+    }
+
+    macro_rules! puthello {
+        ($table:ident) => {
+            insert!($table, "hello", "world")
+        };
+    }
+
+    fn gtable<T: DescribeTable>(table: &Table) -> &T::Table {
+        T::try_get(table).unwrap()
+    }
+
     use std::fs;
     #[test]
     fn table_restore_bytemark_kve() {
@@ -275,12 +299,16 @@ mod bytemark_actual_table_restore {
         fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
         let kve_bin_bin_name = ObjectID::try_from_slice(b"bin_bin").unwrap();
         let kve_bin_bin = Table::from_model_code(0, false).unwrap();
+        puthello!(kve_bin_bin);
         let kve_bin_str_name = ObjectID::try_from_slice(b"bin_str").unwrap();
         let kve_bin_str = Table::from_model_code(1, false).unwrap();
+        puthello!(kve_bin_str);
         let kve_str_str_name = ObjectID::try_from_slice(b"str_str").unwrap();
         let kve_str_str = Table::from_model_code(2, false).unwrap();
+        puthello!(kve_str_str);
         let kve_str_bin_name = ObjectID::try_from_slice(b"str_bin").unwrap();
         let kve_str_bin = Table::from_model_code(3, false).unwrap();
+        puthello!(kve_str_bin);
         let names: [(&ObjectID, &Table, u8); 4] = [
             (&kve_bin_bin_name, &kve_bin_bin, 0),
             (&kve_bin_str_name, &kve_bin_str, 1),
@@ -296,26 +324,46 @@ mod bytemark_actual_table_restore {
         for (tableid, _, modelcode) in names {
             read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
         }
-        for (index, code) in read_tables
+        for (index, (table, code)) in read_tables
             .iter()
-            .map(|tbl| tbl.get_model_code())
+            .map(|tbl| (gtable::<KVE>(tbl), tbl.get_model_code()))
             .enumerate()
         {
             assert_eq!(index, code as usize);
+            assert!(table.get("hello".as_bytes()).unwrap().unwrap().eq(b"world"));
+            assert_eq!(table.kve_len(), 1);
         }
     }
+
+    macro_rules! putlist {
+        ($table:ident) => {
+            gtable::<KVEList>(&$table)
+                .kve_inner_ref()
+                .fresh_entry(Data::from("super"))
+                .unwrap()
+                .insert(LockedVec::new(vec![
+                    Data::from("hello"),
+                    Data::from("world"),
+                ]))
+        };
+    }
+
     #[test]
     fn table_restore_bytemark_kvlist() {
         let default_keyspace = ObjectID::try_from_slice(b"actual_kvl_restore").unwrap();
         fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
         let kve_bin_listbin_name = ObjectID::try_from_slice(b"bin_listbin").unwrap();
         let kve_bin_listbin = Table::from_model_code(4, false).unwrap();
+        putlist!(kve_bin_listbin);
         let kve_bin_liststr_name = ObjectID::try_from_slice(b"bin_liststr").unwrap();
         let kve_bin_liststr = Table::from_model_code(5, false).unwrap();
+        putlist!(kve_bin_liststr);
         let kve_str_listbinstr_name = ObjectID::try_from_slice(b"str_listbinstr").unwrap();
         let kve_str_listbinstr = Table::from_model_code(6, false).unwrap();
+        putlist!(kve_str_listbinstr);
         let kve_str_liststr_name = ObjectID::try_from_slice(b"str_liststr").unwrap();
         let kve_str_liststr = Table::from_model_code(7, false).unwrap();
+        putlist!(kve_str_liststr);
         let names: [(&ObjectID, &Table, u8); 4] = [
             (&kve_bin_listbin_name, &kve_bin_listbin, 4),
             (&kve_bin_liststr_name, &kve_bin_liststr, 5),
@@ -331,12 +379,20 @@ mod bytemark_actual_table_restore {
         for (tableid, _, modelcode) in names {
             read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
         }
-        for (index, code) in read_tables
+        for (index, (table, code)) in read_tables
             .iter()
-            .map(|tbl| tbl.get_model_code())
+            .map(|tbl| (gtable::<KVEList>(tbl), tbl.get_model_code()))
             .enumerate()
         {
+            // check code
             assert_eq!(index + 4, code as usize);
+            // check payload
+            let vec = table.kve_inner_ref().get("super".as_bytes()).unwrap();
+            assert_eq!(vec.read().len(), 2);
+            assert_eq!(vec.read()[0], "hello");
+            assert_eq!(vec.read()[1], "world");
+            // check len
+            assert_eq!(table.kve_len(), 1);
         }
     }
 }

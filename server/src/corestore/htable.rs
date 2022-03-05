@@ -240,7 +240,7 @@ where
 }
 
 /// A wrapper for `Bytes`
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct Data {
     /// The blob of data
     blob: Bytes,
@@ -249,6 +249,12 @@ pub struct Data {
 impl PartialEq<str> for Data {
     fn eq(&self, oth: &str) -> bool {
         self.blob.eq(oth)
+    }
+}
+
+impl<T: AsRef<[u8]>> PartialEq<T> for Data {
+    fn eq(&self, oth: &T) -> bool {
+        self.blob.eq(oth.as_ref())
     }
 }
 
