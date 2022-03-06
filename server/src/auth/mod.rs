@@ -39,136 +39,23 @@
  * users have access to everything but the ability to create/revoke other users
 */
 
-use crate::corestore::array::Array;
-use crate::corestore::htable::Coremap;
-use core::mem::MaybeUninit;
-use std::sync::Arc;
-
 mod keys;
+pub mod provider;
+pub use provider::{AuthError, AuthProvider, AuthResult, Authmap};
+mod errors;
+
 #[cfg(test)]
 mod tests;
 
-// constants
-/// Size of an authn key in bytes
-const AUTHKEY_SIZE: usize = 40;
-/// Size of an authn ID in bytes
-const AUTHID_SIZE: usize = 40;
-#[sky_macros::array]
-const USER_ROOT_ARRAY: [MaybeUninit<u8>; 40] = [b'r', b'o', b'o', b't'];
-/// The root user
-const USER_ROOT: AuthID = unsafe { AuthID::from_const(USER_ROOT_ARRAY, 4) };
+use crate::dbnet::connection::prelude::*;
 
-/// An authn ID
-type AuthID = Array<u8, AUTHID_SIZE>;
-/// An authn key
-pub type Authkey = [u8; AUTHKEY_SIZE];
-/// Result of an auth operation
-type AuthResult<T> = Result<T, AuthError>;
-/// Authmap
-pub type Authmap = Arc<Coremap<AuthID, Authkey>>;
+const AUTH_CLAIM: &str = "claim";
+const AUTH_LOGIN: &str = "login";
+const AUTH_ADDUSER: &str = "adduser";
+const AUTH_DELUSER: &str = "deluser";
 
-/// The authn/authz provider
-///
-pub struct AuthProvider {
-    origin: Option<Authkey>,
-    /// the current user
-    whoami: Option<AuthID>,
-    /// a map of users
-    authmap: Authmap,
-}
-
-/// Auth erros
-#[derive(PartialEq, Debug)]
-pub enum AuthError {
-    /// The auth slot was already claimed
-    AlreadyClaimed,
-    /// Bad userid/tokens/keys
-    BadCredentials,
-    /// Auth is disabled
-    Disabled,
-    /// The action is not available to the current account
-    PermissionDenied,
-    /// The user is anonymous and doesn't have the right to execute this
-    Anonymous,
-}
-
-impl AuthProvider {
-    pub fn new(authmap: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
-        Self {
-            authmap,
-            whoami: None,
-            origin,
-        }
-    }
-    pub fn claim_root(&self, origin_key: &[u8]) -> AuthResult<String> {
-        let origin = self.get_origin()?;
-        if origin == origin_key {
-            // the origin key was good, let's try claiming root
-            let (key, store) = keys::generate_full();
-            if self.authmap.true_if_insert(USER_ROOT, store) {
-                Ok(key)
-            } else {
-                Err(AuthError::AlreadyClaimed)
-            }
-        } else {
-            Err(AuthError::BadCredentials)
-        }
-    }
-    fn are_you_root(&self) -> AuthResult<bool> {
-        match self.whoami.as_ref().map(|v| v.eq(&USER_ROOT)) {
-            Some(v) => Ok(v),
-            None => Err(AuthError::Anonymous),
-        }
-    }
-    pub fn claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
-        if self.are_you_root()? {
-            self._claim_user(claimant)
-        } else {
-            Err(AuthError::PermissionDenied)
-        }
-    }
-    fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
-        let (key, store) = keys::generate_full();
-        if self
-            .authmap
-            .true_if_insert(Array::try_from_slice(claimant).unwrap(), store)
-        {
-            Ok(key)
-        } else {
-            Err(AuthError::AlreadyClaimed)
-        }
-    }
-    pub fn login(&mut self, account: &[u8], token: &[u8]) -> AuthResult<()> {
-        match self
-            .authmap
-            .get(account)
-            .map(|token_hash| keys::verify_key(token, token_hash.as_slice()))
-        {
-            Some(true) => {
-                // great, authenticated
-                self.whoami = Some(Array::try_from_slice(account).unwrap());
-                Ok(())
-            }
-            Some(false) | None => {
-                // imposter!
-                Err(AuthError::BadCredentials)
-            }
-        }
-    }
-    fn get_origin(&self) -> AuthResult<&Authkey> {
-        match self.origin.as_ref() {
-            Some(key) => Ok(key),
-            None => Err(AuthError::Disabled),
-        }
-    }
-}
-
-impl Clone for AuthProvider {
-    fn clone(&self) -> Self {
-        Self {
-            authmap: self.authmap.clone(),
-            whoami: None,
-            origin: self.origin,
-        }
+action! {
+    fn auth(_handle: &Corestore, _con: &mut T, mut _iter: ActionIter<'_>) {
+        todo!()
     }
 }

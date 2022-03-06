@@ -24,9 +24,9 @@
  *
 */
 
+use super::provider::{Authkey, AUTHKEY_SIZE};
 use crate::corestore::array::Array;
-
-type AuthkeyArray = Array<u8, { super::AUTHKEY_SIZE }>;
+type AuthkeyArray = Array<u8, { AUTHKEY_SIZE }>;
 const RAN_BYTES_SIZE: usize = 40;
 
 /// Return a "human readable key" and the "authbytes" that can be stored
@@ -35,7 +35,7 @@ const RAN_BYTES_SIZE: usize = 40;
 /// - Encode that into base64. This is the client key
 /// - Hash the key using rcrypt. This is the server key that
 /// will be stored
-pub fn generate_full() -> (String, super::Authkey) {
+pub fn generate_full() -> (String, Authkey) {
     let mut bytes: [u8; RAN_BYTES_SIZE] = [0u8; RAN_BYTES_SIZE];
     openssl::rand::rand_bytes(&mut bytes).unwrap();
     let ret = base64::encode_config(&bytes, base64::BCRYPT);

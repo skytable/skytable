@@ -35,7 +35,7 @@ mod keys {
 }
 
 mod authn {
-    use super::super::{AuthError, AuthProvider};
+    use crate::auth::{AuthError, AuthProvider};
     use crate::corestore::htable::Coremap;
     use std::sync::Arc;
 
