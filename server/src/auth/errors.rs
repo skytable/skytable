@@ -28,13 +28,13 @@ use crate::actions::ActionError;
 use crate::auth::AuthError;
 
 /// Skyhash respstring: already claimed (user was already claimed)
-const AUTH_ERROR_ALREADYCLAIMED: &[u8] = b"!19\nerr-already-claimed\n";
+pub const AUTH_ERROR_ALREADYCLAIMED: &[u8] = b"!19\nerr-already-claimed\n";
 /// Skyhash respcode(10): bad credentials (either bad creds or invalid user)
-const AUTH_CODE_DENIED: &[u8] = b"!2\n10\n";
+pub const AUTH_CODE_DENIED: &[u8] = b"!2\n10\n";
 /// Skyhash respstring: auth is disabled
-const AUTH_ERROR_DISABLED: &[u8] = b"!17\nerr-auth-disabled\n";
+pub const AUTH_ERROR_DISABLED: &[u8] = b"!17\nerr-auth-disabled\n";
 /// Skyhash respcode(11): Insufficient permissions (same for anonymous user)
-const AUTH_CODE_PERMS: &[u8] = b"!2\n11\n";
+pub const AUTH_CODE_PERMS: &[u8] = b"!2\n11\n";
 
 impl From<AuthError> for ActionError {
     fn from(e: AuthError) -> Self {

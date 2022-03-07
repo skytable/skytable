@@ -120,23 +120,25 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($($argname: $argty,)*) -> crate::actions::ActionResult<()>
-            where
-                T: ProtocolConnectionExt<Strm>,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block)*
+            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+                $($argname: $argty,)*
+            ) -> crate::actions::ActionResult<()>
+            $block)*
     };
     (
         $($(#[$attr:meta])*
-        fn $fname:ident($argone:ident: $argonety:ty, $argtwo:ident: $argtwoty:ty, mut $argthree:ident: $argthreety:ty)
+        fn $fname:ident($argone:ident: $argonety:ty,
+            $argtwo:ident: $argtwoty:ty,
+            mut $argthree:ident: $argthreety:ty)
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> crate::actions::ActionResult<()>
-            where
-                T: ProtocolConnectionExt<Strm>,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block)*
+            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+                $argone: $argonety,
+                $argtwo: $argtwoty,
+                mut $argthree: $argthreety
+            ) -> crate::actions::ActionResult<()>
+            $block)*
     };
 }
 

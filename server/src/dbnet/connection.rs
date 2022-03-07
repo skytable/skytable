@@ -37,14 +37,18 @@
 
 use super::tcp::Connection;
 use crate::actions::ActionError;
+use crate::actions::ActionResult;
+use crate::auth::{self, AuthProvider};
 use crate::corestore::buffers::Integer64;
 use crate::corestore::Corestore;
+use crate::dbnet::connection::prelude::FutureResult;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::Terminator;
 use crate::protocol;
 use crate::protocol::responses;
 use crate::protocol::ParseError;
 use crate::protocol::Query;
+use crate::queryengine;
 use crate::resp::Writable;
 use crate::IoResult;
 use bytes::Buf;
@@ -72,24 +76,49 @@ pub enum QueryResult {
     Wrongtype,
 }
 
+pub struct AuthProviderHandle<'a, T, Strm> {
+    provider: &'a mut AuthProvider,
+    executor: &'a mut ExecutorFn<T, Strm>,
+    _phantom: PhantomData<(T, Strm)>,
+}
+
+impl<'a, T, Strm> AuthProviderHandle<'a, T, Strm>
+where
+    T: ClientConnection<Strm>,
+    Strm: Stream,
+{
+    pub fn new(provider: &'a mut AuthProvider, executor: &'a mut ExecutorFn<T, Strm>) -> Self {
+        Self {
+            provider,
+            executor,
+            _phantom: PhantomData,
+        }
+    }
+    pub fn provider_mut(&mut self) -> &mut AuthProvider {
+        &mut self.provider
+    }
+    pub fn swap_executor_to_anonymous(&mut self) {
+        *self.executor = ConnectionHandler::execute_unauth;
+    }
+    pub fn swap_executor_to_authenticated(&mut self) {
+        *self.executor = ConnectionHandler::execute_auth;
+    }
+}
+
 pub mod prelude {
     //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
-    pub use super::ProtocolConnectionExt;
+    pub use super::{AuthProviderHandle, ClientConnection, ProtocolConnectionExt, Stream};
     pub use crate::actions::{ensure_cond_or_err, ensure_length};
-    pub use crate::aerr;
-    pub use crate::conwrite;
-    pub use crate::corestore::table::{KVEList, KVE};
-    pub use crate::corestore::Corestore;
-    pub use crate::get_tbl;
-    pub use crate::handle_entity;
-    pub use crate::is_lowbit_set;
-    pub use crate::protocol::responses;
-    pub use crate::protocol::responses::groups;
+    pub use crate::corestore::{
+        table::{KVEList, KVE},
+        Corestore,
+    };
+    pub use crate::protocol::responses::{self, groups};
     pub use crate::queryengine::ActionIter;
-    pub use crate::registry;
-    pub use crate::util::{self, Unwrappable};
+    pub use crate::util::{self, FutureResult, Unwrappable};
+    pub use crate::{aerr, conwrite, get_tbl, handle_entity, is_lowbit_set, registry};
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
@@ -108,10 +137,10 @@ where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Try to fill the buffer again
-    fn read_again<'r, 's>(&'r mut self) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    fn read_again<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Send + Sync + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -148,7 +177,7 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<QueryResult, IoError>> + Send + 's>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Sync + Send + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -198,7 +227,7 @@ where
     /// Write the simple query header `*1\n` to the stream
     fn write_simple_query_header<'r, 's>(
         &'r mut self,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + Sync + 's>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -216,7 +245,7 @@ where
     fn write_pipeline_query_header<'r, 's>(
         &'r mut self,
         len: usize,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    ) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -232,10 +261,7 @@ where
         })
     }
     /// Write the flat array length (`_<size>\n`)
-    fn write_flat_array_length<'r, 's>(
-        &'r mut self,
-        len: usize,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    fn write_flat_array_length<'r, 's>(&'r mut self, len: usize) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -252,10 +278,7 @@ where
         })
     }
     /// Write the array length (`&<size>\n`)
-    fn write_array_length<'r, 's>(
-        &'r mut self,
-        len: usize,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    fn write_array_length<'r, 's>(&'r mut self, len: usize) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -276,7 +299,7 @@ where
     fn close_conn_with_error<'r, 's>(
         &'r mut self,
         resp: impl Writable + 's + Send + Sync,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    ) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -291,10 +314,10 @@ where
             ret
         })
     }
-    fn flush_stream<'r, 's>(&'r mut self) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + 's>>
+    fn flush_stream<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
-        Self: Send + 's,
+        Self: Sync + Send + 's,
     {
         Box::pin(async move {
             let mv_self = self;
@@ -380,20 +403,20 @@ where
     }
 }
 
+pub(super) type ExecutorFn<T, Strm> =
+    for<'s> fn(&'s mut ConnectionHandler<T, Strm>, Query) -> FutureResult<'s, ActionResult<()>>;
+
 /// # A generic connection handler
 ///
 /// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
 /// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
 /// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
-pub struct ConnectionHandler<T, Strm>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
-    Self: Send,
-{
+pub struct ConnectionHandler<T, Strm> {
     db: Corestore,
     con: T,
     climit: Arc<Semaphore>,
+    auth: AuthProvider,
+    executor: ExecutorFn<T, Strm>,
     terminator: Terminator,
     _term_sig_tx: mpsc::Sender<()>,
     _marker: PhantomData<Strm>,
@@ -407,6 +430,8 @@ where
     pub fn new(
         db: Corestore,
         con: T,
+        auth: AuthProvider,
+        executor: ExecutorFn<T, Strm>,
         climit: Arc<Semaphore>,
         terminator: Terminator,
         _term_sig_tx: mpsc::Sender<()>,
@@ -414,7 +439,9 @@ where
         Self {
             db,
             con,
+            auth,
             climit,
+            executor,
             terminator,
             _term_sig_tx,
             _marker: PhantomData,
@@ -430,7 +457,9 @@ where
             };
             match try_df {
                 Ok(QueryResult::Q((query, advance_by))) => {
-                    match self.db.execute_query(query, &mut self.con).await {
+                    // the mutable reference to self ensures that the buffer is not modified
+                    // hence ensuring that the pointers will remain valid
+                    match self.execute_query(query).await {
                         Ok(()) => {}
                         Err(ActionError::ActionError(e)) => {
                             self.con.close_conn_with_error(e).await?;
@@ -439,6 +468,8 @@ where
                             return Err(e.into());
                         }
                     }
+                    // this is only when we clear the buffer. since execute_query is not called
+                    // at this point, it's totally fine (so invalidating ptrs is totally cool)
                     self.con.advance_buffer(advance_by);
                 }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
@@ -459,16 +490,72 @@ where
         }
         Ok(())
     }
+
+    /// Execute queries for an unauthenticated user
+    pub(super) fn execute_unauth(&mut self, query: Query) -> FutureResult<'_, ActionResult<()>> {
+        Box::pin(async move {
+            let con = &mut self.con;
+            let db = &mut self.db;
+            let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
+            match query {
+                Query::SimpleQuery(sq) => {
+                    con.write_simple_query_header().await?;
+                    queryengine::execute_simple_noauth(db, con, &mut auth_provider, sq).await?;
+                }
+                Query::PipelineQuery(_) => {
+                    con.write_simple_query_header().await?;
+                    con.write_response(auth::errors::AUTH_CODE_DENIED).await?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Execute queries for an authenticated user
+    pub(super) fn execute_auth(&mut self, query: Query) -> FutureResult<'_, ActionResult<()>> {
+        Box::pin(async move {
+            let con = &mut self.con;
+            let db = &mut self.db;
+            let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
+            match query {
+                Query::SimpleQuery(q) => {
+                    con.write_simple_query_header().await?;
+                    queryengine::execute_simple(db, con, &mut auth_provider, q).await?;
+                }
+                Query::PipelineQuery(pipeline) => {
+                    con.write_pipeline_query_header(pipeline.len()).await?;
+                    queryengine::execute_pipeline(db, con, &mut auth_provider, pipeline).await?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Execute a query that has already been validated by `Connection::read_query`
+    async fn execute_query(&mut self, query: Query) -> ActionResult<()> {
+        (self.executor)(self, query).await?;
+        self.con.flush_stream().await?;
+        Ok(())
+    }
 }
 
-impl<T, Strm> Drop for ConnectionHandler<T, Strm>
-where
-    T: ProtocolConnectionExt<Strm>,
-    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
-{
+impl<T, Strm> Drop for ConnectionHandler<T, Strm> {
     fn drop(&mut self) {
         // Make sure that the permit is returned to the semaphore
         // in the case that there is a panic inside
         self.climit.add_permits(1);
     }
+}
+
+/// A simple _shorthand trait_ for the insanely long definition of the TCP-based stream generic type
+pub trait Stream: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
+impl<T> Stream for T where T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
+
+/// A simple _shorthand trait_ for the insanely long definition of the connection generic type
+pub trait ClientConnection<Strm: Stream>: ProtocolConnectionExt<Strm> + Send + Sync {}
+impl<T, Strm> ClientConnection<Strm> for T
+where
+    T: ProtocolConnectionExt<Strm> + Send + Sync,
+    Strm: Stream,
+{
 }

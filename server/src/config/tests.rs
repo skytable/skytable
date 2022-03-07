@@ -350,8 +350,8 @@ fn get_toml_from_examples_dir(filename: &str) -> TResult<String> {
 mod cfg_file_tests {
     use super::get_toml_from_examples_dir;
     use crate::config::{
-        cfgfile, BGSave, Configset, ConfigurationSet, Modeset, PortConfig, SnapshotConfig,
-        SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
+        cfgfile, AuthSettings, BGSave, Configset, ConfigurationSet, Modeset, PortConfig,
+        SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
     };
     use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
     use std::net::{IpAddr, Ipv6Addr};
@@ -403,7 +403,8 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         );
     }
@@ -423,7 +424,8 @@ mod cfg_file_tests {
                     DEFAULT_PORT
                 ),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         );
     }
@@ -449,6 +451,7 @@ mod cfg_file_tests {
                 ),
                 MAXIMUM_CONNECTION_LIMIT,
                 Modeset::Dev,
+                AuthSettings::default(),
             )
         );
     }
@@ -472,7 +475,8 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         );
     }
@@ -493,7 +497,8 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         )
     }
@@ -514,7 +519,8 @@ mod cfg_file_tests {
                 snapshot: SnapshotConfig::default(),
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         )
     }
@@ -531,7 +537,8 @@ mod cfg_file_tests {
                 noart: false,
                 ports: PortConfig::default(),
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
-                mode: Modeset::Dev
+                mode: Modeset::Dev,
+                auth: AuthSettings::default(),
             }
         );
     }

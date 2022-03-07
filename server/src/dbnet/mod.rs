@@ -40,11 +40,11 @@
 //!
 
 use self::tcp::Listener;
+use crate::auth::AuthProvider;
 use crate::config::PortConfig;
 use crate::config::SslOpts;
 use crate::corestore::Corestore;
 use libsky::TResult;
-use std::io::Error as IoError;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tls::SslListener;
@@ -95,6 +95,8 @@ impl Terminator {
 pub struct BaseListener {
     /// An atomic reference to the coretable
     pub db: Corestore,
+    /// The auth provider
+    pub auth: AuthProvider,
     /// The incoming connection listener (binding)
     pub listener: TcpListener,
     /// The maximum number of connections
@@ -110,15 +112,20 @@ pub struct BaseListener {
 impl BaseListener {
     pub async fn init(
         db: &Corestore,
+        auth: AuthProvider,
         host: IpAddr,
         port: u16,
         semaphore: Arc<Semaphore>,
         signal: broadcast::Sender<()>,
-    ) -> Result<Self, IoError> {
+    ) -> Result<Self, String> {
         let (terminate_tx, terminate_rx) = mpsc::channel(1);
+        let listener = TcpListener::bind((host, port))
+            .await
+            .map_err(|e| format!("Failed to bind to port {port} with error {e}"))?;
         Ok(Self {
             db: db.clone(),
-            listener: TcpListener::bind((host, port)).await?,
+            auth,
+            listener,
             climit: semaphore,
             signal,
             terminate_tx,
@@ -170,7 +177,7 @@ impl MultiListener {
     /// Create a new `InsecureOnly` listener
     pub fn new_insecure_only(base: BaseListener) -> Result<Self, String> {
         log::info!("Server started on: skyhash://{}", bindaddr!(base));
-        Ok(MultiListener::InsecureOnly(Listener { base }))
+        Ok(MultiListener::InsecureOnly(Listener::new(base)))
     }
     /// Create a new `SecureOnly` listener
     pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> Result<Self, String> {
@@ -197,9 +204,7 @@ impl MultiListener {
             ssl.passfile,
         )
         .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
-        let insecure_listener = Listener {
-            base: tcp_base_listener,
-        };
+        let insecure_listener = Listener::new(tcp_base_listener);
         log::info!(
             "Server started on: skyhash://{} and skyhash-secure://{}",
             insec_binaddr,
@@ -250,30 +255,30 @@ pub async fn connect(
     ports: PortConfig,
     maxcon: usize,
     db: Corestore,
+    auth: AuthProvider,
     signal: broadcast::Sender<()>,
 ) -> Result<MultiListener, String> {
     let climit = Arc::new(Semaphore::new(maxcon));
+    let base_listener_init = |host, port| {
+        BaseListener::init(
+            &db,
+            auth.clone(),
+            host,
+            port,
+            climit.clone(),
+            signal.clone(),
+        )
+    };
     let server = match ports {
-        PortConfig::InsecureOnly { host, port } => MultiListener::new_insecure_only(
-            BaseListener::init(&db, host, port, climit.clone(), signal.clone())
-                .await
-                .map_err(|e| format!("Failed to bind to TCP port with error: {}", e))?,
-        )?,
-        PortConfig::SecureOnly { host, ssl } => MultiListener::new_secure_only(
-            BaseListener::init(&db, host, ssl.port, climit.clone(), signal.clone())
-                .await
-                .map_err(|e| format!("Failed to initialize secure port with error: {}", e))?,
-            ssl,
-        )?,
+        PortConfig::InsecureOnly { host, port } => {
+            MultiListener::new_insecure_only(base_listener_init(host, port).await?)?
+        }
+        PortConfig::SecureOnly { host, ssl } => {
+            MultiListener::new_secure_only(base_listener_init(host, ssl.port).await?, ssl)?
+        }
         PortConfig::Multi { host, port, ssl } => {
-            let secure_listener =
-                BaseListener::init(&db, host, ssl.port, climit.clone(), signal.clone())
-                    .await
-                    .map_err(|e| format!("Failed to bind to TCP port with error: {}", e))?;
-            let insecure_listener =
-                BaseListener::init(&db, host, port, climit.clone(), signal.clone())
-                    .await
-                    .map_err(|e| format!("Failed to initialize secure port with error: {}", e))?;
+            let secure_listener = base_listener_init(host, ssl.port).await?;
+            let insecure_listener = base_listener_init(host, port).await?;
             MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };

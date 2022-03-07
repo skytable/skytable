@@ -42,20 +42,54 @@
 mod keys;
 pub mod provider;
 pub use provider::{AuthError, AuthProvider, AuthResult, Authmap};
-mod errors;
+pub mod errors;
 
 #[cfg(test)]
 mod tests;
 
 use crate::dbnet::connection::prelude::*;
 
-const AUTH_CLAIM: &str = "claim";
-const AUTH_LOGIN: &str = "login";
-const AUTH_ADDUSER: &str = "adduser";
-const AUTH_DELUSER: &str = "deluser";
+const AUTH_CLAIM: &[u8] = b"claim";
+const AUTH_LOGIN: &[u8] = b"login";
+const AUTH_ADDUSER: &[u8] = b"adduser";
+const AUTH_DELUSER: &[u8] = b"deluser";
 
 action! {
-    fn auth(_handle: &Corestore, _con: &mut T, mut _iter: ActionIter<'_>) {
+    /// Handle auth. Should have passed the `auth` token
+    fn auth(
+        _handle: &Corestore,
+        _con: &mut T,
+        _auth: &mut AuthProviderHandle<'_, T, Strm>,
+        _iter: ActionIter<'_>
+    ) {
         todo!()
+    }
+    /// Handle a login operation only. The **`login` token is expected to be present**
+    fn auth_login_only(
+        _handle: &Corestore,
+        con: &mut T,
+        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        iter: ActionIter<'_>
+    ) {
+        let mut iter = iter;
+        match iter.next() {
+            Some(v) => match v {
+                AUTH_LOGIN => {
+                    // sweet, where's our username and password
+                    let (username, password) = (iter.next(), iter.next());
+                    match (username, password) {
+                        (Some(username), Some(password)) => {
+                            auth.provider_mut().login(username, password)?;
+                            auth.swap_executor_to_authenticated();
+                        },
+                        _ => return util::err(groups::ACTION_ERR),
+                    }
+                    con.write_response(groups::OKAY).await?;
+                    Ok(())
+                }
+                _ => util::err(errors::AUTH_CODE_PERMS),
+            }
+            None => util::err(groups::ACTION_ERR),
+        }
     }
 }

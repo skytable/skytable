@@ -29,10 +29,13 @@ mod macros;
 pub mod compiler;
 pub mod os;
 use core::fmt::Debug;
+use core::future::Future;
 use core::ops::Deref;
+use core::pin::Pin;
 use std::process;
 
 const EXITCODE_ONE: i32 = 0x01;
+pub type FutureResult<'s, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
 
 /// # Unsafe unwrapping
 ///
@@ -74,6 +77,7 @@ pub fn exit_error() -> ! {
 
 /// Returns a Result with the provided error
 #[inline(never)]
+#[cold]
 pub fn err<T, E>(e: impl Into<E>) -> Result<T, E> {
     Err(e.into())
 }
@@ -91,9 +95,23 @@ impl<T> Wrapper<T> {
     }
 }
 
+impl<T: Clone> Wrapper<T> {
+    pub fn inner_clone(&self) -> T {
+        self.inner.clone()
+    }
+}
+
 impl<T> Deref for Wrapper<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl<T: Clone> Clone for Wrapper<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
     }
 }

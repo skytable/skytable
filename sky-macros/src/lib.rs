@@ -363,7 +363,8 @@ pub fn array(args: TokenStream, item: TokenStream) -> TokenStream {
             } else {
                 // so we have the form we expect
                 let (declaration, expression) = (ret[0], ret[1]);
-                let expression = expression.trim().replace(" ;", "");
+                let expression = expression.trim().replace(";", "");
+                let expression = expression.trim();
                 if !(expression.starts_with('[') && expression.ends_with(']')) {
                     syn::Error::new_spanned(declaration, "Expected an array")
                         .to_compile_error()

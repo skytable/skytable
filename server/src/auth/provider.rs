@@ -75,12 +75,22 @@ pub enum AuthError {
 }
 
 impl AuthProvider {
+    pub fn new_disabled() -> Self {
+        Self {
+            authmap: Arc::default(),
+            whoami: None,
+            origin: None,
+        }
+    }
     pub fn new(authmap: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
         Self {
             authmap,
             whoami: None,
             origin,
         }
+    }
+    pub const fn is_enabled(&self) -> bool {
+        matches!(self.origin, Some(_))
     }
     pub fn claim_root(&self, origin_key: &[u8]) -> AuthResult<String> {
         let origin = self.get_origin()?;

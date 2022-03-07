@@ -26,6 +26,7 @@
 
 use super::connection::ConnectionHandler;
 use super::tcp::TcpBackoff;
+use crate::dbnet::connection::ExecutorFn;
 use crate::dbnet::tcp::BufferedSocketStream;
 use crate::dbnet::tcp::Connection;
 use crate::dbnet::BaseListener;
@@ -41,10 +42,12 @@ use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
+type SslExecutorFn = ExecutorFn<Connection<SslStream<TcpStream>>, SslStream<TcpStream>>;
 
 pub struct SslListener {
     pub base: BaseListener,
     acceptor: SslAcceptor,
+    executor_fn: SslExecutorFn,
 }
 
 impl SslListener {
@@ -79,8 +82,13 @@ impl SslListener {
             acceptor_builder.set_private_key_file(key_file, SslFiletype::PEM)?;
         }
         Ok(SslListener {
-            base,
             acceptor: acceptor_builder.build(),
+            executor_fn: if base.auth.is_enabled() {
+                ConnectionHandler::execute_unauth
+            } else {
+                ConnectionHandler::execute_auth
+            },
+            base,
         })
     }
     async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
@@ -124,6 +132,8 @@ impl SslListener {
             let mut sslhandle = ConnectionHandler::new(
                 self.base.db.clone(),
                 Connection::new(stream),
+                self.base.auth.clone(),
+                self.executor_fn,
                 self.base.climit.clone(),
                 Terminator::new(self.base.signal.subscribe()),
                 self.base.terminate_tx.clone(),

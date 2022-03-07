@@ -25,6 +25,7 @@
 */
 
 use super::{feedback::WarningStack, DEFAULT_IPV4, DEFAULT_PORT};
+use crate::auth::provider::Authkey;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 use core::fmt;
 use core::str::FromStr;
@@ -67,6 +68,17 @@ impl BGSave {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct AuthSettings {
+    pub origin_key: Option<Authkey>,
+}
+
+impl AuthSettings {
+    pub const fn default() -> Self {
+        Self { origin_key: None }
+    }
+}
+
 /// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
@@ -84,6 +96,8 @@ pub struct ConfigurationSet {
     pub maxcon: usize,
     /// The deployment mode
     pub mode: Modeset,
+    /// The auth settings
+    pub auth: AuthSettings,
 }
 
 impl ConfigurationSet {
@@ -94,6 +108,7 @@ impl ConfigurationSet {
         ports: PortConfig,
         maxcon: usize,
         mode: Modeset,
+        auth: AuthSettings,
     ) -> Self {
         Self {
             noart,
@@ -102,6 +117,7 @@ impl ConfigurationSet {
             ports,
             maxcon,
             mode,
+            auth,
         }
     }
     /// Create a default `ConfigurationSet` with the following setup defaults:
@@ -119,6 +135,7 @@ impl ConfigurationSet {
             PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
             MAXIMUM_CONNECTION_LIMIT,
             Modeset::Dev,
+            AuthSettings::default(),
         )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`

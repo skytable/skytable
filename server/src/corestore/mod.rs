@@ -29,9 +29,6 @@ use crate::corestore::{
     memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
     table::{DescribeTable, Table},
 };
-use crate::dbnet::connection::ProtocolConnectionExt;
-use crate::protocol::Query;
-use crate::queryengine;
 use crate::registry;
 use crate::storage;
 use crate::storage::v1::sengine::SnapshotEngine;
@@ -42,7 +39,6 @@ use core::fmt;
 use core::hash::Hash;
 pub use htable::Data;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub mod array;
 pub mod backoff;
 pub mod booltable;
@@ -375,31 +371,6 @@ impl Corestore {
     pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         // trip switch is handled by memstore here
         self.store.force_drop_keyspace(ksid)
-    }
-
-    /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query<T: Send + Sync, Strm>(
-        &mut self,
-        query: Query,
-        con: &mut T,
-    ) -> ActionResult<()>
-    where
-        T: ProtocolConnectionExt<Strm>,
-        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-    {
-        match query {
-            Query::SimpleQuery(q) => {
-                con.write_simple_query_header().await?;
-                queryengine::execute_simple(self, con, q).await?;
-                con.flush_stream().await?;
-            }
-            Query::PipelineQuery(pipeline) => {
-                con.write_pipeline_query_header(pipeline.len()).await?;
-                queryengine::execute_pipeline(self, con, pipeline).await?;
-                con.flush_stream().await?;
-            }
-        }
-        Ok(())
     }
     pub fn strong_count(&self) -> usize {
         Arc::strong_count(&self.store)

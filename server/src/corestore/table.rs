@@ -88,7 +88,7 @@ pub enum SystemDataModel {
 #[derive(Debug)]
 pub struct SystemTable {
     /// data storage
-    data: SystemDataModel,
+    pub data: SystemDataModel,
 }
 
 impl SystemTable {

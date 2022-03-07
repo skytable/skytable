@@ -57,11 +57,12 @@
 #![allow(unused)] // TODO(@ohsayan): Plonk this
 
 use super::KeyspaceResult;
+use crate::auth::Authmap;
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
 use crate::corestore::lock::{QLGuard, QuickLock};
-use crate::corestore::table::SystemTable;
 use crate::corestore::table::Table;
+use crate::corestore::table::{SystemDataModel, SystemTable};
 use crate::registry;
 use crate::util::Wrapper;
 use core::borrow::Borrow;
@@ -76,6 +77,9 @@ const DEFAULT_ARRAY: [MaybeUninit<u8>; 64] = [b'd', b'e', b'f', b'a', b'u', b'l'
 #[sky_macros::array]
 const SYSTEM_ARRAY: [MaybeUninit<u8>; 64] = [b's', b'y', b's', b't', b'e', b'm'];
 
+#[sky_macros::array]
+const SYSTEM_AUTH_ARRAY: [MaybeUninit<u8>; 64] = [b'a', b'u', b't', b'h'];
+
 /// typedef for the keyspace/table IDs. We don't need too much fancy here,
 /// no atomic pointers and all. Just a nice array. With amazing gurantees
 pub type ObjectID = Array<u8, 64>;
@@ -88,6 +92,10 @@ pub const DEFAULT: ObjectID = unsafe {
 pub const SYSTEM: ObjectID = unsafe {
     // SAFETY: known init len
     Array::from_const(SYSTEM_ARRAY, 6)
+};
+pub const AUTH: ObjectID = unsafe {
+    // SAFETY: known init len
+    Array::from_const(SYSTEM_AUTH_ARRAY, 4)
 };
 
 #[test]
@@ -210,9 +218,19 @@ impl Memstore {
             system: SystemKeyspace::new(Coremap::new()),
         }
     }
-    /// Get a reference to the system keyspace
-    pub fn get_system_keyspace(&self) -> Arc<Keyspace> {
-        self.get_keyspace_atomic_ref(&SYSTEM).unwrap()
+    pub fn setup_auth(&self) -> Authmap {
+        match self.system.tables.fresh_entry(AUTH) {
+            Some(fresh) => {
+                // created afresh, fine
+                let r = Authmap::default();
+                fresh.insert(Wrapper::new(SystemTable::new_auth(r.clone())));
+                r
+            }
+            None => match self.system.tables.get(&AUTH).unwrap().data {
+                SystemDataModel::Auth(ref am) => am.clone(),
+                _ => unsafe { impossible!() },
+            },
+        }
     }
     /// Get an atomic reference to a keyspace
     pub fn get_keyspace_atomic_ref<Q>(&self, keyspace_identifier: &Q) -> Option<Arc<Keyspace>>
