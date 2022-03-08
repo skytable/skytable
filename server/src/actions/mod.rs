@@ -102,6 +102,14 @@ pub fn ensure_length(len: usize, is_valid: fn(usize) -> bool) -> ActionResult<()
     }
 }
 
+pub fn ensure_boolean_or_aerr(boolean: bool) -> ActionResult<()> {
+    if util::compiler::likely(boolean) {
+        Ok(())
+    } else {
+        util::err(groups::ACTION_ERR)
+    }
+}
+
 pub fn ensure_cond_or_err(cond: bool, err: &'static [u8]) -> ActionResult<()> {
     if util::compiler::likely(cond) {
         Ok(())

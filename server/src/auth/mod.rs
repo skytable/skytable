@@ -32,7 +32,7 @@
  * - The root key: This is the superuser key that can be used to create/deny other
  * accounts. On claiming the root account, this key is issued
  *
- * When the root account is claimed, it can be used to create "authmap users". authmap
+ * When the root account is claimed, it can be used to create "standard users". standard
  * users have access to everything but the ability to create/revoke other users
 */
 
@@ -65,19 +65,22 @@ action! {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
             AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             AUTH_ADDUSER => {
-                let username = iter.next_or_aerr()?;
+                ensure_boolean_or_aerr(iter.len() == 1)?; // just the username
+                let username = unsafe { iter.next_unchecked() };
                 let key = auth.provider_mut().claim_user(username)?;
                 con.write_response(StringWrapper(key)).await?;
                 Ok(())
             }
             AUTH_LOGOUT => {
+                ensure_boolean_or_aerr(iter.len() == 0)?; // nothing else
                 auth.provider_mut().logout()?;
                 auth.swap_executor_to_anonymous();
                 con.write_response(groups::OKAY).await?;
                 Ok(())
             }
             AUTH_DELUSER => {
-                auth.provider_mut().delete_user(iter.next().unwrap_or_aerr()?)?;
+                ensure_boolean_or_aerr(iter.len() == 1)?; // just the username
+                auth.provider_mut().delete_user(unsafe { iter.next_unchecked() })?;
                 con.write_response(groups::OKAY).await?;
                 Ok(())
             }
@@ -85,7 +88,8 @@ action! {
         }
     }
     fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        let origin_key = iter.next_or_aerr()?;
+        ensure_boolean_or_aerr(iter.len() == 1)?; // just the origin key
+        let origin_key = unsafe { iter.next_unchecked() };
         let key = auth.provider_mut().claim_root(origin_key)?;
         auth.swap_executor_to_authenticated();
         con.write_response(StringWrapper(key)).await?;
@@ -106,14 +110,10 @@ action! {
     }
     fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
         // sweet, where's our username and password
-        let (username, password) = (iter.next(), iter.next());
-        match (username, password) {
-            (Some(username), Some(password)) => {
-                auth.provider_mut().login(username, password)?;
-                auth.swap_executor_to_authenticated();
-            },
-            _ => return util::err(groups::ACTION_ERR),
-        }
+        ensure_boolean_or_aerr(iter.len() == 2)?; // just the uname and pass
+        let (username, password) = unsafe { (iter.next_unchecked(), iter.next_unchecked()) };
+        auth.provider_mut().login(username, password)?;
+        auth.swap_executor_to_authenticated();
         con.write_response(groups::OKAY).await?;
         Ok(())
     }

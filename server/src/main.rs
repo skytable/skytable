@@ -26,6 +26,7 @@
 
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
+#![deny(unused_must_use)]
 #![cfg_attr(feature = "nightly", feature(test))]
 
 //! # Skytable

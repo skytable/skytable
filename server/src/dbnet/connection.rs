@@ -110,7 +110,7 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::{AuthProviderHandle, ClientConnection, ProtocolConnectionExt, Stream};
-    pub use crate::actions::{ensure_cond_or_err, ensure_length};
+    pub use crate::actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length};
     pub use crate::corestore::{
         table::{KVEList, KVE},
         Corestore,
@@ -505,7 +505,8 @@ where
                 }
                 Query::PipelineQuery(_) => {
                     con.write_simple_query_header().await?;
-                    con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS).await?;
+                    con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
+                        .await?;
                 }
             }
             Ok(())
