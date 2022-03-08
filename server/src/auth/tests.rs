@@ -44,19 +44,19 @@ mod authn {
     #[test]
     fn claim_root_okay() {
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
         let _ = provider.claim_root(ORIG).unwrap();
     }
     #[test]
     fn claim_root_wrongkey() {
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
         let claim_err = provider.claim_root(&ORIG[1..]).unwrap_err();
         assert_eq!(claim_err, AuthError::BadCredentials);
     }
     #[test]
     fn claim_root_disabled() {
-        let provider = AuthProvider::new(Arc::new(Coremap::new()), None);
+        let mut provider = AuthProvider::new(Arc::new(Coremap::new()), None);
         assert_eq!(
             provider.claim_root(b"abcd").unwrap_err(),
             AuthError::Disabled
@@ -65,7 +65,7 @@ mod authn {
     #[test]
     fn claim_root_already_claimed() {
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
         let _ = provider.claim_root(ORIG).unwrap();
         assert_eq!(
             provider.claim_root(ORIG).unwrap_err(),
@@ -105,7 +105,7 @@ mod authn {
     #[test]
     fn claim_user_fail_anonymous() {
         let authmap = Arc::new(Coremap::new());
-        let provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
         // claim root
         let _ = provider.claim_root(ORIG).unwrap();
         // try to claim as an anonymous user

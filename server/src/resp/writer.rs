@@ -43,7 +43,7 @@ where
     T: ProtocolConnectionExt<Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    let raw_stream = unsafe { con.raw_stream() };
+    let raw_stream = con.raw_stream();
     raw_stream.write_all(&[tsymbol; 1]).await?; // first write tsymbol
     let bytes = Integer64::from(payload.len());
     raw_stream.write_all(&bytes).await?; // then len
@@ -75,7 +75,7 @@ where
         len: usize,
     ) -> IoResult<FlatArrayWriter<'a, T, Strm>> {
         {
-            let stream = unsafe { con.raw_stream() };
+            let stream = con.raw_stream();
             // first write _
             stream.write_all(&[b'_']).await?;
             let bytes = Integer64::from(len);
@@ -142,7 +142,7 @@ where
         len: usize,
     ) -> IoResult<TypedArrayWriter<'a, T, Strm>> {
         {
-            let stream = unsafe { con.raw_stream() };
+            let stream = con.raw_stream();
             // first write @<tsymbol>
             stream.write_all(&[b'@', tsymbol]).await?;
             let bytes = Integer64::from(len);
@@ -200,7 +200,7 @@ where
         len: usize,
     ) -> IoResult<NonNullArrayWriter<'a, T, Strm>> {
         {
-            let stream = unsafe { con.raw_stream() };
+            let stream = con.raw_stream();
             // first write @<tsymbol>
             stream.write_all(&[b'^', tsymbol]).await?;
             let bytes = Integer64::from(len);

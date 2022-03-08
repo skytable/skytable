@@ -81,7 +81,7 @@ macro_rules! gen_constants_and_matches {
 action! {
     /// Execute queries for an anonymous user
     fn execute_simple_noauth(
-        db: &mut Corestore,
+        _db: &mut Corestore,
         con: &mut T,
         auth: &mut AuthProviderHandle<'_, T, Strm>,
         buf: SimpleQuery
@@ -90,7 +90,7 @@ action! {
             let bufref = unsafe { buf.into_inner() };
             let mut iter = unsafe { get_iter(&bufref) };
             match iter.next_uppercase() {
-                Some(token) if ACTION_AUTH.eq(&*token) => auth::auth_login_only(db, con, auth, iter).await,
+                Some(token) if ACTION_AUTH.eq(&*token) => auth::auth_login_only(con, auth, iter).await,
                 Some(_) => util::err(auth::errors::AUTH_CODE_DENIED),
                 None => util::err(groups::PACKET_ERR),
             }
@@ -181,7 +181,7 @@ async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
             WHEREAMI => actions::whereami::whereami,
             {
                 // actions that need other arguments
-                AUTH => auth::auth(db, con, auth, iter)
+                AUTH => auth::auth(con, auth, iter)
             }
         );
     }

@@ -25,8 +25,9 @@
 */
 
 #[cfg(test)]
-use super::element::UnsafeElement;
+use super::UnsafeElement;
 use super::UnsafeSlice;
+use crate::actions::ActionResult;
 use bytes::Bytes;
 use core::hint::unreachable_unchecked;
 use core::iter::FusedIterator;
@@ -112,6 +113,11 @@ impl<'a> AnyArrayIter<'a> {
     }
     pub unsafe fn into_inner(self) -> Iter<'a, UnsafeSlice> {
         self.iter
+    }
+    /// Returns the next slice or an action error (group)
+    pub fn next_or_aerr(&mut self) -> ActionResult<&'a [u8]> {
+        self.next()
+            .ok_or(super::responses::groups::ACTION_ERR.into())
     }
 }
 

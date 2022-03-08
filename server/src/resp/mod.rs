@@ -85,6 +85,28 @@ impl BytesWrapper {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct StringWrapper(pub String);
+
+impl Writable for StringWrapper {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
+        Box::pin(async move {
+            con.write_lowlevel(&[b'+']).await?;
+            // Now get the size of the Bytes object as bytes
+            let size = Integer64::from(self.0.len());
+            // Write this to the stream
+            con.write_lowlevel(&size).await?;
+            // Now write a LF character
+            con.write_lowlevel(&[b'\n']).await?;
+            // Now write the REAL bytes (of the object)
+            con.write_lowlevel(self.0.as_bytes()).await?;
+            // Now write another LF
+            con.write_lowlevel(&[b'\n']).await?;
+            Ok(())
+        })
+    }
+}
+
 impl Writable for Vec<u8> {
     fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move { con.write_lowlevel(&self).await })

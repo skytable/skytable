@@ -51,22 +51,43 @@ use crate::dbnet::connection::prelude::*;
 
 const AUTH_CLAIM: &[u8] = b"claim";
 const AUTH_LOGIN: &[u8] = b"login";
+const AUTH_LOGOUT: &[u8] = b"logout";
 const AUTH_ADDUSER: &[u8] = b"adduser";
 const AUTH_DELUSER: &[u8] = b"deluser";
 
 action! {
     /// Handle auth. Should have passed the `auth` token
     fn auth(
-        _handle: &Corestore,
-        _con: &mut T,
-        _auth: &mut AuthProviderHandle<'_, T, Strm>,
-        _iter: ActionIter<'_>
+        con: &mut T,
+        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        iter: ActionIter<'_>
     ) {
-        todo!()
+        let mut iter = iter;
+        match iter.next_or_aerr()? {
+            AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
+            AUTH_CLAIM => {
+                let origin_key = iter.next_or_aerr()?;
+                let key = auth.provider_mut().claim_root(origin_key)?;
+                auth.swap_executor_to_authenticated();
+                con.write_response(StringWrapper(key)).await?;
+                Ok(())
+            }
+            AUTH_ADDUSER => {
+                let username = iter.next_or_aerr()?;
+                let key = auth.provider_mut().claim_user(username)?;
+                con.write_response(StringWrapper(key)).await?;
+                Ok(())
+            }
+            AUTH_LOGOUT => {
+                auth.provider_mut().logout()?;
+                auth.swap_executor_to_anonymous();
+                Ok(())
+            }
+            _ => util::err(groups::ACTION_ERR),
+        }
     }
     /// Handle a login operation only. The **`login` token is expected to be present**
     fn auth_login_only(
-        _handle: &Corestore,
         con: &mut T,
         auth: &mut AuthProviderHandle<'_, T, Strm>,
         iter: ActionIter<'_>
@@ -74,22 +95,23 @@ action! {
         let mut iter = iter;
         match iter.next() {
             Some(v) => match v {
-                AUTH_LOGIN => {
-                    // sweet, where's our username and password
-                    let (username, password) = (iter.next(), iter.next());
-                    match (username, password) {
-                        (Some(username), Some(password)) => {
-                            auth.provider_mut().login(username, password)?;
-                            auth.swap_executor_to_authenticated();
-                        },
-                        _ => return util::err(groups::ACTION_ERR),
-                    }
-                    con.write_response(groups::OKAY).await?;
-                    Ok(())
-                }
+                AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
                 _ => util::err(errors::AUTH_CODE_PERMS),
             }
             None => util::err(groups::ACTION_ERR),
         }
+    }
+    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+        // sweet, where's our username and password
+        let (username, password) = (iter.next(), iter.next());
+        match (username, password) {
+            (Some(username), Some(password)) => {
+                auth.provider_mut().login(username, password)?;
+                auth.swap_executor_to_authenticated();
+            },
+            _ => return util::err(groups::ACTION_ERR),
+        }
+        con.write_response(groups::OKAY).await?;
+        Ok(())
     }
 }

@@ -92,12 +92,14 @@ impl AuthProvider {
     pub const fn is_enabled(&self) -> bool {
         matches!(self.origin, Some(_))
     }
-    pub fn claim_root(&self, origin_key: &[u8]) -> AuthResult<String> {
+    pub fn claim_root(&mut self, origin_key: &[u8]) -> AuthResult<String> {
         let origin = self.get_origin()?;
         if origin == origin_key {
             // the origin key was good, let's try claiming root
             let (key, store) = keys::generate_full();
             if self.authmap.true_if_insert(USER_ROOT, store) {
+                // claimed, sweet, log them in
+                self.whoami = Some(USER_ROOT);
                 Ok(key)
             } else {
                 Err(AuthError::AlreadyClaimed)
@@ -145,6 +147,13 @@ impl AuthProvider {
                 // imposter!
                 Err(AuthError::BadCredentials)
             }
+        }
+    }
+    pub fn logout(&mut self) -> AuthResult<()> {
+        if let Some(_) = self.whoami.take() {
+            Ok(())
+        } else {
+            Err(AuthError::Anonymous)
         }
     }
     fn get_origin(&self) -> AuthResult<&Authkey> {
