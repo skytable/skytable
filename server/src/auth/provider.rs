@@ -24,7 +24,7 @@
  *
 */
 
-use super::{keys, AuthError};
+use super::{errors, keys, AuthError};
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
 use core::mem::MaybeUninit;
@@ -108,16 +108,17 @@ impl AuthProvider {
     }
     fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
-        if self
-            .authmap
-            .true_if_insert(Array::try_from_slice(claimant).unwrap(), store)
-        {
+        if self.authmap.true_if_insert(
+            Array::try_from_slice(claimant).ok_or(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))?,
+            store,
+        ) {
             Ok(key)
         } else {
             Err(AuthError::AlreadyClaimed)
         }
     }
     pub fn login(&mut self, account: &[u8], token: &[u8]) -> AuthResult<()> {
+        self.check_enabled()?;
         match self
             .authmap
             .get(account)
@@ -135,11 +136,10 @@ impl AuthProvider {
         }
     }
     pub fn logout(&mut self) -> AuthResult<()> {
-        if let Some(_) = self.whoami.take() {
-            Ok(())
-        } else {
-            Err(AuthError::Anonymous)
-        }
+        self.whoami.take().map(|_| ()).ok_or(AuthError::Anonymous)
+    }
+    fn check_enabled(&self) -> AuthResult<()> {
+        self.origin.as_ref().map(|_| ()).ok_or(AuthError::Disabled)
     }
     fn get_origin(&self) -> AuthResult<&Authkey> {
         match self.origin.as_ref() {

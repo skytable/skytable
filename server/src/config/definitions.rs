@@ -25,7 +25,7 @@
 */
 
 use super::{feedback::WarningStack, DEFAULT_IPV4, DEFAULT_PORT};
-use crate::auth::provider::Authkey;
+use crate::config::AuthkeyWrapper;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 use core::fmt;
 use core::str::FromStr;
@@ -65,17 +65,6 @@ impl BGSave {
     /// Check if BGSAVE is disabled
     pub const fn is_disabled(&self) -> bool {
         matches!(self, Self::Disabled)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct AuthSettings {
-    pub origin_key: Option<Authkey>,
-}
-
-impl AuthSettings {
-    pub const fn default() -> Self {
-        Self { origin_key: None }
     }
 }
 
@@ -391,5 +380,42 @@ impl<'de> Deserialize<'de> for Modeset {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_str(ModesetVisitor)
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct AuthSettings {
+    pub origin_key: Option<AuthkeyWrapper>,
+}
+
+impl AuthSettings {
+    pub const fn default() -> Self {
+        Self { origin_key: None }
+    }
+}
+
+struct AuthSettingsVisitor;
+
+impl<'de> Visitor<'de> for AuthSettingsVisitor {
+    type Value = AuthkeyWrapper;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "a 40 character ASCII string")
+    }
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        AuthkeyWrapper::try_new(value).ok_or(E::custom(
+            "Invalid value for authkey. must be 40 ASCII characters with nonzero first char",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthkeyWrapper {
+    fn deserialize<D>(deserializer: D) -> Result<AuthkeyWrapper, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(AuthSettingsVisitor)
     }
 }

@@ -25,6 +25,7 @@
 */
 
 // external imports
+use crate::auth::provider::Authkey;
 use clap::{load_yaml, App};
 // std imports
 use core::str::FromStr;
@@ -58,6 +59,32 @@ const DEFAULT_SNAPSHOT_FAILSAFE: bool = true;
 const DEFAULT_SSL_PORT: u16 = 2004;
 
 type StaticStr = &'static str;
+
+#[derive(Debug, PartialEq)]
+pub struct AuthkeyWrapper(pub Authkey);
+
+impl AuthkeyWrapper {
+    pub const fn empty() -> Self {
+        Self([0u8; 40])
+    }
+    pub fn try_new(slf: &str) -> Option<Self> {
+        let valid = slf.len() != 0 // cannot be empty
+        && slf.chars().all(|ch| char::is_ascii_alphanumeric(&ch)) // must have ascii alpha
+        && !slf.as_bytes()[0].is_ascii_digit(); // cannot start with number
+        if valid {
+            let mut ret = Self::empty();
+            slf.bytes().enumerate().for_each(|(idx, byte)| {
+                ret.0[idx] = byte;
+            });
+            Some(ret)
+        } else {
+            None
+        }
+    }
+    pub fn into_inner(self) -> Authkey {
+        self.0
+    }
+}
 
 #[derive(Debug)]
 /// An enum representing the outcome of a parse operation for a specific configuration item from a
@@ -108,6 +135,13 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Option<&'a str> {
                 .unwrap_or(ConfigSourceParseResult::ParseFailure)
         })
         .unwrap_or(ConfigSourceParseResult::Absent)
+    }
+}
+
+impl FromStr for AuthkeyWrapper {
+    type Err = ();
+    fn from_str(slf: &str) -> Result<Self, Self::Err> {
+        Self::try_new(slf).ok_or(())
     }
 }
 
@@ -561,6 +595,18 @@ impl Configset {
                 }
             }
         }
+    }
+}
+
+// Auth settings
+impl Configset {
+    pub fn auth_settings(
+        &mut self,
+        nauth: impl TryFromConfigSource<AuthkeyWrapper>,
+        nauth_key: StaticStr,
+    ) {
+        let mut def = AuthkeyWrapper::empty();
+        self.try_mutate(nauth, &mut def, nauth_key, "A 40-byte long ASCII string");
     }
 }
 

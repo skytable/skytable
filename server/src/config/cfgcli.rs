@@ -119,5 +119,11 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
         matches.value_of("tlspass"),
         "--tlspassin"
     );
+    // auth settings
+    fcli!(
+        auth_settings,
+        matches.value_of("origin_key"),
+        "--auth-origin-key"
+    );
     defset
 }

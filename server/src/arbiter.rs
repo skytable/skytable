@@ -83,7 +83,7 @@ pub async fn run(
     let auth_provider = match auth.origin_key {
         Some(key) => {
             let authref = db.get_store().setup_auth();
-            AuthProvider::new(authref, Some(key))
+            AuthProvider::new(authref, Some(key.into_inner()))
         }
         None => AuthProvider::new_disabled(),
     };

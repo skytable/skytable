@@ -24,7 +24,9 @@
  *
 */
 
-use super::{ConfigSourceParseResult, Configset, Modeset, OptString, TryFromConfigSource};
+use super::{
+    AuthSettings, ConfigSourceParseResult, Configset, Modeset, OptString, TryFromConfigSource,
+};
 use serde::Deserialize;
 use std::net::IpAddr;
 
@@ -39,6 +41,8 @@ pub struct Config {
     pub(super) snapshot: Option<ConfigKeySnapshot>,
     /// SSL configuration
     pub(super) ssl: Option<KeySslOpts>,
+    /// auth settings
+    pub(super) auth: Option<AuthSettings>,
 }
 
 /// This struct represents the `server` key in the TOML file
@@ -162,6 +166,7 @@ pub fn from_file(file: ConfigFile) -> Configset {
         bgsave,
         snapshot,
         ssl,
+        auth,
     } = file;
     // server settings
     set.server_tcp(
@@ -220,6 +225,10 @@ pub fn from_file(file: ConfigFile) -> Configset {
             OptString::from(passin),
             "ssl.passin",
         );
+    }
+    if let Some(auth) = auth {
+        let AuthSettings { origin_key } = auth;
+        set.auth_settings(Optional::from(origin_key), "auth.origin")
     }
     set
 }
