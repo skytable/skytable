@@ -28,6 +28,8 @@
 mod macros;
 pub mod compiler;
 pub mod os;
+use crate::actions::{ActionError, ActionResult};
+use crate::protocol::responses::groups;
 use core::fmt::Debug;
 use core::future::Future;
 use core::ops::Deref;
@@ -68,6 +70,20 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
             Some(t) => t,
             None => impossible!(),
         }
+    }
+}
+
+pub trait UnwrapActionError<T> {
+    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T>;
+    fn unwrap_or_aerr(self) -> ActionResult<T>;
+}
+
+impl<T> UnwrapActionError<T> for Option<T> {
+    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
+        self.ok_or(e.into())
+    }
+    fn unwrap_or_aerr(self) -> ActionResult<T> {
+        self.ok_or(groups::ACTION_ERR.into())
     }
 }
 

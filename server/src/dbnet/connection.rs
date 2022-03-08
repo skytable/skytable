@@ -118,7 +118,7 @@ pub mod prelude {
     pub use crate::protocol::responses::{self, groups};
     pub use crate::queryengine::ActionIter;
     pub use crate::resp::StringWrapper;
-    pub use crate::util::{self, FutureResult, Unwrappable};
+    pub use crate::util::{self, FutureResult, UnwrapActionError, Unwrappable};
     pub use crate::{aerr, conwrite, get_tbl, handle_entity, is_lowbit_set, registry};
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }

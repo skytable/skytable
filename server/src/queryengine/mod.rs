@@ -60,10 +60,7 @@ macro_rules! gen_constants_and_matches {
                 pub const $action2: &[u8] = stringify!($action2).as_bytes();
             )*
         }
-        let first = match $buf.next_uppercase() {
-            Some(frst) => frst,
-            None => return util::err(groups::PACKET_ERR),
-        };
+        let first = $buf.next_uppercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?;
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
@@ -89,10 +86,9 @@ action! {
         if buf.is_any_array() {
             let bufref = unsafe { buf.into_inner() };
             let mut iter = unsafe { get_iter(&bufref) };
-            match iter.next_uppercase() {
-                Some(token) if ACTION_AUTH.eq(&*token) => auth::auth_login_only(con, auth, iter).await,
-                Some(_) => util::err(auth::errors::AUTH_CODE_DENIED),
-                None => util::err(groups::PACKET_ERR),
+            match iter.next_uppercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
+                ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
+                _ => util::err(auth::errors::AUTH_CODE_DENIED),
             }
         } else {
             util::err(groups::WRONGTYPE_ERR)

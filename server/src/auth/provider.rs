@@ -24,7 +24,7 @@
  *
 */
 
-use super::keys;
+use super::{keys, AuthError};
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
 use core::mem::MaybeUninit;
@@ -57,21 +57,6 @@ pub struct AuthProvider {
     whoami: Option<AuthID>,
     /// a map of users
     authmap: Authmap,
-}
-
-/// Auth erros
-#[derive(PartialEq, Debug)]
-pub enum AuthError {
-    /// The auth slot was already claimed
-    AlreadyClaimed,
-    /// Bad userid/tokens/keys
-    BadCredentials,
-    /// Auth is disabled
-    Disabled,
-    /// The action is not available to the current account
-    PermissionDenied,
-    /// The user is anonymous and doesn't have the right to execute this
-    Anonymous,
 }
 
 impl AuthProvider {

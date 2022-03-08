@@ -41,8 +41,9 @@
 
 mod keys;
 pub mod provider;
-pub use provider::{AuthError, AuthProvider, AuthResult, Authmap};
+pub use provider::{AuthProvider, AuthResult, Authmap};
 pub mod errors;
+pub use errors::AuthError;
 
 #[cfg(test)]
 mod tests;
@@ -93,12 +94,9 @@ action! {
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
-        match iter.next() {
-            Some(v) => match v {
-                AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
-                _ => util::err(errors::AUTH_CODE_PERMS),
-            }
-            None => util::err(groups::ACTION_ERR),
+        match iter.next_or_aerr()? {
+            AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
+            _ => util::err(errors::AUTH_CODE_PERMS),
         }
     }
     fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {

@@ -108,6 +108,8 @@ mod authn {
         let mut provider = AuthProvider::new(authmap, Some(*ORIG));
         // claim root
         let _ = provider.claim_root(ORIG).unwrap();
+        // logout
+        provider.logout().unwrap();
         // try to claim as an anonymous user
         assert_eq!(
             provider.claim_user(b"newuser").unwrap_err(),
