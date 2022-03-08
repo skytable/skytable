@@ -86,6 +86,12 @@ impl<'a> AnyArrayIter<'a> {
             v.as_slice().to_ascii_uppercase().into_boxed_slice()
         })
     }
+    pub fn next_lowercase(&mut self) -> Option<Box<[u8]>> {
+        self.iter.next().map(|v| unsafe {
+            // SAFETY: Only construction is unsafe, forwarding is not
+            v.as_slice().to_ascii_lowercase().into_boxed_slice()
+        })
+    }
     pub unsafe fn next_uppercase_unchecked(&mut self) -> Box<[u8]> {
         match self.next_uppercase() {
             Some(s) => s,

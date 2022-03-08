@@ -29,13 +29,15 @@ use crate::actions::ActionError;
 /// Skyhash respstring: already claimed (user was already claimed)
 pub const AUTH_ERROR_ALREADYCLAIMED: &[u8] = b"!19\nerr-already-claimed\n";
 /// Skyhash respcode(10): bad credentials (either bad creds or invalid user)
-pub const AUTH_CODE_DENIED: &[u8] = b"!2\n10\n";
+pub const AUTH_CODE_BAD_CREDENTIALS: &[u8] = b"!2\n10\n";
 /// Skyhash respstring: auth is disabled
 pub const AUTH_ERROR_DISABLED: &[u8] = b"!17\nerr-auth-disabled\n";
 /// Skyhash respcode(11): Insufficient permissions (same for anonymous user)
 pub const AUTH_CODE_PERMS: &[u8] = b"!2\n11\n";
 /// Skyhash respstring: ID is too long
 pub const AUTH_ERROR_TOO_LONG: &[u8] = b"!25\nerr-auth-illegal-username\n";
+/// Skyhash respstring: ID is protected/in use
+pub const AUTH_ERROR_FAILED_TO_DELETE_USER: &[u8] = b"!18\nerr-user-delete-fail\n";
 
 /// Auth erros
 #[derive(PartialEq, Debug)]
@@ -59,7 +61,7 @@ impl From<AuthError> for ActionError {
         let r = match e {
             AuthError::AlreadyClaimed => AUTH_ERROR_ALREADYCLAIMED,
             AuthError::Anonymous | AuthError::PermissionDenied => AUTH_CODE_PERMS,
-            AuthError::BadCredentials => AUTH_CODE_DENIED,
+            AuthError::BadCredentials => AUTH_CODE_BAD_CREDENTIALS,
             AuthError::Disabled => AUTH_ERROR_DISABLED,
             AuthError::Other(e) => e,
         };

@@ -122,7 +122,7 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
     // auth settings
     fcli!(
         auth_settings,
-        matches.value_of("origin_key"),
+        matches.value_of("authkey"),
         "--auth-origin-key"
     );
     defset

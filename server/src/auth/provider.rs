@@ -118,7 +118,7 @@ impl AuthProvider {
         }
     }
     pub fn login(&mut self, account: &[u8], token: &[u8]) -> AuthResult<()> {
-        self.check_enabled()?;
+        self.ensure_enabled()?;
         match self
             .authmap
             .get(account)
@@ -138,13 +138,31 @@ impl AuthProvider {
     pub fn logout(&mut self) -> AuthResult<()> {
         self.whoami.take().map(|_| ()).ok_or(AuthError::Anonymous)
     }
-    fn check_enabled(&self) -> AuthResult<()> {
+    fn ensure_enabled(&self) -> AuthResult<()> {
         self.origin.as_ref().map(|_| ()).ok_or(AuthError::Disabled)
     }
     fn get_origin(&self) -> AuthResult<&Authkey> {
         match self.origin.as_ref() {
             Some(key) => Ok(key),
             None => Err(AuthError::Disabled),
+        }
+    }
+    fn ensure_root(&self) -> AuthResult<()> {
+        if self.are_you_root()? {
+            Ok(())
+        } else {
+            Err(AuthError::PermissionDenied)
+        }
+    }
+    pub fn delete_user(&self, user: &[u8]) -> AuthResult<()> {
+        self.ensure_root()?;
+        if user.eq(&USER_ROOT) {
+            // can't delete root!
+            Err(AuthError::Other(errors::AUTH_ERROR_FAILED_TO_DELETE_USER))
+        } else if self.authmap.true_if_removed(user) {
+            Ok(())
+        } else {
+            Err(AuthError::BadCredentials)
         }
     }
 }

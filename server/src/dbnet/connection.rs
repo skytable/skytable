@@ -505,7 +505,7 @@ where
                 }
                 Query::PipelineQuery(_) => {
                     con.write_simple_query_header().await?;
-                    con.write_response(auth::errors::AUTH_CODE_DENIED).await?;
+                    con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS).await?;
                 }
             }
             Ok(())

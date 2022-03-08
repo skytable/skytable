@@ -24,14 +24,11 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
 /*
  * For our authn/authz, we have two important keys:
  * - The origin key: This is the key saved in the configuration file that can also be
  * used as the "recovery key" in the event the "root key" is lost. To claim the root
- * account, one needs this key. This is a variable width key with a maximum size of
- * 64
+ * account, one needs this key. This is a fixed width key with 40 characters
  * - The root key: This is the superuser key that can be used to create/deny other
  * accounts. On claiming the root account, this key is issued
  *
@@ -64,15 +61,9 @@ action! {
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
-        match iter.next_or_aerr()? {
+        match iter.next_lowercase().unwrap_or_aerr()?.as_ref() {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
-            AUTH_CLAIM => {
-                let origin_key = iter.next_or_aerr()?;
-                let key = auth.provider_mut().claim_root(origin_key)?;
-                auth.swap_executor_to_authenticated();
-                con.write_response(StringWrapper(key)).await?;
-                Ok(())
-            }
+            AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             AUTH_ADDUSER => {
                 let username = iter.next_or_aerr()?;
                 let key = auth.provider_mut().claim_user(username)?;
@@ -82,10 +73,23 @@ action! {
             AUTH_LOGOUT => {
                 auth.provider_mut().logout()?;
                 auth.swap_executor_to_anonymous();
+                con.write_response(groups::OKAY).await?;
+                Ok(())
+            }
+            AUTH_DELUSER => {
+                auth.provider_mut().delete_user(iter.next().unwrap_or_aerr()?)?;
+                con.write_response(groups::OKAY).await?;
                 Ok(())
             }
             _ => util::err(groups::ACTION_ERR),
         }
+    }
+    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+        let origin_key = iter.next_or_aerr()?;
+        let key = auth.provider_mut().claim_root(origin_key)?;
+        auth.swap_executor_to_authenticated();
+        con.write_response(StringWrapper(key)).await?;
+        Ok(())
     }
     /// Handle a login operation only. The **`login` token is expected to be present**
     fn auth_login_only(
@@ -94,8 +98,9 @@ action! {
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
-        match iter.next_or_aerr()? {
+        match iter.next_lowercase().unwrap_or_aerr()?.as_ref() {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
+            AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             _ => util::err(errors::AUTH_CODE_PERMS),
         }
     }

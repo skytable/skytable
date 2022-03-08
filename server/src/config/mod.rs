@@ -68,9 +68,8 @@ impl AuthkeyWrapper {
         Self([0u8; 40])
     }
     pub fn try_new(slf: &str) -> Option<Self> {
-        let valid = slf.len() != 0 // cannot be empty
-        && slf.chars().all(|ch| char::is_ascii_alphanumeric(&ch)) // must have ascii alpha
-        && !slf.as_bytes()[0].is_ascii_digit(); // cannot start with number
+        let valid = slf.len() == 40 // must have 40 chars
+        && slf.chars().all(|ch| char::is_ascii_alphanumeric(&ch)); // must have ascii alpha
         if valid {
             let mut ret = Self::empty();
             slf.bytes().enumerate().for_each(|(idx, byte)| {
@@ -607,6 +606,11 @@ impl Configset {
     ) {
         let mut def = AuthkeyWrapper::empty();
         self.try_mutate(nauth, &mut def, nauth_key, "A 40-byte long ASCII string");
+        if def != AuthkeyWrapper::empty() {
+            self.cfg.auth = AuthSettings {
+                origin_key: Some(def),
+            };
+        }
     }
 }
 

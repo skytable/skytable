@@ -86,9 +86,9 @@ action! {
         if buf.is_any_array() {
             let bufref = unsafe { buf.into_inner() };
             let mut iter = unsafe { get_iter(&bufref) };
-            match iter.next_uppercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
+            match iter.next_lowercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
                 ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
-                _ => util::err(auth::errors::AUTH_CODE_DENIED),
+                _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
             }
         } else {
             util::err(groups::WRONGTYPE_ERR)
