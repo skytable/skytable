@@ -35,19 +35,14 @@ mod kvengine_encoding;
 mod kvengine_list;
 mod pipeline;
 
-mod ssl {
-    use skytable::aio::TlsConnection;
-    use skytable::{Element, Query};
-    use std::env;
-    #[tokio::test]
-    async fn test_ssl() {
-        let mut path = env::var("ROOT_DIR").expect("ROOT_DIR unset");
-        path.push_str("/cert.pem");
-        let mut con = TlsConnection::new("127.0.0.1", 2004, &path).await.unwrap();
-        let q = Query::from("heya");
-        assert_eq!(
-            con.run_simple_query(&q).await.unwrap(),
-            Element::String("HEY!".to_owned())
+mod tls {
+    use skytable::{query, Element};
+    #[sky_macros::dbtest_func(tls_cert = "cert.pem", port = 2004)]
+    async fn test_tls() {
+        runeq!(
+            con,
+            query!("heya", "abcd"),
+            Element::String("abcd".to_owned())
         );
     }
 }

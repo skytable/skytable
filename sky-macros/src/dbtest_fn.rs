@@ -33,6 +33,7 @@ pub struct DBTestFunctionConfig {
     table_decl: String,
     port: u16,
     host: String,
+    tls_cert: Option<String>,
 }
 
 impl DBTestFunctionConfig {
@@ -41,12 +42,28 @@ impl DBTestFunctionConfig {
             table_decl: "keymap(str,str)".to_owned(),
             port: 2003,
             host: "127.0.0.1".to_owned(),
+            tls_cert: None,
         }
     }
     pub fn get_connection_tokens(&self) -> impl quote::ToTokens {
-        let DBTestFunctionConfig { port, host, .. } = &self;
-        quote! {
-            let mut con = skytable::AsyncConnection::new(#host, #port).await.unwrap();
+        let DBTestFunctionConfig {
+            port,
+            host,
+            tls_cert,
+            ..
+        } = &self;
+        match tls_cert {
+            Some(cert) => {
+                quote! {
+                    let certpath = ::std::format!("{}/{}", crate::ROOT_DIR, #cert);
+                    let mut con = skytable::aio::TlsConnection::new(
+                        #host, #port, &certpath
+                    ).await.unwrap();
+                }
+            }
+            None => quote! {
+                let mut con = skytable::AsyncConnection::new(#host, #port).await.unwrap();
+            },
         }
     }
     pub fn get_create_table_tokens(&self, table_name: &str) -> impl quote::ToTokens {
@@ -83,6 +100,9 @@ pub fn parse_dbtest_func_args(
         }
         "host" => {
             fcfg.host = util::parse_string(lit, span, "host").expect("Expected a string");
+        }
+        "tls_cert" => {
+            fcfg.tls_cert = Some(util::parse_string(lit, span, "host").expect("Expected a string"));
         }
         x => panic!("unknown attribute {x} specified"),
     }

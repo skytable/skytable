@@ -64,6 +64,9 @@ mod tests;
 
 const PATH: &str = ".sky_pid";
 
+#[cfg(test)]
+const ROOT_DIR: &str = env!("ROOT_DIR");
+
 #[cfg(all(not(target_env = "msvc"), not(miri)))]
 use jemallocator::Jemalloc;
 

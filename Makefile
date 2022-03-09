@@ -1,5 +1,3 @@
-# set ROOT_DIR as our test suite uses it
-export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 # no additional software note
 NO_ADDITIONAL_SOFTWARE := echo "No additional software required for this target"
 # target argument
