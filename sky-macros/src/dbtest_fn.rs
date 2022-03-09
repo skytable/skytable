@@ -27,6 +27,7 @@
 use crate::util;
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::AttributeArgs;
 
 pub struct DBTestFunctionConfig {
     table_decl: String,
@@ -216,7 +217,7 @@ fn generate_dbtest(
 
 /// This function checks if the current function is eligible to be a test and if so, returns
 /// the generated test
-pub fn parse_test_sig(
+pub fn generate_test(
     input: syn::ItemFn,
     rng: &mut impl rand::Rng,
     fcfg: &DBTestFunctionConfig,
@@ -237,4 +238,24 @@ pub fn parse_test_sig(
             .into();
     }
     generate_dbtest(input, rng, fcfg).unwrap_or_else(|e| e.to_compile_error().into())
+}
+
+fn parse_dbtest_func_attrs(attrs: AttributeArgs) -> DBTestFunctionConfig {
+    let mut fcfg = DBTestFunctionConfig::default();
+    attrs.iter().for_each(|arg| {
+        if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
+            let (ident, lit, span) = util::get_metanamevalue_data(&namevalue);
+            parse_dbtest_func_args(&ident, lit, span, &mut fcfg)
+        }
+    });
+    fcfg
+}
+
+pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(item as syn::ItemFn);
+    let attrs = syn::parse_macro_input!(args as AttributeArgs);
+    let mut rng = rand::thread_rng();
+    let fcfg = parse_dbtest_func_attrs(attrs);
+    let func = generate_dbtest(input, &mut rng, &fcfg).unwrap();
+    func
 }

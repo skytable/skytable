@@ -51,12 +51,8 @@ fn parse_dbtest_module_args(args: AttributeArgs) -> DBTestModuleConfig {
     let mut modcfg = DBTestModuleConfig::default();
     for arg in args {
         if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
-            let ident = namevalue.path.get_ident();
-            if ident.is_none() {
-                panic!("Must have specified ident!");
-            }
-            let (lit, span) = (&namevalue.lit, namevalue.lit.span());
-            match ident.unwrap().to_string().to_lowercase().as_str() {
+            let (ident, lit, span) = util::get_metanamevalue_data(&namevalue);
+            match ident.as_str() {
                 "skip" => {
                     modcfg.skips = util::parse_string(lit, span, "skip")
                         .expect("Expected a value for argument `skip`")
@@ -96,7 +92,7 @@ pub fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
             // We just care about functions, so parse functions and ignore everything
             // else
             syn::Item::Fn(function) if !modcfg.skips.contains(&function.sig.ident.to_string()) => {
-                let generated_fn = dbtest_fn::parse_test_sig(function, &mut rng, &modcfg.fcfg);
+                let generated_fn = dbtest_fn::generate_test(function, &mut rng, &modcfg.fcfg);
                 let __tok: syn::ItemFn = syn::parse_macro_input!(generated_fn as syn::ItemFn);
                 let tok = quote! {
                     #__tok

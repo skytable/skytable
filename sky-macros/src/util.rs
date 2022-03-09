@@ -28,6 +28,7 @@ use core::fmt::Display;
 use core::str::FromStr;
 use proc_macro2::Span;
 use rand::Rng;
+use syn::{Lit, MetaNameValue};
 
 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
@@ -40,7 +41,7 @@ pub fn get_rand_string(rng: &mut impl Rng) -> String {
         .collect()
 }
 
-pub fn parse_string(int: &syn::Lit, span: Span, field: &str) -> Result<String, syn::Error> {
+pub fn parse_string(int: &Lit, span: Span, field: &str) -> Result<String, syn::Error> {
     match int {
         syn::Lit::Str(s) => Ok(s.value()),
         syn::Lit::Verbatim(s) => Ok(s.to_string()),
@@ -62,5 +63,16 @@ pub fn parse_number<T: FromStr<Err = E>, E: Display>(
             span,
             format!("Failed to parse {} into a string.", field),
         )),
+    }
+}
+
+pub fn get_metanamevalue_data(namevalue: &MetaNameValue) -> (String, &Lit, Span) {
+    match namevalue
+        .path
+        .get_ident()
+        .map(|ident| ident.to_string().to_lowercase())
+    {
+        None => panic!("Must have specified ident!"),
+        Some(ident) => (ident, &namevalue.lit, namevalue.lit.span()),
     }
 }

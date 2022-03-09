@@ -37,9 +37,10 @@
 //! sure that you don't overwrite a macro provided variable!
 //!
 //! ### Macros and ghost values
-//! - `#[dbtest]`:
+//! - `#[dbtest_func]` and `#[dbtest_module]`:
 //!     - `con` - `skytable::AsyncConnection`
 //!     - `query` - `skytable::Query`
+//!     - `__MYENTITY__` - `String` with entity
 //!
 
 use proc_macro::TokenStream;
@@ -49,7 +50,13 @@ mod dbtest_mod;
 mod util;
 
 #[proc_macro_attribute]
-/// The `dbtest_mdule` macro starts an async server in the background and is meant for
+/// The `dbtest_module` function accepts an inline module of `dbtest_func` compatible functions,
+/// unpacking each function into a dbtest
+pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
+    dbtest_mod::parse_test_module(args, item)
+}
+
+/// The `dbtest_func` macro starts an async server in the background and is meant for
 /// use within the `skyd` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
@@ -75,6 +82,7 @@ mod util;
 /// are practially impossible. Hence we do not bother with a global random string table and instead proceed
 /// to generate tables randomly at the point of invocation
 ///
-pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
-    dbtest_mod::parse_test_module(args, item)
+#[proc_macro_attribute]
+pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
+    dbtest_fn::dbtest_func(args, item)
 }
