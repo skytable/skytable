@@ -71,14 +71,11 @@ use core::mem::MaybeUninit;
 use core::ops::Deref;
 use std::sync::Arc;
 
-#[sky_macros::array]
-const DEFAULT_ARRAY: [MaybeUninit<u8>; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
-
-#[sky_macros::array]
-const SYSTEM_ARRAY: [MaybeUninit<u8>; 64] = [b's', b'y', b's', b't', b'e', b'm'];
-
-#[sky_macros::array]
-const SYSTEM_AUTH_ARRAY: [MaybeUninit<u8>; 64] = [b'a', b'u', b't', b'h'];
+uninit_array! {
+    const DEFAULT_ARRAY: [u8; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
+    const SYSTEM_ARRAY: [u8; 64] = [b's', b'y', b's', b't', b'e', b'm'];
+    const SYSTEM_AUTH_ARRAY: [u8; 64] = [b'a', b'u', b't', b'h'];
+}
 
 /// typedef for the keyspace/table IDs. We don't need too much fancy here,
 /// no atomic pointers and all. Just a nice array. With amazing gurantees

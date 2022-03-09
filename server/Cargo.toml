@@ -8,7 +8,6 @@ version = "0.7.3"
 [dependencies]
 # internal deps
 libsky = { path = "../libsky" }
-sky_macros = { path = "../sky-macros" }
 # external deps
 ahash = "0.7.6"
 bytes = "1.1.0"
@@ -41,6 +40,7 @@ cc = "1.0.72"
 
 [dev-dependencies]
 # internal deps
+sky_macros = { path = "../sky-macros" }
 libstress = { path = "../libstress" }
 skytable = { git = "https://github.com/skytable/client-rust", features = [
   "aio",

@@ -27,7 +27,6 @@
 use super::{errors, keys, AuthError};
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
-use core::mem::MaybeUninit;
 use std::sync::Arc;
 
 // constants
@@ -35,8 +34,10 @@ use std::sync::Arc;
 pub const AUTHKEY_SIZE: usize = 40;
 /// Size of an authn ID in bytes
 pub const AUTHID_SIZE: usize = 40;
-#[sky_macros::array]
-const USER_ROOT_ARRAY: [MaybeUninit<u8>; 40] = [b'r', b'o', b'o', b't'];
+
+uninit_array! {
+    const USER_ROOT_ARRAY: [u8; 40] = [b'r', b'o', b'o', b't'];
+}
 /// The root user
 const USER_ROOT: AuthID = unsafe { AuthID::from_const(USER_ROOT_ARRAY, 4) };
 
