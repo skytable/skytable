@@ -24,7 +24,7 @@
  *
 */
 
-#[sky_macros::dbtest(table = "keymap(str,str)")]
+#[sky_macros::dbtest_module(table = "keymap(str,str)")]
 mod __private {
     use skytable::types::RawString;
     use skytable::{Element, RespCode};

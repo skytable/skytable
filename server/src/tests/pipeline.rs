@@ -24,7 +24,7 @@
  *
 */
 
-#[sky_macros::dbtest]
+#[sky_macros::dbtest_module]
 mod tests {
     use skytable::{query, Element, Pipeline, RespCode};
     async fn test_pipeline_heya_echo() {
