@@ -1,3 +1,11 @@
+# although this is exported by cargo, we'll export it again to use it in the Makefile
+export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+SKYTEST_TCP_PORT := 2003
+SKYTEST_TLS_PORT := 2004
+SKYTEST_TCP_PORT2 := 2005
+SKYTEST_TLS_PORT2 := 2006
+SKYTEST_TLS_CERT := $(ROOT_DIR)/cert.pem
+SKYTEST_TLS_KEY := $(ROOT_DIR)/key.pem
 # no additional software note
 NO_ADDITIONAL_SOFTWARE := echo "No additional software required for this target"
 # target argument
@@ -37,7 +45,7 @@ BINARY_SKYMIGRATE := $(TARGET_FOLDER)sky-migrate
 # archive command
 ARCHIVE :=
 # start background server command
-START_SERVER := cargo run $(TARGET_ARG) -p skyd -- --noart --sslchain cert.pem --sslkey key.pem
+START_SERVER := cargo run $(TARGET_ARG) -p skyd -- --noart --sslchain ${SKYTEST_TLS_CERT} --sslkey ${SKYTEST_TLS_KEY} --port ${SKYTEST_TCP_PORT} --sslport ${SKYTEST_TLS_PORT}
 STOP_SERVER :=
 
 ifeq ($(OS),Windows_NT)
@@ -60,6 +68,9 @@ else
   # add stop command
   STOP_SERVER := pkill skyd
 endif
+
+START_SERVER2 := $(subst $(SKYTEST_TCP_PORT),$(SKYTEST_TCP_PORT2),$(START_SERVER))
+START_SERVER2 := $(subst $(SKYTEST_TLS_PORT),$(SKYTEST_TLS_PORT2),$(START_SERVER2))
 
 # update the archive command if we have a version and artifact name
 RENAME_ARTIFACT :=
@@ -120,7 +131,8 @@ test: .pre
 	@echo "Building and starting server in debug mode ..."
 	@${CBUILD} -p skyd
 	@chmod +x ci/ssl.sh && bash ci/ssl.sh
-	@${START_SERVER}
+	@mkdir -p server1 && cd server1 && ${START_SERVER}
+	@mkdir -p server2 && cd server2 && ${START_SERVER2}
 	@echo "Sleeping for 10 seconds to let the server start up ..."
 	@sleep 10
 	@echo "Finished sleeping"

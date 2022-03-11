@@ -34,6 +34,8 @@ pub struct DBTestFunctionConfig {
     port: u16,
     host: String,
     tls_cert: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl DBTestFunctionConfig {
@@ -43,6 +45,8 @@ impl DBTestFunctionConfig {
             port: 2003,
             host: "127.0.0.1".to_owned(),
             tls_cert: None,
+            username: None,
+            password: None,
         }
     }
     pub fn get_connection_tokens(&self) -> impl quote::ToTokens {
@@ -80,6 +84,22 @@ impl DBTestFunctionConfig {
             ).await.unwrap()
         }
     }
+    pub fn get_login_tokens(&self) -> Option<impl quote::ToTokens> {
+        let Self {
+            username, password, ..
+        } = self;
+        match (username, password) {
+            (Some(username), Some(password)) => Some(quote! {
+                let query = ::skytable::query!("auth", "login", #username, #password);
+                assert_eq!(
+                    con.run_simple_query(&query).await.unwrap(),
+                    ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+                );
+            }),
+            (None, None) => None,
+            _ => panic!("Expected both `username` and `password`"),
+        }
+    }
 }
 
 pub fn parse_dbtest_func_args(
@@ -103,6 +123,14 @@ pub fn parse_dbtest_func_args(
         }
         "tls_cert" => {
             fcfg.tls_cert = Some(util::parse_string(lit, span, "host").expect("Expected a string"));
+        }
+        "username" => {
+            fcfg.username =
+                Some(util::parse_string(lit, span, "username").expect("Expected a string"))
+        }
+        "password" => {
+            fcfg.password =
+                Some(util::parse_string(lit, span, "password").expect("Expected a string"))
         }
         x => panic!("unknown attribute {x} specified"),
     }
@@ -139,6 +167,15 @@ fn generate_dbtest(
         #body
         #connection_tokens
     };
+
+    // check if we need to log in
+    if let Some(login_tokens) = fcfg.get_login_tokens() {
+        body = quote! {
+            #body
+            #login_tokens
+        };
+    }
+
     // now create keyspace
     body = quote! {
         #body

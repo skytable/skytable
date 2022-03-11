@@ -1,5 +1,5 @@
 /*
- * Created on Tue Aug 25 2020
+ * Created on Fri Mar 11 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,26 +24,6 @@
  *
 */
 
-//! This module contains automated tests for queries
-
-#[macro_use]
-mod macros;
-mod auth;
-mod ddl_tests;
-mod inspect_tests;
-mod kvengine;
-mod kvengine_encoding;
-mod kvengine_list;
-mod pipeline;
-
-mod tls {
-    use skytable::{query, Element};
-    #[sky_macros::dbtest_func(tls_cert = "cert.pem", port = 2004)]
-    async fn test_tls() {
-        runeq!(
-            con,
-            query!("heya", "abcd"),
-            Element::String("abcd".to_owned())
-        );
-    }
-}
+#[sky_macros::dbtest_func(username = "abcd", password = "1234")]
+#[should_panic]
+async fn test_auth_fail() {}
