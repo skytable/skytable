@@ -1,5 +1,4 @@
 # although this is exported by cargo, we'll export it again to use it in the Makefile
-SHELL := /bin/bash
 export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 SKYTEST_S1_FILE := $(ROOT_DIR)/ci/server1.toml
 SKYTEST_S2_FILE := $(ROOT_DIR)/ci/server2.toml
@@ -139,12 +138,12 @@ test: .pre
 	@${SEP}
 	@${SEP}
 	@echo "Running all tests ..."
-	@chmod +x ci/pretest.sh && source ci/pretest.sh && ${TEST}
+	@${TEST}
 	@echo "Waiting for server to shut down ..."
 	@${STOP_SERVER}
 	@sleep 10
 	@echo "Removing temporary files ..."
-	@rm -rf .sky_pid cert.pem key.pem server1 server2 .skytestenv
+	@rm -rf .sky_pid server1 server2 .skytest_*
 	@${SEP}
 clean:
 	@${SEP}

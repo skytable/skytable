@@ -35,6 +35,17 @@ pub const AUTHKEY_SIZE: usize = 40;
 /// Size of an authn ID in bytes
 pub const AUTHID_SIZE: usize = 40;
 
+#[cfg(debug_assertions)]
+pub mod testsuite_data {
+    //! Temporary users created by the testsuite in debug mode
+    pub const TESTSUITE_ROOT_USER: &str = "root";
+    pub const TESTSUITE_TEST_USER: &str = "testuser";
+    #[cfg(test)]
+    pub const TESTSUITE_ROOT_TOKEN: &str = "XUOdVKhEONnnGwNwT7WeLqbspDgVtKex0/nwFwBSW7XJxioHwpg6H.";
+    #[cfg(test)]
+    pub const TESTSUITE_TEST_TOKEN: &str = "mpobAB7EY8vnBs70d/..h1VvfinKIeEJgt1rg4wUkwF6aWCvGGR9le";
+}
+
 uninit_array! {
     const USER_ROOT_ARRAY: [u8; 40] = [b'r', b'o', b'o', b't'];
 }
@@ -61,19 +72,51 @@ pub struct AuthProvider {
 }
 
 impl AuthProvider {
-    pub fn new_disabled() -> Self {
-        Self {
-            authmap: Arc::default(),
-            whoami: None,
-            origin: None,
-        }
-    }
-    pub fn new(authmap: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
+    fn _new(authmap: Authmap, whoami: Option<AuthID>, origin: Option<Authkey>) -> Self {
         Self {
             authmap,
-            whoami: None,
+            whoami,
             origin,
         }
+    }
+    /// New provider with no origin-key
+    pub fn new_disabled() -> Self {
+        Self::_new(Default::default(), None, None)
+    }
+    /// New provider with zero users
+    #[cfg(test)]
+    pub fn new_blank(origin: Option<Authkey>) -> Self {
+        Self::_new(Default::default(), None, origin)
+    }
+    /// New provider with users from the provided map
+    ///
+    /// ## Test suite
+    /// The testsuite creates users `root` and `testuser`; this **does not** apply to
+    /// release mode
+    pub fn new(authmap: Arc<Coremap<AuthID, Authkey>>, origin: Option<Authkey>) -> Self {
+        let slf = Self::_new(authmap, None, origin);
+        #[cfg(debug_assertions)]
+        {
+            // 'root' user in test mode
+            slf.authmap.true_if_insert(
+                AuthID::try_from_slice(testsuite_data::TESTSUITE_ROOT_USER).unwrap(),
+                Authkey::from([
+                    172, 143, 117, 169, 158, 156, 33, 106, 139, 107, 20, 106, 91, 219, 34, 157, 98,
+                    147, 142, 91, 222, 238, 205, 120, 72, 171, 90, 218, 147, 2, 75, 67, 44, 108,
+                    185, 124, 55, 40, 156, 252,
+                ]),
+            );
+            // 'testuser' user in test mode
+            slf.authmap.true_if_insert(
+                AuthID::try_from_slice(testsuite_data::TESTSUITE_TEST_USER).unwrap(),
+                Authkey::from([
+                    172, 183, 60, 221, 53, 240, 231, 217, 113, 112, 98, 16, 109, 62, 235, 95, 184,
+                    107, 130, 139, 43, 197, 40, 31, 176, 127, 185, 22, 172, 124, 39, 225, 124, 71,
+                    193, 115, 176, 162, 239, 93,
+                ]),
+            );
+        }
+        slf
     }
     pub const fn is_enabled(&self) -> bool {
         matches!(self.origin, Some(_))
@@ -107,8 +150,13 @@ impl AuthProvider {
             Err(AuthError::PermissionDenied)
         }
     }
-    fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
+    pub fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
+        println!(
+            "For {claimant}, store: {:?}, key: {key}",
+            store,
+            claimant = String::from_utf8_lossy(claimant)
+        );
         if self.authmap.true_if_insert(
             Array::try_from_slice(claimant).ok_or(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))?,
             store,

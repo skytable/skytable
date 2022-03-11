@@ -12,7 +12,7 @@ snapstore.partmap
 .sky_pid
 .devcontainer
 *.deb
-*.pem
 server1
 server2
-.skytestenv
+.skytest_*
+*.pem

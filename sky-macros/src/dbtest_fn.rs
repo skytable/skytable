@@ -103,13 +103,13 @@ impl DBTestFunctionConfig {
         let ret;
         if *testuser {
             ret = quote! {
-                let __username__ = "testuser";
-                let __password__ = ::std::env::var("TESTUSER_TOKEN").expect("TESTUSER_TOKEN unset");
+                let __username__ = crate::auth::provider::testsuite_data::TESTSUITE_TEST_USER;
+                let __password__ = crate::auth::provider::testsuite_data::TESTSUITE_TEST_TOKEN;
             };
         } else if *rootuser {
             ret = quote! {
-                let __username__ = "root";
-                let __password__ = ::std::env::var("ROOTUSER_TOKEN").expect("ROOTUSER_TOKEN unset");
+                let __username__ = crate::auth::provider::testsuite_data::TESTSUITE_ROOT_USER;
+                let __password__ = crate::auth::provider::testsuite_data::TESTSUITE_ROOT_TOKEN;
             };
         } else {
             let (username, password) = login;
@@ -126,7 +126,7 @@ impl DBTestFunctionConfig {
         }
         Some(quote! {
             #ret
-            let __loginquery__ = ::skytable::query!("auth", "login", __username__, __password__.clone());
+            let __loginquery__ = ::skytable::query!("auth", "login", __username__, __password__);
             assert_eq!(
                 con.run_simple_query(&__loginquery__).await.unwrap(),
                 ::skytable::Element::RespCode(::skytable::RespCode::Okay),

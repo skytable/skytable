@@ -36,27 +36,23 @@ mod keys {
 
 mod authn {
     use crate::auth::{AuthError, AuthProvider};
-    use crate::corestore::htable::Coremap;
-    use std::sync::Arc;
 
     const ORIG: &[u8; 40] = b"c4299d190fb9a00626797fcc138c56eae9971664";
 
     #[test]
     fn claim_root_okay() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         let _ = provider.claim_root(ORIG).unwrap();
     }
     #[test]
     fn claim_root_wrongkey() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         let claim_err = provider.claim_root(&ORIG[1..]).unwrap_err();
         assert_eq!(claim_err, AuthError::BadCredentials);
     }
     #[test]
     fn claim_root_disabled() {
-        let mut provider = AuthProvider::new(Arc::new(Coremap::new()), None);
+        let mut provider = AuthProvider::new_disabled();
         assert_eq!(
             provider.claim_root(b"abcd").unwrap_err(),
             AuthError::Disabled
@@ -64,8 +60,7 @@ mod authn {
     }
     #[test]
     fn claim_root_already_claimed() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         let _ = provider.claim_root(ORIG).unwrap();
         assert_eq!(
             provider.claim_root(ORIG).unwrap_err(),
@@ -74,8 +69,7 @@ mod authn {
     }
     #[test]
     fn claim_user_okay_with_login() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
         let rootkey = provider.claim_root(ORIG).unwrap();
         // login as root
@@ -86,8 +80,7 @@ mod authn {
 
     #[test]
     fn claim_user_fail_not_root_with_login() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
         let rootkey = provider.claim_root(ORIG).unwrap();
         // login as root
@@ -104,8 +97,7 @@ mod authn {
     }
     #[test]
     fn claim_user_fail_anonymous() {
-        let authmap = Arc::new(Coremap::new());
-        let mut provider = AuthProvider::new(authmap, Some(*ORIG));
+        let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
         let _ = provider.claim_root(ORIG).unwrap();
         // logout
