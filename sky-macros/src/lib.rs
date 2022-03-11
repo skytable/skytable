@@ -62,6 +62,17 @@ pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// All tests will clean up all values once a single test is over. **These tests should not
 /// be run in multi-threaded environments because they often use the same keys**
+///
+/// ## Arguments
+/// - `table -> str`: Custom table declaration
+/// - `port -> u16`: Custom port
+/// - `host -> str`: Custom host
+/// - `tls_cert -> str`: TLS cert (makes the connection a TLS one)
+/// - `username -> str`: Username for authn
+/// - `password -> str`: Password for authn
+/// - `auth_testuser -> bool`: Login as the test user
+/// - `auth_rootuser -> bool`: Login as the root user
+///
 /// ## _Ghost_ values
 /// This macro gives:
 /// - a `skytable::AsyncConnection` accessible by the `con` variable

@@ -1,9 +1,8 @@
 # although this is exported by cargo, we'll export it again to use it in the Makefile
+SHELL := /bin/bash
 export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-SKYTEST_TCP_PORT := 2003
-SKYTEST_TLS_PORT := 2004
-SKYTEST_TCP_PORT2 := 2005
-SKYTEST_TLS_PORT2 := 2006
+SKYTEST_S1_FILE := $(ROOT_DIR)/ci/server1.toml
+SKYTEST_S2_FILE := $(ROOT_DIR)/ci/server2.toml
 SKYTEST_TLS_CERT := $(ROOT_DIR)/cert.pem
 SKYTEST_TLS_KEY := $(ROOT_DIR)/key.pem
 # no additional software note
@@ -36,6 +35,8 @@ TARGET_FOLDER := $(addsuffix release/,${TARGET_FOLDER})
 CBUILD := cargo build $(TARGET_ARG)
 # cargo test
 CTEST := cargo test $(TARGET_ARG)
+# cargo run
+CRUN := cargo run $(TARGET_ARG)
 
 # binary file paths
 BINARY_SKYSH := $(TARGET_FOLDER)skysh
@@ -45,7 +46,7 @@ BINARY_SKYMIGRATE := $(TARGET_FOLDER)sky-migrate
 # archive command
 ARCHIVE :=
 # start background server command
-START_SERVER := cargo run $(TARGET_ARG) -p skyd -- --noart --sslchain ${SKYTEST_TLS_CERT} --sslkey ${SKYTEST_TLS_KEY} --port ${SKYTEST_TCP_PORT} --sslport ${SKYTEST_TLS_PORT}
+START_SERVER := $(CRUN) -p skyd -- --withconfig $(SKYTEST_S1_FILE)
 STOP_SERVER :=
 
 ifeq ($(OS),Windows_NT)
@@ -69,8 +70,7 @@ else
   STOP_SERVER := pkill skyd
 endif
 
-START_SERVER2 := $(subst $(SKYTEST_TCP_PORT),$(SKYTEST_TCP_PORT2),$(START_SERVER))
-START_SERVER2 := $(subst $(SKYTEST_TLS_PORT),$(SKYTEST_TLS_PORT2),$(START_SERVER2))
+START_SERVER2 := $(subst $(SKYTEST_S1_FILE),$(SKYTEST_S2_FILE),$(START_SERVER))
 
 # update the archive command if we have a version and artifact name
 RENAME_ARTIFACT :=
@@ -139,17 +139,20 @@ test: .pre
 	@${SEP}
 	@${SEP}
 	@echo "Running all tests ..."
-	@${TEST}
+	@chmod +x ci/pretest.sh && source ci/pretest.sh && ${TEST}
 	@echo "Waiting for server to shut down ..."
 	@${STOP_SERVER}
+	@sleep 10
 	@echo "Removing temporary files ..."
-	@rm -f .sky_pid cert.pem key.pem
+	@rm -rf .sky_pid cert.pem key.pem server1 server2 .skytestenv
 	@${SEP}
 clean:
 	@${SEP}
 	@echo "Cleaning up target folder ..."
 	cargo clean
 	@${SEP}
+testclean:
+	@rm -rf server1 server2
 deb: release-bundle
 	@${SEP}
 	@echo "Making a debian package (release) ..."
@@ -158,3 +161,6 @@ deb: release-bundle
 	@echo "Packaging ..."
 	@cargo deb $(TARGET_ARG) --no-build --manifest-path=server/Cargo.toml --output skytable-${VERSION}-${ARTIFACT}.deb
 	@${SEP}
+checkcmd:
+	@echo $(START_SERVER)
+	@echo $(START_SERVER2)

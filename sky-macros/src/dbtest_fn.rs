@@ -29,13 +29,16 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::AttributeArgs;
 
+type OptString = Option<String>;
+
 pub struct DBTestFunctionConfig {
     table_decl: String,
     port: u16,
     host: String,
-    tls_cert: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
+    tls_cert: OptString,
+    login: (OptString, OptString),
+    testuser: bool,
+    rootuser: bool,
 }
 
 impl DBTestFunctionConfig {
@@ -45,8 +48,9 @@ impl DBTestFunctionConfig {
             port: 2003,
             host: "127.0.0.1".to_owned(),
             tls_cert: None,
-            username: None,
-            password: None,
+            login: (None, None),
+            testuser: false,
+            rootuser: false,
         }
     }
     pub fn get_connection_tokens(&self) -> impl quote::ToTokens {
@@ -86,19 +90,49 @@ impl DBTestFunctionConfig {
     }
     pub fn get_login_tokens(&self) -> Option<impl quote::ToTokens> {
         let Self {
-            username, password, ..
+            login,
+            testuser,
+            rootuser,
+            ..
         } = self;
-        match (username, password) {
-            (Some(username), Some(password)) => Some(quote! {
-                let query = ::skytable::query!("auth", "login", #username, #password);
-                assert_eq!(
-                    con.run_simple_query(&query).await.unwrap(),
-                    ::skytable::Element::RespCode(::skytable::RespCode::Okay)
-                );
-            }),
-            (None, None) => None,
-            _ => panic!("Expected both `username` and `password`"),
+        let conflict = (*rootuser && *testuser)
+            || ((*rootuser || *testuser) && (login.0.is_some() || login.1.is_some()));
+        if conflict {
+            panic!("Expected either of `username` and `password`, or `auth_rootuser`, or `auth_testuser`");
         }
+        let ret;
+        if *testuser {
+            ret = quote! {
+                let __username__ = "testuser";
+                let __password__ = ::std::env::var("TESTUSER_TOKEN").expect("TESTUSER_TOKEN unset");
+            };
+        } else if *rootuser {
+            ret = quote! {
+                let __username__ = "root";
+                let __password__ = ::std::env::var("ROOTUSER_TOKEN").expect("ROOTUSER_TOKEN unset");
+            };
+        } else {
+            let (username, password) = login;
+            match (username, password) {
+                (Some(username), Some(password)) => {
+                    ret = quote! {
+                        let __username__ = #username;
+                        let __password__ = #password;
+                    }
+                }
+                (None, None) => return None,
+                _ => panic!("Expected both `username` and `password`"),
+            }
+        }
+        Some(quote! {
+            #ret
+            let __loginquery__ = ::skytable::query!("auth", "login", __username__, __password__.clone());
+            assert_eq!(
+                con.run_simple_query(&__loginquery__).await.unwrap(),
+                ::skytable::Element::RespCode(::skytable::RespCode::Okay),
+                "Failed to login"
+            );
+        })
     }
 }
 
@@ -125,12 +159,18 @@ pub fn parse_dbtest_func_args(
             fcfg.tls_cert = Some(util::parse_string(lit, span, "host").expect("Expected a string"));
         }
         "username" => {
-            fcfg.username =
+            fcfg.login.0 =
                 Some(util::parse_string(lit, span, "username").expect("Expected a string"))
         }
         "password" => {
-            fcfg.password =
+            fcfg.login.1 =
                 Some(util::parse_string(lit, span, "password").expect("Expected a string"))
+        }
+        "auth_testuser" => {
+            fcfg.testuser = util::parse_bool(lit, span, "auth_testuser").expect("Expected a bool")
+        }
+        "auth_rootuser" => {
+            fcfg.rootuser = util::parse_bool(lit, span, "auth_testuser").expect("Expected a bool")
         }
         x => panic!("unknown attribute {x} specified"),
     }

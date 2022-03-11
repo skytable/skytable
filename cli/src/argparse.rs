@@ -97,7 +97,7 @@ pub async fn start_repl() {
         ($editor:expr) => {
             match $editor.readline(&skysh_blank) {
                 Ok(l) => l,
-                Err(ReadlineError::Interrupted) => return,
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => return,
                 Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
             }
         };
@@ -143,9 +143,11 @@ pub async fn start_repl() {
         };
     }
 
-    if let Some(eval_expr) = matches.value_of("eval") {
-        if !eval_expr.is_empty() {
-            runner.run_query(eval_expr).await;
+    if let Some(eval_expr) = matches.values_of("eval") {
+        for eval_expr in eval_expr {
+            if !eval_expr.is_empty() {
+                runner.run_query(eval_expr).await;
+            }
         }
         process::exit(0x00);
     }

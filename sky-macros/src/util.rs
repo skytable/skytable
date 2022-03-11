@@ -53,7 +53,7 @@ pub fn parse_string(int: &Lit, span: Span, field: &str) -> Result<String, syn::E
 }
 
 pub fn parse_number<T: FromStr<Err = E>, E: Display>(
-    int: &syn::Lit,
+    int: &Lit,
     span: Span,
     field: &str,
 ) -> Result<T, syn::Error> {
@@ -61,7 +61,17 @@ pub fn parse_number<T: FromStr<Err = E>, E: Display>(
         syn::Lit::Int(int) => int.base10_parse::<T>(),
         _ => Err(syn::Error::new(
             span,
-            format!("Failed to parse {} into a string.", field),
+            format!("Failed to parse {} into an int.", field),
+        )),
+    }
+}
+
+pub fn parse_bool(boolean: &Lit, span: Span, field: &str) -> Result<bool, syn::Error> {
+    match boolean {
+        Lit::Bool(boolean) => Ok(boolean.value),
+        _ => Err(syn::Error::new(
+            span,
+            format!("Failed to parse {} into a boolean.", field),
         )),
     }
 }

@@ -27,3 +27,9 @@
 #[sky_macros::dbtest_func(username = "abcd", password = "1234")]
 #[should_panic]
 async fn test_auth_fail() {}
+
+#[sky_macros::dbtest_func(port = 2005, auth_testuser = true)]
+async fn test_auth_testuser() {}
+
+#[sky_macros::dbtest_func(port = 2005, auth_rootuser = true)]
+async fn test_auth_rootuser() {}

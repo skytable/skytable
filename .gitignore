@@ -13,3 +13,6 @@ snapstore.partmap
 .devcontainer
 *.deb
 *.pem
+server1
+server2
+.skytestenv
