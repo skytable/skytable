@@ -1,9 +1,8 @@
 # although this is exported by cargo, we'll export it again to use it in the Makefile
 export ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+export MSYS_NO_PATHCONV:=1
 SKYTEST_S1_FILE := $(ROOT_DIR)/ci/server1.toml
 SKYTEST_S2_FILE := $(ROOT_DIR)/ci/server2.toml
-SKYTEST_TLS_CERT := $(ROOT_DIR)/cert.pem
-SKYTEST_TLS_KEY := $(ROOT_DIR)/key.pem
 # no additional software note
 NO_ADDITIONAL_SOFTWARE := echo "No additional software required for this target"
 # target argument
@@ -45,7 +44,7 @@ BINARY_SKYMIGRATE := $(TARGET_FOLDER)sky-migrate
 # archive command
 ARCHIVE :=
 # start background server command
-START_SERVER := $(CRUN) -p skyd -- --withconfig $(SKYTEST_S1_FILE)
+START_SERVER := $(CRUN) -p skyd -- --withconfig "$(SKYTEST_S1_FILE)"
 STOP_SERVER :=
 
 ifeq ($(OS),Windows_NT)
@@ -128,8 +127,8 @@ bundle: release-bundle
 test: .pre
 	@${SEP}
 	@echo "Building and starting server in debug mode ..."
-	@${CBUILD} -p skyd
 	@chmod +x ci/ssl.sh && bash ci/ssl.sh
+	@${CBUILD} -p skyd
 	@mkdir -p server1 && cd server1 && ${START_SERVER}
 	@mkdir -p server2 && cd server2 && ${START_SERVER2}
 	@echo "Sleeping for 10 seconds to let the server start up ..."

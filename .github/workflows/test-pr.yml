@@ -20,7 +20,7 @@ jobs:
             os: macos-latest
             rust: stable
           - build: windows-stable
-            os: windows-latest
+            os: windows-2019
             rust: stable
 
     steps:

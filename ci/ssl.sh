@@ -5,5 +5,5 @@ function gen_sub() {
     esac
     echo "$result"
 }
-
-openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj $(gen_sub '/C=US/CN=example.com') -keyout key.pem -out cert.pem
+SUB=`gen_sub "/C=US/CN=foo"`
+openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 -subj $SUB -keyout key.pem -out cert.pem
