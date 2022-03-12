@@ -170,3 +170,86 @@ async fn auth_deluser_okay_because_root() {
     );
     assert_okay!(con, query!("auth", "deluser", "supercooluser"))
 }
+
+mod syntax_checks {
+    use crate::auth::provider::testsuite_data::{
+        TESTSUITE_ROOT_TOKEN as ROOT_PASS, TESTSUITE_ROOT_USER as ROOT_USER,
+        TESTSUITE_TEST_TOKEN as PASS, TESTSUITE_TEST_USER as USER,
+    };
+    use skytable::{query, Element, RespCode};
+    const ONLYAUTH: u8 = 0;
+    const NOAUTH: u8 = 1;
+    const ONLYROOT: u8 = 2;
+    const NOROOT: u8 = 3;
+    macro_rules! assert_authn_aerr {
+        ($con:expr, $query:expr, $username:expr, $password:expr) => {{
+            runeq!(
+                $con,
+                ::skytable::query!("auth", "login", $username, $password),
+                ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+            );
+            assert_aerr!($con, $query)
+        }};
+        ($con:expr, $query:expr) => {{
+            assert_authn_aerr!($con, $query, NOAUTH)
+        }};
+        ($con:expr, $query:expr, $authnd:ident) => {{
+            match $authnd {
+                ONLYAUTH => {
+                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
+                    assert_authn_aerr!($con, $query, USER, PASS);
+                }
+                NOAUTH => {
+                    assert_aerr!($con, $query);
+                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
+                    assert_authn_aerr!($con, $query, USER, PASS);
+                }
+                ONLYROOT => {
+                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
+                }
+                NOROOT => {
+                    assert_authn_aerr!($con, $query, USER, PASS);
+                }
+                _ => panic!("Unknown authnd state"),
+            }
+        }};
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn login_aerr() {
+        assert_authn_aerr!(con, query!("auth", "login", "lesserdata"));
+        assert_authn_aerr!(con, query!("auth", "login", "user", "password", "extra"));
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn claim_aerr() {
+        assert_authn_aerr!(con, query!("auth", "claim"));
+        assert_authn_aerr!(con, query!("auth", "claim", "origin key", "but more data"));
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn adduser_aerr() {
+        assert_authn_aerr!(
+            con,
+            query!("auth", "adduser", "user", "butextradata"),
+            ONLYAUTH
+        );
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn logout_aerr() {
+        assert_authn_aerr!(con, query!("auth", "logout", "butextradata"), ONLYAUTH);
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn deluser_aerr() {
+        assert_authn_aerr!(
+            con,
+            query!("auth", "deluser", "someuser", "butextradata"),
+            ONLYAUTH
+        );
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn unknown_auth_action() {
+        runeq!(
+            con,
+            query!("auth", "raspberry"),
+            Element::RespCode(RespCode::ErrorString("unknown-action".to_owned()))
+        )
+    }
+}

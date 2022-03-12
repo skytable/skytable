@@ -84,7 +84,7 @@ action! {
                 con.write_response(groups::OKAY).await?;
                 Ok(())
             }
-            _ => util::err(groups::ACTION_ERR),
+            _ => util::err(groups::UNKNOWN_ACTION),
         }
     }
     fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
