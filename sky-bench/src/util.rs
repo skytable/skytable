@@ -93,7 +93,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     let mut query = Query::new();
     query.push("heya");
     if !connection
-        .run_simple_query(&query)
+        .run_query_raw(&query)
         .unwrap()
         .eq(&Element::String("HEY!".to_owned()))
     {
@@ -106,7 +106,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push(&key);
     query.push(&value);
     if !connection
-        .run_simple_query(&query)
+        .run_query_raw(&query)
         .unwrap()
         .eq(&Element::RespCode(RespCode::Okay))
     {
@@ -116,7 +116,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push("get");
     query.push(&key);
     if !connection
-        .run_simple_query(&query)
+        .run_query_raw(&query)
         .unwrap()
         .eq(&Element::Binstr(value.as_bytes().to_owned()))
     {
@@ -126,7 +126,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push("del");
     query.push(&key);
     if !connection
-        .run_simple_query(&query)
+        .run_query_raw(&query)
         .unwrap()
         .eq(&Element::UnsignedInt(1))
     {

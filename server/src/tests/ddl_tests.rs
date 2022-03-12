@@ -36,7 +36,7 @@ mod __private {
         query.push("keyspace");
         query.push(&ksname);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -47,7 +47,7 @@ mod __private {
         query.push("keyspace");
         query.push(&ksname);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
@@ -55,7 +55,7 @@ mod __private {
         query.push("keyspace");
         query.push(ksname);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -67,7 +67,7 @@ mod __private {
         query.push(&tblname);
         query.push("keymap(str,str)");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -80,7 +80,7 @@ mod __private {
         query.push("keymap(str,str)");
         query.push("volatile");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -93,7 +93,7 @@ mod __private {
         query.push(mykeyspace.to_owned() + ":" + &tblname);
         query.push("keymap(str,str)");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -107,7 +107,7 @@ mod __private {
         query.push("keymap(str,str)");
         query.push("volatile");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -119,7 +119,7 @@ mod __private {
         query.push(&tblname);
         query.push("keymap(str,str)");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
@@ -127,7 +127,7 @@ mod __private {
         query.push("table");
         query.push(&tblname);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -141,7 +141,7 @@ mod __private {
         query.push(&my_fqe);
         query.push("keymap(str,str)");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
@@ -149,7 +149,7 @@ mod __private {
         query.push("table");
         query.push(my_fqe);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
@@ -157,7 +157,7 @@ mod __private {
         query.push("USE");
         query.push(&__MYENTITY__);
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         )
     }
@@ -166,7 +166,7 @@ mod __private {
         query.push(&__MYENTITY__);
         query.push("wiwofjwjfio");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::ActionError)
         )
     }
@@ -174,7 +174,7 @@ mod __private {
         let mykeyspace: Vec<&str> = __MYENTITY__.split(':').collect::<Vec<&str>>();
         query.push("whereami");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::NonNullStr(vec![
                 mykeyspace[0].to_owned(),
                 mykeyspace[1].to_owned()

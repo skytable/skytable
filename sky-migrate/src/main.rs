@@ -76,7 +76,7 @@ fn main() {
     };
     // run sanity test
     let q = query!("HEYA");
-    match con.run_simple_query(&q) {
+    match con.run_query_raw(&q) {
         Ok(Element::String(s)) if s.eq("HEY!") => {}
         Ok(_) => err(err!("Unknown response from server")),
         Err(e) => err(err!(
@@ -127,7 +127,7 @@ fn err(_i: ()) -> ! {
 }
 
 fn okay(con: &mut Connection, q: Query) {
-    match con.run_simple_query(&q) {
+    match con.run_query_raw(&q) {
         Ok(Element::RespCode(RespCode::Okay)) => {}
         Err(e) => err(err!("An I/O error occurred while running query: {}", e)),
         Ok(_) => err(err!("Unknown response from server")),

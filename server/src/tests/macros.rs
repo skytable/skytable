@@ -35,7 +35,7 @@ macro_rules! setkeys {
             count += 1;
         )*
         assert_eq!(
-            $con.run_simple_query(&q).await.unwrap(),
+            $con.run_query_raw(&q).await.unwrap(),
             Element::UnsignedInt(count)
         );
     };
@@ -51,13 +51,13 @@ macro_rules! push {
 
 macro_rules! runeq {
     ($con:expr, $query:expr, $eq:expr) => {
-        assert_eq!($con.run_simple_query(&$query).await.unwrap(), $eq)
+        assert_eq!($con.run_query_raw(&$query).await.unwrap(), $eq)
     };
 }
 
 macro_rules! runmatch {
     ($con:expr, $query:expr, $match:path) => {{
-        let ret = $con.run_simple_query(&$query).await.unwrap();
+        let ret = $con.run_query_raw(&$query).await.unwrap();
         assert!(matches!(ret, $match(_)))
     }};
 }

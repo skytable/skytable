@@ -79,7 +79,7 @@ impl DBTestFunctionConfig {
     pub fn get_create_table_tokens(&self, table_name: &str) -> impl quote::ToTokens {
         let Self { table_decl, .. } = self;
         quote! {
-            con.run_simple_query(
+            con.run_query_raw(
                 &skytable::query!(
                     "create",
                     "table",
@@ -130,7 +130,7 @@ impl DBTestFunctionConfig {
             #ret
             let __loginquery__ = ::skytable::query!("auth", "login", __username__, __password__);
             assert_eq!(
-                con.run_simple_query(&__loginquery__).await.unwrap(),
+                con.run_query_raw(&__loginquery__).await.unwrap(),
                 ::skytable::Element::RespCode(::skytable::RespCode::Okay),
                 "Failed to login"
             );
@@ -224,7 +224,7 @@ fn generate_dbtest(
         body = quote! {
             #body
             let __create_ks =
-                con.run_simple_query(
+                con.run_query_raw(
                     &skytable::query!("create", "keyspace", "testsuite")
                 ).await.unwrap();
             if !(
@@ -242,7 +242,7 @@ fn generate_dbtest(
         body = quote! {
             #body
             let __switch_ks =
-                con.run_simple_query(
+                con.run_query_raw(
                     &skytable::query!("use", "testsuite")
                 ).await.unwrap();
             if (__switch_ks != skytable::Element::RespCode(skytable::RespCode::Okay)) {
@@ -271,7 +271,7 @@ fn generate_dbtest(
         body = quote! {
             #body
             let __switch_entity =
-                con.run_simple_query(
+                con.run_query_raw(
                     &skytable::query!("use", __concat_entity)
                 ).await.unwrap();
             assert_eq!(
@@ -296,7 +296,7 @@ fn generate_dbtest(
             {
                 let mut __flush__ = skytable::Query::from("flushdb");
                 std::assert_eq!(
-                    con.run_simple_query(&__flush__).await.unwrap(),
+                    con.run_query_raw(&__flush__).await.unwrap(),
                     skytable::Element::RespCode(skytable::RespCode::Okay)
                 );
             }

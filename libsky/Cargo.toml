@@ -8,4 +8,4 @@ version = "0.7.3"
 
 [dependencies]
 # external deps
-termcolor = "1.1.2"
+termcolor = "1.1.3"

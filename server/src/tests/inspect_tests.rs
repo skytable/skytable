@@ -31,7 +31,7 @@ mod __private {
         query.push("INSPECT");
         query.push("KEYSPACES");
         assert!(matches!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::Str(_))
         ))
     }
@@ -41,7 +41,7 @@ mod __private {
         query.push("KEYSPACE");
         query.push(my_keyspace);
         assert!(matches!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::Str(_))
         ))
     }
@@ -50,7 +50,7 @@ mod __private {
         query.push("INSPECT");
         query.push("TABLE");
         query.push(my_table);
-        match con.run_simple_query(&query).await.unwrap() {
+        match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
                 assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
@@ -61,7 +61,7 @@ mod __private {
         query.push("INSPECT");
         query.push("TABLE");
         query.push(__MYENTITY__);
-        match con.run_simple_query(&query).await.unwrap() {
+        match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
                 assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
             }
@@ -73,7 +73,7 @@ mod __private {
         query.push("KEYSPACES");
         query.push("iowjfjofoe");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::ActionError)
         );
     }
@@ -83,7 +83,7 @@ mod __private {
         query.push("ijfwijifwjo");
         query.push("oijfwirfjwo");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::ActionError)
         );
     }
@@ -93,7 +93,7 @@ mod __private {
         query.push("ijfwijifwjo");
         query.push("oijfwirfjwo");
         assert_eq!(
-            con.run_simple_query(&query).await.unwrap(),
+            con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::ActionError)
         );
     }

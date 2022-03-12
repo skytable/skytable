@@ -76,8 +76,8 @@ impl Runner {
             }
         };
         let ret = match self {
-            Self::Insecure(con) => con.run_simple_query(&query).await,
-            Self::Secure(con) => con.run_simple_query(&query).await,
+            Self::Insecure(con) => con.run_query_raw(&query).await,
+            Self::Secure(con) => con.run_query_raw(&query).await,
         };
         match ret {
             Ok(resp) => print_element(resp),
@@ -87,8 +87,8 @@ impl Runner {
     pub async fn check_entity(&mut self, blank: &mut String, prompt: &mut String) {
         let query: Query = tokenizer::get_query(b"whereami").unwrap();
         let ret = match self {
-            Self::Insecure(con) => con.run_simple_query(&query).await,
-            Self::Secure(con) => con.run_simple_query(&query).await,
+            Self::Insecure(con) => con.run_query_raw(&query).await,
+            Self::Secure(con) => con.run_query_raw(&query).await,
         };
         let ret = match ret {
             Ok(resp) => resp,

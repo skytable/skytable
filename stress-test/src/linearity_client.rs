@@ -133,7 +133,7 @@ pub fn stress_linearity_concurrent_clients_set(
             || Connection::new("127.0.0.1", 2003).unwrap(),
             move |sock, query| {
                 assert_eq!(
-                    sock.run_simple_query(&query).unwrap(),
+                    sock.run_query_raw(&query).unwrap(),
                     Element::RespCode(RespCode::Okay)
                 );
             },
@@ -184,7 +184,7 @@ pub fn stress_linearity_concurrent_clients_get(
         || Connection::new("127.0.0.1", 2003).unwrap(),
         move |sock, query| {
             assert_eq!(
-                sock.run_simple_query(&query).unwrap(),
+                sock.run_query_raw(&query).unwrap(),
                 Element::RespCode(RespCode::Okay)
             );
         },
@@ -211,7 +211,7 @@ pub fn stress_linearity_concurrent_clients_get(
             || Connection::new("127.0.0.1", 2003).unwrap(),
             move |sock, query| {
                 let tx = tx.clone();
-                tx.send(sock.run_simple_query(&query).unwrap()).unwrap();
+                tx.send(sock.run_query_raw(&query).unwrap()).unwrap();
             },
             |_| {},
             true,
