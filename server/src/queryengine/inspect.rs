@@ -44,7 +44,7 @@ action! {
                     KEYSPACE => inspect_keyspace(handle, con, act).await?,
                     TABLE => inspect_table(handle, con, act).await?,
                     KEYSPACES => {
-                        err_if_len_is!(act, con, not 0);
+                        ensure_length(act.len(), |len| len == 0)?;
                         // let's return what all keyspaces exist
                         let ks_list: Vec<ObjectID> = handle
                             .get_store()
@@ -69,7 +69,7 @@ action! {
 
     /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         match act.next() {
             Some(keyspace_name) => {
                 let ksid = if keyspace_name.len() > 64 {
@@ -96,7 +96,7 @@ action! {
 
     /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         match act.next() {
             Some(entity) => {
                 let entity = handle_entity!(con, entity);

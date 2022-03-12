@@ -25,6 +25,7 @@
 */
 
 use crate::dbnet::connection::ConnectionHandler;
+use crate::dbnet::connection::ExecutorFn;
 use crate::dbnet::BaseListener;
 use crate::dbnet::Terminator;
 use crate::protocol;
@@ -43,6 +44,8 @@ use tokio::time;
 pub trait BufferedSocketStream: AsyncWrite {}
 
 impl BufferedSocketStream for TcpStream {}
+
+type TcpExecutorFn = ExecutorFn<Connection<TcpStream>, TcpStream>;
 
 /// A TCP/SSL connection wrapper
 pub struct Connection<T>
@@ -94,9 +97,20 @@ impl TcpBackoff {
 /// A listener
 pub struct Listener {
     pub base: BaseListener,
+    executor_fn: TcpExecutorFn,
 }
 
 impl Listener {
+    pub fn new(base: BaseListener) -> Self {
+        Self {
+            executor_fn: if base.auth.is_enabled() {
+                ConnectionHandler::execute_unauth
+            } else {
+                ConnectionHandler::execute_auth
+            },
+            base,
+        }
+    }
     /// Accept an incoming connection
     async fn accept(&mut self) -> TResult<TcpStream> {
         let backoff = TcpBackoff::new();
@@ -133,6 +147,8 @@ impl Listener {
             let mut chandle = ConnectionHandler::new(
                 self.base.db.clone(),
                 Connection::new(stream),
+                self.base.auth.clone(),
+                self.executor_fn,
                 self.base.climit.clone(),
                 Terminator::new(self.base.signal.subscribe()),
                 self.base.terminate_tx.clone(),

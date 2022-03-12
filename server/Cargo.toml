@@ -8,7 +8,6 @@ version = "0.7.3"
 [dependencies]
 # internal deps
 libsky = { path = "../libsky" }
-sky_macros = { path = "../sky-macros" }
 # external deps
 ahash = "0.7.6"
 bytes = "1.1.0"
@@ -25,8 +24,10 @@ serde = { version = "1.0.136", features = ["derive"] }
 tokio = { version = "1.16.1", features = ["full"] }
 tokio-openssl = "0.6.3"
 toml = "0.5.8"
+rcrypt = "0.4.0"
+base64 = "0.13.0"
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
 jemallocator = "0.3.2"
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -39,6 +40,7 @@ cc = "1.0.72"
 
 [dev-dependencies]
 # internal deps
+sky_macros = { path = "../sky-macros" }
 libstress = { path = "../libstress" }
 skytable = { git = "https://github.com/skytable/client-rust", features = [
   "aio",

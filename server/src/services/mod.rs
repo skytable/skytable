@@ -48,7 +48,7 @@ pub fn pre_shutdown_cleanup(mut pid_file: FileLock, mr: Option<&Memstore>) -> bo
     }
     if let Some(mr) = mr {
         log::info!("Compacting tree");
-        if let Err(e) = storage::interface::cleanup_tree(mr) {
+        if let Err(e) = storage::v1::interface::cleanup_tree(mr) {
             log::error!("Failed to compact tree: {}", e);
             return false;
         }

@@ -25,13 +25,12 @@
 */
 
 #[cfg(test)]
-use super::element::UnsafeElement;
+use super::UnsafeElement;
 use super::UnsafeSlice;
 use bytes::Bytes;
 use core::hint::unreachable_unchecked;
 use core::iter::FusedIterator;
 use core::ops::Deref;
-use core::slice::ChunksExact;
 use core::slice::Iter;
 
 /// An iterator over an [`AnyArray`] (an [`UnsafeSlice`]). The validity of the iterator is
@@ -64,10 +63,6 @@ impl<'a> AnyArrayIter<'a> {
     pub const unsafe fn new(iter: Iter<'a, UnsafeSlice>) -> AnyArrayIter<'a> {
         Self { iter }
     }
-    /// Returns a [`ChunksExact`] (similar to [`ChunksExact` provided by core::slice](core::slice::ChunksExact))
-    pub fn chunks_exact(&'a self, chunks_exact: usize) -> ChunksExact<'a, UnsafeSlice> {
-        self.iter.as_ref().chunks_exact(chunks_exact)
-    }
     /// Check if the iter is empty
     pub fn is_empty(&self) -> bool {
         ExactSizeIterator::len(self) == 0
@@ -88,6 +83,12 @@ impl<'a> AnyArrayIter<'a> {
         self.iter.next().map(|v| unsafe {
             // SAFETY: Only construction is unsafe, forwarding is not
             v.as_slice().to_ascii_uppercase().into_boxed_slice()
+        })
+    }
+    pub fn next_lowercase(&mut self) -> Option<Box<[u8]>> {
+        self.iter.next().map(|v| unsafe {
+            // SAFETY: Only construction is unsafe, forwarding is not
+            v.as_slice().to_ascii_lowercase().into_boxed_slice()
         })
     }
     pub unsafe fn next_uppercase_unchecked(&mut self) -> Box<[u8]> {
@@ -114,6 +115,28 @@ impl<'a> AnyArrayIter<'a> {
     }
     pub fn next_string_owned(&mut self) -> Option<String> {
         self.map_next(|v| String::from_utf8_lossy(&v).to_string())
+    }
+    pub unsafe fn into_inner(self) -> Iter<'a, UnsafeSlice> {
+        self.iter
+    }
+}
+
+pub unsafe trait DerefUnsafeSlice {
+    unsafe fn deref_slice(&self) -> &[u8];
+}
+
+unsafe impl DerefUnsafeSlice for UnsafeSlice {
+    #[inline(always)]
+    unsafe fn deref_slice(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+#[cfg(test)]
+unsafe impl DerefUnsafeSlice for Bytes {
+    #[inline(always)]
+    unsafe fn deref_slice(&self) -> &[u8] {
+        self.as_ref()
     }
 }
 

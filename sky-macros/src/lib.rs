@@ -37,247 +37,43 @@
 //! sure that you don't overwrite a macro provided variable!
 //!
 //! ### Macros and ghost values
-//! - `#[dbtest]`:
+//! - `#[dbtest_func]` and `#[dbtest_module]`:
 //!     - `con` - `skytable::AsyncConnection`
 //!     - `query` - `skytable::Query`
+//!     - `__MYENTITY__` - `String` with entity
 //!
 
 use proc_macro::TokenStream;
-use proc_macro2::Span;
-use quote::quote;
-use syn::{self};
 
-const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-/// This parses a function within a `dbtest` module
-///
-/// This accepts an `async` function and returns a non-`async` version of it - by
-/// making the body of the function use the `tokio` runtime
-fn parse_dbtest(
-    mut input: syn::ItemFn,
-    rng: &mut impl rand::Rng,
-    table_decl: Option<String>,
-) -> Result<TokenStream, syn::Error> {
-    let sig = &mut input.sig;
-    let fname = sig.ident.to_string();
-    let body = &input.block;
-    let attrs = &input.attrs;
-    let vis = &input.vis;
-    let header = quote! {
-        #[::core::prelude::v1::test]
-    };
-    if sig.asyncness.is_none() {
-        let msg = "`dbtest` functions need to be async";
-        return Err(syn::Error::new_spanned(sig.fn_token, msg));
-    }
-    sig.asyncness = None;
-    let rand_string: String = (0..64)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect();
-    let table_decl = table_decl.unwrap_or_else(|| "keymap(str,str)".to_owned());
-    let body = quote! {
-        let mut con = skytable::AsyncConnection::new("127.0.0.1", 2003).await.unwrap();
-        let __create_ks =
-            con.run_simple_query(
-                &skytable::query!("create", "keyspace", "testsuite")
-            ).await.unwrap();
-        let __switch_ks =
-            con.run_simple_query(
-                &skytable::query!("use", "testsuite")
-            ).await.unwrap();
-        let __create_tbl =
-            con.run_simple_query(
-                &skytable::query!(
-                    "create",
-                    "table",
-                    #rand_string,
-                    #table_decl,
-                    "volatile"
-                )
-            ).await.unwrap();
-        let mut __concat_entity = std::string::String::new();
-        __concat_entity.push_str("testsuite:");
-        __concat_entity.push_str(&#rand_string);
-        let __MYENTITY__: String = __concat_entity.clone();
-        let __switch_entity =
-            con.run_simple_query(
-                &skytable::query!("use", __concat_entity)
-            ).await.unwrap();
-        let mut query = skytable::Query::new();
-        #body
-        {
-            let mut __flush__ = skytable::Query::from("flushdb");
-            std::assert_eq!(
-                con.run_simple_query(&__flush__).await.unwrap(),
-                skytable::Element::RespCode(skytable::RespCode::Okay)
-            );
-        }
-    };
-    let result = quote! {
-        #header
-        #(#attrs)*
-        #vis #sig {
-            tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4)
-            .thread_name(#fname)
-            .thread_stack_size(3 * 1024 * 1024)
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async { #body });
-        }
-    };
-    Ok(result.into())
-}
-
-/// This function checks if the current function is eligible to be a test
-fn parse_test_sig(
-    input: syn::ItemFn,
-    rng: &mut impl rand::Rng,
-    table_decl: Option<String>,
-) -> TokenStream {
-    for attr in &input.attrs {
-        if attr.path.is_ident("test") {
-            let msg = "second test attribute is supplied";
-            return syn::Error::new_spanned(&attr, msg)
-                .to_compile_error()
-                .into();
-        }
-    }
-
-    if !input.sig.inputs.is_empty() {
-        let msg = "the test function cannot accept arguments";
-        return syn::Error::new_spanned(&input.sig.inputs, msg)
-            .to_compile_error()
-            .into();
-    }
-    parse_dbtest(input, rng, table_decl).unwrap_or_else(|e| e.to_compile_error().into())
-}
-
-/// This function accepts an entire module which comprises of `dbtest` functions.
-/// It takes each function in turn, and generates `#[test]`able functions for them
-fn parse_test_module(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemMod);
-    let content = match input.content {
-        Some((_, c)) => c,
-        None => {
-            return syn::Error::new_spanned(&input, "Couldn't get the module content")
-                .to_compile_error()
-                .into()
-        }
-    };
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
-    let mut skips = Vec::new();
-    let mut table_decl = None;
-    for arg in args {
-        if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
-            let ident = namevalue.path.get_ident();
-            if ident.is_none() {
-                let msg = "Must have specified ident";
-                return syn::Error::new_spanned(namevalue, msg)
-                    .to_compile_error()
-                    .into();
-            }
-            match ident.unwrap().to_string().to_lowercase().as_str() {
-                "skip" => {
-                    let skip_lit = namevalue.lit.clone();
-                    let span = skip_lit.span();
-                    skips = match parse_string(skip_lit, span, "skip") {
-                        Ok(s) => s,
-                        Err(_) => {
-                            return syn::Error::new_spanned(
-                                namevalue,
-                                "Expected a value for argument `skip`",
-                            )
-                            .to_compile_error()
-                            .into();
-                        }
-                    }
-                    .split_whitespace()
-                    .map(|val| val.to_string())
-                    .collect();
-                }
-                "table" => {
-                    // check if the user wants some special table declaration
-                    let table_decl_lit = namevalue.lit.clone();
-                    let span = table_decl_lit.span();
-                    table_decl = match parse_string(table_decl_lit, span, "table") {
-                        Ok(s) => Some(s),
-                        Err(_) => {
-                            return syn::Error::new_spanned(
-                                namevalue,
-                                "Expected a value for argument `table`",
-                            )
-                            .to_compile_error()
-                            .into();
-                        }
-                    }
-                }
-                x => {
-                    let msg = format!("Unknown attribute {} is specified; expected `skip`", x);
-                    return syn::Error::new_spanned(namevalue, msg)
-                        .to_compile_error()
-                        .into();
-                }
-            }
-        }
-    }
-    let mut result = quote! {};
-    let mut rng = rand::thread_rng();
-    for item in content {
-        match item {
-            // We just care about functions, so parse functions and ignore everything
-            // else
-            syn::Item::Fn(function) => {
-                if skips.contains(&function.sig.ident.to_string()) {
-                    result = quote! {
-                        #result
-                        #function
-                    };
-                    continue;
-                }
-                let inp = parse_test_sig(function, &mut rng, table_decl.clone());
-                let __tok: syn::ItemFn = syn::parse_macro_input!(inp as syn::ItemFn);
-                let tok = quote! {
-                    #__tok
-                };
-                result = quote! {
-                    #result
-                    #tok
-                };
-            }
-            token => {
-                result = quote! {
-                    #result
-                    #token
-                };
-            }
-        }
-    }
-    result.into()
-}
-
-fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::Error> {
-    match int {
-        syn::Lit::Str(s) => Ok(s.value()),
-        syn::Lit::Verbatim(s) => Ok(s.to_string()),
-        _ => Err(syn::Error::new(
-            span,
-            format!("Failed to parse {} into a string.", field),
-        )),
-    }
-}
+mod dbtest_fn;
+mod dbtest_mod;
+mod util;
 
 #[proc_macro_attribute]
-/// The `dbtest` macro starts an async server in the background and is meant for
+/// The `dbtest_module` function accepts an inline module of `dbtest_func` compatible functions,
+/// unpacking each function into a dbtest
+pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
+    dbtest_mod::parse_test_module(args, item)
+}
+
+/// The `dbtest_func` macro starts an async server in the background and is meant for
 /// use within the `skyd` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
 /// All tests will clean up all values once a single test is over. **These tests should not
 /// be run in multi-threaded environments because they often use the same keys**
+///
+/// ## Arguments
+/// - `table -> str`: Custom table declaration
+/// - `port -> u16`: Custom port
+/// - `host -> str`: Custom host
+/// - `tls_cert -> str`: TLS cert (makes the connection a TLS one)
+/// - `username -> str`: Username for authn
+/// - `password -> str`: Password for authn
+/// - `auth_testuser -> bool`: Login as the test user
+/// - `auth_rootuser -> bool`: Login as the root user
+/// - `norun -> bool`: Don't execute anything on the connection
+///
 /// ## _Ghost_ values
 /// This macro gives:
 /// - a `skytable::AsyncConnection` accessible by the `con` variable
@@ -298,118 +94,7 @@ fn parse_string(int: syn::Lit, span: Span, field: &str) -> Result<String, syn::E
 /// are practially impossible. Hence we do not bother with a global random string table and instead proceed
 /// to generate tables randomly at the point of invocation
 ///
-pub fn dbtest(args: TokenStream, item: TokenStream) -> TokenStream {
-    parse_test_module(args, item)
-}
-
 #[proc_macro_attribute]
-/// The array macro enables the creation of arrays without the need for initializing all the elements.
-/// The important point to note here is that this is specifically meant for `skyd::corestore::array`
-/// and using it on anything else may cause unexpected behavior. The idea is that you want a `[T; N]`
-/// but you only have `[T; M]` (N > M) elements. The rest elements (N-M) are fine being uninitialized,
-/// but however, typing them in manually might be cumbersome at times. This macro does some "string magic"
-/// to do that for you.
-///
-/// What you need to pass in:
-/// ```ignore
-/// const <IDENTIFIER>: [TY; LEN] = [M elements ...];
-/// ```
-///
-/// What you get is:
-/// ```ignore
-/// const <IDENTIFIER>: [TY; LEN] = [M initialized elements ..., (N-M) unintialized elements];
-/// ```
-pub fn array(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
-    if !args.is_empty() {
-        syn::Error::new(proc_macro2::Span::call_site(), "Expected 0 arguments")
-            .to_compile_error()
-            .into()
-    } else {
-        // fine, so there's something
-        let item = item.to_string();
-        if !(item.starts_with("const") || item.starts_with("pub const") || item.starts_with("let"))
-        {
-            syn::Error::new_spanned(item, "Expected a `const` or `let` declaration")
-                .to_compile_error()
-                .into()
-        } else {
-            // fine, so it's [let|pub|pub const] : [ty; len] = [1, 2, 3, 4];
-            let item = item.trim();
-            let ret: Vec<&str> = item.split('=').collect();
-            if ret.len() != 2 {
-                syn::Error::new_spanned(item, "Expected a `const` or `let` assignment")
-                    .to_compile_error()
-                    .into()
-            } else {
-                // so we have the form we expect
-                let (declaration, expression) = (ret[0], ret[1]);
-                let expression = expression.trim().replace(" ;", "");
-                if !(expression.starts_with('[') && expression.ends_with(']')) {
-                    syn::Error::new_spanned(declaration, "Expected an array")
-                        .to_compile_error()
-                        .into()
-                } else {
-                    let expression = &expression[1..expression.len() - 1];
-                    // so we have the raw numbers, separated by commas
-                    let count_provided = expression.split(',').count();
-                    let declarations: Vec<&str> = declaration.split(':').collect();
-                    if declarations.len() != 2 {
-                        syn::Error::new_spanned(declaration, "Expected a type")
-                            .to_compile_error()
-                            .into()
-                    } else {
-                        // so we have two parts, let's look at the second part: [ty; len]
-                        let starts_ends =
-                            declarations[1].starts_with('[') && declarations[1].ends_with(']');
-                        if declarations[1].split(';').count() != 2 || starts_ends {
-                            syn::Error::new_spanned(declaration, "Expected [T; N]")
-                                .to_compile_error()
-                                .into()
-                        } else {
-                            // so we have [T; N], let's make it T; N
-                            let len = declarations[1].len();
-                            // decl hash T; N
-                            let decl = &declarations[1][1..len - 1];
-                            let expr: Vec<&str> = decl.split(';').collect();
-                            let (_, count) = (expr[0], expr[1].replace(']', ""));
-                            let count = count.trim();
-                            let count = match count.parse::<usize>() {
-                                Ok(cnt) => cnt,
-                                Err(_) => {
-                                    return syn::Error::new_spanned(
-                                        count,
-                                        "Expected `[T; N]` where `N` is a positive integer",
-                                    )
-                                    .to_compile_error()
-                                    .into()
-                                }
-                            };
-                            let repeats = count - count_provided;
-                            // we have uninit, uninit, uninit, uninit, uninit,
-                            let repeat_str = "core::mem::MaybeUninit::uninit(),".repeat(repeats);
-                            // expression has 1, 2, 3, 4
-                            let expression: String = expression
-                                .split(',')
-                                .map(|s| {
-                                    let mut st = String::new();
-                                    st.push_str("MaybeUninit::new(");
-                                    st.push_str(s);
-                                    st.push(')');
-                                    st.push(',');
-                                    st
-                                })
-                                .collect();
-                            // remove the trailing comma
-                            let expression = &expression[..expression.len() - 1];
-                            // let's join them
-                            let ret = "[".to_owned() + expression + "," + &repeat_str + "];";
-                            let ret = declaration.to_owned() + "=" + &ret;
-                            ret.parse().unwrap()
-                        }
-                    }
-                }
-            }
-        }
-    }
+pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
+    dbtest_fn::dbtest_func(args, item)
 }

@@ -38,8 +38,8 @@ action!(
     /// Do note that this function is blocking since it acquires a write lock.
     /// It will write an entire datagroup, for this `del` action
     fn del(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
-        err_if_len_is!(act, con, eq 0);
-        let table = get_tbl!(handle, con);
+        ensure_length(act.len(), |size| size != 0)?;
+        let table = get_tbl_ref!(handle, con);
         macro_rules! remove {
             ($engine:expr) => {{
                 let encoding_is_okay = ENCODING_LUT_ITER[$engine.kve_key_encoded()](act.as_ref());
@@ -57,12 +57,12 @@ action!(
                         }
                     }
                     if let Some(done_howmany) = done_howmany {
-                        con.write_response(done_howmany).await
+                        con.write_response(done_howmany).await?;
                     } else {
-                        con.write_response(responses::groups::SERVER_ERR).await
+                        con.write_response(responses::groups::SERVER_ERR).await?;
                     }
                 } else {
-                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
+                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
                 }
             }};
         }
@@ -74,7 +74,8 @@ action!(
                 remove!(kvlmap)
             }
             #[allow(unreachable_patterns)]
-            _ => conwrite!(con, groups::WRONG_MODEL),
+            _ => conwrite!(con, groups::WRONG_MODEL)?,
         }
+        Ok(())
     }
 );

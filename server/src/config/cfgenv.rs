@@ -67,5 +67,6 @@ pub(super) fn parse_env_config() -> Configset {
         SKY_TLS_ONLY,
         SKY_TLS_PASSIN
     );
+    fenv!(auth_settings, SKY_AUTH_ORIGIN_KEY);
     defset
 }

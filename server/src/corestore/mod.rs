@@ -24,31 +24,26 @@
  *
 */
 
-use crate::corestore::memstore::DdlError;
-use crate::corestore::memstore::Keyspace;
-use crate::corestore::memstore::Memstore;
-use crate::corestore::memstore::ObjectID;
-use crate::corestore::memstore::DEFAULT;
-use crate::corestore::table::Table;
-use crate::dbnet::connection::ProtocolConnectionExt;
-use crate::kvengine::KVEngine;
-use crate::protocol::Query;
-use crate::queryengine;
+use crate::actions::ActionResult;
+use crate::corestore::{
+    memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
+    table::{DescribeTable, Table},
+};
 use crate::registry;
 use crate::storage;
-use crate::storage::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use core::borrow::Borrow;
+use core::fmt;
 use core::hash::Hash;
 pub use htable::Data;
-use libsky::TResult;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub mod array;
 pub mod backoff;
 pub mod booltable;
 pub mod buffers;
+pub mod heap_array;
 pub mod htable;
 pub mod iarray;
 pub mod lazy;
@@ -66,11 +61,27 @@ pub type OwnedEntityGroup = OptionTuple<ObjectID>;
 /// A raw borrowed entity (not the struct, but in a tuple form)
 type BorrowedEntityGroupRaw<'a> = OptionTuple<&'a [u8]>;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 /// An entity group borrowed from a byte slice
 pub struct BorrowedEntityGroup<'a> {
     va: Option<&'a [u8]>,
     vb: Option<&'a [u8]>,
+}
+
+impl<'a> fmt::Debug for BorrowedEntityGroup<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn write_if_some(v: Option<&'_ [u8]>) -> String {
+            if let Some(v) = v {
+                format!("{:?}", String::from_utf8_lossy(&v))
+            } else {
+                "None".to_owned()
+            }
+        }
+        f.debug_struct("BorrowedEntityGroup")
+            .field("va", &write_if_some(self.va))
+            .field("vb", &write_if_some(self.vb))
+            .finish()
+    }
 }
 
 impl<'a> BorrowedEntityGroup<'a> {
@@ -239,20 +250,13 @@ impl Corestore {
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
     }
-    /// Get the key/value store
-    ///
-    /// `Err`s are propagated if the target table has an incorrect table or if
-    /// the default table is unset
-    pub fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
-        match &self.estate.table {
-            Some((_, tbl)) => match tbl.get_kvstore() {
-                Ok(kvs) => Ok(kvs),
-                _ => Err(DdlError::WrongModel),
-            },
-            None => Err(DdlError::DefaultNotFound),
-        }
+    pub fn get_ctable_ref(&self) -> Option<&Table> {
+        self.estate.table.as_ref().map(|(_, tbl)| tbl.as_ref())
     }
-
+    /// Returns a table with the provided specification
+    pub fn get_table_with<T: DescribeTable>(&self) -> ActionResult<&T::Table> {
+        T::get(self)
+    }
     /// Create a table: in-memory; **no transactional guarantees**. Two tables can be created
     /// simultaneously, but are never flushed unless we are very lucky. If the global flush
     /// system is close to a flush cycle -- then we are in luck: we pause the flush cycle
@@ -367,31 +371,6 @@ impl Corestore {
     pub fn force_drop_keyspace(&self, ksid: ObjectID) -> KeyspaceResult<()> {
         // trip switch is handled by memstore here
         self.store.force_drop_keyspace(ksid)
-    }
-
-    /// Execute a query that has already been validated by `Connection::read_query`
-    pub async fn execute_query<T: Send + Sync, Strm>(
-        &mut self,
-        query: Query,
-        con: &mut T,
-    ) -> TResult<()>
-    where
-        T: ProtocolConnectionExt<Strm>,
-        Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-    {
-        match query {
-            Query::SimpleQuery(q) => {
-                con.write_simple_query_header().await?;
-                queryengine::execute_simple(self, con, q).await?;
-                con.flush_stream().await?;
-            }
-            Query::PipelineQuery(pipeline) => {
-                con.write_pipeline_query_header(pipeline.len()).await?;
-                queryengine::execute_pipeline(self, con, pipeline).await?;
-                con.flush_stream().await?;
-            }
-        }
-        Ok(())
     }
     pub fn strong_count(&self) -> usize {
         Arc::strong_count(&self.store)

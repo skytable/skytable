@@ -47,91 +47,11 @@ macro_rules! is_lowbit_unset {
 }
 
 #[macro_export]
-macro_rules! err_if_len_is {
-    ($buf:ident, $con:ident, eq $len:literal) => {
-        if $buf.len() == $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, not $len:literal) => {
-        if $buf.len() != $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, gt $len:literal) => {
-        if $buf.len() > $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, lt $len:literal) => {
-        if $buf.len() < $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, gt_or_eq $len:literal) => {
-        if $buf.len() >= $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($buf:ident, $con:ident, lt_or_eq $len:literal) => {
-        if $buf.len() <= $len {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-    ($con:ident, $expr:expr) => {
-        if $expr {
-            return $con
-                .write_response(crate::protocol::responses::groups::ACTION_ERR)
-                .await;
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! kve {
-    ($con:expr, $store:expr) => {
-        match $store.get_kvstore() {
-            Ok(store) => store,
-            _ => {
-                // wrong model
-                return $con
-                    .write_response(crate::protocol::responses::groups::WRONG_MODEL)
-                    .await;
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! default_keyspace {
-    ($store:expr, $con:expr) => {
-        match $store.get_keyspace() {
-            Ok(ks) => ks,
-            Err(_) => {
-                return $con
-                    .write_response(crate::protocol::responses::groups::DEFAULT_UNSET)
-                    .await;
-            }
-        }
-    };
-}
-
-#[macro_export]
 macro_rules! conwrite {
     ($con:expr, $what:expr) => {
-        $con.write_response($what).await
+        $con.write_response($what)
+            .await
+            .map_err(|e| crate::actions::ActionError::IoError(e))
     };
 }
 
@@ -145,25 +65,22 @@ macro_rules! aerr {
 #[macro_export]
 macro_rules! get_tbl {
     ($entity:expr, $store:expr, $con:expr) => {{
-        use crate::corestore::memstore::DdlError;
-        match $store.get_table($entity) {
-            Ok(tbl) => tbl,
-            Err(DdlError::DefaultNotFound) => {
-                return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET);
-            }
-            Err(DdlError::ObjectNotFound) => {
-                return conwrite!(
-                    $con,
-                    crate::protocol::responses::groups::CONTAINER_NOT_FOUND
-                );
-            }
-            Err(_) => unsafe { impossible!() },
-        }
+        $store.get_table($entity)?
     }};
     ($store:expr, $con:expr) => {{
         match $store.get_ctable() {
             Some(tbl) => tbl,
-            None => return conwrite!($con, crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! get_tbl_ref {
+    ($store:expr, $con:expr) => {{
+        match $store.get_ctable_ref() {
+            Some(tbl) => tbl,
+            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
         }
     }};
 }

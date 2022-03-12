@@ -120,44 +120,25 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($($argname: $argty,)*) -> std::io::Result<()>
-            where
-                T: ProtocolConnectionExt<Strm>,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block)*
+            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+                $($argname: $argty,)*
+            ) -> crate::actions::ActionResult<()>
+            $block)*
     };
     (
         $($(#[$attr:meta])*
-        fn $fname:ident($argone:ident: $argonety:ty, $argtwo:ident: $argtwoty:ty, mut $argthree:ident: $argthreety:ty)
+        fn $fname:ident($argone:ident: $argonety:ty,
+            $argtwo:ident: $argtwoty:ty,
+            mut $argthree:ident: $argthreety:ty)
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + Send + Sync, Strm>($argone: $argonety, $argtwo: $argtwoty, mut $argthree: $argthreety) -> std::io::Result<()>
-            where
-                T: ProtocolConnectionExt<Strm>,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-                $block)*
-    };
-}
-
-#[allow(unused_macros)] // TODO(@ohsayan): Remove this if we don't need it anymore
-macro_rules! afn_action {
-    (
-        $($(#[$attr:meta])*
-        fn $fname:ident($($argname:ident: $argty:ty),*)
-        $block:block)*
-    ) => {
-        $(
-            $(#[$attr])*
-            fn $fname<'a, T: 'a, Strm: 'a>($($argname: $argty,)*) ->
-            core::pin::Pin<std::boxed::Box<dyn core::future::Future<Output = std::io::Result<()>> + Send + Sync + 'a>>
-            where
-                T: ProtocolConnectionExt<Strm> + Send + Sync,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync
-            {
-                std::boxed::Box::pin(async move {$block})
-            }
-        )*
+            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+                $argone: $argonety,
+                $argtwo: $argtwoty,
+                mut $argthree: $argthreety
+            ) -> crate::actions::ActionResult<()>
+            $block)*
     };
 }
 
@@ -209,6 +190,22 @@ macro_rules! tmut_bool {
 macro_rules! ucidx {
     ($base:expr, $idx:expr) => {
         *($base.as_ptr().add($idx as usize))
+    };
+}
+
+/// If you provide: [T; N] with M initialized elements, then you are given
+/// [MaybeUninit<T>; N] with M initialized elements and N-M uninit elements
+macro_rules! uninit_array {
+    ($($vis:vis const $id:ident: [$ty:ty; $len:expr] = [$($init_element:expr),*];)*) => {
+        $($vis const $id: [::core::mem::MaybeUninit<$ty>; $len] = {
+            let mut ret = [::core::mem::MaybeUninit::uninit(); $len];
+            let mut idx = 0;
+            $(
+                idx += 1;
+                ret[idx - 1] = ::core::mem::MaybeUninit::new($init_element);
+            )*
+            ret
+        };)*
     };
 }
 

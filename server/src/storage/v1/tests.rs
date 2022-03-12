@@ -142,13 +142,14 @@ fn test_runtime_panic_32bit_or_lower() {
 }
 
 mod interface_tests {
-    use super::interface::{create_tree, DIR_KSROOT, DIR_SNAPROOT};
+    use super::interface::{create_tree_fresh, DIR_KSROOT, DIR_SNAPROOT};
     use crate::corestore::memstore::Memstore;
+    use crate::storage::v1::flush::Autoflush;
     use std::fs;
     use std::path::PathBuf;
     #[test]
     fn test_tree() {
-        create_tree(&Memstore::new_default()).unwrap();
+        create_tree_fresh(&Autoflush, &Memstore::new_default()).unwrap();
         let read_ks: Vec<String> = fs::read_dir(DIR_KSROOT)
             .unwrap()
             .map(|dir| {
@@ -261,6 +262,141 @@ mod bytemark_set_tests {
     }
 }
 
+mod bytemark_actual_table_restore {
+    use crate::corestore::{
+        memstore::ObjectID,
+        table::{DescribeTable, KVEList, Table, KVE},
+        Data,
+    };
+    use crate::kvengine::{listmap::LockedVec, KVTable};
+    use crate::storage::v1::{
+        flush::{oneshot::flush_table, Autoflush},
+        unflush::read_table,
+    };
+
+    macro_rules! insert {
+        ($table:ident, $k:expr, $v:expr) => {
+            assert!(gtable::<KVE>(&$table)
+                .set(Data::from($k), Data::from($v))
+                .unwrap())
+        };
+    }
+
+    macro_rules! puthello {
+        ($table:ident) => {
+            insert!($table, "hello", "world")
+        };
+    }
+
+    fn gtable<T: DescribeTable>(table: &Table) -> &T::Table {
+        T::try_get(table).unwrap()
+    }
+
+    use std::fs;
+    #[test]
+    fn table_restore_bytemark_kve() {
+        let default_keyspace = ObjectID::try_from_slice(b"actual_kve_restore").unwrap();
+        fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
+        let kve_bin_bin_name = ObjectID::try_from_slice(b"bin_bin").unwrap();
+        let kve_bin_bin = Table::from_model_code(0, false).unwrap();
+        puthello!(kve_bin_bin);
+        let kve_bin_str_name = ObjectID::try_from_slice(b"bin_str").unwrap();
+        let kve_bin_str = Table::from_model_code(1, false).unwrap();
+        puthello!(kve_bin_str);
+        let kve_str_str_name = ObjectID::try_from_slice(b"str_str").unwrap();
+        let kve_str_str = Table::from_model_code(2, false).unwrap();
+        puthello!(kve_str_str);
+        let kve_str_bin_name = ObjectID::try_from_slice(b"str_bin").unwrap();
+        let kve_str_bin = Table::from_model_code(3, false).unwrap();
+        puthello!(kve_str_bin);
+        let names: [(&ObjectID, &Table, u8); 4] = [
+            (&kve_bin_bin_name, &kve_bin_bin, 0),
+            (&kve_bin_str_name, &kve_bin_str, 1),
+            (&kve_str_str_name, &kve_str_str, 2),
+            (&kve_str_bin_name, &kve_str_bin, 3),
+        ];
+        // flush each of them
+        for (tablename, table, _) in names {
+            flush_table(&Autoflush, tablename, &default_keyspace, table).unwrap();
+        }
+        let mut read_tables: Vec<Table> = Vec::with_capacity(4);
+        // read each of them
+        for (tableid, _, modelcode) in names {
+            read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
+        }
+        for (index, (table, code)) in read_tables
+            .iter()
+            .map(|tbl| (gtable::<KVE>(tbl), tbl.get_model_code()))
+            .enumerate()
+        {
+            assert_eq!(index, code as usize);
+            assert!(table.get("hello".as_bytes()).unwrap().unwrap().eq(b"world"));
+            assert_eq!(table.kve_len(), 1);
+        }
+    }
+
+    macro_rules! putlist {
+        ($table:ident) => {
+            gtable::<KVEList>(&$table)
+                .kve_inner_ref()
+                .fresh_entry(Data::from("super"))
+                .unwrap()
+                .insert(LockedVec::new(vec![
+                    Data::from("hello"),
+                    Data::from("world"),
+                ]))
+        };
+    }
+
+    #[test]
+    fn table_restore_bytemark_kvlist() {
+        let default_keyspace = ObjectID::try_from_slice(b"actual_kvl_restore").unwrap();
+        fs::create_dir_all(format!("data/ks/{}", unsafe { default_keyspace.as_str() })).unwrap();
+        let kve_bin_listbin_name = ObjectID::try_from_slice(b"bin_listbin").unwrap();
+        let kve_bin_listbin = Table::from_model_code(4, false).unwrap();
+        putlist!(kve_bin_listbin);
+        let kve_bin_liststr_name = ObjectID::try_from_slice(b"bin_liststr").unwrap();
+        let kve_bin_liststr = Table::from_model_code(5, false).unwrap();
+        putlist!(kve_bin_liststr);
+        let kve_str_listbinstr_name = ObjectID::try_from_slice(b"str_listbinstr").unwrap();
+        let kve_str_listbinstr = Table::from_model_code(6, false).unwrap();
+        putlist!(kve_str_listbinstr);
+        let kve_str_liststr_name = ObjectID::try_from_slice(b"str_liststr").unwrap();
+        let kve_str_liststr = Table::from_model_code(7, false).unwrap();
+        putlist!(kve_str_liststr);
+        let names: [(&ObjectID, &Table, u8); 4] = [
+            (&kve_bin_listbin_name, &kve_bin_listbin, 4),
+            (&kve_bin_liststr_name, &kve_bin_liststr, 5),
+            (&kve_str_listbinstr_name, &kve_str_listbinstr, 6),
+            (&kve_str_liststr_name, &kve_str_liststr, 7),
+        ];
+        // flush each of them
+        for (tablename, table, _) in names {
+            flush_table(&Autoflush, tablename, &default_keyspace, table).unwrap();
+        }
+        let mut read_tables: Vec<Table> = Vec::with_capacity(4);
+        // read each of them
+        for (tableid, _, modelcode) in names {
+            read_tables.push(read_table(&default_keyspace, tableid, false, modelcode).unwrap());
+        }
+        for (index, (table, code)) in read_tables
+            .iter()
+            .map(|tbl| (gtable::<KVEList>(tbl), tbl.get_model_code()))
+            .enumerate()
+        {
+            // check code
+            assert_eq!(index + 4, code as usize);
+            // check payload
+            let vec = table.kve_inner_ref().get("super".as_bytes()).unwrap();
+            assert_eq!(vec.read().len(), 2);
+            assert_eq!(vec.read()[0], "hello");
+            assert_eq!(vec.read()[1], "world");
+            // check len
+            assert_eq!(table.kve_len(), 1);
+        }
+    }
+}
+
 mod flush_routines {
     use crate::corestore::memstore::Keyspace;
     use crate::corestore::memstore::ObjectID;
@@ -268,8 +404,9 @@ mod flush_routines {
     use crate::corestore::table::Table;
     use crate::corestore::Data;
     use crate::kvengine::listmap::LockedVec;
-    use crate::storage::bytemarks;
-    use crate::storage::Coremap;
+    use crate::storage::v1::bytemarks;
+    use crate::storage::v1::flush::Autoflush;
+    use crate::storage::v1::Coremap;
     use std::fs;
     #[test]
     fn test_flush_unflush_table_pure_kve() {
@@ -282,11 +419,15 @@ mod flush_routines {
         let ksid = unsafe { ObjectID::from_slice("myks1") };
         // create the temp dir for this test
         fs::create_dir_all("data/ks/myks1").unwrap();
-        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
-        let ret =
-            super::unflush::read_table(&ksid, &tblid, false, bytemarks::BYTEMARK_MODEL_KV_BIN_BIN)
-                .unwrap();
+        let ret = super::unflush::read_table::<Table>(
+            &ksid,
+            &tblid,
+            false,
+            bytemarks::BYTEMARK_MODEL_KV_BIN_BIN,
+        )
+        .unwrap();
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
@@ -312,9 +453,9 @@ mod flush_routines {
         let ksid = unsafe { ObjectID::from_slice("mylistyks") };
         // create the temp dir for this test
         fs::create_dir_all("data/ks/mylistyks").unwrap();
-        super::flush::oneshot::flush_table(&tblid, &ksid, &tbl).unwrap();
+        super::flush::oneshot::flush_table(&Autoflush, &tblid, &ksid, &tbl).unwrap();
         // now that it's flushed, let's read the table using and unflush routine
-        let ret = super::unflush::read_table(
+        let ret = super::unflush::read_table::<Table>(
             &ksid,
             &tblid,
             false,
@@ -348,23 +489,23 @@ mod flush_routines {
             .unwrap()
             .set("hello".into(), "world".into())
             .unwrap();
-        ks.create_table(tbl1.clone(), mytbl);
+        assert!(ks.create_table(tbl1.clone(), mytbl));
 
         // and a table with lists
         let cmap = Coremap::new();
         cmap.true_if_insert("mylist".into(), LockedVec::new(vec!["myvalue".into()]));
         let my_list_tbl = Table::new_kve_listmap_with_data(cmap, false, true, true);
-        ks.create_table(list_tbl.clone(), my_list_tbl);
+        assert!(ks.create_table(list_tbl.clone(), my_list_tbl));
 
         // and a volatile table
-        ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true));
+        assert!(ks.create_table(tbl2.clone(), Table::new_kve_with_volatile(true)));
 
         // now flush it
-        super::flush::flush_keyspace_full(&ksid, &ks).unwrap();
-        let ret = super::unflush::read_keyspace(&ksid).unwrap();
-        let tbl1_ret = ret.get(&tbl1).unwrap();
-        let tbl2_ret = ret.get(&tbl2).unwrap();
-        let tbl3_ret_list = ret.get(&list_tbl).unwrap();
+        super::flush::flush_keyspace_full(&Autoflush, &ksid, &ks).unwrap();
+        let ret = super::unflush::read_keyspace::<Keyspace>(&ksid).unwrap();
+        let tbl1_ret = ret.tables.get(&tbl1).unwrap();
+        let tbl2_ret = ret.tables.get(&tbl2).unwrap();
+        let tbl3_ret_list = ret.tables.get(&list_tbl).unwrap();
         // should be a persistent table with the value we set
         assert_eq!(tbl1_ret.count(), 1);
         assert_eq!(

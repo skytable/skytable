@@ -37,7 +37,6 @@ pub mod del;
 pub mod exists;
 pub mod flushdb;
 pub mod get;
-pub mod jget;
 pub mod keylen;
 pub mod lists;
 pub mod lskeys;
@@ -51,6 +50,74 @@ pub mod strong;
 pub mod update;
 pub mod uset;
 pub mod whereami;
+use crate::corestore::memstore::DdlError;
+use crate::protocol::responses::groups;
+use crate::util;
+use std::io::Error as IoError;
+
+/// A generic result for actions
+pub type ActionResult<T> = Result<T, ActionError>;
+
+/// Errors that can occur while running actions
+#[derive(Debug)]
+pub enum ActionError {
+    ActionError(&'static [u8]),
+    IoError(std::io::Error),
+}
+
+impl From<&'static [u8]> for ActionError {
+    fn from(e: &'static [u8]) -> Self {
+        Self::ActionError(e)
+    }
+}
+
+impl From<IoError> for ActionError {
+    fn from(e: IoError) -> Self {
+        Self::IoError(e)
+    }
+}
+
+impl From<DdlError> for ActionError {
+    fn from(e: DdlError) -> Self {
+        let ret = match e {
+            DdlError::AlreadyExists => groups::ALREADY_EXISTS,
+            DdlError::DdlTransactionFailure => groups::DDL_TRANSACTIONAL_FAILURE,
+            DdlError::DefaultNotFound => groups::DEFAULT_UNSET,
+            DdlError::NotEmpty => groups::KEYSPACE_NOT_EMPTY,
+            DdlError::NotReady => groups::NOT_READY,
+            DdlError::ObjectNotFound => groups::CONTAINER_NOT_FOUND,
+            DdlError::ProtectedObject => groups::PROTECTED_OBJECT,
+            DdlError::StillInUse => groups::STILL_IN_USE,
+            DdlError::WrongModel => groups::WRONG_MODEL,
+        };
+        Self::ActionError(ret)
+    }
+}
+
+pub fn ensure_length(len: usize, is_valid: fn(usize) -> bool) -> ActionResult<()> {
+    if util::compiler::likely(is_valid(len)) {
+        Ok(())
+    } else {
+        util::err(groups::ACTION_ERR)
+    }
+}
+
+pub fn ensure_boolean_or_aerr(boolean: bool) -> ActionResult<()> {
+    if util::compiler::likely(boolean) {
+        Ok(())
+    } else {
+        util::err(groups::ACTION_ERR)
+    }
+}
+
+pub fn ensure_cond_or_err(cond: bool, err: &'static [u8]) -> ActionResult<()> {
+    if util::compiler::likely(cond) {
+        Ok(())
+    } else {
+        util::err(err)
+    }
+}
+
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
@@ -58,13 +125,14 @@ pub mod heya {
     action!(
         /// Returns a `HEY!` `Response`
         fn heya(_handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-            err_if_len_is!(act, con, gt 1);
+            ensure_length(act.len(), |len| len == 0 || len == 1)?;
             if act.len() == 1 {
                 let raw_byte = unsafe { act.next_unchecked_bytes() };
-                con.write_response(BytesWrapper(raw_byte)).await
+                con.write_response(BytesWrapper(raw_byte)).await?;
             } else {
-                con.write_response(responses::groups::HEYA).await
+                con.write_response(responses::groups::HEYA).await?;
             }
+            Ok(())
         }
     );
 }

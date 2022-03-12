@@ -109,3 +109,9 @@ args:
       short: m
       help: Sets the deployment type
       value_name: mode
+  - authkey:
+      required: false
+      long: auth-origin-key
+      takes_value: true
+      help: Set the authentication origin key
+      value_name: origin_key

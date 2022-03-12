@@ -32,7 +32,6 @@ pub mod lmod;
 
 use crate::corestore::booltable::BytesBoolTable;
 use crate::corestore::booltable::BytesNicheLUT;
-use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::listmap::LockedVec;
@@ -47,9 +46,8 @@ action! {
     /// Handle an `LSET` query for the list model
     /// Syntax: `LSET <listname> <values ...>`
     fn lset(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, lt 1);
-        let table = get_tbl!(handle, con);
-        let listmap = listmap!(table, con);
+        ensure_length(act.len(), |len| len > 0)?;
+        let listmap = handle.get_table_with::<KVEList>()?;
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.kve_inner_ref();
         if registry::state_okay() {

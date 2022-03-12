@@ -33,7 +33,7 @@
  and we won't read into others' memory (or corrupt our own).
 */
 
-use crate::storage::Data;
+use crate::storage::v1::Data;
 use core::mem;
 use core::ptr;
 use core::slice;

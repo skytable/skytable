@@ -26,13 +26,13 @@
 
 //! Tests for the key/value engine and its operations
 //!
-//! The test functions here might seem slightly _mysterious_ -- but they aren't! The `dbtest` macro from the
+//! The test functions here might seem slightly _mysterious_ -- but they aren't! The `dbtest_module` macro from the
 //! `sky_macros` crate is what does the magic. It provides each function with an async `stream` to write to.
 //! This stream is connected over TCP to a database instance. Once the test completes, the database instance
 //! and its data is destroyed; but the spawned database instances are started up in a way to not store any
 //! data at all, so this is just a precautionary step.
 
-#[sky_macros::dbtest]
+#[sky_macros::dbtest_module]
 mod __private {
     #[cfg(test)]
     use skytable::{types::Array, Element, Query, RespCode};
@@ -1109,7 +1109,7 @@ mod __private {
         );
         query.push("lskeys");
         query.push(&__MYENTITY__);
-        query.push(3.to_string());
+        query.push(3u8.to_string());
         let ret = con.run_simple_query(&query).await.unwrap();
         let ret_should_have: Vec<String> = vec!["x", "y", "z"]
             .into_iter()

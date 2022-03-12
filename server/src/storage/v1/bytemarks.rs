@@ -29,7 +29,12 @@
 //! # Bytemarks
 //!
 //! Bytemarks are single bytes that are written to parts of files to provide metadata. This module
-//! contains a collection of these
+//! contains a collection of these.
+//!
+//! ## Userspace and system bytemarks
+//!
+//! Although ks/system and ks/default might _reside_ next to each other, their bytemarks are entirely
+//! different!
 
 // model
 /*
@@ -59,3 +64,6 @@ pub const BYTEMARK_MODEL_KV_STR_LIST_STR: u8 = 7;
 pub const BYTEMARK_STORAGE_PERSISTENT: u8 = 0;
 /// Volatile storage bytemark
 pub const BYTEMARK_STORAGE_VOLATILE: u8 = 1;
+
+// system bym
+pub const SYSTEM_TABLE_AUTH: u8 = 0;

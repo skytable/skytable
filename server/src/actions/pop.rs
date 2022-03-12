@@ -30,13 +30,13 @@ use crate::util::compiler;
 
 action! {
     fn pop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         let key = unsafe {
             // SAFETY: We have checked for there to be one arg
             act.next_unchecked()
         };
         if registry::state_okay() {
-            let kve = kve!(con, handle);
+            let kve = handle.get_table_with::<KVE>()?;
             let tsymbol = kve.get_vt();
             match kve.pop(key) {
                 Ok(Some((_key, val))) => unsafe {

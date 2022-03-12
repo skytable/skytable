@@ -24,7 +24,7 @@
  *
 */
 
-#[sky_macros::dbtest]
+#[sky_macros::dbtest_module]
 mod __private {
     use skytable::{types::Array, Element, RespCode};
     async fn test_inspect_keyspaces() {

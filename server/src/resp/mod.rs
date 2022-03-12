@@ -28,16 +28,17 @@
 //!
 use crate::corestore::buffers::Integer64;
 use crate::corestore::memstore::ObjectID;
+use crate::util::FutureResult;
 use bytes::Bytes;
-use std::future::Future;
 use std::io::Error as IoError;
-use std::pin::Pin;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 pub mod writer;
 
 pub const TSYMBOL_BINARY: u8 = b'?';
 pub const TSYMBOL_UNICODE: u8 = b'+';
+
+type FutureIoResult<'s> = FutureResult<'s, Result<(), IoError>>;
 
 /// # The `Writable` trait
 /// All trait implementors are given access to an asynchronous stream to which
@@ -54,27 +55,18 @@ pub trait Writable {
     HACK(@ohsayan): Since `async` is not supported in traits just yet, we will have to
     use explicit declarations for asynchoronous functions
     */
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>>;
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s>;
 }
 
 pub trait IsConnection: std::marker::Sync + std::marker::Send {
-    fn write_lowlevel<'s>(
-        &'s mut self,
-        bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>>;
+    fn write_lowlevel<'s>(&'s mut self, bytes: &'s [u8]) -> FutureIoResult<'s>;
 }
 
 impl<T> IsConnection for T
 where
     T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    fn write_lowlevel<'s>(
-        &'s mut self,
-        bytes: &'s [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<(), IoError>> + Send + Sync + 's>> {
+    fn write_lowlevel<'s>(&'s mut self, bytes: &'s [u8]) -> FutureIoResult<'s> {
         Box::pin(self.write_all(bytes))
     }
 }
@@ -93,38 +85,48 @@ impl BytesWrapper {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct StringWrapper(pub String);
+
+impl Writable for StringWrapper {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
+        Box::pin(async move {
+            con.write_lowlevel(&[b'+']).await?;
+            // Now get the size of the Bytes object as bytes
+            let size = Integer64::from(self.0.len());
+            // Write this to the stream
+            con.write_lowlevel(&size).await?;
+            // Now write a LF character
+            con.write_lowlevel(&[b'\n']).await?;
+            // Now write the REAL bytes (of the object)
+            con.write_lowlevel(self.0.as_bytes()).await?;
+            // Now write another LF
+            con.write_lowlevel(&[b'\n']).await?;
+            Ok(())
+        })
+    }
+}
+
 impl Writable for Vec<u8> {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move { con.write_lowlevel(&self).await })
     }
 }
 
 impl<const N: usize> Writable for [u8; N] {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move { con.write_lowlevel(&self).await })
     }
 }
 
 impl Writable for &'static [u8] {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move { con.write_lowlevel(self).await })
     }
 }
 
 impl Writable for &'static str {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             // First write a `+` character to the stream since this is a
             // string (we represent `String`s as `Byte` objects internally)
@@ -147,10 +149,7 @@ impl Writable for &'static str {
 }
 
 impl Writable for BytesWrapper {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             // First write a `+` character to the stream since this is a
             // string (we represent `String`s as `Byte` objects internally)
@@ -174,10 +173,7 @@ impl Writable for BytesWrapper {
 }
 
 impl Writable for usize {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             con.write_lowlevel(b":").await?;
             let usize_bytes = Integer64::from(self);
@@ -192,10 +188,7 @@ impl Writable for usize {
 }
 
 impl Writable for u64 {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             con.write_lowlevel(b":").await?;
             let usize_bytes = Integer64::from(self);
@@ -210,10 +203,7 @@ impl Writable for u64 {
 }
 
 impl Writable for ObjectID {
-    fn write<'s>(
-        self,
-        con: &'s mut impl IsConnection,
-    ) -> Pin<Box<(dyn Future<Output = Result<(), IoError>> + Send + Sync + 's)>> {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             // First write a `+` character to the stream since this is a
             // string (we represent `String`s as `Byte` objects internally)

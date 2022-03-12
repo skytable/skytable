@@ -33,7 +33,6 @@ use core::fmt;
 use core::hash::Hash;
 use core::hash::Hasher;
 use core::iter::FromIterator;
-use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::mem::MaybeUninit;
 use core::ops;
@@ -90,14 +89,6 @@ impl<'a, T: Copy> Drop for LenScopeGuard<'a, T> {
     }
 }
 
-// defy the compiler; just some silly hackery here -- move on
-struct UninitArray<T, const N: usize>(PhantomData<T>);
-
-impl<T, const N: usize> UninitArray<T, N> {
-    const VALUE: MaybeUninit<T> = MaybeUninit::uninit();
-    const ARRAY: [MaybeUninit<T>; N] = [Self::VALUE; N];
-}
-
 macro_rules! impl_zeroed_nm {
     ($($ty:ty),* $(,)?) => {
         $(
@@ -118,10 +109,13 @@ impl_zeroed_nm! {
 }
 
 impl<T, const N: usize> Array<T, N> {
+    // just some silly hackery here because uninit_array isn't stabilized -- move on
+    const VALUE: MaybeUninit<T> = MaybeUninit::uninit();
+    const ARRAY: [MaybeUninit<T>; N] = [Self::VALUE; N];
     /// Create a new array
     pub const fn new() -> Self {
         Array {
-            stack: UninitArray::ARRAY,
+            stack: Self::ARRAY,
             init_len: 0,
         }
     }
@@ -140,7 +134,7 @@ impl<T, const N: usize> Array<T, N> {
     /// This function is extremely unsafe. I mean, I don't even know how to call it safe.
     /// There's one way though: make M == N. This will panic in debug mode if M > N. In
     /// release mode, good luck
-    pub unsafe fn from_const_array<const M: usize>(arr: [T; M]) -> Self {
+    unsafe fn from_const_array<const M: usize>(arr: [T; M]) -> Self {
         debug_assert!(
             N >= M,
             "Provided const array exceeds size limit of initialized array"
@@ -278,13 +272,20 @@ impl<T, const N: usize> Array<T, N> {
             // not fully initialized
             Err(self)
         } else {
-            unsafe {
-                Ok({
-                    // make sure we don't do a double free or end up deleting the elements
-                    let _self = ManuallyDrop::new(self);
-                    ptr::read(_self.as_ptr() as *const [T; N])
-                })
-            }
+            unsafe { Ok(self.into_array_unchecked()) }
+        }
+    }
+    pub unsafe fn into_array_unchecked(self) -> [T; N] {
+        // make sure we don't do a double free or end up deleting the elements
+        let _self = ManuallyDrop::new(self);
+        ptr::read(_self.as_ptr() as *const [T; N])
+    }
+    pub fn try_from_slice(slice: impl AsRef<[T]>) -> Option<Self> {
+        let slice = slice.as_ref();
+        if slice.len() > N {
+            None
+        } else {
+            Some(unsafe { Self::from_slice(slice) })
         }
     }
     /// Extend self from a slice
@@ -313,7 +314,7 @@ impl<const N: usize> Array<u8, N> {
     /// This isn't _unsafe_ but it can cause functions expecting pure unicode to
     /// crash if the array contains invalid unicode
     pub unsafe fn as_str(&self) -> &str {
-        str::from_utf8_unchecked(self.as_ref())
+        str::from_utf8_unchecked(self)
     }
 }
 
@@ -408,7 +409,7 @@ impl<T, const N: usize> Array<T, N> {
         unsafe {
             // the ptr to start writing from
             let mut ptr = Self::as_mut_ptr(self).add(self.len());
-            let end_ptr = Self::as_ptr(self).add(self.remaining_cap());
+            let end_ptr = Self::as_ptr(self).add(self.capacity());
             let mut guard = LenScopeGuard::new(&mut self.init_len);
             let mut iter = iterable.into_iter();
             loop {
@@ -621,6 +622,16 @@ fn test_array_clone() {
     );
     let myclone = arr.clone();
     assert_eq!(arr, myclone);
+}
+
+#[test]
+fn test_array_extend_okay() {
+    let mut arr: Array<u8, 64> = Array::new();
+    arr.extend(
+        "qHwRsmyBYHbqyHfdShOfVSayVUmeKlEagvJoGuTyvaCqpsfFkZabeuqmVeiKbJxV"
+            .as_bytes()
+            .to_owned(),
+    );
 }
 
 #[test]

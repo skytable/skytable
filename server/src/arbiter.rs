@@ -24,6 +24,7 @@
  *
 */
 
+use crate::auth::AuthProvider;
 use crate::config::ConfigurationSet;
 use crate::config::SnapshotConfig;
 use crate::config::SnapshotPref;
@@ -31,7 +32,7 @@ use crate::corestore::Corestore;
 use crate::dbnet::{self, Terminator};
 use crate::diskstore::flock::FileLock;
 use crate::services;
-use crate::storage::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::os::TerminationSignal;
 use libsky::util::terminal;
 use std::sync::Arc;
@@ -54,6 +55,7 @@ pub async fn run(
         bgsave,
         snapshot,
         maxcon,
+        auth,
         ..
     }: ConfigurationSet,
     restore_filepath: Option<String>,
@@ -78,6 +80,13 @@ pub async fn run(
         .map_err(|e| format!("Failed to restore data from backup with error: {}", e))?;
     let db = Corestore::init_with_snapcfg(engine.clone())
         .map_err(|e| format!("Error while initializing database: {}", e))?;
+    let auth_provider = match auth.origin_key {
+        Some(key) => {
+            let authref = db.get_store().setup_auth();
+            AuthProvider::new(authref, Some(key.into_inner()))
+        }
+        None => AuthProvider::new_disabled(),
+    };
 
     // initialize the background services
     let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
@@ -93,7 +102,8 @@ pub async fn run(
     ));
 
     // start the server (single or multiple listeners)
-    let mut server = dbnet::connect(ports, maxcon, db.clone(), signal.clone()).await?;
+    let mut server =
+        dbnet::connect(ports, maxcon, db.clone(), auth_provider, signal.clone()).await?;
 
     let termsig = TerminationSignal::init().map_err(|e| e.to_string())?;
     tokio::select! {

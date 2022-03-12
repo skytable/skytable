@@ -25,6 +25,7 @@
 */
 
 use super::{feedback::WarningStack, DEFAULT_IPV4, DEFAULT_PORT};
+use crate::config::AuthkeyWrapper;
 use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
 use core::fmt;
 use core::str::FromStr;
@@ -84,6 +85,8 @@ pub struct ConfigurationSet {
     pub maxcon: usize,
     /// The deployment mode
     pub mode: Modeset,
+    /// The auth settings
+    pub auth: AuthSettings,
 }
 
 impl ConfigurationSet {
@@ -94,6 +97,7 @@ impl ConfigurationSet {
         ports: PortConfig,
         maxcon: usize,
         mode: Modeset,
+        auth: AuthSettings,
     ) -> Self {
         Self {
             noart,
@@ -102,6 +106,7 @@ impl ConfigurationSet {
             ports,
             maxcon,
             mode,
+            auth,
         }
     }
     /// Create a default `ConfigurationSet` with the following setup defaults:
@@ -119,6 +124,7 @@ impl ConfigurationSet {
             PortConfig::new_insecure_only(DEFAULT_IPV4, 2003),
             MAXIMUM_CONNECTION_LIMIT,
             Modeset::Dev,
+            AuthSettings::default(),
         )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -374,5 +380,42 @@ impl<'de> Deserialize<'de> for Modeset {
         D: Deserializer<'de>,
     {
         deserializer.deserialize_str(ModesetVisitor)
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct AuthSettings {
+    pub origin_key: Option<AuthkeyWrapper>,
+}
+
+impl AuthSettings {
+    pub const fn default() -> Self {
+        Self { origin_key: None }
+    }
+}
+
+struct AuthSettingsVisitor;
+
+impl<'de> Visitor<'de> for AuthSettingsVisitor {
+    type Value = AuthkeyWrapper;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "a 40 character ASCII string")
+    }
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        AuthkeyWrapper::try_new(value).ok_or(E::custom(
+            "Invalid value for authkey. must be 40 ASCII characters with nonzero first char",
+        ))
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthkeyWrapper {
+    fn deserialize<D>(deserializer: D) -> Result<AuthkeyWrapper, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(AuthSettingsVisitor)
     }
 }

@@ -26,13 +26,13 @@
 
 //! Interfaces with the file system
 
-use crate::corestore::htable::Coremap;
-use crate::corestore::htable::Data;
-use crate::corestore::memstore::Keyspace;
 use crate::corestore::memstore::Memstore;
-use crate::kvengine::listmap::LockedVec;
 use crate::registry;
+use crate::storage::v1::flush::FlushableKeyspace;
+use crate::storage::v1::flush::FlushableTable;
+use crate::storage::v1::flush::StorageTarget;
 use crate::IoResult;
+use core::ops::Deref;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{BufWriter, Write};
@@ -43,20 +43,14 @@ pub const DIR_RSNAPROOT: &str = "data/rsnap";
 pub const DIR_BACKUPS: &str = "data/backups";
 pub const DIR_ROOT: &str = "data";
 
-pub trait DiskWritable {
-    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()>;
-}
-
-impl<'a> DiskWritable for &'a Coremap<Data, Data> {
-    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()> {
-        super::se::raw_serialize_map(self, writer)
+/// Creates the directories for the keyspaces
+pub fn create_tree<T: StorageTarget>(target: &T, memroot: &Memstore) -> IoResult<()> {
+    for ks in memroot.keyspaces.iter() {
+        unsafe {
+            try_dir_ignore_existing!(target.keyspace_target(ks.key().as_str()))?;
+        }
     }
-}
-
-impl<'a> DiskWritable for &'a Coremap<Data, LockedVec> {
-    fn write_self<W: Write>(&self, writer: &mut W) -> IoResult<()> {
-        super::se::raw_serialize_list_map(self, writer)
-    }
+    Ok(())
 }
 
 /// This creates the root directory structure:
@@ -71,7 +65,7 @@ impl<'a> DiskWritable for &'a Coremap<Data, LockedVec> {
 /// ```
 ///
 /// If any directories exist, they are simply ignored
-pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
+pub fn create_tree_fresh<T: StorageTarget>(target: &T, memroot: &Memstore) -> IoResult<()> {
     try_dir_ignore_existing!(
         DIR_ROOT,
         DIR_KSROOT,
@@ -79,21 +73,7 @@ pub fn create_tree(memroot: &Memstore) -> IoResult<()> {
         DIR_SNAPROOT,
         DIR_RSNAPROOT
     );
-    for ks in memroot.keyspaces.iter() {
-        unsafe {
-            try_dir_ignore_existing!(concat_path!(DIR_KSROOT, ks.key().as_str()))?;
-        }
-    }
-    Ok(())
-}
-
-pub fn snap_create_tree(snapdir: &str, snapid: &str, memroot: &Memstore) -> IoResult<()> {
-    for ks in memroot.keyspaces.iter() {
-        unsafe {
-            try_dir_ignore_existing!(concat_path!(snapdir, snapid, ks.key().as_str()))?;
-        }
-    }
-    Ok(())
+    self::create_tree(target, memroot)
 }
 
 /// Clean up the tree
@@ -141,17 +121,23 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
 /// Uses a buffered writer under the hood to improve write performance as the provided
 /// writable interface might be very slow. The buffer does flush once done, however, it
 /// is important that you fsync yourself!
-pub fn serialize_into_slow_buffer<T: Write, U: DiskWritable>(
+pub fn serialize_into_slow_buffer<T: Write, U: FlushableTable>(
     buffer: &mut T,
-    writable_item: U,
+    writable_item: &U,
 ) -> IoResult<()> {
     let mut buffer = BufWriter::new(buffer);
-    writable_item.write_self(&mut buffer)?;
+    writable_item.write_table_to(&mut buffer)?;
     buffer.flush()?;
     Ok(())
 }
 
-pub fn serialize_partmap_into_slow_buffer<T: Write>(buffer: &mut T, ks: &Keyspace) -> IoResult<()> {
+pub fn serialize_partmap_into_slow_buffer<T, U, Tbl, K>(buffer: &mut T, ks: &K) -> IoResult<()>
+where
+    T: Write,
+    U: Deref<Target = Tbl>,
+    Tbl: FlushableTable,
+    K: FlushableKeyspace<Tbl, U>,
+{
     let mut buffer = BufWriter::new(buffer);
     super::se::raw_serialize_partmap(&mut buffer, ks)?;
     buffer.flush()?;

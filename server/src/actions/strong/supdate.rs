@@ -29,7 +29,9 @@ use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
 use crate::kvengine::KVEngine;
+use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
+use core::slice::Iter;
 
 action! {
     /// Run an `SUPDATE` query
@@ -38,14 +40,13 @@ action! {
     /// or code `1`
     fn supdate(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
-        if is_lowbit_set!(howmany) || howmany == 0 {
-            return con.write_response(responses::groups::ACTION_ERR).await;
-        }
-        let kve = kve!(con, handle);
+        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
             let encoder = kve.get_encoder();
-            let outcome = {
-                self::snapshot_and_update(kve, encoder, act)
+            let outcome = unsafe {
+                // UNSAFE(@ohsayan): the lifetime of `act` ensure ptr validity
+                self::snapshot_and_update(kve, encoder, act.into_inner())
             };
             match outcome {
                 StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
@@ -73,76 +74,10 @@ action! {
 /// Take a consistent snapshot of the database at this point in time. Once snapshotting
 /// completes, mutate the entries in place while keeping up with isolation guarantees
 /// `(all_okay, enc_err)`
-pub(super) fn snapshot_and_update(
-    kve: &KVEngine,
+pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
+    kve: &'a KVEngine,
     encoder: DoubleEncoder,
-    mut act: ActionIter,
-) -> StrongActionResult {
-    let mut enc_err = false;
-    let mut snapshots = Vec::with_capacity(act.len());
-    let iter_stat_ok;
-    {
-        // snapshot the values at this point in time
-        iter_stat_ok = act.chunks_exact(2).all(|kv| unsafe {
-            let key = ucidx!(kv, 0).as_slice();
-            let value = ucidx!(kv, 1).as_slice();
-            if compiler::likely(encoder.is_ok(key, value)) {
-                if let Some(snapshot) = kve.take_snapshot(key) {
-                    snapshots.push(snapshot);
-                    true
-                } else {
-                    false
-                }
-            } else {
-                enc_err = true;
-                false
-            }
-        });
-    }
-    cfg_test!({
-        // give the caller 10 seconds to do some crap
-        do_sleep!(10 s);
-    });
-    if compiler::unlikely(enc_err) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
-    }
-    if registry::state_okay() {
-        // uphold consistency
-        if iter_stat_ok {
-            let kve = kve;
-            // good, so all the values existed when we snapshotted them; let's update 'em
-            let mut snap_cc = snapshots.into_iter();
-            let lowtable = kve.__get_inner_ref();
-            while let (Some(key), Some(value), Some(snapshot)) =
-                (act.next(), act.next(), snap_cc.next())
-            {
-                // When we snapshotted, we looked at `snapshot`. If the value is still the
-                // same, then we'll update it. Otherwise, let it be
-                if let Some(mut mutable) = lowtable.mut_entry(Data::copy_from_slice(key)) {
-                    if mutable.value().eq(&snapshot) {
-                        mutable.insert(Data::copy_from_slice(value));
-                    } else {
-                        drop(mutable);
-                    }
-                }
-            }
-            StrongActionResult::Okay
-        } else {
-            StrongActionResult::Nil
-        }
-    } else {
-        StrongActionResult::ServerError
-    }
-}
-
-/// Take a consistent snapshot of the database at this point in time. Once snapshotting
-/// completes, mutate the entries in place while keeping up with isolation guarantees
-/// `(all_okay, enc_err)`
-#[cfg(test)]
-pub(super) fn snapshot_and_update_test(
-    kve: &KVEngine,
-    encoder: DoubleEncoder,
-    mut act: std::vec::IntoIter<bytes::Bytes>,
+    mut act: Iter<'a, T>,
 ) -> StrongActionResult {
     let mut enc_err = false;
     let mut snapshots = Vec::with_capacity(act.len());
@@ -150,8 +85,8 @@ pub(super) fn snapshot_and_update_test(
     {
         // snapshot the values at this point in time
         iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
-            let key = &ucidx!(kv, 0);
-            let value = &ucidx!(kv, 1);
+            let key = ucidx!(kv, 0).deref_slice();
+            let value = ucidx!(kv, 1).deref_slice();
             if compiler::likely(encoder.is_ok(key, value)) {
                 if let Some(snapshot) = kve.take_snapshot(key) {
                     snapshots.push(snapshot);
@@ -182,13 +117,17 @@ pub(super) fn snapshot_and_update_test(
             while let (Some(key), Some(value), Some(snapshot)) =
                 (act.next(), act.next(), snap_cc.next())
             {
-                // When we snapshotted, we looked at `snapshot`. If the value is still the
-                // same, then we'll update it. Otherwise, let it be
-                if let Some(mut mutable) = lowtable.mut_entry(Data::from(key)) {
-                    if mutable.value().eq(&snapshot) {
-                        mutable.insert(Data::from(value));
-                    } else {
-                        drop(mutable);
+                unsafe {
+                    // When we snapshotted, we looked at `snapshot`. If the value is still the
+                    // same, then we'll update it. Otherwise, let it be
+                    if let Some(mut mutable) =
+                        lowtable.mut_entry(Data::copy_from_slice(key.deref_slice()))
+                    {
+                        if mutable.value().eq(&snapshot) {
+                            mutable.insert(Data::copy_from_slice(value.deref_slice()));
+                        } else {
+                            drop(mutable);
+                        }
                     }
                 }
             }

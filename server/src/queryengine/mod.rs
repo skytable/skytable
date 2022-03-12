@@ -26,14 +26,13 @@
 
 //! # The Query Engine
 
-use crate::corestore::memstore::DdlError;
+use crate::actions::ActionResult;
+use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::element::UnsafeElement;
-use crate::protocol::iter::AnyArrayIter;
-use crate::protocol::responses;
-use crate::protocol::PipelineQuery;
-use crate::protocol::SimpleQuery;
+use crate::protocol::{
+    element::UnsafeElement, iter::AnyArrayIter, responses, PipelineQuery, SimpleQuery, UnsafeSlice,
+};
 use crate::{actions, admin};
 use core::hint::unreachable_unchecked;
 mod ddl;
@@ -44,22 +43,30 @@ mod tests;
 
 pub type ActionIter<'a> = AnyArrayIter<'a>;
 
+const ACTION_AUTH: &[u8] = b"auth";
+
 macro_rules! gen_constants_and_matches {
-    ($con:expr, $buf:ident, $db:ident, $($action:ident => $fns:expr),*) => {
+    (
+        $con:expr, $buf:ident, $db:ident, $($action:ident => $fns:path),*,
+        {$($action2:ident => $fns2:expr),*}
+    ) => {
         mod tags {
             //! This module is a collection of tags/strings used for evaluating queries
             //! and responses
             $(
                 pub const $action: &[u8] = stringify!($action).as_bytes();
             )*
+            $(
+                pub const $action2: &[u8] = stringify!($action2).as_bytes();
+            )*
         }
-        let first = match $buf.next_uppercase() {
-            Some(frst) => frst,
-            None => return $con.write_response(responses::groups::PACKET_ERR).await,
-        };
+        let first = $buf.next_uppercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?;
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
+            )*
+            $(
+                tags::$action2 => $fns2.await?,
             )*
             _ => {
                 $con.write_response(responses::groups::UNKNOWN_ACTION).await?;
@@ -68,73 +75,75 @@ macro_rules! gen_constants_and_matches {
     };
 }
 
-macro_rules! swap_entity {
-    ($con:expr, $handle:expr, $entity:expr) => {
-        match parser::get_query_entity(&$entity) {
-            Ok(e) => match $handle.swap_entity(e) {
-                Ok(()) => $con.write_response(responses::groups::OKAY).await?,
-                Err(DdlError::ObjectNotFound) => {
-                    $con.write_response(responses::groups::CONTAINER_NOT_FOUND)
-                        .await?
-                }
-                Err(DdlError::DefaultNotFound) => {
-                    $con.write_response(responses::groups::DEFAULT_UNSET)
-                        .await?
-                }
-                Err(_) => unsafe {
-                    // we know Corestore::swap_entity doesn't return anything else
-                    impossible!()
-                },
-            },
-            Err(e) => $con.write_response(e).await?,
-        }
-    };
-}
-
 action! {
-    //// Execute a simple query
-    fn execute_simple(db: &mut Corestore,con: &mut T, buf: SimpleQuery) {
+    /// Execute queries for an anonymous user
+    fn execute_simple_noauth(
+        _db: &mut Corestore,
+        con: &mut T,
+        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        buf: SimpleQuery
+    ) {
         if buf.is_any_array() {
-            unsafe {
-                self::execute_stage(db, con, &buf.into_inner()).await
+            let bufref = unsafe { buf.into_inner() };
+            let mut iter = unsafe { get_iter(&bufref) };
+            match iter.next_lowercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
+                ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
+                _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
             }
         } else {
-            con.write_response(responses::groups::WRONGTYPE_ERR).await
+            util::err(groups::WRONGTYPE_ERR)
+        }
+    }
+    //// Execute a simple query
+    fn execute_simple(
+        db: &mut Corestore,
+        con: &mut T,
+        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        buf: SimpleQuery
+    ) {
+        if buf.is_any_array() {
+            unsafe {
+                self::execute_stage(db, con, auth, &buf.into_inner()).await
+            }
+        } else {
+            util::err(groups::WRONGTYPE_ERR)
         }
     }
 }
 
-async fn execute_stage<'a, T: 'a, Strm>(
+unsafe fn get_iter<'a>(buf: &'a UnsafeElement) -> AnyArrayIter<'a> {
+    let bufref: &'a Box<[UnsafeSlice]>;
+    let iter;
+
+    // this is the boxed slice
+    bufref = {
+        // SAFETY: execute_simple is called by execute_query which in turn is called
+        // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
+        // ensuring that the source buffer exists as long as the connection does
+        // so this is safe.
+        match buf {
+            UnsafeElement::AnyArray(arr) => arr,
+            _ => unreachable_unchecked(),
+        }
+    };
+    // this is our final iter
+    iter = {
+        // SAFETY: Again, this is guaranteed to be valid because the `con` is valid
+        AnyArrayIter::new(bufref.iter())
+    };
+    iter
+}
+
+async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
     db: &mut Corestore,
     con: &'a mut T,
+    auth: &mut AuthProviderHandle<'_, T, Strm>,
     buf: &UnsafeElement,
-) -> std::io::Result<()>
-where
-    T: ProtocolConnectionExt<Strm> + Send + Sync,
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
-{
-    let bufref;
-    let _rawiter;
-    let mut iter;
-    unsafe {
-        // this is the boxed slice
-        bufref = {
-            // SAFETY: execute_simple is called by execute_query which in turn is called
-            // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
-            // ensuring that the source buffer exists as long as the connection does
-            // so this is safe.
-            match buf {
-                UnsafeElement::AnyArray(arr) => arr,
-                _ => unreachable_unchecked(),
-            }
-        };
-        _rawiter = bufref.iter();
-        // this is our final iter
-        iter = {
-            // SAFETY: Again, this is guaranteed to be valid because the `con` is valid
-            AnyArrayIter::new(_rawiter)
-        };
-    }
+) -> ActionResult<()> {
+    let mut iter = unsafe {
+        // UNSAFE(@ohsayan): Assumed to be guaranteed by the caller
+        get_iter(buf)
+    };
     {
         gen_constants_and_matches!(
             con, iter, db,
@@ -165,7 +174,11 @@ where
             LSET => actions::lists::lset,
             LGET => actions::lists::lget::lget,
             LMOD => actions::lists::lmod::lmod,
-            WHEREAMI => actions::whereami::whereami
+            WHEREAMI => actions::whereami::whereami,
+            {
+                // actions that need other arguments
+                AUTH => auth::auth(con, auth, iter)
+            }
         );
     }
     Ok(())
@@ -174,25 +187,28 @@ where
 action! {
     /// Handle `use <entity>` like queries
     fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, not 1);
+        ensure_length(act.len(), |len| len == 1)?;
         let entity = unsafe {
             // SAFETY: Already checked len
             act.next_unchecked()
         };
-        swap_entity!(con, handle, entity);
+        handle.swap_entity(parser::get_query_entity(entity)?)?;
+        con.write_response(groups::OKAY).await?;
         Ok(())
     }
 }
 
 action! {
     /// Execute a basic pipelined query
-    fn execute_pipeline(handle: &mut Corestore, con: &mut T, pipeline: PipelineQuery) {
+    fn execute_pipeline(
+        handle: &mut Corestore,
+        con: &mut T,
+        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        pipeline: PipelineQuery
+    ) {
         for stage in pipeline.iter() {
-            if stage.is_any_array() {
-                self::execute_stage(handle, con, stage).await?;
-            } else {
-                con.write_response(responses::groups::WRONGTYPE_ERR).await?;
-            }
+            ensure_cond_or_err(stage.is_any_array(), groups::WRONGTYPE_ERR)?;
+            self::execute_stage(handle, con, auth, stage).await?;
         }
         Ok(())
     }

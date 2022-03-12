@@ -35,7 +35,7 @@ const DEFAULT_COUNT: usize = 10;
 action!(
     /// Run an `LSKEYS` query
     fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        err_if_len_is!(act, con, gt 3);
+        ensure_length(act.len(), |size| size < 4)?;
         let (table, count) = if act.is_empty() {
             (get_tbl!(handle, con), DEFAULT_COUNT)
         } else if act.len() == 1 {
@@ -46,7 +46,7 @@ action!(
                 let count = if let Ok(cnt) = String::from_utf8_lossy(nextret).parse::<usize>() {
                     cnt
                 } else {
-                    return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+                    return util::err(groups::WRONGTYPE_ERR);
                 };
                 (get_tbl!(handle, con), count)
             } else {
@@ -62,7 +62,7 @@ action!(
             let count = if let Ok(cnt) = String::from_utf8_lossy(count_ret).parse::<usize>() {
                 cnt
             } else {
-                return con.write_response(responses::groups::WRONGTYPE_ERR).await;
+                return util::err(groups::WRONGTYPE_ERR);
             };
             (get_tbl!(entity, handle, con), count)
         };

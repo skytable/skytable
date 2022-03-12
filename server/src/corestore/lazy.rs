@@ -34,6 +34,8 @@ use core::sync::atomic::Ordering;
 
 const ORD_ACQ: Ordering = Ordering::Acquire;
 const ORD_SEQ: Ordering = Ordering::SeqCst;
+const ORD_REL: Ordering = Ordering::Release;
+const ORD_RLX: Ordering = Ordering::Relaxed;
 
 /// A lazily intialized, or _call by need_ value
 #[derive(Debug)]
@@ -203,15 +205,102 @@ cfg_test!(
         });
         drop(x); // no panic because it is null
     }
-
-    struct DropLessStruct(());
-    #[test]
-    fn test_no_drop_nodrop() {
-        let x: Lazy<DropLessStruct, fn() -> DropLessStruct> = Lazy::new(|| {
-            DropLessStruct(())
-        });
-        // deref to init
-        let _y = &*x;
-        drop(x);
-    }
 );
+
+/// A "cell" that can be initialized once using a single atomic
+pub struct Once<T> {
+    value: AtomicPtr<T>,
+}
+
+#[allow(dead_code)] // TODO: Remove this
+impl<T> Once<T> {
+    pub const fn new() -> Self {
+        Self {
+            value: AtomicPtr::new(ptr::null_mut()),
+        }
+    }
+    pub fn with_value(val: T) -> Self {
+        Self {
+            value: AtomicPtr::new(Box::into_raw(Box::new(val))),
+        }
+    }
+    pub fn get(&self) -> Option<&T> {
+        // synchronizes with the store for value ptr
+        let ptr = self.value.load(ORD_ACQ);
+        if ptr.is_null() {
+            None
+        } else {
+            unsafe { Some(&*self.value.load(ORD_ACQ)) }
+        }
+    }
+    pub fn set(&self, val: T) -> bool {
+        // synchronizes with the store for set
+        let snapshot = self.value.load(ORD_ACQ);
+        if snapshot.is_null() {
+            // let's try to init this
+            let vptr = Box::into_raw(Box::new(val));
+            // if malloc fails, that's fine because there will be no cas
+            let r = self.value.compare_exchange(
+                snapshot, vptr, // we must use release ordering to sync with the acq
+                ORD_REL,
+                // on failure simply use relaxed because we don't use the value anyways
+                // -- so why bother stressing out the processor?
+                ORD_RLX,
+            );
+            r.is_ok()
+        } else {
+            false
+        }
+    }
+}
+
+impl<T> Drop for Once<T> {
+    fn drop(&mut self) {
+        let snapshot = self.value.load(ORD_ACQ);
+        if !snapshot.is_null() {
+            unsafe { mem::drop(Box::from_raw(snapshot)) }
+        }
+    }
+}
+
+impl<T> From<Option<T>> for Once<T> {
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(v) => Self::with_value(v),
+            None => Self::new(),
+        }
+    }
+}
+
+#[test]
+fn once_get_none() {
+    let once: Once<u8> = Once::new();
+    assert_eq!(once.get(), None);
+}
+
+cfg_test! {
+    use std::sync::Arc;
+    use std::time::Duration;
+}
+
+#[test]
+fn once_set_get_some() {
+    let once: Arc<Once<u8>> = Arc::new(Once::new());
+    let t1 = once.clone();
+    let t2 = once.clone();
+    let t3 = once.clone();
+    let hdl1 = thread::spawn(move || {
+        assert!(t1.set(10));
+    });
+    thread::sleep(Duration::from_secs(3));
+    let hdl2 = thread::spawn(move || {
+        assert!(!t2.set(10));
+    });
+    let hdl3 = thread::spawn(move || {
+        assert_eq!(*t3.get().unwrap(), 10);
+    });
+    assert_eq!(*once.get().unwrap(), 10);
+    hdl1.join().unwrap();
+    hdl2.join().unwrap();
+    hdl3.join().unwrap();
+}

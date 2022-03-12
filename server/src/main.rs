@@ -26,6 +26,7 @@
 
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
+#![deny(unused_must_use)]
 #![cfg_attr(feature = "nightly", feature(test))]
 
 //! # Skytable
@@ -42,10 +43,11 @@ use libsky::VERSION;
 use std::env;
 use std::process;
 #[macro_use]
-mod util;
+pub mod util;
 mod actions;
 mod admin;
 mod arbiter;
+mod auth;
 mod config;
 mod corestore;
 mod dbnet;
@@ -62,10 +64,15 @@ mod tests;
 
 const PATH: &str = ".sky_pid";
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(test)]
+const ROOT_DIR: &str = env!("ROOT_DIR");
+#[cfg(test)]
+const TEST_AUTH_ORIGIN_KEY: &str = env!("TEST_ORIGIN_KEY");
+
+#[cfg(all(not(target_env = "msvc"), not(miri)))]
 use jemallocator::Jemalloc;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(all(not(target_env = "msvc"), not(miri)))]
 #[global_allocator]
 /// Jemallocator - this is the default memory allocator for platforms other than msvc
 static GLOBAL: Jemalloc = Jemalloc;

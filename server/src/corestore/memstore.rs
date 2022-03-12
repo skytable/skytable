@@ -54,24 +54,23 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
-#![allow(unused)] // TODO(@ohsayan): Plonk this
-
 use super::KeyspaceResult;
+use crate::auth::Authmap;
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
-use crate::corestore::lock::{QLGuard, QuickLock};
 use crate::corestore::table::Table;
+use crate::corestore::table::{SystemDataModel, SystemTable};
 use crate::registry;
+use crate::util::Wrapper;
 use core::borrow::Borrow;
 use core::hash::Hash;
-use core::mem::MaybeUninit;
 use std::sync::Arc;
 
-#[sky_macros::array]
-const DEFAULT_ARRAY: [MaybeUninit<u8>; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
-
-#[sky_macros::array]
-const SYSTEM_ARRAY: [MaybeUninit<u8>; 64] = [b's', b'y', b's', b't', b'e', b'm'];
+uninit_array! {
+    const DEFAULT_ARRAY: [u8; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];
+    const SYSTEM_ARRAY: [u8; 64] = [b's', b'y', b's', b't', b'e', b'm'];
+    const SYSTEM_AUTH_ARRAY: [u8; 64] = [b'a', b'u', b't', b'h'];
+}
 
 /// typedef for the keyspace/table IDs. We don't need too much fancy here,
 /// no atomic pointers and all. Just a nice array. With amazing gurantees
@@ -85,6 +84,10 @@ pub const DEFAULT: ObjectID = unsafe {
 pub const SYSTEM: ObjectID = unsafe {
     // SAFETY: known init len
     Array::from_const(SYSTEM_ARRAY, 6)
+};
+pub const AUTH: ObjectID = unsafe {
+    // SAFETY: known init len
+    Array::from_const(SYSTEM_AUTH_ARRAY, 4)
 };
 
 #[test]
@@ -159,17 +162,24 @@ pub enum DdlError {
 pub struct Memstore {
     /// the keyspaces
     pub keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
+    /// the system keyspace with the system tables
+    pub system: SystemKeyspace,
 }
 
 impl Memstore {
     /// Create a new empty in-memory table with literally nothing in it
+    #[cfg(test)]
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
+            system: SystemKeyspace::new(Coremap::new()),
         }
     }
-    pub fn init_with_all(keyspaces: Coremap<ObjectID, Arc<Keyspace>>) -> Self {
-        Self { keyspaces }
+    pub fn init_with_all(
+        keyspaces: Coremap<ObjectID, Arc<Keyspace>>,
+        system: SystemKeyspace,
+    ) -> Self {
+        Self { keyspaces, system }
     }
     /// Create a new in-memory table with the default keyspace and the default
     /// tables. So, whenever you're calling this, this is what you get:
@@ -194,8 +204,25 @@ impl Memstore {
             keyspaces: {
                 let n = Coremap::new();
                 n.true_if_insert(DEFAULT, Arc::new(Keyspace::empty_default()));
+                // HACK(@ohsayan): This just ensures that the record is in the preload
                 n.true_if_insert(SYSTEM, Arc::new(Keyspace::empty()));
                 n
+            },
+            system: SystemKeyspace::new(Coremap::new()),
+        }
+    }
+    pub fn setup_auth(&self) -> Authmap {
+        match self.system.tables.fresh_entry(AUTH) {
+            Some(fresh) => {
+                // created afresh, fine
+                let r = Authmap::default();
+                fresh.insert(Wrapper::new(SystemTable::new_auth(r.clone())));
+                r
+            }
+            None => match self.system.tables.get(&AUTH).unwrap().data {
+                SystemDataModel::Auth(ref am) => am.clone(),
+                #[allow(unreachable_patterns)]
+                _ => unsafe { impossible!() },
             },
         }
     }
@@ -296,6 +323,18 @@ impl Memstore {
     }
 }
 
+/// System keyspace
+#[derive(Debug)]
+pub struct SystemKeyspace {
+    pub tables: Coremap<ObjectID, Wrapper<SystemTable>>,
+}
+
+impl SystemKeyspace {
+    pub const fn new(tables: Coremap<ObjectID, Wrapper<SystemTable>>) -> Self {
+        Self { tables }
+    }
+}
+
 #[derive(Debug)]
 /// A keyspace houses all the other tables
 pub struct Keyspace {
@@ -304,8 +343,6 @@ pub struct Keyspace {
     /// the replication strategy for this keyspace
     #[allow(dead_code)] // TODO: Remove this once we're ready with replication
     replication_strategy: cluster::ReplicationStrategy,
-    /// A **virtual lock** on the partmap for this keyspace
-    partmap_lock: QuickLock<()>,
 }
 
 #[cfg(test)]
@@ -326,14 +363,12 @@ impl Keyspace {
                 ht
             },
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     pub fn init_with_all_def_strategy(tables: Coremap<ObjectID, Arc<Table>>) -> Self {
         Self {
             tables,
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     /// Create a new empty keyspace with zero tables
@@ -341,7 +376,6 @@ impl Keyspace {
         Self {
             tables: Coremap::new(),
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     pub fn table_count(&self) -> usize {
@@ -391,16 +425,6 @@ impl Keyspace {
                 Err(DdlError::StillInUse)
             }
         }
-    }
-
-    /// Remove a table without doing any reference checks. This will just pull it off
-    pub unsafe fn force_remove_table(&self, tblid: &ObjectID) {
-        // atomic remember? nobody cares about the result
-        self.tables.remove(tblid);
-    }
-
-    pub fn lock_partmap(&self) -> QLGuard<'_, ()> {
-        self.partmap_lock.lock()
     }
 }
 

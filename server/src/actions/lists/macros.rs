@@ -24,15 +24,6 @@
  *
 */
 
-macro_rules! listmap {
-    ($tbl:expr, $con:expr) => {
-        match $tbl.get_model_ref() {
-            DataModel::KVExtListmap(lm) => lm,
-            _ => return conwrite!($con, groups::WRONG_MODEL),
-        }
-    };
-}
-
 macro_rules! writelist {
     ($con:expr, $listmap:expr, $items:expr) => {
         let mut typed_array_writer =

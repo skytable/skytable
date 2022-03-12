@@ -34,8 +34,8 @@ action!(
     /// Run an `MGET` query
     ///
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
-        crate::err_if_len_is!(act, con, eq 0);
-        let kve = kve!(con, handle);
+        ensure_length(act.len(), |size| size != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         let encoding_is_okay = ENCODING_LUT_ITER[kve.kve_key_encoded()](act.as_ref());
         if compiler::likely(encoding_is_okay) {
             let mut writer = unsafe {

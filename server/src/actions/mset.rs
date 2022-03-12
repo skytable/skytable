@@ -33,13 +33,8 @@ action!(
     /// Run an `MSET` query
     fn mset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
-        if is_lowbit_set!(howmany) || howmany == 0 {
-            // An odd number of arguments means that the number of keys
-            // is not the same as the number of values, we won't run this
-            // action at all
-            return con.write_response(responses::groups::ACTION_ERR).await;
-        }
-        let kve = kve!(con, handle);
+        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<KVE>()?;
         let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.kve_tuple_encoding()](&act);
         if compiler::likely(encoding_is_okay) {
             let done_howmany: Option<usize>;
@@ -55,12 +50,13 @@ action!(
                 done_howmany = None;
             }
             if let Some(done_howmany) = done_howmany {
-                return con.write_response(done_howmany as usize).await;
+                con.write_response(done_howmany as usize).await?;
             } else {
-                return con.write_response(responses::groups::SERVER_ERR).await;
+                con.write_response(responses::groups::SERVER_ERR).await?;
             }
         } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))
+            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
         }
+        Ok(())
     }
 );

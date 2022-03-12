@@ -55,6 +55,25 @@ macro_rules! runeq {
     };
 }
 
+macro_rules! runmatch {
+    ($con:expr, $query:expr, $match:path) => {{
+        let ret = $con.run_simple_query(&$query).await.unwrap();
+        assert!(matches!(ret, $match(_)))
+    }};
+}
+
+macro_rules! assert_okay {
+    ($con:expr, $query:expr) => {
+        assert_respcode!($con, $query, ::skytable::RespCode::Okay)
+    };
+}
+
+macro_rules! assert_aerr {
+    ($con:expr, $query:expr) => {
+        assert_respcode!($con, $query, ::skytable::RespCode::ActionError)
+    };
+}
+
 macro_rules! assert_skyhash_arrayeq {
     (str, $con:expr, $query:expr, $($val:expr),*) => {
         runeq!(
@@ -77,5 +96,11 @@ macro_rules! assert_skyhash_arrayeq {
                 ]
             ))
         )
+    };
+}
+
+macro_rules! assert_respcode {
+    ($con:expr, $query:expr, $code:expr) => {
+        runeq!($con, $query, ::skytable::Element::RespCode($code))
     };
 }

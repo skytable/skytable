@@ -36,7 +36,7 @@ use crate::util::compiler;
 action!(
     /// Run an `EXISTS` query
     fn exists(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
-        err_if_len_is!(act, con, eq 0);
+        ensure_length(act.len(), |len| len != 0)?;
         let mut how_many_of_them_exist = 0usize;
         macro_rules! exists {
             ($engine:expr) => {{
@@ -51,7 +51,7 @@ action!(
                 }
             }};
         }
-        let tbl = get_tbl!(handle, con);
+        let tbl = get_tbl_ref!(handle, con);
         match tbl.get_model_ref() {
             DataModel::KV(kve) => exists!(kve),
             DataModel::KVExtListmap(kve) => exists!(kve),

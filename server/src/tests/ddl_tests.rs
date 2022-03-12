@@ -24,7 +24,7 @@
  *
 */
 
-#[sky_macros::dbtest]
+#[sky_macros::dbtest_module]
 mod __private {
     use libstress::utils;
     use skytable::types::Array;

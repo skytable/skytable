@@ -28,9 +28,16 @@
 mod macros;
 pub mod compiler;
 pub mod os;
+use crate::actions::{ActionError, ActionResult};
+use crate::protocol::responses::groups;
+use core::fmt::Debug;
+use core::future::Future;
+use core::ops::Deref;
+use core::pin::Pin;
 use std::process;
 
 const EXITCODE_ONE: i32 = 0x01;
+pub type FutureResult<'s, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
 
 /// # Unsafe unwrapping
 ///
@@ -66,6 +73,61 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
     }
 }
 
+pub trait UnwrapActionError<T> {
+    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T>;
+    fn unwrap_or_aerr(self) -> ActionResult<T>;
+}
+
+impl<T> UnwrapActionError<T> for Option<T> {
+    fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
+        self.ok_or(e.into())
+    }
+    fn unwrap_or_aerr(self) -> ActionResult<T> {
+        self.ok_or(groups::ACTION_ERR.into())
+    }
+}
+
 pub fn exit_error() -> ! {
     process::exit(EXITCODE_ONE)
+}
+
+/// Returns a Result with the provided error
+#[inline(never)]
+#[cold]
+pub fn err<T, E>(e: impl Into<E>) -> Result<T, E> {
+    Err(e.into())
+}
+
+/// This is used to hack around multiple trait system boundaries
+/// like deref coercion recursions
+#[derive(Debug)]
+pub struct Wrapper<T> {
+    inner: T,
+}
+
+impl<T> Wrapper<T> {
+    pub const fn new(inner: T) -> Self {
+        Self { inner }
+    }
+}
+
+impl<T: Clone> Wrapper<T> {
+    pub fn inner_clone(&self) -> T {
+        self.inner.clone()
+    }
+}
+
+impl<T> Deref for Wrapper<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T: Clone> Clone for Wrapper<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
 }

@@ -36,7 +36,7 @@ macro_rules! lset {
     }
 }
 
-#[sky_macros::dbtest(table = "keymap(str,list<str>)")]
+#[sky_macros::dbtest_module(table = "keymap(str,list<str>)")]
 mod __private {
     use skytable::{query, types::Array, Element, RespCode};
 

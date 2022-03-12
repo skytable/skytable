@@ -42,6 +42,7 @@ args:
       short: e
       required: false
       long: eval
+      multiple: true
       value_name: expression
       help: Run an expression without REPL
       takes_value: true
