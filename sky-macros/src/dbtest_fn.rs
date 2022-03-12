@@ -39,6 +39,7 @@ pub struct DBTestFunctionConfig {
     login: (OptString, OptString),
     testuser: bool,
     rootuser: bool,
+    norun: bool,
 }
 
 impl DBTestFunctionConfig {
@@ -51,6 +52,7 @@ impl DBTestFunctionConfig {
             login: (None, None),
             testuser: false,
             rootuser: false,
+            norun: false,
         }
     }
     pub fn get_connection_tokens(&self) -> impl quote::ToTokens {
@@ -172,6 +174,7 @@ pub fn parse_dbtest_func_args(
         "auth_rootuser" => {
             fcfg.rootuser = util::parse_bool(lit, span, "auth_testuser").expect("Expected a bool")
         }
+        "norun" => fcfg.norun = util::parse_bool(lit, span, "norun").expect("Expected a bool"),
         x => panic!("unknown attribute {x} specified"),
     }
 }
@@ -216,64 +219,66 @@ fn generate_dbtest(
         };
     }
 
-    // now create keyspace
-    body = quote! {
-        #body
-        let __create_ks =
-            con.run_simple_query(
-                &skytable::query!("create", "keyspace", "testsuite")
-            ).await.unwrap();
-        if !(
-            __create_ks == skytable::Element::RespCode(skytable::RespCode::Okay) ||
-            __create_ks == skytable::Element::RespCode(
-                skytable::RespCode::ErrorString(
-                    skytable::error::errorstring::ERR_ALREADY_EXISTS.to_owned()
+    if !fcfg.norun {
+        // now create keyspace
+        body = quote! {
+            #body
+            let __create_ks =
+                con.run_simple_query(
+                    &skytable::query!("create", "keyspace", "testsuite")
+                ).await.unwrap();
+            if !(
+                __create_ks == skytable::Element::RespCode(skytable::RespCode::Okay) ||
+                __create_ks == skytable::Element::RespCode(
+                    skytable::RespCode::ErrorString(
+                        skytable::error::errorstring::ERR_ALREADY_EXISTS.to_owned()
+                    )
                 )
-            )
-        ) {
-            panic!("Failed to create keyspace: {:?}", __create_ks);
-        }
-    };
-    // now switch keyspace
-    body = quote! {
-        #body
-        let __switch_ks =
-            con.run_simple_query(
-                &skytable::query!("use", "testsuite")
-            ).await.unwrap();
-        if (__switch_ks != skytable::Element::RespCode(skytable::RespCode::Okay)) {
-            panic!("Failed to switch keyspace: {:?}", __switch_ks);
-        }
-    };
-    // now create table
-    let create_table_tokens = fcfg.get_create_table_tokens(&rand_string);
-    body = quote! {
-        #body
-        assert_eq!(
-            #create_table_tokens,
-            skytable::Element::RespCode(skytable::RespCode::Okay),
-            "Failed to create table"
-        );
-    };
-    // now generate the __MYENTITY__ string
-    body = quote! {
-        #body
-        let mut __concat_entity = std::string::String::new();
-        __concat_entity.push_str("testsuite:");
-        __concat_entity.push_str(&#rand_string);
-        let __MYENTITY__: String = __concat_entity.clone();
-    };
-    // now switch to the temporary table we created
-    body = quote! {
-        #body
-        let __switch_entity =
-            con.run_simple_query(
-                &skytable::query!("use", __concat_entity)
-            ).await.unwrap();
-        assert_eq!(
-            __switch_entity, skytable::Element::RespCode(skytable::RespCode::Okay), "Failed to switch"
-        );
-    };
+            ) {
+                panic!("Failed to create keyspace: {:?}", __create_ks);
+            }
+        };
+        // now switch keyspace
+        body = quote! {
+            #body
+            let __switch_ks =
+                con.run_simple_query(
+                    &skytable::query!("use", "testsuite")
+                ).await.unwrap();
+            if (__switch_ks != skytable::Element::RespCode(skytable::RespCode::Okay)) {
+                panic!("Failed to switch keyspace: {:?}", __switch_ks);
+            }
+        };
+        // now create table
+        let create_table_tokens = fcfg.get_create_table_tokens(&rand_string);
+        body = quote! {
+            #body
+            assert_eq!(
+                #create_table_tokens,
+                skytable::Element::RespCode(skytable::RespCode::Okay),
+                "Failed to create table"
+            );
+        };
+        // now generate the __MYENTITY__ string
+        body = quote! {
+            #body
+            let mut __concat_entity = std::string::String::new();
+            __concat_entity.push_str("testsuite:");
+            __concat_entity.push_str(&#rand_string);
+            let __MYENTITY__: String = __concat_entity.clone();
+        };
+        // now switch to the temporary table we created
+        body = quote! {
+            #body
+            let __switch_entity =
+                con.run_simple_query(
+                    &skytable::query!("use", __concat_entity)
+                ).await.unwrap();
+            assert_eq!(
+                __switch_entity, skytable::Element::RespCode(skytable::RespCode::Okay), "Failed to switch"
+            );
+        };
+    }
     // now give the query ghost variable
     body = quote! {
         #body
@@ -284,17 +289,19 @@ fn generate_dbtest(
         #body
         #testbody
     };
-    // now we're done with the test so flush the table
-    body = quote! {
-        #body
-        {
-            let mut __flush__ = skytable::Query::from("flushdb");
-            std::assert_eq!(
-                con.run_simple_query(&__flush__).await.unwrap(),
-                skytable::Element::RespCode(skytable::RespCode::Okay)
-            );
-        }
-    };
+    if !fcfg.norun {
+        // now we're done with the test so flush the table
+        body = quote! {
+            #body
+            {
+                let mut __flush__ = skytable::Query::from("flushdb");
+                std::assert_eq!(
+                    con.run_simple_query(&__flush__).await.unwrap(),
+                    skytable::Element::RespCode(skytable::RespCode::Okay)
+                );
+            }
+        };
+    }
     let result = quote! {
         #header
         #(#attrs)*

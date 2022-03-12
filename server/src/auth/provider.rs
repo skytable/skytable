@@ -138,25 +138,18 @@ impl AuthProvider {
         }
     }
     fn are_you_root(&self) -> AuthResult<bool> {
+        self.ensure_enabled()?;
         match self.whoami.as_ref().map(|v| v.eq(&USER_ROOT)) {
             Some(v) => Ok(v),
             None => Err(AuthError::Anonymous),
         }
     }
     pub fn claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
-        if self.are_you_root()? {
-            self._claim_user(claimant)
-        } else {
-            Err(AuthError::PermissionDenied)
-        }
+        self.ensure_root()?;
+        self._claim_user(claimant)
     }
     pub fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
-        println!(
-            "For {claimant}, store: {:?}, key: {key}",
-            store,
-            claimant = String::from_utf8_lossy(claimant)
-        );
         if self.authmap.true_if_insert(
             Array::try_from_slice(claimant).ok_or(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))?,
             store,
@@ -185,6 +178,7 @@ impl AuthProvider {
         }
     }
     pub fn logout(&mut self) -> AuthResult<()> {
+        self.ensure_enabled()?;
         self.whoami.take().map(|_| ()).ok_or(AuthError::Anonymous)
     }
     fn ensure_enabled(&self) -> AuthResult<()> {

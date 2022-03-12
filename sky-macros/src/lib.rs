@@ -72,6 +72,7 @@ pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
 /// - `password -> str`: Password for authn
 /// - `auth_testuser -> bool`: Login as the test user
 /// - `auth_rootuser -> bool`: Login as the root user
+/// - `norun -> bool`: Don't execute anything on the connection
 ///
 /// ## _Ghost_ values
 /// This macro gives:

@@ -55,6 +55,23 @@ macro_rules! runeq {
     };
 }
 
+macro_rules! runmatch {
+    ($con:expr, $query:expr, $match:path) => {{
+        let ret = $con.run_simple_query(&$query).await.unwrap();
+        assert!(matches!(ret, $match(_)))
+    }};
+}
+
+macro_rules! assert_okay {
+    ($con:expr, $query:expr) => {
+        runeq!(
+            $con,
+            $query,
+            ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+        )
+    };
+}
+
 macro_rules! assert_skyhash_arrayeq {
     (str, $con:expr, $query:expr, $($val:expr),*) => {
         runeq!(
