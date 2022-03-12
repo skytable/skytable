@@ -2,6 +2,18 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Additions
+
+- Token-based authentication:
+  - `auth claim`
+  - `auth login <username> <token>`
+  - `auth logout`
+  - `auth adduser <username>`
+  - `auth deluser <username>`
+- Shell now supports multiple `--eval` expressions
+
 ## Version 0.7.3
 
 ### Additions

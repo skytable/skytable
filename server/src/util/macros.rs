@@ -142,27 +142,6 @@ macro_rules! action {
     };
 }
 
-#[allow(unused_macros)] // TODO(@ohsayan): Remove this if we don't need it anymore
-macro_rules! afn_action {
-    (
-        $($(#[$attr:meta])*
-        fn $fname:ident($($argname:ident: $argty:ty),*)
-        $block:block)*
-    ) => {
-        $(
-            $(#[$attr])*
-            fn $fname<'a, T: 'a, Strm: 'a>($($argname: $argty,)*) ->
-            core::pin::Pin<std::boxed::Box<dyn core::future::Future<Output = std::io::Result<()>> + Send + Sync + 'a>>
-            where
-                T: ProtocolConnectionExt<Strm> + Send + Sync,
-                Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync
-            {
-                std::boxed::Box::pin(async move {$block})
-            }
-        )*
-    };
-}
-
 #[macro_export]
 macro_rules! byt {
     ($f:expr) => {

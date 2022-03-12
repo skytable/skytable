@@ -54,21 +54,16 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
-#![allow(unused)] // TODO(@ohsayan): Plonk this
-
 use super::KeyspaceResult;
 use crate::auth::Authmap;
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
-use crate::corestore::lock::{QLGuard, QuickLock};
 use crate::corestore::table::Table;
 use crate::corestore::table::{SystemDataModel, SystemTable};
 use crate::registry;
 use crate::util::Wrapper;
 use core::borrow::Borrow;
 use core::hash::Hash;
-use core::mem::MaybeUninit;
-use core::ops::Deref;
 use std::sync::Arc;
 
 uninit_array! {
@@ -173,6 +168,7 @@ pub struct Memstore {
 
 impl Memstore {
     /// Create a new empty in-memory table with literally nothing in it
+    #[cfg(test)]
     pub fn new_empty() -> Self {
         Self {
             keyspaces: Coremap::new(),
@@ -225,6 +221,7 @@ impl Memstore {
             }
             None => match self.system.tables.get(&AUTH).unwrap().data {
                 SystemDataModel::Auth(ref am) => am.clone(),
+                #[allow(unreachable_patterns)]
                 _ => unsafe { impossible!() },
             },
         }
@@ -346,8 +343,6 @@ pub struct Keyspace {
     /// the replication strategy for this keyspace
     #[allow(dead_code)] // TODO: Remove this once we're ready with replication
     replication_strategy: cluster::ReplicationStrategy,
-    /// A **virtual lock** on the partmap for this keyspace
-    partmap_lock: QuickLock<()>,
 }
 
 #[cfg(test)]
@@ -368,14 +363,12 @@ impl Keyspace {
                 ht
             },
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     pub fn init_with_all_def_strategy(tables: Coremap<ObjectID, Arc<Table>>) -> Self {
         Self {
             tables,
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     /// Create a new empty keyspace with zero tables
@@ -383,7 +376,6 @@ impl Keyspace {
         Self {
             tables: Coremap::new(),
             replication_strategy: cluster::ReplicationStrategy::default(),
-            partmap_lock: QuickLock::new(()),
         }
     }
     pub fn table_count(&self) -> usize {
@@ -433,16 +425,6 @@ impl Keyspace {
                 Err(DdlError::StillInUse)
             }
         }
-    }
-
-    /// Remove a table without doing any reference checks. This will just pull it off
-    pub unsafe fn force_remove_table(&self, tblid: &ObjectID) {
-        // atomic remember? nobody cares about the result
-        self.tables.remove(tblid);
-    }
-
-    pub fn lock_partmap(&self) -> QLGuard<'_, ()> {
-        self.partmap_lock.lock()
     }
 }
 

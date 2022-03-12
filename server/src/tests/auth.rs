@@ -244,12 +244,12 @@ mod syntax_checks {
             ONLYAUTH
         );
     }
-    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    #[sky_macros::dbtest_func(port = 2005, norun = true, auth_testuser = true)]
     async fn unknown_auth_action() {
         runeq!(
             con,
             query!("auth", "raspberry"),
-            Element::RespCode(RespCode::ErrorString("unknown-action".to_owned()))
+            Element::RespCode(RespCode::ErrorString("Unknown action".to_owned()))
         )
     }
 }
