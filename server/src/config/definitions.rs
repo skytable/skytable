@@ -199,6 +199,9 @@ impl PortConfig {
     pub const fn insecure_only(&self) -> bool {
         matches!(self, Self::InsecureOnly { .. })
     }
+    pub const fn secure_only(&self) -> bool {
+        matches!(self, Self::SecureOnly { .. })
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -391,6 +394,12 @@ pub struct AuthSettings {
 impl AuthSettings {
     pub const fn default() -> Self {
         Self { origin_key: None }
+    }
+    #[cfg(test)]
+    pub fn new(origin: AuthkeyWrapper) -> Self {
+        Self {
+            origin_key: Some(origin),
+        }
     }
 }
 

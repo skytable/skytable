@@ -349,6 +349,7 @@ fn get_toml_from_examples_dir(filename: &str) -> TResult<String> {
 
 mod cfg_file_tests {
     use super::get_toml_from_examples_dir;
+    use crate::config::AuthkeyWrapper;
     use crate::config::{
         cfgfile, AuthSettings, BGSave, Configset, ConfigurationSet, Modeset, PortConfig,
         SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
@@ -380,6 +381,8 @@ mod cfg_file_tests {
                 Some("/path/to/cert/passphrase.txt".to_owned()),
             ),
         );
+        expected.auth.origin_key =
+            Some(AuthkeyWrapper::try_new(crate::TEST_AUTH_ORIGIN_KEY).unwrap());
         // check
         assert_eq!(cfg_from_file.cfg, expected);
     }
@@ -451,7 +454,7 @@ mod cfg_file_tests {
                 ),
                 MAXIMUM_CONNECTION_LIMIT,
                 Modeset::Dev,
-                AuthSettings::default(),
+                AuthSettings::new(AuthkeyWrapper::try_new(crate::TEST_AUTH_ORIGIN_KEY).unwrap())
             )
         );
     }

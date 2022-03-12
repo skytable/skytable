@@ -11,7 +11,12 @@ host = "127.0.0.1" # The IP address to which you want sdb to bind to
 port = 2003        # The port to which you want sdb to bind to
 noart = false      # Set `noart` to true if you want to disable terminal artwork
 maxcon = 50000     # set the maximum number of clients that the server can accept
-mode = "dev"      # Set this to `prod` when you're running in production and `dev` when in development
+mode = "dev"       # Set this to `prod` when you're running in production and `dev` when in development
+
+# This is an optional key
+[auth]
+# the origin key to be used to claim the root account
+origin_key = "4527387f92a381cbe804593f33991d327d456a97"
 
 # This key is *OPTIONAL*
 [bgsave]

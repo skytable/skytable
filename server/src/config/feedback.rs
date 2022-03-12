@@ -247,6 +247,9 @@ pub(super) fn evaluate_prod_settings(cfg: &ConfigurationSet) -> Result<(), Confi
     if cfg.ports.insecure_only() {
         estack.push("Either multi-socket (TCP and TLS) or TLS only must be enabled");
     }
+    if cfg.auth.origin_key.is_some() && !cfg.ports.secure_only() {
+        estack.push("When authn+authz is enabled, TLS-only mode must be enabled");
+    }
     check_rlimit_or_err(cfg.maxcon, &mut estack)?;
     if estack.is_empty() {
         Ok(())
