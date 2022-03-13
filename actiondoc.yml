@@ -72,6 +72,40 @@ global:
       Returns an array with either the name of the current keyspace as the first element or if a default table
       is set, then it returns the keyspace name as the first element and the table name as the second element
     return: [Non-null array]
+  - name: AUTH
+    desc: Change global authn/authz settings
+    subactions:
+      - name: LOGIN
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH LOGIN <username> <token>]
+        desc: Attempts to log in using the provided credentials
+        return: [Rcode 0, Rcode 10]
+      - name: CLAIM
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH CLAIM <origin key>]
+        desc: Attempts to claim the root account using the origin key
+        return: [String, Rcode 10]
+      - name: LOGOUT
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH LOGOUT]
+        desc: Attempts to log out the currently logged in user
+        return: [Rcode 0, Rcode 10]
+      - name: ADDUSER
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH ADDUSER <username>]
+        desc: Attempts to create a new user with the provided username, returning the token
+        return: [String, Rcode 11]
+      - name: DELUSER
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH DELUSER <username>]
+        desc: Attempts to delete the user with the provided username
+        return: [Rcode 0, Rcode 10, Rcode 11]
+
 keyvalue:
   generic:
     - name: DEL

@@ -65,7 +65,7 @@ async fn claim_root_fail_already_claimed() {
     runeq!(
         con,
         query!("auth", "claim", crate::TEST_AUTH_ORIGIN_KEY),
-        Element::RespCode(RespCode::ErrorString("err-already-claimed".to_owned()))
+        Element::RespCode(RespCode::ErrorString("err-auth-already-claimed".to_owned()))
     )
 }
 
