@@ -162,21 +162,6 @@ macro_rules! do_sleep {
     }};
 }
 
-/// This macro makes the first `if` expression cold (and its corresponding block) while
-/// making the else expression hot
-macro_rules! if_cold {
-    (
-        if ($coldexpr:expr) $coldblock:block
-        else $hotblock:block
-    ) => {
-        if $crate::util::compiler::unlikely($coldexpr) {
-            $crate::util::compiler::cold_err($coldblock)
-        } else {
-            $crate::util::compiler::hot($hotblock)
-        }
-    };
-}
-
 #[cfg(test)]
 macro_rules! tmut_bool {
     ($e:expr) => {{

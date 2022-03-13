@@ -83,10 +83,10 @@ action! {
         match act.next_uppercase().as_ref() {
             None => {
                 // just return everything in the list
-                let items: Vec<Data> = if let Some(list) = listmap.get(listname) {
-                    list.value().read().iter().cloned().collect()
-                } else {
-                    return conwrite!(con, groups::NIL);
+                let items = match listmap.list_cloned_full(listname) {
+                    Ok(Some(list)) => list,
+                    Ok(None) => return conwrite!(con, groups::NIL),
+                    Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
                 };
                 writelist!(con, listmap, items);
             }
@@ -94,76 +94,82 @@ action! {
                 match subaction.as_ref() {
                     LEN => {
                         ensure_length(act.len(), |len| len == 0)?;
-                        if let Some(len) = listmap.len_of(listname) {
-                            conwrite!(con, len)?;
-                        } else {
-                            conwrite!(con, groups::NIL)?;
+                        match listmap.list_len(listname) {
+                            Ok(Some(len)) => conwrite!(con, len)?,
+                            Ok(None) => conwrite!(con, groups::NIL)?,
+                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
                         }
                     }
                     LIMIT => {
                         ensure_length(act.len(), |len| len == 1)?;
                         let count = get_numeric_count!();
-                        let items = if let Some(keys) = listmap.get_cloned(listname, count) {
-                            keys
-                        } else {
-                            return conwrite!(con, groups::NIL);
-                        };
-                        writelist!(con, listmap, items);
+                        match listmap.list_cloned(listname, count) {
+                            Ok(Some(items)) => writelist!(con, listmap, items),
+                            Ok(None) => conwrite!(con, groups::NIL)?,
+                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                        }
                     }
                     VALUEAT => {
                         ensure_length(act.len(), |len| len == 1)?;
                         let idx = get_numeric_count!();
                         let maybe_value = listmap.get(listname).map(|list| {
-                            let readlist = list.read();
-                            let get = readlist.get(idx).cloned();
-                            get
+                            list.map(|lst| lst.read().get(idx).cloned())
                         });
                         match maybe_value {
-                            Some(Some(value)) => {
-                                unsafe {
-                                    // tsymbol is verified
-                                    writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &value)
-                                        .await?;
+                            Ok(v) => match v {
+                                Some(Some(value)) => {
+                                    unsafe {
+                                        // tsymbol is verified
+                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value)
+                                            .await?;
+                                    }
+                                }
+                                Some(None) => {
+                                    // bad index
+                                    conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                                }
+                                None => {
+                                    // not found
+                                    conwrite!(con, groups::NIL)?;
                                 }
                             }
-                            Some(None) => {
-                                // bad index
-                                conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
-                            }
-                            None => {
-                                // not found
-                                conwrite!(con, groups::NIL)?;
-                            }
+                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
                         }
                     }
                     LAST => {
                         ensure_length(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
-                            list.read().last().cloned()
+                            list.map(|lst| lst.read().last().cloned())
                         });
                         match maybe_value {
-                            Some(Some(value)) => {
-                                unsafe {
-                                    writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &value).await?;
-                                }
-                            },
-                            Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
-                            None => conwrite!(con, groups::NIL)?,
+                            Ok(v) => match v {
+                                Some(Some(value)) => {
+                                    unsafe {
+                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value).await?;
+                                    }
+                                },
+                                Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
+                                None => conwrite!(con, groups::NIL)?,
+                            }
+                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
                         }
                     }
                     FIRST => {
                         ensure_length(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
-                            list.read().first().cloned()
+                            list.map(|lst| lst.read().first().cloned())
                         });
                         match maybe_value {
-                            Some(Some(value)) => {
-                                unsafe {
-                                    writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &value).await?;
-                                }
-                            },
-                            Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
-                            None => conwrite!(con, groups::NIL)?,
+                            Ok(v) => match v {
+                                Some(Some(value)) => {
+                                    unsafe {
+                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value).await?;
+                                    }
+                                },
+                                Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
+                                None => conwrite!(con, groups::NIL)?,
+                            }
+                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
                         }
                     }
                     RANGE => {
@@ -182,7 +188,7 @@ action! {
                                     range.set_stop(stop);
                                 };
                                 match listmap.get(listname) {
-                                    Some(list) => {
+                                    Ok(Some(list)) => {
                                         let ret = range.into_vec(&list.read());
                                         match ret {
                                             Some(ret) => {
@@ -191,7 +197,8 @@ action! {
                                             None => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
                                         }
                                     }
-                                    None => conwrite!(con, groups::NIL)?,
+                                    Ok(None) => conwrite!(con, groups::NIL)?,
+                                    Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
                                 }
                             }
                             None => aerr!(con),

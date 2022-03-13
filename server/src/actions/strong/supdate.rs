@@ -28,7 +28,7 @@ use crate::actions::strong::StrongActionResult;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
-use crate::kvengine::KVEngine;
+use crate::kvengine::KVEStandard;
 use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
 use core::slice::Iter;
@@ -43,7 +43,7 @@ action! {
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
         let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
-            let encoder = kve.get_encoder();
+            let encoder = kve.get_double_encoder();
             let outcome = unsafe {
                 // UNSAFE(@ohsayan): the lifetime of `act` ensure ptr validity
                 self::snapshot_and_update(kve, encoder, act.into_inner())
@@ -75,7 +75,7 @@ action! {
 /// completes, mutate the entries in place while keeping up with isolation guarantees
 /// `(all_okay, enc_err)`
 pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
-    kve: &'a KVEngine,
+    kve: &'a KVEStandard,
     encoder: DoubleEncoder,
     mut act: Iter<'a, T>,
 ) -> StrongActionResult {
@@ -87,8 +87,8 @@ pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
         iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
             let key = ucidx!(kv, 0).deref_slice();
             let value = ucidx!(kv, 1).deref_slice();
-            if compiler::likely(encoder.is_ok(key, value)) {
-                if let Some(snapshot) = kve.take_snapshot(key) {
+            if compiler::likely(encoder(key, value)) {
+                if let Some(snapshot) = kve.take_snapshot_unchecked(key) {
                     snapshots.push(snapshot);
                     true
                 } else {
@@ -113,7 +113,7 @@ pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
             let kve = kve;
             // good, so all the values existed when we snapshotted them; let's update 'em
             let mut snap_cc = snapshots.into_iter();
-            let lowtable = kve.__get_inner_ref();
+            let lowtable = kve.get_inner_ref();
             while let (Some(key), Some(value), Some(snapshot)) =
                 (act.next(), act.next(), snap_cc.next())
             {

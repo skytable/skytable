@@ -26,8 +26,7 @@
 
 use crate::actions::strong::StrongActionResult;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::KVEngine;
-use crate::kvengine::SingleEncoder;
+use crate::kvengine::{KVEStandard, SingleEncoder};
 use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
 use core::slice::Iter;
@@ -74,7 +73,7 @@ action! {
 /// Snapshot the current status and then delete maintaining concurrency
 /// guarantees
 pub(super) fn snapshot_and_del<'a, T: 'a + DerefUnsafeSlice>(
-    kve: &'a KVEngine,
+    kve: &'a KVEStandard,
     key_encoder: SingleEncoder,
     act: Iter<'a, T>,
 ) -> StrongActionResult {
@@ -88,8 +87,8 @@ pub(super) fn snapshot_and_del<'a, T: 'a + DerefUnsafeSlice>(
                 // ensure that it is valid
                 key.deref_slice()
             };
-            if compiler::likely(key_encoder.is_ok(key)) {
-                if let Some(snap) = kve.take_snapshot(key) {
+            if compiler::likely(key_encoder(key)) {
+                if let Some(snap) = kve.take_snapshot_unchecked(key) {
                     snapshots.push(snap);
                     true
                 } else {
@@ -113,7 +112,7 @@ pub(super) fn snapshot_and_del<'a, T: 'a + DerefUnsafeSlice>(
         if iter_stat_ok {
             // nice, all keys exist; let's plonk 'em
             let kve = kve;
-            let lowtable = kve.__get_inner_ref();
+            let lowtable = kve.get_inner_ref();
             act.zip(snapshots).for_each(|(key, snapshot)| {
                 let key = unsafe {
                     // UNSAFE(@ohsayan): The caller has passed a slice and they should

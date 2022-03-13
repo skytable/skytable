@@ -35,9 +35,6 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 pub mod writer;
 
-pub const TSYMBOL_BINARY: u8 = b'?';
-pub const TSYMBOL_UNICODE: u8 = b'+';
-
 type FutureIoResult<'s> = FutureResult<'s, Result<(), IoError>>;
 
 /// # The `Writable` trait

@@ -37,9 +37,9 @@ action! {
         };
         if registry::state_okay() {
             let kve = handle.get_table_with::<KVE>()?;
-            let tsymbol = kve.get_vt();
+            let tsymbol = kve.get_value_tsymbol();
             match kve.pop(key) {
-                Ok(Some((_key, val))) => unsafe {
+                Ok(Some(val)) => unsafe {
                     // SAFETY: We have verified the tsymbol ourselves
                     writer::write_raw_mono(con, tsymbol, &val).await?
                 },

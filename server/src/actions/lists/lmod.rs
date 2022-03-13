@@ -27,8 +27,6 @@
 use super::{writer, OKAY_BADIDX_NIL_NLUT};
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT;
-use crate::kvengine::KVTable;
 use crate::util::compiler;
 
 const CLEAR: &[u8] = "CLEAR".as_bytes();
@@ -62,7 +60,7 @@ action! {
         match unsafe { act.next_uppercase_unchecked() }.as_ref() {
             CLEAR => {
                 ensure_length(act.len(), |len| len == 0)?;
-                let list = match listmap.kve_inner_ref().get(listname) {
+                let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
                 };
@@ -76,12 +74,12 @@ action! {
             }
             PUSH => {
                 ensure_length(act.len(), |len| len == 1)?;
-                let list = match listmap.kve_inner_ref().get(listname) {
+                let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
                 };
                 let bts = unsafe { act.next_unchecked() };
-                let ret = if compiler::likely(ENCODING_LUT[listmap.kve_payload_encoded()](bts)) {
+                let ret = if compiler::likely(listmap.is_val_ok(bts)) {
                     if registry::state_okay() {
                         // good to try and insert
                         list.write().push(Data::copy_from_slice(bts));
@@ -100,7 +98,7 @@ action! {
                 ensure_length(act.len(), |len| len == 1)?;
                 let idx_to_remove = get_numeric_count!();
                 if registry::state_okay() {
-                    let maybe_value = listmap.kve_inner_ref().get(listname).map(|list| {
+                    let maybe_value = listmap.get_inner_ref().get(listname).map(|list| {
                         let mut wlock = list.write();
                         if idx_to_remove < wlock.len() {
                             wlock.remove(idx_to_remove);
@@ -118,20 +116,23 @@ action! {
                 ensure_length(act.len(), |len| len == 2)?;
                 let idx_to_insert_at = get_numeric_count!();
                 let bts = unsafe { act.next_unchecked() };
-                let ret = if compiler::likely(ENCODING_LUT[listmap.kve_payload_encoded()](bts)) {
+                let ret = if compiler::likely(listmap.is_val_ok(bts)) {
                     if registry::state_okay() {
                         // okay state, good to insert
-                        let maybe_insert = listmap.get(listname).map(|list| {
-                            let mut wlock = list.write();
-                            if idx_to_insert_at < wlock.len() {
-                                // we can insert
-                                wlock.insert(idx_to_insert_at, Data::copy_from_slice(bts));
-                                true
-                            } else {
-                                // oops, out of bounds
-                                false
-                            }
-                        });
+                        let maybe_insert = match listmap.get(listname) {
+                            Ok(lst) => lst.map(|list| {
+                                let mut wlock = list.write();
+                                if idx_to_insert_at < wlock.len() {
+                                    // we can insert
+                                    wlock.insert(idx_to_insert_at, Data::copy_from_slice(bts));
+                                    true
+                                } else {
+                                    // oops, out of bounds
+                                    false
+                                }
+                            }),
+                            Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
+                        };
                         OKAY_BADIDX_NIL_NLUT[maybe_insert]
                     } else {
                         // flush broken; server err
@@ -153,23 +154,26 @@ action! {
                     None
                 };
                 if registry::state_okay() {
-                    let maybe_pop = listmap.get(listname).map(|list| {
-                        let mut wlock = list.write();
-                        if let Some(idx) = idx {
-                            if idx < wlock.len() {
-                                // so we can pop
-                                Some(wlock.remove(idx))
+                    let maybe_pop = match listmap.get(listname) {
+                        Ok(lst) => lst.map(|list| {
+                            let mut wlock = list.write();
+                            if let Some(idx) = idx {
+                                if idx < wlock.len() {
+                                    // so we can pop
+                                    Some(wlock.remove(idx))
+                                } else {
+                                    None
+                                }
                             } else {
-                                None
+                                wlock.pop()
                             }
-                        } else {
-                            wlock.pop()
-                        }
-                    });
+                        }),
+                        Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
+                    };
                     match maybe_pop {
                         Some(Some(val)) => {
                             unsafe {
-                                writer::write_raw_mono(con, listmap.get_payload_tsymbol(), &val).await?;
+                                writer::write_raw_mono(con, listmap.get_value_tsymbol(), &val).await?;
                             }
                         }
                         Some(None) => {

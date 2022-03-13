@@ -28,7 +28,7 @@ use crate::actions::strong::StrongActionResult;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::DoubleEncoder;
-use crate::kvengine::KVEngine;
+use crate::kvengine::KVEStandard;
 use crate::protocol::iter::DerefUnsafeSlice;
 use crate::util::compiler;
 use core::slice::Iter;
@@ -43,7 +43,7 @@ action! {
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
         let kve = handle.get_table_with::<KVE>()?;
         if registry::state_okay() {
-            let encoder = kve.get_encoder();
+            let encoder = kve.get_double_encoder();
             let outcome = unsafe {
                 // UNSAFE(@ohsayan): The lifetime of `act` guarantees that the
                 // pointers remain valid
@@ -72,18 +72,18 @@ action! {
 /// Take a consistent snapshot of the database at this current point in time
 /// and then mutate the entries, respecting concurrency guarantees
 pub(super) fn snapshot_and_insert<'a, T: 'a + DerefUnsafeSlice>(
-    kve: &'a KVEngine,
+    kve: &'a KVEStandard,
     encoder: DoubleEncoder,
     mut act: Iter<'a, T>,
 ) -> StrongActionResult {
     let mut enc_err = false;
-    let lowtable = kve.__get_inner_ref();
+    let lowtable = kve.get_inner_ref();
     let key_iter_stat_ok;
     {
         key_iter_stat_ok = act.as_ref().chunks_exact(2).all(|kv| unsafe {
             let key = ucidx!(kv, 0).deref_slice();
             let value = ucidx!(kv, 1).deref_slice();
-            if compiler::likely(encoder.is_ok(key, value)) {
+            if compiler::likely(encoder(key, value)) {
                 lowtable.get(key).is_none()
             } else {
                 enc_err = true;

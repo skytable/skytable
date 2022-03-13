@@ -27,7 +27,6 @@
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::KVTable;
 use crate::resp::writer::TypedArrayWriter;
 
 const DEFAULT_COUNT: usize = 10;
@@ -67,12 +66,12 @@ action!(
             (get_tbl!(entity, handle, con), count)
         };
         let tsymbol = match table.get_model_ref() {
-            DataModel::KV(kv) => kv.kve_payload_tsymbol(),
-            DataModel::KVExtListmap(kv) => kv.kve_payload_tsymbol(),
+            DataModel::KV(kv) => kv.get_value_tsymbol(),
+            DataModel::KVExtListmap(kv) => kv.get_value_tsymbol(),
         };
         let items: Vec<Data> = match table.get_model_ref() {
-            DataModel::KV(kv) => kv.kve_inner_ref().get_keys(count),
-            DataModel::KVExtListmap(kv) => kv.kve_inner_ref().get_keys(count),
+            DataModel::KV(kv) => kv.get_inner_ref().get_keys(count),
+            DataModel::KVExtListmap(kv) => kv.get_inner_ref().get_keys(count),
         };
         let mut writer = unsafe {
             // SAFETY: We have checked kty ourselves

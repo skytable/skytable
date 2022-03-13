@@ -25,12 +25,12 @@
 */
 
 macro_rules! writelist {
-    ($con:expr, $listmap:expr, $items:expr) => {
+    ($con:expr, $listmap:expr, $items:expr) => {{
         let mut typed_array_writer =
-            unsafe { TypedArrayWriter::new($con, $listmap.get_payload_tsymbol(), $items.len()) }
+            unsafe { TypedArrayWriter::new($con, $listmap.get_value_tsymbol(), $items.len()) }
                 .await?;
         for item in $items {
             typed_array_writer.write_element(item).await?;
         }
-    };
+    }};
 }

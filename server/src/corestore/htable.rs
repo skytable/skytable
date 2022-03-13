@@ -43,14 +43,11 @@ type HashTable<K, V> = Skymap<K, V, RandomState>;
 #[derive(Debug)]
 /// The Coremap contains the actual key/value pairs along with additional fields for data safety
 /// and protection
-pub struct Coremap<K, V>
-where
-    K: Eq + Hash,
-{
+pub struct Coremap<K, V> {
     pub(crate) inner: HashTable<K, V>,
 }
 
-impl<K: Eq + Hash, V> Default for Coremap<K, V> {
+impl<K, V> Default for Coremap<K, V> {
     fn default() -> Self {
         Coremap {
             inner: HashTable::new_ahash(),
@@ -68,16 +65,20 @@ impl<K: Eq + Hash, V> Coremap<K, V> {
             inner: HashTable::with_capacity(cap),
         }
     }
+    /// Returns the total number of key value pairs
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    /// Clears the inner table!
+    pub fn clear(&self) {
+        self.inner.clear()
+    }
 }
 
 impl<K, V> Coremap<K, V>
 where
     K: Eq + Hash,
 {
-    /// Returns the total number of key value pairs
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
     /// Returns the removed value for key, it it existed
     pub fn remove<Q>(&self, key: &Q) -> Option<(K, V)>
     where
@@ -101,10 +102,6 @@ where
         Q: Hash + Eq + ?Sized,
     {
         self.inner.contains_key(key)
-    }
-    /// Clears the inner table!
-    pub fn clear(&self) {
-        self.inner.clear()
     }
     /// Return a non-consuming iterator
     pub fn iter(&self) -> BorrowedIter<'_, K, V, RandomState> {

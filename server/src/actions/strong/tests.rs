@@ -27,12 +27,12 @@
 mod sdel_concurrency_tests {
     use super::super::sdel;
     use crate::corestore::Data;
-    use crate::kvengine::KVEngine;
+    use crate::kvengine::KVEStandard;
     use std::sync::Arc;
     use std::thread;
     #[test]
     fn test_snapshot_okay() {
-        let kve = KVEngine::init(true, true);
+        let kve = KVEStandard::init(true, true);
         kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let encoder = kve.get_key_encoder();
@@ -42,7 +42,7 @@ mod sdel_concurrency_tests {
     }
     #[test]
     fn test_sdel_snapshot_fail_with_t2() {
-        let kve = Arc::new(KVEngine::init(true, true));
+        let kve = Arc::new(KVEStandard::init(true, true));
         let kve1 = kve.clone();
         let encoder = kve.get_key_encoder();
         {
@@ -71,22 +71,22 @@ mod sdel_concurrency_tests {
 mod sset_concurrency_tests {
     use super::super::sset;
     use crate::corestore::Data;
-    use crate::kvengine::KVEngine;
+    use crate::kvengine::KVEStandard;
     use std::sync::Arc;
     use std::thread;
     #[test]
     fn test_snapshot_okay() {
-        let kve = KVEngine::init(true, true);
-        let encoder = kve.get_encoder();
+        let kve = KVEStandard::init(true, true);
+        let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         let ret = sset::snapshot_and_insert(&kve, encoder, it.as_ref().iter());
         assert!(ret.is_ok());
     }
     #[test]
     fn test_sset_snapshot_fail_with_t2() {
-        let kve = Arc::new(KVEngine::init(true, true));
+        let kve = Arc::new(KVEStandard::init(true, true));
         let kve1 = kve.clone();
-        let encoder = kve.get_encoder();
+        let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         // sset will wait 10s for us
         let t1handle =
@@ -112,26 +112,26 @@ mod sset_concurrency_tests {
 mod supdate_concurrency_tests {
     use super::super::supdate;
     use crate::corestore::Data;
-    use crate::kvengine::KVEngine;
+    use crate::kvengine::KVEStandard;
     use std::sync::Arc;
     use std::thread;
     #[test]
     fn test_snapshot_okay() {
-        let kve = KVEngine::init(true, true);
+        let kve = KVEStandard::init(true, true);
         kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
-        let encoder = kve.get_encoder();
+        let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         let ret = supdate::snapshot_and_update(&kve, encoder, it.as_ref().iter());
         assert!(ret.is_ok());
     }
     #[test]
     fn test_supdate_snapshot_fail_with_t2() {
-        let kve = Arc::new(KVEngine::init(true, true));
+        let kve = Arc::new(KVEStandard::init(true, true));
         kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
         kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
         let kve1 = kve.clone();
-        let encoder = kve.get_encoder();
+        let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         // supdate will wait 10s for us
         let t1handle =

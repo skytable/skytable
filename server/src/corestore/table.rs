@@ -31,9 +31,7 @@ use crate::corestore::Data;
 #[cfg(test)]
 use crate::corestore::{memstore::DdlError, KeyspaceResult};
 use crate::dbnet::connection::prelude::Corestore;
-use crate::kvengine::listmap::LockedVec;
-use crate::kvengine::KVTable;
-use crate::kvengine::{listmap::KVEListMap, KVEngine};
+use crate::kvengine::{KVEListmap, KVEStandard, LockedVec};
 use crate::protocol::responses::groups;
 use crate::util;
 
@@ -57,7 +55,7 @@ pub trait DescribeTable {
 pub struct KVE;
 
 impl DescribeTable for KVE {
-    type Table = KVEngine;
+    type Table = KVEStandard;
     fn try_get(table: &Table) -> Option<&Self::Table> {
         if let DataModel::KV(ref kve) = table.model_store {
             Some(kve)
@@ -70,7 +68,7 @@ impl DescribeTable for KVE {
 pub struct KVEList;
 
 impl DescribeTable for KVEList {
-    type Table = KVEListMap;
+    type Table = KVEListmap;
     fn try_get(table: &Table) -> Option<&Self::Table> {
         if let DataModel::KVExtListmap(ref kvl) = table.model_store {
             Some(kvl)
@@ -105,8 +103,8 @@ impl SystemTable {
 
 #[derive(Debug)]
 pub enum DataModel {
-    KV(KVEngine),
-    KVExtListmap(KVEListMap),
+    KV(KVEStandard),
+    KVExtListmap(KVEListmap),
 }
 
 // same 8 byte ptrs; any chance of optimizations?
@@ -122,14 +120,14 @@ pub struct Table {
 
 impl Table {
     #[cfg(test)]
-    pub const fn from_kve(kve: KVEngine, volatile: bool) -> Self {
+    pub const fn from_kve(kve: KVEStandard, volatile: bool) -> Self {
         Self {
             model_store: DataModel::KV(kve),
             volatile,
         }
     }
     #[cfg(test)]
-    pub const fn from_kve_listmap(kve: KVEListMap, volatile: bool) -> Self {
+    pub const fn from_kve_listmap(kve: KVEListmap, volatile: bool) -> Self {
         Self {
             model_store: DataModel::KVExtListmap(kve),
             volatile,
@@ -137,7 +135,7 @@ impl Table {
     }
     /// Get the key/value store if the table is a key/value store
     #[cfg(test)]
-    pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEngine> {
+    pub const fn get_kvstore(&self) -> KeyspaceResult<&KVEStandard> {
         #[allow(irrefutable_let_patterns)]
         if let DataModel::KV(kvs) = &self.model_store {
             Ok(kvs)
@@ -147,8 +145,8 @@ impl Table {
     }
     pub fn count(&self) -> usize {
         match &self.model_store {
-            DataModel::KV(kv) => kv.kve_len(),
-            DataModel::KVExtListmap(kv) => kv.kve_len(),
+            DataModel::KV(kv) => kv.len(),
+            DataModel::KVExtListmap(kv) => kv.len(),
         }
     }
     /// Returns this table's _description_
@@ -177,8 +175,8 @@ impl Table {
     }
     pub fn truncate_table(&self) {
         match self.model_store {
-            DataModel::KV(ref kv) => kv.kve_clear(),
-            DataModel::KVExtListmap(ref kv) => kv.kve_clear(),
+            DataModel::KV(ref kv) => kv.truncate_table(),
+            DataModel::KVExtListmap(ref kv) => kv.truncate_table(),
         }
     }
     /// Returns the storage type as an 8-bit uint
@@ -198,7 +196,7 @@ impl Table {
     ) -> Self {
         Self {
             volatile,
-            model_store: DataModel::KV(KVEngine::init_with_data(k_enc, v_enc, data)),
+            model_store: DataModel::KV(KVEStandard::new(k_enc, v_enc, data)),
         }
     }
     pub fn new_kve_listmap_with_data(
@@ -209,11 +207,7 @@ impl Table {
     ) -> Self {
         Self {
             volatile,
-            model_store: DataModel::KVExtListmap(KVEListMap::init_with_data(
-                k_enc,
-                payload_enc,
-                data,
-            )),
+            model_store: DataModel::KVExtListmap(KVEListmap::new(k_enc, payload_enc, data)),
         }
     }
     pub fn from_model_code(code: u8, volatile: bool) -> Option<Self> {
@@ -264,7 +258,7 @@ impl Table {
                 str,str => 2
                 str,bin => 3
                 */
-                let (kenc, venc) = kvs.kve_tuple_encoding();
+                let (kenc, venc) = kvs.get_encoding_tuple();
                 let ret = kenc as u8 + venc as u8;
                 // a little bitmagic goes a long way
                 (ret & 1) + ((kenc as u8) << 1)
@@ -276,7 +270,7 @@ impl Table {
                 str,list<bin> => 6,
                 str,list<str> => 7
                 */
-                let (kenc, venc) = kvlistmap.kve_tuple_encoding();
+                let (kenc, venc) = kvlistmap.get_encoding_tuple();
                 ((kenc as u8) << 1) + (venc as u8) + 4
             }
         }

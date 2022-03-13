@@ -26,7 +26,7 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::{encoding::ENCODING_LUT_ITER_PAIR, KVTable};
+use crate::kvengine::encoding::ENCODING_LUT_ITER_PAIR;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 
@@ -38,7 +38,7 @@ action!(
         let howmany = act.len();
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
         let kve = handle.get_table_with::<KVE>()?;
-        let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.kve_tuple_encoding()](&act);
+        let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.get_encoding_tuple()](&act);
         if compiler::likely(encoding_is_okay) {
             if registry::state_okay() {
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {

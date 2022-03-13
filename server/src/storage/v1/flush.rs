@@ -36,7 +36,6 @@ use crate::corestore::{
     memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace},
     table::{DataModel, SystemDataModel, SystemTable, Table},
 };
-use crate::kvengine::KVTable;
 use crate::registry;
 use crate::util::Wrapper;
 use crate::IoResult;
@@ -178,9 +177,9 @@ impl FlushableTable for Table {
     }
     fn write_table_to<W: Write>(&self, writer: &mut W) -> IoResult<()> {
         match self.get_model_ref() {
-            DataModel::KV(ref kve) => super::se::raw_serialize_map(kve.kve_inner_ref(), writer),
+            DataModel::KV(ref kve) => super::se::raw_serialize_map(kve.get_inner_ref(), writer),
             DataModel::KVExtListmap(ref kvl) => {
-                super::se::raw_serialize_list_map(kvl.kve_inner_ref(), writer)
+                super::se::raw_serialize_list_map(kvl.get_inner_ref(), writer)
             }
         }
     }

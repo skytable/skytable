@@ -34,8 +34,7 @@ use crate::corestore::booltable::BytesBoolTable;
 use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::listmap::LockedVec;
-use crate::kvengine::KVTable;
+use crate::kvengine::LockedVec;
 use crate::resp::writer;
 
 const OKAY_OVW_BLUT: BytesBoolTable = BytesBoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
@@ -49,7 +48,7 @@ action! {
         ensure_length(act.len(), |len| len > 0)?;
         let listmap = handle.get_table_with::<KVEList>()?;
         let listname = unsafe { act.next_unchecked_bytes() };
-        let list = listmap.kve_inner_ref();
+        let list = listmap.get_inner_ref();
         if registry::state_okay() {
             let did = if let Some(entry) = list.fresh_entry(listname.into()) {
                 let v: Vec<Data> = act.map(Data::copy_from_slice).collect();

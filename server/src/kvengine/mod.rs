@@ -1,5 +1,5 @@
 /*
- * Created on Wed Jun 30 2021
+ * Created on Sun Mar 13 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,481 +24,266 @@
  *
 */
 
-#![allow(unused)] // TODO(@ohsayan): Plonk this
+#![allow(dead_code)] // TODO(@ohsayan): Clean this up later
 
-use crate::corestore::htable::Coremap;
-use crate::corestore::htable::Data;
-use crate::corestore::map::bref::Ref;
-use crate::resp::TSYMBOL_BINARY;
-use crate::resp::TSYMBOL_UNICODE;
-use core::borrow::Borrow;
-use core::hash::Hash;
-// do not mess
-#[macro_use]
-mod macros;
-// endof do not mess
 pub mod encoding;
-pub mod listmap;
+#[cfg(test)]
+mod tests;
 
-pub trait KVTable<'a, T> {
-    /// Get the number of entries in a given KVE table
-    fn kve_len(&self) -> usize;
-    /// Truncate a given KVE table
-    fn kve_clear(&self);
-    /// Get (kenc, venc) for a given KVE table
-    fn kve_tuple_encoding(&self) -> (bool, bool) {
-        (self.kve_key_encoded(), self.kve_payload_encoded())
-    }
-    /// Get kenc for a given KVE table
-    fn kve_key_encoded(&self) -> bool;
-    /// Get venc for a given KVE table
-    fn kve_payload_encoded(&self) -> bool;
-    /// Get a reference to the inner table for a given KVE Table
-    fn kve_inner_ref(&'a self) -> &'a T;
-    /// Remove a key from the KVE
-    fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
-    where
-        Data: Borrow<Q>;
-    /// Get the key encoder
-    fn kve_get_key_encoder(&self) -> SingleEncoder {
-        s_encoder_booled!(self.kve_key_encoded())
-    }
-    /// Get the payload encoder
-    fn kve_get_payload_encoder(&self) -> SingleEncoder {
-        s_encoder_booled!(self.kve_payload_encoded())
-    }
-    /// Check if the KVE contains a certain key
-    fn kve_exists<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
-    where
-        Data: Borrow<Q>;
-    /// Get the length of a certain key in the KVE
-    fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
-    where
-        Data: Borrow<Q>;
-    /// Get the tsymbol for the KVE key
-    fn kve_key_tsymbol(&self) -> u8 {
-        if self.kve_key_encoded() {
-            TSYMBOL_UNICODE
-        } else {
-            TSYMBOL_BINARY
-        }
-    }
-    /// Get the tsymbol for the KVE payload
-    fn kve_payload_tsymbol(&self) -> u8 {
-        if self.kve_payload_encoded() {
-            TSYMBOL_UNICODE
-        } else {
-            TSYMBOL_BINARY
-        }
-    }
+use self::encoding::{ENCODING_LUT, ENCODING_LUT_PAIR};
+use crate::corestore::{booltable::BoolTable, htable::Coremap, map::bref::Ref, Data};
+use crate::util::compiler;
+use parking_lot::RwLock;
+
+pub type KVEStandard = KVEngine<Data>;
+pub type KVEListmap = KVEngine<LockedVec>;
+pub type LockedVec = RwLock<Vec<Data>>;
+pub type SingleEncoder = fn(&[u8]) -> bool;
+pub type DoubleEncoder = fn(&[u8], &[u8]) -> bool;
+type EntryRef<'a, T> = Ref<'a, Data, T>;
+type EncodingResult<T> = Result<T, ()>;
+type OptionRef<'a, T> = Option<Ref<'a, Data, T>>;
+type EncodingResultRef<'a, T> = EncodingResult<OptionRef<'a, T>>;
+
+const TSYMBOL_LUT: BoolTable<u8> = BoolTable::new(b'+', b'?');
+
+pub trait KVEValue {
+    fn verify_encoding(&self, e_v: bool) -> EncodingResult<()>;
 }
 
-impl<'a> KVTable<'a, Coremap<Data, Data>> for KVEngine {
-    fn kve_len(&self) -> usize {
-        self.table.len()
-    }
-    fn kve_clear(&self) {
-        self.table.clear()
-    }
-    fn kve_key_encoded(&self) -> bool {
-        self.encoded_k
-    }
-    fn kve_payload_encoded(&self) -> bool {
-        self.encoded_v
-    }
-    fn kve_inner_ref(&'a self) -> &'a Coremap<Data, Data> {
-        &self.table
-    }
-    fn kve_remove<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
-    where
-        Data: Borrow<Q>,
-    {
-        self.table.true_if_removed(input)
-    }
-    fn kve_exists<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> bool
-    where
-        Data: Borrow<Q>,
-    {
-        self.table.contains_key(input)
-    }
-    fn kve_keylen<Q: ?Sized + Eq + Hash>(&self, input: &Q) -> Option<usize>
-    where
-        Data: Borrow<Q>,
-    {
-        self.table.get(input).map(|v| v.key().len())
-    }
-}
-
-/// An arbitrary unicode/binary _double encoder_ for two byte slice inputs
-pub struct DoubleEncoder {
-    fn_ptr: fn(&[u8], &[u8]) -> bool,
-    v_t: u8,
-}
-
-impl DoubleEncoder {
-    /// Check if the underlying encoding validator verifies the encoding
-    pub fn is_ok(&self, a: &[u8], b: &[u8]) -> bool {
-        (self.fn_ptr)(a, b)
-    }
-    pub const fn get_tsymbol(&self) -> u8 {
-        self.v_t
-    }
-}
-
-/// A _single encoder_ for a single byte slice input
-pub struct SingleEncoder {
-    fn_ptr: fn(&[u8]) -> bool,
-    v_t: u8,
-}
-
-impl SingleEncoder {
-    /// Check if the underlying encoding validator verifies the encoding
-    pub fn is_ok(&self, a: &[u8]) -> bool {
-        (self.fn_ptr)(a)
-    }
-    pub const fn get_tsymbol(&self) -> u8 {
-        self.v_t
-    }
-}
-
-// DROP impl isn't required as ShardLock's field types need-drop (std::mem)
-
-/// The key/value engine that acts as the in-memory backing store for the database
-///
-#[derive(Debug)]
-pub struct KVEngine {
-    /// the atomic table
-    table: Coremap<Data, Data>,
-    /// the encoding switch for the key
-    encoded_k: bool,
-    /// the encoding switch for the value
-    encoded_v: bool,
-}
-
-impl Default for KVEngine {
-    fn default() -> Self {
-        // by default, we don't care about the encoding scheme unless explicitly
-        // specified
-        KVEngine::init(false, false)
-    }
-}
-
-impl KVEngine {
-    /// Create a new in-memory KVEngine with the specified encoding schemes
-    pub fn init(encoded_k: bool, encoded_v: bool) -> Self {
-        Self::init_with_data(encoded_k, encoded_v, Coremap::new())
-    }
-    pub fn init_with_data(encoded_k: bool, encoded_v: bool, table: Coremap<Data, Data>) -> Self {
-        Self {
-            table,
-            encoded_k,
-            encoded_v,
-        }
-    }
-    pub fn get_encoding(&self) -> (bool, bool) {
-        (self.encoded_k, self.encoded_v)
-    }
-    /// Returns an encoder for the key and the value
-    pub fn get_encoder(&self) -> DoubleEncoder {
-        match self.get_encoding() {
-            (true, true) => {
-                // both k & v
-                fn is_okay(key: &[u8], value: &[u8]) -> bool {
-                    encoding::is_utf8(key) && encoding::is_utf8(value)
-                }
-                d_encoder!(is_okay, TSYMBOL_UNICODE)
-            }
-            (true, false) => {
-                // only k
-                fn is_okay(key: &[u8], _value: &[u8]) -> bool {
-                    encoding::is_utf8(key)
-                }
-                d_encoder!(is_okay, TSYMBOL_BINARY)
-            }
-            (false, false) => {
-                // none
-                fn is_okay(_k: &[u8], _v: &[u8]) -> bool {
-                    true
-                }
-                d_encoder!(is_okay, TSYMBOL_BINARY)
-            }
-            (false, true) => {
-                // only v
-                fn is_okay(_k: &[u8], v: &[u8]) -> bool {
-                    encoding::is_utf8(v)
-                }
-                d_encoder!(is_okay, TSYMBOL_UNICODE)
-            }
-        }
-    }
-    /// Returns an encoder for the key
-    pub fn get_key_encoder(&self) -> SingleEncoder {
-        s_encoder_booled!(self.encoded_k)
-    }
-    /// Returns an encoder for the value
-    pub fn get_value_encoder(&self) -> SingleEncoder {
-        s_encoder_booled!(self.encoded_v)
-    }
-    pub fn __get_inner_ref(&self) -> &Coremap<Data, Data> {
-        &self.table
-    }
-    /// Return an owned value of the key. In most cases, the reference count is just incremented
-    /// unless the data itself is mutated in place
-    pub fn take_snapshot<Q>(&self, key: &Q) -> Option<Data>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self.table.get(key).map(|v| v.clone())
-    }
-    /// Truncate the table
-    pub fn truncate_table(&self) {
-        self.table.clear()
-    }
-    pub const fn needs_value_encoding(&self) -> bool {
-        self.encoded_v
-    }
-    pub const fn needs_key_encoding(&self) -> bool {
-        self.encoded_k
-    }
-    pub const fn needs_no_encoding(&self) -> bool {
-        !(self.encoded_k && self.encoded_v)
-    }
-    pub const fn get_vt(&self) -> u8 {
-        if self.encoded_v {
-            TSYMBOL_UNICODE
-        } else {
-            TSYMBOL_BINARY
-        }
-    }
-    pub const fn get_kt(&self) -> u8 {
-        if self.encoded_k {
-            TSYMBOL_UNICODE
-        } else {
-            TSYMBOL_BINARY
-        }
-    }
-    /// Get the value for a given key if it exists
-    pub fn get_with_tsymbol<Q>(&self, key: &Q) -> Result<(Option<Ref<Data, Data>>, u8), ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok((self.table.get(key), self.get_vt()))
-    }
-    /// Get the value for a given key if it exists
-    pub fn get<Q>(&self, key: &Q) -> Result<Option<Ref<Data, Data>>, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok(self.table.get(key))
-    }
-    /// Get the value for a given key if it exists, returning a cloned reference
-    pub fn get_cloned<Q>(&self, key: &Q) -> Result<Option<Data>, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok(self.table.get_cloned(key))
-    }
-    pub fn get_cloned_unchecked<Q>(&self, key: &Q) -> Option<Data>
-    where
-        Data: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.table.get_cloned(key)
-    }
-    /// Get the value for a given key if it exists, returning a cloned reference
-    pub fn get_cloned_with_tsymbol<Q>(&self, key: &Q) -> Result<(Option<Data>, u8), ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok((self.table.get_cloned(key), self.get_vt()))
-    }
-    pub fn exists<Q>(&self, key: &Q) -> Result<bool, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok(self.table.contains_key(key))
-    }
-    pub fn exists_unchecked<Q>(&self, key: &Q) -> bool
-    where
-        Data: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.table.contains_key(key)
-    }
-    /// Check the unicode encoding of a given byte array
-    fn _encode<T: AsRef<[u8]>>(data: T) -> Result<(), ()> {
-        if encoding::is_utf8(data.as_ref()) {
+impl KVEValue for Data {
+    fn verify_encoding(&self, e_v: bool) -> EncodingResult<()> {
+        if ENCODING_LUT[e_v](self) {
             Ok(())
         } else {
             Err(())
         }
     }
-    /// Check the unicode encoding of the given key, if the encoded_k flag is set
-    fn _encode_key<T: AsRef<[u8]>>(&self, key: T) -> Result<(), ()> {
-        if self.encoded_k {
-            Self::_encode(key.as_ref())?;
+}
+
+impl KVEValue for LockedVec {
+    fn verify_encoding(&self, e_v: bool) -> EncodingResult<()> {
+        let func = ENCODING_LUT[e_v];
+        if self.read().iter().all(|v| func(v)) {
             Ok(())
         } else {
-            Ok(())
+            Err(())
         }
     }
-    /// Check the unicode encoding of the given value, if the encoded_v flag is set
-    fn _encode_value<T: AsRef<[u8]>>(&self, value: T) -> Result<(), ()> {
-        if self.encoded_v {
-            Self::_encode(value)
+}
+
+#[derive(Debug)]
+pub struct KVEngine<T> {
+    data: Coremap<Data, T>,
+    e_k: bool,
+    e_v: bool,
+}
+
+// basic method impls
+impl<T> KVEngine<T> {
+    /// Create a new KVE
+    pub fn new(e_k: bool, e_v: bool, data: Coremap<Data, T>) -> Self {
+        Self { data, e_k, e_v }
+    }
+    /// Create a new empty KVE
+    pub fn init(e_k: bool, e_v: bool) -> Self {
+        Self::new(e_k, e_v, Default::default())
+    }
+    /// Number of KV pairs
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+    /// Delete all the key/value pairs
+    pub fn truncate_table(&self) {
+        self.data.clear()
+    }
+    /// Returns a reference to the inner structure
+    pub fn get_inner_ref(&self) -> &Coremap<Data, T> {
+        &self.data
+    }
+    /// Check the encoding of the key
+    pub fn is_key_ok(&self, key: &[u8]) -> bool {
+        self._check_encoding(key, self.e_k)
+    }
+    /// Check the encoding of the value
+    pub fn is_val_ok(&self, val: &[u8]) -> bool {
+        self._check_encoding(val, self.e_v)
+    }
+    #[inline(always)]
+    fn check_key_encoding(&self, item: &[u8]) -> Result<(), ()> {
+        self.check_encoding(item, self.e_k)
+    }
+    #[inline(always)]
+    fn check_value_encoding(&self, item: &[u8]) -> Result<(), ()> {
+        self.check_encoding(item, self.e_v)
+    }
+    #[inline(always)]
+    fn _check_encoding(&self, item: &[u8], encoded: bool) -> bool {
+        ENCODING_LUT[encoded](item)
+    }
+    #[inline(always)]
+    fn check_encoding(&self, item: &[u8], encoded: bool) -> Result<(), ()> {
+        if compiler::likely(self._check_encoding(item, encoded)) {
+            Ok(())
         } else {
-            Ok(())
+            Err(())
         }
     }
-    /// Set the value of a non-existent key
-    pub fn set(&self, key: Data, value: Data) -> Result<bool, ()> {
-        self._encode_key(&key)?;
-        self._encode_value(&value)?;
-        Ok(self.table.true_if_insert(key, value))
+    pub fn is_key_encoded(&self) -> bool {
+        self.e_k
     }
-    /// Set the value of a non-existent key
-    pub fn set_unchecked(&self, key: Data, value: Data) -> bool {
-        self.table.true_if_insert(key, value)
+    pub fn is_val_encoded(&self) -> bool {
+        self.e_v
     }
-    /// Update the value of an existing key
-    pub fn update(&self, key: Data, value: Data) -> Result<bool, ()> {
-        self._encode_key(&key)?;
-        self._encode_value(&value)?;
-        Ok(self.table.true_if_update(key, value))
+    /// Get the key tsymbol
+    pub fn get_key_tsymbol(&self) -> u8 {
+        TSYMBOL_LUT[self.e_k]
     }
-    /// Update the value of an existing key
-    pub fn update_unchecked(&self, key: Data, value: Data) -> bool {
-        self.table.true_if_update(key, value)
+    /// Get the value tsymbol
+    pub fn get_value_tsymbol(&self) -> u8 {
+        TSYMBOL_LUT[self.e_v]
     }
-    /// Update or insert the value of a key
-    pub fn upsert(&self, key: Data, value: Data) -> Result<(), ()> {
-        self._encode_key(&key)?;
-        self._encode_value(&value)?;
-        self.table.upsert(key, value);
-        Ok(())
+    /// Returns (k_enc, v_enc)
+    pub fn get_encoding_tuple(&self) -> (bool, bool) {
+        (self.e_k, self.e_v)
     }
-    /// Update or insert the value of a key
-    pub fn upsert_unchecked(&self, key: Data, value: Data) {
-        self.table.upsert(key, value);
+    /// Returns an encoder fnptr for the key
+    pub fn get_key_encoder(&self) -> SingleEncoder {
+        ENCODING_LUT[self.e_k]
     }
-    /// Remove an existing key
-    pub fn remove<Q>(&self, key: &Q) -> Result<bool, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok(self.table.true_if_removed(key))
-    }
-    /// Remove an existing key
-    pub fn remove_unchecked<Q>(&self, key: &Q) -> bool
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self.table.true_if_removed(key)
-    }
-    pub fn pop<Q>(&self, key: &Q) -> Result<Option<(Data, Data)>, ()>
-    where
-        Data: Borrow<Q>,
-        Q: AsRef<[u8]> + Hash + Eq + ?Sized,
-    {
-        self._encode_key(key)?;
-        Ok(self.table.remove(key))
-    }
-    pub fn pop_unchecked<Q>(&self, key: &Q) -> Option<(Data, Data)>
-    where
-        Data: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.table.remove(key)
+    /// Returns an encoder fnptr for the value
+    pub fn get_val_encoder(&self) -> SingleEncoder {
+        ENCODING_LUT[self.e_v]
     }
 }
 
-#[test]
-fn test_ignore_encoding() {
-    let non_unicode_value = b"Hello \xF0\x90\x80World".to_vec();
-    let non_unicode_key = non_unicode_value.to_owned();
-    let tbl = KVEngine::default();
-    assert!(tbl
-        .set(non_unicode_key.into(), non_unicode_value.into())
-        .is_ok());
-}
-
-#[test]
-fn test_bad_unicode_key() {
-    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
-    let tbl = KVEngine::init(true, false);
-    assert!(tbl.set(Data::from(bad_unicode), Data::from("123")).is_err());
-}
-
-#[test]
-fn test_bad_unicode_value() {
-    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
-    let tbl = KVEngine::init(false, true);
-    assert!(tbl.set(Data::from("123"), Data::from(bad_unicode)).is_err());
-}
-
-#[test]
-fn test_bad_unicode_key_value() {
-    let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
-    let tbl = KVEngine::init(true, true);
-    assert!(tbl
-        .set(Data::from(bad_unicode.clone()), Data::from(bad_unicode))
-        .is_err());
-}
-
-#[test]
-fn test_with_bincode() {
-    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
-    struct User {
-        username: String,
-        password: String,
-        uuid: u128,
-        score: u32,
-        level: u32,
+// dict impls
+impl<T: KVEValue> KVEngine<T> {
+    /// Get the value of the given key
+    pub fn get<Q: AsRef<[u8]>>(&self, key: Q) -> EncodingResultRef<T> {
+        self.check_key_encoding(key.as_ref())
+            .map(|_| self.get_unchecked(key))
     }
-    let tbl = KVEngine::init(true, false);
-    let joe = User {
-        username: "Joe".to_owned(),
-        password: "Joe123".to_owned(),
-        uuid: u128::MAX,
-        score: u32::MAX,
-        level: u32::MAX,
-    };
-    assert!(tbl
-        .set(
-            Data::from("Joe"),
-            Data::from(bincode::serialize(&joe).unwrap(),),
-        )
-        .is_ok(),);
-    assert_eq!(
-        bincode::deserialize::<User>(&tbl.get("Joe".as_bytes()).unwrap().unwrap()).unwrap(),
-        joe
-    );
+    /// Get the value of the given key without any encoding checks
+    pub fn get_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> OptionRef<T> {
+        self.data.get(key.as_ref())
+    }
+    /// Set the value of the given key
+    pub fn set(&self, key: Data, val: T) -> EncodingResult<bool> {
+        self.check_key_encoding(&key)
+            .and_then(|_| val.verify_encoding(self.e_v))
+            .map(|_| self.set_unchecked(key, val))
+    }
+    /// Same as set, but doesn't check encoding. Caller must check encoding
+    pub fn set_unchecked(&self, key: Data, val: T) -> bool {
+        self.data.true_if_insert(key, val)
+    }
+    /// Check if the provided key exists
+    pub fn exists<Q: AsRef<[u8]>>(&self, key: Q) -> EncodingResult<bool> {
+        self.check_key_encoding(key.as_ref())?;
+        Ok(self.exists_unchecked(key.as_ref()))
+    }
+    pub fn exists_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> bool {
+        self.data.contains_key(key.as_ref())
+    }
+    /// Update the value of an existing key. Returns `true` if updated
+    pub fn update(&self, key: Data, val: T) -> EncodingResult<bool> {
+        self.check_key_encoding(&key)?;
+        val.verify_encoding(self.e_v)?;
+        Ok(self.update_unchecked(key, val))
+    }
+    /// Update the value of an existing key without encoding checks
+    pub fn update_unchecked(&self, key: Data, val: T) -> bool {
+        self.data.true_if_update(key, val)
+    }
+    /// Update or insert an entry
+    pub fn upsert(&self, key: Data, val: T) -> EncodingResult<()> {
+        self.check_key_encoding(&key)?;
+        val.verify_encoding(self.e_v)?;
+        Ok(self.upsert_unchecked(key, val))
+    }
+    /// Update or insert an entry without encoding checks
+    pub fn upsert_unchecked(&self, key: Data, val: T) {
+        self.data.upsert(key, val)
+    }
+    /// Remove an entry
+    pub fn remove<Q: AsRef<[u8]>>(&self, key: Q) -> EncodingResult<bool> {
+        self.check_key_encoding(key.as_ref())?;
+        Ok(self.remove_unchecked(key))
+    }
+    /// Remove an entry without encoding checks
+    pub fn remove_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> bool {
+        self.data.true_if_removed(key.as_ref())
+    }
+    /// Pop an entry
+    pub fn pop<Q: AsRef<[u8]>>(&self, key: Q) -> EncodingResult<Option<T>> {
+        self.check_key_encoding(key.as_ref())?;
+        Ok(self.pop_unchecked(key))
+    }
+    /// Pop an entry without encoding checks
+    pub fn pop_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> Option<T> {
+        self.data.remove(key.as_ref()).map(|(_, v)| v)
+    }
 }
 
-#[test]
-fn test_encoder_ignore() {
-    let tbl = KVEngine::default();
-    let encoder = tbl.get_encoder();
-    assert!(encoder.is_ok("hello".as_bytes(), b"Hello \xF0\x90\x80World"));
+impl<T: Clone> KVEngine<T> {
+    pub fn get_cloned<Q: AsRef<[u8]>>(&self, key: Q) -> EncodingResult<Option<T>> {
+        self.check_key_encoding(key.as_ref())?;
+        Ok(self.get_cloned_unchecked(key.as_ref()))
+    }
+    pub fn get_cloned_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> Option<T> {
+        self.data.get_cloned(key.as_ref())
+    }
 }
 
-#[test]
-fn test_encoder_validate_with_non_unicode() {
-    let tbl = KVEngine::init(true, true);
-    let encoder = tbl.get_encoder();
-    assert!(!encoder.is_ok("hello".as_bytes(), b"Hello \xF0\x90\x80World"));
+impl KVEStandard {
+    pub fn take_snapshot_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> Option<Data> {
+        self.data.get_cloned(key.as_ref())
+    }
+    /// Returns an encoder that checks each key and each value in turn
+    /// Usual usage:
+    /// ```notest
+    /// for (k, v) in samples {
+    ///     assert!(kve.get_double_encoder(k, v))
+    /// }
+    /// ```
+    pub fn get_double_encoder(&self) -> DoubleEncoder {
+        ENCODING_LUT_PAIR[(self.e_k, self.e_v)]
+    }
+}
+
+// list impls
+impl KVEListmap {
+    #[cfg(test)]
+    pub fn add_list(&self, listname: Data) -> EncodingResult<bool> {
+        self.check_key_encoding(&listname)?;
+        Ok(self.data.true_if_insert(listname, LockedVec::new(vec![])))
+    }
+    pub fn list_len(&self, listname: &[u8]) -> EncodingResult<Option<usize>> {
+        self.check_key_encoding(&listname)?;
+        Ok(self.data.get(listname).map(|list| list.read().len()))
+    }
+    pub fn list_cloned(&self, listname: &[u8], count: usize) -> EncodingResult<Option<Vec<Data>>> {
+        self.check_key_encoding(listname)?;
+        Ok(self.data.get(listname).map(|list| {
+            list.read()
+                .iter()
+                .map(|element| element.clone())
+                .take(count)
+                .collect()
+        }))
+    }
+    pub fn list_cloned_full(&self, listname: &[u8]) -> EncodingResult<Option<Vec<Data>>> {
+        self.check_key_encoding(listname)?;
+        Ok(self
+            .data
+            .get(listname)
+            .map(|list| list.read().iter().map(|element| element.clone()).collect()))
+    }
+}
+
+impl<T> Default for KVEngine<T> {
+    fn default() -> Self {
+        Self::init(false, false)
+    }
 }

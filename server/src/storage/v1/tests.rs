@@ -268,7 +268,7 @@ mod bytemark_actual_table_restore {
         table::{DescribeTable, KVEList, Table, KVE},
         Data,
     };
-    use crate::kvengine::{listmap::LockedVec, KVTable};
+    use crate::kvengine::LockedVec;
     use crate::storage::v1::{
         flush::{oneshot::flush_table, Autoflush},
         unflush::read_table,
@@ -331,14 +331,14 @@ mod bytemark_actual_table_restore {
         {
             assert_eq!(index, code as usize);
             assert!(table.get("hello".as_bytes()).unwrap().unwrap().eq(b"world"));
-            assert_eq!(table.kve_len(), 1);
+            assert_eq!(table.len(), 1);
         }
     }
 
     macro_rules! putlist {
         ($table:ident) => {
             gtable::<KVEList>(&$table)
-                .kve_inner_ref()
+                .get_inner_ref()
                 .fresh_entry(Data::from("super"))
                 .unwrap()
                 .insert(LockedVec::new(vec![
@@ -387,12 +387,12 @@ mod bytemark_actual_table_restore {
             // check code
             assert_eq!(index + 4, code as usize);
             // check payload
-            let vec = table.kve_inner_ref().get("super".as_bytes()).unwrap();
+            let vec = table.get_inner_ref().get("super".as_bytes()).unwrap();
             assert_eq!(vec.read().len(), 2);
             assert_eq!(vec.read()[0], "hello");
             assert_eq!(vec.read()[1], "world");
             // check len
-            assert_eq!(table.kve_len(), 1);
+            assert_eq!(table.len(), 1);
         }
     }
 }
@@ -403,7 +403,7 @@ mod flush_routines {
     use crate::corestore::table::DataModel;
     use crate::corestore::table::Table;
     use crate::corestore::Data;
-    use crate::kvengine::listmap::LockedVec;
+    use crate::kvengine::LockedVec;
     use crate::storage::v1::bytemarks;
     use crate::storage::v1::flush::Autoflush;
     use crate::storage::v1::Coremap;
@@ -443,8 +443,8 @@ mod flush_routines {
     fn test_flush_unflush_table_kvext_listmap() {
         let tbl = Table::new_kve_listmap_with_data(Coremap::new(), false, true, true);
         if let DataModel::KVExtListmap(kvl) = tbl.get_model_ref() {
-            kvl.add_list("mylist".into());
-            let list = kvl.get("mylist".as_bytes()).unwrap();
+            kvl.add_list("mylist".into()).unwrap();
+            let list = kvl.get("mylist".as_bytes()).unwrap().unwrap();
             list.write().push("mysupervalue".into());
         } else {
             panic!("Bad model!");
@@ -464,7 +464,7 @@ mod flush_routines {
         .unwrap();
         assert!(!ret.is_volatile());
         if let DataModel::KVExtListmap(kvl) = ret.get_model_ref() {
-            let list = kvl.get("mylist".as_bytes()).unwrap();
+            let list = kvl.get("mylist".as_bytes()).unwrap().unwrap();
             let lread = list.read();
             assert_eq!(lread.len(), 1);
             assert_eq!(lread[0].as_ref(), "mysupervalue".as_bytes());
@@ -525,7 +525,7 @@ mod flush_routines {
         assert_eq!(tbl3_ret_list.count(), 1);
         if let DataModel::KVExtListmap(kvl) = tbl3_ret_list.get_model_ref() {
             assert_eq!(
-                kvl.get("mylist".as_bytes()).unwrap().read()[0].as_ref(),
+                kvl.get("mylist".as_bytes()).unwrap().unwrap().read()[0].as_ref(),
                 "myvalue".as_bytes()
             );
         } else {
@@ -541,7 +541,7 @@ mod list_tests {
     use super::iter::RawSliceIter;
     use super::{de, se};
     use crate::corestore::{htable::Coremap, Data};
-    use crate::kvengine::listmap::LockedVec;
+    use crate::kvengine::LockedVec;
     use core::ops::Deref;
     use parking_lot::RwLock;
     #[test]
@@ -641,7 +641,7 @@ mod list_tests {
 mod corruption_tests {
     use crate::corestore::htable::Coremap;
     use crate::corestore::Data;
-    use crate::kvengine::listmap::LockedVec;
+    use crate::kvengine::LockedVec;
     #[test]
     fn test_corruption_map_basic() {
         let mymap = Coremap::new();

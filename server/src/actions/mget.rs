@@ -25,7 +25,7 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::{encoding::ENCODING_LUT_ITER, KVTable};
+use crate::kvengine::encoding::ENCODING_LUT_ITER;
 use crate::queryengine::ActionIter;
 use crate::resp::writer::TypedArrayWriter;
 use crate::util::compiler;
@@ -36,11 +36,11 @@ action!(
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         ensure_length(act.len(), |size| size != 0)?;
         let kve = handle.get_table_with::<KVE>()?;
-        let encoding_is_okay = ENCODING_LUT_ITER[kve.kve_key_encoded()](act.as_ref());
+        let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
         if compiler::likely(encoding_is_okay) {
             let mut writer = unsafe {
                 // SAFETY: We are getting the value type ourselves
-                TypedArrayWriter::new(con, kve.get_vt(), act.len())
+                TypedArrayWriter::new(con, kve.get_value_tsymbol(), act.len())
             }
             .await?;
             for key in act {

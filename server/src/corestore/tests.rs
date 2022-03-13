@@ -122,7 +122,7 @@ mod memstore_keyspace_tests {
 
 mod modelcode_tests {
     use super::super::table::Table;
-    use crate::kvengine::listmap::KVEListMap;
+    use crate::kvengine::KVEListmap;
     use crate::kvengine::KVEngine;
     #[test]
     fn test_model_code_pure_kve() {
@@ -148,13 +148,13 @@ mod modelcode_tests {
     #[test]
     fn test_model_code_kvext_listmap() {
         // binstr, list<binstr>
-        let l1 = KVEListMap::new(false, false);
+        let l1 = KVEListmap::init(false, false);
         // binstr, list<str>
-        let l2 = KVEListMap::new(false, true);
+        let l2 = KVEListmap::init(false, true);
         // str, list<binstr>
-        let l3 = KVEListMap::new(true, false);
+        let l3 = KVEListmap::init(true, false);
         // str, list<str>
-        let l4 = KVEListMap::new(true, true);
+        let l4 = KVEListmap::init(true, true);
 
         // now check
         let tbl1 = Table::from_kve_listmap(l1, false);

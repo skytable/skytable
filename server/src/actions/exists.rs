@@ -29,7 +29,7 @@
 
 use crate::corestore::table::DataModel;
 use crate::dbnet::connection::prelude::*;
-use crate::kvengine::{encoding::ENCODING_LUT_ITER, KVTable};
+use crate::kvengine::encoding::ENCODING_LUT_ITER;
 use crate::queryengine::ActionIter;
 use crate::util::compiler;
 
@@ -40,10 +40,10 @@ action!(
         let mut how_many_of_them_exist = 0usize;
         macro_rules! exists {
             ($engine:expr) => {{
-                let encoding_is_okay = ENCODING_LUT_ITER[$engine.kve_key_encoded()](act.as_ref());
+                let encoding_is_okay = ENCODING_LUT_ITER[$engine.is_key_encoded()](act.as_ref());
                 if compiler::likely(encoding_is_okay) {
                     act.for_each(|key| {
-                        how_many_of_them_exist += $engine.kve_exists(key) as usize;
+                        how_many_of_them_exist += $engine.exists_unchecked(key) as usize;
                     });
                     conwrite!(con, how_many_of_them_exist)?;
                 } else {

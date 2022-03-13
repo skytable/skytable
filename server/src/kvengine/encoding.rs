@@ -69,6 +69,12 @@ pub const ENCODING_LUT_ITER_PAIR: TwoBitLUT<fn(&AnyArrayIter) -> bool> = TwoBitL
 );
 pub const ENCODING_LUT: BoolTable<fn(&[u8]) -> bool> =
     BoolTable::new(self::is_okay_encoded, self::is_okay_no_encoding);
+pub const ENCODING_LUT_PAIR: TwoBitLUT<fn(&[u8], &[u8]) -> bool> = TwoBitLUT::new(
+    self::is_okay_encoded_pair_ff,
+    self::is_okay_encoded_pair_ft,
+    self::is_okay_encoded_pair_tf,
+    self::is_okay_encoded_pair_tt,
+);
 
 /// This table maps bytes to character classes that helps us reduce the size of the
 /// transition table and generate bitmasks
@@ -154,6 +160,22 @@ pub fn is_okay_encoded(inp: &[u8]) -> bool {
 }
 
 pub const fn is_okay_no_encoding(_inp: &[u8]) -> bool {
+    true
+}
+
+pub fn is_okay_encoded_pair_tt(a: &[u8], b: &[u8]) -> bool {
+    is_okay_encoded(a) && is_okay_encoded(b)
+}
+
+pub fn is_okay_encoded_pair_tf(a: &[u8], _b: &[u8]) -> bool {
+    is_okay_encoded(a)
+}
+
+pub fn is_okay_encoded_pair_ft(_a: &[u8], b: &[u8]) -> bool {
+    is_okay_encoded(b)
+}
+
+pub const fn is_okay_encoded_pair_ff(_a: &[u8], _b: &[u8]) -> bool {
     true
 }
 

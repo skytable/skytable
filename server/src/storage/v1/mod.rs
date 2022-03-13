@@ -185,7 +185,7 @@ unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
 
 mod se {
     use super::*;
-    use crate::kvengine::listmap::LockedVec;
+    use crate::kvengine::LockedVec;
     use crate::storage::v1::flush::FlushableKeyspace;
     use crate::storage::v1::flush::FlushableTable;
     use crate::IoResult;
@@ -340,7 +340,7 @@ mod se {
 mod de {
     use super::iter::{RawSliceIter, RawSliceIterBorrowed};
     use super::{Array, Coremap, Data, Hash, HashSet};
-    use crate::kvengine::listmap::LockedVec;
+    use crate::kvengine::LockedVec;
     use core::ptr;
     use parking_lot::RwLock;
     use std::collections::HashMap;

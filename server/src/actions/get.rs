@@ -37,8 +37,8 @@ action!(
         ensure_length(act.len(), |len| len == 1)?;
         let kve = handle.get_table_with::<KVE>()?;
         unsafe {
-            match kve.get_cloned_with_tsymbol(act.next_unchecked()) {
-                Ok((Some(val), tsymbol)) => writer::write_raw_mono(con, tsymbol, &val).await?,
+            match kve.get_cloned(act.next_unchecked()) {
+                Ok(Some(val)) => writer::write_raw_mono(con, kve.get_value_tsymbol(), &val).await?,
                 Err(_) => compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?,
                 Ok(_) => conwrite!(con, groups::NIL)?,
             }

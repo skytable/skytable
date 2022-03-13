@@ -38,16 +38,16 @@ action!(
         ensure_length(act.len(), |len| len != 0)?;
         if registry::state_okay() {
             let kve = handle.get_table_with::<KVE>()?;
-            let encoding_is_okay = ENCODING_LUT_ITER[kve.needs_key_encoding()](act.as_ref());
+            let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
             if compiler::likely(encoding_is_okay) {
                 let mut writer = unsafe {
                     // SAFETY: We have verified the tsymbol ourselves
-                    TypedArrayWriter::new(con, kve.get_vt(), act.len())
+                    TypedArrayWriter::new(con, kve.get_value_tsymbol(), act.len())
                 }
                 .await?;
                 for key in act {
                     match kve.pop_unchecked(key) {
-                        Some((_key, val)) => writer.write_element(val).await?,
+                        Some(val) => writer.write_element(val).await?,
                         None => writer.write_null().await?,
                     }
                 }
