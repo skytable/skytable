@@ -85,26 +85,26 @@ action! {
                 con.write_response(groups::OKAY).await?;
                 Ok(())
             }
-            AUTH_RESTORE => {
-                let newkey = match iter.len() {
-                    1 => {
-                        // so this fella thinks they're root
-                        auth.provider().regenerate(unsafe {iter.next_unchecked()})?
-                    }
-                    2 => {
-                        // so this fella is giving us the origin key
-                        let origin = unsafe { iter.next_unchecked() };
-                        let id = unsafe { iter.next_unchecked() };
-                        auth.provider().verify_origin(origin)?;
-                        auth.provider().regenerate(id)?
-                    }
-                    _ => return util::err(groups::ACTION_ERR),
-                };
-                con.write_response(StringWrapper(newkey)).await?;
-                Ok(())
-            }
+            AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
             _ => util::err(groups::UNKNOWN_ACTION),
         }
+    }
+    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+        let newkey = match iter.len() {
+            1 => {
+                // so this fella thinks they're root
+                auth.provider().regenerate(unsafe {iter.next_unchecked()})?
+            }
+            2 => {
+                // so this fella is giving us the origin key
+                let origin = unsafe { iter.next_unchecked() };
+                let id = unsafe { iter.next_unchecked() };
+                auth.provider().regenerate_using_origin(origin, id)?
+            }
+            _ => return util::err(groups::ACTION_ERR),
+        };
+        con.write_response(StringWrapper(newkey)).await?;
+        Ok(())
     }
     fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr(iter.len() == 1)?; // just the origin key
@@ -124,6 +124,7 @@ action! {
         match iter.next_lowercase().unwrap_or_aerr()?.as_ref() {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
             AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
+            AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
             _ => util::err(errors::AUTH_CODE_PERMS),
         }
     }

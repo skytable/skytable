@@ -35,7 +35,7 @@ pub const AUTH_ERROR_DISABLED: &[u8] = b"!17\nerr-auth-disabled\n";
 /// Skyhash respcode(11): Insufficient permissions (same for anonymous user)
 pub const AUTH_CODE_PERMS: &[u8] = b"!2\n11\n";
 /// Skyhash respstring: ID is too long
-pub const AUTH_ERROR_TOO_LONG: &[u8] = b"!25\nerr-auth-illegal-username\n";
+pub const AUTH_ERROR_ILLEGAL_USERNAME: &[u8] = b"!25\nerr-auth-illegal-username\n";
 /// Skyhash respstring: ID is protected/in use
 pub const AUTH_ERROR_FAILED_TO_DELETE_USER: &[u8] = b"!21\nerr-auth-deluser-fail\n";
 

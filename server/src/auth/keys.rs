@@ -50,6 +50,6 @@ pub fn generate_full() -> (String, Authkey) {
 }
 
 /// Verify a "human readable key" against the provided "authbytes"
-pub fn verify_key(input: &[u8], hash: &[u8]) -> bool {
-    rcrypt::verify(input, hash).unwrap()
+pub fn verify_key(input: &[u8], hash: &[u8]) -> Option<bool> {
+    rcrypt::verify(input, hash).ok()
 }

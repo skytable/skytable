@@ -53,6 +53,37 @@ macro_rules! assert_auth_bad_credentials {
     };
 }
 
+const ONLYAUTH: u8 = 0;
+const NOAUTH: u8 = 1;
+
+macro_rules! assert_authn_resp_matrix {
+    ($con:expr, $query:expr, $username:ident, $password:ident, $resp:expr) => {
+        runeq!(
+            $con,
+            ::skytable::query!("auth", "login", $username, $password),
+            ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+        );
+        runeq!($con, $query, $resp);
+    };
+    ($con:expr, $query:expr, $resp:expr) => {{
+        runeq!($con, $query, $resp)
+    }};
+    ($con:expr, $query:expr, $authnd:ident, $resp:expr) => {{
+        match $authnd {
+            ONLYAUTH => {
+                assert_authn_resp_matrix!($con, $query, ROOT_USER, ROOT_PASS, $resp);
+                assert_authn_resp_matrix!($con, $query, USER, PASS, $resp);
+            }
+            NOAUTH => {
+                assert_authn_resp_matrix!($con, $query, $resp);
+                assert_authn_resp_matrix!($con, $query, ROOT_USER, ROOT_PASS, $resp);
+                assert_authn_resp_matrix!($con, $query, USER, PASS, $resp);
+            }
+            _ => panic!("Unknown authnd state"),
+        }
+    }};
+}
+
 // auth claim
 // auth claim fail because it is disabled
 #[sky_macros::dbtest_func]
@@ -171,47 +202,77 @@ async fn auth_deluser_okay_because_root() {
     assert_okay!(con, query!("auth", "deluser", "supercooluser"))
 }
 
+// restore
+#[sky_macros::dbtest_func]
+async fn restore_fail_because_disabled() {
+    assert_auth_disabled!(con, query!("auth", "restore", "root"));
+}
+#[sky_macros::dbtest_func(port = 2005, auth_testuser = true)]
+async fn restore_fail_because_not_root() {
+    assert_auth_perm_error!(con, query!("auth", "restore", "root"));
+}
+#[sky_macros::dbtest_func(port = 2005, auth_rootuser = true)]
+async fn restore_okay_because_root() {
+    runmatch!(
+        con,
+        query!("auth", "adduser", "supercooldude"),
+        Element::String
+    );
+    runmatch!(
+        con,
+        query!("auth", "restore", "supercooldude"),
+        Element::String
+    );
+}
+#[sky_macros::dbtest_func(port = 2005, auth_rootuser = true, norun = true)]
+async fn restore_okay_with_origin_key() {
+    runmatch!(con, query!("auth", "adduser", "someuser2"), Element::String);
+    // now logout
+    runeq!(
+        con,
+        query!("auth", "logout"),
+        Element::RespCode(RespCode::Okay)
+    );
+    // we should still be able to restore using origin key
+    runmatch!(
+        con,
+        query!("auth", "restore", crate::TEST_AUTH_ORIGIN_KEY, "someuser2"),
+        Element::String
+    );
+}
+
 mod syntax_checks {
+    use super::{NOAUTH, ONLYAUTH};
     use crate::auth::provider::testsuite_data::{
         TESTSUITE_ROOT_TOKEN as ROOT_PASS, TESTSUITE_ROOT_USER as ROOT_USER,
         TESTSUITE_TEST_TOKEN as PASS, TESTSUITE_TEST_USER as USER,
     };
     use skytable::{query, Element, RespCode};
-    const ONLYAUTH: u8 = 0;
-    const NOAUTH: u8 = 1;
-    const ONLYROOT: u8 = 2;
-    const NOROOT: u8 = 3;
     macro_rules! assert_authn_aerr {
         ($con:expr, $query:expr, $username:expr, $password:expr) => {{
-            runeq!(
+            assert_authn_resp_matrix!(
                 $con,
-                ::skytable::query!("auth", "login", $username, $password),
-                ::skytable::Element::RespCode(::skytable::RespCode::Okay)
-            );
-            assert_aerr!($con, $query)
+                $query,
+                $username,
+                $password,
+                ::skytable::Element::RespCode(::skytable::RespCode::ActionError)
+            )
         }};
         ($con:expr, $query:expr) => {{
-            assert_authn_aerr!($con, $query, NOAUTH)
+            assert_authn_resp_matrix!(
+                $con,
+                $query,
+                NOAUTH,
+                ::skytable::Element::RespCode(::skytable::RespCode::ActionError)
+            )
         }};
         ($con:expr, $query:expr, $authnd:ident) => {{
-            match $authnd {
-                ONLYAUTH => {
-                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
-                    assert_authn_aerr!($con, $query, USER, PASS);
-                }
-                NOAUTH => {
-                    assert_aerr!($con, $query);
-                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
-                    assert_authn_aerr!($con, $query, USER, PASS);
-                }
-                ONLYROOT => {
-                    assert_authn_aerr!($con, $query, ROOT_USER, ROOT_PASS);
-                }
-                NOROOT => {
-                    assert_authn_aerr!($con, $query, USER, PASS);
-                }
-                _ => panic!("Unknown authnd state"),
-            }
+            assert_authn_resp_matrix!(
+                $con,
+                $query,
+                $authnd,
+                ::skytable::Element::RespCode(::skytable::RespCode::ActionError)
+            );
         }};
     }
     #[sky_macros::dbtest_func(port = 2005, norun = true)]
@@ -242,6 +303,14 @@ mod syntax_checks {
             con,
             query!("auth", "deluser", "someuser", "butextradata"),
             ONLYAUTH
+        );
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn regenerate_aerr() {
+        assert_authn_aerr!(con, query!("auth", "restore"));
+        assert_authn_aerr!(
+            con,
+            query!("auth", "restore", "someuser", "origin", "but extra data")
         );
     }
     #[sky_macros::dbtest_func(port = 2005, norun = true, auth_testuser = true)]

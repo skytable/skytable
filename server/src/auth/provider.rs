@@ -147,7 +147,8 @@ impl AuthProvider {
     pub fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
         if self.authmap.true_if_insert(
-            Array::try_from_slice(claimant).ok_or(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))?,
+            Array::try_from_slice(claimant)
+                .ok_or(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))?,
             store,
         ) {
             Ok(key)
@@ -162,20 +163,27 @@ impl AuthProvider {
             .get(account)
             .map(|token_hash| keys::verify_key(token, token_hash.as_slice()))
         {
-            Some(true) => {
+            Some(Some(true)) => {
                 // great, authenticated
                 self.whoami = Some(Self::try_auth_id(account)?);
                 Ok(())
             }
-            Some(false) | None => {
-                // imposter!
+            _ => {
+                // either the password was wrong, or the username was wrong
                 Err(AuthError::BadCredentials)
             }
         }
     }
-    /// Regenerate the token for the given user. This returns a new token
+    pub fn regenerate_using_origin(&self, origin: &[u8], account: &[u8]) -> AuthResult<String> {
+        self.verify_origin(origin)?;
+        self._regenerate(account)
+    }
     pub fn regenerate(&self, account: &[u8]) -> AuthResult<String> {
         self.ensure_root()?;
+        self._regenerate(account)
+    }
+    /// Regenerate the token for the given user. This returns a new token
+    fn _regenerate(&self, account: &[u8]) -> AuthResult<String> {
         let id = Self::try_auth_id(account)?;
         let (key, store) = keys::generate_full();
         if self.authmap.true_if_update(id, store) {
@@ -185,11 +193,7 @@ impl AuthProvider {
         }
     }
     fn try_auth_id(authid: &[u8]) -> AuthResult<AuthID> {
-        if authid.len() == AUTHID_SIZE {
-            Ok(AuthID::try_from_slice(authid).unwrap())
-        } else {
-            Err(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))
-        }
+        AuthID::try_from_slice(authid).ok_or(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))
     }
     pub fn logout(&mut self) -> AuthResult<()> {
         self.ensure_enabled()?;

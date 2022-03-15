@@ -30,7 +30,7 @@ mod keys {
     #[test]
     fn test_verify_key() {
         let (key, store) = generate_full();
-        assert!(verify_key(key.as_bytes(), &store));
+        assert!(verify_key(key.as_bytes(), &store).unwrap());
     }
 }
 

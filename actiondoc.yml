@@ -113,6 +113,7 @@ global:
           Attempts to restore the password for the provided user. This will regenerate the token
           and return the newly issued token. However, if you aren't a root account, that is, you
           lost your root password, then you'll need to run `AUTH RESTORE <origin-key> root`.
+        return: [String, Rcode 10, Rcode 11]
 
 keyvalue:
   generic:

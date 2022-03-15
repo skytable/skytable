@@ -68,12 +68,6 @@ macro_rules! assert_okay {
     };
 }
 
-macro_rules! assert_aerr {
-    ($con:expr, $query:expr) => {
-        assert_respcode!($con, $query, ::skytable::RespCode::ActionError)
-    };
-}
-
 macro_rules! assert_skyhash_arrayeq {
     (str, $con:expr, $query:expr, $($val:expr),*) => {
         runeq!(
