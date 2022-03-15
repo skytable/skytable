@@ -97,6 +97,9 @@ where
     pub fn provider_mut(&mut self) -> &mut AuthProvider {
         &mut self.provider
     }
+    pub fn provider(&self) -> &AuthProvider {
+        &self.provider
+    }
     pub fn swap_executor_to_anonymous(&mut self) {
         *self.executor = ConnectionHandler::execute_unauth;
     }

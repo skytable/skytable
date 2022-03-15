@@ -12,6 +12,8 @@ All changes in this project will be noted in this file.
   - `auth logout`
   - `auth adduser <username>`
   - `auth deluser <username>`
+  - `auth restore <username>`
+  - `auth restore <origin key> <username>`
 - Shell now supports multiple `--eval` expressions
 
 ## Version 0.7.3

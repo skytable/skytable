@@ -52,6 +52,7 @@ const AUTH_LOGIN: &[u8] = b"login";
 const AUTH_LOGOUT: &[u8] = b"logout";
 const AUTH_ADDUSER: &[u8] = b"adduser";
 const AUTH_DELUSER: &[u8] = b"deluser";
+const AUTH_RESTORE: &[u8] = b"restore";
 
 action! {
     /// Handle auth. Should have passed the `auth` token
@@ -82,6 +83,24 @@ action! {
                 ensure_boolean_or_aerr(iter.len() == 1)?; // just the username
                 auth.provider_mut().delete_user(unsafe { iter.next_unchecked() })?;
                 con.write_response(groups::OKAY).await?;
+                Ok(())
+            }
+            AUTH_RESTORE => {
+                let newkey = match iter.len() {
+                    1 => {
+                        // so this fella thinks they're root
+                        auth.provider().regenerate(unsafe {iter.next_unchecked()})?
+                    }
+                    2 => {
+                        // so this fella is giving us the origin key
+                        let origin = unsafe { iter.next_unchecked() };
+                        let id = unsafe { iter.next_unchecked() };
+                        auth.provider().verify_origin(origin)?;
+                        auth.provider().regenerate(id)?
+                    }
+                    _ => return util::err(groups::ACTION_ERR),
+                };
+                con.write_response(StringWrapper(newkey)).await?;
                 Ok(())
             }
             _ => util::err(groups::UNKNOWN_ACTION),

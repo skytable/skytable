@@ -122,19 +122,15 @@ impl AuthProvider {
         matches!(self.origin, Some(_))
     }
     pub fn claim_root(&mut self, origin_key: &[u8]) -> AuthResult<String> {
-        let origin = self.get_origin()?;
-        if origin == origin_key {
-            // the origin key was good, let's try claiming root
-            let (key, store) = keys::generate_full();
-            if self.authmap.true_if_insert(USER_ROOT, store) {
-                // claimed, sweet, log them in
-                self.whoami = Some(USER_ROOT);
-                Ok(key)
-            } else {
-                Err(AuthError::AlreadyClaimed)
-            }
+        self.verify_origin(origin_key)?;
+        // the origin key was good, let's try claiming root
+        let (key, store) = keys::generate_full();
+        if self.authmap.true_if_insert(USER_ROOT, store) {
+            // claimed, sweet, log them in
+            self.whoami = Some(USER_ROOT);
+            Ok(key)
         } else {
-            Err(AuthError::BadCredentials)
+            Err(AuthError::AlreadyClaimed)
         }
     }
     fn are_you_root(&self) -> AuthResult<bool> {
@@ -168,7 +164,7 @@ impl AuthProvider {
         {
             Some(true) => {
                 // great, authenticated
-                self.whoami = Some(Array::try_from_slice(account).unwrap());
+                self.whoami = Some(Self::try_auth_id(account)?);
                 Ok(())
             }
             Some(false) | None => {
@@ -177,12 +173,37 @@ impl AuthProvider {
             }
         }
     }
+    /// Regenerate the token for the given user. This returns a new token
+    pub fn regenerate(&self, account: &[u8]) -> AuthResult<String> {
+        self.ensure_root()?;
+        let id = Self::try_auth_id(account)?;
+        let (key, store) = keys::generate_full();
+        if self.authmap.true_if_update(id, store) {
+            Ok(key)
+        } else {
+            Err(AuthError::BadCredentials)
+        }
+    }
+    fn try_auth_id(authid: &[u8]) -> AuthResult<AuthID> {
+        if authid.len() == AUTHID_SIZE {
+            Ok(AuthID::try_from_slice(authid).unwrap())
+        } else {
+            Err(AuthError::Other(errors::AUTH_ERROR_TOO_LONG))
+        }
+    }
     pub fn logout(&mut self) -> AuthResult<()> {
         self.ensure_enabled()?;
         self.whoami.take().map(|_| ()).ok_or(AuthError::Anonymous)
     }
     fn ensure_enabled(&self) -> AuthResult<()> {
         self.origin.as_ref().map(|_| ()).ok_or(AuthError::Disabled)
+    }
+    pub fn verify_origin(&self, origin: &[u8]) -> AuthResult<()> {
+        if self.get_origin()?.eq(origin) {
+            Ok(())
+        } else {
+            Err(AuthError::BadCredentials)
+        }
     }
     fn get_origin(&self) -> AuthResult<&Authkey> {
         match self.origin.as_ref() {
