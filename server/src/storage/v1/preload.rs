@@ -64,7 +64,6 @@ const META_SEGMENT: u8 = META_SEGMENT_BE;
 ///
 pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoResult<()> {
     // generate the meta segment
-    #[allow(clippy::identity_op)]
     w.write_all(&[META_SEGMENT])?;
     super::se::raw_serialize_set(&store.keyspaces, w)?;
     Ok(())

@@ -25,6 +25,7 @@
 */
 
 use bytes::Bytes;
+use core::any;
 use core::borrow::Borrow;
 use core::borrow::BorrowMut;
 use core::cmp::Ordering;
@@ -540,7 +541,18 @@ where
     T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        (**self).fmt(f)
+        if any::type_name::<T>().eq(any::type_name::<u8>()) {
+            let slf = unsafe {
+                // UNSAFE(@ohsayan): Guaranteed by the above invariant
+                &*(self as *const Array<T, CAP> as *const Array<u8, CAP>)
+            };
+            match String::from_utf8(slf.to_vec()) {
+                Ok(st) => write!(f, "{:#?}", st),
+                Err(_) => (**self).fmt(f),
+            }
+        } else {
+            (**self).fmt(f)
+        }
     }
 }
 

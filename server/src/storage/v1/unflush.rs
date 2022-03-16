@@ -218,6 +218,8 @@ pub fn read_full() -> IoResult<Memstore> {
         let ks = self::read_keyspace::<Keyspace>(&ksid)?;
         ksmap.upsert(ksid, Arc::new(ks));
     }
+    // HACK(@ohsayan): Now pop system back in here
+    ksmap.upsert(SYSTEM, Arc::new(Keyspace::empty()));
     Ok(Memstore::init_with_all(ksmap, system_keyspace))
 }
 

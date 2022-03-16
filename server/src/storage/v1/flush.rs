@@ -226,9 +226,11 @@ pub fn flush_full<T: StorageTarget>(target: T, store: &Memstore) -> IoResult<()>
         self::flush_keyspace_full(&target, keyspace.key(), keyspace.value().as_ref())?;
     }
     // flush system tables
-    // IMPORTANT: DO NOT REORDER THIS. THE above loop will flush a PARTMAP once. But
-    // this has to be done again!
-    self::flush_keyspace_full(&target, &SYSTEM, &store.system)?;
+    // HACK(@ohsayan): DO NOT REORDER THIS. THE above loop will flush a PARTMAP once. But
+    // this has to be done again! The system keyspace in the above loop is a dummy one
+    // because it is located in a different field. So, we need to flush the actual list
+    // of tables
+    self::oneshot::flush_partmap(&target, &SYSTEM, &store.system)?;
     Ok(())
 }
 
