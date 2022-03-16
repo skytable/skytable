@@ -27,352 +27,332 @@
 use super::parser;
 
 mod parser_ddl_tests {
-    use super::parser::parse_table_args_test;
-    use crate::corestore::memstore::ObjectID;
+    use super::parser::Entity;
+    macro_rules! byvec {
+        ($($element:expr),*) => {
+            vec![
+                $(
+                    $element.as_bytes()
+                ),*
+            ]
+        };
+    }
+    fn parse_table_args_test(input: Vec<&'static [u8]>) -> Result<(Entity<'_>, u8), &'static [u8]> {
+        super::parser::parse_table_args(&input[0], &input[1])
+    }
     use crate::protocol::responses;
     #[test]
     fn test_table_args_valid() {
         // binstr, binstr
-        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,binstr)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(binstr,binstr)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 0);
 
         // binstr, str
-        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,str)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(binstr,str)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 1);
 
         // str, str
-        let mut it = vec![byt!("mytbl"), byt!("keymap(str,str)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(str,str)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 2);
 
         // str, binstr
-        let mut it = vec![byt!("mytbl"), byt!("keymap(str,binstr)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(str,binstr)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 3);
 
         // now test kvext: listmap
         // binstr, list<binstr>
-        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,list<binstr>)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(binstr,list<binstr>)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 4);
 
         // binstr, list<str>
-        let mut it = vec![byt!("mytbl"), byt!("keymap(binstr,list<str>)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(binstr,list<str>)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 5);
 
         // str, list<binstr>
-        let mut it = vec![byt!("mytbl"), byt!("keymap(str,list<binstr>)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        let it = byvec!("mytbl", "keymap(str,list<binstr>)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 6);
 
-        // binstr, list<binstr>
-        let mut it = vec![byt!("mytbl"), byt!("keymap(str,list<str>)")].into_iter();
-        let (tbl_name, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tbl_name, unsafe {
-            (Some(ObjectID::from_slice("mytbl")), None)
-        });
+        // str, list<str>
+        let it = byvec!("mytbl", "keymap(str,list<str>)");
+        let (tbl_name, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tbl_name, Entity::Single(b"mytbl"));
         assert_eq!(mcode, 7);
     }
     #[test]
     fn test_table_bad_ident() {
-        let mut it = vec![byt!("1one"), byt!("keymap(binstr,binstr)")].into_iter();
+        let it = byvec!("1one", "keymap(binstr,binstr)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_CONTAINER_NAME
         );
-        let mut it = vec![byt!("%whywouldsomeone"), byt!("keymap(binstr,binstr)")].into_iter();
+        let it = byvec!("%whywouldsomeone", "keymap(binstr,binstr)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_CONTAINER_NAME
         );
     }
     #[test]
     fn test_table_whitespaced_datatypes() {
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(binstr, binstr)")].into_iter();
-        let (tblid, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tblid, unsafe {
-            (Some(ObjectID::from_slice("mycooltbl")), None)
-        });
+        let it = byvec!("mycooltbl", "keymap(binstr, binstr)");
+        let (tblid, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tblid, Entity::Single(b"mycooltbl"));
         assert_eq!(mcode, 0);
 
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(binstr, str)")].into_iter();
-        let (tblid, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tblid, unsafe {
-            (Some(ObjectID::from_slice("mycooltbl")), None)
-        });
+        let it = byvec!("mycooltbl", "keymap(binstr, str)");
+        let (tblid, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tblid, Entity::Single(b"mycooltbl"));
         assert_eq!(mcode, 1);
 
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(str, str)")].into_iter();
-        let (tblid, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tblid, unsafe {
-            (Some(ObjectID::from_slice("mycooltbl")), None)
-        });
+        let it = byvec!("mycooltbl", "keymap(str, str)");
+        let (tblid, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tblid, Entity::Single(b"mycooltbl"));
         assert_eq!(mcode, 2);
 
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(str, binstr)")].into_iter();
-        let (tblid, mcode) = parse_table_args_test(&mut it).unwrap();
-        assert_eq!(tblid, unsafe {
-            (Some(ObjectID::from_slice("mycooltbl")), None)
-        });
+        let it = byvec!("mycooltbl", "keymap(str, binstr)");
+        let (tblid, mcode) = parse_table_args_test(it).unwrap();
+        assert_eq!(tblid, Entity::Single(b"mycooltbl"));
         assert_eq!(mcode, 3);
     }
 
     #[test]
     fn test_table_badty() {
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(wth, str)")].into_iter();
+        let it = byvec!("mycooltbl", "keymap(wth, str)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_DATA_TYPE
         );
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(wth, wth)")].into_iter();
+        let it = byvec!("mycooltbl", "keymap(wth, wth)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_DATA_TYPE
         );
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(str, wth)")].into_iter();
+        let it = byvec!("mycooltbl", "keymap(str, wth)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_DATA_TYPE
         );
-        let mut it = vec![byt!("mycooltbl"), byt!("keymap(wth1, wth2)")].into_iter();
+        let it = byvec!("mycooltbl", "keymap(wth1, wth2)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_DATA_TYPE
         );
     }
     #[test]
     fn test_table_bad_model() {
-        let mut it = vec![byt!("mycooltbl"), byt!("wthmap(wth, wth)")].into_iter();
+        let it = byvec!("mycooltbl", "wthmap(wth, wth)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_MODEL
         );
-        let mut it = vec![byt!("mycooltbl"), byt!("wthmap(str, str)")].into_iter();
+        let it = byvec!("mycooltbl", "wthmap(str, str)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_MODEL
         );
-        let mut it = vec![byt!("mycooltbl"), byt!("wthmap()")].into_iter();
+        let it = byvec!("mycooltbl", "wthmap()");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::UNKNOWN_MODEL
         );
     }
     #[test]
     fn test_table_malformed_expr() {
-        let mut it = bi!("mycooltbl", "keymap(");
+        let it = byvec!("mycooltbl", "keymap(");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(,");
+        let it = byvec!("mycooltbl", "keymap(,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(,,");
+        let it = byvec!("mycooltbl", "keymap(,,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap),");
+        let it = byvec!("mycooltbl", "keymap),");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap),,");
+        let it = byvec!("mycooltbl", "keymap),,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap),,)");
+        let it = byvec!("mycooltbl", "keymap),,)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(,)");
+        let it = byvec!("mycooltbl", "keymap(,)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(,,)");
+        let it = byvec!("mycooltbl", "keymap(,,)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap,");
+        let it = byvec!("mycooltbl", "keymap,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap,,");
+        let it = byvec!("mycooltbl", "keymap,,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap,,)");
+        let it = byvec!("mycooltbl", "keymap,,)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(str,");
+        let it = byvec!("mycooltbl", "keymap(str,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(str,str");
+        let it = byvec!("mycooltbl", "keymap(str,str");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(str,str,");
+        let it = byvec!("mycooltbl", "keymap(str,str,");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(str,str,)");
+        let it = byvec!("mycooltbl", "keymap(str,str,)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
-        let mut it = bi!("mycooltbl", "keymap(str,str,),");
+        let it = byvec!("mycooltbl", "keymap(str,str,),");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
     }
 
     #[test]
     fn test_table_too_many_args() {
-        let mut it = bi!("mycooltbl", "keymap(str, str, str)");
+        let it = byvec!("mycooltbl", "keymap(str, str, str)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::TOO_MANY_ARGUMENTS
         );
 
         // this should be valid for not-yet-known data types too
-        let mut it = bi!("mycooltbl", "keymap(wth, wth, wth)");
+        let it = byvec!("mycooltbl", "keymap(wth, wth, wth)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::TOO_MANY_ARGUMENTS
         );
     }
 
     #[test]
     fn test_bad_key_type() {
-        let mut it = bi!("myverycooltbl", "keymap(list<str>, str)");
+        let it = byvec!("myverycooltbl", "keymap(list<str>, str)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_TYPE_FOR_KEY
         );
-        let mut it = bi!("myverycooltbl", "keymap(list<binstr>, binstr)");
+        let it = byvec!("myverycooltbl", "keymap(list<binstr>, binstr)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_TYPE_FOR_KEY
         );
         // for consistency checks
-        let mut it = bi!("myverycooltbl", "keymap(list<str>, binstr)");
+        let it = byvec!("myverycooltbl", "keymap(list<str>, binstr)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_TYPE_FOR_KEY
         );
-        let mut it = bi!("myverycooltbl", "keymap(list<binstr>, str)");
+        let it = byvec!("myverycooltbl", "keymap(list<binstr>, str)");
         assert_eq!(
-            parse_table_args_test(&mut it).unwrap_err(),
+            parse_table_args_test(it).unwrap_err(),
             responses::groups::BAD_TYPE_FOR_KEY
         );
     }
 }
 
 mod entity_parser_tests {
-    use super::parser::get_query_entity;
-    use crate::corestore::BorrowedEntityGroup;
+    use super::parser::Entity;
     use crate::protocol::responses;
     #[test]
     fn test_query_full_entity_okay() {
         let x = byt!("ks:tbl");
-        assert_eq!(
-            get_query_entity(&x).unwrap(),
-            BorrowedEntityGroup::from((Some("ks".as_bytes()), Some("tbl".as_bytes())))
-        );
+        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Full(b"ks", b"tbl"));
     }
     #[test]
     fn test_query_half_entity() {
         let x = byt!("tbl");
-        assert_eq!(
-            get_query_entity(&x).unwrap(),
-            BorrowedEntityGroup::from((Some("tbl".as_bytes()), None))
-        )
+        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Single(b"tbl"))
+    }
+    #[test]
+    fn test_query_partial_entity() {
+        let x = byt!(":tbl");
+        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Partial(b"tbl"))
     }
     #[test]
     fn test_query_entity_badexpr() {
         let x = byt!("ks:");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!(":");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
-        );
-        let x = byt!(":tbl");
-        assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("::");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("::ks");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("ks::tbl");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("ks::");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("ks::tbl::");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
         let x = byt!("::ks::tbl::");
         assert_eq!(
-            get_query_entity(&x).unwrap_err(),
+            Entity::from_slice(&x).unwrap_err(),
             responses::groups::BAD_EXPRESSION
         );
     }
@@ -381,7 +361,7 @@ mod entity_parser_tests {
     fn test_bad_entity_name() {
         let ename = byt!("$var");
         assert_eq!(
-            get_query_entity(&ename).unwrap_err(),
+            Entity::from_slice(&ename).unwrap_err(),
             responses::groups::BAD_CONTAINER_NAME
         );
     }

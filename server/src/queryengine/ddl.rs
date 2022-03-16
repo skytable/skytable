@@ -77,7 +77,9 @@ action! {
     /// We should have `<tableid> <model>(args) properties`
     fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         ensure_length(act.len(), |size| size > 1 && size < 4)?;
-        let (table_entity, model_code) = parser::parse_table_args(&mut act)?;
+        let table_name = unsafe { act.next().unsafe_unwrap() };
+        let model_name = unsafe { act.next().unsafe_unwrap() };
+        let (table_entity, model_code) = parser::parse_table_args(table_name, model_name)?;
         let is_volatile = match act.next() {
             Some(maybe_volatile) => {
                 ensure_cond_or_err(maybe_volatile.eq(VOLATILE), responses::groups::UNKNOWN_PROPERTY)?;
@@ -121,7 +123,7 @@ action! {
         ensure_length(act.len(), |size| size == 1)?;
         match act.next() {
             Some(eg) => {
-                let entity_group = parser::get_query_entity(eg)?;
+                let entity_group = parser::Entity::from_slice(eg)?;
                 if registry::state_okay() {
                     handle.drop_table(entity_group)?;
                     con.write_response(responses::groups::OKAY).await?;

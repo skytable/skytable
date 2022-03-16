@@ -29,13 +29,13 @@ use crate::corestore::{
     memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
     table::{DescribeTable, Table},
 };
+use crate::queryengine::parser::{Entity, OwnedEntity};
 use crate::registry;
 use crate::storage;
 use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::Unwrappable;
 use crate::IoResult;
 use core::borrow::Borrow;
-use core::fmt;
 use core::hash::Hash;
 pub use htable::Data;
 use std::sync::Arc;
@@ -55,57 +55,6 @@ pub mod table;
 mod tests;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
-type OptionTuple<T> = (Option<T>, Option<T>);
-/// An owned entity group
-pub type OwnedEntityGroup = OptionTuple<ObjectID>;
-/// A raw borrowed entity (not the struct, but in a tuple form)
-type BorrowedEntityGroupRaw<'a> = OptionTuple<&'a [u8]>;
-
-#[derive(PartialEq)]
-/// An entity group borrowed from a byte slice
-pub struct BorrowedEntityGroup<'a> {
-    va: Option<&'a [u8]>,
-    vb: Option<&'a [u8]>,
-}
-
-impl<'a> fmt::Debug for BorrowedEntityGroup<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn write_if_some(v: Option<&'_ [u8]>) -> String {
-            if let Some(v) = v {
-                format!("{:?}", String::from_utf8_lossy(&v))
-            } else {
-                "None".to_owned()
-            }
-        }
-        f.debug_struct("BorrowedEntityGroup")
-            .field("va", &write_if_some(self.va))
-            .field("vb", &write_if_some(self.vb))
-            .finish()
-    }
-}
-
-impl<'a> BorrowedEntityGroup<'a> {
-    pub unsafe fn into_owned(self) -> OwnedEntityGroup {
-        match self {
-            BorrowedEntityGroup {
-                va: Some(a),
-                vb: Some(b),
-            } => (Some(ObjectID::from_slice(a)), Some(ObjectID::from_slice(b))),
-            BorrowedEntityGroup {
-                va: Some(a),
-                vb: None,
-            } => (Some(ObjectID::from_slice(a)), None),
-            _ => impossible!(),
-        }
-    }
-}
-
-impl<'a> From<BorrowedEntityGroupRaw<'a>> for BorrowedEntityGroup<'a> {
-    fn from(oth: BorrowedEntityGroupRaw<'a>) -> Self {
-        let (va, vb) = oth;
-        Self { va, vb }
-    }
-}
 
 #[derive(Debug, Clone)]
 struct ConnectionEntityState {
@@ -180,23 +129,17 @@ impl Corestore {
     ///
     /// If the table is non-existent or the default keyspace was unset, then
     /// false is returned. Else true is returned
-    pub fn swap_entity(&mut self, entity: BorrowedEntityGroup) -> KeyspaceResult<()> {
+    pub fn swap_entity(&mut self, entity: Entity<'_>) -> KeyspaceResult<()> {
         match entity {
             // Switch to the provided keyspace
-            BorrowedEntityGroup {
-                va: Some(ks),
-                vb: None,
-            } => match self.store.get_keyspace_atomic_ref(ks) {
+            Entity::Single(ks) => match self.store.get_keyspace_atomic_ref(ks) {
                 Some(ksref) => self
                     .estate
                     .set_ks(ksref, unsafe { ObjectID::from_slice(ks) }),
                 None => return Err(DdlError::ObjectNotFound),
             },
             // Switch to the provided table in the given keyspace
-            BorrowedEntityGroup {
-                va: Some(ks),
-                vb: Some(tbl),
-            } => match self.store.get_keyspace_atomic_ref(ks) {
+            Entity::Full(ks, tbl) => match self.store.get_keyspace_atomic_ref(ks) {
                 Some(kspace) => match kspace.get_table_atomic_ref(tbl) {
                     Some(tblref) => unsafe {
                         self.estate.set_table(
@@ -210,7 +153,15 @@ impl Corestore {
                 },
                 None => return Err(DdlError::ObjectNotFound),
             },
-            _ => unsafe { impossible!() },
+            Entity::Partial(tbl) => match &self.estate.ks {
+                Some((_, ks)) => match ks.get_table_atomic_ref(tbl) {
+                    Some(tblref) => {
+                        self.estate.table = Some((unsafe { ObjectID::from_slice(tbl) }, tblref));
+                    }
+                    None => return Err(DdlError::ObjectNotFound),
+                },
+                None => return Err(DdlError::DefaultNotFound),
+            },
         }
         Ok(())
     }
@@ -222,29 +173,22 @@ impl Corestore {
         self.store.get_keyspace_atomic_ref(ksid)
     }
     /// Get an atomic reference to a table
-    pub fn get_table(&self, entity: BorrowedEntityGroup) -> KeyspaceResult<Arc<Table>> {
+    pub fn get_table(&self, entity: Entity<'_>) -> KeyspaceResult<Arc<Table>> {
         match entity {
-            BorrowedEntityGroup {
-                va: Some(ksid),
-                vb: Some(table),
-            } => match self.store.get_keyspace_atomic_ref(ksid) {
+            Entity::Full(ksid, table) => match self.store.get_keyspace_atomic_ref(ksid) {
                 Some(ks) => match ks.get_table_atomic_ref(table) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
                 None => Err(DdlError::ObjectNotFound),
             },
-            BorrowedEntityGroup {
-                va: Some(tbl),
-                vb: None,
-            } => match &self.estate.ks {
+            Entity::Single(tbl) | Entity::Partial(tbl) => match &self.estate.ks {
                 Some((_, ks)) => match ks.get_table_atomic_ref(tbl) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
                 None => Err(DdlError::DefaultNotFound),
             },
-            _ => unsafe { impossible!() },
         }
     }
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
@@ -267,16 +211,17 @@ impl Corestore {
     /// **Trip switch handled:** Yes
     pub fn create_table(
         &self,
-        entity: OwnedEntityGroup,
+        entity: Entity<'_>,
         modelcode: u8,
         volatile: bool,
     ) -> KeyspaceResult<()> {
+        let entity = entity.into_owned();
         // first lock the global flush state
         let flush_lock = registry::lock_flush_state();
         let ret;
         match entity {
             // Important: create table <tblname> is only ks
-            (Some(tblid), None) => {
+            OwnedEntity::Single(tblid) | OwnedEntity::Partial(tblid) => {
                 ret = match &self.estate.ks {
                     Some((_, ks)) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
@@ -295,7 +240,7 @@ impl Corestore {
                     None => Err(DdlError::DefaultNotFound),
                 };
             }
-            (Some(ksid), Some(tblid)) => {
+            OwnedEntity::Full(ksid, tblid) => {
                 ret = match self.store.get_keyspace_atomic_ref(&ksid) {
                     Some(kspace) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
@@ -314,7 +259,6 @@ impl Corestore {
                     None => Err(DdlError::ObjectNotFound),
                 }
             }
-            _ => unsafe { impossible!() },
         }
         // free the global flush lock
         drop(flush_lock);
@@ -322,23 +266,16 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, entity: BorrowedEntityGroup) -> KeyspaceResult<()> {
+    pub fn drop_table(&self, entity: Entity<'_>) -> KeyspaceResult<()> {
         match entity {
-            BorrowedEntityGroup {
-                va: Some(tblid),
-                vb: None,
-            } => match &self.estate.ks {
+            Entity::Single(tblid) | Entity::Partial(tblid) => match &self.estate.ks {
                 Some((_, ks)) => ks.drop_table(tblid),
                 None => Err(DdlError::DefaultNotFound),
             },
-            BorrowedEntityGroup {
-                va: Some(ksid),
-                vb: Some(tblid),
-            } => match self.store.get_keyspace_atomic_ref(ksid) {
+            Entity::Full(ksid, tblid) => match self.store.get_keyspace_atomic_ref(ksid) {
                 Some(ks) => ks.drop_table(tblid),
                 None => Err(DdlError::ObjectNotFound),
             },
-            _ => unsafe { impossible!() },
         }
     }
 

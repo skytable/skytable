@@ -33,6 +33,7 @@ use crate::dbnet::connection::prelude::*;
 use crate::protocol::{
     element::UnsafeElement, iter::AnyArrayIter, responses, PipelineQuery, SimpleQuery, UnsafeSlice,
 };
+use crate::queryengine::parser::Entity;
 use crate::{actions, admin};
 use core::hint::unreachable_unchecked;
 mod ddl;
@@ -192,7 +193,7 @@ action! {
             // SAFETY: Already checked len
             act.next_unchecked()
         };
-        handle.swap_entity(parser::get_query_entity(entity)?)?;
+        handle.swap_entity(Entity::from_slice(entity)?)?;
         con.write_response(groups::OKAY).await?;
         Ok(())
     }

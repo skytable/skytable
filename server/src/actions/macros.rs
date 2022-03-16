@@ -88,7 +88,7 @@ macro_rules! get_tbl_ref {
 #[macro_export]
 macro_rules! handle_entity {
     ($con:expr, $ident:expr) => {{
-        match crate::queryengine::parser::get_query_entity(&$ident) {
+        match crate::queryengine::parser::Entity::from_slice(&$ident) {
             Ok(e) => e,
             Err(e) => return conwrite!($con, e),
         }

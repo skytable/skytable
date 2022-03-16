@@ -15,6 +15,8 @@ All changes in this project will be noted in this file.
   - `auth restore <username>`
   - `auth restore <origin key> <username>`
 - Shell now supports multiple `--eval` expressions
+- Partial entity syntax: `:table` can be used for referring to the current table. For example
+  you can use `use :default` instead of `use default:default`
 
 ## Version 0.7.3
 
