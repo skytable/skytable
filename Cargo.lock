@@ -488,6 +488,7 @@ dependencies = [
  "env_logger",
  "libsky",
  "log",
+ "powershell_script",
  "zip",
 ]
 
@@ -849,6 +850,12 @@ name = "pkg-config"
 version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58893f751c9b0412871a09abd62ecd2a00298c6c83befa223ef98c52aef40cbe"
+
+[[package]]
+name = "powershell_script"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a5a338783191ce961183e8fbca5a4d2902b2595260cecfb55f61f083cdff865"
 
 [[package]]
 name = "ppv-lite86"

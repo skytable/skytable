@@ -30,6 +30,8 @@ use std::process::Child;
 use std::process::Command;
 
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
+#[cfg(windows)]
+const POWERSHELL_SCRIPT: &str = include_str!("../../ci/windows/stop.ps1");
 
 pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Command {
     let mut cmd = Command::new("cargo");
@@ -51,11 +53,22 @@ pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, 
     Ok((s1, s2))
 }
 
+#[cfg(not(windows))]
 fn kill_servers() -> HarnessResult<()> {
     util::handle_child("kill servers", cmd!("pkill", "skyd"))?;
     // sleep
     util::sleep_sec(10);
     Ok(())
+}
+
+#[cfg(windows)]
+fn kill_servers() -> HarnessResult<()> {
+    match powershell_script::run(POWERSHELL_SCRIPT, false) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(HarnessError::Other(format!(
+            "Failed to run powershell script with error: {e}"
+        ))),
+    }
 }
 
 pub fn run_test() -> HarnessResult<()> {
@@ -109,20 +122,24 @@ pub fn run_test_inner() -> HarnessResult<()> {
     }
 
     // build skyd
+    info!("Building server binary ...");
     util::handle_child("build skyd", build_cmd)?;
-    let s1_cmd = get_run_server_cmd("server1", &cmd);
-    let s2_cmd = get_run_server_cmd("server2", &cmd);
 
     // start the servers, run tests and kill
+    info!("Starting servers ...");
+    let s1_cmd = get_run_server_cmd("server1", &cmd);
+    let s2_cmd = get_run_server_cmd("server2", &cmd);
     let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
     info!("All servers started. Now running standard test suite ...");
     util::handle_child("standard test suite", standard_test_suite)?;
     kill_servers()?;
 
     // start server up again, run tests and kill
+    info!("Starting servers ...");
     let s1_cmd = get_run_server_cmd("server1", &cmd);
     let s2_cmd = get_run_server_cmd("server2", &cmd);
     let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
+    info!("All servers started. Now running persistence test suite ...");
     util::handle_child("standard test suite", persist_test_suite)?;
 
     Ok(())
