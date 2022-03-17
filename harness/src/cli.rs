@@ -24,6 +24,7 @@
  *
 */
 
+use crate::linuxpkg::LinuxPackageType;
 use crate::{HarnessError, HarnessResult};
 use std::{env, process};
 
@@ -42,11 +43,13 @@ SUBCOMMANDS:
 pub enum HarnessWhat {
     Test,
     Bundle,
+    LinuxPackage(LinuxPackageType),
 }
 
 impl HarnessWhat {
     const CLI_TEST: &'static str = "test";
     const CLI_BUNDLE: &'static str = "bundle";
+    const CLI_DEB: &'static str = "deb";
     const CLI_ARG_HELP: &'static str = "--help";
     const CLI_ARG_HELP_SHORT: &'static str = "-h";
     pub fn from_env() -> HarnessResult<Self> {
@@ -63,6 +66,7 @@ impl HarnessWhat {
             Self::CLI_TEST => HarnessWhat::Test,
             Self::CLI_BUNDLE => HarnessWhat::Bundle,
             Self::CLI_ARG_HELP_SHORT | Self::CLI_ARG_HELP => display_help(),
+            Self::CLI_DEB => HarnessWhat::LinuxPackage(LinuxPackageType::Deb),
             unknown_arg => return Err(HarnessError::UnknownCommand(unknown_arg.to_string())),
         };
         Ok(ret)

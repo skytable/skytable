@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use zip::{write::FileOptions, ZipWriter};
 
-const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
+pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
 
 fn concat_path(binary_name: &str, body: impl AsRef<Path>) -> PathBuf {
     let mut pb = PathBuf::from(body.as_ref());
@@ -65,7 +65,8 @@ fn get_bundle_name() -> String {
     filename
 }
 
-pub fn run_bundle() -> HarnessResult<()> {
+/// Builds binaries in release mode and returns the target folder path
+pub fn build_release() -> HarnessResult<PathBuf> {
     let mut build_args = vec!["build".to_owned()];
     let mut target_folder = PathBuf::from("target");
     match util::get_var(util::VAR_TARGET) {
@@ -79,21 +80,18 @@ pub fn run_bundle() -> HarnessResult<()> {
     target_folder.push("release");
 
     // assemble build args
-    build_args.extend([
-        "-p".into(),
-        "skyd".into(),
-        "-p".into(),
-        "sky-bench".into(),
-        "-p".into(),
-        "skysh".into(),
-        "-p".into(),
-        "sky-migrate".into(),
-        "--release".into(),
-    ]);
+    for binary in BINARIES {
+        build_args.extend(["-p".to_owned(), binary.to_owned()])
+    }
+    build_args.push("--release".into());
     let mut cmd = Command::new("cargo");
     cmd.args(&build_args);
     util::handle_child("build release binaries", cmd)?;
+    Ok(target_folder)
+}
 
+pub fn run_bundle() -> HarnessResult<()> {
+    let target_folder = self::build_release()?;
     // now package
     package_binaries(target_folder)?;
     Ok(())

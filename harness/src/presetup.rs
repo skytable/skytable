@@ -24,40 +24,30 @@
  *
 */
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-mod util;
-mod bundle;
-mod cli;
-mod error;
-mod linuxpkg;
-mod presetup;
-mod test;
-use crate::{
-    cli::HarnessWhat,
-    error::{HarnessError, HarnessResult},
-};
-use env_logger::Builder;
-use std::{env, process};
+use crate::{util, HarnessResult};
 
-fn main() {
-    Builder::new()
-        .parse_filters(&env::var("SKYHARNESS_LOG").unwrap_or_else(|_| "info".to_owned()))
-        .init();
-    if let Err(e) = runner() {
-        eprintln!("harness failed with: {}", e);
-        process::exit(0x01);
-    }
-}
+const TARGET_I686_GNU_LINUX: &str = "i686-unknown-linux-gnu";
+const TARGET_X86_64_MUSL_LINUX: &str = "x86_64-unknown-linux-musl";
 
-fn runner() -> HarnessResult<()> {
-    let harness = cli::HarnessWhat::from_env()?;
-    presetup::install_deps()?;
-    match harness {
-        HarnessWhat::Test => test::run_test()?,
-        HarnessWhat::Bundle => bundle::run_bundle()?,
-        HarnessWhat::LinuxPackage(pkg) => linuxpkg::create_linuxpkg(pkg)?,
-    }
+/// Install system deps
+pub fn install_deps() -> HarnessResult<()> {
+    info!("Installing additional deps for this platform ...");
+    let install = match util::get_var(util::VAR_TARGET) {
+        Some(t) => match t.as_str() {
+            TARGET_I686_GNU_LINUX => cmd!(
+                "bash",
+                "-c",
+                "sudo apt-get update && sudo apt install gcc-multilib -y"
+            ),
+            TARGET_X86_64_MUSL_LINUX => cmd!(
+                "bash",
+                "-c",
+                "sudo apt-get update && sudo apt install musl-tools -y"
+            ),
+            _ => return Ok(()),
+        },
+        None => return Ok(()),
+    };
+    util::handle_child("install system deps", install)?;
     Ok(())
 }
