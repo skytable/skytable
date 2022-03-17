@@ -488,6 +488,7 @@ dependencies = [
  "env_logger",
  "libsky",
  "log",
+ "openssl",
  "powershell_script",
  "zip",
 ]
