@@ -28,12 +28,14 @@
 
 #[macro_use]
 mod macros;
+#[cfg(not(feature = "persist-suite"))]
 mod auth;
 mod ddl_tests;
 mod inspect_tests;
 mod kvengine;
 mod kvengine_encoding;
 mod kvengine_list;
+mod persist;
 mod pipeline;
 
 mod tls {

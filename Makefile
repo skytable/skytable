@@ -141,6 +141,22 @@ test: .pre
 	@echo "Waiting for server to shut down ..."
 	@${STOP_SERVER}
 	@sleep 10
+  # now run persistence suite
+	@${SEP}
+	@echo "Running persistence suite ..."
+	@${SEP}
+	@mkdir -p server1 && cd server1 && ${START_SERVER}
+	@mkdir -p server2 && cd server2 && ${START_SERVER2}
+	@echo "Sleeping for 10 seconds to let the server start up ..."
+	@sleep 10
+	@echo "Finished sleeping"
+	@${SEP}
+	@${SEP}
+	@echo "Running all persistence tests ..."
+	@${TEST} --features persist-suite
+	@echo "Waiting for server to shut down ..."
+	@${STOP_SERVER}
+	@sleep 10
 	@echo "Removing temporary files ..."
 	@rm -rf .sky_pid server1 server2 .skytest_*
 	@${SEP}

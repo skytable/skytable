@@ -39,6 +39,41 @@ macro_rules! setkeys {
             Element::UnsignedInt(count)
         );
     };
+    ($con:ident, $($key:expr => $value:expr),*) => {
+        let mut q = ::skytable::Query::new();
+        q.push("MSET");
+        let mut count = 0;
+        $(
+            q.push($key);
+            q.push($value);
+            count += 1;
+        )*
+        assert_eq!(
+            $con.run_query_raw(&q).await.unwrap(),
+            ::skytable::Element::UnsignedInt(count)
+        );
+    };
+}
+
+macro_rules! switch_entity {
+    ($con:expr, $entity:expr) => {
+        runeq!(
+            $con,
+            ::skytable::query!("use", $entity),
+            ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+        )
+    };
+}
+
+macro_rules! create_table_and_switch {
+    ($con:expr, $table:expr, $decl:expr) => {{
+        runeq!(
+            $con,
+            ::skytable::query!("create", "table", $table, $decl),
+            ::skytable::Element::RespCode(::skytable::RespCode::Okay)
+        );
+        switch_entity!($con, $table);
+    }};
 }
 
 macro_rules! push {
