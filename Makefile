@@ -58,7 +58,7 @@ ifeq ($(OS),Windows_NT)
   CBUILD := cmd /C $(CBUILD)
   CTEST := cmd /C $(CTEST)
   # finally add stop command
-  STOP_SERVER := taskkill.exe /F /IM skyd.exe
+  STOP_SERVER := Powershell.exe -executionpolicy remotesigned -File ci\windows\stop.ps1
 else
   # not windows, so archive is easy
   ARCHIVE += zip -j ourbundle.zip $(BINARY_SKYSH) $(BINARY_SKYD) $(BINARY_SKYBENCH) $(BINARY_SKYMIGRATE)
