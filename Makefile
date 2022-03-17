@@ -178,3 +178,4 @@ deb: release-bundle
 checkcmd:
 	@echo $(START_SERVER)
 	@echo $(START_SERVER2)
+	@echo $(TARGET_FOLDER)

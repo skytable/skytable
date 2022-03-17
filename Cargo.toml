@@ -8,6 +8,7 @@ members = [
     "libstress",
     "stress-test",
     "sky-migrate",
+    "harness",
 ]
 
 [profile.release]
