@@ -30,9 +30,13 @@ use std::fmt;
 pub type HarnessResult<T> = Result<T, HarnessError>;
 #[derive(Debug)]
 pub enum HarnessError {
+    /// Unknown command
     UnknownCommand(String),
+    /// Bad arguments
     BadArguments(String),
-    ChildError(&'static str, ExitCode),
+    /// Child process failure
+    ChildError(String, ExitCode),
+    /// Other error
     Other(String),
 }
 

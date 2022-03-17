@@ -39,13 +39,13 @@ pub fn get_var(var: &str) -> Option<String> {
     env::var_os(var).map(|v| v.to_string_lossy().to_string())
 }
 
-pub fn handle_exitstatus(desc: &'static str, status: IoResult<ExitStatus>) -> HarnessResult<()> {
+pub fn handle_exitstatus(desc: &str, status: IoResult<ExitStatus>) -> HarnessResult<()> {
     match status {
         Ok(status) => {
             if status.success() {
                 Ok(())
             } else {
-                Err(HarnessError::ChildError(desc, status.code()))
+                Err(HarnessError::ChildError(desc.to_owned(), status.code()))
             }
         }
         Err(e) => Err(HarnessError::Other(format!(
@@ -64,7 +64,7 @@ pub fn get_child(desc: impl ToString, mut input: Command) -> HarnessResult<Child
     }
 }
 
-pub fn handle_child(desc: &'static str, input: Command) -> HarnessResult<()> {
+pub fn handle_child(desc: &str, input: Command) -> HarnessResult<()> {
     self::handle_exitstatus(desc, self::get_child(desc, input)?.wait())
 }
 

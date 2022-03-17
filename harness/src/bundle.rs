@@ -24,34 +24,19 @@
  *
 */
 
-use crate::{util, HarnessError, HarnessResult};
+use crate::{
+    build::{self, BuildMode},
+    util, HarnessError, HarnessResult,
+};
 use libsky::VERSION;
 use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
 use zip::{write::FileOptions, ZipWriter};
 
-pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
-
-fn concat_path(binary_name: &str, body: impl AsRef<Path>) -> PathBuf {
-    let mut pb = PathBuf::from(body.as_ref());
-    #[cfg(windows)]
-    let binary_name = format!("{}.exe", binary_name);
-    pb.push(binary_name);
-    pb
-}
-
-fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
-    let mut paths = Vec::with_capacity(3);
-    for binary in BINARIES {
-        paths.push(concat_path(binary, target_folder));
-    }
-    paths
-}
-
+/// Returns the bundle name
 fn get_bundle_name() -> String {
     let mut filename = format!("sky-bundle-v{VERSION}");
     match util::get_var(util::VAR_ARTIFACT) {
@@ -65,41 +50,18 @@ fn get_bundle_name() -> String {
     filename
 }
 
-/// Builds binaries in release mode and returns the target folder path
-pub fn build_release() -> HarnessResult<PathBuf> {
-    let mut build_args = vec!["build".to_owned()];
-    let mut target_folder = PathBuf::from("target");
-    match util::get_var(util::VAR_TARGET) {
-        Some(t) => {
-            build_args.push("--target".to_owned());
-            build_args.push(t.to_string());
-            target_folder.push(&t);
-        }
-        None => {}
-    };
-    target_folder.push("release");
-
-    // assemble build args
-    for binary in BINARIES {
-        build_args.extend(["-p".to_owned(), binary.to_owned()])
-    }
-    build_args.push("--release".into());
-    let mut cmd = Command::new("cargo");
-    cmd.args(&build_args);
-    util::handle_child("build release binaries", cmd)?;
-    Ok(target_folder)
-}
-
-pub fn run_bundle() -> HarnessResult<()> {
-    let target_folder = self::build_release()?;
+/// Create a bundle using the provided mode
+pub fn bundle(mode: BuildMode) -> HarnessResult<()> {
+    let target_folder = build::build(mode)?;
     // now package
     package_binaries(target_folder)?;
     Ok(())
 }
 
+/// Package the binaries into a ZIP file
 fn package_binaries(target_folder: PathBuf) -> HarnessResult<()> {
     // get the file index
-    let file_index = get_files_index(&target_folder);
+    let file_index = build::get_files_index(&target_folder);
     // get the bundle file name
     let bundle_file_name = get_bundle_name();
     // create the bundle file

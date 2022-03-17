@@ -28,6 +28,7 @@
 extern crate log;
 #[macro_use]
 mod util;
+mod build;
 mod bundle;
 mod cli;
 mod error;
@@ -56,7 +57,7 @@ fn runner() -> HarnessResult<()> {
     presetup::install_deps()?;
     match harness {
         HarnessWhat::Test => test::run_test()?,
-        HarnessWhat::Bundle => bundle::run_bundle()?,
+        HarnessWhat::Bundle(bundle_mode) => bundle::bundle(bundle_mode)?,
         HarnessWhat::LinuxPackage(pkg) => linuxpkg::create_linuxpkg(pkg)?,
     }
     Ok(())

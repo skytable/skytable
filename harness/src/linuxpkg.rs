@@ -24,21 +24,25 @@
  *
 */
 
-use crate::bundle::build_release;
+use crate::build::{self, BuildMode};
 use crate::{util, HarnessResult};
 use libsky::VERSION;
 use std::process::Command;
 
+/// The Linux package type
 pub enum LinuxPackageType {
+    /// Debian packages
     Deb,
 }
 
 impl LinuxPackageType {
+    /// Returns the extension
     fn get_extension(&self) -> String {
         match self {
             Self::Deb => ".deb".to_owned(),
         }
     }
+    /// Returns the file name for the package
     fn get_file_name(&self) -> String {
         let mut filename = format!("skytable-v{VERSION}");
         match util::get_var(util::VAR_ARTIFACT) {
@@ -53,9 +57,10 @@ impl LinuxPackageType {
     }
 }
 
+/// Creates a Linux package for the provided Linux package type
 pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
     info!("Building binaries for Linux package");
-    let _ = build_release()?;
+    let _ = build::build(BuildMode::Release)?;
     info!("Creating Linux package");
     let filename = package_type.get_file_name();
     match package_type {

@@ -42,10 +42,13 @@ use std::io::Write;
 use std::process::Child;
 use std::process::Command;
 
+/// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
 #[cfg(windows)]
+/// The powershell script hack to send CTRL+C using kernel32
 const POWERSHELL_SCRIPT: &str = include_str!("../../ci/windows/stop.ps1");
 
+/// Get the command to start the provided server1
 pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.args(cmd_payload);
@@ -56,6 +59,7 @@ pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Co
     cmd
 }
 
+/// Start the servers returning handles to the child processes
 pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, Child)> {
     info!("Starting server1 ...");
     let s1 = util::get_child("start server1", s1_cmd)?;
@@ -66,16 +70,24 @@ pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, 
     Ok((s1, s2))
 }
 
-#[cfg(not(windows))]
+/// Kill the servers (run the command and then sleep for 10s)
 fn kill_servers() -> HarnessResult<()> {
-    util::handle_child("kill servers", cmd!("pkill", "skyd"))?;
+    kill_servers_inner()?;
     // sleep
-    util::sleep_sec(10);
+    util::sleep_sec(20);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+/// Kill the servers using `pkill` (send SIGTERM)
+fn kill_servers_inner() -> HarnessResult<()> {
+    util::handle_child("kill servers", cmd!("pkill", "skyd"))?;
     Ok(())
 }
 
 #[cfg(windows)]
-fn kill_servers() -> HarnessResult<()> {
+/// HACK(@ohsayan): Kill the servers using a powershell hack
+fn kill_servers_inner() -> HarnessResult<()> {
     match powershell_script::run(POWERSHELL_SCRIPT, false) {
         Ok(_) => Ok(()),
         Err(e) => Err(HarnessError::Other(format!(
@@ -84,6 +96,7 @@ fn kill_servers() -> HarnessResult<()> {
     }
 }
 
+/// Run the test suite
 pub fn run_test() -> HarnessResult<()> {
     let ret = run_test_inner();
     kill_servers()?;
@@ -98,53 +111,10 @@ pub fn run_test() -> HarnessResult<()> {
     ret
 }
 
-fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
-    let rsa = Rsa::generate(2048)?;
-    let key_pair = PKey::from_rsa(rsa)?;
-
-    let mut x509_name = X509NameBuilder::new()?;
-    x509_name.append_entry_by_text("C", "US")?;
-    x509_name.append_entry_by_text("ST", "CA")?;
-    x509_name.append_entry_by_text("O", "Skytable")?;
-    x509_name.append_entry_by_text("CN", "sky-harness")?;
-    let x509_name = x509_name.build();
-
-    let mut cert_builder = X509::builder()?;
-    cert_builder.set_version(2)?;
-    let serial_number = {
-        let mut serial = BigNum::new()?;
-        serial.rand(159, MsbOption::MAYBE_ZERO, false)?;
-        serial.to_asn1_integer()?
-    };
-    cert_builder.set_serial_number(&serial_number)?;
-    cert_builder.set_subject_name(&x509_name)?;
-    cert_builder.set_issuer_name(&x509_name)?;
-    cert_builder.set_pubkey(&key_pair)?;
-    let not_before = Asn1Time::days_from_now(0)?;
-    cert_builder.set_not_before(&not_before)?;
-    let not_after = Asn1Time::days_from_now(365)?;
-    cert_builder.set_not_after(&not_after)?;
-
-    cert_builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
-    cert_builder.append_extension(
-        KeyUsage::new()
-            .critical()
-            .key_cert_sign()
-            .crl_sign()
-            .build()?,
-    )?;
-
-    let subject_key_identifier =
-        SubjectKeyIdentifier::new().build(&cert_builder.x509v3_context(None, None))?;
-    cert_builder.append_extension(subject_key_identifier)?;
-
-    cert_builder.sign(&key_pair, MessageDigest::sha256())?;
-    let cert = cert_builder.build();
-
-    Ok((cert, key_pair))
-}
-
-pub fn run_test_inner() -> HarnessResult<()> {
+/// Actually run the tests. This will run:
+/// - The standard test suite
+/// - The persistence test suite
+fn run_test_inner() -> HarnessResult<()> {
     // first create the TLS keys
     info!("Creating TLS key+cert");
     let (cert, pkey) = mk_ca_cert().expect("Failed to create cert");
@@ -210,4 +180,51 @@ pub fn run_test_inner() -> HarnessResult<()> {
     util::handle_child("standard test suite", persist_test_suite)?;
 
     Ok(())
+}
+
+/// Generate certificates
+fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
+    let rsa = Rsa::generate(2048)?;
+    let key_pair = PKey::from_rsa(rsa)?;
+
+    let mut x509_name = X509NameBuilder::new()?;
+    x509_name.append_entry_by_text("C", "US")?;
+    x509_name.append_entry_by_text("ST", "CA")?;
+    x509_name.append_entry_by_text("O", "Skytable")?;
+    x509_name.append_entry_by_text("CN", "sky-harness")?;
+    let x509_name = x509_name.build();
+
+    let mut cert_builder = X509::builder()?;
+    cert_builder.set_version(2)?;
+    let serial_number = {
+        let mut serial = BigNum::new()?;
+        serial.rand(159, MsbOption::MAYBE_ZERO, false)?;
+        serial.to_asn1_integer()?
+    };
+    cert_builder.set_serial_number(&serial_number)?;
+    cert_builder.set_subject_name(&x509_name)?;
+    cert_builder.set_issuer_name(&x509_name)?;
+    cert_builder.set_pubkey(&key_pair)?;
+    let not_before = Asn1Time::days_from_now(0)?;
+    cert_builder.set_not_before(&not_before)?;
+    let not_after = Asn1Time::days_from_now(365)?;
+    cert_builder.set_not_after(&not_after)?;
+
+    cert_builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
+    cert_builder.append_extension(
+        KeyUsage::new()
+            .critical()
+            .key_cert_sign()
+            .crl_sign()
+            .build()?,
+    )?;
+
+    let subject_key_identifier =
+        SubjectKeyIdentifier::new().build(&cert_builder.x509v3_context(None, None))?;
+    cert_builder.append_extension(subject_key_identifier)?;
+
+    cert_builder.sign(&key_pair, MessageDigest::sha256())?;
+    let cert = cert_builder.build();
+
+    Ok((cert, key_pair))
 }

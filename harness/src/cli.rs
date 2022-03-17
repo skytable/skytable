@@ -24,6 +24,7 @@
  *
 */
 
+use crate::build::BuildMode;
 use crate::linuxpkg::LinuxPackageType;
 use crate::{HarnessError, HarnessResult};
 use std::{env, process};
@@ -42,16 +43,18 @@ SUBCOMMANDS:
 
 pub enum HarnessWhat {
     Test,
-    Bundle,
+    Bundle(BuildMode),
     LinuxPackage(LinuxPackageType),
 }
 
 impl HarnessWhat {
     const CLI_TEST: &'static str = "test";
     const CLI_BUNDLE: &'static str = "bundle";
+    const CLI_BUNDLE_DEBUG: &'static str = "bundle-dbg";
     const CLI_DEB: &'static str = "deb";
     const CLI_ARG_HELP: &'static str = "--help";
     const CLI_ARG_HELP_SHORT: &'static str = "-h";
+    /// Returns the target _harness mode_ from env
     pub fn from_env() -> HarnessResult<Self> {
         let args: Vec<String> = env::args().skip(1).collect();
         if args.is_empty() {
@@ -64,7 +67,8 @@ impl HarnessWhat {
         }
         let ret = match args[0].as_str() {
             Self::CLI_TEST => HarnessWhat::Test,
-            Self::CLI_BUNDLE => HarnessWhat::Bundle,
+            Self::CLI_BUNDLE => HarnessWhat::Bundle(BuildMode::Release),
+            Self::CLI_BUNDLE_DEBUG => HarnessWhat::Bundle(BuildMode::Debug),
             Self::CLI_ARG_HELP_SHORT | Self::CLI_ARG_HELP => display_help(),
             Self::CLI_DEB => HarnessWhat::LinuxPackage(LinuxPackageType::Deb),
             unknown_arg => return Err(HarnessError::UnknownCommand(unknown_arg.to_string())),
