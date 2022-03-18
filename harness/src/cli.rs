@@ -41,6 +41,7 @@ SUBCOMMANDS:
     bundle  Build the bundle\
 ";
 
+#[derive(Copy, Clone)]
 pub enum HarnessWhat {
     Test,
     Bundle(BuildMode),
@@ -74,6 +75,13 @@ impl HarnessWhat {
             unknown_arg => return Err(HarnessError::UnknownCommand(unknown_arg.to_string())),
         };
         Ok(ret)
+    }
+    pub fn description(&self) -> String {
+        match self {
+            HarnessWhat::Test => "test suite".to_owned(),
+            HarnessWhat::Bundle(mode) => format!("{} bundle", mode.to_string()),
+            HarnessWhat::LinuxPackage(pkg) => format!("Linux package {}", pkg.to_string()),
+        }
     }
 }
 

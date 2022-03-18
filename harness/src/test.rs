@@ -24,7 +24,7 @@
  *
 */
 
-use crate::{util, HarnessError, HarnessResult};
+use crate::{build::BuildMode, util, HarnessError, HarnessResult};
 use openssl::{
     asn1::Asn1Time,
     bn::{BigNum, MsbOption},
@@ -39,10 +39,11 @@ use openssl::{
 };
 use std::fs;
 use std::io::Write;
-use std::process::Child;
-use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::Child;
+use std::process::Command;
 
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
@@ -54,12 +55,14 @@ const POWERSHELL_SCRIPT: &str = include_str!("../../ci/windows/stop.ps1");
 const CREATE_NEW_CONSOLE: u32 = 0x00000010;
 
 /// Get the command to start the provided server1
-pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Command {
-    let mut cmd = Command::new("cargo");
-    cmd.args(cmd_payload);
-    cmd.arg("--");
+pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Path>) -> Command {
+    let cfg_file_path = PathBuf::from(format!("{WORKSPACE_ROOT}ci/{server_id}.toml"));
+    let binpath = util::concat_path("skyd", target_folder)
+        .to_string_lossy()
+        .to_string();
+    let mut cmd = Command::new(binpath);
     cmd.arg("--withconfig");
-    cmd.arg(format!("{WORKSPACE_ROOT}ci/{server_id}.toml"));
+    cmd.arg(cfg_file_path);
     cmd.current_dir(server_id);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NEW_CONSOLE);
@@ -106,7 +109,9 @@ fn kill_servers_inner() -> HarnessResult<()> {
 /// Run the test suite
 pub fn run_test() -> HarnessResult<()> {
     let ret = run_test_inner();
-    kill_servers()?;
+    if let Err(e) = kill_servers() {
+        error!("Failed to kill servers with error: {e}");
+    }
 
     // clean up
     fs::remove_dir_all("server1").map_err(|e| {
@@ -139,14 +144,12 @@ fn run_test_inner() -> HarnessResult<()> {
     })?;
 
     // assemble commands
-    let mut cmd: Vec<String> = vec!["run".to_string(), "-p".to_string(), "skyd".to_string()];
+    let target_folder = util::get_target_folder(BuildMode::Debug);
     let standard_test_suite;
     let persist_test_suite;
     let build_cmd;
     match util::get_var(util::VAR_TARGET) {
         Some(target) => {
-            cmd.push("--target".into());
-            cmd.push(target.to_string());
             standard_test_suite = cmd!("cargo", "test", "--target", &target);
             persist_test_suite = cmd!(
                 "cargo",
@@ -171,8 +174,8 @@ fn run_test_inner() -> HarnessResult<()> {
 
     // start the servers, run tests and kill
     info!("Starting servers ...");
-    let s1_cmd = get_run_server_cmd("server1", &cmd);
-    let s2_cmd = get_run_server_cmd("server2", &cmd);
+    let s1_cmd = get_run_server_cmd("server1", &target_folder);
+    let s2_cmd = get_run_server_cmd("server2", &target_folder);
     let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
     info!("All servers started. Now running standard test suite ...");
     util::handle_child("standard test suite", standard_test_suite)?;
@@ -180,8 +183,8 @@ fn run_test_inner() -> HarnessResult<()> {
 
     // start server up again, run tests and kill
     info!("Starting servers ...");
-    let s1_cmd = get_run_server_cmd("server1", &cmd);
-    let s2_cmd = get_run_server_cmd("server2", &cmd);
+    let s1_cmd = get_run_server_cmd("server1", &target_folder);
+    let s2_cmd = get_run_server_cmd("server2", &target_folder);
     let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
     info!("All servers started. Now running persistence test suite ...");
     util::handle_child("standard test suite", persist_test_suite)?;

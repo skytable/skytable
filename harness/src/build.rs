@@ -26,15 +26,13 @@
 
 use crate::util;
 use crate::HarnessResult;
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{path::PathBuf, process::Command};
 
 /// The binaries that will be present in a bundle
 pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
 
 /// The build mode
+#[derive(Copy, Clone)]
 pub enum BuildMode {
     Debug,
     Release,
@@ -59,20 +57,11 @@ impl ToString for BuildMode {
     }
 }
 
-/// Returns `{body}/{binary_name}(.exe if on windows)`
-fn concat_path(binary_name: &str, body: impl AsRef<Path>) -> PathBuf {
-    let mut pb = PathBuf::from(body.as_ref());
-    #[cfg(windows)]
-    let binary_name = format!("{}.exe", binary_name);
-    pb.push(binary_name);
-    pb
-}
-
 /// Returns the paths of the files for the given target folder
 pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
     let mut paths = Vec::with_capacity(3);
     for binary in BINARIES {
-        paths.push(concat_path(binary, target_folder));
+        paths.push(util::concat_path(binary, target_folder));
     }
     paths
 }
@@ -80,16 +69,14 @@ pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
 /// Runs `cargo build` with the provided mode. `TARGET` is handled automatically
 pub fn build(mode: BuildMode) -> HarnessResult<PathBuf> {
     let mut build_args = vec!["build".to_owned()];
-    let mut target_folder = PathBuf::from("target");
+    let target_folder = util::get_target_folder(mode);
     match util::get_var(util::VAR_TARGET) {
         Some(t) => {
             build_args.push("--target".to_owned());
             build_args.push(t.to_string());
-            target_folder.push(&t);
         }
         None => {}
     };
-    target_folder.push(mode.to_string());
 
     // assemble build args
     for binary in BINARIES {

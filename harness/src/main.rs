@@ -47,7 +47,7 @@ fn main() {
         .parse_filters(&env::var("SKYHARNESS_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
     if let Err(e) = runner() {
-        eprintln!("harness failed with: {}", e);
+        error!("harness failed with: {}", e);
         process::exit(0x01);
     }
 }
@@ -60,5 +60,9 @@ fn runner() -> HarnessResult<()> {
         HarnessWhat::Bundle(bundle_mode) => bundle::bundle(bundle_mode)?,
         HarnessWhat::LinuxPackage(pkg) => linuxpkg::create_linuxpkg(pkg)?,
     }
+    info!(
+        "Successfully finished running harness for {}",
+        harness.description()
+    );
     Ok(())
 }

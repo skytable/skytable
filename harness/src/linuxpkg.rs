@@ -30,6 +30,7 @@ use libsky::VERSION;
 use std::process::Command;
 
 /// The Linux package type
+#[derive(Copy, Clone)]
 pub enum LinuxPackageType {
     /// Debian packages
     Deb,
@@ -54,6 +55,14 @@ impl LinuxPackageType {
         }
         filename.push_str(&self.get_extension());
         filename
+    }
+}
+
+impl ToString for LinuxPackageType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Deb => "deb".to_owned(),
+        }
     }
 }
 

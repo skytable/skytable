@@ -24,16 +24,19 @@
  *
 */
 
+use crate::build::BuildMode;
 use crate::process::ExitStatus;
 use crate::{HarnessError, HarnessResult};
 use std::env;
 use std::io::Result as IoResult;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::process::Command;
 pub type ExitCode = Option<i32>;
 
 pub const VAR_TARGET: &str = "TARGET";
 pub const VAR_ARTIFACT: &str = "ARTIFACT";
+pub const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
 
 pub fn get_var(var: &str) -> Option<String> {
     env::var_os(var).map(|v| v.to_string_lossy().to_string())
@@ -70,6 +73,22 @@ pub fn handle_child(desc: &str, input: Command) -> HarnessResult<()> {
 
 pub fn sleep_sec(secs: u64) {
     std::thread::sleep(std::time::Duration::from_secs(secs))
+}
+
+pub fn get_target_folder(mode: BuildMode) -> PathBuf {
+    match env::var_os(VAR_TARGET).map(|v| v.to_string_lossy().to_string()) {
+        Some(target) => format!("{WORKSPACE_ROOT}/target/{target}/{}", mode.to_string()).into(),
+        None => format!("{WORKSPACE_ROOT}/target/{}", mode.to_string()).into(),
+    }
+}
+
+/// Returns `{body}/{binary_name}(.exe if on windows)`
+pub fn concat_path(binary_name: &str, body: impl AsRef<Path>) -> PathBuf {
+    let mut pb = PathBuf::from(body.as_ref());
+    #[cfg(windows)]
+    let binary_name = format!("{}.exe", binary_name);
+    pb.push(binary_name);
+    pb
 }
 
 #[macro_export]
