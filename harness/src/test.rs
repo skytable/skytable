@@ -41,12 +41,17 @@ use std::fs;
 use std::io::Write;
 use std::process::Child;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
 #[cfg(windows)]
 /// The powershell script hack to send CTRL+C using kernel32
 const POWERSHELL_SCRIPT: &str = include_str!("../../ci/windows/stop.ps1");
+#[cfg(windows)]
+/// Flag for new console Window
+const CREATE_NEW_CONSOLE: u32 = 0x00000010;
 
 /// Get the command to start the provided server1
 pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Command {
@@ -56,6 +61,8 @@ pub fn get_run_server_cmd(server_id: &'static str, cmd_payload: &[String]) -> Co
     cmd.arg("--withconfig");
     cmd.arg(format!("{WORKSPACE_ROOT}ci/{server_id}.toml"));
     cmd.current_dir(server_id);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NEW_CONSOLE);
     cmd
 }
 
