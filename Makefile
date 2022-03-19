@@ -6,5 +6,5 @@ test: .harness
 	@${RUN_HARNESS} test
 bundle: .harness
 	@${RUN_HARNESS} bundle
-deb:
+deb: .harness
 	@${RUN_HARNESS} deb

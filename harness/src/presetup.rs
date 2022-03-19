@@ -44,7 +44,10 @@ pub fn install_deps() -> HarnessResult<()> {
                 "-c",
                 "sudo apt-get update && sudo apt install musl-tools -y"
             ),
-            _ => return Ok(()),
+            _ => {
+                info!("No additional dependencies required on this platform");
+                return Ok(());
+            }
         },
         None => return Ok(()),
     };
