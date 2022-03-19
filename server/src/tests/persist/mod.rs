@@ -50,6 +50,7 @@ macro_rules! bin {
     }};
 }
 
+mod auth;
 mod kv;
 mod kvlist;
 
