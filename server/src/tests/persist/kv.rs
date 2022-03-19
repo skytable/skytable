@@ -1,5 +1,5 @@
 /*
- * Created on Thu Mar 17 2022
+ * Created on Sat Mar 19 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,79 +24,19 @@
  *
 */
 
+use super::{persist_load, persist_store, PERSIST_TEST_SET_SIZE};
 use sky_macros::dbtest_func as dbtest;
-use skytable::{aio::Connection, query, types::RawString, Element, Query, RespCode};
-
-const PERIST_TEST_SET_SIZE: usize = 4;
-
-trait AsQueryItem {
-    fn push_into_query(&self, query: &mut Query);
-    fn as_element(&self) -> Element;
-}
-
-impl AsQueryItem for &'static [u8] {
-    fn push_into_query(&self, query: &mut Query) {
-        query.push(RawString::from(self.to_vec()));
-    }
-    fn as_element(&self) -> Element {
-        Element::Binstr(self.to_vec())
-    }
-}
-
-impl AsQueryItem for &'static str {
-    fn push_into_query(&self, query: &mut Query) {
-        query.push(*self);
-    }
-    fn as_element(&self) -> Element {
-        Element::String(self.to_string())
-    }
-}
-
-async fn persist_store<K: AsQueryItem, V: AsQueryItem>(
-    con: &mut Connection,
-    table_id: &str,
-    declaration: &str,
-    input: [(K, V); PERIST_TEST_SET_SIZE],
-) {
-    create_table_and_switch!(con, table_id, declaration);
-    for (key, value) in input {
-        let mut query = Query::from("set");
-        key.push_into_query(&mut query);
-        value.push_into_query(&mut query);
-        runeq!(con, query, Element::RespCode(RespCode::Okay))
-    }
-}
-
-async fn persist_load<K: AsQueryItem, V: AsQueryItem>(
-    con: &mut Connection,
-    table_id: &str,
-    input: [(K, V); PERIST_TEST_SET_SIZE],
-) {
-    switch_entity!(con, table_id);
-    for (key, value) in input {
-        let mut q = Query::from("get");
-        key.push_into_query(&mut q);
-        runeq!(con, q, value.as_element());
-    }
-    // now delete this table, freeing it up for the next suite run
-    switch_entity!(con, "default:default");
-    runeq!(
-        con,
-        query!("drop", "table", table_id),
-        Element::RespCode(RespCode::Okay)
-    );
-}
 
 const PERSIST_CFG_KEYMAP_BIN_BIN_TABLE: &str = "testsuite:persist_bin_bin_tbl";
-const PERSIST_DATA_KEYMAP_BIN_BIN_TABLE: [(&[u8], &[u8]); PERIST_TEST_SET_SIZE] = [
-    (b"mykey1\xF0\x90\x80", b"myval1\xF0\x90\x80"),
-    (b"mykey2\xF0\x90\x80", b"myval2\xF0\x90\x80"),
-    (b"mykey3\xF0\x90\x80", b"myval3\xF0\x90\x80"),
-    (b"mykey4\xF0\x90\x80", b"myval4\xF0\x90\x80"),
+const PERSIST_DATA_KEYMAP_BIN_BIN_TABLE: [(&[u8], &[u8]); PERSIST_TEST_SET_SIZE] = [
+    (bin!(b"mykey1"), bin!(b"myval1")),
+    (bin!(b"mykey2"), bin!(b"myval2")),
+    (bin!(b"mykey3"), bin!(b"myval3")),
+    (bin!(b"mykey4"), bin!(b"myval4")),
 ];
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
-async fn persist_store_keymap_bin_bin() {
+async fn store_keymap_bin_bin() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_BIN_TABLE,
@@ -107,7 +47,7 @@ async fn persist_store_keymap_bin_bin() {
 }
 
 #[dbtest(run_if_cfg = "persist-suite", norun = true)]
-async fn persist_load_keymap_bin_bin() {
+async fn load_keymap_bin_bin() {
     persist_load(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_BIN_TABLE,
@@ -117,15 +57,15 @@ async fn persist_load_keymap_bin_bin() {
 }
 
 const PERSIST_CFG_KEYMAP_BIN_STR_TABLE: &str = "testsuite:persist_bin_str_tbl";
-const PERSIST_DATA_KEYMAP_BIN_STR_TABLE: [(&[u8], &str); PERIST_TEST_SET_SIZE] = [
-    (b"mykey1\xF0\x90\x80", "myval1"),
-    (b"mykey2\xF0\x90\x80", "myval2"),
-    (b"mykey3\xF0\x90\x80", "myval3"),
-    (b"mykey4\xF0\x90\x80", "myval4"),
+const PERSIST_DATA_KEYMAP_BIN_STR_TABLE: [(&[u8], &str); PERSIST_TEST_SET_SIZE] = [
+    (bin!(b"mykey1"), "myval1"),
+    (bin!(b"mykey2"), "myval2"),
+    (bin!(b"mykey3"), "myval3"),
+    (bin!(b"mykey4"), "myval4"),
 ];
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
-async fn persist_store_keymap_bin_str() {
+async fn store_keymap_bin_str() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_STR_TABLE,
@@ -136,7 +76,7 @@ async fn persist_store_keymap_bin_str() {
 }
 
 #[dbtest(run_if_cfg = "persist-suite", norun = true)]
-async fn persist_load_keymap_bin_str() {
+async fn load_keymap_bin_str() {
     persist_load(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_STR_TABLE,
@@ -146,7 +86,7 @@ async fn persist_load_keymap_bin_str() {
 }
 
 const PERSIST_CFG_KEYMAP_STR_STR_TABLE: &str = "testsuite:persist_str_str_tbl";
-const PERSIST_DATA_KEYMAP_STR_STR_TABLE: [(&str, &str); PERIST_TEST_SET_SIZE] = [
+const PERSIST_DATA_KEYMAP_STR_STR_TABLE: [(&str, &str); PERSIST_TEST_SET_SIZE] = [
     ("mykey1", "myval1"),
     ("mykey2", "myval2"),
     ("mykey3", "myval3"),
@@ -154,7 +94,7 @@ const PERSIST_DATA_KEYMAP_STR_STR_TABLE: [(&str, &str); PERIST_TEST_SET_SIZE] = 
 ];
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
-async fn persist_store_keymap_str_str() {
+async fn store_keymap_str_str() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_STR_TABLE,
@@ -165,7 +105,7 @@ async fn persist_store_keymap_str_str() {
 }
 
 #[dbtest(run_if_cfg = "persist-suite", norun = true)]
-async fn persist_load_keymap_str_str() {
+async fn load_keymap_str_str() {
     persist_load(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_STR_TABLE,
@@ -175,15 +115,15 @@ async fn persist_load_keymap_str_str() {
 }
 
 const PERSIST_CFG_KEYMAP_STR_BIN_TABLE: &str = "testsuite:persist_str_bin_tbl";
-const PERSIST_DATA_KEYMAP_STR_BIN_TABLE: [(&str, &[u8]); PERIST_TEST_SET_SIZE] = [
-    ("mykey1", b"myval1\xF0\x90\x80"),
-    ("mykey2", b"myval2\xF0\x90\x80"),
-    ("mykey3", b"myval3\xF0\x90\x80"),
-    ("mykey4", b"myval4\xF0\x90\x80"),
+const PERSIST_DATA_KEYMAP_STR_BIN_TABLE: [(&str, &[u8]); PERSIST_TEST_SET_SIZE] = [
+    ("mykey1", bin!(b"myval1")),
+    ("mykey2", bin!(b"myval2")),
+    ("mykey3", bin!(b"myval3")),
+    ("mykey4", bin!(b"myval4")),
 ];
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
-async fn persist_store_keymap_str_bin() {
+async fn store_keymap_str_bin() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_BIN_TABLE,
@@ -194,7 +134,7 @@ async fn persist_store_keymap_str_bin() {
 }
 
 #[dbtest(run_if_cfg = "persist-suite", norun = true)]
-async fn persist_load_keymap_str_bin() {
+async fn load_keymap_str_bin() {
     persist_load(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_BIN_TABLE,
