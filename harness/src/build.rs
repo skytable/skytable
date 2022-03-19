@@ -32,7 +32,7 @@ use std::{path::PathBuf, process::Command};
 pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
 
 /// The build mode
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum BuildMode {
     Debug,
     Release,

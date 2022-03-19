@@ -54,12 +54,12 @@ fn get_bundle_name() -> String {
 pub fn bundle(mode: BuildMode) -> HarnessResult<()> {
     let target_folder = build::build(mode)?;
     // now package
-    package_binaries(target_folder)?;
+    package_binaries(target_folder, mode)?;
     Ok(())
 }
 
 /// Package the binaries into a ZIP file
-fn package_binaries(target_folder: PathBuf) -> HarnessResult<()> {
+fn package_binaries(target_folder: PathBuf, mode: BuildMode) -> HarnessResult<()> {
     // get the file index
     let file_index = build::get_files_index(&target_folder);
     // get the bundle file name
@@ -72,9 +72,14 @@ fn package_binaries(target_folder: PathBuf) -> HarnessResult<()> {
     // create a temp buffer
     let mut buffer = Vec::new();
     // ZIP settings
-    let options = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated)
-        .unix_permissions(0o755);
+    let mut options = FileOptions::default().unix_permissions(0o755);
+    if mode == BuildMode::Debug {
+        // avoid compressing in debug since the binaries will be huge, so it's
+        // better to avoid wasting CI time
+        options = options.compression_method(zip::CompressionMethod::Stored);
+    } else {
+        options = options.compression_method(zip::CompressionMethod::Deflated);
+    }
     for file in file_index {
         let path = file.as_path();
         let name = path.strip_prefix(Path::new(&target_folder)).unwrap();

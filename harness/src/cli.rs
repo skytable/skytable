@@ -37,8 +37,9 @@ OPTIONS:
     harness [SUBCOMMAND]
 
 SUBCOMMANDS:
-    test    Run the full test suite
-    bundle  Build the bundle\
+    test       Run the full test suite
+    bundle     Build the bundle
+    bundle-dbg Build the debug bundle \
 ";
 
 #[derive(Copy, Clone)]
