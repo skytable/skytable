@@ -1,0 +1,14 @@
+[package]
+name = "harness"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libsky = { path = "../libsky" }
+env_logger = "0.9.0"
+log = "0.4.14"
+zip = { version = "0.5.13", features = ["deflate"] }
+powershell_script = "0.3.2"
+openssl = { version = "*", features = ["vendored"] }

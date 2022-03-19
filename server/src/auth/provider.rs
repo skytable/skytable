@@ -42,7 +42,7 @@ pub mod testsuite_data {
     pub const TESTSUITE_TEST_USER: &str = "testuser";
     #[cfg(test)]
     pub const TESTSUITE_ROOT_TOKEN: &str = "XUOdVKhEONnnGwNwT7WeLqbspDgVtKex0/nwFwBSW7XJxioHwpg6H.";
-    #[cfg(test)]
+    #[cfg(all(not(feature = "persist-suite"), test))]
     pub const TESTSUITE_TEST_TOKEN: &str = "mpobAB7EY8vnBs70d/..h1VvfinKIeEJgt1rg4wUkwF6aWCvGGR9le";
 }
 

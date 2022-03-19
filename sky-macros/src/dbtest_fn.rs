@@ -40,6 +40,7 @@ pub struct DBTestFunctionConfig {
     testuser: bool,
     rootuser: bool,
     norun: bool,
+    skip_cfg: quote::__private::TokenStream,
 }
 
 impl DBTestFunctionConfig {
@@ -53,6 +54,7 @@ impl DBTestFunctionConfig {
             testuser: false,
             rootuser: false,
             norun: false,
+            skip_cfg: quote! {},
         }
     }
     pub fn get_connection_tokens(&self) -> impl quote::ToTokens {
@@ -89,6 +91,9 @@ impl DBTestFunctionConfig {
                 )
             ).await.unwrap()
         }
+    }
+    pub fn get_skip_cfg_tokens(&self) -> &impl quote::ToTokens {
+        &self.skip_cfg
     }
     pub fn get_login_tokens(&self) -> Option<impl quote::ToTokens> {
         let Self {
@@ -175,6 +180,18 @@ pub fn parse_dbtest_func_args(
             fcfg.rootuser = util::parse_bool(lit, span, "auth_testuser").expect("Expected a bool")
         }
         "norun" => fcfg.norun = util::parse_bool(lit, span, "norun").expect("Expected a bool"),
+        "run_if_cfg" => {
+            let cfg_name = util::parse_string(lit, span, "run_if_cfg").expect("Expected a string");
+            fcfg.skip_cfg = quote! {
+                #[cfg_attr(not(feature = #cfg_name), ignore)]
+            };
+        }
+        "skip_if_cfg" => {
+            let cfg_name = util::parse_string(lit, span, "run_if_cfg").expect("Expected a string");
+            fcfg.skip_cfg = quote! {
+                #[cfg_attr(feature = #cfg_name, ignore)]
+            };
+        }
         x => panic!("unknown attribute {x} specified"),
     }
 }
@@ -302,7 +319,9 @@ fn generate_dbtest(
             }
         };
     }
+    let skip_cfg = fcfg.get_skip_cfg_tokens();
     let result = quote! {
+        #skip_cfg
         #header
         #(#attrs)*
         #vis #sig {

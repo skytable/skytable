@@ -60,8 +60,7 @@ pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
 /// use within the `skyd` or `WORKSPACEROOT/server/` crate. If you use this compiler
 /// macro in any other crate, you'll simply get compilation errors
 ///
-/// All tests will clean up all values once a single test is over. **These tests should not
-/// be run in multi-threaded environments because they often use the same keys**
+/// All tests will clean up all values once a single test is over
 ///
 /// ## Arguments
 /// - `table -> str`: Custom table declaration

@@ -1,5 +1,5 @@
 /*
- * Created on Tue Aug 25 2020
+ * Created on Sat Mar 19 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,28 +24,27 @@
  *
 */
 
-//! This module contains automated tests for queries
+use sky_macros::dbtest_func as dbtest;
+use skytable::{query, Element};
 
-#[macro_use]
-mod macros;
-#[cfg(not(feature = "persist-suite"))]
-mod auth;
-mod ddl_tests;
-mod inspect_tests;
-mod kvengine;
-mod kvengine_encoding;
-mod kvengine_list;
-mod persist;
-mod pipeline;
+const USERID: &str = "steinbeck";
 
-mod tls {
-    use skytable::{query, Element};
-    #[sky_macros::dbtest_func(tls_cert = "cert.pem", port = 2004)]
-    async fn test_tls() {
-        runeq!(
-            con,
-            query!("heya", "abcd"),
-            Element::String("abcd".to_owned())
-        );
-    }
+#[dbtest(
+    skip_if_cfg = "persist-suite",
+    norun = true,
+    auth_rootuser = true,
+    port = 2005
+)]
+async fn store_user() {
+    runmatch!(con, query!("auth", "adduser", USERID), Element::String)
+}
+
+#[dbtest(
+    run_if_cfg = "persist-suite",
+    norun = true,
+    auth_rootuser = true,
+    port = 2005
+)]
+async fn load_user() {
+    assert_okay!(con, query!("auth", "deluser", USERID));
 }
