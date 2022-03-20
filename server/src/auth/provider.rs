@@ -233,6 +233,15 @@ impl AuthProvider {
             Err(AuthError::BadCredentials)
         }
     }
+    /// List all the users
+    pub fn collect_usernames(&self) -> AuthResult<Vec<String>> {
+        self.ensure_root()?;
+        Ok(self
+            .authmap
+            .iter()
+            .map(|kv| String::from_utf8_lossy(kv.key()).to_string())
+            .collect())
+    }
 }
 
 impl Clone for AuthProvider {

@@ -1209,7 +1209,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0-alpha.4"
-source = "git+https://github.com/skytable/client-rust?branch=next#bea0bb07d6a8af8650fa445744b9a77eae413fcb"
+source = "git+https://github.com/skytable/client-rust?branch=next#6d1affbc5a0ec9c9d4a1cb98f6542962fef6aac1"
 dependencies = [
  "async-trait",
  "bb8",
@@ -1223,7 +1223,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0-alpha.4"
-source = "git+https://github.com/skytable/client-rust.git#bea0bb07d6a8af8650fa445744b9a77eae413fcb"
+source = "git+https://github.com/skytable/client-rust.git#6d1affbc5a0ec9c9d4a1cb98f6542962fef6aac1"
 dependencies = [
  "r2d2",
 ]

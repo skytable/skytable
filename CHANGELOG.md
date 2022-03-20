@@ -14,6 +14,7 @@ All changes in this project will be noted in this file.
   - `auth deluser <username>`
   - `auth restore <username>`
   - `auth restore <origin key> <username>`
+  - `auth listuser`
 - Shell now supports multiple `--eval` expressions
 - Partial entity syntax: `:table` can be used for referring to the current table. For example
   you can use `use :default` instead of `use default:default`

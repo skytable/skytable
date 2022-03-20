@@ -35,6 +35,8 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 pub mod writer;
 
+pub const TSYMBOL_UNICODE_STRING: u8 = b'+';
+
 type FutureIoResult<'s> = FutureResult<'s, Result<(), IoError>>;
 
 /// # The `Writable` trait
@@ -88,7 +90,7 @@ pub struct StringWrapper(pub String);
 impl Writable for StringWrapper {
     fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
-            con.write_lowlevel(&[b'+']).await?;
+            con.write_lowlevel(&[TSYMBOL_UNICODE_STRING]).await?;
             // Now get the size of the Bytes object as bytes
             let size = Integer64::from(self.0.len());
             // Write this to the stream
@@ -129,7 +131,7 @@ impl Writable for &'static str {
             // string (we represent `String`s as `Byte` objects internally)
             // and since `Bytes` are effectively `String`s we will append the
             // type operator `+` to the stream
-            con.write_lowlevel(&[b'+']).await?;
+            con.write_lowlevel(&[TSYMBOL_UNICODE_STRING]).await?;
             // Now get the size of the Bytes object as bytes
             let size = Integer64::from(self.len());
             // Write this to the stream
@@ -153,7 +155,7 @@ impl Writable for BytesWrapper {
             // and since `Bytes` are effectively `String`s we will append the
             // type operator `+` to the stream
             let bytes = self.finish_into_bytes();
-            con.write_lowlevel(&[b'+']).await?;
+            con.write_lowlevel(&[TSYMBOL_UNICODE_STRING]).await?;
             // Now get the size of the Bytes object as bytes
             let size = Integer64::from(bytes.len());
             // Write this to the stream
@@ -206,7 +208,7 @@ impl Writable for ObjectID {
             // string (we represent `String`s as `Byte` objects internally)
             // and since `Bytes` are effectively `String`s we will append the
             // type operator `+` to the stream
-            con.write_lowlevel(&[b'+']).await?;
+            con.write_lowlevel(&[TSYMBOL_UNICODE_STRING]).await?;
             // Now get the size of the Bytes object as bytes
             let size = Integer64::from(self.len());
             // Write this to the stream

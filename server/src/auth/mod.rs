@@ -38,6 +38,7 @@
 
 mod keys;
 pub mod provider;
+use crate::resp::{writer::NonNullArrayWriter, TSYMBOL_UNICODE_STRING};
 pub use provider::{AuthProvider, AuthResult, Authmap};
 pub mod errors;
 pub use errors::AuthError;
@@ -53,6 +54,7 @@ const AUTH_LOGOUT: &[u8] = b"logout";
 const AUTH_ADDUSER: &[u8] = b"adduser";
 const AUTH_DELUSER: &[u8] = b"deluser";
 const AUTH_RESTORE: &[u8] = b"restore";
+const AUTH_LISTUSER: &[u8] = b"listuser";
 
 action! {
     /// Handle auth. Should have passed the `auth` token
@@ -86,8 +88,21 @@ action! {
                 Ok(())
             }
             AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
+            AUTH_LISTUSER => self::auth_listuser(con, auth, &mut iter).await,
             _ => util::err(groups::UNKNOWN_ACTION),
         }
+    }
+    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+        ensure_boolean_or_aerr(iter.len() == 0)?;
+        let usernames = auth.provider().collect_usernames()?;
+        let mut array_writer = unsafe {
+            // The symbol is definitely correct, obvious from this context
+            NonNullArrayWriter::new(con, TSYMBOL_UNICODE_STRING, usernames.len())
+        }.await?;
+        for username in usernames {
+            array_writer.write_element(username).await?;
+        }
+        Ok(())
     }
     fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
         let newkey = match iter.len() {

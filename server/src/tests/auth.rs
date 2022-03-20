@@ -43,13 +43,13 @@ macro_rules! assert_auth_disabled {
 
 macro_rules! assert_auth_perm_error {
     ($con:expr, $query:expr) => {
-        assert_autherror!($con, $query, RespCode::ErrorString("11".to_owned()))
+        assert_autherror!($con, $query, RespCode::AuthPermissionError)
     };
 }
 
 macro_rules! assert_auth_bad_credentials {
     ($con:expr, $query:expr) => {
-        assert_autherror!($con, $query, RespCode::ErrorString("10".to_owned()))
+        assert_autherror!($con, $query, RespCode::AuthBadCredentials)
     };
 }
 
@@ -241,6 +241,22 @@ async fn restore_okay_with_origin_key() {
     );
 }
 
+// auth listuser
+#[sky_macros::dbtest_func]
+async fn listuser_fail_because_disabled() {
+    assert_auth_disabled!(con, query!("auth", "listuser"));
+}
+#[sky_macros::dbtest_func(port = 2005, auth_testuser = true)]
+async fn listuser_fail_because_not_root() {
+    assert_auth_perm_error!(con, query!("auth", "listuser"))
+}
+#[sky_macros::dbtest_func(port = 2005, auth_rootuser = true)]
+async fn listuser_okay_because_root() {
+    let ret: Vec<String> = con.run_query(query!("auth", "listuser")).await.unwrap();
+    assert!(ret.contains(&"root".to_owned()));
+    assert!(ret.contains(&"testuser".to_owned()));
+}
+
 mod syntax_checks {
     use super::{NOAUTH, ONLYAUTH};
     use crate::auth::provider::testsuite_data::{
@@ -312,6 +328,10 @@ mod syntax_checks {
             con,
             query!("auth", "restore", "someuser", "origin", "but extra data")
         );
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn listuser_aerr() {
+        assert_authn_aerr!(con, query!("auth", "listuser", "extra argument"), ONLYAUTH);
     }
     #[sky_macros::dbtest_func(port = 2005, norun = true, auth_testuser = true)]
     async fn unknown_auth_action() {
