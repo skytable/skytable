@@ -146,11 +146,10 @@ impl AuthProvider {
     }
     pub fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
         let (key, store) = keys::generate_full();
-        if self.authmap.true_if_insert(
-            Array::try_from_slice(claimant)
-                .ok_or(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))?,
-            store,
-        ) {
+        if self
+            .authmap
+            .true_if_insert(Self::try_auth_id(claimant)?, store)
+        {
             Ok(key)
         } else {
             Err(AuthError::AlreadyClaimed)
@@ -193,7 +192,14 @@ impl AuthProvider {
         }
     }
     fn try_auth_id(authid: &[u8]) -> AuthResult<AuthID> {
-        AuthID::try_from_slice(authid).ok_or(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))
+        if authid.is_ascii() && authid.len() <= AUTHID_SIZE {
+            Ok(unsafe {
+                // We just verified the length
+                AuthID::from_slice(authid)
+            })
+        } else {
+            Err(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))
+        }
     }
     pub fn logout(&mut self) -> AuthResult<()> {
         self.ensure_enabled()?;

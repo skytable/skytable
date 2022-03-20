@@ -114,6 +114,13 @@ global:
           and return the newly issued token. However, if you aren't a root account, that is, you
           lost your root password, then you'll need to run `AUTH RESTORE <origin-key> root`.
         return: [String, Rcode 10, Rcode 11]
+      - name: LISTUSER
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH LISTUSER]
+        desc: |
+          Attempts to return a list of users for the current database instance
+        return: [Non-null array]
 
 keyvalue:
   generic:
