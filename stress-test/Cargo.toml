@@ -12,11 +12,11 @@ libstress = { path = "../libstress" }
 skytable = { git = "https://github.com/skytable/client-rust.git", branch = "next", features = [
     "dbg",
 ] }
-sysinfo = "0.23.5"
 devtimer = "4.0.1"
 # external deps
+sysinfo = "0.23.5"
 env_logger = "0.9.0"
 log = "0.4.14"
 rand = "0.8.5"
-crossbeam-channel = "0.5.2"
+crossbeam-channel = "0.5.4"
 num_cpus = "1.13.1"
