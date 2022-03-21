@@ -49,7 +49,10 @@ pub fn install_deps() -> HarnessResult<()> {
                 return Ok(());
             }
         },
-        None => return Ok(()),
+        None => {
+            warn!("No target specified so not attempting to install any dependencies");
+            return Ok(());
+        }
     };
     util::handle_child("install system deps", install)?;
     Ok(())

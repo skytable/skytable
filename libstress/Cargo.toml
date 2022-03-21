@@ -1,6 +1,6 @@
 [package]
 name = "libstress"
-version = "0.7.3"
+version = "0.7.4"
 authors = ["Sayan Nandan <nandansayan@outlook.com>"]
 edition = "2021"
 
