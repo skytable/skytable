@@ -35,6 +35,8 @@ mod error;
 mod linuxpkg;
 mod presetup;
 mod test;
+#[cfg(test)]
+mod tests;
 use crate::{
     cli::HarnessWhat,
     error::{HarnessError, HarnessResult},

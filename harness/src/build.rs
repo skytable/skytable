@@ -59,7 +59,7 @@ impl ToString for BuildMode {
 
 /// Returns the paths of the files for the given target folder
 pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
-    let mut paths = Vec::with_capacity(3);
+    let mut paths = Vec::with_capacity(BINARIES.len());
     for binary in BINARIES {
         paths.push(util::concat_path(binary, target_folder));
     }

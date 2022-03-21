@@ -37,7 +37,7 @@ use std::path::PathBuf;
 use zip::{write::FileOptions, ZipWriter};
 
 /// Returns the bundle name
-fn get_bundle_name() -> String {
+pub fn get_bundle_name() -> String {
     let mut filename = format!("sky-bundle-v{VERSION}");
     match util::get_var(util::VAR_ARTIFACT) {
         Some(artifact) => {

@@ -24,7 +24,11 @@
  *
 */
 
-use crate::{build::BuildMode, util, HarnessError, HarnessResult};
+use crate::{
+    build::BuildMode,
+    util::{self, SLEEP_FOR_STARTUP, SLEEP_FOR_TERMINATION},
+    HarnessError, HarnessResult,
+};
 use openssl::{
     asn1::Asn1Time,
     bn::{BigNum, MsbOption},
@@ -73,18 +77,19 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
 pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, Child)> {
     info!("Starting server1 ...");
     let s1 = util::get_child("start server1", s1_cmd)?;
-    util::sleep_sec(10);
+    util::sleep_sec(SLEEP_FOR_STARTUP);
     info!("Starting server2 ...");
     let s2 = util::get_child("start server2", s2_cmd)?;
-    util::sleep_sec(10);
+    util::sleep_sec(SLEEP_FOR_STARTUP);
     Ok((s1, s2))
 }
 
 /// Kill the servers (run the command and then sleep for 10s)
 fn kill_servers() -> HarnessResult<()> {
+    info!("Terminating server instances ...");
     kill_servers_inner()?;
     // sleep
-    util::sleep_sec(20);
+    util::sleep_sec(SLEEP_FOR_TERMINATION);
     Ok(())
 }
 
@@ -114,6 +119,7 @@ pub fn run_test() -> HarnessResult<()> {
     }
 
     // clean up
+    info!("Cleaning up test directories ...");
     fs::remove_dir_all("server1").map_err(|e| {
         HarnessError::Other(format!("Failed to remove dir `server1` with error: {e}"))
     })?;

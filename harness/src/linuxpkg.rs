@@ -44,7 +44,7 @@ impl LinuxPackageType {
         }
     }
     /// Returns the file name for the package
-    fn get_file_name(&self) -> String {
+    pub fn get_file_name(&self) -> String {
         let mut filename = format!("skytable-v{VERSION}");
         match util::get_var(util::VAR_ARTIFACT) {
             Some(artifact) => {
