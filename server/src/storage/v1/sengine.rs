@@ -112,6 +112,7 @@ impl SnapshotEngine {
     }
     pub fn parse_dir(&self) -> SnapshotResult<()> {
         let dir = fs::read_dir(DIR_SNAPROOT)?;
+        let mut local_queue = self.local_queue.lock();
         for entry in dir {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
@@ -120,7 +121,7 @@ impl SnapshotEngine {
                 if !SNAP_MATCH.is_match(&name) {
                     return Err("unknown file in snapshot directory".into());
                 }
-                self.local_queue.lock().push(name.to_string());
+                local_queue.push(name.to_string());
             } else {
                 return Err("unrecognized file in snapshot directory".into());
             }

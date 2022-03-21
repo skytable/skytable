@@ -66,9 +66,6 @@ pub async fn run(
     match &snapshot {
         SnapshotConfig::Enabled(SnapshotPref { atmost, .. }) => {
             engine = SnapshotEngine::new(*atmost);
-            engine
-                .parse_dir()
-                .map_err(|e| format!("Failed to init snapshot engine: {}", e))?;
         }
         SnapshotConfig::Disabled => {
             engine = SnapshotEngine::new_disabled();
@@ -78,8 +75,13 @@ pub async fn run(
     // restore data
     services::restore_data(restore_filepath)
         .map_err(|e| format!("Failed to restore data from backup with error: {}", e))?;
+    // init the store
     let db = Corestore::init_with_snapcfg(engine.clone())
         .map_err(|e| format!("Error while initializing database: {}", e))?;
+    // refresh the snapshotengine state
+    engine
+        .parse_dir()
+        .map_err(|e| format!("Failed to init snapshot engine: {}", e))?;
     let auth_provider = match auth.origin_key {
         Some(key) => {
             let authref = db.get_store().setup_auth();
