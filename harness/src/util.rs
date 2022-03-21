@@ -90,11 +90,18 @@ pub fn get_target_folder(mode: BuildMode) -> PathBuf {
     }
 }
 
-/// Returns `{body}/{binary_name}(.exe if on windows)`
+/// Get the extension
+pub fn add_extension(binary_name: &str) -> String {
+    if cfg!(windows) {
+        format!("{binary_name}.exe")
+    } else {
+        binary_name.to_owned()
+    }
+}
+
+/// Returns `{body}/{binary_name}`
 pub fn concat_path(binary_name: &str, body: impl AsRef<Path>) -> PathBuf {
     let mut pb = PathBuf::from(body.as_ref());
-    #[cfg(windows)]
-    let binary_name = format!("{}.exe", binary_name);
     pb.push(binary_name);
     pb
 }

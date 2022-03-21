@@ -61,7 +61,8 @@ impl ToString for BuildMode {
 pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
     let mut paths = Vec::with_capacity(BINARIES.len());
     for binary in BINARIES {
-        paths.push(util::concat_path(binary, target_folder));
+        let binary = util::add_extension(binary);
+        paths.push(util::concat_path(&binary, target_folder));
     }
     paths
 }

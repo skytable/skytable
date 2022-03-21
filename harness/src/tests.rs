@@ -57,14 +57,26 @@ fn file_names() {
     let files_index = build::get_files_index(&target_folder_debug);
     let expected_files_index: Vec<PathBuf> = build::BINARIES
         .iter()
-        .map(|bin| format!("{WORKSPACE_ROOT}target/debug/{bin}").into())
+        .map(|bin| {
+            {
+                let bin = util::add_extension(bin);
+                format!("{WORKSPACE_ROOT}target/debug/{bin}")
+            }
+            .into()
+        })
         .collect();
     assert_eq!(files_index, expected_files_index);
     // files index for release
     let files_index = build::get_files_index(&target_folder_release);
     let expected_files_index: Vec<PathBuf> = build::BINARIES
         .iter()
-        .map(|bin| format!("{WORKSPACE_ROOT}target/release/{bin}").into())
+        .map(|bin| {
+            {
+                let bin = util::add_extension(bin);
+                format!("{WORKSPACE_ROOT}target/release/{bin}")
+            }
+            .into()
+        })
         .collect();
     assert_eq!(files_index, expected_files_index);
     // linux package name
@@ -92,14 +104,26 @@ fn file_names() {
     let files_index = build::get_files_index(&target_folder_debug);
     let expected_files_index: Vec<PathBuf> = build::BINARIES
         .iter()
-        .map(|bin| format!("{WORKSPACE_ROOT}target/{TARGET}/debug/{bin}").into())
+        .map(|bin| {
+            format!(
+                "{WORKSPACE_ROOT}target/{TARGET}/debug/{bin}",
+                bin = util::add_extension(bin)
+            )
+            .into()
+        })
         .collect();
     assert_eq!(files_index, expected_files_index);
     // files index for release
     let files_index = build::get_files_index(&target_folder_release);
     let expected_files_index: Vec<PathBuf> = build::BINARIES
         .iter()
-        .map(|bin| format!("{WORKSPACE_ROOT}target/{TARGET}/release/{bin}").into())
+        .map(|bin| {
+            format!(
+                "{WORKSPACE_ROOT}target/{TARGET}/release/{bin}",
+                bin = util::add_extension(bin)
+            )
+            .into()
+        })
         .collect();
     assert_eq!(files_index, expected_files_index);
     // linux package name
