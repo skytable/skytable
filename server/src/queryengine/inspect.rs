@@ -69,9 +69,11 @@ action! {
 
     /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length(act.len(), |len| len < 2)?;
+        let tbl_list: Vec<ObjectID>;
         match act.next() {
             Some(keyspace_name) => {
+                // inspect the provided keyspace
                 let ksid = if keyspace_name.len() > 64 {
                     return conwrite!(con, responses::groups::BAD_CONTAINER_NAME);
                 } else {
@@ -81,15 +83,19 @@ action! {
                     Some(kspace) => kspace,
                     None => return conwrite!(con, responses::groups::CONTAINER_NOT_FOUND),
                 };
-                let tbl_list: Vec<ObjectID> = ks.tables.iter().map(|kv| kv.key().clone()).collect();
-                let mut writer = unsafe {
-                    TypedArrayWriter::new(con, b'+', tbl_list.len())
-                }.await?;
-                for tbl in tbl_list {
-                    writer.write_element(tbl).await?;
-                }
+                tbl_list = ks.tables.iter().map(|kv| kv.key().clone()).collect();
             },
-            None => aerr!(con),
+            None => {
+                // inspect the current keyspace
+                let cks = handle.get_cks()?;
+                tbl_list = cks.tables.iter().map(|kv| kv.key().clone()).collect();
+            },
+        }
+        let mut writer = unsafe {
+            TypedArrayWriter::new(con, b'+', tbl_list.len())
+        }.await?;
+        for tbl in tbl_list {
+            writer.write_element(tbl).await?;
         }
         Ok(())
     }

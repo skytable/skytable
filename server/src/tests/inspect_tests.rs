@@ -36,20 +36,24 @@ mod __private {
         ))
     }
     async fn test_inspect_keyspace() {
-        let my_keyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
         query.push("INSPECT");
         query.push("KEYSPACE");
-        query.push(my_keyspace);
+        query.push(&__MYKS__);
         assert!(matches!(
             con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::Str(_))
         ))
     }
+    async fn test_inspect_current_keyspace() {
+        query.push("INSPECT");
+        query.push("KEYSPACE");
+        let ret: Vec<String> = con.run_query(&query).await.unwrap();
+        assert!(ret.contains(&__MYTABLE__));
+    }
     async fn test_inspect_table() {
-        let my_table: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[1];
         query.push("INSPECT");
         query.push("TABLE");
-        query.push(my_table);
+        query.push(__MYTABLE__);
         match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
                 assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())

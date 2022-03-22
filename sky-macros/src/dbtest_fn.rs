@@ -282,6 +282,8 @@ fn generate_dbtest(
             let mut __concat_entity = std::string::String::new();
             __concat_entity.push_str("testsuite:");
             __concat_entity.push_str(&#rand_string);
+            let __MYTABLE__ : String = #rand_string.to_string();
+            let __MYKS__: String = "testsuite".to_owned();
             let __MYENTITY__: String = __concat_entity.clone();
         };
         // now switch to the temporary table we created

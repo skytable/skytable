@@ -165,6 +165,13 @@ impl Corestore {
         }
         Ok(())
     }
+    /// Returns the current keyspace, if set
+    pub fn get_cks(&self) -> KeyspaceResult<&Keyspace> {
+        match self.estate.ks {
+            Some((_, ref cks)) => Ok(cks),
+            _ => Err(DdlError::DefaultNotFound),
+        }
+    }
     pub fn get_keyspace<Q>(&self, ksid: &Q) -> Option<Arc<Keyspace>>
     where
         ObjectID: Borrow<Q>,

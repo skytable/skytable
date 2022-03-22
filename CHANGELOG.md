@@ -2,6 +2,16 @@
 
 All changes in this project will be noted in this file.
 
+## Unreleased
+
+### Additions
+
+- `INSPECT KEYSPACE` without arguments to inspect the current keyspace
+
+### Fixes
+
+- Added error code output for new error codes which otherwise printed "Unknown error"
+
 ## Version 0.7.4
 
 ### Additions

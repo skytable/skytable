@@ -85,12 +85,11 @@ mod __private {
         );
     }
     async fn test_create_table_fully_qualified_entity() {
-        let mykeyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
         query.push("create");
         query.push("table");
-        query.push(mykeyspace.to_owned() + ":" + &tblname);
+        query.push(__MYKS__.to_owned() + ":" + &tblname);
         query.push("keymap(str,str)");
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
@@ -98,12 +97,11 @@ mod __private {
         );
     }
     async fn test_create_table_volatile_fully_qualified_entity() {
-        let mykeyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
         query.push("create");
         query.push("table");
-        query.push(mykeyspace.to_owned() + ":" + &tblname);
+        query.push(__MYKS__.to_owned() + ":" + &tblname);
         query.push("keymap(str,str)");
         query.push("volatile");
         assert_eq!(
@@ -132,10 +130,9 @@ mod __private {
         );
     }
     async fn test_drop_table_fully_qualified_entity() {
-        let mykeyspace: &str = __MYENTITY__.split(':').collect::<Vec<&str>>()[0];
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        let my_fqe = mykeyspace.to_owned() + ":" + &tblname;
+        let my_fqe = __MYKS__.to_owned() + ":" + &tblname;
         query.push("create");
         query.push("table");
         query.push(&my_fqe);
@@ -171,14 +168,10 @@ mod __private {
         )
     }
     async fn test_whereami() {
-        let mykeyspace: Vec<&str> = __MYENTITY__.split(':').collect::<Vec<&str>>();
         query.push("whereami");
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::Array(Array::NonNullStr(vec![
-                mykeyspace[0].to_owned(),
-                mykeyspace[1].to_owned()
-            ]))
+            Element::Array(Array::NonNullStr(vec![__MYKS__, __MYTABLE__]))
         );
         runeq!(
             con,
