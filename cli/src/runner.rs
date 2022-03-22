@@ -146,6 +146,9 @@ fn print_rcode(rcode: RespCode, idx: Option<usize>) {
         RespCode::PacketError => write_err!(idx, "Packet Error"),
         RespCode::ServerError => write_err!(idx, "Server Error"),
         RespCode::UnknownDataType => write_err!(idx, "Unknown data type"),
+        RespCode::EncodingError => write_err!(idx, "Encoding error"),
+        RespCode::AuthBadCredentials => write_err!(idx, "auth bad credentials"),
+        RespCode::AuthPermissionError => write_err!(idx, "auth permission error"),
         _ => write_err!(idx, "Unknown error"),
     }
 }
