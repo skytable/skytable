@@ -24,21 +24,17 @@
  *
 */
 
-use crate::runner::Runner;
-use crate::tokenizer;
-use clap::load_yaml;
-use clap::App;
-use crossterm::terminal::{Clear, ClearType};
-use crossterm::{cursor, execute};
-use libsky::URL;
-use libsky::VERSION;
-use readline::config::Configurer;
-use readline::{error::ReadlineError, Editor};
+use crate::{runner::Runner, tokenizer};
+use clap::{load_yaml, App};
+use crossterm::{
+    cursor, execute,
+    terminal::{Clear, ClearType},
+};
+use libsky::{URL, VERSION};
+use readline::{config::Configurer, error::ReadlineError, Editor};
 use rustyline as readline;
-use skytable::Pipeline;
-use skytable::Query;
-use std::io::stdout;
-use std::process;
+use skytable::{Pipeline, Query};
+use std::{io::stdout, process};
 
 const ADDR: &str = "127.0.0.1";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";
@@ -155,7 +151,7 @@ pub async fn start_repl() {
     match editor.load_history(SKYSH_HISTORY_FILE) {
         Ok(_) => {}
         Err(e) => match e {
-            rustyline::error::ReadlineError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            ReadlineError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 println!("{}", SKY_WELCOME)
             }
             _ => fatal!("Failed to read history file with error: {}", e),
@@ -251,7 +247,7 @@ pub async fn start_repl() {
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) => break,
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => break,
             Err(err) => fatal!("ERROR: Failed to read line with error: {}", err),
         }
     }

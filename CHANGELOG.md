@@ -11,7 +11,8 @@ All changes in this project will be noted in this file.
 
 ### Fixes
 
-- Added error code output for new error codes which otherwise printed "Unknown error"
+- (skysh) Added error code output for new error codes which otherwise printed "Unknown error"
+- (skysh) Fixed handling of EOF keystroke
 
 ## Version 0.7.4
 
