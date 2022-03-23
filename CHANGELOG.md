@@ -8,6 +8,7 @@ All changes in this project will be noted in this file.
 
 - `INSPECT KEYSPACE` without arguments to inspect the current keyspace
 - `INSPECT TABLE` without arguments to inspect the current table
+- `AUTH WHOAMI` returns the AuthID of the currently logged in user
 
 ### Fixes
 

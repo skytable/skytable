@@ -248,6 +248,14 @@ impl AuthProvider {
             .map(|kv| String::from_utf8_lossy(kv.key()).to_string())
             .collect())
     }
+    /// Return the AuthID of the current user
+    pub fn whoami(&self) -> AuthResult<String> {
+        self.ensure_enabled()?;
+        self.whoami
+            .as_ref()
+            .map(|v| String::from_utf8_lossy(v).to_string())
+            .ok_or(AuthError::Anonymous)
+    }
 }
 
 impl Clone for AuthProvider {

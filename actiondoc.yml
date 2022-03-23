@@ -121,6 +121,14 @@ global:
         desc: |
           Attempts to return a list of users for the current database instance
         return: [Non-null array]
+      - name: WHOAMI
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [AUTH WHOAMI]
+        desc: |
+          Returns a string with the AuthID of the currently logged in user or errors if the user
+          is not logged in
+        return: String
 
 keyvalue:
   generic:

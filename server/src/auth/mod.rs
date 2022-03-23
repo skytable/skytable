@@ -55,6 +55,7 @@ const AUTH_ADDUSER: &[u8] = b"adduser";
 const AUTH_DELUSER: &[u8] = b"deluser";
 const AUTH_RESTORE: &[u8] = b"restore";
 const AUTH_LISTUSER: &[u8] = b"listuser";
+const AUTH_WHOAMI: &[u8] = b"whoami";
 
 action! {
     /// Handle auth. Should have passed the `auth` token
@@ -89,8 +90,14 @@ action! {
             }
             AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
             AUTH_LISTUSER => self::auth_listuser(con, auth, &mut iter).await,
+            AUTH_WHOAMI => self::auth_whoami(con, auth, &mut iter).await,
             _ => util::err(groups::UNKNOWN_ACTION),
         }
+    }
+    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+        ensure_boolean_or_aerr(iter.len() == 0)?;
+        con.write_response(StringWrapper(auth.provider().whoami()?)).await?;
+        Ok(())
     }
     fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr(iter.len() == 0)?;
@@ -140,6 +147,7 @@ action! {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
             AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
+            AUTH_WHOAMI => self::auth_whoami(con, auth, &mut iter).await,
             _ => util::err(errors::AUTH_CODE_PERMS),
         }
     }

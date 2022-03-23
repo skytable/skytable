@@ -24,6 +24,7 @@
  *
 */
 
+use crate::auth::provider::testsuite_data;
 use skytable::{query, Element, RespCode};
 
 macro_rules! assert_autherror {
@@ -257,6 +258,33 @@ async fn listuser_okay_because_root() {
     assert!(ret.contains(&"testuser".to_owned()));
 }
 
+// auth whoami
+#[sky_macros::dbtest_func]
+async fn whoami_fail_because_disabled() {
+    assert_auth_disabled!(con, query!("auth", "whoami"))
+}
+#[sky_macros::dbtest_func(port = 2005, norun = true)]
+async fn whoami_fail_because_anonymous() {
+    assert_auth_perm_error!(con, query!("auth", "whoami"))
+}
+#[sky_macros::dbtest_func(port = 2005, norun = true, auth_testuser = true)]
+async fn auth_whoami_okay_testuser() {
+    runeq!(
+        con,
+        query!("auth", "whoami"),
+        Element::String(testsuite_data::TESTSUITE_TEST_USER.to_owned())
+    )
+}
+
+#[sky_macros::dbtest_func(port = 2005, norun = true, auth_rootuser = true)]
+async fn auth_whoami_okay_rootuser() {
+    runeq!(
+        con,
+        query!("auth", "whoami"),
+        Element::String(testsuite_data::TESTSUITE_ROOT_USER.to_owned())
+    )
+}
+
 mod syntax_checks {
     use super::{NOAUTH, ONLYAUTH};
     use crate::auth::provider::testsuite_data::{
@@ -332,6 +360,10 @@ mod syntax_checks {
     #[sky_macros::dbtest_func(port = 2005, norun = true)]
     async fn listuser_aerr() {
         assert_authn_aerr!(con, query!("auth", "listuser", "extra argument"), ONLYAUTH);
+    }
+    #[sky_macros::dbtest_func(port = 2005, norun = true)]
+    async fn whoami_aerr() {
+        assert_authn_aerr!(con, query!("auth", "whoami", "extra argument"));
     }
     #[sky_macros::dbtest_func(port = 2005, norun = true, auth_testuser = true)]
     async fn unknown_auth_action() {
