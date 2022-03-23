@@ -102,13 +102,17 @@ action! {
 
     /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length(act.len(), |len| len < 2)?;
         match act.next() {
             Some(entity) => {
                 let entity = handle_entity!(con, entity);
                 conwrite!(con, get_tbl!(entity, handle, con).describe_self())?;
             },
-            None => aerr!(con),
+            None => {
+                // inspect the current table
+                let tbl = handle.get_table_result()?;
+                con.write_response(tbl.describe_self()).await?;
+            },
         }
         Ok(())
     }

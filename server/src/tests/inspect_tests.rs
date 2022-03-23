@@ -24,6 +24,8 @@
  *
 */
 
+const TABLE_DECL_KM_STR_STR_VOLATILE: &str = "Keymap { data:(str,str), volatile:true }";
+
 #[sky_macros::dbtest_module]
 mod __private {
     use skytable::{types::Array, Element, RespCode};
@@ -56,10 +58,16 @@ mod __private {
         query.push(__MYTABLE__);
         match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
-                assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
+                assert_eq!(st, TABLE_DECL_KM_STR_STR_VOLATILE.to_owned())
             }
             _ => panic!("Bad response for inspect table"),
         }
+    }
+    async fn test_inspect_current_table() {
+        query.push("INSPECT");
+        query.push("TABLE");
+        let ret: String = con.run_query(&query).await.unwrap();
+        assert_eq!(ret, TABLE_DECL_KM_STR_STR_VOLATILE);
     }
     async fn test_inspect_table_fully_qualified_entity() {
         query.push("INSPECT");
@@ -67,7 +75,7 @@ mod __private {
         query.push(__MYENTITY__);
         match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
-                assert_eq!(st, "Keymap { data:(str,str), volatile:true }".to_owned())
+                assert_eq!(st, TABLE_DECL_KM_STR_STR_VOLATILE.to_owned())
             }
             _ => panic!("Bad response for inspect table"),
         }

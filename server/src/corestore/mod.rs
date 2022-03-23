@@ -201,6 +201,12 @@ impl Corestore {
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
     }
+    pub fn get_table_result(&self) -> KeyspaceResult<&Table> {
+        match self.estate.table {
+            Some((_, ref table)) => Ok(table),
+            _ => Err(DdlError::DefaultNotFound),
+        }
+    }
     pub fn get_ctable_ref(&self) -> Option<&Table> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.as_ref())
     }

@@ -7,6 +7,7 @@ All changes in this project will be noted in this file.
 ### Additions
 
 - `INSPECT KEYSPACE` without arguments to inspect the current keyspace
+- `INSPECT TABLE` without arguments to inspect the current table
 
 ### Fixes
 

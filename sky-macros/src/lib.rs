@@ -75,9 +75,11 @@ pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ## _Ghost_ values
 /// This macro gives:
-/// - a `skytable::AsyncConnection` accessible by the `con` variable
-/// - a mutable `skytable::Query` accessible by the `query` variable
-/// - the current entity, accessible by `__MYENTITY__`
+/// - `con`: a `skytable::AsyncConnection`
+/// - `query`: a mutable `skytable::Query`
+/// - `__MYENTITY__`: the entity set on launch
+/// - `__MYTABLE__`: the table set on launch
+/// - `__MYKS__`: the keyspace set on launch
 ///
 /// ## Requirements
 ///
