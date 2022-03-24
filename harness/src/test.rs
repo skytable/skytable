@@ -63,6 +63,8 @@ const CREATE_NEW_CONSOLE: u32 = 0x00000010;
 const TESTSUITE_SERVER_HOST: &str = "127.0.0.1";
 /// The test suite server ports
 const TESTSUITE_SERVER_PORTS: [u16; 4] = [2003, 2004, 2005, 2006];
+/// The server IDs matching with the configuration files
+const SERVER_IDS: [&str; 2] = ["server1", "server2"];
 
 /// Get the command to start the provided server1
 pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Path>) -> Command {
@@ -74,6 +76,8 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
     cmd.arg("--withconfig");
     cmd.arg(cfg_file_path);
     cmd.current_dir(server_id);
+    cmd.stderr(Stdio::piped());
+    cmd.stdout(Stdio::piped());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NEW_CONSOLE);
     cmd
@@ -82,7 +86,14 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
 fn connection_refused<T>(input: Result<T, IoError>) -> HarnessResult<bool> {
     match input {
         Ok(_) => Ok(false),
-        Err(e) if e.kind().eq(&ErrorKind::ConnectionRefused) => Ok(true),
+        Err(e)
+            if matches!(
+                e.kind(),
+                ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset
+            ) =>
+        {
+            Ok(true)
+        }
         Err(e) => Err(HarnessError::Other(format!(
             "Expected ConnectionRefused while checking for startup. Got error {e} instead"
         ))),
@@ -148,21 +159,37 @@ fn wait_for_shutdown() -> HarnessResult<()> {
 }
 
 /// Start the servers returning handles to the child processes
-pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, Child)> {
-    info!("Starting server1 ...");
-    let s1 = util::get_child("start server1", s1_cmd)?;
-    info!("Starting server2 ...");
-    let s2 = util::get_child("start server2", s2_cmd)?;
+fn start_servers(target_folder: impl AsRef<Path>) -> HarnessResult<Vec<Child>> {
+    let mut ret = Vec::with_capacity(SERVER_IDS.len());
+    for server_id in SERVER_IDS {
+        let cmd = get_run_server_cmd(server_id, target_folder.as_ref());
+        info!("Starting {server_id} ...");
+        ret.push(util::get_child(format!("start {server_id}"), cmd)?);
+    }
     wait_for_startup()?;
-    Ok((s1, s2))
+    Ok(ret)
 }
 
-/// Kill the servers (run the command and then sleep for 10s)
-fn kill_servers() -> HarnessResult<()> {
+fn run_with_servers(
+    target_folder: impl AsRef<Path>,
+    run_what: impl FnOnce() -> HarnessResult<()>,
+) -> HarnessResult<()> {
+    info!("Starting servers ...");
+    let children = start_servers(target_folder.as_ref())?;
+    run_what()?;
     info!("Terminating server instances ...");
-    kill_servers_inner()?;
-    // sleep
+    kill_servers()?;
+    info!("Sent termination signals");
     wait_for_shutdown()?;
+    info!("Terminated server instances");
+    // just use this to avoid ignoring the children vector
+    assert_eq!(children.len(), SERVER_IDS.len());
+    Ok(())
+}
+
+/// Send termination signal to the servers
+fn kill_servers() -> HarnessResult<()> {
+    kill_servers_inner()?;
     Ok(())
 }
 
@@ -251,22 +278,19 @@ fn run_test_inner() -> HarnessResult<()> {
     info!("Building server binary ...");
     util::handle_child("build skyd", build_cmd)?;
 
-    // start the servers, run tests and kill
-    info!("Starting servers ...");
-    let s1_cmd = get_run_server_cmd("server1", &target_folder);
-    let s2_cmd = get_run_server_cmd("server2", &target_folder);
-    let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
-    info!("All servers started. Now running standard test suite ...");
-    util::handle_child("standard test suite", standard_test_suite)?;
-    kill_servers()?;
+    // run standard test suite
+    run_with_servers(&target_folder, move || {
+        info!("Running standard test suite ...");
+        util::handle_child("standard test suite", standard_test_suite)?;
+        Ok(())
+    })?;
 
-    // start server up again, run tests and kill
-    info!("Starting servers ...");
-    let s1_cmd = get_run_server_cmd("server1", &target_folder);
-    let s2_cmd = get_run_server_cmd("server2", &target_folder);
-    let (_s1, _s2) = start_servers(s1_cmd, s2_cmd)?;
-    info!("All servers started. Now running persistence test suite ...");
-    util::handle_child("standard test suite", persist_test_suite)?;
+    // run persistence tests
+    run_with_servers(&target_folder, move || {
+        info!("Running persistence test suite ...");
+        util::handle_child("standard test suite", persist_test_suite)?;
+        Ok(())
+    })?;
 
     Ok(())
 }

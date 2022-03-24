@@ -25,13 +25,10 @@
 */
 
 use crate::build::BuildMode;
-use crate::process::ExitStatus;
 use crate::{HarnessError, HarnessResult};
 use std::env;
-use std::io::Result as IoResult;
 use std::path::{Path, PathBuf};
-use std::process::Child;
-use std::process::Command;
+use std::process::{Child, Command, Output};
 pub type ExitCode = Option<i32>;
 
 #[cfg(not(test))]
@@ -49,21 +46,6 @@ pub fn get_var(var: &str) -> Option<String> {
     env::var_os(var).map(|v| v.to_string_lossy().to_string())
 }
 
-pub fn handle_exitstatus(desc: &str, status: IoResult<ExitStatus>) -> HarnessResult<()> {
-    match status {
-        Ok(status) => {
-            if status.success() {
-                Ok(())
-            } else {
-                Err(HarnessError::ChildError(desc.to_owned(), status.code()))
-            }
-        }
-        Err(e) => Err(HarnessError::Other(format!(
-            "Failed to get exitcode while running `{desc}`. this error happened: {e}"
-        ))),
-    }
-}
-
 pub fn get_child(desc: impl ToString, mut input: Command) -> HarnessResult<Child> {
     let desc = desc.to_string();
     match input.spawn() {
@@ -74,8 +56,30 @@ pub fn get_child(desc: impl ToString, mut input: Command) -> HarnessResult<Child
     }
 }
 
+fn check_child_err(desc: impl ToString, output: Output) -> HarnessResult<()> {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    error!("The child failed with stderr: `{stderr}` and stdout: `{stdout}`");
+    Err(HarnessError::ChildError(
+        desc.to_string(),
+        output.status.code(),
+    ))
+}
+
+pub fn ensure_child_success(id: &str, child: Child) -> HarnessResult<()> {
+    let r = child
+        .wait_with_output()
+        .map_err(|e| HarnessError::Other(format!("Failed to get child output with error: {e}")))?;
+    if r.status.success() {
+        Ok(())
+    } else {
+        check_child_err(id, r)
+    }
+}
+
 pub fn handle_child(desc: &str, input: Command) -> HarnessResult<()> {
-    self::handle_exitstatus(desc, self::get_child(desc, input)?.wait())
+    let child = self::get_child(desc, input)?;
+    ensure_child_success(desc, child)
 }
 
 pub fn sleep_sec(secs: u64) {
