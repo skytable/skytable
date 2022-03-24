@@ -33,7 +33,7 @@ jobs:
             os: macos-latest
             artifact: x86_64-macos
           - rust: x86_64-pc-windows-msvc
-            os: windows-2019
+            os: windows-latest
             artifact: x86_64-windows
     env:
       RUST_BACKTRACE: 1
@@ -79,12 +79,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2019]
+        os: [ubuntu-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
             artifact: i686-linux-gnu
-          - os: windows-2019
+          - os: windows-latest
             artifact: i686-windows
             rust: i686-pc-windows-msvc
 

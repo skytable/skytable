@@ -26,7 +26,7 @@
 
 use crate::{
     build::BuildMode,
-    util::{self, SLEEP_FOR_STARTUP, SLEEP_FOR_TERMINATION},
+    util::{self, SLEEP_FOR_TERMINATION},
     HarnessError, HarnessResult,
 };
 use openssl::{
@@ -41,13 +41,15 @@ use openssl::{
         X509NameBuilder, X509,
     },
 };
-use std::fs;
-use std::io::Write;
+use skytable::Connection;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::Child;
-use std::process::Command;
+use std::{
+    fs,
+    io::{Error as IoError, ErrorKind, Write},
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
+};
 
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
@@ -57,6 +59,10 @@ const POWERSHELL_SCRIPT: &str = include_str!("../../ci/windows/stop.ps1");
 #[cfg(windows)]
 /// Flag for new console Window
 const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+/// The test suite server host
+const TESTSUITE_SERVER_HOST: &str = "127.0.0.1";
+/// The test suite server ports
+const TESTSUITE_SERVER_PORTS: [u16; 4] = [2003, 2004, 2005, 2006];
 
 /// Get the command to start the provided server1
 pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Path>) -> Command {
@@ -73,14 +79,81 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
     cmd
 }
 
+fn connection_refused<T>(input: Result<T, IoError>) -> HarnessResult<bool> {
+    match input {
+        Ok(_) => Ok(false),
+        Err(e) if e.kind().eq(&ErrorKind::ConnectionRefused) => Ok(true),
+        Err(e) => Err(HarnessError::Other(format!(
+            "Expected ConnectionRefused while checking for startup. Got error {e} instead"
+        ))),
+    }
+}
+
+/// Waits for the servers to start up or errors if something unexpected happened
+fn wait_for_startup() -> HarnessResult<()> {
+    info!("Waiting for servers to start up");
+    for port in TESTSUITE_SERVER_PORTS {
+        let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
+        let mut backoff = 1;
+        let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+        while connection_refused(con)? {
+            if backoff > 64 {
+                // enough sleeping, return an error
+                error!("Server didn't respond in {backoff} seconds. Something is wrong");
+                return Err(HarnessError::Other(format!(
+                    "Startup backoff elapsed. Server at {connection_string} did not respond."
+                )));
+            }
+            info!(
+                "Server at {connection_string} not started. Sleeping for {backoff} second(s) ..."
+            );
+            util::sleep_sec(backoff);
+            con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            backoff *= 2;
+        }
+        info!("Server at {connection_string} has started");
+    }
+    info!("All servers started up");
+    Ok(())
+}
+
+/// Wait for the servers to shutdown, returning an error if something unexpected happens
+fn wait_for_shutdown() -> HarnessResult<()> {
+    info!("Waiting for servers to shut down");
+    for port in TESTSUITE_SERVER_PORTS {
+        let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
+        let mut backoff = 1;
+        let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+        while !connection_refused(con)? {
+            if backoff > 64 {
+                // enough sleeping, return an error
+                error!("Server didn't shut down within {backoff} seconds. Something is wrong");
+                return Err(HarnessError::Other(format!(
+                    "Shutdown backoff elapsed. Server at {connection_string} did not shut down."
+                )));
+            }
+            info!(
+                "Server at {connection_string} still active. Sleeping for {backoff} second(s) ..."
+            );
+            util::sleep_sec(backoff);
+            con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            backoff *= 2;
+        }
+        info!("Server at {connection_string} has stopped accepting connections");
+    }
+    info!("All servers have stopped accepting connections. Allowing {SLEEP_FOR_TERMINATION} seconds for them to exit");
+    util::sleep_sec(SLEEP_FOR_TERMINATION);
+    info!("All servers have shutdown");
+    Ok(())
+}
+
 /// Start the servers returning handles to the child processes
 pub fn start_servers(s1_cmd: Command, s2_cmd: Command) -> HarnessResult<(Child, Child)> {
     info!("Starting server1 ...");
     let s1 = util::get_child("start server1", s1_cmd)?;
-    util::sleep_sec(SLEEP_FOR_STARTUP);
     info!("Starting server2 ...");
     let s2 = util::get_child("start server2", s2_cmd)?;
-    util::sleep_sec(SLEEP_FOR_STARTUP);
+    wait_for_startup()?;
     Ok((s1, s2))
 }
 
@@ -89,7 +162,7 @@ fn kill_servers() -> HarnessResult<()> {
     info!("Terminating server instances ...");
     kill_servers_inner()?;
     // sleep
-    util::sleep_sec(SLEEP_FOR_TERMINATION);
+    wait_for_shutdown()?;
     Ok(())
 }
 

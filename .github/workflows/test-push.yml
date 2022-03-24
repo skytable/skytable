@@ -23,13 +23,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-2019]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: x86_64-unknown-linux-gnu
           - os: macos-latest
             rust: x86_64-apple-darwin
-          - os: windows-2019
+          - os: windows-latest
             rust: x86_64-pc-windows-msvc
 
     steps:
@@ -113,11 +113,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2019]
+        os: [ubuntu-latest, windows-latest]
         include:
           - os: ubuntu-latest
             rust: i686-unknown-linux-gnu
-          - os: windows-2019
+          - os: windows-latest
             rust: i686-pc-windows-msvc
     steps:
       - name: Checkout source code

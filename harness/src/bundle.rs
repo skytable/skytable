@@ -72,14 +72,9 @@ fn package_binaries(target_folder: PathBuf, mode: BuildMode) -> HarnessResult<()
     // create a temp buffer
     let mut buffer = Vec::new();
     // ZIP settings
-    let mut options = FileOptions::default().unix_permissions(0o755);
-    if mode == BuildMode::Debug {
-        // avoid compressing in debug since the binaries will be huge, so it's
-        // better to avoid wasting CI time
-        options = options.compression_method(zip::CompressionMethod::Stored);
-    } else {
-        options = options.compression_method(zip::CompressionMethod::Deflated);
-    }
+    let options = FileOptions::default()
+        .unix_permissions(0o755)
+        .compression_method(mode.get_compression_method());
     for file in file_index {
         let path = file.as_path();
         let name = path.strip_prefix(Path::new(&target_folder)).unwrap();

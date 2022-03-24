@@ -27,6 +27,7 @@
 use crate::util;
 use crate::HarnessResult;
 use std::{path::PathBuf, process::Command};
+use zip::CompressionMethod;
 
 /// The binaries that will be present in a bundle
 pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
@@ -44,6 +45,13 @@ impl BuildMode {
         match self {
             BuildMode::Debug => None,
             BuildMode::Release => Some("--release"),
+        }
+    }
+    /// Returns the compression method for the build mode
+    pub const fn get_compression_method(&self) -> CompressionMethod {
+        match self {
+            BuildMode::Debug => CompressionMethod::Stored,
+            BuildMode::Release => CompressionMethod::Deflated,
         }
     }
 }

@@ -43,8 +43,7 @@ pub const VAR_ARTIFACT: &str = "ARTIFACT";
 #[cfg(test)]
 pub const VAR_ARTIFACT: &str = "ARTIFACT_TESTSUITE";
 pub const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
-pub const SLEEP_FOR_STARTUP: u64 = 15;
-pub const SLEEP_FOR_TERMINATION: u64 = 20;
+pub const SLEEP_FOR_TERMINATION: u64 = 15;
 
 pub fn get_var(var: &str) -> Option<String> {
     env::var_os(var).map(|v| v.to_string_lossy().to_string())

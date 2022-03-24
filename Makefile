@@ -6,5 +6,7 @@ test: .harness
 	@${RUN_HARNESS} test
 bundle: .harness
 	@${RUN_HARNESS} bundle
+bundle-dbg: .harness
+	@${RUN_HARNESS} bundle-dbg
 deb: .harness
 	@${RUN_HARNESS} deb

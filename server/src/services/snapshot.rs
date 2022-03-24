@@ -56,7 +56,17 @@ pub async fn snapshot_service(
             loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        if engine.mksnap(handle.clone_store()).await == 0 {
+                        let succeeded = engine.mksnap(handle.clone_store()).await == 0;
+                        #[cfg(test)]
+                        {
+                            use std::env::set_var;
+                            if succeeded {
+                                set_var("SKYTEST_SNAPSHOT_OKAY", "true");
+                            } else {
+                                set_var("SKYTEST_SNAPSHOT_OKAY", "false");
+                            }
+                        }
+                        if succeeded {
                             // it passed, so unpoison the handle
                             registry::unpoison();
                         } else if failsafe {
