@@ -128,7 +128,7 @@ global:
         desc: |
           Returns a string with the AuthID of the currently logged in user or errors if the user
           is not logged in
-        return: String
+        return: [String]
 
 keyvalue:
   generic:
