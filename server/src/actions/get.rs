@@ -35,7 +35,7 @@ action!(
     /// Run a `GET` query
     fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         ensure_length(act.len(), |len| len == 1)?;
-        let kve = handle.get_table_with::<KVE>()?;
+        let kve = handle.get_table_with::<KVEBlob>()?;
         unsafe {
             match kve.get_cloned(act.next_unchecked()) {
                 Ok(Some(val)) => writer::write_raw_mono(con, kve.get_value_tsymbol(), &val).await?,

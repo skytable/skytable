@@ -38,25 +38,25 @@
 
 // model
 /*
- * KVE:
- * (1) Pure KVE: [0, 3]
+ * KVEBlob:
+ * (1) Pure KVEBlob: [0, 3]
  * (2) KVExt/Listmap: [4, 7]
 */
-/// KVE model bytemark with key:bin, val:bin
+/// KVEBlob model bytemark with key:bin, val:bin
 pub const BYTEMARK_MODEL_KV_BIN_BIN: u8 = 0;
-/// KVE model bytemark with key:bin, val:str
+/// KVEBlob model bytemark with key:bin, val:str
 pub const BYTEMARK_MODEL_KV_BIN_STR: u8 = 1;
-/// KVE model bytemark with key:str, val:str
+/// KVEBlob model bytemark with key:str, val:str
 pub const BYTEMARK_MODEL_KV_STR_STR: u8 = 2;
-/// KVE model bytemark with key:str, val:bin
+/// KVEBlob model bytemark with key:str, val:bin
 pub const BYTEMARK_MODEL_KV_STR_BIN: u8 = 3;
-/// KVE model bytemark with key:binstr, val: list<binstr>
+/// KVEBlob model bytemark with key:binstr, val: list<binstr>
 pub const BYTEMARK_MODEL_KV_BINSTR_LIST_BINSTR: u8 = 4;
-/// KVE model bytemark with key:binstr, val: list<str>
+/// KVEBlob model bytemark with key:binstr, val: list<str>
 pub const BYTEMARK_MODEL_KV_BINSTR_LIST_STR: u8 = 5;
-/// KVE model bytemark with key:str, val: list<binstr>
+/// KVEBlob model bytemark with key:str, val: list<binstr>
 pub const BYTEMARK_MODEL_KV_STR_LIST_BINSTR: u8 = 6;
-/// KVE model bytemark with key:str, val: list<str>
+/// KVEBlob model bytemark with key:str, val: list<str>
 pub const BYTEMARK_MODEL_KV_STR_LIST_STR: u8 = 7;
 
 // storage bym

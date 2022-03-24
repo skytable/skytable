@@ -41,7 +41,7 @@ action! {
     fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
-        let kve = handle.get_table_with::<KVE>()?;
+        let kve = handle.get_table_with::<KVEBlob>()?;
         if registry::state_okay() {
             let encoder = kve.get_double_encoder();
             let outcome = unsafe {

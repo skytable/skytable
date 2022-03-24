@@ -107,7 +107,7 @@ impl<'a> StorageTarget for RemoteSnapshot<'a> {
     fn root(&self) -> String {
         let mut p = String::from(interface::DIR_RSNAPROOT);
         p.push('/');
-        p.push_str(&self.name);
+        p.push_str(self.name);
         p
     }
 }

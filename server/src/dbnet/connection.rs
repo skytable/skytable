@@ -95,10 +95,10 @@ where
         }
     }
     pub fn provider_mut(&mut self) -> &mut AuthProvider {
-        &mut self.provider
+        self.provider
     }
     pub fn provider(&self) -> &AuthProvider {
-        &self.provider
+        self.provider
     }
     pub fn swap_executor_to_anonymous(&mut self) {
         *self.executor = ConnectionHandler::execute_unauth;
@@ -115,7 +115,7 @@ pub mod prelude {
     pub use super::{AuthProviderHandle, ClientConnection, ProtocolConnectionExt, Stream};
     pub use crate::actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length};
     pub use crate::corestore::{
-        table::{KVEList, KVE},
+        table::{KVEBlob, KVEList},
         Corestore,
     };
     pub use crate::protocol::responses::{self, groups};

@@ -236,7 +236,7 @@ pub async fn start_repl() {
                             // continuation on next line
                             let cl = readln!(editor);
                             line.drain(line.len() - 2..);
-                            line.extend(cl.chars());
+                            line.push_str(&cl);
                         }
                         did_swap = line
                             .get(..3)

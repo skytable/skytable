@@ -44,6 +44,9 @@ pub type FutureResult<'s, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 's
 /// This trait provides a method `unsafe_unwrap` that is potentially unsafe and has
 /// the ability to **violate multiple safety gurantees** that rust provides. So,
 /// if you get `SIGILL`s or `SIGSEGV`s, by using this trait, blame yourself.
+///
+/// # Safety
+/// Use this when you're absolutely sure that the error case is never reached
 pub unsafe trait Unwrappable<T> {
     /// Unwrap a _nullable_ (almost) type to get its value while asserting that the value
     /// cannot ever be null
@@ -80,10 +83,10 @@ pub trait UnwrapActionError<T> {
 
 impl<T> UnwrapActionError<T> for Option<T> {
     fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
-        self.ok_or(e.into())
+        self.ok_or_else(|| e.into())
     }
     fn unwrap_or_aerr(self) -> ActionResult<T> {
-        self.ok_or(groups::ACTION_ERR.into())
+        self.ok_or_else(|| groups::ACTION_ERR.into())
     }
 }
 

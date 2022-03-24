@@ -121,7 +121,7 @@ pub(super) fn parse_table_args<'a>(
     let key_ty = key_ty.as_bytes();
     let val_ty = val_ty.as_bytes();
     let model_code: u8 = match (key_ty, val_ty) {
-        // pure KVE
+        // pure KVEBlob
         (BINSTR, BINSTR) => 0,
         (BINSTR, STR) => 1,
         (STR, STR) => 2,

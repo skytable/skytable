@@ -26,8 +26,7 @@
 
 use crate::util;
 use crate::HarnessResult;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::{path::PathBuf, process::Command};
 use zip::CompressionMethod;
 
@@ -68,7 +67,7 @@ impl ToString for BuildMode {
 }
 
 /// Returns the paths of the files for the given target folder
-pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
+pub fn get_files_index(target_folder: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::with_capacity(BINARIES.len());
     for binary in BINARIES {
         let binary = util::add_extension(binary);
@@ -81,12 +80,9 @@ pub fn get_files_index(target_folder: &PathBuf) -> Vec<PathBuf> {
 pub fn build(mode: BuildMode) -> HarnessResult<PathBuf> {
     let mut build_args = vec!["build".to_owned()];
     let target_folder = util::get_target_folder(mode);
-    match util::get_var(util::VAR_TARGET) {
-        Some(t) => {
-            build_args.push("--target".to_owned());
-            build_args.push(t.to_string());
-        }
-        None => {}
+    if let Some(t) = util::get_var(util::VAR_TARGET) {
+        build_args.push("--target".to_owned());
+        build_args.push(t.to_string());
     };
 
     // assemble build args

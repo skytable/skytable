@@ -58,6 +58,8 @@ mod unix {
                 if ret != 0 {
                     Err(IoError::last_os_error())
                 } else {
+                    // clippy doesn't realize that rlimit has a different size on 32-bit
+                    #[allow(clippy::useless_conversion)]
                     Ok(ResourceLimit::new(
                         rlim.rlim_cur.into(),
                         rlim.rlim_max.into(),

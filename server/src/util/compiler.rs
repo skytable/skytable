@@ -61,9 +61,14 @@ pub const fn hot<T>(v: T) -> T {
     v
 }
 
+/// # Safety
+/// The caller is responsible for ensuring lifetime validity
 pub const unsafe fn extend_lifetime<'a, 'b, T>(inp: &'a T) -> &'b T {
     mem::transmute(inp)
 }
+
+/// # Safety
+/// The caller is responsible for ensuring lifetime validity
 pub unsafe fn extend_lifetime_mut<'a, 'b, T>(inp: &'a mut T) -> &'b mut T {
     mem::transmute(inp)
 }

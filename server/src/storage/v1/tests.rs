@@ -265,7 +265,7 @@ mod bytemark_set_tests {
 mod bytemark_actual_table_restore {
     use crate::corestore::{
         memstore::ObjectID,
-        table::{DescribeTable, KVEList, Table, KVE},
+        table::{DescribeTable, KVEList, Table, KVEBlob},
         Data,
     };
     use crate::kvengine::LockedVec;
@@ -276,7 +276,7 @@ mod bytemark_actual_table_restore {
 
     macro_rules! insert {
         ($table:ident, $k:expr, $v:expr) => {
-            assert!(gtable::<KVE>(&$table)
+            assert!(gtable::<KVEBlob>(&$table)
                 .set(Data::from($k), Data::from($v))
                 .unwrap())
         };
@@ -326,7 +326,7 @@ mod bytemark_actual_table_restore {
         }
         for (index, (table, code)) in read_tables
             .iter()
-            .map(|tbl| (gtable::<KVE>(tbl), tbl.get_model_code()))
+            .map(|tbl| (gtable::<KVEBlob>(tbl), tbl.get_model_code()))
             .enumerate()
         {
             assert_eq!(index, code as usize);

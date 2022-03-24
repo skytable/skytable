@@ -42,7 +42,7 @@ pub trait DescribeTable {
         match store.estate.table {
             Some((_, ref table)) => {
                 // so we do have a table
-                match Self::try_get(&table) {
+                match Self::try_get(table) {
                     Some(tbl) => Ok(tbl),
                     None => util::err(groups::WRONG_MODEL),
                 }
@@ -52,9 +52,9 @@ pub trait DescribeTable {
     }
 }
 
-pub struct KVE;
+pub struct KVEBlob;
 
-impl DescribeTable for KVE {
+impl DescribeTable for KVEBlob {
     type Table = KVEStandard;
     fn try_get(table: &Table) -> Option<&Self::Table> {
         if let DataModel::KV(ref kve) = table.model_store {
@@ -187,7 +187,7 @@ impl Table {
     pub const fn is_volatile(&self) -> bool {
         self.volatile
     }
-    /// Create a new KVE Table with the provided settings
+    /// Create a new KVEBlob Table with the provided settings
     pub fn new_pure_kve_with_data(
         data: Coremap<Data, Data>,
         volatile: bool,

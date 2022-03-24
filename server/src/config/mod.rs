@@ -184,7 +184,7 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 /// Since we have conflicting trait implementations, we define a custom `Option<String>` type
 pub struct OptString {
     base: Option<String>,
@@ -192,12 +192,6 @@ pub struct OptString {
 
 impl OptString {
     pub const fn new_null() -> Self {
-        Self { base: None }
-    }
-}
-
-impl Default for OptString {
-    fn default() -> Self {
         Self { base: None }
     }
 }
@@ -518,6 +512,7 @@ impl Configset {
 }
 
 // TLS settings
+#[allow(clippy::too_many_arguments)]
 impl Configset {
     pub fn tls_settings(
         &mut self,
@@ -647,7 +642,7 @@ pub fn get_config() -> Result<ConfigType, ConfigError> {
         Ok(ConfigType::new_default(restore_file))
     } else {
         cfg_from_file
-            .unwrap_or(cfg_from_env.and_then(cfg_from_cli))
+            .unwrap_or_else(|| cfg_from_env.and_then(cfg_from_cli))
             .into_result(restore_file)
     }
 }

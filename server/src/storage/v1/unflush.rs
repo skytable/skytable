@@ -95,10 +95,11 @@ pub trait UnflushableTable: Sized {
     fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self>;
 }
 
+#[allow(clippy::transmute_int_to_bool)]
 impl UnflushableTable for Table {
     fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self> {
         let ret = match model_code {
-            // pure KVE: [0, 3]
+            // pure KVEBlob: [0, 3]
             x if x < 4 => {
                 let data = decode(filepath, volatile)?;
                 let (k_enc, v_enc) = unsafe {

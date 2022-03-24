@@ -59,6 +59,8 @@ use crate::corestore::booltable::TwoBitLUT;
 use crate::protocol::iter::AnyArrayIter;
 use crate::protocol::iter::BorrowedAnyArrayIter;
 
+type PairFn = fn(&[u8], &[u8]) -> bool;
+
 pub const ENCODING_LUT_ITER: BoolTable<fn(BorrowedAnyArrayIter) -> bool> =
     BoolTable::new(is_okay_encoded_iter, is_okay_no_encoding_iter);
 pub const ENCODING_LUT_ITER_PAIR: TwoBitLUT<fn(&AnyArrayIter) -> bool> = TwoBitLUT::new(
@@ -69,7 +71,7 @@ pub const ENCODING_LUT_ITER_PAIR: TwoBitLUT<fn(&AnyArrayIter) -> bool> = TwoBitL
 );
 pub const ENCODING_LUT: BoolTable<fn(&[u8]) -> bool> =
     BoolTable::new(self::is_okay_encoded, self::is_okay_no_encoding);
-pub const ENCODING_LUT_PAIR: TwoBitLUT<fn(&[u8], &[u8]) -> bool> = TwoBitLUT::new(
+pub const ENCODING_LUT_PAIR: TwoBitLUT<PairFn> = TwoBitLUT::new(
     self::is_okay_encoded_pair_ff,
     self::is_okay_encoded_pair_ft,
     self::is_okay_encoded_pair_tf,
@@ -148,7 +150,7 @@ pub fn pair_is_okay_encoded_iter_tt(inp: &AnyArrayIter<'_>) -> bool {
 }
 
 pub fn is_okay_encoded_iter(mut inp: BorrowedAnyArrayIter<'_>) -> bool {
-    inp.all(|v| self::is_okay_encoded(v))
+    inp.all(self::is_okay_encoded)
 }
 
 pub const fn is_okay_no_encoding_iter(_inp: BorrowedAnyArrayIter<'_>) -> bool {

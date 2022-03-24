@@ -81,11 +81,11 @@ pub struct KVEngine<T> {
 
 // basic method impls
 impl<T> KVEngine<T> {
-    /// Create a new KVE
+    /// Create a new KVEBlob
     pub fn new(e_k: bool, e_v: bool, data: Coremap<Data, T>) -> Self {
         Self { data, e_k, e_v }
     }
-    /// Create a new empty KVE
+    /// Create a new empty KVEBlob
     pub fn init(e_k: bool, e_v: bool) -> Self {
         Self::new(e_k, e_v, Default::default())
     }
@@ -200,7 +200,8 @@ impl<T: KVEValue> KVEngine<T> {
     pub fn upsert(&self, key: Data, val: T) -> EncodingResult<()> {
         self.check_key_encoding(&key)?;
         val.verify_encoding(self.e_v)?;
-        Ok(self.upsert_unchecked(key, val))
+        self.upsert_unchecked(key, val);
+        Ok(())
     }
     /// Update or insert an entry without encoding checks
     pub fn upsert_unchecked(&self, key: Data, val: T) {
@@ -260,25 +261,22 @@ impl KVEListmap {
         Ok(self.data.true_if_insert(listname, LockedVec::new(vec![])))
     }
     pub fn list_len(&self, listname: &[u8]) -> EncodingResult<Option<usize>> {
-        self.check_key_encoding(&listname)?;
+        self.check_key_encoding(listname)?;
         Ok(self.data.get(listname).map(|list| list.read().len()))
     }
     pub fn list_cloned(&self, listname: &[u8], count: usize) -> EncodingResult<Option<Vec<Data>>> {
         self.check_key_encoding(listname)?;
-        Ok(self.data.get(listname).map(|list| {
-            list.read()
-                .iter()
-                .map(|element| element.clone())
-                .take(count)
-                .collect()
-        }))
+        Ok(self
+            .data
+            .get(listname)
+            .map(|list| list.read().iter().cloned().take(count).collect()))
     }
     pub fn list_cloned_full(&self, listname: &[u8]) -> EncodingResult<Option<Vec<Data>>> {
         self.check_key_encoding(listname)?;
         Ok(self
             .data
             .get(listname)
-            .map(|list| list.read().iter().map(|element| element.clone()).collect()))
+            .map(|list| list.read().iter().cloned().collect()))
     }
 }
 

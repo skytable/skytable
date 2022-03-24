@@ -31,7 +31,7 @@ use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::protocol::{
-    element::UnsafeElement, iter::AnyArrayIter, responses, PipelineQuery, SimpleQuery, UnsafeSlice,
+    element::UnsafeElement, iter::AnyArrayIter, responses, PipelineQuery, SimpleQuery,
 };
 use crate::queryengine::parser::Entity;
 use crate::{actions, admin};
@@ -112,12 +112,10 @@ action! {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 unsafe fn get_iter<'a>(buf: &'a UnsafeElement) -> AnyArrayIter<'a> {
-    let bufref: &'a Box<[UnsafeSlice]>;
-    let iter;
-
     // this is the boxed slice
-    bufref = {
+    let bufref = {
         // SAFETY: execute_simple is called by execute_query which in turn is called
         // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
         // ensuring that the source buffer exists as long as the connection does
@@ -128,7 +126,7 @@ unsafe fn get_iter<'a>(buf: &'a UnsafeElement) -> AnyArrayIter<'a> {
         }
     };
     // this is our final iter
-    iter = {
+    let iter = {
         // SAFETY: Again, this is guaranteed to be valid because the `con` is valid
         AnyArrayIter::new(bufref.iter())
     };

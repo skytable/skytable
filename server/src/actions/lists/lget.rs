@@ -49,10 +49,9 @@ impl Range {
         self.stop = Some(stop);
     }
     pub fn into_vec(self, slice: &[Data]) -> Option<Vec<Data>> {
-        match slice.get(self.start..self.stop.unwrap_or(slice.len())) {
-            Some(slc) => Some(slc.iter().cloned().collect()),
-            None => None,
-        }
+        slice
+            .get(self.start..self.stop.unwrap_or(slice.len()))
+            .map(|slc| slc.to_vec())
     }
 }
 

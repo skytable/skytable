@@ -37,7 +37,7 @@ action!(
     fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
-        let kve = handle.get_table_with::<KVE>()?;
+        let kve = handle.get_table_with::<KVEBlob>()?;
         let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.get_encoding_tuple()](&act);
         if compiler::likely(encoding_is_okay) {
             if registry::state_okay() {

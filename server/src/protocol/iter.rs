@@ -111,16 +111,18 @@ impl<'a> AnyArrayIter<'a> {
         Bytes::copy_from_slice(self.next_unchecked())
     }
     pub fn map_next<T>(&mut self, cls: fn(&[u8]) -> T) -> Option<T> {
-        self.next().map(|v| cls(v))
+        self.next().map(cls)
     }
     pub fn next_string_owned(&mut self) -> Option<String> {
-        self.map_next(|v| String::from_utf8_lossy(&v).to_string())
+        self.map_next(|v| String::from_utf8_lossy(v).to_string())
     }
     pub unsafe fn into_inner(self) -> Iter<'a, UnsafeSlice> {
         self.iter
     }
 }
 
+/// # Safety
+/// Caller must ensure validity of the slice returned
 pub unsafe trait DerefUnsafeSlice {
     unsafe fn deref_slice(&self) -> &[u8];
 }

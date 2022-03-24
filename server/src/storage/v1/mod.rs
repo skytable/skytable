@@ -551,6 +551,7 @@ mod de {
         Some(list)
     }
 
+    #[allow(clippy::needless_return)]
     pub(super) unsafe fn transmute_len(start_ptr: *const u8) -> usize {
         little_endian! {{
             return self::transmute_len_le(start_ptr);

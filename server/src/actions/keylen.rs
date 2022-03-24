@@ -33,7 +33,7 @@ action!(
     fn keylen(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         ensure_length(act.len(), |len| len == 1)?;
         let res: Option<usize> = {
-            let reader = handle.get_table_with::<KVE>()?;
+            let reader = handle.get_table_with::<KVEBlob>()?;
             unsafe {
                 // UNSAFE(@ohsayan): this is completely safe as we've already checked
                 // the number of arguments is one

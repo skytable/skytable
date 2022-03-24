@@ -414,9 +414,11 @@ impl<'de> Visitor<'de> for AuthSettingsVisitor {
     where
         E: de::Error,
     {
-        AuthkeyWrapper::try_new(value).ok_or(E::custom(
-            "Invalid value for authkey. must be 40 ASCII characters with nonzero first char",
-        ))
+        AuthkeyWrapper::try_new(value).ok_or_else(|| {
+            E::custom(
+                "Invalid value for authkey. must be 40 ASCII characters with nonzero first char",
+            )
+        })
     }
 }
 

@@ -34,21 +34,20 @@ action!(
     fn mset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
         let howmany = act.len();
         ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
-        let kve = handle.get_table_with::<KVE>()?;
+        let kve = handle.get_table_with::<KVEBlob>()?;
         let encoding_is_okay = ENCODING_LUT_ITER_PAIR[kve.get_encoding_tuple()](&act);
         if compiler::likely(encoding_is_okay) {
-            let done_howmany: Option<usize>;
-            if registry::state_okay() {
+            let done_howmany: Option<usize> = if registry::state_okay() {
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     didmany += kve
                         .set_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val))
                         as usize;
                 }
-                done_howmany = Some(didmany);
+                Some(didmany)
             } else {
-                done_howmany = None;
-            }
+                None
+            };
             if let Some(done_howmany) = done_howmany {
                 con.write_response(done_howmany as usize).await?;
             } else {

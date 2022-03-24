@@ -369,7 +369,7 @@ fn parse_dbtest_func_attrs(attrs: AttributeArgs) -> DBTestFunctionConfig {
     let mut fcfg = DBTestFunctionConfig::default();
     attrs.iter().for_each(|arg| {
         if let syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) = arg {
-            let (ident, lit, span) = util::get_metanamevalue_data(&namevalue);
+            let (ident, lit, span) = util::get_metanamevalue_data(namevalue);
             parse_dbtest_func_args(&ident, lit, span, &mut fcfg)
         }
     });
@@ -381,6 +381,5 @@ pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = syn::parse_macro_input!(args as AttributeArgs);
     let mut rng = rand::thread_rng();
     let fcfg = parse_dbtest_func_attrs(attrs);
-    let func = generate_dbtest(input, &mut rng, &fcfg).unwrap();
-    func
+    generate_dbtest(input, &mut rng, &fcfg).unwrap()
 }

@@ -36,7 +36,7 @@ action! {
             act.next_unchecked()
         };
         if registry::state_okay() {
-            let kve = handle.get_table_with::<KVE>()?;
+            let kve = handle.get_table_with::<KVEBlob>()?;
             let tsymbol = kve.get_value_tsymbol();
             match kve.pop(key) {
                 Ok(Some(val)) => unsafe {

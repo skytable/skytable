@@ -42,7 +42,7 @@ action!(
         ensure_length(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {
-                let writer = handle.get_table_with::<KVE>()?;
+                let writer = handle.get_table_with::<KVEBlob>()?;
                 match unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments

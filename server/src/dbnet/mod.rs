@@ -167,6 +167,7 @@ macro_rules! bindaddr {
 /// - The `Multi` variant holds both an `SslListener` and a `Listener`
 ///     This variant enables listening to both secure and insecure sockets at the same time
 ///     asynchronously
+#[allow(clippy::large_enum_variant)]
 pub enum MultiListener {
     SecureOnly(SslListener),
     InsecureOnly(Listener),

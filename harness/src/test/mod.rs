@@ -65,12 +65,9 @@ pub fn run_test() -> HarnessResult<()> {
 }
 
 fn append_target(args: &mut Vec<String>) {
-    match util::get_var(util::VAR_TARGET) {
-        Some(target) => {
-            args.push("--target".into());
-            args.push(target);
-        }
-        None => {}
+    if let Some(target) = util::get_var(util::VAR_TARGET) {
+        args.push("--target".into());
+        args.push(target);
     }
 }
 

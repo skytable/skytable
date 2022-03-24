@@ -62,15 +62,10 @@ pub async fn run(
 ) -> Result<Corestore, String> {
     // Intialize the broadcast channel
     let (signal, _) = broadcast::channel(1);
-    let engine;
-    match &snapshot {
-        SnapshotConfig::Enabled(SnapshotPref { atmost, .. }) => {
-            engine = SnapshotEngine::new(*atmost);
-        }
-        SnapshotConfig::Disabled => {
-            engine = SnapshotEngine::new_disabled();
-        }
-    }
+    let engine = match &snapshot {
+        SnapshotConfig::Enabled(SnapshotPref { atmost, .. }) => SnapshotEngine::new(*atmost),
+        SnapshotConfig::Disabled => SnapshotEngine::new_disabled(),
+    };
     let engine = Arc::new(engine);
     // restore data
     services::restore_data(restore_filepath)

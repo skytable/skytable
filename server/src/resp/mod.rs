@@ -24,6 +24,8 @@
  *
 */
 
+#![allow(clippy::needless_lifetimes)]
+
 //! Utilities for generating responses, which are only used by the `server`
 //!
 use crate::corestore::buffers::Integer64;

@@ -38,7 +38,7 @@ action! {
     /// `Nil`, which is code `1`
     fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         ensure_length(act.len(), |len| len != 0)?;
-        let kve = handle.get_table_with::<KVE>()?;
+        let kve = handle.get_table_with::<KVEBlob>()?;
         if registry::state_okay() {
             // guarantee one check: consistency
             let key_encoder = kve.get_key_encoder();

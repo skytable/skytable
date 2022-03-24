@@ -39,12 +39,9 @@ use zip::{write::FileOptions, ZipWriter};
 /// Returns the bundle name
 pub fn get_bundle_name() -> String {
     let mut filename = format!("sky-bundle-v{VERSION}");
-    match util::get_var(util::VAR_ARTIFACT) {
-        Some(artifact) => {
-            filename.push('-');
-            filename.push_str(&artifact);
-        }
-        None => {}
+    if let Some(artifact) = util::get_var(util::VAR_ARTIFACT) {
+        filename.push('-');
+        filename.push_str(&artifact);
     }
     filename.push_str(".zip");
     filename

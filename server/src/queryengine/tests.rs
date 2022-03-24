@@ -38,7 +38,7 @@ mod parser_ddl_tests {
         };
     }
     fn parse_table_args_test(input: Vec<&'static [u8]>) -> Result<(Entity<'_>, u8), &'static [u8]> {
-        super::parser::parse_table_args(&input[0], &input[1])
+        super::parser::parse_table_args(input[0], input[1])
     }
     use crate::protocol::responses;
     #[test]

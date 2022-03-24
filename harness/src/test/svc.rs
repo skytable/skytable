@@ -29,6 +29,8 @@ use crate::{
     HarnessError, HarnessResult,
 };
 use skytable::Connection;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
     io::{Error as IoError, ErrorKind},
     path::Path,

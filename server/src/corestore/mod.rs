@@ -231,11 +231,10 @@ impl Corestore {
         let entity = entity.into_owned();
         // first lock the global flush state
         let flush_lock = registry::lock_flush_state();
-        let ret;
-        match entity {
+        let ret = match entity {
             // Important: create table <tblname> is only ks
             OwnedEntity::Single(tblid) | OwnedEntity::Partial(tblid) => {
-                ret = match &self.estate.ks {
+                match &self.estate.ks {
                     Some((_, ks)) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
@@ -251,10 +250,10 @@ impl Corestore {
                         }
                     }
                     None => Err(DdlError::DefaultNotFound),
-                };
+                }
             }
             OwnedEntity::Full(ksid, tblid) => {
-                ret = match self.store.get_keyspace_atomic_ref(&ksid) {
+                match self.store.get_keyspace_atomic_ref(&ksid) {
                     Some(kspace) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
@@ -272,7 +271,7 @@ impl Corestore {
                     None => Err(DdlError::ObjectNotFound),
                 }
             }
-        }
+        };
         // free the global flush lock
         drop(flush_lock);
         ret

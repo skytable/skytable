@@ -100,20 +100,20 @@ impl AuthProvider {
             // 'root' user in test mode
             slf.authmap.true_if_insert(
                 AuthID::try_from_slice(testsuite_data::TESTSUITE_ROOT_USER).unwrap(),
-                Authkey::from([
+                [
                     172, 143, 117, 169, 158, 156, 33, 106, 139, 107, 20, 106, 91, 219, 34, 157, 98,
                     147, 142, 91, 222, 238, 205, 120, 72, 171, 90, 218, 147, 2, 75, 67, 44, 108,
                     185, 124, 55, 40, 156, 252,
-                ]),
+                ],
             );
             // 'testuser' user in test mode
             slf.authmap.true_if_insert(
                 AuthID::try_from_slice(testsuite_data::TESTSUITE_TEST_USER).unwrap(),
-                Authkey::from([
+                [
                     172, 183, 60, 221, 53, 240, 231, 217, 113, 112, 98, 16, 109, 62, 235, 95, 184,
                     107, 130, 139, 43, 197, 40, 31, 176, 127, 185, 22, 172, 124, 39, 225, 124, 71,
                     193, 115, 176, 162, 239, 93,
-                ]),
+                ],
             );
         }
         slf

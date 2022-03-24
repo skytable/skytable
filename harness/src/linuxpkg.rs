@@ -27,7 +27,6 @@
 use crate::build::{self, BuildMode};
 use crate::{util, HarnessResult};
 use libsky::VERSION;
-use std::process::Command;
 
 /// The Linux package type
 #[derive(Copy, Clone)]
@@ -46,12 +45,9 @@ impl LinuxPackageType {
     /// Returns the file name for the package
     pub fn get_file_name(&self) -> String {
         let mut filename = format!("skytable-v{VERSION}");
-        match util::get_var(util::VAR_ARTIFACT) {
-            Some(artifact) => {
-                filename.push('-');
-                filename.push_str(&artifact);
-            }
-            None => {}
+        if let Some(artifact) = util::get_var(util::VAR_ARTIFACT) {
+            filename.push('-');
+            filename.push_str(&artifact);
         }
         filename.push_str(&self.get_extension());
         filename
@@ -78,12 +74,9 @@ pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
             util::handle_child("install cargo-deb", cmd!("cargo", "install", "cargo-deb"))?;
             // assemble the command
             let mut build_args = vec!["deb".to_owned()];
-            match util::get_var(util::VAR_TARGET) {
-                Some(t) => {
-                    build_args.push("--target".to_string());
-                    build_args.push(t);
-                }
-                None => {}
+            if let Some(t) = util::get_var(util::VAR_TARGET) {
+                build_args.push("--target".to_string());
+                build_args.push(t);
             }
             build_args.extend([
                 "--no-build".to_owned(),
@@ -91,8 +84,7 @@ pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
                 "--output".to_owned(),
                 filename.to_owned(),
             ]);
-            let mut command = Command::new("cargo");
-            command.args(build_args);
+            let command = util::assemble_command_from_slice(build_args);
             util::handle_child("build dpkg", command)?;
         }
     }

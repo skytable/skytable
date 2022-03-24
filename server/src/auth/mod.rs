@@ -76,7 +76,7 @@ action! {
                 Ok(())
             }
             AUTH_LOGOUT => {
-                ensure_boolean_or_aerr(iter.len() == 0)?; // nothing else
+                ensure_boolean_or_aerr(iter.is_empty())?; // nothing else
                 auth.provider_mut().logout()?;
                 auth.swap_executor_to_anonymous();
                 con.write_response(groups::OKAY).await?;
@@ -95,12 +95,12 @@ action! {
         }
     }
     fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        ensure_boolean_or_aerr(iter.len() == 0)?;
+        ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
         con.write_response(StringWrapper(auth.provider().whoami()?)).await?;
         Ok(())
     }
     fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        ensure_boolean_or_aerr(iter.len() == 0)?;
+        ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
         let usernames = auth.provider().collect_usernames()?;
         let mut array_writer = unsafe {
             // The symbol is definitely correct, obvious from this context
