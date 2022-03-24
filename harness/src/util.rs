@@ -27,6 +27,7 @@
 use crate::build::BuildMode;
 use crate::{HarnessError, HarnessResult};
 use std::env;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 pub type ExitCode = Option<i32>;
@@ -54,6 +55,13 @@ pub fn get_child(desc: impl ToString, mut input: Command) -> HarnessResult<Child
             "Failed to spawn process for `{desc}` with error: {e}"
         ))),
     }
+}
+
+pub fn assemble_command_from_slice<T: AsRef<OsStr>>(commands: impl AsRef<[T]>) -> Command {
+    let mut commands = commands.as_ref().iter();
+    let mut c = Command::new(commands.next().unwrap());
+    c.args(commands);
+    c
 }
 
 fn check_child_err(desc: impl ToString, output: Output) -> HarnessResult<()> {

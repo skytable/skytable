@@ -25,8 +25,7 @@
 */
 
 use super::{BGSave, Configset, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4};
-
-pub(super) use libsky::TResult;
+use crate::ROOT_DIR;
 use std::fs;
 
 // server tests
@@ -336,15 +335,9 @@ fn tls_settings_fail_with_missing_required_values() {
 }
 
 /// Gets a `toml` file from `WORKSPACEROOT/examples/config-files`
-fn get_toml_from_examples_dir(filename: &str) -> TResult<String> {
-    use std::path;
-    let curdir = path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspaceroot = curdir.ancestors().nth(1).unwrap();
-    let mut fileloc = path::PathBuf::from(workspaceroot);
-    fileloc.push("examples");
-    fileloc.push("config-files");
-    fileloc.push(filename);
-    Ok(fs::read_to_string(fileloc)?)
+fn get_toml_from_examples_dir(filename: &str) -> String {
+    let path = format!("{ROOT_DIR}examples/config-files/{filename}");
+    fs::read_to_string(path).unwrap()
 }
 
 mod cfg_file_tests {
@@ -364,7 +357,7 @@ mod cfg_file_tests {
 
     #[test]
     fn config_file_okay() {
-        let file = get_toml_from_examples_dir("template.toml").unwrap();
+        let file = get_toml_from_examples_dir("template.toml");
         let toml = toml::from_str(&file).unwrap();
         let cfg_from_file = cfgfile::from_file(toml);
         assert!(cfg_from_file.is_mutated());
@@ -389,14 +382,14 @@ mod cfg_file_tests {
 
     #[test]
     fn test_config_file_ok() {
-        let file = get_toml_from_examples_dir("skyd.toml").unwrap();
+        let file = get_toml_from_examples_dir("skyd.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(cfg.cfg, ConfigurationSet::default());
     }
 
     #[test]
     fn test_config_file_noart() {
-        let file = get_toml_from_examples_dir("secure-noart.toml").unwrap();
+        let file = get_toml_from_examples_dir("secure-noart.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -414,7 +407,7 @@ mod cfg_file_tests {
 
     #[test]
     fn test_config_file_ipv6() {
-        let file = get_toml_from_examples_dir("ipv6.toml").unwrap();
+        let file = get_toml_from_examples_dir("ipv6.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -435,7 +428,7 @@ mod cfg_file_tests {
 
     #[test]
     fn test_config_file_template() {
-        let file = get_toml_from_examples_dir("template.toml").unwrap();
+        let file = get_toml_from_examples_dir("template.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -461,14 +454,14 @@ mod cfg_file_tests {
 
     #[test]
     fn test_config_file_bad_bgsave_section() {
-        let file = get_toml_from_examples_dir("badcfg2.toml").unwrap();
+        let file = get_toml_from_examples_dir("badcfg2.toml");
         let cfg = cfgset_from_toml_str(file);
         assert!(cfg.is_err());
     }
 
     #[test]
     fn test_config_file_custom_bgsave() {
-        let file = get_toml_from_examples_dir("withcustombgsave.toml").unwrap();
+        let file = get_toml_from_examples_dir("withcustombgsave.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -490,7 +483,7 @@ mod cfg_file_tests {
          * This test demonstrates a case where the user just said that BGSAVE is enabled.
          * In that case, we will default to the 120 second duration
          */
-        let file = get_toml_from_examples_dir("bgsave-justenabled.toml").unwrap();
+        let file = get_toml_from_examples_dir("bgsave-justenabled.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -512,7 +505,7 @@ mod cfg_file_tests {
          * This test demonstrates a case where the user just gave the value for every
          * In that case, it means BGSAVE is enabled and set to `every` seconds
          */
-        let file = get_toml_from_examples_dir("bgsave-justevery.toml").unwrap();
+        let file = get_toml_from_examples_dir("bgsave-justevery.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,
@@ -530,7 +523,7 @@ mod cfg_file_tests {
 
     #[test]
     fn test_config_file_snapshot() {
-        let file = get_toml_from_examples_dir("snapshot.toml").unwrap();
+        let file = get_toml_from_examples_dir("snapshot.toml");
         let cfg = cfgset_from_toml_str(file).unwrap();
         assert_eq!(
             cfg.cfg,

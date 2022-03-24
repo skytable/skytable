@@ -35,7 +35,7 @@ pub mod terminal {
         if stdout.set_color(ColorSpec::new().set_fg(color)).is_err() {
             return Err(fmt::Error);
         }
-        if write!(&mut stdout, "{}", item).is_err() {
+        if writeln!(&mut stdout, "{}", item).is_err() {
             return Err(fmt::Error);
         }
         if stdout.reset().is_err() {

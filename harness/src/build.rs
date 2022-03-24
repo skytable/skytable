@@ -26,6 +26,8 @@
 
 use crate::util;
 use crate::HarnessResult;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{path::PathBuf, process::Command};
 use zip::CompressionMethod;
 
