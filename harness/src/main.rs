@@ -48,6 +48,8 @@ fn main() {
     Builder::new()
         .parse_filters(&env::var("SKYHARNESS_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
+    // avoid verbose logging
+    env::set_var("SKY_LOG", "error");
     if let Err(e) = runner() {
         error!("harness failed with: {}", e);
         process::exit(0x01);

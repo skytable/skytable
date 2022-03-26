@@ -31,7 +31,6 @@
 //!
 //! This contains modules which are shared by both the `cli` and the `server` modules
 
-pub mod util;
 use std::error::Error;
 /// A generic result
 pub type TResult<T> = Result<T, Box<dyn Error>>;

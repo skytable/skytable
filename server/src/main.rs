@@ -129,9 +129,9 @@ fn check_args_and_get_cfg() -> (ConfigurationSet, Option<String>) {
     match config::get_config() {
         Ok(cfg) => {
             if cfg.is_artful() {
-                println!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
+                log::info!("Skytable v{} | {}\n{}", VERSION, URL, TEXT);
             } else {
-                println!("Skytable v{} | {}", VERSION, URL);
+                log::info!("Skytable v{} | {}", VERSION, URL);
             }
             if cfg.is_custom() {
                 log::info!("Using settings from supplied configuration");

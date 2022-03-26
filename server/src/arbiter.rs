@@ -34,7 +34,6 @@ use crate::diskstore::flock::FileLock;
 use crate::services;
 use crate::storage::v1::sengine::SnapshotEngine;
 use crate::util::os::TerminationSignal;
-use libsky::util::terminal;
 use std::sync::Arc;
 use std::thread::sleep;
 use tokio::{
@@ -193,7 +192,7 @@ pub fn finalize_shutdown(corestore: Corestore, pid_file: FileLock) {
     });
     okay &= services::pre_shutdown_cleanup(pid_file, Some(corestore.get_store()));
     if okay {
-        terminal::write_success("Goodbye :)").unwrap()
+        log::info!("Goodbye :)");
     } else {
         log::error!("Didn't terminate successfully");
         crate::exit_error();
