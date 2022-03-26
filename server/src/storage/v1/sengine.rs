@@ -51,6 +51,7 @@ pub static SNAP_MATCH: Lazy<Regex, fn() -> Regex> = Lazy::new(|| {
     Regex::new("^\\d{4}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[01])(-)(?:(?:([01]?\\d|2[0-3]))?([0-5]?\\d))?([0-5]?\\d)$").unwrap()
 });
 
+#[derive(Debug)]
 pub enum SnapshotEngineError {
     Io(IoError),
     Engine(&'static str),

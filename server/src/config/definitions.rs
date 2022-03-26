@@ -202,6 +202,21 @@ impl PortConfig {
     pub const fn secure_only(&self) -> bool {
         matches!(self, Self::SecureOnly { .. })
     }
+    pub fn get_description(&self) -> String {
+        match self {
+            Self::Multi { host, port, ssl } => {
+                format!(
+                    "skyhash://{host}:{port} and skyhash-secure://{host}:{tlsport}",
+                    tlsport = ssl.get_port()
+                )
+            }
+            Self::SecureOnly {
+                host,
+                ssl: SslOpts { port, .. },
+            } => format!("skyhash-secure://{host}:{port}"),
+            Self::InsecureOnly { host, port } => format!("skyhash://{host}:{port}"),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -220,6 +235,9 @@ impl SslOpts {
             port,
             passfile,
         }
+    }
+    pub const fn get_port(&self) -> u16 {
+        self.port
     }
 }
 

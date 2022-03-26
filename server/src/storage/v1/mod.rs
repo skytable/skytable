@@ -64,6 +64,7 @@ use std::io::Write;
 mod macros;
 // endof do not mess
 pub mod bytemarks;
+pub mod error;
 pub mod flush;
 pub mod interface;
 pub mod iter;

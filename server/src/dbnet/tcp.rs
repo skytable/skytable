@@ -24,22 +24,22 @@
  *
 */
 
-use crate::dbnet::connection::ConnectionHandler;
-use crate::dbnet::connection::ExecutorFn;
-use crate::dbnet::BaseListener;
-use crate::dbnet::Terminator;
-use crate::protocol;
+use crate::{
+    dbnet::{
+        connection::{ConnectionHandler, ExecutorFn},
+        BaseListener, Terminator,
+    },
+    protocol, IoResult,
+};
 use bytes::BytesMut;
-use core::cell::Cell;
-use libsky::TResult;
 use libsky::BUF_CAP;
-pub use protocol::ParseResult;
-pub use protocol::Query;
-use std::time::Duration;
-use tokio::io::AsyncWrite;
-use tokio::io::BufWriter;
-use tokio::net::TcpStream;
-use tokio::time;
+pub use protocol::{ParseResult, Query};
+use std::{cell::Cell, time::Duration};
+use tokio::{
+    io::{AsyncWrite, BufWriter},
+    net::TcpStream,
+    time,
+};
 
 pub trait BufferedSocketStream: AsyncWrite {}
 
@@ -112,7 +112,7 @@ impl Listener {
         }
     }
     /// Accept an incoming connection
-    async fn accept(&mut self) -> TResult<TcpStream> {
+    async fn accept(&mut self) -> IoResult<TcpStream> {
         let backoff = TcpBackoff::new();
         loop {
             match self.base.listener.accept().await {
@@ -121,7 +121,7 @@ impl Listener {
                 Err(e) => {
                     if backoff.should_disconnect() {
                         // Too many retries, goodbye user
-                        return Err(e.into());
+                        return Err(e);
                     }
                 }
             }
@@ -130,7 +130,7 @@ impl Listener {
         }
     }
     /// Run the server
-    pub async fn run(&mut self) -> TResult<()> {
+    pub async fn run(&mut self) -> IoResult<()> {
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it

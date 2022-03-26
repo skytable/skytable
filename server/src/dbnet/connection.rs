@@ -35,36 +35,32 @@
 //! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
 //! respones in compliance with the Skyhash protocol.
 
-use super::tcp::Connection;
-use crate::actions::ActionError;
-use crate::actions::ActionResult;
-use crate::auth::{self, AuthProvider};
-use crate::corestore::buffers::Integer64;
-use crate::corestore::Corestore;
-use crate::dbnet::connection::prelude::FutureResult;
-use crate::dbnet::tcp::BufferedSocketStream;
-use crate::dbnet::Terminator;
-use crate::protocol;
-use crate::protocol::responses;
-use crate::protocol::ParseError;
-use crate::protocol::Query;
-use crate::queryengine;
-use crate::resp::Writable;
-use crate::IoResult;
-use bytes::Buf;
-use bytes::BytesMut;
-use libsky::TResult;
-use std::future::Future;
-use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::marker::PhantomData;
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
-use tokio::sync::mpsc;
-use tokio::sync::Semaphore;
+use crate::{
+    actions::{ActionError, ActionResult},
+    auth::{self, AuthProvider},
+    corestore::{buffers::Integer64, Corestore},
+    dbnet::{
+        connection::prelude::FutureResult,
+        tcp::{BufferedSocketStream, Connection},
+        Terminator,
+    },
+    protocol::{self, responses, ParseError, Query},
+    queryengine,
+    resp::Writable,
+    IoResult,
+};
+use bytes::{Buf, BytesMut};
+use std::{
+    future::Future,
+    io::{Error as IoError, ErrorKind},
+    marker::PhantomData,
+    pin::Pin,
+    sync::Arc,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
+    sync::{mpsc, Semaphore},
+};
 
 pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
 type QueryWithAdvance = (Query, usize);
@@ -451,7 +447,7 @@ where
             _marker: PhantomData,
         }
     }
-    pub async fn run(&mut self) -> TResult<()> {
+    pub async fn run(&mut self) -> IoResult<()> {
         while !self.terminator.is_termination_signal() {
             let try_df = tokio::select! {
                 tdf = self.con.read_query() => tdf,
@@ -469,7 +465,7 @@ where
                             self.con.close_conn_with_error(e).await?;
                         }
                         Err(ActionError::IoError(e)) => {
-                            return Err(e.into());
+                            return Err(e);
                         }
                     }
                     // this is only when we clear the buffer. since execute_query is not called
@@ -486,10 +482,10 @@ where
                 #[cfg(windows)]
                 Err(e) => match e.kind() {
                     ErrorKind::ConnectionReset => return Ok(()),
-                    _ => return Err(e.into()),
+                    _ => return Err(e),
                 },
                 #[cfg(not(windows))]
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             }
         }
         Ok(())

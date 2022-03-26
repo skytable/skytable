@@ -24,18 +24,20 @@
  *
 */
 
-use crate::auth::AuthProvider;
-use crate::config::ConfigurationSet;
-use crate::config::SnapshotConfig;
-use crate::config::SnapshotPref;
-use crate::corestore::Corestore;
-use crate::dbnet::{self, Terminator};
-use crate::diskstore::flock::FileLock;
-use crate::services;
-use crate::storage::v1::sengine::SnapshotEngine;
-use crate::util::os::TerminationSignal;
-use std::sync::Arc;
-use std::thread::sleep;
+use crate::{
+    auth::AuthProvider,
+    config::{ConfigurationSet, SnapshotConfig, SnapshotPref},
+    corestore::Corestore,
+    dbnet::{self, Terminator},
+    diskstore::flock::FileLock,
+    services,
+    storage::v1::sengine::SnapshotEngine,
+    util::{
+        error::{Error, SkyResult},
+        os::TerminationSignal,
+    },
+};
+use std::{sync::Arc, thread::sleep};
 use tokio::{
     sync::{
         broadcast,
@@ -58,7 +60,7 @@ pub async fn run(
         ..
     }: ConfigurationSet,
     restore_filepath: Option<String>,
-) -> Result<Corestore, String> {
+) -> SkyResult<Corestore> {
     // Intialize the broadcast channel
     let (signal, _) = broadcast::channel(1);
     let engine = match &snapshot {
@@ -68,14 +70,11 @@ pub async fn run(
     let engine = Arc::new(engine);
     // restore data
     services::restore_data(restore_filepath)
-        .map_err(|e| format!("Failed to restore data from backup with error: {}", e))?;
+        .map_err(|e| Error::ioerror_extra(e, "restoring data from backup"))?;
     // init the store
-    let db = Corestore::init_with_snapcfg(engine.clone())
-        .map_err(|e| format!("Error while initializing database: {}", e))?;
+    let db = Corestore::init_with_snapcfg(engine.clone())?;
     // refresh the snapshotengine state
-    engine
-        .parse_dir()
-        .map_err(|e| format!("Failed to init snapshot engine: {}", e))?;
+    engine.parse_dir()?;
     let auth_provider = match auth.origin_key {
         Some(key) => {
             let authref = db.get_store().setup_auth();
@@ -101,7 +100,8 @@ pub async fn run(
     let mut server =
         dbnet::connect(ports, maxcon, db.clone(), auth_provider, signal.clone()).await?;
 
-    let termsig = TerminationSignal::init().map_err(|e| e.to_string())?;
+    let termsig =
+        TerminationSignal::init().map_err(|e| Error::ioerror_extra(e, "binding to signals"))?;
     tokio::select! {
         _ = server.run_server() => {},
         _ = termsig => {}

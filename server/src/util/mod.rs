@@ -28,6 +28,7 @@
 mod macros;
 pub mod compiler;
 pub mod os;
+pub mod error;
 use crate::actions::{ActionError, ActionResult};
 use crate::protocol::responses::groups;
 use core::fmt::Debug;

@@ -32,9 +32,8 @@ use crate::corestore::{
 use crate::queryengine::parser::{Entity, OwnedEntity};
 use crate::registry;
 use crate::storage;
-use crate::storage::v1::sengine::SnapshotEngine;
+use crate::storage::v1::{error::StorageEngineResult, sengine::SnapshotEngine};
 use crate::util::Unwrappable;
-use crate::IoResult;
 use core::borrow::Borrow;
 use core::hash::Hash;
 pub use htable::Data;
@@ -103,7 +102,7 @@ pub struct Corestore {
 impl Corestore {
     /// This is the only function you'll ever need to either create a new database instance
     /// or restore from an earlier instance
-    pub fn init_with_snapcfg(sengine: Arc<SnapshotEngine>) -> IoResult<Self> {
+    pub fn init_with_snapcfg(sengine: Arc<SnapshotEngine>) -> StorageEngineResult<Self> {
         let store = storage::unflush::read_full()?;
         Ok(Self::default_with_store(store, sengine))
     }

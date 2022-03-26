@@ -34,12 +34,11 @@
 
 use crate::corestore::memstore::Memstore;
 use crate::corestore::memstore::ObjectID;
+use crate::storage::v1::error::{StorageEngineError, StorageEngineResult};
 use crate::IoResult;
 use core::ptr;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::Error as IoError;
-use std::io::ErrorKind;
 use std::io::Write;
 
 pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;
@@ -70,10 +69,10 @@ pub(super) fn raw_generate_preload<W: Write>(w: &mut W, store: &Memstore) -> IoR
 }
 
 /// Reads the preload file and returns a set
-pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> {
+pub(super) fn read_preload_raw(preload: Vec<u8>) -> StorageEngineResult<HashSet<ObjectID>> {
     if preload.len() < 16 {
         // nah, this is a bad disk file
-        return Err(IoError::from(ErrorKind::UnexpectedEof));
+        return Err(StorageEngineError::corrupted_preload());
     }
     // first read in the meta segment
     unsafe {
@@ -85,21 +84,10 @@ pub(super) fn read_preload_raw(preload: Vec<u8>) -> IoResult<HashSet<ObjectID>> 
             META_SEGMENT_LE => {
                 super::iter::endian_set_little();
             }
-            _ => return Err(IoError::from(ErrorKind::Unsupported)),
+            _ => return Err(StorageEngineError::BadMetadata("preload".into())),
         }
     }
     // all checks complete; time to decode
-    let ret = super::de::deserialize_set_ctype(&preload[1..]);
-    match ret {
-        Some(ret) => Ok(ret),
-        _ => Err(IoError::from(ErrorKind::InvalidData)),
-    }
-}
-
-/// Reads the partfile and returns a set
-pub fn read_partfile_raw(partfile: Vec<u8>) -> IoResult<LoadedPartfile> {
-    match super::de::deserialize_set_ctype_bytemark(&partfile) {
-        Some(s) => Ok(s),
-        None => Err(IoError::from(ErrorKind::InvalidData)),
-    }
+    super::de::deserialize_set_ctype(&preload[1..])
+        .ok_or_else(StorageEngineError::corrupted_preload)
 }

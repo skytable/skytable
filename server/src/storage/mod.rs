@@ -68,9 +68,8 @@ in practice).
 pub mod v1;
 
 pub mod unflush {
-    use crate::corestore::memstore::Memstore;
-    use crate::IoResult;
-    pub fn read_full() -> IoResult<Memstore> {
+    use crate::{corestore::memstore::Memstore, storage::v1::error::StorageEngineResult};
+    pub fn read_full() -> StorageEngineResult<Memstore> {
         super::v1::unflush::read_full()
     }
 }

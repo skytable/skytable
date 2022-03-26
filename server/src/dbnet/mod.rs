@@ -40,17 +40,19 @@
 //!
 
 use self::tcp::Listener;
-use crate::auth::AuthProvider;
-use crate::config::PortConfig;
-use crate::config::SslOpts;
-use crate::corestore::Corestore;
-use libsky::TResult;
-use std::net::IpAddr;
-use std::sync::Arc;
+use crate::{
+    auth::AuthProvider,
+    config::{PortConfig, SslOpts},
+    corestore::Corestore,
+    util::error::{Error, SkyResult},
+    IoResult,
+};
+use std::{net::IpAddr, sync::Arc};
 use tls::SslListener;
-use tokio::net::TcpListener;
-use tokio::sync::Semaphore;
-use tokio::sync::{broadcast, mpsc};
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc, Semaphore},
+};
 pub mod connection;
 #[macro_use]
 mod macros;
@@ -117,11 +119,11 @@ impl BaseListener {
         port: u16,
         semaphore: Arc<Semaphore>,
         signal: broadcast::Sender<()>,
-    ) -> Result<Self, String> {
+    ) -> SkyResult<Self> {
         let (terminate_tx, terminate_rx) = mpsc::channel(1);
         let listener = TcpListener::bind((host, port))
             .await
-            .map_err(|e| format!("Failed to bind to port {port} with error {e}"))?;
+            .map_err(|e| Error::ioerror_extra(e, format!("binding to port {port}")))?;
         Ok(Self {
             db: db.clone(),
             auth,
@@ -145,18 +147,6 @@ impl BaseListener {
     }
 }
 
-/// This macro returns the bind address of a listener
-///
-/// We were just very lazy, so we just used a macro instead of a member function
-macro_rules! bindaddr {
-    ($base:ident) => {
-        $base
-            .listener
-            .local_addr()
-            .map_err(|e| format!("Failed to get bind address: {}", e))?
-    };
-}
-
 /// Multiple Listener Interface
 ///
 /// A `MultiListener` is an abstraction over an `SslListener` or a `Listener` to facilitate
@@ -176,48 +166,35 @@ pub enum MultiListener {
 
 impl MultiListener {
     /// Create a new `InsecureOnly` listener
-    pub fn new_insecure_only(base: BaseListener) -> Result<Self, String> {
-        log::info!("Server started on: skyhash://{}", bindaddr!(base));
-        Ok(MultiListener::InsecureOnly(Listener::new(base)))
+    pub fn new_insecure_only(base: BaseListener) -> Self {
+        MultiListener::InsecureOnly(Listener::new(base))
     }
     /// Create a new `SecureOnly` listener
-    pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> Result<Self, String> {
-        let bindaddr = bindaddr!(base);
-        let slf = MultiListener::SecureOnly(
-            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base, ssl.passfile)
-                .map_err(|e| format!("Couldn't bind to secure port: {}", e))?,
-        );
-        log::info!("Server started on: skyhash-secure://{}", bindaddr);
-        Ok(slf)
+    pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> SkyResult<Self> {
+        let listener =
+            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base, ssl.passfile)?;
+        Ok(MultiListener::SecureOnly(listener))
     }
     /// Create a new `Multi` listener that has both a secure and an insecure listener
     pub async fn new_multi(
         ssl_base_listener: BaseListener,
         tcp_base_listener: BaseListener,
         ssl: SslOpts,
-    ) -> Result<Self, String> {
-        let sec_bindaddr = bindaddr!(ssl_base_listener);
-        let insec_binaddr = bindaddr!(tcp_base_listener);
+    ) -> SkyResult<Self> {
         let secure_listener = SslListener::new_pem_based_ssl_connection(
             ssl.key,
             ssl.chain,
             ssl_base_listener,
             ssl.passfile,
-        )
-        .map_err(|e| format!("Couldn't bind to secure port: {}", e))?;
+        )?;
         let insecure_listener = Listener::new(tcp_base_listener);
-        log::info!(
-            "Server started on: skyhash://{} and skyhash-secure://{}",
-            insec_binaddr,
-            sec_bindaddr
-        );
         Ok(MultiListener::Multi(insecure_listener, secure_listener))
     }
     /// Start the server
     ///
     /// The running of single and/or parallel listeners is handled by this function by
     /// exploiting the working of async functions
-    pub async fn run_server(&mut self) -> TResult<()> {
+    pub async fn run_server(&mut self) -> IoResult<()> {
         match self {
             MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
             MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
@@ -258,7 +235,7 @@ pub async fn connect(
     db: Corestore,
     auth: AuthProvider,
     signal: broadcast::Sender<()>,
-) -> Result<MultiListener, String> {
+) -> SkyResult<MultiListener> {
     let climit = Arc::new(Semaphore::new(maxcon));
     let base_listener_init = |host, port| {
         BaseListener::init(
@@ -270,9 +247,10 @@ pub async fn connect(
             signal.clone(),
         )
     };
+    let description = ports.get_description();
     let server = match ports {
         PortConfig::InsecureOnly { host, port } => {
-            MultiListener::new_insecure_only(base_listener_init(host, port).await?)?
+            MultiListener::new_insecure_only(base_listener_init(host, port).await?)
         }
         PortConfig::SecureOnly { host, ssl } => {
             MultiListener::new_secure_only(base_listener_init(host, ssl.port).await?, ssl)?
@@ -283,5 +261,6 @@ pub async fn connect(
             MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };
+    log::info!("Server started on {}", description);
     Ok(server)
 }

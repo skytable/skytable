@@ -29,26 +29,23 @@
 //! Routines for unflushing data
 
 use super::bytemarks;
-use crate::corestore::memstore::Keyspace;
-use crate::corestore::memstore::Memstore;
-use crate::corestore::memstore::ObjectID;
-use crate::corestore::memstore::SystemKeyspace;
-use crate::corestore::memstore::SYSTEM;
-use crate::corestore::table::SystemTable;
-use crate::corestore::table::Table;
-use crate::storage::v1::de::DeserializeInto;
-use crate::storage::v1::flush::Autoflush;
-use crate::storage::v1::interface::DIR_KSROOT;
-use crate::storage::v1::preload::LoadedPartfile;
-use crate::storage::v1::Coremap;
-use crate::util::Wrapper;
-use crate::IoResult;
+use crate::{
+    corestore::{
+        memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace, SYSTEM},
+        table::{SystemTable, Table},
+    },
+    storage::v1::{
+        de::DeserializeInto,
+        error::{ErrorContext, StorageEngineError, StorageEngineResult},
+        flush::Autoflush,
+        interface::DIR_KSROOT,
+        preload::LoadedPartfile,
+        Coremap,
+    },
+    util::Wrapper,
+};
 use core::mem::transmute;
-use std::fs;
-use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::sync::Arc;
+use std::{fs, path::Path, sync::Arc};
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
 const PRELOAD_PATH: &str = "data/ks/PRELOAD";
@@ -56,15 +53,15 @@ const PRELOAD_PATH: &str = "data/ks/PRELOAD";
 /// A keyspace that can be restored from disk storage
 pub trait UnflushableKeyspace: Sized {
     /// Unflush routine for a keyspace
-    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self>;
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> StorageEngineResult<Self>;
 }
 
 impl UnflushableKeyspace for Keyspace {
-    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self> {
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> StorageEngineResult<Self> {
         let ks: Coremap<ObjectID, Arc<Table>> = Coremap::with_capacity(partmap.len());
         for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
             if table_storage_type > 1 {
-                return Err(bad_data!());
+                return Err(StorageEngineError::bad_metadata_in_table(ksid, &tableid));
             }
             let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
             let tbl = self::read_table::<Table>(ksid, &tableid, is_volatile, model_code)?;
@@ -75,11 +72,11 @@ impl UnflushableKeyspace for Keyspace {
 }
 
 impl UnflushableKeyspace for SystemKeyspace {
-    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> IoResult<Self> {
+    fn unflush_keyspace(partmap: LoadedPartfile, ksid: &ObjectID) -> StorageEngineResult<Self> {
         let ks: Coremap<ObjectID, Wrapper<SystemTable>> = Coremap::with_capacity(partmap.len());
         for (tableid, (table_storage_type, model_code)) in partmap.into_iter() {
             if table_storage_type > 1 {
-                return Err(bad_data!());
+                return Err(StorageEngineError::bad_metadata_in_table(ksid, &tableid));
             }
             let is_volatile = table_storage_type == bytemarks::BYTEMARK_STORAGE_VOLATILE;
             let tbl = self::read_table::<SystemTable>(ksid, &tableid, is_volatile, model_code)?;
@@ -92,12 +89,20 @@ impl UnflushableKeyspace for SystemKeyspace {
 /// Tables that can be restored from disk storage
 pub trait UnflushableTable: Sized {
     /// Procedure to restore (deserialize) table from disk storage
-    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self>;
+    fn unflush_table(
+        filepath: impl AsRef<Path>,
+        model_code: u8,
+        volatile: bool,
+    ) -> StorageEngineResult<Self>;
 }
 
 #[allow(clippy::transmute_int_to_bool)]
 impl UnflushableTable for Table {
-    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self> {
+    fn unflush_table(
+        filepath: impl AsRef<Path>,
+        model_code: u8,
+        volatile: bool,
+    ) -> StorageEngineResult<Self> {
         let ret = match model_code {
             // pure KVEBlob: [0, 3]
             x if x < 4 => {
@@ -122,32 +127,50 @@ impl UnflushableTable for Table {
                 };
                 Table::new_kve_listmap_with_data(data, volatile, k_enc, v_enc)
             }
-            _ => return Err(IoError::from(ErrorKind::Unsupported)),
+            _ => {
+                return Err(StorageEngineError::BadMetadata(
+                    filepath.as_ref().to_string_lossy().to_string(),
+                ))
+            }
         };
         Ok(ret)
     }
 }
 
 impl UnflushableTable for SystemTable {
-    fn unflush_table(filepath: impl AsRef<Path>, model_code: u8, volatile: bool) -> IoResult<Self> {
+    fn unflush_table(
+        filepath: impl AsRef<Path>,
+        model_code: u8,
+        volatile: bool,
+    ) -> StorageEngineResult<Self> {
         match model_code {
             0 => {
                 // this is the authmap
                 let authmap = decode(filepath, volatile)?;
                 Ok(SystemTable::new_auth(Arc::new(authmap)))
             }
-            _ => Err(IoError::from(ErrorKind::Unsupported)),
+            _ => Err(StorageEngineError::BadMetadata(
+                filepath.as_ref().to_string_lossy().to_string(),
+            )),
         }
     }
 }
 
 #[inline(always)]
-fn decode<T: DeserializeInto>(filepath: impl AsRef<Path>, volatile: bool) -> IoResult<T> {
+fn decode<T: DeserializeInto>(
+    filepath: impl AsRef<Path>,
+    volatile: bool,
+) -> StorageEngineResult<T> {
     if volatile {
         Ok(T::new_empty())
     } else {
-        let data = fs::read(filepath)?;
-        super::de::deserialize_into(&data).ok_or_else(|| bad_data!())
+        let data = fs::read(filepath.as_ref()).map_err_context(format!(
+            "reading file {}",
+            filepath.as_ref().to_string_lossy()
+        ))?;
+        super::de::deserialize_into(&data).ok_or_else(|| {
+            StorageEngineError::CorruptedFile(filepath.as_ref().to_string_lossy().to_string())
+        })
     }
 }
 
@@ -160,27 +183,31 @@ pub fn read_table<T: UnflushableTable>(
     tblid: &ObjectID,
     volatile: bool,
     model_code: u8,
-) -> IoResult<T> {
+) -> StorageEngineResult<T> {
     let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), tblid.as_str()) };
     let tbl = T::unflush_table(filepath, model_code, volatile)?;
     Ok(tbl)
 }
 
 /// Read an entire keyspace into a Coremap. You'll need to initialize the rest
-pub fn read_keyspace<K: UnflushableKeyspace>(ksid: &ObjectID) -> IoResult<K> {
+pub fn read_keyspace<K: UnflushableKeyspace>(ksid: &ObjectID) -> StorageEngineResult<K> {
     let partmap = self::read_partmap(ksid)?;
     K::unflush_keyspace(partmap, ksid)
 }
 
 /// Read the `PARTMAP` for a given keyspace
-pub fn read_partmap(ksid: &ObjectID) -> IoResult<LoadedPartfile> {
-    let filepath = unsafe { concat_path!(DIR_KSROOT, ksid.as_str(), "PARTMAP") };
-    super::preload::read_partfile_raw(fs::read(filepath)?)
+pub fn read_partmap(ksid: &ObjectID) -> StorageEngineResult<LoadedPartfile> {
+    let ksid_str = unsafe { ksid.as_str() };
+    let filepath = concat_path!(DIR_KSROOT, ksid_str, "PARTMAP");
+    let partmap_raw = fs::read(&filepath)
+        .map_err_context(format!("while reading {}", filepath.to_string_lossy()))?;
+    super::de::deserialize_set_ctype_bytemark(&partmap_raw)
+        .ok_or_else(|| StorageEngineError::corrupted_partmap(ksid))
 }
 
 /// Read the `PRELOAD`
-pub fn read_preload() -> IoResult<PreloadSet> {
-    let read = fs::read(PRELOAD_PATH)?;
+pub fn read_preload() -> StorageEngineResult<PreloadSet> {
+    let read = fs::read(PRELOAD_PATH).map_err_context("reading PRELOAD")?;
     super::preload::read_preload_raw(read)
 }
 
@@ -189,7 +216,7 @@ pub fn read_preload() -> IoResult<PreloadSet> {
 /// If this is a new instance an empty store is returned while the directory tree
 /// is also created. If this is an already initialized instance then the store
 /// is read and returned (and any possible errors that are encountered are returned)
-pub fn read_full() -> IoResult<Memstore> {
+pub fn read_full() -> StorageEngineResult<Memstore> {
     if is_new_instance() {
         log::trace!("Detected new instance. Creating data directory");
         /*

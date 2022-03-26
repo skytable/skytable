@@ -24,20 +24,21 @@
  *
 */
 
-use super::connection::ConnectionHandler;
-use super::tcp::TcpBackoff;
-use crate::dbnet::connection::ExecutorFn;
-use crate::dbnet::tcp::BufferedSocketStream;
-use crate::dbnet::tcp::Connection;
-use crate::dbnet::BaseListener;
-use crate::dbnet::Terminator;
-use libsky::TResult;
-use openssl::pkey::PKey;
-use openssl::rsa::Rsa;
-use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod};
-use std::fs;
-use std::io::Error as IoError;
-use std::pin::Pin;
+use crate::{
+    dbnet::{
+        connection::{ConnectionHandler, ExecutorFn},
+        tcp::{BufferedSocketStream, Connection, TcpBackoff},
+        BaseListener, Terminator,
+    },
+    util::error::{Error, SkyResult},
+    IoResult,
+};
+use openssl::{
+    pkey::PKey,
+    rsa::Rsa,
+    ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod},
+};
+use std::{fs, pin::Pin};
 use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
 
@@ -56,22 +57,17 @@ impl SslListener {
         chain_file: String,
         base: BaseListener,
         tls_passfile: Option<String>,
-    ) -> TResult<Self> {
+    ) -> SkyResult<Self> {
         let mut acceptor_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
         // cert is the same for both
         acceptor_builder.set_certificate_chain_file(chain_file)?;
         if let Some(tls_passfile) = tls_passfile {
             // first read in the private key
-            let tls_private_key = fs::read(key_file).map_err(|e: IoError| {
-                format!("Failed to read TLS private key file with error: {}", e)
-            })?;
+            let tls_private_key = fs::read(key_file)
+                .map_err(|e| Error::ioerror_extra(e, "reading TLS private key"))?;
             // read the passphrase because the passphrase file stream was provided
-            let tls_keyfile_stream = fs::read(tls_passfile).map_err(|e: IoError| {
-                format!(
-                    "Failed to read TLS private key passphrase file with error: {}",
-                    e
-                )
-            })?;
+            let tls_keyfile_stream = fs::read(tls_passfile)
+                .map_err(|e| Error::ioerror_extra(e, "reading TLS password file"))?;
             // decrypt the private key
             let pkey = Rsa::private_key_from_pem_passphrase(&tls_private_key, &tls_keyfile_stream)?;
             let pkey = PKey::from_rsa(pkey)?;
@@ -91,7 +87,7 @@ impl SslListener {
             base,
         })
     }
-    async fn accept(&mut self) -> TResult<SslStream<TcpStream>> {
+    async fn accept(&mut self) -> SkyResult<SslStream<TcpStream>> {
         let backoff = TcpBackoff::new();
         loop {
             match self.base.listener.accept().await {
@@ -115,7 +111,7 @@ impl SslListener {
             backoff.spin().await;
         }
     }
-    pub async fn run(&mut self) -> TResult<()> {
+    pub async fn run(&mut self) -> IoResult<()> {
         loop {
             // Take the permit first, but we won't use it right now
             // that's why we will forget it
@@ -139,7 +135,6 @@ impl SslListener {
                 self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {
-                log::debug!("Spawned listener task");
                 if let Err(e) = sslhandle.run().await {
                     log::error!("Error: {}", e);
                 }

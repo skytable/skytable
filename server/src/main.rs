@@ -104,8 +104,7 @@ fn main() {
     // important: create the pid_file just here and nowhere else because check_args can also
     // involve passing --help or wrong arguments which can falsely create a PID file
     let pid_file = run_pre_startup_tasks();
-    let db: Result<corestore::Corestore, String> =
-        runtime.block_on(async move { arbiter::run(cfg, restore_file).await });
+    let db = runtime.block_on(async move { arbiter::run(cfg, restore_file).await });
     // Make sure all background workers terminate
     drop(runtime);
     let db = match db {
