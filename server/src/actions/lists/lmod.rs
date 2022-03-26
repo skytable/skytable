@@ -73,23 +73,20 @@ action! {
                 conwrite!(con, okay)?;
             }
             PUSH => {
-                ensure_length(act.len(), |len| len == 1)?;
+                ensure_boolean_or_aerr(!act.is_empty())?;
                 let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
                     _ => return conwrite!(con, groups::NIL),
                 };
-                let bts = unsafe { act.next_unchecked() };
-                let ret = if compiler::likely(listmap.is_val_ok(bts)) {
+                let venc_ok = listmap.get_val_encoder();
+                let ret = if compiler::likely(act.as_ref().all(venc_ok)) {
                     if registry::state_okay() {
-                        // good to try and insert
-                        list.write().push(Data::copy_from_slice(bts));
+                        list.write().extend(act.map(Data::copy_from_slice));
                         groups::OKAY
                     } else {
-                        // server broken; server err
                         groups::SERVER_ERR
                     }
                 } else {
-                    // encoding failed; uh
                     groups::ENCODING_ERROR
                 };
                 conwrite!(con, ret)?;

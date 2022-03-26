@@ -307,8 +307,8 @@ keyvalue:
         - name: push
           complexity: O(1)
           accept: [AnyArray]
-          syntax: [LMOD <list> push <value>]
-          desc: Appends the element to the end of the provided list
+          syntax: [LMOD <list> push <v1> <v2> ...]
+          desc: Appends the elements to the end of the provided list, if it exists.
           return: [Rcode 0, Rcode 1, Rcode 5]
         - name: insert
           complexity: O(1)

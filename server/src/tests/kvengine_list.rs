@@ -213,6 +213,11 @@ mod __private {
         let q = query!("lmod", "mylist", "push", "v1");
         runeq!(con, q, Element::RespCode(RespCode::Okay));
     }
+    /// lmod push multiple (okay)
+    async fn test_lmod_push_multiple_okay() {
+        lset!(con, "mylist");
+        assert_okay!(con, query!("lmod", "mylist", "push", "v1", "v2"));
+    }
     /// lmod push (nil)
     async fn test_lmod_push_nil() {
         let q = query!("lmod", "mylist", "push", "v1");
