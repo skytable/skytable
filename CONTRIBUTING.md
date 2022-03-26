@@ -32,13 +32,12 @@ In other cases, use the C style.
 
 ### Parts of the project
 
-- `ci` , `.github` : CI scripts (which, under normal circumstances, don't need to be modified)
-- `cli` : Source for `skysh` which is the command-line client for Skytable
-- `examples` : Example configuration files
-- `libsky` : This contains functions, structs, ... used by both the `cli` and the
-- `server` : Source for the main database server ``
-- `sky-bench` : The source for the benchmarking tool resides here
-- `sky-macros` : The source for custom compiler macros used by Skytable
+The main parts (ignorning CI scripts, stress test suite, test harness and custom compiler macros) are:
+
+- `cli`: REPL shell
+- `server`: database server
+- `sky-bench`: benchmark tool
+- `sky-migrate`: migration tool
 
 ### Jargon
 

@@ -2,18 +2,20 @@
 
 All changes in this project will be noted in this file.
 
-## Unreleased
+## Version 0.7.5
 
 ### Additions
 
 - `INSPECT KEYSPACE` without arguments to inspect the current keyspace
 - `INSPECT TABLE` without arguments to inspect the current table
 - `AUTH WHOAMI` returns the AuthID of the currently logged in user
+- Enable multiples values to be pushed into a list at once with `lmod push`
 
 ### Fixes
 
 - (skysh) Added error code output for new error codes which otherwise printed "Unknown error"
 - (skysh) Fixed handling of EOF keystroke
+- (skyd) Respect logging level for all terminal output
 
 ## Version 0.7.4
 

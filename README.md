@@ -11,9 +11,11 @@
 
 ## What is Skytable?
 
-Skytable is an effort to provide the best of key/value stores, document stores and columnar databases, that is, **simplicity, flexibility and queryability at scale**. The name 'Skytable' exemplifies our vision to create a database that has limitless possibilities. Skytable was previously known as TerrabaseDB (and then Skybase) and is also nicknamed "STable", "Sky" and "SDB" by the community.
+Skytable is a free and open-source NoSQL database that aims to provide flexible data modeling at
+scale. For us simplicity, performance and flexibility are our guiding design principles.
+We were previously known as TerrabaseDB or Skybase and are nicknamed Sky, SDB or STable by the community.
 
-Skytable is currently under development but can be used as a **performant**, **secure** and **persistent key-value store**.
+Features like keyspaces, tables, data types, authn+authz, snapshots and more are ready for you to use while we're working on [several new data models and features](https://github.com/skytable/skytable/issues/203). Skytable's key/value store is performant, secure and ready for you to deploy.
 
 ## Getting started 🚀
 
@@ -23,13 +25,13 @@ Skytable is currently under development but can be used as a **performant**, **s
 4. First run `skyd` to start the database server and then run `skysh` to start the interactive shell
 5. Run commands like: `SET foo bar` , `GET bar` , `UPDATE cat mitten` or `DEL proprietary` on `skysh`!
 
-You can learn more about installation [here](https://docs.skytable.io/getting-started/)
+You can learn more about installation [here](https://docs.skytable.io/getting-started)
 
 ## Features
 
 - **Insanely fast**: Scale to millions of queries per second per node
 - **Multiple keyspaces/tables**: Seamlessly integrates with actions to provide a SQL-like experience
-- **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/actions-overview). With the `str` and `binstr` types.
+- **Key/value store**: `GET` , `SET` , `UPDATE` and [all that stuff](https://docs.skytable.io/all-actions). With the `str` and `binstr` types.
 - **Authn/Authz**: Simple and secure authentication/authorization
 - **Volatile tables**: For all the caching you need
 - **Snapshots**: Automated (and tunable) snapshots for stress-free backups
