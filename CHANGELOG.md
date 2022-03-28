@@ -21,6 +21,7 @@ All changes in this project will be noted in this file.
 - (skysh) Fixed handling of EOF keystroke
 - (skyd) Respect logging level for all terminal output
 - (skyd) Fixed LF check in protocol impl
+- (skyd) Fixed new instance detection (now checks if data directory is empty or not)
 
 ## Version 0.7.4
 

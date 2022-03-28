@@ -45,7 +45,7 @@ use crate::{
     util::Wrapper,
 };
 use core::mem::transmute;
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, io::ErrorKind, path::Path, sync::Arc};
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
 const PRELOAD_PATH: &str = "data/ks/PRELOAD";
@@ -217,7 +217,7 @@ pub fn read_preload() -> StorageEngineResult<PreloadSet> {
 /// is also created. If this is an already initialized instance then the store
 /// is read and returned (and any possible errors that are encountered are returned)
 pub fn read_full() -> StorageEngineResult<Memstore> {
-    if is_new_instance() {
+    if is_new_instance()? {
         log::trace!("Detected new instance. Creating data directory");
         /*
         Since the `PRELOAD` file doesn't exist -- this is a new instance
@@ -251,8 +251,14 @@ pub fn read_full() -> StorageEngineResult<Memstore> {
     Ok(Memstore::init_with_all(ksmap, system_keyspace))
 }
 
-/// Check if the data/ks/PRELOAD file exists (if not: we're on a new instance)
-pub fn is_new_instance() -> bool {
-    let path = Path::new("data/ks/PRELOAD");
-    !(path.exists() && path.is_file())
+/// Check if the `data` directory is non-empty (if not: we're on a new instance)
+pub fn is_new_instance() -> StorageEngineResult<bool> {
+    match fs::read_dir("data") {
+        Ok(mut dir) => Ok(dir.next().is_none()),
+        Err(e) if e.kind().eq(&ErrorKind::NotFound) => Ok(true),
+        Err(e) => Err(StorageEngineError::ioerror_extra(
+            e,
+            "while checking data directory",
+        )),
+    }
 }
