@@ -65,6 +65,13 @@ impl<K: Eq + Hash, V> Coremap<K, V> {
             inner: HashTable::with_capacity(cap),
         }
     }
+    pub fn try_with_capacity(cap: usize) -> Result<Self, ()> {
+        if cap > (isize::MAX as usize) {
+            Err(())
+        } else {
+            Ok(Self::with_capacity(cap))
+        }
+    }
     /// Returns the total number of key value pairs
     pub fn len(&self) -> usize {
         self.inner.len()

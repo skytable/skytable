@@ -439,7 +439,8 @@ mod de {
     {
         let mut rawiter = RawSliceIter::new(data);
         let len = rawiter.next_64bit_integer_to_usize()?;
-        let mut set = HashSet::with_capacity(len);
+        let mut set = HashSet::new();
+        set.try_reserve(len).ok()?;
         for _ in 0..len {
             let lenkey = rawiter.next_64bit_integer_to_usize()?;
             if !T::is_expected_len(lenkey) {
@@ -469,7 +470,8 @@ mod de {
         let mut rawiter = RawSliceIter::new(data);
         // so we have 8B. Just unsafe access and transmute it
         let len = rawiter.next_64bit_integer_to_usize()?;
-        let mut set = HashMap::with_capacity(len);
+        let mut set = HashMap::new();
+        set.try_reserve(len).ok()?;
         for _ in 0..len {
             let lenkey = rawiter.next_64bit_integer_to_usize()?;
             if !T::is_expected_len(lenkey) {
@@ -496,7 +498,7 @@ mod de {
     pub fn deserialize_map(data: &[u8]) -> Option<Coremap<Data, Data>> {
         let mut rawiter = RawSliceIter::new(data);
         let len = rawiter.next_64bit_integer_to_usize()?;
-        let hm = Coremap::with_capacity(len);
+        let hm = Coremap::try_with_capacity(len).ok()?;
         for _ in 0..len {
             let (lenkey, lenval) = rawiter.next_64bit_integer_pair_to_usize()?;
             let key = rawiter.next_owned_data(lenkey)?;
@@ -517,7 +519,7 @@ mod de {
         // get the len
         let len = rawiter.next_64bit_integer_to_usize()?;
         // allocate a map
-        let map = Coremap::with_capacity(len);
+        let map = Coremap::try_with_capacity(len).ok()?;
         // now enter a loop
         for _ in 0..len {
             let keylen = rawiter.next_64bit_integer_to_usize()?;
@@ -541,7 +543,8 @@ mod de {
     pub fn deserialize_nested_list(mut iter: RawSliceIterBorrowed<'_>) -> Option<Vec<Data>> {
         // get list payload len
         let list_payload_extent = iter.next_64bit_integer_to_usize()?;
-        let mut list = Vec::with_capacity(list_payload_extent);
+        let mut list = Vec::new();
+        list.try_reserve(list_payload_extent).ok()?;
         for _ in 0..list_payload_extent {
             // get element size
             let list_element_payload_size = iter.next_64bit_integer_to_usize()?;

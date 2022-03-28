@@ -22,6 +22,7 @@ All changes in this project will be noted in this file.
 - (skyd) Respect logging level for all terminal output
 - (skyd) Fixed LF check in protocol impl
 - (skyd) Fixed new instance detection (now checks if data directory is empty or not)
+- (skyd) Fixed panic resulting from corrupted metadata in `PARTMAP`
 
 ## Version 0.7.4
 
