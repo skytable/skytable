@@ -38,6 +38,13 @@ fn test_read_line() {
 }
 
 #[test]
+fn test_read_line_fail() {
+    let line = "abcdef".as_bytes();
+    let mut p = Parser::new(line);
+    assert_eq!(p.read_line().unwrap_err(), ParseError::NotEnough);
+}
+
+#[test]
 fn test_read_until() {
     let mybytes = "123456789".as_bytes();
     let mut parser = Parser::new(mybytes);

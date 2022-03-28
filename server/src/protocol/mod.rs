@@ -380,15 +380,17 @@ impl<'a> Parser<'a> {
             let end_ptr = self.data_end_ptr();
             let mut len = 0usize;
             unsafe {
-                while end_ptr > self.cursor {
-                    if *self.cursor == b'\n' {
-                        self.incr_cursor();
-                        break;
-                    }
+                while end_ptr > self.cursor && *self.cursor != b'\n' {
                     len += 1;
                     self.incr_cursor();
                 }
-                Ok(UnsafeSlice::new(start_ptr, len))
+                if self.will_cursor_give_linefeed()? {
+                    let ret = Ok(UnsafeSlice::new(start_ptr, len));
+                    self.incr_cursor();
+                    ret
+                } else {
+                    Err(ParseError::BadPacket)
+                }
             }
         }
     }

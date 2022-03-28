@@ -20,6 +20,7 @@ All changes in this project will be noted in this file.
 - (skysh) Added error code output for new error codes which otherwise printed "Unknown error"
 - (skysh) Fixed handling of EOF keystroke
 - (skyd) Respect logging level for all terminal output
+- (skyd) Fixed LF check in protocol impl
 
 ## Version 0.7.4
 
