@@ -26,7 +26,7 @@
 
 //! # The Query Engine
 
-use crate::actions::ActionResult;
+use crate::actions::{ActionError, ActionResult};
 use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
@@ -174,6 +174,7 @@ async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
             LGET => actions::lists::lget::lget,
             LMOD => actions::lists::lmod::lmod,
             WHEREAMI => actions::whereami::whereami,
+            SYS => admin::sys::sys,
             {
                 // actions that need other arguments
                 AUTH => auth::auth(con, auth, iter)
@@ -197,6 +198,26 @@ action! {
     }
 }
 
+/// Execute a stage **completely**. This means that action errors are never propagated
+/// over the try operator
+async fn execute_stage_pedantic<'a, T: ClientConnection<Strm> + 'a, Strm: Stream + 'a>(
+    handle: &mut Corestore,
+    con: &mut T,
+    auth: &mut AuthProviderHandle<'_, T, Strm>,
+    stage: &UnsafeElement,
+) -> crate::IoResult<()> {
+    let ret = async {
+        ensure_cond_or_err(stage.is_any_array(), groups::WRONGTYPE_ERR)?;
+        self::execute_stage(handle, con, auth, stage).await?;
+        Ok(())
+    };
+    match ret.await {
+        Ok(()) => Ok(()),
+        Err(ActionError::ActionError(e)) => con.write_response(e).await,
+        Err(ActionError::IoError(ioe)) => Err(ioe),
+    }
+}
+
 action! {
     /// Execute a basic pipelined query
     fn execute_pipeline(
@@ -206,8 +227,7 @@ action! {
         pipeline: PipelineQuery
     ) {
         for stage in pipeline.iter() {
-            ensure_cond_or_err(stage.is_any_array(), groups::WRONGTYPE_ERR)?;
-            self::execute_stage(handle, con, auth, stage).await?;
+            self::execute_stage_pedantic(handle, con, auth, stage).await?;
         }
         Ok(())
     }

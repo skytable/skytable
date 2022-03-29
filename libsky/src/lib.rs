@@ -37,9 +37,9 @@ pub type TResult<T> = Result<T, Box<dyn Error>>;
 /// The size of the read buffer in bytes
 pub const BUF_CAP: usize = 8 * 1024; // 8 KB per-connection
 /// The current version
-pub static VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The URL
-pub static URL: &str = "https://github.com/skytable/skytable";
+pub const URL: &str = "https://github.com/skytable/skytable";
 
 #[macro_export]
 /// Don't use unwrap_or but use this macro as the optimizer fails to optimize away usages

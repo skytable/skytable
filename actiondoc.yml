@@ -129,6 +129,30 @@ global:
           Returns a string with the AuthID of the currently logged in user or errors if the user
           is not logged in
         return: [String]
+  - name: SYS
+    desc: |
+      Get system information and metrics
+    subactions:
+      - name: INFO
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [sys info <property>]
+        return: [String, Float]
+        desc: |
+          Returns static properties of the system, i.e properties that do not change during runtime.
+          The following properties are available:
+            - `version`: Returns the server version (String)
+            - `protocol`: Returns the protocol version string (String)
+            - `protover`: Returns the protocol version (float)
+      - name: METRIC
+        complexity: O(1)
+        accept: [AnyArray]
+        syntax: [sys metric <metric>]
+        return: [String, Float]
+        desc: |
+          Returns dynamic properties of the system, i.e metrics are properties that can change during
+          runtime. The following metrics are available:
+            - `health`: Returns "good" or "critical" depending on the system state (String)
 
 keyvalue:
   generic:

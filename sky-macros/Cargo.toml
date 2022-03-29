@@ -14,4 +14,4 @@ proc-macro = true
 proc-macro2 = "1.0.36"
 quote = "1.0.17"
 rand = "0.8.5"
-syn = { version = "1.0.89", features = ["full"] }
+syn = { version = "1.0.90", features = ["full"] }
