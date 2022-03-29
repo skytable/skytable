@@ -55,15 +55,6 @@ mod sys {
     use libsky::VERSION;
     use sky_macros::dbtest_func as dbtest;
     use skytable::{query, Element, RespCode};
-    const UNKNOWN_ACTION: &str = "Unknown action";
-    #[dbtest]
-    async fn test_sys_unknown_action() {
-        runeq!(
-            con,
-            query!("sys", "what"),
-            Element::RespCode(RespCode::ErrorString(UNKNOWN_ACTION.to_owned()))
-        );
-    }
     #[dbtest]
     async fn test_sys_info_aerr() {
         runeq!(

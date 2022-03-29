@@ -26,7 +26,7 @@
 
 #[sky_macros::dbtest_module]
 mod tests {
-    use skytable::{query, Element, Pipeline, RespCode};
+    use skytable::{query, types::Array, Element, Pipeline, RespCode};
     async fn test_pipeline_heya_echo() {
         let pipe = Pipeline::new()
             .append(query!("heya", "first"))
@@ -66,5 +66,20 @@ mod tests {
                 Element::RespCode(RespCode::ActionError)
             ]
         );
+    }
+    async fn test_pipeline_with_multiple_error() {
+        let pipe = Pipeline::new()
+            .append(query!("mset", "x", "y", "z"))
+            .append(query!("mget", "x", "y", "z"))
+            .append(query!("heya", "finally"));
+        let ret = con.run_pipeline(pipe).await.unwrap();
+        assert_eq!(
+            ret,
+            vec![
+                Element::RespCode(RespCode::ActionError),
+                Element::Array(Array::Str(vec![None, None, None])),
+                Element::String("finally".to_owned())
+            ]
+        )
     }
 }

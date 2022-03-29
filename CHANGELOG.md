@@ -23,6 +23,7 @@ All changes in this project will be noted in this file.
 - (skyd) Fixed LF check in protocol impl
 - (skyd) Fixed new instance detection (now checks if data directory is empty or not)
 - (skyd) Fixed panic resulting from corrupted metadata in `PARTMAP`
+- (skyd) Fixed invalid pipeline response when action error is propagated from a single stage
 
 ## Version 0.7.4
 
