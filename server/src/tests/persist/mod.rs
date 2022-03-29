@@ -24,12 +24,30 @@
  *
 */
 
+use sky_macros::dbtest_func as dbtest;
 use skytable::{
     aio::Connection,
     query,
     types::{Array, RawString},
     Element, Query, RespCode,
 };
+
+#[dbtest(skip_if_cfg = "persist-suite", norun = true, port = 2007)]
+async fn store_keyspace() {
+    assert_okay!(con, query!("create", "keyspace", "universe"));
+    switch_entity!(con, "universe");
+    assert_okay!(con, query!("create", "table", "warp", "keymap(str,str)"));
+    switch_entity!(con, "universe:warp");
+    assert_okay!(con, query!("set", "x", "100"));
+}
+#[dbtest(run_if_cfg = "persist-suite", norun = true, port = 2007)]
+async fn load_keyspace() {
+    switch_entity!(con, "universe:warp");
+    runeq!(con, query!("get", "x"), Element::String("100".to_owned()));
+    switch_entity!(con, "default");
+    assert_okay!(con, query!("drop", "table", "universe:warp"));
+    assert_okay!(con, query!("drop", "keyspace", "universe"));
+}
 
 macro_rules! bin {
     ($input:expr) => {{
