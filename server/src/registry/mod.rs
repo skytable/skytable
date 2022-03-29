@@ -79,6 +79,7 @@ static GLOBAL_STATE: AtomicBool = AtomicBool::new(true);
 static FLUSH_STATE: QuickLock<()> = QuickLock::new(());
 /// The preload trip switch
 static PRELOAD_TRIPSWITCH: Trip = Trip::new_untripped();
+static CLEANUP_TRIPSWITCH: Trip = Trip::new_untripped();
 
 /// Check the global system state
 pub fn state_okay() -> bool {
@@ -104,4 +105,9 @@ pub fn unpoison() {
 /// Get a static reference to the global preload trip switch
 pub fn get_preload_tripswitch() -> &'static Trip {
     &PRELOAD_TRIPSWITCH
+}
+
+/// Get a static reference to the global cleanup trip switch
+pub fn get_cleanup_tripswitch() -> &'static Trip {
+    &CLEANUP_TRIPSWITCH
 }

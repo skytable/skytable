@@ -204,7 +204,9 @@ impl<'a> Entity<'a> {
     fn verify_entity_name(input: &[u8]) -> Result<&[u8], &'static [u8]> {
         let valid_name = input.len() < 65
             && encoding::is_utf8(input)
-            && unsafe { VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(input)) };
+            && unsafe { VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(input)) }
+            && input != b"PARTMAP"
+            && input != b"PRELOAD";
         if compiler::likely(valid_name && !input.is_empty()) {
             // valid name
             Ok(input)

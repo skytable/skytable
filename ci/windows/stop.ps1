@@ -12,6 +12,8 @@ function Terminate-Process() {
 $ProcessIDs=(get-process skyd).id
 $Proc1=($ProcessIDs -split '\n')[0]
 $Proc2=($ProcessIDs -split '\n')[1]
+$Proc3=($ProcessIDs -split '\n')[2]
 
 Terminate-Process -ProcessID $Proc1
 Terminate-Process -ProcessID $Proc2
+Terminate-Process -ProcessID $Proc3

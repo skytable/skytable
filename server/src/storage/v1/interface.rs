@@ -81,10 +81,13 @@ pub fn create_tree_fresh<T: StorageTarget>(target: &T, memroot: &Memstore) -> Io
 /// **Warning**: Calling this is quite inefficient so consider calling it once or twice
 /// throughout the lifecycle of the server
 pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
-    if registry::get_preload_tripswitch().is_tripped() {
+    if registry::get_cleanup_tripswitch().is_tripped() {
         // only run a cleanup if someone tripped the switch
         // hashset because the fs itself will not allow duplicate entries
-        let dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
+        // the keyspaces directory will contain the PRELOAD file, but we'll just
+        // remove it from the list
+        let mut dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
+        dir_keyspaces.remove("PRELOAD");
         let our_keyspaces: HashSet<String> = memroot
             .keyspaces
             .iter()
@@ -92,9 +95,25 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
             .collect();
         // these are the folders that we need to remove; plonk the deleted keyspaces first
         for folder in dir_keyspaces.difference(&our_keyspaces) {
-            if folder != "PRELOAD" {
-                let ks_path = concat_str!(DIR_KSROOT, "/", folder);
-                fs::remove_dir_all(ks_path)?;
+            let ks_path = concat_str!(DIR_KSROOT, "/", folder);
+            fs::remove_dir_all(ks_path)?;
+        }
+        // now remove the tables
+        for keyspace in memroot.keyspaces.iter() {
+            let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
+            let mut dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
+            // in the list of directories we collected, remove PARTMAP because we should NOT
+            // delete it
+            dir_tbls.remove("PARTMAP");
+            let our_tbls: HashSet<String> = keyspace
+                .value()
+                .tables
+                .iter()
+                .map(|v| unsafe { v.key().as_str() }.to_owned())
+                .collect();
+            for old_file in dir_tbls.difference(&our_tbls) {
+                let fpath = concat_path!(&ks_path, old_file);
+                fs::remove_file(&fpath)?;
             }
         }
         // now plonk the data files

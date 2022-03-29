@@ -262,6 +262,8 @@ impl Memstore {
                         ks.remove();
                         // trip the preload switch
                         registry::get_preload_tripswitch().trip();
+                        // trip the cleanup switch
+                        registry::get_cleanup_tripswitch().trip();
                         Ok(())
                     } else if !no_tables_are_in_keyspace {
                         // not empty; may be referenced to or not referenced to
@@ -312,6 +314,8 @@ impl Memstore {
                         keyspace.remove();
                         // trip the preload switch
                         registry::get_preload_tripswitch().trip();
+                        // trip the cleanup switch
+                        registry::get_cleanup_tripswitch().trip();
                         Ok(())
                     } else {
                         Err(DdlError::StillInUse)
@@ -420,6 +424,8 @@ impl Keyspace {
             if did_remove {
                 // we need to re-init tree; so trip
                 registry::get_preload_tripswitch().trip();
+                // we need to cleanup tree; so trip
+                registry::get_cleanup_tripswitch().trip();
                 Ok(())
             } else {
                 Err(DdlError::StillInUse)

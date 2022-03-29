@@ -24,15 +24,18 @@ All changes in this project will be noted in this file.
 
 ### Fixes
 
-- (skysh) Added error code output for new error codes which otherwise printed "Unknown error"
-- (skysh) Fixed handling of EOF keystroke
-- (skyd) Respect logging level for all terminal output
-- (skyd) Fixed LF check in protocol impl
-- (skyd) Fixed new instance detection (now checks if data directory is empty or not)
-- (skyd) Fixed panic resulting from corrupted metadata in `PARTMAP`
-- (skyd) Fixed invalid pipeline response when action error is propagated from a single stage
-- (skyd) Fixed bug where the preload wasn't flushed if a snapshot already flushed it before the
-  save on termination routine
+- skysh:
+  - Added error code output for new error codes which otherwise printed "Unknown error"
+  - Fixed handling of EOF keystroke
+- skyd:
+  - Respect logging level for all terminal output
+  - Fixed LF check in protocol impl
+  - Fixed new instance detection (now checks if data directory is empty or not)
+  - Fixed panic resulting from corrupted metadata in `PARTMAP`
+  - Fixed invalid pipeline response when action error is propagated from a single stage
+  - Fixed bug where the preload wasn't flushed if a snapshot already flushed it before the
+    save on termination routine
+  - Fixed bug that prevented tree cleanup from working
 
 ## Version 0.7.4
 
