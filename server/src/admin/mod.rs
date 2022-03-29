@@ -27,3 +27,4 @@
 //! Modules for administration of Skytable
 
 pub mod mksnap;
+pub mod sys;

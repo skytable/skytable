@@ -62,7 +62,7 @@ mod storage;
 #[cfg(test)]
 mod tests;
 
-const PATH: &str = ".sky_pid";
+const PID_FILE_PATH: &str = ".sky_pid";
 
 #[cfg(test)]
 const ROOT_DIR: &str = env!("ROOT_DIR");
@@ -157,7 +157,7 @@ fn check_args_and_get_cfg() -> (ConfigurationSet, Option<String>) {
 /// to the same directory which can cause potentially undefined behavior.
 ///
 fn run_pre_startup_tasks() -> FileLock {
-    let mut file = match FileLock::lock(PATH) {
+    let mut file = match FileLock::lock(PID_FILE_PATH) {
         Ok(fle) => fle,
         Err(e) => {
             log::error!("Startup failure: Failed to lock pid file: {}", e);

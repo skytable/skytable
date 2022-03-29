@@ -38,6 +38,7 @@ use tokio::io::AsyncWriteExt;
 pub mod writer;
 
 pub const TSYMBOL_UNICODE_STRING: u8 = b'+';
+pub const TSYMBOL_FLOAT: u8 = b'%';
 
 type FutureIoResult<'s> = FutureResult<'s, Result<(), IoError>>;
 
@@ -220,6 +221,21 @@ impl Writable for ObjectID {
             // Now write the REAL bytes (of the object)
             con.write_lowlevel(&self).await?;
             // Now write another LF
+            con.write_lowlevel(&[b'\n']).await?;
+            Ok(())
+        })
+    }
+}
+
+impl Writable for f32 {
+    fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
+        Box::pin(async move {
+            let payload = self.to_string();
+            let payload_len = Integer64::from(payload.len());
+            con.write_lowlevel(&[TSYMBOL_FLOAT]).await?;
+            con.write_lowlevel(&payload_len).await?;
+            con.write_lowlevel(&[b'\n']).await?;
+            con.write_lowlevel(payload.as_bytes()).await?;
             con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         })

@@ -174,6 +174,7 @@ async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
             LGET => actions::lists::lget::lget,
             LMOD => actions::lists::lmod::lmod,
             WHEREAMI => actions::whereami::whereami,
+            SYS => admin::sys::sys,
             {
                 // actions that need other arguments
                 AUTH => auth::auth(con, auth, iter)

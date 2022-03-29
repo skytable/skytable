@@ -91,6 +91,9 @@ impl<'a> AnyArrayIter<'a> {
             v.as_slice().to_ascii_lowercase().into_boxed_slice()
         })
     }
+    pub unsafe fn next_lowercase_unchecked(&mut self) -> Box<[u8]> {
+        self.next_lowercase().unwrap_or_else(|| impossible!())
+    }
     pub unsafe fn next_uppercase_unchecked(&mut self) -> Box<[u8]> {
         match self.next_uppercase() {
             Some(s) => s,
