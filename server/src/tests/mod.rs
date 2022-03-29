@@ -37,6 +37,7 @@ mod kvengine_encoding;
 mod kvengine_list;
 mod persist;
 mod pipeline;
+mod snapshot;
 
 mod tls {
     use skytable::{query, Element};

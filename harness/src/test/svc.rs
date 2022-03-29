@@ -42,12 +42,13 @@ const POWERSHELL_SCRIPT: &str = include_str!("../../../ci/windows/stop.ps1");
 #[cfg(windows)]
 /// Flag for new console Window
 const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+pub(super) const SERVERS: [(&str, [u16; 2]); 3] = [
+    ("server1", [2003, 2004]),
+    ("server2", [2005, 2006]),
+    ("server3", [2007, 2008]),
+];
 /// The test suite server host
 const TESTSUITE_SERVER_HOST: &str = "127.0.0.1";
-/// The test suite server ports
-const TESTSUITE_SERVER_PORTS: [u16; 4] = [2003, 2004, 2005, 2006];
-/// The server IDs matching with the configuration files
-const SERVER_IDS: [&str; 2] = ["server1", "server2"];
 /// The workspace root
 const WORKSPACE_ROOT: &str = env!("ROOT_DIR");
 
@@ -89,26 +90,28 @@ fn connection_refused<T>(input: Result<T, IoError>) -> HarnessResult<bool> {
 /// Waits for the servers to start up or errors if something unexpected happened
 fn wait_for_startup() -> HarnessResult<()> {
     info!("Waiting for servers to start up");
-    for port in TESTSUITE_SERVER_PORTS {
-        let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
-        let mut backoff = 1;
-        let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
-        while connection_refused(con)? {
-            if backoff > 64 {
-                // enough sleeping, return an error
-                error!("Server didn't respond in {backoff} seconds. Something is wrong");
-                return Err(HarnessError::Other(format!(
-                    "Startup backoff elapsed. Server at {connection_string} did not respond."
-                )));
-            }
-            info!(
+    for (_, ports) in SERVERS {
+        for port in ports {
+            let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
+            let mut backoff = 1;
+            let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            while connection_refused(con)? {
+                if backoff > 64 {
+                    // enough sleeping, return an error
+                    error!("Server didn't respond in {backoff} seconds. Something is wrong");
+                    return Err(HarnessError::Other(format!(
+                        "Startup backoff elapsed. Server at {connection_string} did not respond."
+                    )));
+                }
+                info!(
                 "Server at {connection_string} not started. Sleeping for {backoff} second(s) ..."
             );
-            util::sleep_sec(backoff);
-            con = Connection::new(TESTSUITE_SERVER_HOST, port);
-            backoff *= 2;
+                util::sleep_sec(backoff);
+                con = Connection::new(TESTSUITE_SERVER_HOST, port);
+                backoff *= 2;
+            }
+            info!("Server at {connection_string} has started");
         }
-        info!("Server at {connection_string} has started");
     }
     info!("All servers started up");
     Ok(())
@@ -117,26 +120,28 @@ fn wait_for_startup() -> HarnessResult<()> {
 /// Wait for the servers to shutdown, returning an error if something unexpected happens
 fn wait_for_shutdown() -> HarnessResult<()> {
     info!("Waiting for servers to shut down");
-    for port in TESTSUITE_SERVER_PORTS {
-        let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
-        let mut backoff = 1;
-        let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
-        while !connection_refused(con)? {
-            if backoff > 64 {
-                // enough sleeping, return an error
-                error!("Server didn't shut down within {backoff} seconds. Something is wrong");
-                return Err(HarnessError::Other(format!(
+    for (_, ports) in SERVERS {
+        for port in ports {
+            let connection_string = format!("{TESTSUITE_SERVER_HOST}:{port}");
+            let mut backoff = 1;
+            let mut con = Connection::new(TESTSUITE_SERVER_HOST, port);
+            while !connection_refused(con)? {
+                if backoff > 64 {
+                    // enough sleeping, return an error
+                    error!("Server didn't shut down within {backoff} seconds. Something is wrong");
+                    return Err(HarnessError::Other(format!(
                     "Shutdown backoff elapsed. Server at {connection_string} did not shut down."
                 )));
-            }
-            info!(
+                }
+                info!(
                 "Server at {connection_string} still active. Sleeping for {backoff} second(s) ..."
             );
-            util::sleep_sec(backoff);
-            con = Connection::new(TESTSUITE_SERVER_HOST, port);
-            backoff *= 2;
+                util::sleep_sec(backoff);
+                con = Connection::new(TESTSUITE_SERVER_HOST, port);
+                backoff *= 2;
+            }
+            info!("Server at {connection_string} has stopped accepting connections");
         }
-        info!("Server at {connection_string} has stopped accepting connections");
     }
     info!("All servers have stopped accepting connections. Allowing {SLEEP_FOR_TERMINATION} seconds for them to exit");
     util::sleep_sec(SLEEP_FOR_TERMINATION);
@@ -146,8 +151,8 @@ fn wait_for_shutdown() -> HarnessResult<()> {
 
 /// Start the servers returning handles to the child processes
 fn start_servers(target_folder: impl AsRef<Path>) -> HarnessResult<Vec<Child>> {
-    let mut ret = Vec::with_capacity(SERVER_IDS.len());
-    for server_id in SERVER_IDS {
+    let mut ret = Vec::with_capacity(SERVERS.len());
+    for (server_id, _ports) in SERVERS {
         let cmd = get_run_server_cmd(server_id, target_folder.as_ref());
         info!("Starting {server_id} ...");
         ret.push(util::get_child(format!("start {server_id}"), cmd)?);
@@ -169,7 +174,7 @@ pub(super) fn run_with_servers(
         wait_for_shutdown()?;
     }
     // just use this to avoid ignoring the children vector
-    assert_eq!(children.len(), SERVER_IDS.len());
+    assert_eq!(children.len(), SERVERS.len());
     Ok(())
 }
 

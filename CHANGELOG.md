@@ -31,6 +31,8 @@ All changes in this project will be noted in this file.
 - (skyd) Fixed new instance detection (now checks if data directory is empty or not)
 - (skyd) Fixed panic resulting from corrupted metadata in `PARTMAP`
 - (skyd) Fixed invalid pipeline response when action error is propagated from a single stage
+- (skyd) Fixed bug where the preload wasn't flushed if a snapshot already flushed it before the
+  save on termination routine
 
 ## Version 0.7.4
 

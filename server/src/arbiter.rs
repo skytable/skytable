@@ -96,12 +96,13 @@ pub async fn run(
         Terminator::new(signal.subscribe()),
     ));
 
+    // bind to signals
+    let termsig =
+        TerminationSignal::init().map_err(|e| Error::ioerror_extra(e, "binding to signals"))?;
     // start the server (single or multiple listeners)
     let mut server =
         dbnet::connect(ports, maxcon, db.clone(), auth_provider, signal.clone()).await?;
 
-    let termsig =
-        TerminationSignal::init().map_err(|e| Error::ioerror_extra(e, "binding to signals"))?;
     tokio::select! {
         _ = server.run_server() => {},
         _ = termsig => {}

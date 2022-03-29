@@ -46,6 +46,15 @@ mod svc;
 
 /// Run the test suite
 pub fn run_test() -> HarnessResult<()> {
+    info!("Creating test directories");
+    for (server_id, _ports) in svc::SERVERS {
+        fs::create_dir_all(server_id).map_err(|e| {
+            HarnessError::Other(format!(
+                "Failed to create `{server_id}` dir with error: {e}"
+            ))
+        })?;
+    }
+
     let ret = run_test_inner();
     let kill_check = svc::kill_servers();
     util::sleep_sec(SLEEP_FOR_TERMINATION);
@@ -55,12 +64,13 @@ pub fn run_test() -> HarnessResult<()> {
 
     // clean up
     info!("Cleaning up test directories ...");
-    fs::remove_dir_all("server1").map_err(|e| {
-        HarnessError::Other(format!("Failed to remove dir `server1` with error: {e}"))
-    })?;
-    fs::remove_dir_all("server2").map_err(|e| {
-        HarnessError::Other(format!("Failed to remove dir `server1` with error: {e}"))
-    })?;
+    for (server_id, _ports) in svc::SERVERS {
+        fs::remove_dir_all(server_id).map_err(|e| {
+            HarnessError::Other(format!(
+                "Failed to remove dir `{server_id}` with error: {e}"
+            ))
+        })?;
+    }
     ret
 }
 
@@ -84,12 +94,6 @@ fn run_test_inner() -> HarnessResult<()> {
     pkeyfile
         .write_all(&pkey.private_key_to_pem_pkcs8().unwrap())
         .unwrap();
-    fs::create_dir_all("server1").map_err(|e| {
-        HarnessError::Other(format!("Failed to create `server1` dir with error: {e}"))
-    })?;
-    fs::create_dir_all("server2").map_err(|e| {
-        HarnessError::Other(format!("Failed to create `server2` dir with error: {e}"))
-    })?;
 
     // assemble commands
     let target_folder = util::get_target_folder(BuildMode::Debug);
