@@ -119,6 +119,14 @@ impl Runner {
     }
 }
 
+fn print_float(float: f32, idx: Option<usize>) {
+    if let Some(idx) = idx {
+        println!("({idx}) {float}")
+    } else {
+        println!("{float}");
+    }
+}
+
 fn print_element(el: Element) {
     match el {
         Element::String(st) => write_str!(st),
@@ -131,6 +139,7 @@ fn print_element(el: Element) {
         Element::Array(Array::Recursive(a)) => print_array(a),
         Element::Array(Array::NonNullBin(nbrr)) => print_array_nonnull_bin(nbrr),
         Element::Array(Array::NonNullStr(nsrr)) => print_array_nonnull_str(nsrr),
+        Element::Float(float) => print_float(float, None),
         _ => eskysh!("The server possibly sent a newer data type that we can't parse"),
     }
 }
