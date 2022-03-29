@@ -265,7 +265,7 @@ mod bytemark_set_tests {
 mod bytemark_actual_table_restore {
     use crate::corestore::{
         memstore::ObjectID,
-        table::{DescribeTable, KVEList, Table, KVEBlob},
+        table::{DescribeTable, KVEBlob, KVEList, Table},
         Data,
     };
     use crate::kvengine::LockedVec;
@@ -693,5 +693,93 @@ mod corruption_tests {
         // now chop "7u64" (8+8+5+8+8+7)
         v.drain(29..37);
         assert!(super::de::deserialize_list_map(&v).is_none());
+    }
+}
+
+mod storage_target_directory_structure {
+    use crate::{
+        corestore::{
+            memstore::{Memstore, ObjectID},
+            table::{SystemTable, Table},
+        },
+        storage::v1::flush::{self, LocalSnapshot, RemoteSnapshot},
+        util::{
+            os::{self, EntryKind},
+            Wrapper,
+        },
+    };
+    enum FileKind {
+        Dir(&'static str),
+        File(&'static str),
+    }
+    impl FileKind {
+        fn into_entrykind_path(self, closure: impl Fn(&'static str) -> String + Copy) -> EntryKind {
+            match self {
+                Self::Dir(dir) => EntryKind::Directory(closure(dir)),
+                Self::File(file) => EntryKind::File(closure(file)),
+            }
+        }
+    }
+    fn get_memstore_and_file_list() -> (Memstore, Vec<FileKind>) {
+        let paths = vec![
+            // the default keyspace
+            FileKind::Dir("default"),
+            FileKind::File("default/default"),
+            FileKind::File("default/PARTMAP"),
+            // the superks keyspace
+            FileKind::Dir("superks"),
+            FileKind::File("superks/PARTMAP"),
+            FileKind::File("superks/blueshark"),
+            // the system keyspace
+            FileKind::Dir("system"),
+            FileKind::File("system/PARTMAP"),
+            FileKind::File("system/superauthy"),
+            // the preload file
+            FileKind::File("PRELOAD"),
+        ];
+        (get_memstore(), paths)
+    }
+    fn get_memstore() -> Memstore {
+        let store = Memstore::new_default();
+        assert!(store.create_keyspace(ObjectID::try_from_slice("superks").unwrap()));
+        assert!(store
+            .get_keyspace_atomic_ref("superks".as_bytes())
+            .unwrap()
+            .create_table(
+                ObjectID::try_from_slice("blueshark").unwrap(),
+                Table::new_default_kve()
+            ));
+        assert!(store.system.tables.true_if_insert(
+            ObjectID::try_from_slice("superauthy").unwrap(),
+            Wrapper::new(SystemTable::new_auth(Default::default()))
+        ));
+        store
+    }
+    use std::fs;
+    #[test]
+    fn local_snapshot_dir() {
+        let (store, paths) = get_memstore_and_file_list();
+        let paths = paths
+            .into_iter()
+            .map(|v| v.into_entrykind_path(|file| format!("data/snaps/localsnap/{file}")))
+            .collect::<Vec<EntryKind>>();
+        let target = LocalSnapshot::new("localsnap".to_owned());
+        flush::flush_full(target, &store).unwrap();
+        let files = os::rlistdir("data/snaps/localsnap").unwrap();
+        assert_veceq!(files, paths);
+        fs::remove_dir_all("data/snaps/localsnap").unwrap();
+    }
+    #[test]
+    fn remote_snapshot_dir() {
+        let (store, paths) = get_memstore_and_file_list();
+        let paths = paths
+            .into_iter()
+            .map(|v| v.into_entrykind_path(|file| format!("data/rsnap/wisnap/{file}")))
+            .collect::<Vec<EntryKind>>();
+        let target = RemoteSnapshot::new("wisnap");
+        flush::flush_full(target, &store).unwrap();
+        let files = os::rlistdir("data/rsnap/wisnap").unwrap();
+        assert_veceq!(files, paths);
+        fs::remove_dir_all("data/rsnap/wisnap").unwrap();
     }
 }

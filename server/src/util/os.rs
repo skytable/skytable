@@ -209,3 +209,42 @@ fn rcopy_okay() {
     fs::remove_dir_all("testdata").unwrap();
     fs::remove_dir_all("my-backups").unwrap();
 }
+
+#[derive(Debug, PartialEq)]
+pub enum EntryKind {
+    Directory(String),
+    File(String),
+}
+
+impl EntryKind {
+    pub fn get_inner(&self) -> &str {
+        match self {
+            Self::Directory(rf) | Self::File(rf) => rf,
+        }
+    }
+}
+
+/// Returns a vector with a complete list of entries (both directories and files)
+/// in the given path (recursive extraction)
+pub fn rlistdir(path: impl AsRef<Path>) -> crate::IoResult<Vec<EntryKind>> {
+    let mut ret = Vec::new();
+    rlistdir_inner(path.as_ref(), &mut ret)?;
+    Ok(ret)
+}
+
+fn rlistdir_inner(path: &Path, paths: &mut Vec<EntryKind>) -> crate::IoResult<()> {
+    let dir = fs::read_dir(path)?;
+    for entry in dir {
+        let entry = entry?;
+        let path = entry.path();
+        let path_str = path.to_string_lossy().to_string();
+        // we want both directory names and file names
+        if path.is_dir() {
+            paths.push(EntryKind::Directory(path_str));
+            rlistdir_inner(&path, paths)?;
+        } else {
+            paths.push(EntryKind::File(path_str));
+        }
+    }
+    Ok(())
+}

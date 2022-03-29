@@ -36,6 +36,7 @@ All changes in this project will be noted in this file.
   - Fixed bug where the preload wasn't flushed if a snapshot already flushed it before the
     save on termination routine
   - Fixed bug that prevented tree cleanup from working
+  - Disallow `PRELOAD` and `PARTMAP` as entity names
 
 ## Version 0.7.4
 
