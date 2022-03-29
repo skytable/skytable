@@ -60,7 +60,7 @@ use core::slice;
 /// The Skyhash protocol version
 pub const PROTOCOL_VERSION: f32 = 1.2;
 /// The Skyhash protocol version string (Skyhash-x.y)
-pub const PROTOCOL_VERSIONSTRING: &[u8] = b"Skyhash-1.1";
+pub const PROTOCOL_VERSIONSTRING: &str = "Skyhash-1.1";
 
 const ASCII_UNDERSCORE: u8 = b'_';
 const ASCII_AMPERSAND: u8 = b'&';

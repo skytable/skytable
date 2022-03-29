@@ -29,8 +29,8 @@ mod tests {
     use skytable::{query, Element, Pipeline, RespCode};
     async fn test_pipeline_heya_echo() {
         let pipe = Pipeline::new()
-            .add(query!("heya", "first"))
-            .add(query!("heya", "second"));
+            .append(query!("heya", "first"))
+            .append(query!("heya", "second"));
         let ret = con.run_pipeline(pipe).await.unwrap();
         assert_eq!(
             ret,
@@ -41,7 +41,9 @@ mod tests {
         )
     }
     async fn test_pipeline_basic() {
-        let pipe = Pipeline::new().add(query!("heya")).add(query!("get", "x"));
+        let pipe = Pipeline::new()
+            .append(query!("heya"))
+            .append(query!("get", "x"));
         let ret = con.run_pipeline(pipe).await.unwrap();
         assert_eq!(
             ret,
@@ -54,8 +56,8 @@ mod tests {
     // although an error is simply just a response, but we'll still add a test for sanity
     async fn test_pipeline_with_error() {
         let pipe = Pipeline::new()
-            .add(query!("heya"))
-            .add(query!("get", "x", "y"));
+            .append(query!("heya"))
+            .append(query!("get", "x", "y"));
         let ret = con.run_pipeline(pipe).await.unwrap();
         assert_eq!(
             ret,

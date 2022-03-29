@@ -49,3 +49,87 @@ mod tls {
         );
     }
 }
+
+mod sys {
+    use crate::protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING};
+    use libsky::VERSION;
+    use sky_macros::dbtest_func as dbtest;
+    use skytable::{query, Element, RespCode};
+    const UNKNOWN_ACTION: &str = "Unknown action";
+    #[dbtest]
+    async fn test_sys_unknown_action() {
+        runeq!(
+            con,
+            query!("sys", "what"),
+            Element::RespCode(RespCode::ErrorString(UNKNOWN_ACTION.to_owned()))
+        );
+    }
+    #[dbtest]
+    async fn test_sys_info_aerr() {
+        runeq!(
+            con,
+            query!("sys", "info"),
+            Element::RespCode(RespCode::ActionError)
+        );
+        runeq!(
+            con,
+            query!(
+                "sys",
+                "info",
+                "this is cool",
+                "but why this extra argument?"
+            ),
+            Element::RespCode(RespCode::ActionError)
+        )
+    }
+    #[dbtest]
+    async fn test_sys_info_protocol() {
+        runeq!(
+            con,
+            query!("sys", "info", "protocol"),
+            Element::String(PROTOCOL_VERSIONSTRING.to_owned())
+        )
+    }
+    #[dbtest]
+    async fn test_sys_info_protover() {
+        runeq!(
+            con,
+            query!("sys", "info", "protover"),
+            Element::Float(PROTOCOL_VERSION)
+        )
+    }
+    #[dbtest]
+    async fn test_sys_info_version() {
+        runeq!(
+            con,
+            query!("sys", "info", "version"),
+            Element::String(VERSION.to_owned())
+        )
+    }
+    #[dbtest]
+    async fn test_sys_metric_aerr() {
+        runeq!(
+            con,
+            query!("sys", "metric"),
+            Element::RespCode(RespCode::ActionError)
+        );
+        runeq!(
+            con,
+            query!(
+                "sys",
+                "metric",
+                "this is cool",
+                "but why this extra argument?"
+            ),
+            Element::RespCode(RespCode::ActionError)
+        )
+    }
+    #[dbtest]
+    async fn test_sys_metric_health() {
+        runeq!(
+            con,
+            query!("sys", "metric", "health"),
+            Element::String("good".to_owned())
+        )
+    }
+}

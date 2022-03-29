@@ -538,9 +538,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d39cd93900197114fa1fcb7ae84ca742095eed9442088988ae74fa744e930e77"
+checksum = "9be70c98951c83b8d2f8f60d7065fa6d5146873094452a1008da8c2f1e4205ad"
 dependencies = [
  "cfg-if",
  "libc",
@@ -1350,7 +1350,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0-alpha.4"
-source = "git+https://github.com/skytable/client-rust?branch=next#6d1affbc5a0ec9c9d4a1cb98f6542962fef6aac1"
+source = "git+https://github.com/skytable/client-rust?branch=next#0fead63b0f5e80cef6106dd56e833812091aceeb"
 dependencies = [
  "async-trait",
  "bb8",
@@ -1364,7 +1364,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0-alpha.4"
-source = "git+https://github.com/skytable/client-rust.git#6d1affbc5a0ec9c9d4a1cb98f6542962fef6aac1"
+source = "git+https://github.com/skytable/client-rust.git#0fead63b0f5e80cef6106dd56e833812091aceeb"
 dependencies = [
  "r2d2",
 ]
@@ -1426,9 +1426,9 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"
-version = "1.0.89"
+version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea297be220d52398dcc07ce15a209fce436d361735ac1db700cab3b6cdfb9f54"
+checksum = "704df27628939572cd88d33f171cd6f896f4eaca85252c6e0a72d8d8287ee86f"
 dependencies = [
  "proc-macro2",
  "quote",
