@@ -1,6 +1,6 @@
 [package]
 name = "sky-migrate"
-version = "0.7.4"
+version = "0.7.5"
 authors = ["Sayan Nandan <nandansayan@outlook.com>"]
 edition = "2021"
 

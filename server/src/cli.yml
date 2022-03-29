@@ -1,5 +1,5 @@
 name: Skytable Server
-version: 0.7.4
+version: 0.7.5
 author: Sayan N. <ohsayan@outlook.com>
 about: The Skytable Database server
 args:

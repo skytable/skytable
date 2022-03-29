@@ -6,6 +6,13 @@ All changes in this project will be noted in this file.
 
 ### Additions
 
+- `sys` action for system information and metrics:
+  - `info`: For static properties:
+    - `version`: Server version
+    - `protocol`: Protocol version string (Skyhash-x.y)
+    - `protover`: Protocol version float
+  - `metric`: For dynamic properties:
+    - `health`: System health
 - `INSPECT KEYSPACE` without arguments to inspect the current keyspace
 - `INSPECT TABLE` without arguments to inspect the current table
 - `AUTH WHOAMI` returns the AuthID of the currently logged in user
