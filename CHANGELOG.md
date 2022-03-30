@@ -13,6 +13,7 @@ All changes in this project will be noted in this file.
     - `protover`: Protocol version float
   - `metric`: For dynamic properties:
     - `health`: System health
+    - `storage`: Bytes used for on-disk storage
 - `INSPECT KEYSPACE` without arguments to inspect the current keyspace
 - `INSPECT TABLE` without arguments to inspect the current table
 - `AUTH WHOAMI` returns the AuthID of the currently logged in user

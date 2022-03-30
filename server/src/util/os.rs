@@ -273,3 +273,21 @@ fn rlistdir_inner(path: &Path, paths: &mut Vec<EntryKind>) -> crate::IoResult<()
     }
     Ok(())
 }
+
+fn dir_size_inner(dir: fs::ReadDir) -> IoResult<u64> {
+    let mut ret = 0;
+    for entry in dir {
+        let entry = entry?;
+        let size = match entry.metadata()? {
+            meta if meta.is_dir() => dir_size_inner(fs::read_dir(entry.path())?)?,
+            meta => meta.len(),
+        };
+        ret += size;
+    }
+    Ok(ret)
+}
+
+/// Returns the size of a directory by recursively scanning it
+pub fn dirsize(path: impl AsRef<Path>) -> IoResult<u64> {
+    dir_size_inner(fs::read_dir(path.as_ref())?)
+}

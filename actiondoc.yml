@@ -153,6 +153,7 @@ global:
           Returns dynamic properties of the system, i.e metrics are properties that can change during
           runtime. The following metrics are available:
             - `health`: Returns "good" or "critical" depending on the system state (String)
+            - `storage`: Returns bytes used for on-disk storage (uint64)
 
 keyvalue:
   generic:

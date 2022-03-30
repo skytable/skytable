@@ -42,7 +42,7 @@ mod snapshot;
 mod tls {
     use skytable::{query, Element};
     #[sky_macros::dbtest_func(tls_cert = "cert.pem", port = 2004)]
-    async fn test_tls() {
+    async fn tls() {
         runeq!(
             con,
             query!("heya", "abcd"),
@@ -57,7 +57,7 @@ mod sys {
     use sky_macros::dbtest_func as dbtest;
     use skytable::{query, Element, RespCode};
     #[dbtest]
-    async fn test_sys_info_aerr() {
+    async fn sys_info_aerr() {
         runeq!(
             con,
             query!("sys", "info"),
@@ -75,7 +75,7 @@ mod sys {
         )
     }
     #[dbtest]
-    async fn test_sys_info_protocol() {
+    async fn sys_info_protocol() {
         runeq!(
             con,
             query!("sys", "info", "protocol"),
@@ -83,7 +83,7 @@ mod sys {
         )
     }
     #[dbtest]
-    async fn test_sys_info_protover() {
+    async fn sys_info_protover() {
         runeq!(
             con,
             query!("sys", "info", "protover"),
@@ -91,7 +91,7 @@ mod sys {
         )
     }
     #[dbtest]
-    async fn test_sys_info_version() {
+    async fn sys_info_version() {
         runeq!(
             con,
             query!("sys", "info", "version"),
@@ -99,7 +99,7 @@ mod sys {
         )
     }
     #[dbtest]
-    async fn test_sys_metric_aerr() {
+    async fn sys_metric_aerr() {
         runeq!(
             con,
             query!("sys", "metric"),
@@ -107,21 +107,24 @@ mod sys {
         );
         runeq!(
             con,
-            query!(
-                "sys",
-                "metric",
-                "this is cool",
-                "but why this extra argument?"
-            ),
+            query!("sys", "metric", "health", "but why this extra argument?"),
             Element::RespCode(RespCode::ActionError)
         )
     }
     #[dbtest]
-    async fn test_sys_metric_health() {
+    async fn sys_metric_health() {
         runeq!(
             con,
             query!("sys", "metric", "health"),
             Element::String("good".to_owned())
+        )
+    }
+    #[dbtest]
+    async fn sys_storage_usage() {
+        runmatch!(
+            con,
+            query!("sys", "metric", "storage"),
+            Element::UnsignedInt
         )
     }
 }

@@ -24,9 +24,12 @@
  *
 */
 
-use crate::corestore::booltable::BoolTable;
-use crate::dbnet::connection::prelude::*;
-use crate::protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING};
+use crate::{
+    corestore::booltable::BoolTable,
+    dbnet::connection::prelude::*,
+    protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING},
+    storage::v1::interface::DIR_ROOT,
+};
 use ::libsky::VERSION;
 
 const INFO: &[u8] = b"info";
@@ -35,6 +38,7 @@ const INFO_PROTOCOL: &[u8] = b"protocol";
 const INFO_PROTOVER: &[u8] = b"protover";
 const INFO_VERSION: &[u8] = b"version";
 const METRIC_HEALTH: &[u8] = b"health";
+const METRIC_STORAGE_USAGE: &[u8] = b"storage";
 const ERR_UNKNOWN_PROPERTY: &[u8] = b"!16\nunknown-property\n";
 const ERR_UNKNOWN_METRIC: &[u8] = b"!14\nunknown-metric\n";
 
@@ -63,6 +67,15 @@ action! {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             METRIC_HEALTH => {
                 con.write_response(HEALTH_TABLE[registry::state_okay()]).await?
+            }
+            METRIC_STORAGE_USAGE => {
+                match util::os::dirsize(DIR_ROOT) {
+                    Ok(size) => con.write_response(size).await?,
+                    Err(e) => {
+                        log::error!("Failed to get storage usage with: {e}");
+                        con.write_response(groups::SERVER_ERR).await?
+                    },
+                }
             }
             _ => return util::err(ERR_UNKNOWN_METRIC),
         }
