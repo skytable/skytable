@@ -26,7 +26,7 @@
 
 use crate::{
     build::BuildMode,
-    util::{self, SLEEP_FOR_TERMINATION},
+    util::{self},
     HarnessError, HarnessResult,
 };
 use openssl::{
@@ -57,7 +57,7 @@ pub fn run_test() -> HarnessResult<()> {
 
     let ret = run_test_inner();
     let kill_check = svc::kill_servers();
-    util::sleep_sec(SLEEP_FOR_TERMINATION);
+    svc::wait_for_server_exit()?;
     if let Err(e) = kill_check {
         error!("Failed to kill servers with error: {e}");
     }

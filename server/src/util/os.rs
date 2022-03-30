@@ -25,6 +25,7 @@
 */
 
 #[cfg(unix)]
+use std::ffi::OsStr;
 pub use unix::*;
 #[cfg(windows)]
 pub use windows::*;
@@ -217,10 +218,33 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
+    pub fn into_inner(self) -> String {
+        match self {
+            Self::Directory(path) | Self::File(path) => path,
+        }
+    }
     pub fn get_inner(&self) -> &str {
         match self {
             Self::Directory(rf) | Self::File(rf) => rf,
         }
+    }
+}
+
+impl ToString for EntryKind {
+    fn to_string(&self) -> String {
+        self.get_inner().to_owned()
+    }
+}
+
+impl AsRef<str> for EntryKind {
+    fn as_ref(&self) -> &str {
+        self.get_inner()
+    }
+}
+
+impl AsRef<OsStr> for EntryKind {
+    fn as_ref(&self) -> &OsStr {
+        OsStr::new(self.get_inner())
     }
 }
 

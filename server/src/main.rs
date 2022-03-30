@@ -116,6 +116,11 @@ fn main() {
             process::exit(1);
         }
     };
+    {
+        // remove this file in debug builds for harness to pick it up
+        #[cfg(debug_assertions)]
+        std::fs::remove_file(PID_FILE_PATH).unwrap();
+    }
     log::info!("Stopped accepting incoming connections");
     arbiter::finalize_shutdown(db, pid_file);
 }

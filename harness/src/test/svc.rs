@@ -25,7 +25,7 @@
 */
 
 use crate::{
-    util::{self, SLEEP_FOR_TERMINATION},
+    util::{self},
     HarnessError, HarnessResult,
 };
 use skytable::Connection;
@@ -36,6 +36,8 @@ use std::{
     path::Path,
     process::{Child, Command},
 };
+
+const ROOT_DIR: &str = env!("ROOT_DIR");
 #[cfg(windows)]
 /// The powershell script hack to send CTRL+C using kernel32
 const POWERSHELL_SCRIPT: &str = include_str!("../../../ci/windows/stop.ps1");
@@ -68,6 +70,26 @@ pub fn get_run_server_cmd(server_id: &'static str, target_folder: impl AsRef<Pat
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NEW_CONSOLE);
     cmd
+}
+
+pub(super) fn wait_for_server_exit() -> HarnessResult<()> {
+    for (server_id, _) in SERVERS {
+        let mut backoff = 1;
+        let path = format!("{ROOT_DIR}{server_id}/.sky_pid");
+        while Path::new(&path).exists() {
+            if backoff > 64 {
+                return Err(HarnessError::Other(format!(
+                    "Backoff elapsed. {server_id} process did not exit. PID file still present"
+                )));
+            }
+            info!("{server_id} process still live. Sleeping for {backoff} second(s)");
+            util::sleep_sec(backoff);
+            backoff *= 2;
+        }
+        info!("{server_id} has exited completely");
+    }
+    info!("All servers have exited completely");
+    Ok(())
 }
 
 fn connection_refused<T>(input: Result<T, IoError>) -> HarnessResult<bool> {
@@ -143,9 +165,8 @@ fn wait_for_shutdown() -> HarnessResult<()> {
             info!("Server at {connection_string} has stopped accepting connections");
         }
     }
-    info!("All servers have stopped accepting connections. Allowing {SLEEP_FOR_TERMINATION} seconds for them to exit");
-    util::sleep_sec(SLEEP_FOR_TERMINATION);
-    info!("All servers have shutdown");
+    info!("All servers have stopped accepting connections. Waiting for complete process exit");
+    wait_for_server_exit()?;
     Ok(())
 }
 
@@ -182,7 +203,6 @@ pub(super) fn run_with_servers(
 pub(super) fn kill_servers() -> HarnessResult<()> {
     info!("Terminating server instances ...");
     kill_servers_inner()?;
-    info!("Sent termination signals");
     Ok(())
 }
 

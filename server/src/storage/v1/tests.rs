@@ -708,6 +708,8 @@ mod storage_target_directory_structure {
             Wrapper,
         },
     };
+    use std::collections::HashSet;
+    use std::path::PathBuf;
     enum FileKind {
         Dir(&'static str),
         File(&'static str),
@@ -755,6 +757,19 @@ mod storage_target_directory_structure {
         ));
         store
     }
+    fn ensure_paths_equality(a: Vec<EntryKind>, b: Vec<EntryKind>) {
+        assert_eq!(a.len(), b.len());
+        let aset: HashSet<PathBuf> = a
+            .iter()
+            .map(|apath| PathBuf::from(apath.to_string()))
+            .collect();
+        let bset: HashSet<PathBuf> = a
+            .iter()
+            .map(|bpath| PathBuf::from(bpath.to_string()))
+            .collect();
+        aset.into_iter()
+            .for_each(|apath| assert_eq!(&apath, bset.get(&apath).unwrap()));
+    }
     use std::fs;
     #[test]
     fn local_snapshot_dir() {
@@ -766,7 +781,7 @@ mod storage_target_directory_structure {
         let target = LocalSnapshot::new("localsnap".to_owned());
         flush::flush_full(target, &store).unwrap();
         let files = os::rlistdir("data/snaps/localsnap").unwrap();
-        assert_veceq!(files, paths);
+        ensure_paths_equality(files, paths);
         fs::remove_dir_all("data/snaps/localsnap").unwrap();
     }
     #[test]
@@ -779,7 +794,7 @@ mod storage_target_directory_structure {
         let target = RemoteSnapshot::new("wisnap");
         flush::flush_full(target, &store).unwrap();
         let files = os::rlistdir("data/rsnap/wisnap").unwrap();
-        assert_veceq!(files, paths);
+        ensure_paths_equality(files, paths);
         fs::remove_dir_all("data/rsnap/wisnap").unwrap();
     }
 }
