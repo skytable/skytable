@@ -44,6 +44,8 @@
 //!
 
 use proc_macro::TokenStream;
+use quote::quote;
+use syn::Lit;
 
 mod dbtest_fn;
 mod dbtest_mod;
@@ -98,4 +100,58 @@ pub fn dbtest_module(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
     dbtest_fn::dbtest_func(args, item)
+}
+
+#[proc_macro]
+/// Get a compile time respcode/respstring array. For example, if you pass: "Unknown action",
+/// it will return: `!14\nUnknown Action\n`
+pub fn compiled_eresp_array(tokens: TokenStream) -> TokenStream {
+    _get_eresp_array(tokens)
+}
+
+fn _get_eresp_array(tokens: TokenStream) -> TokenStream {
+    let payload_str = match syn::parse_macro_input!(tokens as Lit) {
+        Lit::Str(st) => st.value(),
+        _ => panic!("Expected a string literal"),
+    };
+    let payload_bytes = payload_str.as_bytes();
+    let payload_len = payload_bytes.len();
+    let payload_len_str = payload_len.to_string();
+    let payload_len_bytes = payload_len_str.as_bytes();
+    let mut processed = quote! {
+        b'!',
+    };
+    for byte in payload_len_bytes {
+        processed = quote! {
+            #processed
+            #byte,
+        };
+    }
+    processed = quote! {
+        #processed
+        b'\n',
+    };
+    for byte in payload_bytes {
+        processed = quote! {
+            #processed
+            #byte,
+        }
+    }
+    processed = quote! {
+        [#processed
+        b'\n',]
+    };
+    processed.into()
+}
+
+#[proc_macro]
+/// Get a compile time respcode/respstring slice. For example, if you pass: "Unknown action",
+/// it will return: `!14\nUnknown Action\n`
+pub fn compiled_eresp_bytes(tokens: TokenStream) -> TokenStream {
+    let ret = compiled_eresp_array(tokens);
+    let ret = syn::parse_macro_input!(ret as syn::Expr);
+    quote! {
+        &#ret
+    }
+    .into()
 }
