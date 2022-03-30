@@ -41,6 +41,7 @@ All changes in this project will be noted in this file.
   - Fixed edge case where time on host is incorrect, resulting in bad snapshot names which might
     ultimately lead to loss of snapshot data
   - Fixed remote snapshots with same names being overwritten
+- (sky-bench) Fixed `testkey` causing RSTs
 
 ## Version 0.7.4
 

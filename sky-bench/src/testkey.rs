@@ -44,7 +44,7 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
-            let mut buf = [0u8; 7];
+            let mut buf = [0u8; 8];
             let _ = sock.read_exact(&mut buf).unwrap();
         },
         |socket| {
