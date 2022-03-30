@@ -30,7 +30,7 @@ use skytable::{query, Element, RespCode};
 const SNAPSHOT_DISABLED: &str = "err-snapshot-disabled";
 
 #[dbtest]
-async fn test_snapshot_local_disabled() {
+async fn snapshot_fail_because_local_disabled() {
     runeq!(
         con,
         query!("mksnap"),
@@ -39,16 +39,49 @@ async fn test_snapshot_local_disabled() {
 }
 
 #[dbtest(skip_if_cfg = "persist-suite")]
-async fn test_snapshot_remote_okay() {
-    assert_okay!(con, query!("mksnap", "myremote"))
+async fn rsnap_okay() {
+    loop {
+        match con.run_query_raw(query!("mksnap", "myremo")).await.unwrap() {
+            Element::RespCode(RespCode::Okay) => break,
+            Element::RespCode(RespCode::ErrorString(estr)) if estr.eq("err-snapshot-busy") => {}
+            x => panic!("snapshot failed: {:?}", x),
+        }
+    }
 }
 
 #[dbtest(port = 2007)]
-async fn test_snapshot_local_okay() {
+async fn local_snapshot_from_remote_okay() {
     assert_okay!(con, query!("mksnap"))
 }
 
 #[dbtest(port = 2007, skip_if_cfg = "persist-suite")]
-async fn test_snapshot_remote_okay_with_local_enabled() {
-    assert_okay!(con, query!("mksnap", "myremote"))
+async fn remote_snapshot_okay_with_local_enabled() {
+    loop {
+        match con.run_query_raw(query!("mksnap", "myremo")).await.unwrap() {
+            Element::RespCode(RespCode::Okay) => break,
+            Element::RespCode(RespCode::ErrorString(estr)) if estr.eq("err-snapshot-busy") => {}
+            x => panic!("snapshot failed: {:?}", x),
+        }
+    }
+}
+
+#[dbtest(port = 2007, skip_if_cfg = "persist-suite")]
+async fn remote_snapshot_fail_because_already_exists() {
+    loop {
+        match con.run_query_raw(query!("mksnap", "dupe")).await.unwrap() {
+            Element::RespCode(RespCode::Okay) => break,
+            Element::RespCode(RespCode::ErrorString(estr)) if estr.eq("err-snapshot-busy") => {}
+            x => panic!("snapshot failed: {:?}", x),
+        }
+    }
+    loop {
+        match con.run_query_raw(query!("mksnap", "dupe")).await.unwrap() {
+            Element::RespCode(RespCode::ErrorString(estr)) => match estr.as_str() {
+                "err-snapshot-busy" => {}
+                "duplicate-snapshot" => break,
+                _ => panic!("Got error string: {estr} instead"),
+            },
+            x => panic!("snapshot failed: {:?}", x),
+        }
+    }
 }

@@ -25,7 +25,7 @@
 */
 
 use self::queue::Queue;
-use super::interface::DIR_SNAPROOT;
+use super::interface::{DIR_RSNAPROOT, DIR_SNAPROOT};
 use crate::corestore::iarray::IArray;
 use crate::corestore::lazy::Lazy;
 use crate::corestore::lock::QuickLock;
@@ -36,6 +36,7 @@ use chrono::prelude::Utc;
 use core::fmt;
 use core::str;
 use regex::Regex;
+use std::collections::HashSet;
 use std::fs;
 use std::io::Error as IoError;
 use std::sync::Arc;
@@ -92,41 +93,70 @@ pub struct SnapshotEngine {
     /// the local snapshot queue
     local_queue: QuickLock<Queue>,
     /// the remote snapshot lock
-    remote_lock: QuickLock<()>,
+    remote_queue: QuickLock<HashSet<Bytes>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SnapshotActionResult {
+    Ok,
+    Busy,
+    Disabled,
+    Failure,
+    AlreadyExists,
 }
 
 impl SnapshotEngine {
     /// Returns a fresh, uninitialized snapshot engine instance
-    pub const fn new(maxlen: usize) -> Self {
+    pub fn new(maxlen: usize) -> Self {
         Self {
             local_enabled: true,
             local_queue: QuickLock::new(Queue::new(maxlen, maxlen == 0)),
-            remote_lock: QuickLock::new(()),
+            remote_queue: QuickLock::new(HashSet::new()),
         }
     }
-    pub const fn new_disabled() -> Self {
+    pub fn new_disabled() -> Self {
         Self {
             local_enabled: false,
             local_queue: QuickLock::new(Queue::new(0, true)),
-            remote_lock: QuickLock::new(()),
+            remote_queue: QuickLock::new(HashSet::new()),
         }
     }
-    pub fn parse_dir(&self) -> SnapshotResult<()> {
-        let dir = fs::read_dir(DIR_SNAPROOT)?;
-        let mut local_queue = self.local_queue.lock();
+    fn _parse_dir(
+        dir: &str,
+        is_okay: impl Fn(&str) -> bool,
+        mut append: impl FnMut(String),
+    ) -> SnapshotResult<()> {
+        let dir = fs::read_dir(dir)?;
         for entry in dir {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
                 let fname = entry.file_name();
                 let name = fname.to_string_lossy();
-                if !SNAP_MATCH.is_match(&name) {
-                    return Err("unknown file in snapshot directory".into());
+                if !is_okay(&name) {
+                    return Err("unknown folder in snapshot directory".into());
                 }
-                local_queue.push(name.to_string());
+                append(name.to_string());
             } else {
                 return Err("unrecognized file in snapshot directory".into());
             }
         }
+        Ok(())
+    }
+    pub fn parse_dir(&self) -> SnapshotResult<()> {
+        let mut local_queue = self.local_queue.lock();
+        Self::_parse_dir(
+            DIR_SNAPROOT,
+            |name| SNAP_MATCH.is_match(name),
+            |snapshot| local_queue.push(snapshot),
+        )?;
+        let mut remote_queue = self.remote_queue.lock();
+        Self::_parse_dir(
+            DIR_RSNAPROOT,
+            |_| true,
+            |rsnap| {
+                remote_queue.insert(Bytes::from(rsnap));
+            },
+        )?;
         Ok(())
     }
     /// Generate the snapshot name
@@ -148,12 +178,12 @@ impl SnapshotEngine {
     /// - `1` => Error
     /// - `2` => Disabled
     /// - `3` => Busy
-    pub async fn mksnap(&self, store: Arc<Memstore>) -> u8 {
+    pub async fn mksnap(&self, store: Arc<Memstore>) -> SnapshotActionResult {
         if self.local_enabled {
             // try to lock the local queue
             let mut queue = match self.local_queue.try_lock() {
                 Some(lck) => lck,
-                None => return 3,
+                None => return SnapshotActionResult::Busy,
             };
             let name = self.get_snapname();
             let nameclone = name.clone();
@@ -173,7 +203,7 @@ impl SnapshotEngine {
                     log::error!("Failed to create snapshot with error: {}", e);
                     // so it failed, remove it from queue
                     let _ = queue.pop_last().unwrap();
-                    return 1;
+                    return SnapshotActionResult::Failure;
                 }
             }
 
@@ -189,9 +219,10 @@ impl SnapshotEngine {
                 .await
                 .expect("mksnap thread panicked");
             }
-            0
+            drop(queue);
+            SnapshotActionResult::Ok
         } else {
-            2
+            SnapshotActionResult::Disabled
         }
     }
     /// Spawns a blocking task to create a remote snapshot. Returns either of:
@@ -199,26 +230,33 @@ impl SnapshotEngine {
     /// - `1` => Error
     /// - `3` => Busy
     /// (consistent with mksnap)
-    pub async fn mkrsnap(&self, name: Bytes, store: Arc<Memstore>) -> u8 {
-        let _lck = match self.remote_lock.try_lock() {
+    pub async fn mkrsnap(&self, name: Bytes, store: Arc<Memstore>) -> SnapshotActionResult {
+        let mut remq = match self.remote_queue.try_lock() {
             Some(q) => q,
-            None => return 3,
+            None => return SnapshotActionResult::Busy,
         };
-        tokio::task::spawn_blocking(move || {
-            let name_str = unsafe {
-                // SAFETY: We have already checked if name is UTF-8
-                str::from_utf8_unchecked(&name)
-            };
-            if let Err(e) = Self::_rmksnap_blocking_section(&store, name_str) {
-                log::error!("Remote snapshot failed with: {}", e);
-                1
-            } else {
-                log::info!("Remote snapshot succeeded");
-                0
-            }
-        })
-        .await
-        .expect("rmksnap thread panicked")
+        if remq.contains(&name) {
+            SnapshotActionResult::AlreadyExists
+        } else {
+            let nameclone = name.clone();
+            let ret = tokio::task::spawn_blocking(move || {
+                let name_str = unsafe {
+                    // SAFETY: We have already checked if name is UTF-8
+                    str::from_utf8_unchecked(&nameclone)
+                };
+                if let Err(e) = Self::_rmksnap_blocking_section(&store, name_str) {
+                    log::error!("Remote snapshot failed with: {}", e);
+                    SnapshotActionResult::Failure
+                } else {
+                    log::info!("Remote snapshot succeeded");
+                    SnapshotActionResult::Ok
+                }
+            })
+            .await
+            .expect("rmksnap thread panicked");
+            assert!(remq.insert(name));
+            ret
+        }
     }
 }
 

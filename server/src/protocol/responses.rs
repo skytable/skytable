@@ -59,6 +59,8 @@ pub mod groups {
     pub const SNAPSHOT_BUSY: &[u8] = "!17\nerr-snapshot-busy\n".as_bytes();
     /// Snapshot disabled (other error)
     pub const SNAPSHOT_DISABLED: &[u8] = "!21\nerr-snapshot-disabled\n".as_bytes();
+    /// Duplicate snapshot
+    pub const SNAPSHOT_DUPLICATE: &[u8] = "!18\nduplicate-snapshot\n".as_bytes();
     /// Snapshot has illegal name (other error)
     pub const SNAPSHOT_ILLEGAL_NAME: &[u8] = "!25\nerr-invalid-snapshot-name\n".as_bytes();
     /// Access after termination signal (other error)

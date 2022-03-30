@@ -28,7 +28,7 @@ use crate::config::SnapshotConfig;
 use crate::corestore::Corestore;
 use crate::dbnet::Terminator;
 use crate::registry;
-use crate::storage::v1::sengine::SnapshotEngine;
+use crate::storage::v1::sengine::{SnapshotActionResult, SnapshotEngine};
 use std::sync::Arc;
 use tokio::time::{self, Duration};
 
@@ -56,7 +56,7 @@ pub async fn snapshot_service(
             loop {
                 tokio::select! {
                     _ = time::sleep_until(time::Instant::now() + duration) => {
-                        let succeeded = engine.mksnap(handle.clone_store()).await == 0;
+                        let succeeded = engine.mksnap(handle.clone_store()).await == SnapshotActionResult::Ok;
                         #[cfg(test)]
                         {
                             use std::env::set_var;

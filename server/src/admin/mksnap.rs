@@ -26,6 +26,7 @@
 
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding;
+use crate::storage::v1::sengine::SnapshotActionResult;
 use core::str;
 use std::path::{Component, PathBuf};
 
@@ -37,10 +38,10 @@ action!(
         if act.is_empty() {
             // traditional mksnap
             match engine.mksnap(handle.clone_store()).await {
-                0 => conwrite!(con, groups::OKAY)?,
-                1 => conwrite!(con, groups::SERVER_ERR)?,
-                2 => conwrite!(con, groups::SNAPSHOT_DISABLED)?,
-                3 => conwrite!(con, groups::SNAPSHOT_BUSY)?,
+                SnapshotActionResult::Ok => conwrite!(con, groups::OKAY)?,
+                SnapshotActionResult::Failure => conwrite!(con, groups::SERVER_ERR)?,
+                SnapshotActionResult::Disabled => conwrite!(con, groups::SNAPSHOT_DISABLED)?,
+                SnapshotActionResult::Busy => conwrite!(con, groups::SNAPSHOT_BUSY)?,
                 _ => unsafe { impossible!() },
             }
         } else if act.len() == 1 {
@@ -76,9 +77,10 @@ action!(
 
             // now make the snapshot
             match engine.mkrsnap(name, handle.clone_store()).await {
-                0 => conwrite!(con, groups::OKAY)?,
-                1 => conwrite!(con, groups::SERVER_ERR)?,
-                3 => conwrite!(con, groups::SNAPSHOT_BUSY)?,
+                SnapshotActionResult::Ok => conwrite!(con, groups::OKAY)?,
+                SnapshotActionResult::Failure => conwrite!(con, groups::SERVER_ERR)?,
+                SnapshotActionResult::Busy => conwrite!(con, groups::SNAPSHOT_BUSY)?,
+                SnapshotActionResult::AlreadyExists => conwrite!(con, groups::SNAPSHOT_DUPLICATE)?,
                 _ => unsafe { impossible!() },
             }
         } else {
