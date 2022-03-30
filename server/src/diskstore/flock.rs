@@ -31,12 +31,11 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove lint or remove offending methods
 
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::Result;
-use std::io::Write;
-use std::io::{Seek, SeekFrom};
-use std::path::PathBuf;
+use std::{
+    fs::{File, OpenOptions},
+    io::{Result, Seek, SeekFrom, Write},
+    path::Path,
+};
 
 #[derive(Debug)]
 /// # File Lock
@@ -63,14 +62,14 @@ impl FileLock {
     /// Initialize a new `FileLock` by locking a file
     ///
     /// This function will create and lock a file if it doesn't exist or it
-    /// will create and lock a new file
+    /// will lock the existing file
     /// **This will immediately fail if locking fails, i.e it is non-blocking**
-    pub fn lock(filename: impl Into<PathBuf>) -> Result<Self> {
+    pub fn lock(filename: impl AsRef<Path>) -> Result<Self> {
         let file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
-            .open(filename.into())?;
+            .open(filename.as_ref())?;
         Self::_lock(&file)?;
         Ok(Self {
             file,

@@ -41,14 +41,14 @@ jobs:
       ARTIFACT: ${{ matrix.artifact }}
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/cache@v2
-        name: Restore cache
+      - name: Restore cache
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ matrix.rust }}-${{ hashFiles('Cargo.lock') }}
+            ./target
+          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |
@@ -94,14 +94,14 @@ jobs:
       ARTIFACT: ${{ matrix.artifact }}
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/cache@v2
-        name: Restore cache
+      - name: Restore cache
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ matrix.rust }}-${{ hashFiles('**/lockfiles') }}
+            ./target
+          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install 32-bit tools (Linux)
         run: sudo apt update && sudo apt install gcc-multilib -y

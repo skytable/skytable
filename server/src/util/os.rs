@@ -25,10 +25,11 @@
 */
 
 #[cfg(unix)]
-use std::ffi::OsStr;
 pub use unix::*;
 #[cfg(windows)]
 pub use windows::*;
+
+use std::ffi::OsStr;
 
 #[cfg(unix)]
 mod unix {

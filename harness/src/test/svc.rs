@@ -26,7 +26,7 @@
 
 use crate::{
     util::{self},
-    HarnessError, HarnessResult,
+    HarnessError, HarnessResult, ROOT_DIR,
 };
 use skytable::Connection;
 #[cfg(windows)]
@@ -37,7 +37,6 @@ use std::{
     process::{Child, Command},
 };
 
-const ROOT_DIR: &str = env!("ROOT_DIR");
 #[cfg(windows)]
 /// The powershell script hack to send CTRL+C using kernel32
 const POWERSHELL_SCRIPT: &str = include_str!("../../../ci/windows/stop.ps1");
@@ -76,10 +75,11 @@ pub(super) fn wait_for_server_exit() -> HarnessResult<()> {
     for (server_id, _) in SERVERS {
         let mut backoff = 1;
         let path = format!("{ROOT_DIR}{server_id}/.sky_pid");
-        while Path::new(&path).exists() {
+        let filepath = Path::new(&path);
+        while filepath.exists() {
             if backoff > 64 {
                 return Err(HarnessError::Other(format!(
-                    "Backoff elapsed. {server_id} process did not exit. PID file still present"
+                    "Backoff elapsed. {server_id} process did not exit. PID file at {path} still present"
                 )));
             }
             info!("{server_id} process still live. Sleeping for {backoff} second(s)");

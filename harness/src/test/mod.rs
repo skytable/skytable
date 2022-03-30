@@ -57,9 +57,11 @@ pub fn run_test() -> HarnessResult<()> {
 
     let ret = run_test_inner();
     let kill_check = svc::kill_servers();
-    svc::wait_for_server_exit()?;
     if let Err(e) = kill_check {
         error!("Failed to kill servers with error: {e}");
+    }
+    if let Err(e) = svc::wait_for_server_exit() {
+        error!("Servers did not terminate successfully: {e}");
     }
 
     // clean up

@@ -52,27 +52,14 @@ jobs:
           chmod +x ci/setvars.sh
           ci/setvars.sh
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
+      - name: Restore cache
+        uses: actions/cache@v3
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ./target
+          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |
@@ -134,29 +121,14 @@ jobs:
         with:
           install: "HTML::Entities"
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
+      - name: Restore cache
+        uses: actions/cache@v3
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ./target
+          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |
@@ -216,29 +188,14 @@ jobs:
           chmod +x ci/setvars.sh
           ci/setvars.sh
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v2
+      - name: Restore cache
+        uses: actions/cache@v3
         with:
-          path: ~/.cargo/registry
-          key: ${{ matrix.rust }}-cargo-registry-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v2
-        with:
-          path: ~/.cargo/git
-          key: ${{ matrix.rust }}-cargo-index-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-cargo-index-
-
-      - name: Cache Cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ matrix.rust }}-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ matrix.rust }}-target-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ./target
+          key: ${{ matrix.rust }}-rscache-${{ hashFiles('Cargo.lock') }}
 
       - name: Install Rust
         run: |

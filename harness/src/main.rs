@@ -44,6 +44,8 @@ use crate::{
 use env_logger::Builder;
 use std::{env, process};
 
+const ROOT_DIR: &str = env!("ROOT_DIR");
+
 fn main() {
     Builder::new()
         .parse_filters(&env::var("SKYHARNESS_LOG").unwrap_or_else(|_| "info".to_owned()))
