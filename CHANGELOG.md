@@ -37,6 +37,9 @@ All changes in this project will be noted in this file.
     save on termination routine
   - Fixed bug that prevented tree cleanup from working
   - Disallow `PRELOAD` and `PARTMAP` as entity names
+  - Fixed edge case where time on host is incorrect, resulting in bad snapshot names which might
+    ultimately lead to loss of snapshot data
+  - Fixed remote snapshots with same names being overwritten
 
 ## Version 0.7.4
 

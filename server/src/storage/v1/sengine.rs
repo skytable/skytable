@@ -39,6 +39,7 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Error as IoError;
+use std::path::Path;
 use std::sync::Arc;
 
 type QStore = IArray<[String; 64]>;
@@ -164,9 +165,13 @@ impl SnapshotEngine {
         Utc::now().format("%Y%m%d-%H%M%S").to_string()
     }
     fn _mksnap_blocking_section(store: &Memstore, name: String) -> SnapshotResult<()> {
-        let snapshot = LocalSnapshot::new(name);
-        super::flush::flush_full(snapshot, store)?;
-        Ok(())
+        if Path::new(&format!("{DIR_SNAPROOT}/{name}")).exists() {
+            Err(SnapshotEngineError::Engine("Server time is incorrect"))
+        } else {
+            let snapshot = LocalSnapshot::new(name);
+            super::flush::flush_full(snapshot, store)?;
+            Ok(())
+        }
     }
     fn _rmksnap_blocking_section(store: &Memstore, name: &str) -> SnapshotResult<()> {
         let snapshot = RemoteSnapshot::new(name);
