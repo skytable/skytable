@@ -202,11 +202,19 @@ impl<'a> Entity<'a> {
     }
     #[inline(always)]
     fn verify_entity_name(input: &[u8]) -> Result<&[u8], &'static [u8]> {
-        let valid_name = input.len() < 65
+        let mut valid_name = input.len() < 65
             && encoding::is_utf8(input)
-            && unsafe { VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(input)) }
-            && input != b"PARTMAP"
-            && input != b"PRELOAD";
+            && unsafe { VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(input)) };
+        #[cfg(windows)]
+        {
+            // paths on Windows are case insensitive that's why this is necessary
+            valid_name &=
+                !(input.eq_ignore_ascii_case(b"PRELOAD") || input.eq_ignore_ascii_case(b"PARTMAP"));
+        }
+        #[cfg(not(windows))]
+        {
+            valid_name &= (input != b"PRELOAD") && (input != b"PARTMAP");
+        }
         if compiler::likely(valid_name && !input.is_empty()) {
             // valid name
             Ok(input)

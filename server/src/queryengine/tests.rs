@@ -365,4 +365,17 @@ mod entity_parser_tests {
             responses::groups::BAD_CONTAINER_NAME
         );
     }
+    #[test]
+    fn ks_or_table_with_preload_or_partmap() {
+        let badname = byt!("PARTMAP");
+        assert_eq!(
+            Entity::from_slice(&badname).unwrap_err(),
+            responses::groups::BAD_CONTAINER_NAME
+        );
+        let badname = byt!("PRELOAD");
+        assert_eq!(
+            Entity::from_slice(&badname).unwrap_err(),
+            responses::groups::BAD_CONTAINER_NAME
+        );
+    }
 }
