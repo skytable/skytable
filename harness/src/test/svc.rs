@@ -216,7 +216,7 @@ fn kill_servers_inner() -> HarnessResult<()> {
 #[cfg(windows)]
 /// HACK(@ohsayan): Kill the servers using a powershell hack
 fn kill_servers_inner() -> HarnessResult<()> {
-    match powershell_script::run(POWERSHELL_SCRIPT, false) {
+    match powershell_script::run(POWERSHELL_SCRIPT) {
         Ok(_) => Ok(()),
         Err(e) => Err(HarnessError::Other(format!(
             "Failed to run powershell script with error: {e}"
