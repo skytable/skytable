@@ -155,7 +155,11 @@ fn has_remaining_with_incr() {
 fn exhausted() {
     for src in slices() {
         let parser = Parser::new(&src);
-        assert!(!parser.exhausted());
+        if src.is_empty() {
+            assert!(parser.exhausted());
+        } else {
+            assert!(!parser.exhausted())
+        }
     }
 }
 #[test]
