@@ -40,6 +40,7 @@
 pub mod element;
 pub mod iter;
 pub mod responses;
+pub mod v2;
 bench! {
     mod benches;
 }
