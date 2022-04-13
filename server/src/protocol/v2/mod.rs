@@ -31,6 +31,7 @@ use core::marker::PhantomData;
 #[cfg(test)]
 mod tests;
 
+/// A parser for Skyhash 2.0
 pub struct Parser<'a> {
     end: *const u8,
     cursor: *const u8,
@@ -98,6 +99,7 @@ impl<'a> Parser<'a> {
 
 // higher level abstractions
 impl<'a> Parser<'a> {
+    /// Attempt to read `len` bytes
     fn read_until(&mut self, len: usize) -> ParseResult<UnsafeSlice> {
         if self.has_remaining(len) {
             unsafe {
@@ -110,6 +112,7 @@ impl<'a> Parser<'a> {
             Err(ParseError::NotEnough)
         }
     }
+    /// Attempt to read a byte slice terminated by an LF
     fn read_line(&mut self) -> ParseResult<UnsafeSlice> {
         let start_ptr = self.cursor_ptr();
         unsafe {
@@ -124,5 +127,28 @@ impl<'a> Parser<'a> {
                 Err(ParseError::NotEnough)
             }
         }
+    }
+    fn read_usize(&mut self) -> ParseResult<usize> {
+        let line = self.read_line()?;
+        let bytes = unsafe {
+            // UNSAFE(@ohsayan): We just extracted the slice
+            line.as_slice()
+        };
+        let mut ret = 0usize;
+        for byte in bytes {
+            if byte.is_ascii_digit() {
+                ret = match ret.checked_mul(10) {
+                    Some(r) => r,
+                    None => return Err(ParseError::DatatypeParseFailure),
+                };
+                ret = match ret.checked_add((byte - b'0') as _) {
+                    Some(r) => r,
+                    None => return Err(ParseError::DatatypeParseFailure),
+                };
+            } else {
+                return Err(ParseError::DatatypeParseFailure);
+            }
+        }
+        Ok(ret)
     }
 }

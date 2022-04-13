@@ -196,6 +196,7 @@ fn exhausted_with_incr() {
     }
 }
 
+// not_exhausted
 #[test]
 fn not_exhausted() {
     for src in slices() {
@@ -238,6 +239,7 @@ fn ensure_zero_reads(parser: &mut Parser) {
     }
 }
 
+// read_until
 #[test]
 fn read_until_empty() {
     let b = v!(b"");
@@ -303,6 +305,7 @@ fn slices_lf_with_len() -> IterPacketWithLen {
     get_slices_with_len(slices_lf())
 }
 
+// read_line
 #[test]
 fn read_line_special_case_only_lf() {
     let b = v!(b"\n");
@@ -334,9 +337,9 @@ fn read_line() {
             }
             // now, we attempt to read which should work
             ensure_zero_reads(&mut parser);
-            // now, we attempt to read another line which should fail
-            assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
         }
+        // now, we attempt to read another line which should fail
+        assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
         // ensure that cursor is at end
         unsafe {
             assert_eq!(parser.cursor_ptr(), src.as_ptr().add(len));
