@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
                     Some(r) => r,
                     None => return Err(ParseError::DatatypeParseFailure),
                 };
-                ret = match ret.checked_add((byte - b'0') as _) {
+                ret = match ret.checked_add((byte & 0x0F) as _) {
                     Some(r) => r,
                     None => return Err(ParseError::DatatypeParseFailure),
                 };

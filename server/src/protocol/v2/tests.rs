@@ -489,6 +489,11 @@ fn read_usize_fail_empty() {
         Parser::new(&payload).read_usize().unwrap_err(),
         ParseError::NotEnough
     );
+    let payload = v!(b"\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::NotEnough
+    );
 }
 
 #[test]
@@ -506,4 +511,33 @@ fn read_usize_okay() {
     assert_eq!(Parser::new(&payload).read_usize().unwrap(), 1);
     let payload = v!(b"1234\n");
     assert_eq!(Parser::new(&payload).read_usize().unwrap(), 1234);
+}
+
+#[test]
+fn read_usize_fail() {
+    let payload = v!(b"a\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::DatatypeParseFailure
+    );
+    let payload = v!(b"1a\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::DatatypeParseFailure
+    );
+    let payload = v!(b"a1\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::DatatypeParseFailure
+    );
+    let payload = v!(b"aa\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::DatatypeParseFailure
+    );
+    let payload = v!(b"12345abcde\n");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::DatatypeParseFailure
+    );
 }
