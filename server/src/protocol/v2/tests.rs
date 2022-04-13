@@ -419,3 +419,91 @@ fn read_line_subsequent_lf() {
     }
     ensure_exhausted(&p1);
 }
+
+#[test]
+fn read_line_pedantic_okay() {
+    for (len, src) in slices_lf_with_len() {
+        let mut parser = Parser::new(&src);
+        if len == 0 {
+            // should be empty, so NotEnough
+            assert_eq!(
+                parser.read_line_pedantic().unwrap_err(),
+                ParseError::NotEnough
+            );
+        } else {
+            // should work
+            unsafe {
+                assert_eq!(
+                    parser.read_line_pedantic().unwrap().as_slice(),
+                    &src.as_slice()[..len - 1]
+                );
+            }
+            // now, we attempt to read which should work
+            ensure_zero_reads(&mut parser);
+        }
+        // ensure it is exhausted
+        ensure_exhausted(&parser);
+        // now, we attempt to read another line which should fail
+        assert_eq!(
+            parser.read_line_pedantic().unwrap_err(),
+            ParseError::NotEnough
+        );
+        // ensure that cursor is at end
+        unsafe {
+            assert_eq!(parser.cursor_ptr(), src.as_ptr().add(len));
+        }
+    }
+}
+
+#[test]
+fn read_line_pedantic_fail_empty() {
+    let payload = v!(b"");
+    assert_eq!(
+        Parser::new(&payload).read_line_pedantic().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
+fn read_line_pedantic_fail_only_lf() {
+    let payload = v!(b"\n");
+    assert_eq!(
+        Parser::new(&payload).read_line_pedantic().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
+fn read_line_pedantic_fail_only_lf_extra_data() {
+    let payload = v!(b"\n1");
+    assert_eq!(
+        Parser::new(&payload).read_line_pedantic().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
+fn read_usize_fail_empty() {
+    let payload = v!(b"");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
+fn read_usize_fail_no_lf() {
+    let payload = v!(b"1");
+    assert_eq!(
+        Parser::new(&payload).read_usize().unwrap_err(),
+        ParseError::NotEnough
+    );
+}
+
+#[test]
+fn read_usize_okay() {
+    let payload = v!(b"1\n");
+    assert_eq!(Parser::new(&payload).read_usize().unwrap(), 1);
+    let payload = v!(b"1234\n");
+    assert_eq!(Parser::new(&payload).read_usize().unwrap(), 1234);
+}

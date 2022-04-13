@@ -128,8 +128,25 @@ impl<'a> Parser<'a> {
             }
         }
     }
+    /// Attempt to read a line, **rejecting an empty payload**
+    fn read_line_pedantic(&mut self) -> ParseResult<UnsafeSlice> {
+        let start_ptr = self.cursor_ptr();
+        unsafe {
+            while self.not_exhausted() && self.get_byte_at_cursor() != b'\n' {
+                self.incr_cursor();
+            }
+            let len = self.cursor_ptr() as usize - start_ptr as usize;
+            if self.not_exhausted() && len != 0 && self.get_byte_at_cursor() == b'\n' {
+                self.incr_cursor(); // skip LF
+                Ok(UnsafeSlice::new(start_ptr, len))
+            } else {
+                Err(ParseError::NotEnough)
+            }
+        }
+    }
+    /// Attempt to read an `usize` from the buffer
     fn read_usize(&mut self) -> ParseResult<usize> {
-        let line = self.read_line()?;
+        let line = self.read_line_pedantic()?;
         let bytes = unsafe {
             // UNSAFE(@ohsayan): We just extracted the slice
             line.as_slice()
