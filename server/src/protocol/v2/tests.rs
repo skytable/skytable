@@ -183,3 +183,36 @@ fn exhausted_with_incr() {
         }
     }
 }
+
+#[test]
+fn not_exhausted() {
+    for src in slices() {
+        let parser = Parser::new(&src);
+        if src.is_empty() {
+            assert!(!parser.not_exhausted());
+        } else {
+            assert!(parser.not_exhausted())
+        }
+    }
+}
+#[test]
+fn not_exhausted_with_incr() {
+    for (len, src) in slices_with_len() {
+        let mut parser = Parser::new(&src);
+        if len == 0 {
+            assert!(!parser.not_exhausted());
+        } else {
+            assert!(parser.not_exhausted());
+            unsafe {
+                parser.incr_cursor();
+                if len == 1 {
+                    assert!(!parser.not_exhausted());
+                } else {
+                    assert!(parser.not_exhausted());
+                    parser.incr_cursor_by(len - 1);
+                    assert!(!parser.not_exhausted());
+                }
+            }
+        }
+    }
+}
