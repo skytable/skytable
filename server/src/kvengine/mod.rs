@@ -269,7 +269,7 @@ impl KVEListmap {
         Ok(self
             .data
             .get(listname)
-            .map(|list| list.read().iter().cloned().take(count).collect()))
+            .map(|list| list.read().iter().take(count).cloned().collect()))
     }
     pub fn list_cloned_full(&self, listname: &[u8]) -> EncodingResult<Option<Vec<Data>>> {
         self.check_key_encoding(listname)?;

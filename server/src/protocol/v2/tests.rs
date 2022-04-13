@@ -29,6 +29,9 @@ use crate::protocol::ParseError;
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;
 
+type IterPacketWithLen = Map<VecIntoIter<Vec<u8>>, fn(Vec<u8>) -> (usize, Vec<u8>)>;
+type Packets = Vec<Vec<u8>>;
+
 macro_rules! v {
     () => {
         vec![]
@@ -38,8 +41,12 @@ macro_rules! v {
     };
 }
 
+fn get_slices(slices: &[&[u8]]) -> Packets {
+    slices.iter().map(|slc| slc.to_vec()).collect()
+}
+
 // We do this intentionally for "heap simulation"
-fn slices() -> Vec<Vec<u8>> {
+fn slices() -> Packets {
     const SLICE_COLLECTION: &[&[u8]] = &[
         b"",
         b"a",
@@ -56,11 +63,15 @@ fn slices() -> Vec<Vec<u8>> {
         b"abcdefghijkl",
         b"abcdefghijklm",
     ];
-    SLICE_COLLECTION.iter().map(|slc| slc.to_vec()).collect()
+    get_slices(SLICE_COLLECTION)
 }
 
-fn slices_with_len() -> Map<VecIntoIter<Vec<u8>>, impl FnMut(Vec<u8>) -> (usize, Vec<u8>)> {
-    slices().into_iter().map(|slc| (slc.len(), slc))
+fn get_slices_with_len(slices: Packets) -> IterPacketWithLen {
+    slices.into_iter().map(|slc| (slc.len(), slc))
+}
+
+fn slices_with_len() -> IterPacketWithLen {
+    get_slices_with_len(slices())
 }
 
 // data_end_ptr
@@ -265,5 +276,72 @@ fn read_until_not_enough() {
         );
         // should the above fail, zero reads should still work
         ensure_zero_reads(&mut parser);
+    }
+}
+
+fn slices_lf() -> Packets {
+    const SLICE_COLLECTION: &[&[u8]] = &[
+        b"",
+        b"a\n",
+        b"ab\n",
+        b"abc\n",
+        b"abcd\n",
+        b"abcde\n",
+        b"abcdef\n",
+        b"abcdefg\n",
+        b"abcdefgh\n",
+        b"abcdefghi\n",
+        b"abcdefghij\n",
+        b"abcdefghijk\n",
+        b"abcdefghijkl\n",
+        b"abcdefghijklm\n",
+    ];
+    get_slices(SLICE_COLLECTION)
+}
+
+fn slices_lf_with_len() -> IterPacketWithLen {
+    get_slices_with_len(slices_lf())
+}
+
+#[test]
+fn read_line_special_case_only_lf() {
+    let b = v!(b"\n");
+    let mut parser = Parser::new(&b);
+    unsafe {
+        let r = parser.read_line().unwrap();
+        let slice = r.as_slice();
+        assert_eq!(slice, b"");
+        assert!(slice.is_empty());
+    };
+    // ensure it is exhausted
+    assert!(parser.exhausted());
+}
+
+#[test]
+fn read_line() {
+    for (len, src) in slices_lf_with_len() {
+        let mut parser = Parser::new(&src);
+        if len == 0 {
+            // should be empty, so NotEnough
+            assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
+        } else {
+            // should work
+            unsafe {
+                assert_eq!(
+                    parser.read_line().unwrap().as_slice(),
+                    &src.as_slice()[..len - 1]
+                );
+            }
+            // now, we attempt to read which should work
+            ensure_zero_reads(&mut parser);
+            // now, we attempt to read another line which should fail
+            assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
+        }
+        // ensure that cursor is at end
+        unsafe {
+            assert_eq!(parser.cursor_ptr(), src.as_ptr().add(len));
+        }
+        // ensure it is exhausted
+        assert!(parser.exhausted());
     }
 }

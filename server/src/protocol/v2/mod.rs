@@ -110,4 +110,19 @@ impl<'a> Parser<'a> {
             Err(ParseError::NotEnough)
         }
     }
+    fn read_line(&mut self) -> ParseResult<UnsafeSlice> {
+        let start_ptr = self.cursor_ptr();
+        unsafe {
+            while self.not_exhausted() && self.get_byte_at_cursor() != b'\n' {
+                self.incr_cursor();
+            }
+            if self.not_exhausted() && self.get_byte_at_cursor() == b'\n' {
+                let len = self.cursor_ptr() as usize - start_ptr as usize;
+                self.incr_cursor(); // skip LF
+                Ok(UnsafeSlice::new(start_ptr, len))
+            } else {
+                Err(ParseError::NotEnough)
+            }
+        }
+    }
 }
