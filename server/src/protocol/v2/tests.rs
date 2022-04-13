@@ -25,6 +25,7 @@
 */
 
 use super::Parser;
+use crate::protocol::ParseError;
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;
 
@@ -214,5 +215,55 @@ fn not_exhausted_with_incr() {
                 }
             }
         }
+    }
+}
+
+fn ensure_zero_reads(parser: &mut Parser) {
+    let r = parser.read_until(0).unwrap();
+    unsafe {
+        let slice = r.as_slice();
+        assert_eq!(slice, b"");
+        assert!(slice.is_empty());
+    }
+}
+
+#[test]
+fn read_until_empty() {
+    let b = v!(b"");
+    let mut parser = Parser::new(&b);
+    ensure_zero_reads(&mut parser);
+    assert_eq!(parser.read_until(1).unwrap_err(), ParseError::NotEnough);
+}
+
+#[test]
+fn read_until_nonempty() {
+    for (len, src) in slices_with_len() {
+        let mut parser = Parser::new(&src);
+        // should always work
+        ensure_zero_reads(&mut parser);
+        // now read the entire length; should always work
+        let r = parser.read_until(len).unwrap();
+        unsafe {
+            let slice = r.as_slice();
+            assert_eq!(slice, src.as_slice());
+            assert_eq!(slice.len(), len);
+        }
+        // even after the buffer is exhausted, `0` should always work
+        ensure_zero_reads(&mut parser);
+    }
+}
+
+#[test]
+fn read_until_not_enough() {
+    for (len, src) in slices_with_len() {
+        let mut parser = Parser::new(&src);
+        ensure_zero_reads(&mut parser);
+        // try to read more than the amount of data bufferred
+        assert_eq!(
+            parser.read_until(len + 1).unwrap_err(),
+            ParseError::NotEnough
+        );
+        // should the above fail, zero reads should still work
+        ensure_zero_reads(&mut parser);
     }
 }
