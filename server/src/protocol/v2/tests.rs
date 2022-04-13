@@ -41,8 +41,32 @@ macro_rules! v {
     };
 }
 
+fn ensure_exhausted(p: &Parser) {
+    assert!(!p.not_exhausted());
+    assert!(p.exhausted());
+}
+
+fn ensure_remaining(p: &Parser, r: usize) {
+    assert_eq!(p.remaining(), r);
+    assert!(p.has_remaining(r));
+}
+
+fn ensure_not_exhausted(p: &Parser) {
+    assert!(p.not_exhausted());
+    assert!(!p.exhausted());
+}
+
 fn get_slices(slices: &[&[u8]]) -> Packets {
     slices.iter().map(|slc| slc.to_vec()).collect()
+}
+
+fn ensure_zero_reads(parser: &mut Parser) {
+    let r = parser.read_until(0).unwrap();
+    unsafe {
+        let slice = r.as_slice();
+        assert_eq!(slice, b"");
+        assert!(slice.is_empty());
+    }
 }
 
 // We do this intentionally for "heap simulation"
@@ -74,6 +98,31 @@ fn slices_with_len() -> IterPacketWithLen {
     get_slices_with_len(slices())
 }
 
+fn slices_lf() -> Packets {
+    const SLICE_COLLECTION: &[&[u8]] = &[
+        b"",
+        b"a\n",
+        b"ab\n",
+        b"abc\n",
+        b"abcd\n",
+        b"abcde\n",
+        b"abcdef\n",
+        b"abcdefg\n",
+        b"abcdefgh\n",
+        b"abcdefghi\n",
+        b"abcdefghij\n",
+        b"abcdefghijk\n",
+        b"abcdefghijkl\n",
+        b"abcdefghijklm\n",
+    ];
+    get_slices(SLICE_COLLECTION)
+}
+
+fn slices_lf_with_len() -> IterPacketWithLen {
+    get_slices_with_len(slices_lf())
+}
+
+// "actual" tests
 // data_end_ptr
 #[test]
 fn data_end_ptr() {
@@ -230,15 +279,6 @@ fn not_exhausted_with_incr() {
     }
 }
 
-fn ensure_zero_reads(parser: &mut Parser) {
-    let r = parser.read_until(0).unwrap();
-    unsafe {
-        let slice = r.as_slice();
-        assert_eq!(slice, b"");
-        assert!(slice.is_empty());
-    }
-}
-
 // read_until
 #[test]
 fn read_until_empty() {
@@ -281,28 +321,27 @@ fn read_until_not_enough() {
     }
 }
 
-fn slices_lf() -> Packets {
-    const SLICE_COLLECTION: &[&[u8]] = &[
-        b"",
-        b"a\n",
-        b"ab\n",
-        b"abc\n",
-        b"abcd\n",
-        b"abcde\n",
-        b"abcdef\n",
-        b"abcdefg\n",
-        b"abcdefgh\n",
-        b"abcdefghi\n",
-        b"abcdefghij\n",
-        b"abcdefghijk\n",
-        b"abcdefghijkl\n",
-        b"abcdefghijklm\n",
-    ];
-    get_slices(SLICE_COLLECTION)
-}
-
-fn slices_lf_with_len() -> IterPacketWithLen {
-    get_slices_with_len(slices_lf())
+#[test]
+fn read_until_more_bytes() {
+    let sample1 = v!(b"abcd1");
+    let mut p1 = Parser::new(&sample1);
+    unsafe {
+        assert_eq!(
+            p1.read_until(&sample1.len() - 1).unwrap().as_slice(),
+            &sample1[..&sample1.len() - 1]
+        );
+        // ensure we have not exhasuted
+        ensure_not_exhausted(&p1);
+        ensure_remaining(&p1, 1);
+    }
+    let sample2 = v!(b"abcd1234567890!@#$");
+    let mut p2 = Parser::new(&sample2);
+    unsafe {
+        assert_eq!(p2.read_until(4).unwrap().as_slice(), &sample2[..4]);
+        // ensure we have not exhasuted
+        ensure_not_exhausted(&p2);
+        ensure_remaining(&p2, sample2.len() - 4);
+    }
 }
 
 // read_line
@@ -317,7 +356,7 @@ fn read_line_special_case_only_lf() {
         assert!(slice.is_empty());
     };
     // ensure it is exhausted
-    assert!(parser.exhausted());
+    ensure_exhausted(&parser);
 }
 
 #[test]
@@ -338,13 +377,45 @@ fn read_line() {
             // now, we attempt to read which should work
             ensure_zero_reads(&mut parser);
         }
+        // ensure it is exhausted
+        ensure_exhausted(&parser);
         // now, we attempt to read another line which should fail
         assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
         // ensure that cursor is at end
         unsafe {
             assert_eq!(parser.cursor_ptr(), src.as_ptr().add(len));
         }
-        // ensure it is exhausted
-        assert!(parser.exhausted());
     }
+}
+
+#[test]
+fn read_line_more_bytes() {
+    let sample1 = v!(b"abcd\n1");
+    let mut p1 = Parser::new(&sample1);
+    let line = p1.read_line().unwrap();
+    unsafe {
+        assert_eq!(line.as_slice(), b"abcd");
+    }
+    // we should still have one remaining
+    ensure_not_exhausted(&p1);
+    ensure_remaining(&p1, 1);
+}
+
+#[test]
+fn read_line_subsequent_lf() {
+    let sample1 = v!(b"abcd\n1\n");
+    let mut p1 = Parser::new(&sample1);
+    let line = p1.read_line().unwrap();
+    unsafe {
+        assert_eq!(line.as_slice(), b"abcd");
+    }
+    // we should still have two octets remaining
+    ensure_not_exhausted(&p1);
+    ensure_remaining(&p1, 2);
+    // and we should be able to read in another line
+    let line = p1.read_line().unwrap();
+    unsafe {
+        assert_eq!(line.as_slice(), b"1");
+    }
+    ensure_exhausted(&p1);
 }
