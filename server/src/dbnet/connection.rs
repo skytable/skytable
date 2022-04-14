@@ -68,7 +68,6 @@ type QueryWithAdvance = (Query, usize);
 pub enum QueryResult {
     Q(QueryWithAdvance),
     E(&'static [u8]),
-    Empty,
     Wrongtype,
 }
 
@@ -163,9 +162,6 @@ where
     }
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        if self.get_buffer().is_empty() {
-            return Err(ParseError::Empty);
-        }
         protocol::Parser::new(self.get_buffer()).parse()
     }
     /// Read a query from the remote end
@@ -188,7 +184,6 @@ where
                         Ok(query_with_advance) => {
                             return Ok(QueryResult::Q(query_with_advance));
                         }
-                        Err(ParseError::Empty) => return Ok(QueryResult::Empty),
                         Err(ParseError::NotEnough) => (),
                         Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
                         Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
@@ -478,7 +473,6 @@ where
                         .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
                         .await?
                 }
-                Ok(QueryResult::Empty) => return Ok(()),
                 #[cfg(windows)]
                 Err(e) => match e.kind() {
                     ErrorKind::ConnectionReset => return Ok(()),

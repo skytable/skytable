@@ -164,33 +164,27 @@ impl UnsafeSlice {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
 /// # Parser Errors
 ///
 /// Several errors can arise during parsing and this enum accounts for them
 pub enum ParseError {
     /// Didn't get the number of expected bytes
-    NotEnough,
-    /// The query contains an unexpected byte
-    UnexpectedByte,
+    NotEnough = 0,
     /// The packet simply contains invalid data
-    ///
-    /// This is rarely returned and only in the special cases where a bad client sends `0` as
-    /// the query count
-    BadPacket,
+    BadPacket = 1,
+    /// The query contains an unexpected byte
+    UnexpectedByte = 2,
     /// A data type was given but the parser failed to serialize it into this type
     ///
     /// This can happen not just for elements but can also happen for their sizes ([`Self::parse_into_u64`])
-    DatatypeParseFailure,
+    DatatypeParseFailure = 3,
     /// A data type that the server doesn't know was passed into the query
     ///
     /// This is a frequent problem that can arise between different server editions as more data types
     /// can be added with changing server versions
-    UnknownDatatype,
-    /// The query is empty
-    ///
-    /// The **parser will never return this**, but instead it is provided for convenience with [`dbnet`]
-    Empty,
+    UnknownDatatype = 4,
 }
 
 #[derive(Debug, PartialEq)]

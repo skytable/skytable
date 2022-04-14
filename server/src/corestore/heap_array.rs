@@ -24,68 +24,77 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
-use core::alloc::Layout;
-use core::fmt;
-use core::mem::ManuallyDrop;
-use core::ops::Deref;
-use core::ptr;
-use core::slice;
+use core::{alloc::Layout, fmt, marker::PhantomData, mem::ManuallyDrop, ops::Deref, ptr, slice};
 use std::alloc::dealloc;
 
 /// A heap-allocated array
-pub struct HeapArray {
-    ptr: *const u8,
+pub struct HeapArray<T> {
+    ptr: *const T,
     len: usize,
+    _marker: PhantomData<T>,
 }
 
-impl HeapArray {
-    pub fn new(mut v: Vec<u8>) -> Self {
+impl<T> HeapArray<T> {
+    #[cfg(test)]
+    pub fn new(mut v: Vec<T>) -> Self {
         v.shrink_to_fit();
         let v = ManuallyDrop::new(v);
         Self {
             ptr: v.as_ptr(),
             len: v.len(),
+            _marker: PhantomData,
         }
     }
-    pub fn as_slice(&self) -> &[u8] {
+    pub unsafe fn with_capacity(cap: usize) -> Self {
+        let v = ManuallyDrop::new(Vec::with_capacity(cap));
+        Self {
+            ptr: v.as_ptr(),
+            len: cap,
+            _marker: PhantomData,
+        }
+    }
+    pub unsafe fn write_to_index(&mut self, index: usize, data: T) {
+        debug_assert!(index < self.len);
+        ptr::write(self.ptr.add(index) as *mut _, data)
+    }
+    #[cfg(test)]
+    pub fn as_slice(&self) -> &[T] {
         self
     }
 }
 
-impl Drop for HeapArray {
+impl<T> Drop for HeapArray<T> {
     fn drop(&mut self) {
         unsafe {
             // run dtor
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr as *mut u8, self.len));
+            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr as *mut T, self.len));
             // deallocate
             if self.len != 0 {
-                let layout = Layout::array::<u8>(self.len).unwrap();
-                dealloc(self.ptr as *mut u8, layout);
+                let layout = Layout::array::<T>(self.len).unwrap();
+                dealloc(self.ptr as *mut T as *mut u8, layout);
             }
         }
     }
 }
 
 // totally fine because `u8`s can be safely shared across threads
-unsafe impl Send for HeapArray {}
-unsafe impl Sync for HeapArray {}
+unsafe impl<T: Send> Send for HeapArray<T> {}
+unsafe impl<T: Sync> Sync for HeapArray<T> {}
 
-impl Deref for HeapArray {
-    type Target = [u8];
+impl<T> Deref for HeapArray<T> {
+    type Target = [T];
     fn deref(&self) -> &Self::Target {
         unsafe { slice::from_raw_parts(self.ptr, self.len) }
     }
 }
 
-impl fmt::Debug for HeapArray {
+impl<T: fmt::Debug> fmt::Debug for HeapArray<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl PartialEq for HeapArray {
+impl<T: PartialEq> PartialEq for HeapArray<T> {
     fn eq(&self, other: &Self) -> bool {
         self == other
     }

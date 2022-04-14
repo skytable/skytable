@@ -24,7 +24,7 @@
  *
 */
 
-use super::Parser;
+use super::{Parser, PipelinedQuery, Query, QueryType, SimpleQuery};
 use crate::protocol::ParseError;
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;
@@ -39,6 +39,11 @@ macro_rules! v {
     ($literal:literal) => {
         $literal.to_vec()
     };
+    ($($lit:literal),*) => {
+        vec![$(
+            $lit.as_bytes().to_owned()
+        ),*]
+    }
 }
 
 fn ensure_exhausted(p: &Parser) {
@@ -120,6 +125,22 @@ fn slices_lf() -> Packets {
 
 fn slices_lf_with_len() -> IterPacketWithLen {
     get_slices_with_len(slices_lf())
+}
+
+fn simple_query(query: Query) -> SimpleQuery {
+    if let QueryType::Simple(sq) = query.data {
+        sq
+    } else {
+        panic!("Got pipeline instead of simple!");
+    }
+}
+
+fn pipelined_query(query: Query) -> PipelinedQuery {
+    if let QueryType::Pipelined(pq) = query.data {
+        pq
+    } else {
+        panic!("Got simple instead of pipeline!");
+    }
 }
 
 // "actual" tests
@@ -469,7 +490,7 @@ fn read_line_pedantic_fail_only_lf() {
     let payload = v!(b"\n");
     assert_eq!(
         Parser::new(&payload).read_line_pedantic().unwrap_err(),
-        ParseError::NotEnough
+        ParseError::BadPacket
     );
 }
 
@@ -478,7 +499,7 @@ fn read_line_pedantic_fail_only_lf_extra_data() {
     let payload = v!(b"\n1");
     assert_eq!(
         Parser::new(&payload).read_line_pedantic().unwrap_err(),
-        ParseError::NotEnough
+        ParseError::BadPacket
     );
 }
 
@@ -492,7 +513,7 @@ fn read_usize_fail_empty() {
     let payload = v!(b"\n");
     assert_eq!(
         Parser::new(&payload).read_usize().unwrap_err(),
-        ParseError::NotEnough
+        ParseError::BadPacket
     );
 }
 
@@ -540,4 +561,25 @@ fn read_usize_fail() {
         Parser::new(&payload).read_usize().unwrap_err(),
         ParseError::DatatypeParseFailure
     );
+}
+
+#[test]
+fn simple_query_okay() {
+    let body = v!(b"*3\n3\nSET1\nx3\n100");
+    let ret = Parser::parse(&body).unwrap();
+    assert_eq!(ret.forward, body.len());
+    let query = simple_query(ret);
+    assert_eq!(query.into_owned().data, v!["SET", "x", "100"]);
+}
+
+#[test]
+fn pipelined_query_okay() {
+    let body = v!(b"$2\n3\n3\nSET1\nx3\n1002\n3\nGET1\nx");
+    let ret = Parser::parse(&body).unwrap();
+    assert_eq!(ret.forward, body.len());
+    let query = pipelined_query(ret);
+    assert_eq!(
+        query.into_owned().data,
+        vec![v!["SET", "x", "100"], v!["GET", "x"]]
+    )
 }
