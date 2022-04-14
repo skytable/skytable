@@ -34,28 +34,51 @@ pub struct HeapArray<T> {
     _marker: PhantomData<T>,
 }
 
+pub struct HeapArrayWriter<T> {
+    base: Vec<T>,
+}
+
+impl<T> HeapArrayWriter<T> {
+    pub fn with_capacity(cap: usize) -> Self {
+        Self {
+            base: Vec::with_capacity(cap),
+        }
+    }
+    /// ## Safety
+    /// Caller must ensure that `idx <= cap`. If not, you'll corrupt your
+    /// memory
+    pub unsafe fn write_to_index(&mut self, idx: usize, element: T) {
+        debug_assert!(idx <= self.base.capacity());
+        ptr::write(self.base.as_mut_ptr().add(idx), element);
+        self.base.set_len(self.base.len() + 1);
+    }
+    /// ## Safety
+    /// This function can lead to memory unsafety in two ways:
+    /// - Excess capacity: In that case, it will leak memory
+    /// - Uninitialized elements: In that case, it will segfault while attempting to call
+    /// `T`'s dtor
+    pub unsafe fn finish(self) -> HeapArray<T> {
+        let base = ManuallyDrop::new(self.base);
+        HeapArray::new(base.as_ptr(), base.len())
+    }
+}
+
 impl<T> HeapArray<T> {
     #[cfg(test)]
-    pub fn new(mut v: Vec<T>) -> Self {
+    pub fn new_from_vec(mut v: Vec<T>) -> Self {
         v.shrink_to_fit();
         let v = ManuallyDrop::new(v);
+        unsafe { Self::new(v.as_ptr(), v.len()) }
+    }
+    pub unsafe fn new(ptr: *const T, len: usize) -> Self {
         Self {
-            ptr: v.as_ptr(),
-            len: v.len(),
+            ptr,
+            len,
             _marker: PhantomData,
         }
     }
-    pub unsafe fn with_capacity(cap: usize) -> Self {
-        let v = ManuallyDrop::new(Vec::with_capacity(cap));
-        Self {
-            ptr: v.as_ptr(),
-            len: cap,
-            _marker: PhantomData,
-        }
-    }
-    pub unsafe fn write_to_index(&mut self, index: usize, data: T) {
-        debug_assert!(index < self.len);
-        ptr::write(self.ptr.add(index) as *mut _, data)
+    pub fn new_writer(cap: usize) -> HeapArrayWriter<T> {
+        HeapArrayWriter::with_capacity(cap)
     }
     #[cfg(test)]
     pub fn as_slice(&self) -> &[T] {
@@ -69,10 +92,8 @@ impl<T> Drop for HeapArray<T> {
             // run dtor
             ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr as *mut T, self.len));
             // deallocate
-            if self.len != 0 {
-                let layout = Layout::array::<T>(self.len).unwrap();
-                dealloc(self.ptr as *mut T as *mut u8, layout);
-            }
+            let layout = Layout::array::<T>(self.len).unwrap();
+            dealloc(self.ptr as *mut T as *mut u8, layout);
         }
     }
 }
@@ -104,6 +125,6 @@ impl<T: PartialEq> PartialEq for HeapArray<T> {
 fn heaparray_impl() {
     // basically, this shouldn't segfault
     let heap_array = b"notasuperuser".to_vec();
-    let heap_array = HeapArray::new(heap_array);
+    let heap_array = HeapArray::new_from_vec(heap_array);
     assert_eq!(heap_array.as_slice(), b"notasuperuser");
 }

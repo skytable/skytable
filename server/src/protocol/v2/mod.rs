@@ -258,13 +258,13 @@ impl<'a> Parser<'a> {
     fn _next_simple_query(&mut self) -> ParseResult<HeapArray<UnsafeSlice>> {
         let element_count = self.read_usize()?;
         unsafe {
-            let mut data = HeapArray::with_capacity(element_count);
+            let mut data = HeapArray::new_writer(element_count);
             for i in 0..element_count {
                 let element_size = self.read_usize()?;
                 let element = self.read_until(element_size)?;
                 data.write_to_index(i, element);
             }
-            Ok(data)
+            Ok(data.finish())
         }
     }
     /// Parse a simple query
@@ -314,12 +314,14 @@ impl<'a> Parser<'a> {
     fn next_pipeline(&mut self) -> ParseResult<PipelinedQuery> {
         let query_count = self.read_usize()?;
         unsafe {
-            let mut queries = HeapArray::with_capacity(query_count);
+            let mut queries = HeapArray::new_writer(query_count);
             for i in 0..query_count {
                 let sq = self._next_simple_query()?;
                 queries.write_to_index(i, sq);
             }
-            Ok(PipelinedQuery { data: queries })
+            Ok(PipelinedQuery {
+                data: queries.finish(),
+            })
         }
     }
     fn _parse(&mut self) -> ParseResult<QueryType> {

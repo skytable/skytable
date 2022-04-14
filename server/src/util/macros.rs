@@ -122,7 +122,7 @@ macro_rules! action {
             $($(#[$attr])*
             pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
                 $($argname: $argty,)*
-            ) -> crate::actions::ActionResult<()>
+            ) -> $crate::actions::ActionResult<()>
             $block)*
     };
     (
@@ -137,7 +137,7 @@ macro_rules! action {
                 $argone: $argonety,
                 $argtwo: $argtwoty,
                 mut $argthree: $argthreety
-            ) -> crate::actions::ActionResult<()>
+            ) -> $crate::actions::ActionResult<()>
             $block)*
     };
 }
