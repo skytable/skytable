@@ -564,12 +564,36 @@ fn read_usize_fail() {
 }
 
 #[test]
+fn parse_fail_because_unknown_query_scheme() {
+    let body = v!(b"?3\n3\nSET1\nx3\n100");
+    assert_eq!(
+        Parser::parse(&body).unwrap_err(),
+        ParseError::UnexpectedByte
+    )
+}
+
+#[test]
 fn simple_query_okay() {
     let body = v!(b"*3\n3\nSET1\nx3\n100");
     let ret = Parser::parse(&body).unwrap();
     assert_eq!(ret.forward, body.len());
     let query = simple_query(ret);
     assert_eq!(query.into_owned().data, v!["SET", "x", "100"]);
+}
+#[test]
+fn parse_fail_because_not_enough() {
+    let full_payload = b"*3\n3\nSET1\nx3\n100";
+    let samples: Vec<Vec<u8>> = (0..full_payload.len() - 1)
+        .map(|i| full_payload.iter().take(i).cloned().collect())
+        .collect();
+    for body in samples {
+        assert_eq!(
+            Parser::parse(&body).unwrap_err(),
+            ParseError::NotEnough,
+            "Failed with body len: {}",
+            body.len()
+        )
+    }
 }
 
 #[test]
@@ -582,4 +606,16 @@ fn pipelined_query_okay() {
         query.into_owned().data,
         vec![v!["SET", "x", "100"], v!["GET", "x"]]
     )
+}
+
+#[test]
+fn pipelined_query_fail_because_not_enough() {
+    let full_payload = v!(b"$2\n3\n3\nSET1\nx3\n1002\n3\nGET1\nx");
+    let samples: Vec<Vec<u8>> = (0..full_payload.len() - 1)
+        .map(|i| full_payload.iter().cloned().take(i).collect())
+        .collect();
+    for body in samples {
+        let ret = Parser::parse(&body).unwrap_err();
+        assert_eq!(ret, ParseError::NotEnough)
+    }
 }

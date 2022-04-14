@@ -28,10 +28,11 @@
 
 use crate::corestore::heap_array::HeapArray;
 use crate::protocol::{ParseError, ParseResult, UnsafeSlice};
-use core::marker::PhantomData;
+use core::{marker::PhantomData, mem::transmute};
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub struct Query {
     forward: usize,
     data: QueryType,
@@ -43,11 +44,13 @@ impl Query {
     }
 }
 
+#[derive(Debug)]
 pub enum QueryType {
     Simple(SimpleQuery),
     Pipelined(PipelinedQuery),
 }
 
+#[derive(Debug)]
 pub struct SimpleQuery {
     data: HeapArray<UnsafeSlice>,
 }
@@ -70,6 +73,7 @@ struct OwnedSimpleQuery {
     data: Vec<Vec<u8>>,
 }
 
+#[derive(Debug)]
 pub struct PipelinedQuery {
     data: HeapArray<HeapArray<UnsafeSlice>>,
 }
@@ -207,7 +211,7 @@ impl<'a> Parser<'a> {
                 Ok(UnsafeSlice::new(start_ptr, len))
             } else {
                 // just some silly hackery
-                Err(*(&(1 & has_lf as u8) as *const u8 as *const ParseError))
+                Err(transmute(has_lf))
             }
         }
     }
@@ -312,7 +316,8 @@ impl<'a> Parser<'a> {
         unsafe {
             let mut queries = HeapArray::with_capacity(query_count);
             for i in 0..query_count {
-                queries.write_to_index(i, self._next_simple_query()?);
+                let sq = self._next_simple_query()?;
+                queries.write_to_index(i, sq);
             }
             Ok(PipelinedQuery { data: queries })
         }
