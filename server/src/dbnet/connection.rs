@@ -69,6 +69,7 @@ pub enum QueryResult {
     Q(QueryWithAdvance),
     E(&'static [u8]),
     Wrongtype,
+    Disconnected,
 }
 
 pub struct AuthProviderHandle<'a, T, Strm> {
@@ -135,31 +136,6 @@ pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
 where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    /// Try to fill the buffer again
-    fn read_again<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                let (buffer, stream) = mv_self.get_mut_both();
-                match stream.read_buf(buffer).await {
-                    Ok(0) => {
-                        if buffer.is_empty() {
-                            return Ok(());
-                        } else {
-                            return Err(IoError::from(ErrorKind::ConnectionReset));
-                        }
-                    }
-                    Ok(_) => Ok(()),
-                    Err(e) => return Err(e),
-                }
-            };
-            ret
-        })
-    }
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
         protocol::Parser::new(self.get_buffer()).parse()
@@ -177,26 +153,35 @@ where
     {
         Box::pin(async move {
             let mv_self = self;
-            let _: Result<QueryResult, IoError> = {
-                loop {
-                    mv_self.read_again().await?;
-                    match mv_self.try_query() {
-                        Ok(query_with_advance) => {
-                            return Ok(QueryResult::Q(query_with_advance));
-                        }
-                        Err(ParseError::NotEnough) => (),
-                        Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
-                        Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                            return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
-                        }
-                        Err(ParseError::UnknownDatatype) => {
-                            return Ok(QueryResult::E(
-                                responses::full_responses::R_UNKNOWN_DATA_TYPE,
-                            ));
+            loop {
+                let (buffer, stream) = mv_self.get_mut_both();
+                match stream.read_buf(buffer).await {
+                    Ok(0) => {
+                        if buffer.is_empty() {
+                            return Ok(QueryResult::Disconnected);
+                        } else {
+                            return Err(IoError::from(ErrorKind::ConnectionReset));
                         }
                     }
+                    Ok(_) => {}
+                    Err(e) => return Err(e),
                 }
-            };
+                match mv_self.try_query() {
+                    Ok(query_with_advance) => {
+                        return Ok(QueryResult::Q(query_with_advance));
+                    }
+                    Err(ParseError::NotEnough) => (),
+                    Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
+                    Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
+                        return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
+                    }
+                    Err(ParseError::UnknownDatatype) => {
+                        return Ok(QueryResult::E(
+                            responses::full_responses::R_UNKNOWN_DATA_TYPE,
+                        ));
+                    }
+                }
+            }
         })
     }
     /// Write a response to the stream
@@ -473,6 +458,7 @@ where
                         .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
                         .await?
                 }
+                Ok(QueryResult::Disconnected) => return Ok(()),
                 #[cfg(windows)]
                 Err(e) => match e.kind() {
                     ErrorKind::ConnectionReset => return Ok(()),
