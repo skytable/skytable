@@ -47,7 +47,7 @@ macro_rules! hoststr {
 macro_rules! sanity_test {
     ($host:expr, $port:expr) => {{
         // Run a sanity test
-        if let Err(e) = crate::util::run_sanity_test(&$host, $port) {
+        if let Err(e) = $crate::util::run_sanity_test(&$host, $port) {
             Err(e)
         } else {
             Ok(())

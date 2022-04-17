@@ -28,11 +28,11 @@ use crate::{
     util::{self},
     HarnessError, HarnessResult, ROOT_DIR,
 };
-use skytable::Connection;
+use skytable::{error::Error, Connection, SkyResult};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::{
-    io::{Error as IoError, ErrorKind},
+    io::ErrorKind,
     path::Path,
     process::{Child, Command},
 };
@@ -92,10 +92,10 @@ pub(super) fn wait_for_server_exit() -> HarnessResult<()> {
     Ok(())
 }
 
-fn connection_refused<T>(input: Result<T, IoError>) -> HarnessResult<bool> {
+fn connection_refused<T>(input: SkyResult<T>) -> HarnessResult<bool> {
     match input {
         Ok(_) => Ok(false),
-        Err(e)
+        Err(Error::IoError(e))
             if matches!(
                 e.kind(),
                 ErrorKind::ConnectionRefused | ErrorKind::ConnectionReset

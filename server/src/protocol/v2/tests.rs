@@ -580,6 +580,16 @@ fn simple_query_okay() {
     let query = simple_query(ret);
     assert_eq!(query.into_owned().data, v!["SET", "x", "100"]);
 }
+
+#[test]
+fn simple_query_okay_empty_elements() {
+    let body = v!(b"*3\n3\nSET0\n0\n");
+    let ret = Parser::parse(&body).unwrap();
+    assert_eq!(ret.forward, body.len());
+    let query = simple_query(ret);
+    assert_eq!(query.into_owned().data, v!["SET", "", ""]);
+}
+
 #[test]
 fn parse_fail_because_not_enough() {
     let full_payload = b"*3\n3\nSET1\nx3\n100";
@@ -605,6 +615,18 @@ fn pipelined_query_okay() {
     assert_eq!(
         query.into_owned().data,
         vec![v!["SET", "x", "100"], v!["GET", "x"]]
+    )
+}
+
+#[test]
+fn pipelined_query_okay_empty_elements() {
+    let body = v!(b"$2\n3\n3\nSET0\n3\n1002\n3\nGET0\n");
+    let ret = Parser::parse(&body).unwrap();
+    assert_eq!(ret.forward, body.len());
+    let query = pipelined_query(ret);
+    assert_eq!(
+        query.into_owned().data,
+        vec![v!["SET", "", "100"], v!["GET", ""]]
     )
 }
 
