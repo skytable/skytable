@@ -24,19 +24,17 @@
  *
 */
 
-use crate::report::AggregatedReport;
-use crate::util;
+use crate::{report::AggregatedReport, util};
 use devtimer::DevTime;
-use libstress::utils::generate_random_byte_vector;
-use libstress::PoolConfig;
+use libstress::{utils::generate_random_byte_vector, PoolConfig};
 use rand::thread_rng;
-use skytable::types::RawString;
-use skytable::Query;
-use std::io::{Read, Write};
-use std::net::TcpStream;
-mod validation;
-
-use self::validation::SIMPLE_QUERY_SIZE;
+use skytable::{types::RawString, Query};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+};
+pub mod validation;
+use self::validation::SQ_RESPCODE_SIZE;
 
 const NOTICE_INIT_BENCH: &str = "Finished sanity test. Initializing benchmark ...";
 const NOTICE_INIT_COMPLETE: &str = "Initialization complete! Benchmark started";
@@ -79,23 +77,19 @@ pub fn runner(
         .arg(format!("default:{}", &temp_table))
         .into_raw_query();
 
-    // an okay response code size: `*1\n!1\n0\n`:
-    let response_okay_size =
-        validation::calculate_monoelement_dataframe_size(1) + SIMPLE_QUERY_SIZE;
-
     let pool_config = PoolConfig::new(
         max_connections,
         move || {
             let mut stream = TcpStream::connect(&host).unwrap();
             stream.write_all(&switch_table.clone()).unwrap();
-            let mut v = vec![0; response_okay_size];
+            let mut v = vec![0; SQ_RESPCODE_SIZE];
             let _ = stream.read_exact(&mut v).unwrap();
             stream
         },
         move |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
             // all `okay`s are returned (for both update and set)
-            let mut v = vec![0; response_okay_size];
+            let mut v = vec![0; SQ_RESPCODE_SIZE];
             let _ = sock.read_exact(&mut v).unwrap();
         },
         |socket| {
@@ -166,7 +160,8 @@ pub fn runner(
         dt.stop_timer("SET").unwrap();
 
         let get_response_packet_size =
-            validation::calculate_monoelement_dataframe_size(per_kv_size) + SIMPLE_QUERY_SIZE;
+            validation::calculate_monoelement_dataframe_size(per_kv_size)
+                + validation::calculate_metaframe_size(1);
         let getpool =
             pool_config.with_loop_closure(move |sock: &mut TcpStream, packet: Vec<u8>| {
                 sock.write_all(&packet).unwrap();
@@ -215,7 +210,7 @@ fn init_temp_table(rand: &mut impl rand::Rng, host: &str) -> String {
     let mut create_table_connection = TcpStream::connect(host).unwrap();
     // create table
     create_table_connection.write_all(&create_table).unwrap();
-    let mut v = [0u8; 8];
+    let mut v = [0u8; SQ_RESPCODE_SIZE];
     let _ = create_table_connection.read_exact(&mut v).unwrap();
     temp_table
 }

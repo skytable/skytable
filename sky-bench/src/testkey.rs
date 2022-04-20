@@ -24,8 +24,7 @@
  *
 */
 
-use crate::hoststr;
-use crate::sanity_test;
+use crate::{benchtool::validation::SQ_RESPCODE_SIZE, hoststr, sanity_test};
 use libstress::Workpool;
 use rand::thread_rng;
 use skytable::Query;
@@ -44,7 +43,7 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         move || TcpStream::connect(host.clone()).unwrap(),
         |sock, packet: Vec<u8>| {
             sock.write_all(&packet).unwrap();
-            let mut buf = [0u8; 8];
+            let mut buf = [0u8; SQ_RESPCODE_SIZE];
             let _ = sock.read_exact(&mut buf).unwrap();
         },
         |socket| {
