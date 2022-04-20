@@ -62,7 +62,7 @@ use tokio::{
     sync::{mpsc, Semaphore},
 };
 
-pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
+pub const SIMPLE_QUERY_HEADER: [u8; 1] = [b'*'];
 type QueryWithAdvance = (Query, usize);
 
 pub enum QueryResult {
@@ -138,7 +138,7 @@ where
 {
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        protocol::Parser::new(self.get_buffer()).parse()
+        protocol::Parser::parse(self.get_buffer())
     }
     /// Read a query from the remote end
     ///
@@ -232,7 +232,7 @@ where
     {
         Box::pin(async move {
             let slf = self;
-            slf.write_response([b'*']).await?;
+            slf.write_response([b'$']).await?;
             slf.get_mut_stream()
                 .write_all(&Integer64::init(len as u64))
                 .await?;
@@ -478,11 +478,11 @@ where
             let db = &mut self.db;
             let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
             match query {
-                Query::SimpleQuery(sq) => {
+                Query::Simple(sq) => {
                     con.write_simple_query_header().await?;
                     queryengine::execute_simple_noauth(db, con, &mut auth_provider, sq).await?;
                 }
-                Query::PipelineQuery(_) => {
+                Query::Pipelined(_) => {
                     con.write_simple_query_header().await?;
                     con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
                         .await?;
@@ -499,11 +499,11 @@ where
             let db = &mut self.db;
             let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
             match query {
-                Query::SimpleQuery(q) => {
+                Query::Simple(q) => {
                     con.write_simple_query_header().await?;
                     queryengine::execute_simple(db, con, &mut auth_provider, q).await?;
                 }
-                Query::PipelineQuery(pipeline) => {
+                Query::Pipelined(pipeline) => {
                     con.write_pipeline_query_header(pipeline.len()).await?;
                     queryengine::execute_pipeline(db, con, &mut auth_provider, pipeline).await?;
                 }

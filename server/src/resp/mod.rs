@@ -102,8 +102,6 @@ impl Writable for StringWrapper {
             con.write_lowlevel(&[b'\n']).await?;
             // Now write the REAL bytes (of the object)
             con.write_lowlevel(self.0.as_bytes()).await?;
-            // Now write another LF
-            con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         })
     }
@@ -143,8 +141,6 @@ impl Writable for &'static str {
             con.write_lowlevel(&[b'\n']).await?;
             // Now write the REAL bytes (of the object)
             con.write_lowlevel(self.as_bytes()).await?;
-            // Now write another LF
-            con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         })
     }
@@ -167,8 +163,6 @@ impl Writable for BytesWrapper {
             con.write_lowlevel(&[b'\n']).await?;
             // Now write the REAL bytes (of the object)
             con.write_lowlevel(&bytes).await?;
-            // Now write another LF
-            con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         })
     }
@@ -179,9 +173,6 @@ impl Writable for usize {
         Box::pin(async move {
             con.write_lowlevel(b":").await?;
             let usize_bytes = Integer64::from(self);
-            let usize_bytes_len = Integer64::from(usize_bytes.len());
-            con.write_lowlevel(&usize_bytes_len).await?;
-            con.write_lowlevel(b"\n").await?;
             con.write_lowlevel(&usize_bytes).await?;
             con.write_lowlevel(b"\n").await?;
             Ok(())
@@ -194,9 +185,6 @@ impl Writable for u64 {
         Box::pin(async move {
             con.write_lowlevel(b":").await?;
             let usize_bytes = Integer64::from(self);
-            let usize_bytes_len = Integer64::from(usize_bytes.len());
-            con.write_lowlevel(&usize_bytes_len).await?;
-            con.write_lowlevel(b"\n").await?;
             con.write_lowlevel(&usize_bytes).await?;
             con.write_lowlevel(b"\n").await?;
             Ok(())
@@ -220,8 +208,6 @@ impl Writable for ObjectID {
             con.write_lowlevel(&[b'\n']).await?;
             // Now write the REAL bytes (of the object)
             con.write_lowlevel(&self).await?;
-            // Now write another LF
-            con.write_lowlevel(&[b'\n']).await?;
             Ok(())
         })
     }
@@ -231,10 +217,7 @@ impl Writable for f32 {
     fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s> {
         Box::pin(async move {
             let payload = self.to_string();
-            let payload_len = Integer64::from(payload.len());
             con.write_lowlevel(&[TSYMBOL_FLOAT]).await?;
-            con.write_lowlevel(&payload_len).await?;
-            con.write_lowlevel(&[b'\n']).await?;
             con.write_lowlevel(payload.as_bytes()).await?;
             con.write_lowlevel(&[b'\n']).await?;
             Ok(())

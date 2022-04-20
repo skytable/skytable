@@ -24,14 +24,9 @@
  *
 */
 
-#[cfg(test)]
-use super::UnsafeElement;
-use super::UnsafeSlice;
+use super::{Query, UnsafeSlice};
 use bytes::Bytes;
-use core::hint::unreachable_unchecked;
-use core::iter::FusedIterator;
-use core::ops::Deref;
-use core::slice::Iter;
+use core::{hint::unreachable_unchecked, iter::FusedIterator, ops::Deref, slice::Iter};
 
 /// An iterator over an [`AnyArray`] (an [`UnsafeSlice`]). The validity of the iterator is
 /// left to the caller who has to guarantee:
@@ -183,20 +178,12 @@ impl<'a> FusedIterator for BorrowedAnyArrayIter<'a> {}
 #[test]
 fn test_iter() {
     use super::{Parser, Query};
-    let (q, _fwby) = Parser::new(b"*1\n~3\n3\nset\n1\nx\n3\n100\n")
-        .parse()
-        .unwrap();
+    let (q, _fwby) = Parser::parse(b"*3\n3\nset1\nx3\n100").unwrap();
     let r = match q {
-        Query::SimpleQuery(q) => q,
+        Query::Simple(q) => q,
         _ => panic!("Wrong query"),
     };
-    let arr = unsafe {
-        match r.into_inner() {
-            UnsafeElement::AnyArray(arr) => arr,
-            _ => panic!("Wrong type"),
-        }
-    };
-    let it = arr.iter();
+    let it = r.as_slice().iter();
     let mut iter = unsafe { AnyArrayIter::new(it) };
     assert_eq!(iter.next_uppercase().unwrap().as_ref(), "SET".as_bytes());
     assert_eq!(iter.next().unwrap(), "x".as_bytes());

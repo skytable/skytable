@@ -661,9 +661,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.123"
+version = "0.2.124"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb691a747a7ab48abc15c5b42066eaafde10dc427e3b6ee2a1cf43db04c763bd"
+checksum = "21a41fed9d98f27ab1c6d161da622a4fa35e8a54a8adc24bbf3ddd0ef70b0e50"
 
 [[package]]
 name = "libsky"
@@ -1114,9 +1114,9 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "rustix"
-version = "0.34.3"
+version = "0.34.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb617eb09c4ef1536405e357e3b63f39e3ab4cc2159db05395278ad5c352bb16"
+checksum = "3f5d1c6ed6d1c6915aa64749b809fc1bafff49d160f5d927463658093d7d62ab"
 dependencies = [
  "bitflags",
  "errno",
@@ -1336,7 +1336,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#297bd18fb864dc89f0a5c1a42b95a43150127597"
+source = "git+https://github.com/skytable/client-rust?branch=next#8d4ead1bc0e58421fada2c1fd7a9f75ccdc3f30e"
 dependencies = [
  "async-trait",
  "bb8",
@@ -1350,7 +1350,7 @@ dependencies = [
 [[package]]
 name = "skytable"
 version = "0.7.0"
-source = "git+https://github.com/skytable/client-rust.git#297bd18fb864dc89f0a5c1a42b95a43150127597"
+source = "git+https://github.com/skytable/client-rust.git#8d4ead1bc0e58421fada2c1fd7a9f75ccdc3f30e"
 dependencies = [
  "r2d2",
 ]

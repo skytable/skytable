@@ -49,7 +49,6 @@ where
     raw_stream.write_all(&bytes).await?; // then len
     raw_stream.write_all(&[b'\n']).await?; // LF
     raw_stream.write_all(payload).await?; // payload
-    raw_stream.write_all(&[b'\n']).await?; // final LF
     Ok(())
 }
 
@@ -103,8 +102,6 @@ where
         stream.write_all(&[b'\n']).await?;
         // now element
         stream.write_all(bytes).await?;
-        // now final LF
-        stream.write_all(&[b'\n']).await?;
         Ok(())
     }
     /// Write the NIL response code
@@ -167,14 +164,12 @@ where
         stream.write_all(&[b'\n']).await?;
         // now element
         stream.write_all(bytes).await?;
-        // now final LF
-        stream.write_all(&[b'\n']).await?;
         Ok(())
     }
     /// Write a null
     pub async fn write_null(&mut self) -> IoResult<()> {
         let stream = unsafe { self.con.raw_stream() };
-        stream.write_all(&[b'\0', b'\n']).await?;
+        stream.write_all(&[b'\0']).await?;
         Ok(())
     }
 }
@@ -225,8 +220,6 @@ where
         stream.write_all(&[b'\n']).await?;
         // now element
         stream.write_all(bytes).await?;
-        // now final LF
-        stream.write_all(&[b'\n']).await?;
         Ok(())
     }
 }
