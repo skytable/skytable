@@ -115,21 +115,8 @@ fn _get_eresp_array(tokens: TokenStream) -> TokenStream {
         _ => panic!("Expected a string literal"),
     };
     let payload_bytes = payload_str.as_bytes();
-    let payload_len = payload_bytes.len();
-    let payload_len_str = payload_len.to_string();
-    let payload_len_bytes = payload_len_str.as_bytes();
     let mut processed = quote! {
         b'!',
-    };
-    for byte in payload_len_bytes {
-        processed = quote! {
-            #processed
-            #byte,
-        };
-    }
-    processed = quote! {
-        #processed
-        b'\n',
     };
     for byte in payload_bytes {
         processed = quote! {
@@ -138,8 +125,11 @@ fn _get_eresp_array(tokens: TokenStream) -> TokenStream {
         }
     }
     processed = quote! {
-        [#processed
-        b'\n',]
+        #processed
+        b'\n',
+    };
+    processed = quote! {
+        [#processed]
     };
     processed.into()
 }

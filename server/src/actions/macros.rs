@@ -51,14 +51,14 @@ macro_rules! conwrite {
     ($con:expr, $what:expr) => {
         $con.write_response($what)
             .await
-            .map_err(|e| crate::actions::ActionError::IoError(e))
+            .map_err(|e| $crate::actions::ActionError::IoError(e))
     };
 }
 
 #[macro_export]
 macro_rules! aerr {
     ($con:expr) => {
-        return conwrite!($con, crate::protocol::responses::groups::ACTION_ERR)
+        return conwrite!($con, $crate::protocol::responses::groups::ACTION_ERR)
     };
 }
 
@@ -70,7 +70,7 @@ macro_rules! get_tbl {
     ($store:expr, $con:expr) => {{
         match $store.get_ctable() {
             Some(tbl) => tbl,
-            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return $crate::util::err($crate::protocol::responses::groups::DEFAULT_UNSET),
         }
     }};
 }
@@ -80,7 +80,7 @@ macro_rules! get_tbl_ref {
     ($store:expr, $con:expr) => {{
         match $store.get_ctable_ref() {
             Some(tbl) => tbl,
-            None => return crate::util::err(crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return $crate::util::err($crate::protocol::responses::groups::DEFAULT_UNSET),
         }
     }};
 }
@@ -88,7 +88,7 @@ macro_rules! get_tbl_ref {
 #[macro_export]
 macro_rules! handle_entity {
     ($con:expr, $ident:expr) => {{
-        match crate::queryengine::parser::Entity::from_slice(&$ident) {
+        match $crate::queryengine::parser::Entity::from_slice(&$ident) {
             Ok(e) => e,
             Err(e) => return conwrite!($con, e),
         }

@@ -24,68 +24,98 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
-use core::alloc::Layout;
-use core::fmt;
-use core::mem::ManuallyDrop;
-use core::ops::Deref;
-use core::ptr;
-use core::slice;
+use core::{alloc::Layout, fmt, marker::PhantomData, mem::ManuallyDrop, ops::Deref, ptr, slice};
 use std::alloc::dealloc;
 
 /// A heap-allocated array
-pub struct HeapArray {
-    ptr: *const u8,
+pub struct HeapArray<T> {
+    ptr: *const T,
     len: usize,
+    _marker: PhantomData<T>,
 }
 
-impl HeapArray {
-    pub fn new(mut v: Vec<u8>) -> Self {
-        v.shrink_to_fit();
-        let v = ManuallyDrop::new(v);
+pub struct HeapArrayWriter<T> {
+    base: Vec<T>,
+}
+
+impl<T> HeapArrayWriter<T> {
+    pub fn with_capacity(cap: usize) -> Self {
         Self {
-            ptr: v.as_ptr(),
-            len: v.len(),
+            base: Vec::with_capacity(cap),
         }
     }
-    pub fn as_slice(&self) -> &[u8] {
+    /// ## Safety
+    /// Caller must ensure that `idx <= cap`. If not, you'll corrupt your
+    /// memory
+    pub unsafe fn write_to_index(&mut self, idx: usize, element: T) {
+        debug_assert!(idx <= self.base.capacity());
+        ptr::write(self.base.as_mut_ptr().add(idx), element);
+        self.base.set_len(self.base.len() + 1);
+    }
+    /// ## Safety
+    /// This function can lead to memory unsafety in two ways:
+    /// - Excess capacity: In that case, it will leak memory
+    /// - Uninitialized elements: In that case, it will segfault while attempting to call
+    /// `T`'s dtor
+    pub unsafe fn finish(self) -> HeapArray<T> {
+        let base = ManuallyDrop::new(self.base);
+        HeapArray::new(base.as_ptr(), base.len())
+    }
+}
+
+impl<T> HeapArray<T> {
+    #[cfg(test)]
+    pub fn new_from_vec(mut v: Vec<T>) -> Self {
+        v.shrink_to_fit();
+        let v = ManuallyDrop::new(v);
+        unsafe { Self::new(v.as_ptr(), v.len()) }
+    }
+    pub unsafe fn new(ptr: *const T, len: usize) -> Self {
+        Self {
+            ptr,
+            len,
+            _marker: PhantomData,
+        }
+    }
+    pub fn new_writer(cap: usize) -> HeapArrayWriter<T> {
+        HeapArrayWriter::with_capacity(cap)
+    }
+    #[cfg(test)]
+    pub fn as_slice(&self) -> &[T] {
         self
     }
 }
 
-impl Drop for HeapArray {
+impl<T> Drop for HeapArray<T> {
     fn drop(&mut self) {
         unsafe {
             // run dtor
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr as *mut u8, self.len));
+            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr as *mut T, self.len));
             // deallocate
-            if self.len != 0 {
-                let layout = Layout::array::<u8>(self.len).unwrap();
-                dealloc(self.ptr as *mut u8, layout);
-            }
+            let layout = Layout::array::<T>(self.len).unwrap();
+            dealloc(self.ptr as *mut T as *mut u8, layout);
         }
     }
 }
 
 // totally fine because `u8`s can be safely shared across threads
-unsafe impl Send for HeapArray {}
-unsafe impl Sync for HeapArray {}
+unsafe impl<T: Send> Send for HeapArray<T> {}
+unsafe impl<T: Sync> Sync for HeapArray<T> {}
 
-impl Deref for HeapArray {
-    type Target = [u8];
+impl<T> Deref for HeapArray<T> {
+    type Target = [T];
     fn deref(&self) -> &Self::Target {
         unsafe { slice::from_raw_parts(self.ptr, self.len) }
     }
 }
 
-impl fmt::Debug for HeapArray {
+impl<T: fmt::Debug> fmt::Debug for HeapArray<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl PartialEq for HeapArray {
+impl<T: PartialEq> PartialEq for HeapArray<T> {
     fn eq(&self, other: &Self) -> bool {
         self == other
     }
@@ -95,6 +125,6 @@ impl PartialEq for HeapArray {
 fn heaparray_impl() {
     // basically, this shouldn't segfault
     let heap_array = b"notasuperuser".to_vec();
-    let heap_array = HeapArray::new(heap_array);
+    let heap_array = HeapArray::new_from_vec(heap_array);
     assert_eq!(heap_array.as_slice(), b"notasuperuser");
 }

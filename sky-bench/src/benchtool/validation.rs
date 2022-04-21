@@ -24,8 +24,7 @@
  *
 */
 
-/// Just a sweet `*1\n`
-pub(super) const SIMPLE_QUERY_SIZE: usize = 3;
+pub const SQ_RESPCODE_SIZE: usize = b"*!1\n".len();
 
 /// For a dataframe, this returns the dataframe size for array responses.
 ///
@@ -77,7 +76,7 @@ pub fn calculate_typed_array_dataframe_size(
 /// For a monoelement dataframe, this returns the size:
 /// ```text
 /// <tsymbol><size>\n
-/// <element>\n
+/// <element>
 /// ```
 ///
 /// For an `okay` respcode, it will look like this:
@@ -91,7 +90,6 @@ pub fn calculate_monoelement_dataframe_size(per_element_size: usize) -> usize {
     s += per_element_size.to_string().len(); // the bytes in size string
     s += 1; // the LF
     s += per_element_size; // the element itself
-    s += 1; // the final LF
     s
 }
 
@@ -102,10 +100,11 @@ pub fn calculate_monoelement_dataframe_size(per_element_size: usize) -> usize {
 #[allow(dead_code)] // TODO(@ohsayan): Remove this lint
 pub fn calculate_metaframe_size(queries: usize) -> usize {
     if queries == 1 {
-        SIMPLE_QUERY_SIZE
+        // just `*`
+        1
     } else {
         let mut s = 0;
-        s += 1; // `*`
+        s += 1; // `$`
         s += queries.to_string().len(); // the bytes in size string
         s += 1; // `\n`
         s
@@ -118,11 +117,11 @@ mod tests {
 
     #[test]
     fn test_monoelement_calculation() {
-        assert_eq!(calculate_monoelement_dataframe_size(1), 5);
+        assert_eq!(calculate_monoelement_dataframe_size(1), 4);
     }
     #[test]
     fn test_simple_query_metaframe_size() {
-        assert_eq!(calculate_metaframe_size(1), SIMPLE_QUERY_SIZE);
+        assert_eq!(calculate_metaframe_size(1), 1);
     }
     #[test]
     fn test_typed_array_dataframe_size() {

@@ -66,8 +66,8 @@ struct ConnectionEntityState {
 impl ConnectionEntityState {
     fn default(ks: Arc<Keyspace>, tbl: Arc<Table>) -> Self {
         Self {
-            table: Some((DEFAULT.clone(), tbl)),
-            ks: Some((DEFAULT.clone(), ks)),
+            table: Some((DEFAULT, tbl)),
+            ks: Some((DEFAULT, ks)),
         }
     }
     fn set_ks(&mut self, ks: Arc<Keyspace>, ksid: ObjectID) {

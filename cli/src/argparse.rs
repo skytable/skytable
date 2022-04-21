@@ -274,5 +274,4 @@ fn clear_screen() {
     let mut stdout = stdout();
     execute!(stdout, Clear(ClearType::All)).expect("Failed to clear screen");
     execute!(stdout, cursor::MoveTo(0, 0)).expect("Failed to move cursor to origin");
-    drop(stdout); // aggressively drop stdout
 }

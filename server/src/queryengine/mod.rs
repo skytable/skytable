@@ -30,12 +30,9 @@ use crate::actions::{ActionError, ActionResult};
 use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::{
-    element::UnsafeElement, iter::AnyArrayIter, responses, PipelineQuery, SimpleQuery,
-};
+use crate::protocol::{iter::AnyArrayIter, responses, PipelinedQuery, SimpleQuery, UnsafeSlice};
 use crate::queryengine::parser::Entity;
 use crate::{actions, admin};
-use core::hint::unreachable_unchecked;
 mod ddl;
 mod inspect;
 pub mod parser;
@@ -84,15 +81,15 @@ action! {
         auth: &mut AuthProviderHandle<'_, T, Strm>,
         buf: SimpleQuery
     ) {
-        if buf.is_any_array() {
-            let bufref = unsafe { buf.into_inner() };
-            let mut iter = unsafe { get_iter(&bufref) };
-            match iter.next_lowercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
-                ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
-                _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
-            }
-        } else {
-            util::err(groups::WRONGTYPE_ERR)
+        let bufref = buf.as_slice();
+        let mut iter = unsafe {
+            // UNSAFE(@ohsayan): The presence of the connection guarantees that this
+            // won't suddenly become invalid
+            AnyArrayIter::new(bufref.iter())
+        };
+        match iter.next_lowercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
+            ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
+            _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
         }
     }
     //// Execute a simple query
@@ -102,46 +99,20 @@ action! {
         auth: &mut AuthProviderHandle<'_, T, Strm>,
         buf: SimpleQuery
     ) {
-        if buf.is_any_array() {
-            unsafe {
-                self::execute_stage(db, con, auth, &buf.into_inner()).await
-            }
-        } else {
-            util::err(groups::WRONGTYPE_ERR)
-        }
+        self::execute_stage(db, con, auth, buf.as_slice()).await
     }
-}
-
-#[allow(clippy::needless_lifetimes)]
-unsafe fn get_iter<'a>(buf: &'a UnsafeElement) -> AnyArrayIter<'a> {
-    // this is the boxed slice
-    let bufref = {
-        // SAFETY: execute_simple is called by execute_query which in turn is called
-        // by ConnnectionHandler::run(). In all cases, the `Con` remains valid
-        // ensuring that the source buffer exists as long as the connection does
-        // so this is safe.
-        match buf {
-            UnsafeElement::AnyArray(arr) => arr,
-            _ => unreachable_unchecked(),
-        }
-    };
-    // this is our final iter
-    let iter = {
-        // SAFETY: Again, this is guaranteed to be valid because the `con` is valid
-        AnyArrayIter::new(bufref.iter())
-    };
-    iter
 }
 
 async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
     db: &mut Corestore,
     con: &'a mut T,
     auth: &mut AuthProviderHandle<'_, T, Strm>,
-    buf: &UnsafeElement,
+    buf: &[UnsafeSlice],
 ) -> ActionResult<()> {
     let mut iter = unsafe {
-        // UNSAFE(@ohsayan): Assumed to be guaranteed by the caller
-        get_iter(buf)
+        // UNSAFE(@ohsayan): The presence of the connection guarantees that this
+        // won't suddenly become invalid
+        AnyArrayIter::new(buf.iter())
     };
     {
         gen_constants_and_matches!(
@@ -204,10 +175,9 @@ async fn execute_stage_pedantic<'a, T: ClientConnection<Strm> + 'a, Strm: Stream
     handle: &mut Corestore,
     con: &mut T,
     auth: &mut AuthProviderHandle<'_, T, Strm>,
-    stage: &UnsafeElement,
+    stage: &[UnsafeSlice],
 ) -> crate::IoResult<()> {
     let ret = async {
-        ensure_cond_or_err(stage.is_any_array(), groups::WRONGTYPE_ERR)?;
         self::execute_stage(handle, con, auth, stage).await?;
         Ok(())
     };
@@ -224,9 +194,9 @@ action! {
         handle: &mut Corestore,
         con: &mut T,
         auth: &mut AuthProviderHandle<'_, T, Strm>,
-        pipeline: PipelineQuery
+        pipeline: PipelinedQuery
     ) {
-        for stage in pipeline.iter() {
+        for stage in pipeline.into_inner().iter() {
             self::execute_stage_pedantic(handle, con, auth, stage).await?;
         }
         Ok(())

@@ -82,7 +82,7 @@ pub fn build(mode: BuildMode) -> HarnessResult<PathBuf> {
     let target_folder = util::get_target_folder(mode);
     if let Some(t) = util::get_var(util::VAR_TARGET) {
         build_args.push("--target".to_owned());
-        build_args.push(t.to_string());
+        build_args.push(t);
     };
 
     // assemble build args

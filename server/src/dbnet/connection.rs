@@ -62,14 +62,14 @@ use tokio::{
     sync::{mpsc, Semaphore},
 };
 
-pub const SIMPLE_QUERY_HEADER: [u8; 3] = [b'*', b'1', b'\n'];
+pub const SIMPLE_QUERY_HEADER: [u8; 1] = [b'*'];
 type QueryWithAdvance = (Query, usize);
 
 pub enum QueryResult {
     Q(QueryWithAdvance),
     E(&'static [u8]),
-    Empty,
     Wrongtype,
+    Disconnected,
 }
 
 pub struct AuthProviderHandle<'a, T, Strm> {
@@ -136,37 +136,9 @@ pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
 where
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
-    /// Try to fill the buffer again
-    fn read_again<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                let (buffer, stream) = mv_self.get_mut_both();
-                match stream.read_buf(buffer).await {
-                    Ok(0) => {
-                        if buffer.is_empty() {
-                            return Ok(());
-                        } else {
-                            return Err(IoError::from(ErrorKind::ConnectionReset));
-                        }
-                    }
-                    Ok(_) => Ok(()),
-                    Err(e) => return Err(e),
-                }
-            };
-            ret
-        })
-    }
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        if self.get_buffer().is_empty() {
-            return Err(ParseError::Empty);
-        }
-        protocol::Parser::new(self.get_buffer()).parse()
+        protocol::Parser::parse(self.get_buffer())
     }
     /// Read a query from the remote end
     ///
@@ -181,27 +153,30 @@ where
     {
         Box::pin(async move {
             let mv_self = self;
-            let _: Result<QueryResult, IoError> = {
-                loop {
-                    mv_self.read_again().await?;
-                    match mv_self.try_query() {
-                        Ok(query_with_advance) => {
-                            return Ok(QueryResult::Q(query_with_advance));
-                        }
-                        Err(ParseError::Empty) => return Ok(QueryResult::Empty),
-                        Err(ParseError::NotEnough) => (),
-                        Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
-                        Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                            return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
-                        }
-                        Err(ParseError::UnknownDatatype) => {
-                            return Ok(QueryResult::E(
-                                responses::full_responses::R_UNKNOWN_DATA_TYPE,
-                            ));
+            loop {
+                let (buffer, stream) = mv_self.get_mut_both();
+                match stream.read_buf(buffer).await {
+                    Ok(0) => {
+                        if buffer.is_empty() {
+                            return Ok(QueryResult::Disconnected);
+                        } else {
+                            return Err(IoError::from(ErrorKind::ConnectionReset));
                         }
                     }
+                    Ok(_) => {}
+                    Err(e) => return Err(e),
                 }
-            };
+                match mv_self.try_query() {
+                    Ok(query_with_advance) => {
+                        return Ok(QueryResult::Q(query_with_advance));
+                    }
+                    Err(ParseError::NotEnough) => (),
+                    Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
+                    Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
+                        return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
+                    }
+                }
+            }
         })
     }
     /// Write a response to the stream
@@ -252,7 +227,7 @@ where
     {
         Box::pin(async move {
             let slf = self;
-            slf.write_response([b'*']).await?;
+            slf.write_response([b'$']).await?;
             slf.get_mut_stream()
                 .write_all(&Integer64::init(len as u64))
                 .await?;
@@ -478,7 +453,7 @@ where
                         .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
                         .await?
                 }
-                Ok(QueryResult::Empty) => return Ok(()),
+                Ok(QueryResult::Disconnected) => return Ok(()),
                 #[cfg(windows)]
                 Err(e) => match e.kind() {
                     ErrorKind::ConnectionReset => return Ok(()),
@@ -498,11 +473,11 @@ where
             let db = &mut self.db;
             let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
             match query {
-                Query::SimpleQuery(sq) => {
+                Query::Simple(sq) => {
                     con.write_simple_query_header().await?;
                     queryengine::execute_simple_noauth(db, con, &mut auth_provider, sq).await?;
                 }
-                Query::PipelineQuery(_) => {
+                Query::Pipelined(_) => {
                     con.write_simple_query_header().await?;
                     con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
                         .await?;
@@ -519,11 +494,11 @@ where
             let db = &mut self.db;
             let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
             match query {
-                Query::SimpleQuery(q) => {
+                Query::Simple(q) => {
                     con.write_simple_query_header().await?;
                     queryengine::execute_simple(db, con, &mut auth_provider, q).await?;
                 }
-                Query::PipelineQuery(pipeline) => {
+                Query::Pipelined(pipeline) => {
                     con.write_pipeline_query_header(pipeline.len()).await?;
                     queryengine::execute_pipeline(db, con, &mut auth_provider, pipeline).await?;
                 }

@@ -27,17 +27,17 @@
 use crate::actions::ActionError;
 
 /// Skyhash respstring: already claimed (user was already claimed)
-pub const AUTH_ERROR_ALREADYCLAIMED: &[u8] = b"!24\nerr-auth-already-claimed\n";
+pub const AUTH_ERROR_ALREADYCLAIMED: &[u8] = b"!err-auth-already-claimed\n";
 /// Skyhash respcode(10): bad credentials (either bad creds or invalid user)
-pub const AUTH_CODE_BAD_CREDENTIALS: &[u8] = b"!2\n10\n";
+pub const AUTH_CODE_BAD_CREDENTIALS: &[u8] = b"!10\n";
 /// Skyhash respstring: auth is disabled
-pub const AUTH_ERROR_DISABLED: &[u8] = b"!17\nerr-auth-disabled\n";
+pub const AUTH_ERROR_DISABLED: &[u8] = b"!err-auth-disabled\n";
 /// Skyhash respcode(11): Insufficient permissions (same for anonymous user)
-pub const AUTH_CODE_PERMS: &[u8] = b"!2\n11\n";
+pub const AUTH_CODE_PERMS: &[u8] = b"!11\n";
 /// Skyhash respstring: ID is too long
-pub const AUTH_ERROR_ILLEGAL_USERNAME: &[u8] = b"!25\nerr-auth-illegal-username\n";
+pub const AUTH_ERROR_ILLEGAL_USERNAME: &[u8] = b"!err-auth-illegal-username\n";
 /// Skyhash respstring: ID is protected/in use
-pub const AUTH_ERROR_FAILED_TO_DELETE_USER: &[u8] = b"!21\nerr-auth-deluser-fail\n";
+pub const AUTH_ERROR_FAILED_TO_DELETE_USER: &[u8] = b"!err-auth-deluser-fail\n";
 
 /// Auth erros
 #[derive(PartialEq, Debug)]
