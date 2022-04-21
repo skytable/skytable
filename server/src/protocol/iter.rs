@@ -24,7 +24,7 @@
  *
 */
 
-use super::{Query, UnsafeSlice};
+use super::UnsafeSlice;
 use bytes::Bytes;
 use core::{hint::unreachable_unchecked, iter::FusedIterator, ops::Deref, slice::Iter};
 

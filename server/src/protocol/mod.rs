@@ -24,8 +24,6 @@
  *
 */
 
-#![allow(unused)] // TODO(@ohsayan): Remove this once we're done
-
 use crate::corestore::heap_array::HeapArray;
 use core::{fmt, marker::PhantomData, mem::transmute, slice};
 #[cfg(feature = "nightly")]
@@ -77,31 +75,6 @@ impl UnsafeSlice {
     pub unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.start_ptr, self.len)
     }
-    /// Destruct self, and return a slice, lifetime bound by whoever calls it
-    pub unsafe fn into_slice<'a>(self) -> &'a [u8] {
-        slice::from_raw_parts(self.start_ptr, self.len)
-    }
-    #[cfg(test)]
-    pub unsafe fn to_owned(&self) -> Vec<u8> {
-        self.as_slice().to_owned()
-    }
-    /// Check if a certain idx has a certain byte. This can be _thought of something
-    /// like_:
-    /// ```notest
-    /// *(slice.get_unchecked(pos)).eq(pos)
-    /// ```
-    pub unsafe fn unsafe_eq(&self, byte: u8, pos: usize) -> bool {
-        *self.start_ptr.add(pos) == byte
-    }
-    /// Turns self into a slice, lifetime bound by caller's lifetime with the provided `chop`.
-    /// This is roughly equivalent to:
-    /// ```notest
-    /// &slice[..slice.len() - chop]
-    /// ```
-    pub unsafe fn into_slice_with_start_and_end<'a>(self, len: usize, chop: usize) -> &'a [u8] {
-        debug_assert!(len <= self.len);
-        slice::from_raw_parts(self.start_ptr.add(len), self.len - chop)
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -113,6 +86,7 @@ pub enum ParseError {
     /// Didn't get the number of expected bytes
     NotEnough = 0u8,
     /// The packet simply contains invalid data
+    #[allow(dead_code)] // HACK(@ohsayan): rustc can't "guess" the transmutation
     BadPacket = 1u8,
     /// The query contains an unexpected byte
     UnexpectedByte = 2u8,
@@ -120,11 +94,6 @@ pub enum ParseError {
     ///
     /// This can happen not just for elements but can also happen for their sizes ([`Self::parse_into_u64`])
     DatatypeParseFailure = 3u8,
-    /// A data type that the server doesn't know was passed into the query
-    ///
-    /// This is a frequent problem that can arise between different server editions as more data types
-    /// can be added with changing server versions
-    UnknownDatatype = 4u8,
 }
 
 /// A generic result to indicate parsing errors thorugh the [`ParseError`] enum
@@ -234,6 +203,7 @@ impl<'a> Parser<'a> {
     fn has_remaining(&self, size: usize) -> bool {
         self.remaining() >= size
     }
+    #[cfg(test)]
     /// Check if we have exhausted the buffer
     fn exhausted(&self) -> bool {
         self.cursor_ptr() >= self.data_end_ptr()
@@ -276,6 +246,7 @@ impl<'a> Parser<'a> {
             Err(ParseError::NotEnough)
         }
     }
+    #[cfg(test)]
     /// Attempt to read a byte slice terminated by an LF
     fn read_line(&mut self) -> ParseResult<UnsafeSlice> {
         let start_ptr = self.cursor_ptr();

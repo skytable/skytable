@@ -175,11 +175,6 @@ where
                     Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
                         return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
                     }
-                    Err(ParseError::UnknownDatatype) => {
-                        return Ok(QueryResult::E(
-                            responses::full_responses::R_UNKNOWN_DATA_TYPE,
-                        ));
-                    }
                 }
             }
         })
