@@ -79,4 +79,4 @@ You can see a full list of contributors [here](https://ohsayan.github.io/skythan
 
 ## License
 
-First, [know your rights](https://medium.com/swlh/understanding-the-agpl-the-most-misunderstood-license-86fd1fe91275)! This project is licensed under the [AGPL-3.0 License](./LICENSE).
+This project is licensed under the [AGPL-3.0 License](./LICENSE).

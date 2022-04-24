@@ -10,6 +10,6 @@ edition = "2021"
 # external deps
 num_cpus = "1.13.1"
 crossbeam-channel = "0.5.4"
-rayon = "1.5.1"
+rayon = "1.5.2"
 log = "0.4.16"
 rand = "0.8.5"
