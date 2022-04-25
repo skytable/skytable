@@ -261,6 +261,6 @@ pub async fn connect(
             MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
         }
     };
-    log::info!("Server started on {}", description);
+    log::info!("Server started on {description}");
     Ok(server)
 }

@@ -51,10 +51,8 @@ use crate::{
 };
 use bytes::{Buf, BytesMut};
 use std::{
-    future::Future,
     io::{Error as IoError, ErrorKind},
     marker::PhantomData,
-    pin::Pin,
     sync::Arc,
 };
 use tokio::{
@@ -109,16 +107,20 @@ pub mod prelude {
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::{AuthProviderHandle, ClientConnection, ProtocolConnectionExt, Stream};
-    pub use crate::actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length};
-    pub use crate::corestore::{
-        table::{KVEBlob, KVEList},
-        Corestore,
+    pub use crate::{
+        actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length},
+        aerr, conwrite,
+        corestore::{
+            table::{KVEBlob, KVEList},
+            Corestore,
+        },
+        get_tbl, handle_entity, is_lowbit_set,
+        protocol::responses::{self, groups},
+        queryengine::ActionIter,
+        registry,
+        resp::StringWrapper,
+        util::{self, FutureResult, UnwrapActionError, Unwrappable},
     };
-    pub use crate::protocol::responses::{self, groups};
-    pub use crate::queryengine::ActionIter;
-    pub use crate::resp::StringWrapper;
-    pub use crate::util::{self, FutureResult, UnwrapActionError, Unwrappable};
-    pub use crate::{aerr, conwrite, get_tbl, handle_entity, is_lowbit_set, registry};
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
@@ -134,7 +136,7 @@ pub mod prelude {
 /// good trouble.
 pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
 where
-    Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
+    Strm: Stream,
 {
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
@@ -144,9 +146,7 @@ where
     ///
     /// This function asynchronously waits until all the data required
     /// for parsing the query is available
-    fn read_query<'r, 's>(
-        &'r mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<QueryResult, IoError>> + Send + 's>>
+    fn read_query<'r, 's>(&'r mut self) -> FutureResult<'s, Result<QueryResult, IoError>>
     where
         'r: 's,
         Self: Sync + Send + 's,
@@ -183,7 +183,7 @@ where
     fn write_response<'r, 's>(
         &'r mut self,
         streamer: impl Writable + 's + Send + Sync,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Sync + Send + 's>>
+    ) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + 's,
@@ -199,10 +199,8 @@ where
             ret
         })
     }
-    /// Write the simple query header `*1\n` to the stream
-    fn write_simple_query_header<'r, 's>(
-        &'r mut self,
-    ) -> Pin<Box<dyn Future<Output = IoResult<()>> + Send + Sync + 's>>
+    /// Write the simple query header `*` to the stream
+    fn write_simple_query_header<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
     where
         'r: 's,
         Self: Send + Sync + 's,
@@ -353,7 +351,7 @@ pub trait ProtocolConnection<Strm> {
 impl<Strm, T> ProtocolConnectionExt<Strm> for T
 where
     T: ProtocolConnection<Strm> + Send,
-    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
+    Strm: Stream,
 {
 }
 
@@ -400,7 +398,7 @@ pub struct ConnectionHandler<T, Strm> {
 impl<T, Strm> ConnectionHandler<T, Strm>
 where
     T: ProtocolConnectionExt<Strm> + Send + Sync,
-    Strm: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt,
+    Strm: Stream,
 {
     pub fn new(
         db: Corestore,
