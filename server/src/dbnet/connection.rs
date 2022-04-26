@@ -451,18 +451,45 @@ where
                 Ok(QueryResult::Q((query, advance_by))) => {
                     // the mutable reference to self ensures that the buffer is not modified
                     // hence ensuring that the pointers will remain valid
-                    match self.execute_query(query).await {
-                        Ok(()) => {}
-                        Err(ActionError::ActionError(e)) => {
-                            self.con.close_conn_with_error(e).await?;
-                        }
-                        Err(ActionError::IoError(e)) => {
-                            return Err(e);
+                    #[cfg(debug_assertions)]
+                    let len_at_start = self.con.get_buffer().len();
+                    #[cfg(debug_assertions)]
+                    let sptr_at_start = self.con.get_buffer().as_ptr() as usize;
+                    #[cfg(debug_assertions)]
+                    let eptr_at_start = sptr_at_start + len_at_start;
+                    {
+                        match self.execute_query(query).await {
+                            Ok(()) => {}
+                            Err(ActionError::ActionError(e)) => {
+                                self.con.close_conn_with_error(e).await?;
+                            }
+                            Err(ActionError::IoError(e)) => {
+                                return Err(e);
+                            }
                         }
                     }
-                    // this is only when we clear the buffer. since execute_query is not called
-                    // at this point, it's totally fine (so invalidating ptrs is totally cool)
-                    self.con.advance_buffer(advance_by);
+                    {
+                        // do these assertions to ensure memory safety (this is just for sanity sake)
+                        #[cfg(debug_assertions)]
+                        // len should be unchanged. no functions should **ever** touch the buffer
+                        debug_assert_eq!(self.con.get_buffer().len(), len_at_start);
+                        #[cfg(debug_assertions)]
+                        // start of allocation should be unchanged
+                        debug_assert_eq!(self.con.get_buffer().as_ptr() as usize, sptr_at_start);
+                        #[cfg(debug_assertions)]
+                        // end of allocation should be unchanged. else we're entirely violating
+                        // memory safety guarantees
+                        debug_assert_eq!(
+                            unsafe {
+                                // UNSAFE(@ohsayan): THis is always okay
+                                self.con.get_buffer().as_ptr().add(len_at_start)
+                            } as usize,
+                            eptr_at_start
+                        );
+                        // this is only when we clear the buffer. since execute_query is not called
+                        // at this point, it's totally fine (so invalidating ptrs is totally cool)
+                        self.con.advance_buffer(advance_by);
+                    }
                 }
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {
