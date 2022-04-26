@@ -44,7 +44,7 @@ use crate::{
         tcp::{BufferedSocketStream, Connection},
         Terminator,
     },
-    protocol::{self, responses, ParseError, Query},
+    protocol::{responses, ParseError, Query, Skyhash2},
     queryengine,
     resp::Writable,
     IoResult,
@@ -61,7 +61,19 @@ use tokio::{
 };
 
 pub const SIMPLE_QUERY_HEADER: [u8; 1] = [b'*'];
-type QueryWithAdvance = (Query, usize);
+pub(super) type QueryWithAdvance = (Query, usize);
+
+/// The [`ProtocolSpec`] trait implementation enables extremely easy switching between
+/// protocols by being generic for the same base connection types
+pub trait ProtocolSpec: Send + Sync {
+    fn parse(buf: &[u8]) -> Result<QueryWithAdvance, ParseError>;
+}
+
+impl ProtocolSpec for Skyhash2 {
+    fn parse(buf: &[u8]) -> Result<QueryWithAdvance, ParseError> {
+        Skyhash2::parse(buf)
+    }
+}
 
 pub enum QueryResult {
     Q(QueryWithAdvance),
@@ -70,18 +82,19 @@ pub enum QueryResult {
     Disconnected,
 }
 
-pub struct AuthProviderHandle<'a, T, Strm> {
+pub struct AuthProviderHandle<'a, P: ProtocolSpec, T, Strm> {
     provider: &'a mut AuthProvider,
-    executor: &'a mut ExecutorFn<T, Strm>,
+    executor: &'a mut ExecutorFn<P, T, Strm>,
     _phantom: PhantomData<(T, Strm)>,
 }
 
-impl<'a, T, Strm> AuthProviderHandle<'a, T, Strm>
+impl<'a, P, T, Strm> AuthProviderHandle<'a, P, T, Strm>
 where
-    T: ClientConnection<Strm>,
+    T: ClientConnection<P, Strm>,
     Strm: Stream,
+    P: ProtocolSpec,
 {
-    pub fn new(provider: &'a mut AuthProvider, executor: &'a mut ExecutorFn<T, Strm>) -> Self {
+    pub fn new(provider: &'a mut AuthProvider, executor: &'a mut ExecutorFn<P, T, Strm>) -> Self {
         Self {
             provider,
             executor,
@@ -106,7 +119,9 @@ pub mod prelude {
     //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
-    pub use super::{AuthProviderHandle, ClientConnection, ProtocolConnectionExt, Stream};
+    pub use super::{
+        AuthProviderHandle, ClientConnection, ProtocolConnectionExt, ProtocolSpec, Stream,
+    };
     pub use crate::{
         actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length},
         aerr, conwrite,
@@ -134,13 +149,14 @@ pub mod prelude {
 /// The fact that this is a trait enables great flexibility in terms of visibility, but **DO NOT EVER CALL any function other than
 /// `read_query`, `close_conn_with_error` or `write_response`**. If you mess with functions like `read_again`, you're likely to pull yourself into some
 /// good trouble.
-pub trait ProtocolConnectionExt<Strm>: ProtocolConnection<Strm> + Send
+pub trait ProtocolConnectionExt<P, Strm>: ProtocolConnection<P, Strm> + Send
 where
     Strm: Stream,
+    P: ProtocolSpec,
 {
     /// Try to parse a query from the buffered data
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        protocol::Parser::parse(self.get_buffer())
+        P::parse(self.get_buffer())
     }
     /// Read a query from the remote end
     ///
@@ -193,7 +209,7 @@ where
             let mv_self = self;
             let streamer = streamer;
             let ret: IoResult<()> = {
-                streamer.write(&mut mv_self.get_mut_stream()).await?;
+                streamer.write(mv_self.get_mut_stream()).await?;
                 Ok(())
             };
             ret
@@ -323,7 +339,7 @@ where
 /// ```
 ///
 /// `Strm` should be a stream, i.e something like an SSL connection/TCP connection.
-pub trait ProtocolConnection<Strm> {
+pub trait ProtocolConnection<P: ProtocolSpec, Strm> {
     /// Returns an **immutable** reference to the underlying read buffer
     fn get_buffer(&self) -> &BytesMut;
     /// Returns an **immutable** reference to the underlying stream
@@ -348,16 +364,18 @@ pub trait ProtocolConnection<Strm> {
 
 // Give ProtocolConnection implementors a free ProtocolConnectionExt impl
 
-impl<Strm, T> ProtocolConnectionExt<Strm> for T
+impl<Strm, T, P> ProtocolConnectionExt<P, Strm> for T
 where
-    T: ProtocolConnection<Strm> + Send,
+    T: ProtocolConnection<P, Strm> + Send,
     Strm: Stream,
+    P: ProtocolSpec,
 {
 }
 
-impl<T> ProtocolConnection<T> for Connection<T>
+impl<T, P> ProtocolConnection<P, T> for Connection<T>
 where
     T: BufferedSocketStream,
+    P: ProtocolSpec,
 {
     fn get_buffer(&self) -> &BytesMut {
         &self.buffer
@@ -376,35 +394,36 @@ where
     }
 }
 
-pub(super) type ExecutorFn<T, Strm> =
-    for<'s> fn(&'s mut ConnectionHandler<T, Strm>, Query) -> FutureResult<'s, ActionResult<()>>;
+pub(super) type ExecutorFn<P, T, Strm> =
+    for<'s> fn(&'s mut ConnectionHandler<P, T, Strm>, Query) -> FutureResult<'s, ActionResult<()>>;
 
 /// # A generic connection handler
 ///
 /// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
 /// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
 /// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
-pub struct ConnectionHandler<T, Strm> {
+pub struct ConnectionHandler<P, T, Strm> {
     db: Corestore,
     con: T,
     climit: Arc<Semaphore>,
     auth: AuthProvider,
-    executor: ExecutorFn<T, Strm>,
+    executor: ExecutorFn<P, T, Strm>,
     terminator: Terminator,
     _term_sig_tx: mpsc::Sender<()>,
     _marker: PhantomData<Strm>,
 }
 
-impl<T, Strm> ConnectionHandler<T, Strm>
+impl<P, T, Strm> ConnectionHandler<P, T, Strm>
 where
-    T: ProtocolConnectionExt<Strm> + Send + Sync,
+    T: ProtocolConnectionExt<P, Strm> + Send + Sync,
     Strm: Stream,
+    P: ProtocolSpec,
 {
     pub fn new(
         db: Corestore,
         con: T,
         auth: AuthProvider,
-        executor: ExecutorFn<T, Strm>,
+        executor: ExecutorFn<P, T, Strm>,
         climit: Arc<Semaphore>,
         terminator: Terminator,
         _term_sig_tx: mpsc::Sender<()>,
@@ -513,7 +532,7 @@ where
     }
 }
 
-impl<T, Strm> Drop for ConnectionHandler<T, Strm> {
+impl<P, T, Strm> Drop for ConnectionHandler<P, T, Strm> {
     fn drop(&mut self) {
         // Make sure that the permit is returned to the semaphore
         // in the case that there is a panic inside
@@ -526,10 +545,14 @@ pub trait Stream: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
 impl<T> Stream for T where T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
 
 /// A simple _shorthand trait_ for the insanely long definition of the connection generic type
-pub trait ClientConnection<Strm: Stream>: ProtocolConnectionExt<Strm> + Send + Sync {}
-impl<T, Strm> ClientConnection<Strm> for T
+pub trait ClientConnection<P: ProtocolSpec, Strm: Stream>:
+    ProtocolConnectionExt<P, Strm> + Send + Sync
+{
+}
+impl<P, T, Strm> ClientConnection<P, Strm> for T
 where
-    T: ProtocolConnectionExt<Strm> + Send + Sync,
+    T: ProtocolConnectionExt<P, Strm> + Send + Sync,
     Strm: Stream,
+    P: ProtocolSpec,
 {
 }

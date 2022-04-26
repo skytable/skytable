@@ -26,7 +26,7 @@
 
 use crate::corestore::buffers::Integer64;
 use crate::corestore::Data;
-use crate::dbnet::connection::ProtocolConnectionExt;
+use crate::dbnet::connection::{ProtocolConnectionExt, ProtocolSpec};
 use crate::protocol::responses::groups;
 use crate::IoResult;
 use core::marker::PhantomData;
@@ -34,13 +34,14 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
 /// Write a raw mono group with a custom tsymbol
-pub async unsafe fn write_raw_mono<T, Strm>(
+pub async unsafe fn write_raw_mono<P, T, Strm>(
     con: &mut T,
     tsymbol: u8,
     payload: &Data,
 ) -> IoResult<()>
 where
-    T: ProtocolConnectionExt<Strm>,
+    P: ProtocolSpec,
+    T: ProtocolConnectionExt<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     let raw_stream = con.raw_stream();
@@ -54,16 +55,17 @@ where
 
 #[derive(Debug)]
 /// A writer for a flat array, which is a multi-typed non-recursive array
-pub struct FlatArrayWriter<'a, T, Strm> {
+pub struct FlatArrayWriter<'a, P, T, Strm> {
     tsymbol: u8,
     con: &'a mut T,
-    _owned: PhantomData<Strm>,
+    _owned: PhantomData<(P, Strm)>,
 }
 
 #[allow(dead_code)] // TODO(@ohsayan): Remove this once we start using the flat array writer
-impl<'a, T, Strm> FlatArrayWriter<'a, T, Strm>
+impl<'a, P, T, Strm> FlatArrayWriter<'a, P, T, Strm>
 where
-    T: ProtocolConnectionExt<Strm>,
+    P: ProtocolSpec,
+    T: ProtocolConnectionExt<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Intialize a new flat array writer. This will write out the tsymbol
@@ -72,7 +74,7 @@ where
         con: &'a mut T,
         tsymbol: u8,
         len: usize,
-    ) -> IoResult<FlatArrayWriter<'a, T, Strm>> {
+    ) -> IoResult<FlatArrayWriter<'a, P, T, Strm>> {
         {
             let stream = con.raw_stream();
             // first write _
@@ -121,14 +123,15 @@ where
 #[derive(Debug)]
 /// A writer for a typed array, which is a singly-typed array which either
 /// has a typed element or a `NULL`
-pub struct TypedArrayWriter<'a, T, Strm> {
+pub struct TypedArrayWriter<'a, P, T, Strm> {
     con: &'a mut T,
-    _owned: PhantomData<Strm>,
+    _owned: PhantomData<(P, Strm)>,
 }
 
-impl<'a, T, Strm> TypedArrayWriter<'a, T, Strm>
+impl<'a, P, T, Strm> TypedArrayWriter<'a, P, T, Strm>
 where
-    T: ProtocolConnectionExt<Strm>,
+    P: ProtocolSpec,
+    T: ProtocolConnectionExt<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Create a new `typedarraywriter`. This will write the tsymbol and
@@ -137,7 +140,7 @@ where
         con: &'a mut T,
         tsymbol: u8,
         len: usize,
-    ) -> IoResult<TypedArrayWriter<'a, T, Strm>> {
+    ) -> IoResult<TypedArrayWriter<'a, P, T, Strm>> {
         {
             let stream = con.raw_stream();
             // first write @<tsymbol>
@@ -177,14 +180,15 @@ where
 #[derive(Debug)]
 /// A writer for a non-null typed array, which is a singly-typed array which either
 /// has a typed element or a `NULL`
-pub struct NonNullArrayWriter<'a, T, Strm> {
+pub struct NonNullArrayWriter<'a, P, T, Strm> {
     con: &'a mut T,
-    _owned: PhantomData<Strm>,
+    _owned: PhantomData<(P, Strm)>,
 }
 
-impl<'a, T, Strm> NonNullArrayWriter<'a, T, Strm>
+impl<'a, P, T, Strm> NonNullArrayWriter<'a, P, T, Strm>
 where
-    T: ProtocolConnectionExt<Strm>,
+    P: ProtocolSpec,
+    T: ProtocolConnectionExt<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Create a new `typedarraywriter`. This will write the tsymbol and
@@ -193,7 +197,7 @@ where
         con: &'a mut T,
         tsymbol: u8,
         len: usize,
-    ) -> IoResult<NonNullArrayWriter<'a, T, Strm>> {
+    ) -> IoResult<NonNullArrayWriter<'a, P, T, Strm>> {
         {
             let stream = con.raw_stream();
             // first write @<tsymbol>

@@ -61,7 +61,7 @@ action! {
     /// Handle auth. Should have passed the `auth` token
     fn auth(
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
@@ -94,12 +94,12 @@ action! {
             _ => util::err(groups::UNKNOWN_ACTION),
         }
     }
-    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
         con.write_response(StringWrapper(auth.provider().whoami()?)).await?;
         Ok(())
     }
-    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
         let usernames = auth.provider().collect_usernames()?;
         let mut array_writer = unsafe {
@@ -111,7 +111,7 @@ action! {
         }
         Ok(())
     }
-    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         let newkey = match iter.len() {
             1 => {
                 // so this fella thinks they're root
@@ -128,7 +128,7 @@ action! {
         con.write_response(StringWrapper(newkey)).await?;
         Ok(())
     }
-    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr(iter.len() == 1)?; // just the origin key
         let origin_key = unsafe { iter.next_unchecked() };
         let key = auth.provider_mut().claim_root(origin_key)?;
@@ -139,7 +139,7 @@ action! {
     /// Handle a login operation only. The **`login` token is expected to be present**
     fn auth_login_only(
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
@@ -151,7 +151,7 @@ action! {
             _ => util::err(errors::AUTH_CODE_PERMS),
         }
     }
-    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         // sweet, where's our username and password
         ensure_boolean_or_aerr(iter.len() == 2)?; // just the uname and pass
         let (username, password) = unsafe { (iter.next_unchecked(), iter.next_unchecked()) };

@@ -25,7 +25,7 @@
 */
 
 use crate::corestore::heap_array::HeapArray;
-use core::{fmt, marker::PhantomData, mem::transmute, slice};
+use core::{fmt, mem::transmute, slice};
 #[cfg(feature = "nightly")]
 mod benches;
 #[cfg(test)]
@@ -39,6 +39,7 @@ pub mod responses;
 pub const PROTOCOL_VERSION: f32 = 2.0;
 /// The Skyhash protocol version string (Skyhash-x.y)
 pub const PROTOCOL_VERSIONSTRING: &str = "Skyhash-2.0";
+pub type Skyhash2 = Parser;
 
 #[derive(PartialEq)]
 /// As its name says, an [`UnsafeSlice`] is a terribly unsafe slice. It's guarantess are
@@ -165,27 +166,28 @@ struct OwnedPipelinedQuery {
 }
 
 /// A parser for Skyhash 2.0
-pub struct Parser<'a> {
+pub struct Parser {
     end: *const u8,
     cursor: *const u8,
-    _lt: PhantomData<&'a ()>,
 }
 
-impl<'a> Parser<'a> {
+unsafe impl Sync for Parser {}
+unsafe impl Send for Parser {}
+
+impl Parser {
     /// Initialize a new parser
-    pub fn new(slice: &[u8]) -> Self {
+    fn new(slice: &[u8]) -> Self {
         unsafe {
             Self {
                 end: slice.as_ptr().add(slice.len()),
                 cursor: slice.as_ptr(),
-                _lt: PhantomData,
             }
         }
     }
 }
 
 // basic methods
-impl<'a> Parser<'a> {
+impl Parser {
     /// Returns a ptr one byte past the allocation of the buffer
     const fn data_end_ptr(&self) -> *const u8 {
         self.end
@@ -220,7 +222,7 @@ impl<'a> Parser<'a> {
 }
 
 // mutable refs
-impl<'a> Parser<'a> {
+impl Parser {
     /// Increment the cursor by `by` positions
     unsafe fn incr_cursor_by(&mut self, by: usize) {
         self.cursor = self.cursor.add(by);
@@ -232,7 +234,7 @@ impl<'a> Parser<'a> {
 }
 
 // higher level abstractions
-impl<'a> Parser<'a> {
+impl Parser {
     /// Attempt to read `len` bytes
     fn read_until(&mut self, len: usize) -> ParseResult<UnsafeSlice> {
         if self.has_remaining(len) {
@@ -308,7 +310,7 @@ impl<'a> Parser<'a> {
 }
 
 // query impls
-impl<'a> Parser<'a> {
+impl Parser {
     /// Parse the next simple query. This should have passed the `*` tsymbol
     ///
     /// Simple query structure (tokenized line-by-line):
@@ -412,6 +414,8 @@ impl<'a> Parser<'a> {
             Err(ParseError::NotEnough)
         }
     }
+    // only expose this. don't expose Self::new since that'll be _relatively easier_ to
+    // invalidate invariants for
     pub fn parse(buf: &[u8]) -> ParseResult<(Query, usize)> {
         let mut slf = Self::new(buf);
         let body = slf._parse()?;

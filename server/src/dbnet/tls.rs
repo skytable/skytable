@@ -26,10 +26,11 @@
 
 use crate::{
     dbnet::{
-        connection::{ConnectionHandler, ExecutorFn},
+        connection::{ConnectionHandler, ExecutorFn, ProtocolSpec},
         tcp::{BufferedSocketStream, Connection, TcpBackoff},
         BaseListener, Terminator,
     },
+    protocol::Skyhash2,
     util::error::{Error, SkyResult},
     IoResult,
 };
@@ -43,21 +44,23 @@ use tokio::net::TcpStream;
 use tokio_openssl::SslStream;
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
-type SslExecutorFn = ExecutorFn<Connection<SslStream<TcpStream>>, SslStream<TcpStream>>;
+type SslExecutorFn<P> = ExecutorFn<P, Connection<SslStream<TcpStream>>, SslStream<TcpStream>>;
 
-pub struct SslListener {
+pub type SslListener = SslListenerRaw<Skyhash2>;
+
+pub struct SslListenerRaw<P> {
     pub base: BaseListener,
     acceptor: SslAcceptor,
-    executor_fn: SslExecutorFn,
+    executor_fn: SslExecutorFn<P>,
 }
 
-impl SslListener {
+impl<P: ProtocolSpec + 'static> SslListenerRaw<P> {
     pub fn new_pem_based_ssl_connection(
         key_file: String,
         chain_file: String,
         base: BaseListener,
         tls_passfile: Option<String>,
-    ) -> SkyResult<Self> {
+    ) -> SkyResult<SslListenerRaw<P>> {
         let mut acceptor_builder = SslAcceptor::mozilla_intermediate(SslMethod::tls())?;
         // cert is the same for both
         acceptor_builder.set_certificate_chain_file(chain_file)?;
@@ -77,7 +80,7 @@ impl SslListener {
             // no passphrase, needs interactive
             acceptor_builder.set_private_key_file(key_file, SslFiletype::PEM)?;
         }
-        Ok(SslListener {
+        Ok(Self {
             acceptor: acceptor_builder.build(),
             executor_fn: if base.auth.is_enabled() {
                 ConnectionHandler::execute_unauth

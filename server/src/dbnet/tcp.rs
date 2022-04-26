@@ -24,6 +24,8 @@
  *
 */
 
+use crate::dbnet::connection::ProtocolSpec;
+use crate::protocol::Skyhash2;
 use crate::{
     dbnet::{
         connection::{ConnectionHandler, ExecutorFn},
@@ -45,7 +47,7 @@ pub trait BufferedSocketStream: AsyncWrite {}
 
 impl BufferedSocketStream for TcpStream {}
 
-type TcpExecutorFn = ExecutorFn<Connection<TcpStream>, TcpStream>;
+type TcpExecutorFn<P> = ExecutorFn<P, Connection<TcpStream>, TcpStream>;
 
 /// A TCP/SSL connection wrapper
 pub struct Connection<T>
@@ -94,13 +96,15 @@ impl TcpBackoff {
     }
 }
 
+pub type Listener = RawListener<Skyhash2>;
+
 /// A listener
-pub struct Listener {
+pub struct RawListener<P> {
     pub base: BaseListener,
-    executor_fn: TcpExecutorFn,
+    executor_fn: TcpExecutorFn<P>,
 }
 
-impl Listener {
+impl<P: ProtocolSpec + 'static> RawListener<P> {
     pub fn new(base: BaseListener) -> Self {
         Self {
             executor_fn: if base.auth.is_enabled() {

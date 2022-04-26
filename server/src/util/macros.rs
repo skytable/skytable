@@ -120,23 +120,40 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
                 $($argname: $argty,)*
             ) -> $crate::actions::ActionResult<()>
             $block)*
     };
     (
         $($(#[$attr:meta])*
-        fn $fname:ident($argone:ident: $argonety:ty,
+        fn $fname:ident(
+            $argone:ident: $argonety:ty,
             $argtwo:ident: $argtwoty:ty,
-            mut $argthree:ident: $argthreety:ty)
-        $block:block)*
+            mut $argthree:ident: $argthreety:ty
+        ) $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + ClientConnection<Strm>, Strm:Stream>(
+            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
                 $argone: $argonety,
                 $argtwo: $argtwoty,
                 mut $argthree: $argthreety
+            ) -> $crate::actions::ActionResult<()>
+            $block)*
+    };
+    (
+        $($(#[$attr:meta])*
+        fn $fname:ident(
+            $argone:ident: $argonety:ty,
+            $argtwo:ident: $argtwoty:ty,
+            $argthree:ident: $argthreety:ty
+        ) $block:block)*
+    ) => {
+            $($(#[$attr])*
+            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
+                $argone: $argonety,
+                $argtwo: $argtwoty,
+                $argthree: $argthreety
             ) -> $crate::actions::ActionResult<()>
             $block)*
     };

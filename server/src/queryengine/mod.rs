@@ -78,7 +78,7 @@ action! {
     fn execute_simple_noauth(
         _db: &mut Corestore,
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         buf: SimpleQuery
     ) {
         let bufref = buf.as_slice();
@@ -96,17 +96,17 @@ action! {
     fn execute_simple(
         db: &mut Corestore,
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         buf: SimpleQuery
     ) {
         self::execute_stage(db, con, auth, buf.as_slice()).await
     }
 }
 
-async fn execute_stage<'a, T: 'a + ClientConnection<Strm>, Strm: Stream>(
+async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, Strm: Stream>(
     db: &mut Corestore,
     con: &'a mut T,
-    auth: &mut AuthProviderHandle<'_, T, Strm>,
+    auth: &mut AuthProviderHandle<'_, P, T, Strm>,
     buf: &[UnsafeSlice],
 ) -> ActionResult<()> {
     let mut iter = unsafe {
@@ -171,10 +171,15 @@ action! {
 
 /// Execute a stage **completely**. This means that action errors are never propagated
 /// over the try operator
-async fn execute_stage_pedantic<'a, T: ClientConnection<Strm> + 'a, Strm: Stream + 'a>(
+async fn execute_stage_pedantic<
+    'a,
+    P: ProtocolSpec,
+    T: ClientConnection<P, Strm> + 'a,
+    Strm: Stream + 'a,
+>(
     handle: &mut Corestore,
     con: &mut T,
-    auth: &mut AuthProviderHandle<'_, T, Strm>,
+    auth: &mut AuthProviderHandle<'_, P, T, Strm>,
     stage: &[UnsafeSlice],
 ) -> crate::IoResult<()> {
     let ret = async {
@@ -193,7 +198,7 @@ action! {
     fn execute_pipeline(
         handle: &mut Corestore,
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         pipeline: PipelinedQuery
     ) {
         for stage in pipeline.into_inner().iter() {
