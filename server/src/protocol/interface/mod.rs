@@ -47,6 +47,8 @@ pub trait ProtocolCharset {
     const TSYMBOL_ARRAY: u8;
     const TSYMBOL_FLAT_ARRAY: u8;
     const LF: u8 = b'\n';
+    const SIMPLE_QUERY_HEADER: &'static [u8];
+    const PIPELINED_QUERY_FIRST_BYTE: u8;
     const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8];
 }
 
@@ -224,8 +226,25 @@ where
     Strm: Stream,
     P: ProtocolSpec,
 {
+    // utility (intentionally underscored to avoid direct access)
     fn _get_raw_stream(&mut self) -> &mut BufWriter<Strm> {
         self.get_mut_stream()
+    }
+
+    // metaframe methods
+    async fn write_simple_query_header(&mut self) -> IoResult<()> {
+        self.get_mut_stream()
+            .write_all(P::SIMPLE_QUERY_HEADER)
+            .await
+    }
+    async fn write_pipelined_query_header(&mut self, qcount: usize) -> IoResult<()> {
+        self.get_mut_stream()
+            .write_all(&[P::PIPELINED_QUERY_FIRST_BYTE])
+            .await?;
+        self.get_mut_stream()
+            .write_all(&Integer64::from(qcount))
+            .await?;
+        self.get_mut_stream().write_all(&[P::LF]).await
     }
 
     // monoelements

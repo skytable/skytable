@@ -45,6 +45,8 @@ impl ProtocolCharset for Skyhash2 {
     const TSYMBOL_ARRAY: u8 = b'&';
     const TSYMBOL_FLAT_ARRAY: u8 = b'_';
     const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8] = b"\0";
+    const SIMPLE_QUERY_HEADER: &'static [u8] = b"*";
+    const PIPELINED_QUERY_FIRST_BYTE: u8 = b'$';
 }
 
 impl ProtocolSpec for Skyhash2 {
