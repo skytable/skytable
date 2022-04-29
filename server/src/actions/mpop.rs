@@ -33,9 +33,9 @@ use crate::util::compiler;
 action!(
     /// Run an MPOP action
     fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len != 0)?;
+        ensure_length::<P>(act.len(), |len| len != 0)?;
         if registry::state_okay() {
-            let kve = handle.get_table_with::<KVEBlob>()?;
+            let kve = handle.get_table_with::<P, KVEBlob>()?;
             let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
             if compiler::likely(encoding_is_okay) {
                 con.write_typed_array_header(act.len(), kve.get_value_tsymbol())
@@ -47,11 +47,11 @@ action!(
                     }
                 }
             } else {
-                return util::err(groups::ENCODING_ERROR);
+                return util::err(P::RCODE_ENCODING_ERROR);
             }
         } else {
             // don't begin the operation at all if the database is poisoned
-            return util::err(groups::SERVER_ERR);
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }

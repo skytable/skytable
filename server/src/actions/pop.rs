@@ -28,22 +28,22 @@ use crate::dbnet::connection::prelude::*;
 
 action! {
     fn pop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length::<P>(act.len(), |len| len == 1)?;
         let key = unsafe {
             // SAFETY: We have checked for there to be one arg
             act.next_unchecked()
         };
         if registry::state_okay() {
-            let kve = handle.get_table_with::<KVEBlob>()?;
+            let kve = handle.get_table_with::<P, KVEBlob>()?;
             match kve.pop(key) {
                 Ok(Some(val)) => con.write_mono_length_prefixed_with_tsymbol(
                     &val, kve.get_value_tsymbol()
                 ).await?,
-                Ok(None) => return util::err(groups::NIL),
-                Err(()) => return util::err(groups::ENCODING_ERROR),
+                Ok(None) => return util::err(P::RCODE_NIL),
+                Err(()) => return util::err(P::RCODE_ENCODING_ERROR),
             }
         } else {
-            return util::err(groups::SERVER_ERR);
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }

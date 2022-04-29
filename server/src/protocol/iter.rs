@@ -174,18 +174,3 @@ impl<'a> DoubleEndedIterator for BorrowedAnyArrayIter<'a> {
 
 impl<'a> ExactSizeIterator for BorrowedAnyArrayIter<'a> {}
 impl<'a> FusedIterator for BorrowedAnyArrayIter<'a> {}
-
-#[test]
-fn test_iter() {
-    use super::{Parser, Query};
-    let (q, _fwby) = Parser::parse(b"*3\n3\nset1\nx3\n100").unwrap();
-    let r = match q {
-        Query::Simple(q) => q,
-        _ => panic!("Wrong query"),
-    };
-    let it = r.as_slice().iter();
-    let mut iter = unsafe { AnyArrayIter::new(it) };
-    assert_eq!(iter.next_uppercase().unwrap().as_ref(), "SET".as_bytes());
-    assert_eq!(iter.next().unwrap(), "x".as_bytes());
-    assert_eq!(iter.next().unwrap(), "100".as_bytes());
-}

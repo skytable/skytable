@@ -24,7 +24,6 @@
  *
 */
 
-use super::OKAY_BADIDX_NIL_NLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::util::compiler;
@@ -44,55 +43,55 @@ action! {
     /// - `LMOD <mylist> remove <index>`
     /// - `LMOD <mylist> clear`
     fn lmod(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len > 1)?;
-        let listmap = handle.get_table_with::<KVEList>()?;
+        ensure_length::<P>(act.len(), |len| len > 1)?;
+        let listmap = handle.get_table_with::<P, KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };
         macro_rules! get_numeric_count {
             () => {
                 match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
                     Ok(int) => int,
-                    Err(_) => return Err(groups::WRONGTYPE_ERR.into()),
+                    Err(_) => return Err(P::RCODE_WRONGTYPE_ERR.into()),
                 }
             };
         }
         // now let us see what we need to do
         match unsafe { act.next_uppercase_unchecked() }.as_ref() {
             CLEAR => {
-                ensure_length(act.len(), |len| len == 0)?;
+                ensure_length::<P>(act.len(), |len| len == 0)?;
                 let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
-                    _ => return Err(groups::NIL.into()),
+                    _ => return Err(P::RCODE_NIL.into()),
                 };
                 let okay = if registry::state_okay() {
                     list.write().clear();
-                    groups::OKAY
+                    P::RCODE_OKAY
                 } else {
-                    groups::SERVER_ERR
+                    P::RCODE_SERVER_ERR
                 };
                 con._write_raw(okay).await?
             }
             PUSH => {
-                ensure_boolean_or_aerr(!act.is_empty())?;
+                ensure_boolean_or_aerr::<P>(!act.is_empty())?;
                 let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
-                    _ => return Err(groups::NIL.into()),
+                    _ => return Err(P::RCODE_NIL.into()),
                 };
                 let venc_ok = listmap.get_val_encoder();
                 let ret = if compiler::likely(act.as_ref().all(venc_ok)) {
                     if registry::state_okay() {
                         list.write().extend(act.map(Data::copy_from_slice));
-                        groups::OKAY
+                        P::RCODE_OKAY
                     } else {
-                        groups::SERVER_ERR
+                        P::RCODE_SERVER_ERR
                     }
                 } else {
-                    groups::ENCODING_ERROR
+                    P::RCODE_ENCODING_ERROR
                 };
                 con._write_raw(ret).await?
             }
             REMOVE => {
-                ensure_length(act.len(), |len| len == 1)?;
+                ensure_length::<P>(act.len(), |len| len == 1)?;
                 let idx_to_remove = get_numeric_count!();
                 if registry::state_okay() {
                     let maybe_value = listmap.get_inner_ref().get(listname).map(|list| {
@@ -104,13 +103,13 @@ action! {
                             false
                         }
                     });
-                    con._write_raw(OKAY_BADIDX_NIL_NLUT[maybe_value]).await?
+                    con._write_raw(P::OKAY_BADIDX_NIL_NLUT[maybe_value]).await?
                 } else {
-                    return Err(groups::SERVER_ERR.into());
+                    return Err(P::RCODE_SERVER_ERR.into());
                 }
             }
             INSERT => {
-                ensure_length(act.len(), |len| len == 2)?;
+                ensure_length::<P>(act.len(), |len| len == 2)?;
                 let idx_to_insert_at = get_numeric_count!();
                 let bts = unsafe { act.next_unchecked() };
                 let ret = if compiler::likely(listmap.is_val_ok(bts)) {
@@ -128,21 +127,21 @@ action! {
                                     false
                                 }
                             }),
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         };
-                        OKAY_BADIDX_NIL_NLUT[maybe_insert]
+                        P::OKAY_BADIDX_NIL_NLUT[maybe_insert]
                     } else {
                         // flush broken; server err
-                        groups::SERVER_ERR
+                        P::RCODE_SERVER_ERR
                     }
                 } else {
                     // encoding failed, uh
-                    groups::ENCODING_ERROR
+                    P::RCODE_ENCODING_ERROR
                 };
                 con._write_raw(ret).await?
             }
             POP => {
-                ensure_length(act.len(), |len| len < 2)?;
+                ensure_length::<P>(act.len(), |len| len < 2)?;
                 let idx = if act.len() == 1 {
                     // we have an idx
                     Some(get_numeric_count!())
@@ -165,7 +164,7 @@ action! {
                                 wlock.pop()
                             }
                         }),
-                        Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                        Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                     };
                     match maybe_pop {
                         Some(Some(val)) => {
@@ -174,15 +173,15 @@ action! {
                             ).await?;
                         }
                         Some(None) => {
-                            con._write_raw(groups::LISTMAP_BAD_INDEX).await?;
+                            con._write_raw(P::RSTRING_LISTMAP_BAD_INDEX).await?;
                         }
-                        None => con._write_raw(groups::NIL).await?,
+                        None => con._write_raw(P::RCODE_NIL).await?,
                     }
                 } else {
-                    con._write_raw(groups::SERVER_ERR).await?
+                    con._write_raw(P::RCODE_SERVER_ERR).await?
                 }
             }
-            _ => con._write_raw(groups::UNKNOWN_ACTION).await?,
+            _ => con._write_raw(P::RCODE_UNKNOWN_ACTION).await?,
         }
         Ok(())
     }

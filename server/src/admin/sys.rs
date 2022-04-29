@@ -47,11 +47,11 @@ const HEALTH_TABLE: BoolTable<&str> = BoolTable::new("good", "critical");
 action! {
     fn sys(_handle: &Corestore, con: &mut T, iter: ActionIter<'_>) {
         let mut iter = iter;
-        ensure_boolean_or_aerr(iter.len() == 2)?;
+        ensure_boolean_or_aerr::<P>(iter.len() == 2)?;
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             INFO => sys_info(con, &mut iter).await,
             METRIC => sys_metric(con, &mut iter).await,
-            _ => util::err(groups::UNKNOWN_ACTION),
+            _ => util::err(P::RCODE_UNKNOWN_ACTION),
         }
     }
     fn sys_info(con: &mut T, iter: &mut ActionIter<'_>) {
@@ -73,7 +73,7 @@ action! {
                     Ok(size) => con.write_int64(size).await?,
                     Err(e) => {
                         log::error!("Failed to get storage usage with: {e}");
-                        return util::err(groups::SERVER_ERR);
+                        return util::err(P::RCODE_SERVER_ERR);
                     },
                 }
             }

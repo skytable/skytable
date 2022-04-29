@@ -46,7 +46,7 @@ use crate::{
     },
     protocol::{
         interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-        responses, Query,
+        Query,
     },
     queryengine, IoResult,
 };
@@ -107,16 +107,13 @@ pub mod prelude {
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::{AuthProviderHandle, ClientConnection, Stream};
     pub use crate::{
-        actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length},
+        actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length, translate_ddl_error},
         corestore::{
             table::{KVEBlob, KVEList},
             Corestore,
         },
         get_tbl, handle_entity, is_lowbit_set,
-        protocol::{
-            interface::{ProtocolRead, ProtocolSpec},
-            responses::{self, groups},
-        },
+        protocol::interface::{ProtocolRead, ProtocolSpec},
         queryengine::ActionIter,
         registry,
         util::{self, FutureResult, UnwrapActionError, Unwrappable},
@@ -286,7 +283,7 @@ where
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {
                     self.con
-                        .close_conn_with_error(responses::groups::WRONGTYPE_ERR)
+                        .close_conn_with_error(P::RCODE_WRONGTYPE_ERR)
                         .await?
                 }
                 Ok(QueryResult::Disconnected) => return Ok(()),

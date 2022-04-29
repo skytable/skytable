@@ -25,7 +25,7 @@
 */
 
 use super::{Parser, PipelinedQuery, Query, SimpleQuery};
-use crate::protocol::ParseError;
+use crate::protocol::{iter::AnyArrayIter, ParseError};
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;
 
@@ -640,4 +640,19 @@ fn pipelined_query_fail_because_not_enough() {
         let ret = Parser::parse(&body).unwrap_err();
         assert_eq!(ret, ParseError::NotEnough)
     }
+}
+
+#[test]
+fn test_iter() {
+    use super::{Parser, Query};
+    let (q, _fwby) = Parser::parse(b"*3\n3\nset1\nx3\n100").unwrap();
+    let r = match q {
+        Query::Simple(q) => q,
+        _ => panic!("Wrong query"),
+    };
+    let it = r.as_slice().iter();
+    let mut iter = unsafe { AnyArrayIter::new(it) };
+    assert_eq!(iter.next_uppercase().unwrap().as_ref(), "SET".as_bytes());
+    assert_eq!(iter.next().unwrap(), "x".as_bytes());
+    assert_eq!(iter.next().unwrap(), "100".as_bytes());
 }

@@ -58,7 +58,7 @@ macro_rules! gen_constants_and_matches {
                 pub const $action2: &[u8] = stringify!($action2).as_bytes();
             )*
         }
-        let first = $buf.next_uppercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?;
+        let first = $buf.next_uppercase().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?;
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
@@ -67,7 +67,7 @@ macro_rules! gen_constants_and_matches {
                 tags::$action2 => $fns2.await?,
             )*
             _ => {
-                $con._write_raw(groups::UNKNOWN_ACTION).await?;
+                $con._write_raw(P::RCODE_UNKNOWN_ACTION).await?;
             }
         }
     };
@@ -87,7 +87,7 @@ action! {
             // won't suddenly become invalid
             AnyArrayIter::new(bufref.iter())
         };
-        match iter.next_lowercase().unwrap_or_custom_aerr(groups::PACKET_ERR)?.as_ref() {
+        match iter.next_lowercase().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?.as_ref() {
             ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
             _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
         }
@@ -158,13 +158,13 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
 action! {
     /// Handle `use <entity>` like queries
     fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length::<P>(act.len(), |len| len == 1)?;
         let entity = unsafe {
             // SAFETY: Already checked len
             act.next_unchecked()
         };
-        handle.swap_entity(Entity::from_slice(entity)?)?;
-        con._write_raw(groups::OKAY).await?;
+        translate_ddl_error::<P, ()>(handle.swap_entity(Entity::from_slice::<P>(entity)?))?;
+        con._write_raw(P::RCODE_OKAY).await?;
         Ok(())
     }
 }

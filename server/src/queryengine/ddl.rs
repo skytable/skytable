@@ -42,14 +42,14 @@ action! {
     /// like queries
     fn create(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        ensure_length(act.len(), |size| size > 1)?;
+        ensure_length::<P>(act.len(), |size| size > 1)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
             TABLE => create_table(handle, con, act).await?,
             KEYSPACE => create_keyspace(handle, con, act).await?,
             _ => {
-                con._write_raw(groups::UNKNOWN_DDL_QUERY).await?;
+                con._write_raw(P::RSTRING_UNKNOWN_DDL_QUERY).await?;
             }
         }
         Ok(())
@@ -59,14 +59,14 @@ action! {
     /// like queries
     fn ddl_drop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         // minlength is 2 (create has already been checked)
-        ensure_length(act.len(), |size| size > 1)?;
+        ensure_length::<P>(act.len(), |size| size > 1)?;
         let mut create_what = unsafe { act.next().unsafe_unwrap() }.to_vec();
         create_what.make_ascii_uppercase();
         match create_what.as_ref() {
             TABLE => drop_table(handle, con, act).await?,
             KEYSPACE => drop_keyspace(handle, con, act).await?,
             _ => {
-                con._write_raw(groups::UNKNOWN_DDL_QUERY).await?;
+                con._write_raw(P::RSTRING_UNKNOWN_DDL_QUERY).await?;
             }
         }
         Ok(())
@@ -74,77 +74,77 @@ action! {
 
     /// We should have `<tableid> <model>(args) properties`
     fn create_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size > 1 && size < 4)?;
+        ensure_length::<P>(act.len(), |size| size > 1 && size < 4)?;
         let table_name = unsafe { act.next().unsafe_unwrap() };
         let model_name = unsafe { act.next().unsafe_unwrap() };
-        let (table_entity, model_code) = parser::parse_table_args(table_name, model_name)?;
+        let (table_entity, model_code) = parser::parse_table_args::<P>(table_name, model_name)?;
         let is_volatile = match act.next() {
             Some(maybe_volatile) => {
-                ensure_cond_or_err(maybe_volatile.eq(VOLATILE), responses::groups::UNKNOWN_PROPERTY)?;
+                ensure_cond_or_err(maybe_volatile.eq(VOLATILE), P::RSTRING_UNKNOWN_PROPERTY)?;
                 true
             }
             None => false,
         };
         if registry::state_okay() {
-            handle.create_table(table_entity, model_code, is_volatile)?;
-            con._write_raw(groups::OKAY).await?;
+            translate_ddl_error::<P, ()>(handle.create_table(table_entity, model_code, is_volatile))?;
+            con._write_raw(P::RCODE_OKAY).await?;
         } else {
-            return util::err(groups::SERVER_ERR);
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }
 
     /// We should have `<ksid>`
     fn create_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length::<P>(act.len(), |len| len == 1)?;
         match act.next() {
             Some(ksid) => {
-                ensure_cond_or_err(encoding::is_utf8(&ksid), responses::groups::ENCODING_ERROR)?;
+                ensure_cond_or_err(encoding::is_utf8(&ksid), P::RCODE_ENCODING_ERROR)?;
                 let ksid_str = unsafe { str::from_utf8_unchecked(ksid) };
-                ensure_cond_or_err(VALID_CONTAINER_NAME.is_match(ksid_str), responses::groups::BAD_EXPRESSION)?;
-                ensure_cond_or_err(ksid.len() < 64, responses::groups::CONTAINER_NAME_TOO_LONG)?;
+                ensure_cond_or_err(VALID_CONTAINER_NAME.is_match(ksid_str), P::RSTRING_BAD_EXPRESSION)?;
+                ensure_cond_or_err(ksid.len() < 64, P::RSTRING_CONTAINER_NAME_TOO_LONG)?;
                 let ksid = unsafe { ObjectID::from_slice(ksid_str) };
                 if registry::state_okay() {
-                    handle.create_keyspace(ksid)?;
-                    con._write_raw(groups::OKAY).await?
+                    translate_ddl_error::<P, ()>(handle.create_keyspace(ksid))?;
+                    con._write_raw(P::RCODE_OKAY).await?
                 } else {
-                    return util::err(groups::SERVER_ERR);
+                    return util::err(P::RCODE_SERVER_ERR);
                 }
             }
-            None => return util::err(groups::ACTION_ERR),
+            None => return util::err(P::RCODE_ACTION_ERR),
         }
         Ok(())
     }
 
     /// Drop a table (`<tblid>` only)
     fn drop_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size == 1)?;
+        ensure_length::<P>(act.len(), |size| size == 1)?;
         match act.next() {
             Some(eg) => {
-                let entity_group = parser::Entity::from_slice(eg)?;
+                let entity_group = parser::Entity::from_slice::<P>(eg)?;
                 if registry::state_okay() {
-                    handle.drop_table(entity_group)?;
-                    con._write_raw(groups::OKAY).await?;
+                    translate_ddl_error::<P, ()>(handle.drop_table(entity_group))?;
+                    con._write_raw(P::RCODE_OKAY).await?;
                 } else {
-                    return util::err(groups::SERVER_ERR);
+                    return util::err(P::RCODE_SERVER_ERR);
                 }
             },
-            None => return util::err(groups::ACTION_ERR),
+            None => return util::err(P::RCODE_ACTION_ERR),
         }
         Ok(())
     }
 
     /// Drop a keyspace (`<ksid>` only)
     fn drop_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size == 1)?;
+        ensure_length::<P>(act.len(), |size| size == 1)?;
         match act.next() {
             Some(ksid) => {
-                ensure_cond_or_err(ksid.len() < 64, responses::groups::CONTAINER_NAME_TOO_LONG)?;
+                ensure_cond_or_err(ksid.len() < 64, P::RSTRING_CONTAINER_NAME_TOO_LONG)?;
                 let force_remove = match act.next() {
                     Some(bts) if bts.eq(FORCE_REMOVE) => true,
                     None => false,
                     _ => {
-                        return util::err(responses::groups::UNKNOWN_ACTION);
+                        return util::err(P::RCODE_UNKNOWN_ACTION);
                     }
                 };
                 if registry::state_okay() {
@@ -154,13 +154,13 @@ action! {
                     } else {
                         handle.drop_keyspace(objid)
                     };
-                    result?;
-                    con._write_raw(groups::OKAY).await?;
+                    translate_ddl_error::<P, ()>(result)?;
+                    con._write_raw(P::RCODE_OKAY).await?;
                 } else {
-                    return util::err(groups::SERVER_ERR);
+                    return util::err(P::RCODE_SERVER_ERR);
                 }
             },
-            None => return util::err(groups::ACTION_ERR),
+            None => return util::err(P::RCODE_ACTION_ERR),
         }
         Ok(())
     }

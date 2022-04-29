@@ -38,10 +38,10 @@ action!(
         if act.is_empty() {
             // traditional mksnap
             match engine.mksnap(handle.clone_store()).await {
-                SnapshotActionResult::Ok => con._write_raw(groups::OKAY).await?,
-                SnapshotActionResult::Failure => return util::err(groups::SERVER_ERR),
-                SnapshotActionResult::Disabled => return util::err(groups::SNAPSHOT_DISABLED),
-                SnapshotActionResult::Busy => return util::err(groups::SNAPSHOT_BUSY),
+                SnapshotActionResult::Ok => con._write_raw(P::RCODE_OKAY).await?,
+                SnapshotActionResult::Failure => return util::err(P::RCODE_SERVER_ERR),
+                SnapshotActionResult::Disabled => return util::err(P::RSTRING_SNAPSHOT_DISABLED),
+                SnapshotActionResult::Busy => return util::err(P::RSTRING_SNAPSHOT_BUSY),
                 _ => unsafe { impossible!() },
             }
         } else if act.len() == 1 {
@@ -51,7 +51,7 @@ action!(
                 act.next_unchecked_bytes()
             };
             if !encoding::is_utf8(&name) {
-                return util::err(groups::ENCODING_ERROR);
+                return util::err(P::RCODE_ENCODING_ERROR);
             }
 
             // SECURITY: Check for directory traversal syntax
@@ -72,21 +72,21 @@ action!(
                 .count()
                 != 0;
             if illegal_snapshot {
-                return util::err(groups::SNAPSHOT_ILLEGAL_NAME);
+                return util::err(P::RSTRING_SNAPSHOT_ILLEGAL_NAME);
             }
 
             // now make the snapshot
             match engine.mkrsnap(name, handle.clone_store()).await {
-                SnapshotActionResult::Ok => con._write_raw(groups::OKAY).await?,
-                SnapshotActionResult::Failure => return util::err(groups::SERVER_ERR),
-                SnapshotActionResult::Busy => return util::err(groups::SNAPSHOT_BUSY),
+                SnapshotActionResult::Ok => con._write_raw(P::RCODE_OKAY).await?,
+                SnapshotActionResult::Failure => return util::err(P::RCODE_SERVER_ERR),
+                SnapshotActionResult::Busy => return util::err(P::RSTRING_SNAPSHOT_BUSY),
                 SnapshotActionResult::AlreadyExists => {
-                    return util::err(groups::SNAPSHOT_DUPLICATE)
+                    return util::err(P::RSTRING_SNAPSHOT_DUPLICATE)
                 }
                 _ => unsafe { impossible!() },
             }
         } else {
-            return util::err(groups::ACTION_ERR);
+            return util::err(P::RCODE_ACTION_ERR);
         }
         Ok(())
     }

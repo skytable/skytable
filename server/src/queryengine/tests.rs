@@ -28,6 +28,8 @@ use super::parser;
 
 mod parser_ddl_tests {
     use super::parser::Entity;
+    use crate::protocol::interface::ProtocolSpec;
+    use crate::protocol::Skyhash2;
     macro_rules! byvec {
         ($($element:expr),*) => {
             vec![
@@ -38,9 +40,8 @@ mod parser_ddl_tests {
         };
     }
     fn parse_table_args_test(input: Vec<&'static [u8]>) -> Result<(Entity<'_>, u8), &'static [u8]> {
-        super::parser::parse_table_args(input[0], input[1])
+        super::parser::parse_table_args::<Skyhash2>(input[0], input[1])
     }
-    use crate::protocol::responses;
     #[test]
     fn test_table_args_valid() {
         // binstr, binstr
@@ -97,12 +98,12 @@ mod parser_ddl_tests {
         let it = byvec!("1one", "keymap(binstr,binstr)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_CONTAINER_NAME
+            Skyhash2::RSTRING_BAD_CONTAINER_NAME
         );
         let it = byvec!("%whywouldsomeone", "keymap(binstr,binstr)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_CONTAINER_NAME
+            Skyhash2::RSTRING_BAD_CONTAINER_NAME
         );
     }
     #[test]
@@ -133,22 +134,22 @@ mod parser_ddl_tests {
         let it = byvec!("mycooltbl", "keymap(wth, str)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_DATA_TYPE
+            Skyhash2::RCODE_UNKNOWN_DATA_TYPE
         );
         let it = byvec!("mycooltbl", "keymap(wth, wth)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_DATA_TYPE
+            Skyhash2::RCODE_UNKNOWN_DATA_TYPE
         );
         let it = byvec!("mycooltbl", "keymap(str, wth)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_DATA_TYPE
+            Skyhash2::RCODE_UNKNOWN_DATA_TYPE
         );
         let it = byvec!("mycooltbl", "keymap(wth1, wth2)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_DATA_TYPE
+            Skyhash2::RCODE_UNKNOWN_DATA_TYPE
         );
     }
     #[test]
@@ -156,17 +157,17 @@ mod parser_ddl_tests {
         let it = byvec!("mycooltbl", "wthmap(wth, wth)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_MODEL
+            Skyhash2::RSTRING_UNKNOWN_MODEL
         );
         let it = byvec!("mycooltbl", "wthmap(str, str)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_MODEL
+            Skyhash2::RSTRING_UNKNOWN_MODEL
         );
         let it = byvec!("mycooltbl", "wthmap()");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::UNKNOWN_MODEL
+            Skyhash2::RSTRING_UNKNOWN_MODEL
         );
     }
     #[test]
@@ -174,82 +175,82 @@ mod parser_ddl_tests {
         let it = byvec!("mycooltbl", "keymap(");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(,,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap),");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap),,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap),,)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(,)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(,,)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap,,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap,,)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(str,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(str,str");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(str,str,");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(str,str,)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let it = byvec!("mycooltbl", "keymap(str,str,),");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
     }
 
@@ -258,14 +259,14 @@ mod parser_ddl_tests {
         let it = byvec!("mycooltbl", "keymap(str, str, str)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::TOO_MANY_ARGUMENTS
+            Skyhash2::RSTRING_TOO_MANY_ARGUMENTS
         );
 
         // this should be valid for not-yet-known data types too
         let it = byvec!("mycooltbl", "keymap(wth, wth, wth)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::TOO_MANY_ARGUMENTS
+            Skyhash2::RSTRING_TOO_MANY_ARGUMENTS
         );
     }
 
@@ -274,86 +275,96 @@ mod parser_ddl_tests {
         let it = byvec!("myverycooltbl", "keymap(list<str>, str)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_TYPE_FOR_KEY
+            Skyhash2::RSTRING_BAD_TYPE_FOR_KEY
         );
         let it = byvec!("myverycooltbl", "keymap(list<binstr>, binstr)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_TYPE_FOR_KEY
+            Skyhash2::RSTRING_BAD_TYPE_FOR_KEY
         );
         // for consistency checks
         let it = byvec!("myverycooltbl", "keymap(list<str>, binstr)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_TYPE_FOR_KEY
+            Skyhash2::RSTRING_BAD_TYPE_FOR_KEY
         );
         let it = byvec!("myverycooltbl", "keymap(list<binstr>, str)");
         assert_eq!(
             parse_table_args_test(it).unwrap_err(),
-            responses::groups::BAD_TYPE_FOR_KEY
+            Skyhash2::RSTRING_BAD_TYPE_FOR_KEY
         );
     }
 }
 
 mod entity_parser_tests {
     use super::parser::Entity;
-    use crate::protocol::responses;
+    use crate::protocol::interface::ProtocolSpec;
+    use crate::protocol::Skyhash2;
     #[test]
     fn test_query_full_entity_okay() {
         let x = byt!("ks:tbl");
-        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Full(b"ks", b"tbl"));
+        assert_eq!(
+            Entity::from_slice::<Skyhash2>(&x).unwrap(),
+            Entity::Full(b"ks", b"tbl")
+        );
     }
     #[test]
     fn test_query_half_entity() {
         let x = byt!("tbl");
-        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Single(b"tbl"))
+        assert_eq!(
+            Entity::from_slice::<Skyhash2>(&x).unwrap(),
+            Entity::Single(b"tbl")
+        )
     }
     #[test]
     fn test_query_partial_entity() {
         let x = byt!(":tbl");
-        assert_eq!(Entity::from_slice(&x).unwrap(), Entity::Partial(b"tbl"))
+        assert_eq!(
+            Entity::from_slice::<Skyhash2>(&x).unwrap(),
+            Entity::Partial(b"tbl")
+        )
     }
     #[test]
     fn test_query_entity_badexpr() {
         let x = byt!("ks:");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!(":");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("::");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("::ks");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("ks::tbl");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("ks::");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("ks::tbl::");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
         let x = byt!("::ks::tbl::");
         assert_eq!(
-            Entity::from_slice(&x).unwrap_err(),
-            responses::groups::BAD_EXPRESSION
+            Entity::from_slice::<Skyhash2>(&x).unwrap_err(),
+            Skyhash2::RSTRING_BAD_EXPRESSION
         );
     }
 
@@ -361,21 +372,21 @@ mod entity_parser_tests {
     fn test_bad_entity_name() {
         let ename = byt!("$var");
         assert_eq!(
-            Entity::from_slice(&ename).unwrap_err(),
-            responses::groups::BAD_CONTAINER_NAME
+            Entity::from_slice::<Skyhash2>(&ename).unwrap_err(),
+            Skyhash2::RSTRING_BAD_CONTAINER_NAME
         );
     }
     #[test]
     fn ks_or_table_with_preload_or_partmap() {
         let badname = byt!("PARTMAP");
         assert_eq!(
-            Entity::from_slice(&badname).unwrap_err(),
-            responses::groups::BAD_CONTAINER_NAME
+            Entity::from_slice::<Skyhash2>(&badname).unwrap_err(),
+            Skyhash2::RSTRING_BAD_CONTAINER_NAME
         );
         let badname = byt!("PRELOAD");
         assert_eq!(
-            Entity::from_slice(&badname).unwrap_err(),
-            responses::groups::BAD_CONTAINER_NAME
+            Entity::from_slice::<Skyhash2>(&badname).unwrap_err(),
+            Skyhash2::RSTRING_BAD_CONTAINER_NAME
         );
     }
 }

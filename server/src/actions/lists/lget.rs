@@ -63,8 +63,8 @@ action! {
     /// - `LGET <mylist> LAST` will return the last item
     /// if it exists
     fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len != 0)?;
-        let listmap = handle.get_table_with::<KVEList>()?;
+        ensure_length::<P>(act.len(), |len| len != 0)?;
+        let listmap = handle.get_table_with::<P, KVEList>()?;
         // get the list name
         let listname = unsafe { act.next_unchecked() };
         // now let us see what we need to do
@@ -72,7 +72,7 @@ action! {
             () => {
                 match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
                     Ok(int) => int,
-                    Err(_) => return util::err(groups::WRONGTYPE_ERR),
+                    Err(_) => return util::err(P::RCODE_WRONGTYPE_ERR),
                 }
             };
         }
@@ -81,32 +81,32 @@ action! {
                 // just return everything in the list
                 let items = match listmap.list_cloned_full(listname) {
                     Ok(Some(list)) => list,
-                    Ok(None) => return Err(groups::NIL.into()),
-                    Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                    Ok(None) => return Err(P::RCODE_NIL.into()),
+                    Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                 };
                 writelist!(con, listmap, items);
             }
             Some(subaction) => {
                 match subaction.as_ref() {
                     LEN => {
-                        ensure_length(act.len(), |len| len == 0)?;
+                        ensure_length::<P>(act.len(), |len| len == 0)?;
                         match listmap.list_len(listname) {
                             Ok(Some(len)) => con.write_usize(len).await?,
-                            Ok(None) => return Err(groups::NIL.into()),
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Ok(None) => return Err(P::RCODE_NIL.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         }
                     }
                     LIMIT => {
-                        ensure_length(act.len(), |len| len == 1)?;
+                        ensure_length::<P>(act.len(), |len| len == 1)?;
                         let count = get_numeric_count!();
                         match listmap.list_cloned(listname, count) {
                             Ok(Some(items)) => writelist!(con, listmap, items),
-                            Ok(None) => return Err(groups::NIL.into()),
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Ok(None) => return Err(P::RCODE_NIL.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         }
                     }
                     VALUEAT => {
-                        ensure_length(act.len(), |len| len == 1)?;
+                        ensure_length::<P>(act.len(), |len| len == 1)?;
                         let idx = get_numeric_count!();
                         let maybe_value = listmap.get(listname).map(|list| {
                             list.map(|lst| lst.read().get(idx).cloned())
@@ -120,18 +120,18 @@ action! {
                                 }
                                 Some(None) => {
                                     // bad index
-                                    return Err(groups::LISTMAP_BAD_INDEX.into());
+                                    return Err(P::RSTRING_LISTMAP_BAD_INDEX.into());
                                 }
                                 None => {
                                     // not found
-                                    return Err(groups::NIL.into());
+                                    return Err(P::RCODE_NIL.into());
                                 }
                             }
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         }
                     }
                     LAST => {
-                        ensure_length(act.len(), |len| len == 0)?;
+                        ensure_length::<P>(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
                             list.map(|lst| lst.read().last().cloned())
                         });
@@ -142,14 +142,14 @@ action! {
                                         &value, listmap.get_value_tsymbol()
                                     ).await?;
                                 },
-                                Some(None) => return Err(groups::LISTMAP_LIST_IS_EMPTY.into()),
-                                None => return Err(groups::NIL.into()),
+                                Some(None) => return Err(P::RSTRING_LISTMAP_LIST_IS_EMPTY.into()),
+                                None => return Err(P::RCODE_NIL.into()),
                             }
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         }
                     }
                     FIRST => {
-                        ensure_length(act.len(), |len| len == 0)?;
+                        ensure_length::<P>(act.len(), |len| len == 0)?;
                         let maybe_value = listmap.get(listname).map(|list| {
                             list.map(|lst| lst.read().first().cloned())
                         });
@@ -160,10 +160,10 @@ action! {
                                         &value, listmap.get_value_tsymbol()
                                     ).await?;
                                 },
-                                Some(None) => return Err(groups::LISTMAP_LIST_IS_EMPTY.into()),
-                                None => return Err(groups::NIL.into()),
+                                Some(None) => return Err(P::RSTRING_LISTMAP_LIST_IS_EMPTY.into()),
+                                None => return Err(P::RCODE_NIL.into()),
                             }
-                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                            Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                         }
                     }
                     RANGE => {
@@ -171,13 +171,13 @@ action! {
                             Some(start) => {
                                 let start: usize = match start.parse() {
                                     Ok(v) => v,
-                                    Err(_) => return util::err(groups::WRONGTYPE_ERR),
+                                    Err(_) => return util::err(P::RCODE_WRONGTYPE_ERR),
                                 };
                                 let mut range = Range::new(start);
                                 if let Some(stop) = act.next_string_owned() {
                                     let stop: usize = match stop.parse() {
                                         Ok(v) => v,
-                                        Err(_) => return util::err(groups::WRONGTYPE_ERR),
+                                        Err(_) => return util::err(P::RCODE_WRONGTYPE_ERR),
                                     };
                                     range.set_stop(stop);
                                 };
@@ -188,17 +188,17 @@ action! {
                                             Some(ret) => {
                                                 writelist!(con, listmap, ret);
                                             },
-                                            None => return Err(groups::LISTMAP_BAD_INDEX.into()),
+                                            None => return Err(P::RSTRING_LISTMAP_BAD_INDEX.into()),
                                         }
                                     }
-                                    Ok(None) => return Err(groups::NIL.into()),
-                                    Err(()) => return Err(groups::ENCODING_ERROR.into()),
+                                    Ok(None) => return Err(P::RCODE_NIL.into()),
+                                    Err(()) => return Err(P::RCODE_ENCODING_ERROR.into()),
                                 }
                             }
-                            None => return Err(groups::ACTION_ERR.into()),
+                            None => return Err(P::RCODE_ACTION_ERR.into()),
                         }
                     }
-                    _ => return Err(groups::UNKNOWN_ACTION.into()),
+                    _ => return Err(P::RCODE_UNKNOWN_ACTION.into()),
                 }
             }
         }

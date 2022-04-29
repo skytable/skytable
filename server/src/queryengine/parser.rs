@@ -26,7 +26,7 @@
 
 use crate::corestore::{lazy::Lazy, memstore::ObjectID};
 use crate::kvengine::encoding;
-use crate::protocol::responses;
+use crate::queryengine::ProtocolSpec;
 use crate::util::{
     self,
     compiler::{self, cold_err},
@@ -47,20 +47,20 @@ pub(super) static VALID_CONTAINER_NAME: LazyRegexFn =
 pub(super) static VALID_TYPENAME: LazyRegexFn =
     LazyRegexFn::new(|| Regex::new("^<[a-zA-Z][a-zA-Z0-9]+[^>\\s]?>{1}$").unwrap());
 
-pub(super) fn parse_table_args<'a>(
+pub(super) fn parse_table_args<'a, P: ProtocolSpec>(
     table_name: &'a [u8],
     model_name: &'a [u8],
 ) -> Result<(Entity<'a>, u8), &'static [u8]> {
     if compiler::unlikely(!encoding::is_utf8(&table_name) || !encoding::is_utf8(&model_name)) {
-        return Err(responses::groups::ENCODING_ERROR);
+        return Err(P::RCODE_ENCODING_ERROR);
     }
     let model_name_str = unsafe { str::from_utf8_unchecked(model_name) };
 
     // get the entity group
-    let entity_group = Entity::from_slice(table_name)?;
+    let entity_group = Entity::from_slice::<P>(table_name)?;
     let splits: Vec<&str> = model_name_str.split('(').collect();
     if compiler::unlikely(splits.len() != 2) {
-        return Err(responses::groups::BAD_EXPRESSION);
+        return Err(P::RSTRING_BAD_EXPRESSION);
     }
 
     let model_name_split = unsafe { ucidx!(splits, 0) };
@@ -69,19 +69,19 @@ pub(super) fn parse_table_args<'a>(
     // model name has to have at least one char while model args should have
     // atleast `)` 1 chars (for example if the model takes no arguments: `smh()`)
     if compiler::unlikely(model_name_split.is_empty() || model_args_split.is_empty()) {
-        return Err(responses::groups::BAD_EXPRESSION);
+        return Err(P::RSTRING_BAD_EXPRESSION);
     }
 
     // THIS IS WHERE WE HANDLE THE NEWER MODELS
     if model_name_split.as_bytes() != KEYMAP {
-        return Err(responses::groups::UNKNOWN_MODEL);
+        return Err(P::RSTRING_UNKNOWN_MODEL);
     }
 
     let non_bracketed_end =
         unsafe { ucidx!(*model_args_split.as_bytes(), model_args_split.len() - 1) != b')' };
 
     if compiler::unlikely(non_bracketed_end) {
-        return Err(responses::groups::BAD_EXPRESSION);
+        return Err(P::RSTRING_BAD_EXPRESSION);
     }
 
     // should be (ty1, ty2)
@@ -96,10 +96,10 @@ pub(super) fn parse_table_args<'a>(
             let all_nonzero = model_args.into_iter().all(|v| !v.is_empty());
             if all_nonzero {
                 // arg fun
-                Err(responses::groups::TOO_MANY_ARGUMENTS)
+                Err(P::RSTRING_TOO_MANY_ARGUMENTS)
             } else {
                 // comma fun
-                Err(responses::groups::BAD_EXPRESSION)
+                Err(P::RSTRING_BAD_EXPRESSION)
             }
         });
     }
@@ -116,7 +116,7 @@ pub(super) fn parse_table_args<'a>(
         VALID_CONTAINER_NAME.is_match(val_ty)
     };
     if compiler::unlikely(!(valid_key_ty || valid_val_ty)) {
-        return Err(responses::groups::BAD_EXPRESSION);
+        return Err(P::RSTRING_BAD_EXPRESSION);
     }
     let key_ty = key_ty.as_bytes();
     let val_ty = val_ty.as_bytes();
@@ -132,8 +132,8 @@ pub(super) fn parse_table_args<'a>(
         (STR, LIST_BINSTR) => 6,
         (STR, LIST_STR) => 7,
         // KVExt bad keytypes (we can't use lists as keys for obvious reasons)
-        (LIST_STR, _) | (LIST_BINSTR, _) => return Err(responses::groups::BAD_TYPE_FOR_KEY),
-        _ => return Err(responses::groups::UNKNOWN_DATA_TYPE),
+        (LIST_STR, _) | (LIST_BINSTR, _) => return Err(P::RSTRING_BAD_TYPE_FOR_KEY),
+        _ => return Err(P::RCODE_UNKNOWN_DATA_TYPE),
     };
     Ok((entity_group, model_code))
 }
@@ -179,29 +179,29 @@ impl<'a> fmt::Debug for Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
-    pub fn from_slice(input: ByteSlice<'a>) -> Result<Entity<'a>, &'static [u8]> {
+    pub fn from_slice<P: ProtocolSpec>(input: ByteSlice<'a>) -> Result<Entity<'a>, &'static [u8]> {
         let parts: Vec<&[u8]> = input.split(|b| *b == b':').collect();
         if compiler::unlikely(parts.is_empty() || parts.len() > 2) {
-            return util::err(responses::groups::BAD_EXPRESSION);
+            return util::err(P::RSTRING_BAD_EXPRESSION);
         }
         // just the table
         let first_entity = unsafe { ucidx!(parts, 0) };
         if parts.len() == 1 {
-            Ok(Entity::Single(Self::verify_entity_name(first_entity)?))
+            Ok(Entity::Single(Self::verify_entity_name::<P>(first_entity)?))
         } else {
-            let second_entity = Self::verify_entity_name(unsafe { ucidx!(parts, 1) })?;
+            let second_entity = Self::verify_entity_name::<P>(unsafe { ucidx!(parts, 1) })?;
             if first_entity.is_empty() {
                 // partial syntax; so the table is in the second position
                 Ok(Entity::Partial(second_entity))
             } else {
-                let keyspace = Self::verify_entity_name(first_entity)?;
-                let table = Self::verify_entity_name(second_entity)?;
+                let keyspace = Self::verify_entity_name::<P>(first_entity)?;
+                let table = Self::verify_entity_name::<P>(second_entity)?;
                 Ok(Entity::Full(keyspace, table))
             }
         }
     }
     #[inline(always)]
-    fn verify_entity_name(input: &[u8]) -> Result<&[u8], &'static [u8]> {
+    fn verify_entity_name<P: ProtocolSpec>(input: &[u8]) -> Result<&[u8], &'static [u8]> {
         let mut valid_name = input.len() < 65
             && encoding::is_utf8(input)
             && unsafe { VALID_CONTAINER_NAME.is_match(str::from_utf8_unchecked(input)) };
@@ -220,13 +220,13 @@ impl<'a> Entity<'a> {
             Ok(input)
         } else if compiler::unlikely(input.is_empty()) {
             // bad expression (something like `:`)
-            util::err(responses::groups::BAD_EXPRESSION)
+            util::err(P::RSTRING_BAD_EXPRESSION)
         } else if compiler::unlikely(input.eq(b"system")) {
             // system cannot be switched to
-            util::err(responses::groups::PROTECTED_OBJECT)
+            util::err(P::RSTRING_PROTECTED_OBJECT)
         } else {
             // the container has a bad name
-            util::err(responses::groups::BAD_CONTAINER_NAME)
+            util::err(P::RSTRING_BAD_CONTAINER_NAME)
         }
     }
     pub fn as_owned(&self) -> OwnedEntity {

@@ -28,20 +28,16 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-
-const UPDATE_NLUT: BytesNicheLUT =
-    BytesNicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::NIL);
 
 action!(
     /// Run an `UPDATE` query
     fn update(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 2)?;
+        ensure_length::<P>(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {
-                let writer = handle.get_table_with::<KVEBlob>()?;
+                let writer = handle.get_table_with::<P, KVEBlob>()?;
                 match unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
@@ -55,9 +51,9 @@ action!(
                     Err(()) => None,
                 }
             };
-            con._write_raw(UPDATE_NLUT[did_we]).await?;
+            con._write_raw(P::UPDATE_NLUT[did_we]).await?;
         } else {
-            return util::err(groups::SERVER_ERR);
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }

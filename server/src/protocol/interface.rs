@@ -24,9 +24,12 @@
  *
 */
 
-use super::{responses, ParseError};
+use super::ParseError;
 use crate::{
-    corestore::buffers::Integer64,
+    corestore::{
+        booltable::{BytesBoolTable, BytesNicheLUT},
+        buffers::Integer64,
+    },
     dbnet::connection::{QueryResult, QueryWithAdvance, RawConnection, Stream},
     util::FutureResult,
     IoResult,
@@ -35,6 +38,7 @@ use std::io::{Error as IoError, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub trait ProtocolSpec {
+    // type symbols
     const TSYMBOL_STRING: u8;
     const TSYMBOL_BINARY: u8;
     const TSYMBOL_FLOAT: u8;
@@ -43,10 +47,80 @@ pub trait ProtocolSpec {
     const TSYMBOL_TYPED_NON_NULL_ARRAY: u8;
     const TSYMBOL_ARRAY: u8;
     const TSYMBOL_FLAT_ARRAY: u8;
+
+    // charset
     const LF: u8 = b'\n';
+
+    // metaframe
     const SIMPLE_QUERY_HEADER: &'static [u8];
     const PIPELINED_QUERY_FIRST_BYTE: u8;
+
+    // typed array
     const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8];
+
+    // respcodes
+    const RCODE_OKAY: &'static [u8];
+    const RCODE_NIL: &'static [u8];
+    const RCODE_OVERWRITE_ERR: &'static [u8];
+    const RCODE_ACTION_ERR: &'static [u8];
+    const RCODE_PACKET_ERR: &'static [u8];
+    const RCODE_SERVER_ERR: &'static [u8];
+    const RCODE_OTHER_ERR_EMPTY: &'static [u8];
+    const RCODE_UNKNOWN_ACTION: &'static [u8];
+    const RCODE_WRONGTYPE_ERR: &'static [u8];
+    const RCODE_UNKNOWN_DATA_TYPE: &'static [u8];
+    const RCODE_ENCODING_ERROR: &'static [u8];
+
+    // respstrings
+    const RSTRING_SNAPSHOT_BUSY: &'static [u8];
+    const RSTRING_SNAPSHOT_DISABLED: &'static [u8];
+    const RSTRING_SNAPSHOT_DUPLICATE: &'static [u8];
+    const RSTRING_SNAPSHOT_ILLEGAL_NAME: &'static [u8];
+    const RSTRING_ERR_ACCESS_AFTER_TERMSIG: &'static [u8];
+    const RSTRING_DEFAULT_UNSET: &'static [u8];
+    const RSTRING_CONTAINER_NOT_FOUND: &'static [u8];
+    const RSTRING_STILL_IN_USE: &'static [u8];
+    const RSTRING_PROTECTED_OBJECT: &'static [u8];
+    const RSTRING_WRONG_MODEL: &'static [u8];
+    const RSTRING_ALREADY_EXISTS: &'static [u8];
+    const RSTRING_NOT_READY: &'static [u8];
+    const RSTRING_DDL_TRANSACTIONAL_FAILURE: &'static [u8];
+    const RSTRING_UNKNOWN_DDL_QUERY: &'static [u8];
+    const RSTRING_BAD_EXPRESSION: &'static [u8];
+    const RSTRING_UNKNOWN_MODEL: &'static [u8];
+    const RSTRING_TOO_MANY_ARGUMENTS: &'static [u8];
+    const RSTRING_CONTAINER_NAME_TOO_LONG: &'static [u8];
+    const RSTRING_BAD_CONTAINER_NAME: &'static [u8];
+    const RSTRING_UNKNOWN_INSPECT_QUERY: &'static [u8];
+    const RSTRING_UNKNOWN_PROPERTY: &'static [u8];
+    const RSTRING_KEYSPACE_NOT_EMPTY: &'static [u8];
+    const RSTRING_BAD_TYPE_FOR_KEY: &'static [u8];
+    const RSTRING_LISTMAP_BAD_INDEX: &'static [u8];
+    const RSTRING_LISTMAP_LIST_IS_EMPTY: &'static [u8];
+
+    // full responses
+    const FULLRESP_RCODE_PACKET_ERR: &'static [u8];
+    const FULLRESP_HEYA: &'static [u8];
+
+    // LUTs
+    const SET_NLUT: BytesNicheLUT = BytesNicheLUT::new(
+        Self::RCODE_ENCODING_ERROR,
+        Self::RCODE_OKAY,
+        Self::RCODE_OVERWRITE_ERR,
+    );
+    const OKAY_BADIDX_NIL_NLUT: BytesNicheLUT = BytesNicheLUT::new(
+        Self::RCODE_NIL,
+        Self::RCODE_OKAY,
+        Self::RSTRING_LISTMAP_BAD_INDEX,
+    );
+    const OKAY_OVW_BLUT: BytesBoolTable =
+        BytesBoolTable::new(Self::RCODE_OKAY, Self::RCODE_OVERWRITE_ERR);
+
+    const UPDATE_NLUT: BytesNicheLUT = BytesNicheLUT::new(
+        Self::RCODE_ENCODING_ERROR,
+        Self::RCODE_OKAY,
+        Self::RCODE_NIL,
+    );
 }
 
 /// # The `ProtocolRead` trait
@@ -93,7 +167,7 @@ where
                     Err(ParseError::NotEnough) => (),
                     Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
                     Err(ParseError::UnexpectedByte | ParseError::BadPacket) => {
-                        return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
+                        return Ok(QueryResult::E(P::FULLRESP_RCODE_PACKET_ERR));
                     }
                 }
             }

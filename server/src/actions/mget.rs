@@ -33,8 +33,8 @@ action!(
     /// Run an `MGET` query
     ///
     fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size != 0)?;
-        let kve = handle.get_table_with::<KVEBlob>()?;
+        ensure_length::<P>(act.len(), |size| size != 0)?;
+        let kve = handle.get_table_with::<P, KVEBlob>()?;
         let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
         if compiler::likely(encoding_is_okay) {
             con.write_typed_array_header(act.len(), kve.get_value_tsymbol())
@@ -46,7 +46,7 @@ action!(
                 }
             }
         } else {
-            return util::err(groups::ENCODING_ERROR);
+            return util::err(P::RCODE_ENCODING_ERROR);
         }
         Ok(())
     }

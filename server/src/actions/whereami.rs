@@ -28,7 +28,7 @@ use crate::dbnet::connection::prelude::*;
 
 action! {
     fn whereami(store: &Corestore, con: &mut T, act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 0)?;
+        ensure_length::<P>(act.len(), |len| len == 0)?;
         match store.get_ids() {
             (Some(ks), Some(tbl)) =>  {
                 con.write_typed_non_null_array_header(2, b'+').await?;

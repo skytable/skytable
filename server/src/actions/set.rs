@@ -28,21 +28,17 @@
 //! This module provides functions to work with `SET` queries
 
 use crate::corestore;
-use crate::corestore::booltable::BytesNicheLUT;
 use crate::dbnet::connection::prelude::*;
 use crate::queryengine::ActionIter;
 use corestore::Data;
 
-const SET_NLUT: BytesNicheLUT =
-    BytesNicheLUT::new(groups::ENCODING_ERROR, groups::OKAY, groups::OVERWRITE_ERR);
-
 action!(
     /// Run a `SET` query
     fn set(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 2)?;
+        ensure_length::<P>(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {
-                let writer = handle.get_table_with::<KVEBlob>()?;
+                let writer = handle.get_table_with::<P, KVEBlob>()?;
                 match unsafe {
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
@@ -56,9 +52,9 @@ action!(
                     Err(()) => None,
                 }
             };
-            con._write_raw(SET_NLUT[did_we]).await?;
+            con._write_raw(P::SET_NLUT[did_we]).await?;
         } else {
-            con._write_raw(groups::SERVER_ERR).await?;
+            con._write_raw(P::RCODE_SERVER_ERR).await?;
         }
         Ok(())
     }

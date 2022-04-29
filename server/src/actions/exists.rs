@@ -36,7 +36,7 @@ use crate::util::compiler;
 action!(
     /// Run an `EXISTS` query
     fn exists(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len != 0)?;
+        ensure_length::<P>(act.len(), |len| len != 0)?;
         let mut how_many_of_them_exist = 0usize;
         macro_rules! exists {
             ($engine:expr) => {{
@@ -47,7 +47,7 @@ action!(
                     });
                     con.write_usize(how_many_of_them_exist).await?;
                 } else {
-                    return util::err(groups::ENCODING_ERROR);
+                    return util::err(P::RCODE_ENCODING_ERROR);
                 }
             }};
         }
@@ -56,7 +56,7 @@ action!(
             DataModel::KV(kve) => exists!(kve),
             DataModel::KVExtListmap(kve) => exists!(kve),
             #[allow(unreachable_patterns)]
-            _ => return util::err(groups::WRONG_MODEL),
+            _ => return util::err(P::RSTRING_WRONG_MODEL),
         }
         Ok(())
     }

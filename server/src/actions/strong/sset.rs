@@ -40,8 +40,8 @@ action! {
     /// `Overwrite Error` or code `2`
     fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
-        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
-        let kve = handle.get_table_with::<KVEBlob>()?;
+        ensure_length::<P>(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<P, KVEBlob>()?;
         if registry::state_okay() {
             let encoder = kve.get_double_encoder();
             let outcome = unsafe {
@@ -50,12 +50,12 @@ action! {
                 self::snapshot_and_insert(kve, encoder, act.into_inner())
             };
             match outcome {
-                StrongActionResult::Okay => con._write_raw(groups::OKAY).await?,
-                StrongActionResult::OverwriteError => return util::err(groups::OVERWRITE_ERR),
-                StrongActionResult::ServerError => return util::err(groups::SERVER_ERR),
+                StrongActionResult::Okay => con._write_raw(P::RCODE_OKAY).await?,
+                StrongActionResult::OverwriteError => return util::err(P::RCODE_OVERWRITE_ERR),
+                StrongActionResult::ServerError => return util::err(P::RCODE_SERVER_ERR),
                 StrongActionResult::EncodingError => {
                     // error we love to hate: encoding error, ugh
-                    return util::err(groups::ENCODING_ERROR);
+                    return util::err(P::RCODE_ENCODING_ERROR);
                 },
                 StrongActionResult::Nil => unsafe {
                     // SAFETY check: never the case
@@ -63,7 +63,7 @@ action! {
                 }
             }
         } else {
-            return util::err(groups::SERVER_ERR);
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }
