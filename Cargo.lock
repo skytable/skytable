@@ -1293,6 +1293,7 @@ name = "skyd"
 version = "0.7.5"
 dependencies = [
  "ahash",
+ "async-trait",
  "base64",
  "bincode",
  "bytes",

@@ -120,7 +120,12 @@ macro_rules! action {
         $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
+            pub async fn $fname<
+                'a,
+                T: 'a + $crate::dbnet::connection::ClientConnection<P, Strm>,
+                Strm: $crate::dbnet::connection::Stream,
+                P: $crate::protocol::interface::ProtocolSpec
+            > (
                 $($argname: $argty,)*
             ) -> $crate::actions::ActionResult<()>
             $block)*
@@ -134,7 +139,12 @@ macro_rules! action {
         ) $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
+            pub async fn $fname<
+                'a,
+                T: 'a + $crate::dbnet::connection::ClientConnection<P, Strm>,
+                Strm: $crate::dbnet::connection::Stream,
+                P: $crate::protocol::interface::ProtocolSpec
+            >(
                 $argone: $argonety,
                 $argtwo: $argtwoty,
                 mut $argthree: $argthreety
@@ -150,7 +160,12 @@ macro_rules! action {
         ) $block:block)*
     ) => {
             $($(#[$attr])*
-            pub async fn $fname<'a, T: 'a + ClientConnection<P, Strm>, Strm:Stream, P: crate::dbnet::connection::ProtocolSpec>(
+            pub async fn $fname<
+                'a,
+                T: 'a + $crate::dbnet::connection::ClientConnection<P, Strm>,
+                Strm: $crate::dbnet::connection::Stream,
+                P: $crate::protocol::interface::ProtocolSpec
+            >(
                 $argone: $argonety,
                 $argtwo: $argtwoty,
                 $argthree: $argthreety

@@ -10,6 +10,7 @@ version = "0.7.5"
 libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
 # external deps
+async-trait = "0.1.53"
 ahash = "0.7.6"
 bytes = "1.1.0"
 chrono = "0.4.19"

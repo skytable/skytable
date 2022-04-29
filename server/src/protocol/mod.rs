@@ -31,8 +31,11 @@ mod benches;
 #[cfg(test)]
 mod tests;
 // pub mods
+pub mod interface;
 pub mod iter;
 pub mod responses;
+// versions
+mod v2;
 // endof pub mods
 
 /// The Skyhash protocol version

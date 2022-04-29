@@ -26,11 +26,14 @@
 
 use crate::{
     dbnet::{
-        connection::{ConnectionHandler, ExecutorFn, ProtocolSpec},
+        connection::{ConnectionHandler, ExecutorFn},
         tcp::{BufferedSocketStream, Connection, TcpBackoff},
         BaseListener, Terminator,
     },
-    protocol::Skyhash2,
+    protocol::{
+        interface::{ProtocolRead, ProtocolSpec},
+        Skyhash2,
+    },
     util::error::{Error, SkyResult},
     IoResult,
 };
@@ -54,7 +57,10 @@ pub struct SslListenerRaw<P> {
     executor_fn: SslExecutorFn<P>,
 }
 
-impl<P: ProtocolSpec + 'static> SslListenerRaw<P> {
+impl<P: ProtocolSpec + 'static> SslListenerRaw<P>
+where
+    Connection<SslStream<TcpStream>>: ProtocolRead<P, SslStream<TcpStream>>,
+{
     pub fn new_pem_based_ssl_connection(
         key_file: String,
         chain_file: String,

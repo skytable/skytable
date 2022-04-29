@@ -60,7 +60,7 @@ pub trait Writable {
     fn write<'s>(self, con: &'s mut impl IsConnection) -> FutureIoResult<'s>;
 }
 
-pub trait IsConnection: std::marker::Sync + std::marker::Send {
+pub trait IsConnection: Sync + Send {
     fn write_lowlevel<'s>(&'s mut self, bytes: &'s [u8]) -> FutureIoResult<'s>;
 }
 

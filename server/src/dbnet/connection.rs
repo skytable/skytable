@@ -25,55 +25,39 @@
 */
 
 //! # Generic connection traits
-//! The `con` module defines the generic connection traits `ProtocolConnection` and `ProtocolConnectionExt`.
+//! The `con` module defines the generic connection traits `RawConnection` and `ProtocolRead`.
 //! These two traits can be used to interface with sockets that are used for communication through the Skyhash
 //! protocol.
 //!
-//! The `ProtocolConnection` trait provides a basic set of methods that are required by prospective connection
+//! The `RawConnection` trait provides a basic set of methods that are required by prospective connection
 //! objects to be eligible for higher level protocol interactions (such as interactions with high-level query objects).
-//! Once a type implements this trait, it automatically gets a free `ProtocolConnectionExt` implementation. This immediately
+//! Once a type implements this trait, it automatically gets a free `ProtocolRead` implementation. This immediately
 //! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
 //! respones in compliance with the Skyhash protocol.
 
 use crate::{
     actions::{ActionError, ActionResult},
     auth::{self, AuthProvider},
-    corestore::{buffers::Integer64, Corestore},
+    corestore::Corestore,
     dbnet::{
         connection::prelude::FutureResult,
         tcp::{BufferedSocketStream, Connection},
         Terminator,
     },
-    protocol::{responses, ParseError, Query, Skyhash2},
-    queryengine,
-    resp::Writable,
-    IoResult,
+    protocol::{
+        interface::{ProtocolRead, ProtocolSpec},
+        responses, Query,
+    },
+    queryengine, IoResult,
 };
 use bytes::{Buf, BytesMut};
-use std::{
-    io::{Error as IoError, ErrorKind},
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{marker::PhantomData, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     sync::{mpsc, Semaphore},
 };
 
-pub const SIMPLE_QUERY_HEADER: [u8; 1] = [b'*'];
-pub(super) type QueryWithAdvance = (Query, usize);
-
-/// The [`ProtocolSpec`] trait implementation enables extremely easy switching between
-/// protocols by being generic for the same base connection types
-pub trait ProtocolSpec: Send + Sync {
-    fn parse(buf: &[u8]) -> Result<QueryWithAdvance, ParseError>;
-}
-
-impl ProtocolSpec for Skyhash2 {
-    fn parse(buf: &[u8]) -> Result<QueryWithAdvance, ParseError> {
-        Skyhash2::parse(buf)
-    }
-}
+pub type QueryWithAdvance = (Query, usize);
 
 pub enum QueryResult {
     Q(QueryWithAdvance),
@@ -116,12 +100,10 @@ where
 }
 
 pub mod prelude {
-    //! A 'prelude' for callers that would like to use the `ProtocolConnection` and `ProtocolConnectionExt` traits
+    //! A 'prelude' for callers that would like to use the `RawConnection` and `ProtocolRead` traits
     //!
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
-    pub use super::{
-        AuthProviderHandle, ClientConnection, ProtocolConnectionExt, ProtocolSpec, Stream,
-    };
+    pub use super::{AuthProviderHandle, ClientConnection, Stream};
     pub use crate::{
         actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length},
         aerr, conwrite,
@@ -130,7 +112,10 @@ pub mod prelude {
             Corestore,
         },
         get_tbl, handle_entity, is_lowbit_set,
-        protocol::responses::{self, groups},
+        protocol::{
+            interface::{ProtocolRead, ProtocolSpec},
+            responses::{self, groups},
+        },
         queryengine::ActionIter,
         registry,
         resp::StringWrapper,
@@ -139,197 +124,14 @@ pub mod prelude {
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
 }
 
-/// # The `ProtocolConnectionExt` trait
+/// # The `RawConnection` trait
 ///
-/// The `ProtocolConnectionExt` trait has default implementations and doesn't ever require explicit definitions, unless
-/// there's some black magic that you want to do. All [`ProtocolConnection`] objects will get a free implementation for this trait.
-/// Hence implementing [`ProtocolConnection`] alone is enough for you to get high-level methods to interface with the protocol.
-///
-/// ## DO NOT
-/// The fact that this is a trait enables great flexibility in terms of visibility, but **DO NOT EVER CALL any function other than
-/// `read_query`, `close_conn_with_error` or `write_response`**. If you mess with functions like `read_again`, you're likely to pull yourself into some
-/// good trouble.
-pub trait ProtocolConnectionExt<P, Strm>: ProtocolConnection<P, Strm> + Send
-where
-    Strm: Stream,
-    P: ProtocolSpec,
-{
-    /// Try to parse a query from the buffered data
-    fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        P::parse(self.get_buffer())
-    }
-    /// Read a query from the remote end
-    ///
-    /// This function asynchronously waits until all the data required
-    /// for parsing the query is available
-    fn read_query<'r, 's>(&'r mut self) -> FutureResult<'s, Result<QueryResult, IoError>>
-    where
-        'r: 's,
-        Self: Sync + Send + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            loop {
-                let (buffer, stream) = mv_self.get_mut_both();
-                match stream.read_buf(buffer).await {
-                    Ok(0) => {
-                        if buffer.is_empty() {
-                            return Ok(QueryResult::Disconnected);
-                        } else {
-                            return Err(IoError::from(ErrorKind::ConnectionReset));
-                        }
-                    }
-                    Ok(_) => {}
-                    Err(e) => return Err(e),
-                }
-                match mv_self.try_query() {
-                    Ok(query_with_advance) => {
-                        return Ok(QueryResult::Q(query_with_advance));
-                    }
-                    Err(ParseError::NotEnough) => (),
-                    Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
-                    Err(ParseError::UnexpectedByte) | Err(ParseError::BadPacket) => {
-                        return Ok(QueryResult::E(responses::full_responses::R_PACKET_ERR));
-                    }
-                }
-            }
-        })
-    }
-    /// Write a response to the stream
-    fn write_response<'r, 's>(
-        &'r mut self,
-        streamer: impl Writable + 's + Send + Sync,
-    ) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + 's,
-        Self: Sync,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let streamer = streamer;
-            let ret: IoResult<()> = {
-                streamer.write(mv_self.get_mut_stream()).await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    /// Write the simple query header `*` to the stream
-    fn write_simple_query_header<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                mv_self.write_response(SIMPLE_QUERY_HEADER).await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    /// Write the length of the pipeline query (*)
-    fn write_pipeline_query_header<'r, 's>(
-        &'r mut self,
-        len: usize,
-    ) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let slf = self;
-            slf.write_response([b'$']).await?;
-            slf.get_mut_stream()
-                .write_all(&Integer64::init(len as u64))
-                .await?;
-            slf.write_response([b'\n']).await?;
-            Ok(())
-        })
-    }
-    /// Write the flat array length (`_<size>\n`)
-    fn write_flat_array_length<'r, 's>(&'r mut self, len: usize) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                mv_self.write_response([b'_']).await?;
-                mv_self.write_response(len.to_string().into_bytes()).await?;
-                mv_self.write_response([b'\n']).await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    /// Write the array length (`&<size>\n`)
-    fn write_array_length<'r, 's>(&'r mut self, len: usize) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                mv_self.write_response([b'&']).await?;
-                mv_self.write_response(len.to_string().into_bytes()).await?;
-                mv_self.write_response([b'\n']).await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    /// Wraps around the `write_response` used to differentiate between a
-    /// success response and an error response
-    fn close_conn_with_error<'r, 's>(
-        &'r mut self,
-        resp: impl Writable + 's + Send + Sync,
-    ) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Send + Sync + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                mv_self.write_response(resp).await?;
-                mv_self.flush_stream().await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    fn flush_stream<'r, 's>(&'r mut self) -> FutureResult<'s, IoResult<()>>
-    where
-        'r: 's,
-        Self: Sync + Send + 's,
-    {
-        Box::pin(async move {
-            let mv_self = self;
-            let ret: IoResult<()> = {
-                mv_self.get_mut_stream().flush().await?;
-                Ok(())
-            };
-            ret
-        })
-    }
-    unsafe fn raw_stream(&mut self) -> &mut BufWriter<Strm> {
-        self.get_mut_stream()
-    }
-}
-
-/// # The `ProtocolConnection` trait
-///
-/// The `ProtocolConnection` trait has low-level methods that can be used to interface with raw sockets. Any type
-/// that successfully implements this trait will get an implementation for `ProtocolConnectionExt` which augments and
+/// The `RawConnection` trait has low-level methods that can be used to interface with raw sockets. Any type
+/// that successfully implements this trait will get an implementation for `ProtocolRead` which augments and
 /// builds on these fundamental methods to provide high-level interfacing with queries.
 ///
-/// ## Example of a `ProtocolConnection` object
-/// Ideally a `ProtocolConnection` object should look like (the generic parameter just exists for doc-tests, just think that
+/// ## Example of a `RawConnection` object
+/// Ideally a `RawConnection` object should look like (the generic parameter just exists for doc-tests, just think that
 /// there is a type `Strm`):
 /// ```no_run
 /// struct Connection<Strm> {
@@ -339,7 +141,7 @@ where
 /// ```
 ///
 /// `Strm` should be a stream, i.e something like an SSL connection/TCP connection.
-pub trait ProtocolConnection<P: ProtocolSpec, Strm> {
+pub trait RawConnection<P: ProtocolSpec, Strm>: Send + Sync {
     /// Returns an **immutable** reference to the underlying read buffer
     fn get_buffer(&self) -> &BytesMut;
     /// Returns an **immutable** reference to the underlying stream
@@ -362,19 +164,9 @@ pub trait ProtocolConnection<P: ProtocolSpec, Strm> {
     }
 }
 
-// Give ProtocolConnection implementors a free ProtocolConnectionExt impl
-
-impl<Strm, T, P> ProtocolConnectionExt<P, Strm> for T
+impl<T, P> RawConnection<P, T> for Connection<T>
 where
-    T: ProtocolConnection<P, Strm> + Send,
-    Strm: Stream,
-    P: ProtocolSpec,
-{
-}
-
-impl<T, P> ProtocolConnection<P, T> for Connection<T>
-where
-    T: BufferedSocketStream,
+    T: BufferedSocketStream + Sync + Send,
     P: ProtocolSpec,
 {
     fn get_buffer(&self) -> &BytesMut {
@@ -399,8 +191,8 @@ pub(super) type ExecutorFn<P, T, Strm> =
 
 /// # A generic connection handler
 ///
-/// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`ProtocolConnection`] trait (or
-/// the [`ProtocolConnectionExt`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
+/// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`RawConnection`] trait (or
+/// the [`ProtocolRead`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
 /// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
 pub struct ConnectionHandler<P, T, Strm> {
     db: Corestore,
@@ -415,7 +207,7 @@ pub struct ConnectionHandler<P, T, Strm> {
 
 impl<P, T, Strm> ConnectionHandler<P, T, Strm>
 where
-    T: ProtocolConnectionExt<P, Strm> + Send + Sync,
+    T: ProtocolRead<P, Strm> + Send + Sync,
     Strm: Stream,
     P: ProtocolSpec,
 {
@@ -573,12 +365,12 @@ impl<T> Stream for T where T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync
 
 /// A simple _shorthand trait_ for the insanely long definition of the connection generic type
 pub trait ClientConnection<P: ProtocolSpec, Strm: Stream>:
-    ProtocolConnectionExt<P, Strm> + Send + Sync
+    ProtocolRead<P, Strm> + Send + Sync
 {
 }
 impl<P, T, Strm> ClientConnection<P, Strm> for T
 where
-    T: ProtocolConnectionExt<P, Strm> + Send + Sync,
+    T: ProtocolRead<P, Strm> + Send + Sync,
     Strm: Stream,
     P: ProtocolSpec,
 {

@@ -24,8 +24,10 @@
  *
 */
 
-use crate::dbnet::connection::ProtocolSpec;
-use crate::protocol::Skyhash2;
+use crate::protocol::{
+    interface::{ProtocolRead, ProtocolSpec},
+    Skyhash2,
+};
 use crate::{
     dbnet::{
         connection::{ConnectionHandler, ExecutorFn},
@@ -104,7 +106,10 @@ pub struct RawListener<P> {
     executor_fn: TcpExecutorFn<P>,
 }
 
-impl<P: ProtocolSpec + 'static> RawListener<P> {
+impl<P: ProtocolSpec + 'static> RawListener<P>
+where
+    Connection<TcpStream>: ProtocolRead<P, TcpStream>,
+{
     pub fn new(base: BaseListener) -> Self {
         Self {
             executor_fn: if base.auth.is_enabled() {

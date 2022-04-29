@@ -26,8 +26,10 @@
 
 use crate::corestore::buffers::Integer64;
 use crate::corestore::Data;
-use crate::dbnet::connection::{ProtocolConnectionExt, ProtocolSpec};
-use crate::protocol::responses::groups;
+use crate::protocol::{
+    interface::{ProtocolRead, ProtocolSpec},
+    responses::groups,
+};
 use crate::IoResult;
 use core::marker::PhantomData;
 use tokio::io::AsyncReadExt;
@@ -41,7 +43,7 @@ pub async unsafe fn write_raw_mono<P, T, Strm>(
 ) -> IoResult<()>
 where
     P: ProtocolSpec,
-    T: ProtocolConnectionExt<P, Strm>,
+    T: ProtocolRead<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     let raw_stream = con.raw_stream();
@@ -65,7 +67,7 @@ pub struct FlatArrayWriter<'a, P, T, Strm> {
 impl<'a, P, T, Strm> FlatArrayWriter<'a, P, T, Strm>
 where
     P: ProtocolSpec,
-    T: ProtocolConnectionExt<P, Strm>,
+    T: ProtocolRead<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Intialize a new flat array writer. This will write out the tsymbol
@@ -131,7 +133,7 @@ pub struct TypedArrayWriter<'a, P, T, Strm> {
 impl<'a, P, T, Strm> TypedArrayWriter<'a, P, T, Strm>
 where
     P: ProtocolSpec,
-    T: ProtocolConnectionExt<P, Strm>,
+    T: ProtocolRead<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Create a new `typedarraywriter`. This will write the tsymbol and
@@ -188,7 +190,7 @@ pub struct NonNullArrayWriter<'a, P, T, Strm> {
 impl<'a, P, T, Strm> NonNullArrayWriter<'a, P, T, Strm>
 where
     P: ProtocolSpec,
-    T: ProtocolConnectionExt<P, Strm>,
+    T: ProtocolRead<P, Strm>,
     Strm: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync,
 {
     /// Create a new `typedarraywriter`. This will write the tsymbol and
