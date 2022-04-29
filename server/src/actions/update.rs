@@ -55,9 +55,9 @@ action!(
                     Err(()) => None,
                 }
             };
-            conwrite!(con, UPDATE_NLUT[did_we])?;
+            con._write_raw(UPDATE_NLUT[did_we]).await?;
         } else {
-            conwrite!(con, groups::SERVER_ERR)?;
+            return util::err(groups::SERVER_ERR);
         }
         Ok(())
     }

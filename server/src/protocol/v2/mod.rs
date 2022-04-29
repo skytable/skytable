@@ -25,17 +25,18 @@
 */
 
 use super::{
-    interface::{ProtocolCharset, ProtocolSpec, ProtocolWrite},
+    interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
     ParseError, Skyhash2,
 };
 use crate::{
     corestore::buffers::Integer64,
     dbnet::connection::{QueryWithAdvance, RawConnection, Stream},
+    util::FutureResult,
     IoResult,
 };
 use tokio::io::AsyncWriteExt;
 
-impl ProtocolCharset for Skyhash2 {
+impl ProtocolSpec for Skyhash2 {
     const TSYMBOL_STRING: u8 = b'+';
     const TSYMBOL_BINARY: u8 = b'?';
     const TSYMBOL_FLOAT: u8 = b'%';
@@ -49,67 +50,136 @@ impl ProtocolCharset for Skyhash2 {
     const PIPELINED_QUERY_FIRST_BYTE: u8 = b'$';
 }
 
-impl ProtocolSpec for Skyhash2 {
-    fn parse(buf: &[u8]) -> Result<QueryWithAdvance, ParseError> {
-        Skyhash2::parse(buf)
+impl<Strm, T> ProtocolRead<Skyhash2, Strm> for T
+where
+    T: RawConnection<Skyhash2, Strm> + Send + Sync,
+    Strm: Stream,
+{
+    fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
+        Skyhash2::parse(self.get_buffer())
     }
 }
 
-#[async_trait::async_trait]
 impl<Strm, T> ProtocolWrite<Skyhash2, Strm> for T
 where
     T: RawConnection<Skyhash2, Strm> + Send + Sync,
     Strm: Stream,
 {
-    async fn write_string(&mut self, string: &str) -> IoResult<()> {
-        let stream = self.get_mut_stream();
-        // tsymbol
-        stream.write_all(&[Skyhash2::TSYMBOL_STRING]).await?;
-        // length
-        let len_bytes = Integer64::from(string.len());
-        stream.write_all(&len_bytes).await?;
-        // LF
-        stream.write_all(&[Skyhash2::LF]).await?;
-        // payload
-        stream.write_all(string.as_bytes()).await
+    fn write_string<'life0, 'life1, 'ret_life>(
+        &'life0 mut self,
+        string: &'life1 str,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        'life1: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // tsymbol
+            stream.write_all(&[Skyhash2::TSYMBOL_STRING]).await?;
+            // length
+            let len_bytes = Integer64::from(string.len());
+            stream.write_all(&len_bytes).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await?;
+            // payload
+            stream.write_all(string.as_bytes()).await
+        })
     }
-    async fn write_binary(&mut self, binary: &[u8]) -> IoResult<()> {
-        let stream = self.get_mut_stream();
-        // tsymbol
-        stream.write_all(&[Skyhash2::TSYMBOL_BINARY]).await?;
-        // length
-        let len_bytes = Integer64::from(binary.len());
-        stream.write_all(&len_bytes).await?;
-        // LF
-        stream.write_all(&[Skyhash2::LF]).await?;
-        // payload
-        stream.write_all(binary).await
+    fn write_binary<'life0, 'life1, 'ret_life>(
+        &'life0 mut self,
+        binary: &'life1 [u8],
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        'life1: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // tsymbol
+            stream.write_all(&[Skyhash2::TSYMBOL_BINARY]).await?;
+            // length
+            let len_bytes = Integer64::from(binary.len());
+            stream.write_all(&len_bytes).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await?;
+            // payload
+            stream.write_all(binary).await
+        })
     }
-    async fn write_usize(&mut self, size: usize) -> IoResult<()> {
-        let stream = self.get_mut_stream();
-        // tsymbol
-        stream.write_all(&[Skyhash2::TSYMBOL_INT64]).await?;
-        // body
-        stream.write_all(&Integer64::from(size)).await?;
-        // LF
-        stream.write_all(&[Skyhash2::LF]).await
+    fn write_usize<'life0, 'ret_life>(
+        &'life0 mut self,
+        size: usize,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // tsymbol
+            stream.write_all(&[Skyhash2::TSYMBOL_INT64]).await?;
+            // body
+            stream.write_all(&Integer64::from(size)).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await
+        })
     }
-    async fn write_float(&mut self, float: f32) -> IoResult<()> {
-        let stream = self.get_mut_stream();
-        // tsymbol
-        stream.write_all(&[Skyhash2::TSYMBOL_FLOAT]).await?;
-        // body
-        stream.write_all(float.to_string().as_bytes()).await?;
-        // LF
-        stream.write_all(&[Skyhash2::LF]).await
+    fn write_int64<'life0, 'ret_life>(
+        &'life0 mut self,
+        int: u64,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // tsymbol
+            stream.write_all(&[Skyhash2::TSYMBOL_INT64]).await?;
+            // body
+            stream.write_all(&Integer64::from(int)).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await
+        })
     }
-    async fn write_typed_array_element(&mut self, element: &[u8]) -> IoResult<()> {
-        let stream = self.get_mut_stream();
-        // len
-        stream.write_all(&Integer64::from(element.len())).await?;
-        // LF
-        stream.write_all(&[Skyhash2::LF]).await?;
-        // body
-        stream.write_all(element).await
+    fn write_float<'life0, 'ret_life>(
+        &'life0 mut self,
+        float: f32,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // tsymbol
+            stream.write_all(&[Skyhash2::TSYMBOL_FLOAT]).await?;
+            // body
+            stream.write_all(float.to_string().as_bytes()).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await
+        })
+    }
+    fn write_typed_array_element<'life0, 'life1, 'ret_life>(
+        &'life0 mut self,
+        element: &'life1 [u8],
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        'life1: 'ret_life,
+        Self: 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // len
+            stream.write_all(&Integer64::from(element.len())).await?;
+            // LF
+            stream.write_all(&[Skyhash2::LF]).await?;
+            // body
+            stream.write_all(element).await
+        })
     }
 }

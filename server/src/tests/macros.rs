@@ -104,7 +104,7 @@ macro_rules! assert_okay {
 }
 
 macro_rules! assert_skyhash_arrayeq {
-    (str, $con:expr, $query:expr, $($val:expr),*) => {
+    (!str, $con:expr, $query:expr, $($val:expr),*) => {
         runeq!(
             $con,
             $query,
@@ -115,13 +115,13 @@ macro_rules! assert_skyhash_arrayeq {
             ))
         )
     };
-    (bin, $con:expr, $query:expr, $($val:expr),*) => {
+    (str, $con:expr, $query:expr, $($val:expr),*) => {
         runeq!(
             $con,
             $query,
-            skytable::Element::Array(skytable::types::Array::Bin(
+            skytable::Element::Array(skytable::types::Array::NonNullStr(
                 vec![
-                    $(Some($val.into()),)*
+                    $($val.into(),)*
                 ]
             ))
         )

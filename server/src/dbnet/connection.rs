@@ -45,12 +45,14 @@ use crate::{
         Terminator,
     },
     protocol::{
-        interface::{ProtocolRead, ProtocolSpec},
+        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
         responses, Query,
     },
     queryengine, IoResult,
 };
 use bytes::{Buf, BytesMut};
+#[cfg(windows)]
+use std::io::ErrorKind;
 use std::{marker::PhantomData, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
@@ -66,7 +68,7 @@ pub enum QueryResult {
     Disconnected,
 }
 
-pub struct AuthProviderHandle<'a, P: ProtocolSpec, T, Strm> {
+pub struct AuthProviderHandle<'a, P, T, Strm> {
     provider: &'a mut AuthProvider,
     executor: &'a mut ExecutorFn<P, T, Strm>,
     _phantom: PhantomData<(T, Strm)>,
@@ -106,7 +108,6 @@ pub mod prelude {
     pub use super::{AuthProviderHandle, ClientConnection, Stream};
     pub use crate::{
         actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length},
-        aerr, conwrite,
         corestore::{
             table::{KVEBlob, KVEList},
             Corestore,
@@ -118,7 +119,6 @@ pub mod prelude {
         },
         queryengine::ActionIter,
         registry,
-        resp::StringWrapper,
         util::{self, FutureResult, UnwrapActionError, Unwrappable},
     };
     pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -207,7 +207,7 @@ pub struct ConnectionHandler<P, T, Strm> {
 
 impl<P, T, Strm> ConnectionHandler<P, T, Strm>
 where
-    T: ProtocolRead<P, Strm> + Send + Sync,
+    T: ProtocolRead<P, Strm> + ProtocolWrite<P, Strm> + Send + Sync,
     Strm: Stream,
     P: ProtocolSpec,
 {
@@ -286,7 +286,7 @@ where
                 Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
                 Ok(QueryResult::Wrongtype) => {
                     self.con
-                        .close_conn_with_error(responses::groups::WRONGTYPE_ERR.to_owned())
+                        .close_conn_with_error(responses::groups::WRONGTYPE_ERR)
                         .await?
                 }
                 Ok(QueryResult::Disconnected) => return Ok(()),
@@ -315,7 +315,7 @@ where
                 }
                 Query::Pipelined(_) => {
                     con.write_simple_query_header().await?;
-                    con.write_response(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
+                    con._write_raw(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
                         .await?;
                 }
             }
@@ -335,7 +335,7 @@ where
                     queryengine::execute_simple(db, con, &mut auth_provider, q).await?;
                 }
                 Query::Pipelined(pipeline) => {
-                    con.write_pipeline_query_header(pipeline.len()).await?;
+                    con.write_pipelined_query_header(pipeline.len()).await?;
                     queryengine::execute_pipeline(db, con, &mut auth_provider, pipeline).await?;
                 }
             }
@@ -346,7 +346,7 @@ where
     /// Execute a query that has already been validated by `Connection::read_query`
     async fn execute_query(&mut self, query: Query) -> ActionResult<()> {
         (self.executor)(self, query).await?;
-        self.con.flush_stream().await?;
+        self.con._flush_stream().await?;
         Ok(())
     }
 }
@@ -365,12 +365,12 @@ impl<T> Stream for T where T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync
 
 /// A simple _shorthand trait_ for the insanely long definition of the connection generic type
 pub trait ClientConnection<P: ProtocolSpec, Strm: Stream>:
-    ProtocolRead<P, Strm> + Send + Sync
+    ProtocolWrite<P, Strm> + ProtocolRead<P, Strm> + Send + Sync
 {
 }
 impl<P, T, Strm> ClientConnection<P, Strm> for T
 where
-    T: ProtocolRead<P, Strm> + Send + Sync,
+    T: ProtocolWrite<P, Strm> + ProtocolRead<P, Strm> + Send + Sync,
     Strm: Stream,
     P: ProtocolSpec,
 {

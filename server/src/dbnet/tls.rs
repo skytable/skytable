@@ -31,7 +31,7 @@ use crate::{
         BaseListener, Terminator,
     },
     protocol::{
-        interface::{ProtocolRead, ProtocolSpec},
+        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
         Skyhash2,
     },
     util::error::{Error, SkyResult},
@@ -59,7 +59,8 @@ pub struct SslListenerRaw<P> {
 
 impl<P: ProtocolSpec + 'static> SslListenerRaw<P>
 where
-    Connection<SslStream<TcpStream>>: ProtocolRead<P, SslStream<TcpStream>>,
+    Connection<SslStream<TcpStream>>:
+        ProtocolRead<P, SslStream<TcpStream>> + ProtocolWrite<P, SslStream<TcpStream>>,
 {
     pub fn new_pem_based_ssl_connection(
         key_file: String,

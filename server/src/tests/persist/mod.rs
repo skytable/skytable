@@ -161,9 +161,9 @@ impl<const N: usize> PersistValue for [&[u8]; N] {
     fn response_load(&self) -> Element {
         let mut flat = Vec::with_capacity(N);
         for item in self {
-            flat.push(Some(item.to_vec()));
+            flat.push(item.to_vec());
         }
-        Element::Array(Array::Bin(flat))
+        Element::Array(Array::NonNullBin(flat))
     }
 }
 
@@ -174,9 +174,9 @@ impl<const N: usize> PersistValue for [&str; N] {
     fn response_load(&self) -> Element {
         let mut flat = Vec::with_capacity(N);
         for item in self {
-            flat.push(Some(item.to_string()));
+            flat.push(item.to_string());
         }
-        Element::Array(Array::Str(flat))
+        Element::Array(Array::NonNullStr(flat))
     }
 }
 

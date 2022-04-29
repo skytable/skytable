@@ -47,22 +47,6 @@ macro_rules! is_lowbit_unset {
 }
 
 #[macro_export]
-macro_rules! conwrite {
-    ($con:expr, $what:expr) => {
-        $con.write_response($what)
-            .await
-            .map_err(|e| $crate::actions::ActionError::IoError(e))
-    };
-}
-
-#[macro_export]
-macro_rules! aerr {
-    ($con:expr) => {
-        return conwrite!($con, $crate::protocol::responses::groups::ACTION_ERR)
-    };
-}
-
-#[macro_export]
 macro_rules! get_tbl {
     ($entity:expr, $store:expr, $con:expr) => {{
         $store.get_table($entity)?
@@ -90,7 +74,7 @@ macro_rules! handle_entity {
     ($con:expr, $ident:expr) => {{
         match $crate::queryengine::parser::Entity::from_slice(&$ident) {
             Ok(e) => e,
-            Err(e) => return conwrite!($con, e),
+            Err(e) => return Err(e.into()),
         }
     }};
 }

@@ -27,7 +27,6 @@
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding::ENCODING_LUT_ITER;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::TypedArrayWriter;
 use crate::util::compiler;
 
 action!(
@@ -38,19 +37,16 @@ action!(
         let kve = handle.get_table_with::<KVEBlob>()?;
         let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
         if compiler::likely(encoding_is_okay) {
-            let mut writer = unsafe {
-                // SAFETY: We are getting the value type ourselves
-                TypedArrayWriter::new(con, kve.get_value_tsymbol(), act.len())
-            }
-            .await?;
+            con.write_typed_array_header(act.len(), kve.get_value_tsymbol())
+                .await?;
             for key in act {
                 match kve.get_cloned_unchecked(key) {
-                    Some(v) => writer.write_element(&v).await?,
-                    None => writer.write_null().await?,
+                    Some(v) => con.write_typed_array_element(&v).await?,
+                    None => con.write_typed_array_element_null().await?,
                 }
             }
         } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+            return util::err(groups::ENCODING_ERROR);
         }
         Ok(())
     }

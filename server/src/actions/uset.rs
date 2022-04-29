@@ -44,12 +44,12 @@ action!(
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
                     kve.upsert_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val));
                 }
-                conwrite!(con, howmany / 2)?;
+                con.write_usize(howmany / 2).await?;
             } else {
-                conwrite!(con, groups::SERVER_ERR)?;
+                return util::err(groups::SERVER_ERR);
             }
         } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+            return util::err(groups::ENCODING_ERROR);
         }
         Ok(())
     }

@@ -49,12 +49,12 @@ action!(
                 None
             };
             if let Some(done_howmany) = done_howmany {
-                con.write_response(done_howmany as usize).await?;
+                con.write_usize(done_howmany).await?;
             } else {
-                con.write_response(responses::groups::SERVER_ERR).await?;
+                return util::err(groups::SERVER_ERR);
             }
         } else {
-            compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+            return util::err(groups::ENCODING_ERROR);
         }
         Ok(())
     }

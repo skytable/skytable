@@ -26,9 +26,6 @@
 
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer;
-use crate::resp::writer::TypedArrayWriter;
-
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();
@@ -84,8 +81,8 @@ action! {
                 // just return everything in the list
                 let items = match listmap.list_cloned_full(listname) {
                     Ok(Some(list)) => list,
-                    Ok(None) => return conwrite!(con, groups::NIL),
-                    Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
+                    Ok(None) => return Err(groups::NIL.into()),
+                    Err(()) => return Err(groups::ENCODING_ERROR.into()),
                 };
                 writelist!(con, listmap, items);
             }
@@ -94,9 +91,9 @@ action! {
                     LEN => {
                         ensure_length(act.len(), |len| len == 0)?;
                         match listmap.list_len(listname) {
-                            Ok(Some(len)) => conwrite!(con, len)?,
-                            Ok(None) => conwrite!(con, groups::NIL)?,
-                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                            Ok(Some(len)) => con.write_usize(len).await?,
+                            Ok(None) => return Err(groups::NIL.into()),
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         }
                     }
                     LIMIT => {
@@ -104,8 +101,8 @@ action! {
                         let count = get_numeric_count!();
                         match listmap.list_cloned(listname, count) {
                             Ok(Some(items)) => writelist!(con, listmap, items),
-                            Ok(None) => conwrite!(con, groups::NIL)?,
-                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                            Ok(None) => return Err(groups::NIL.into()),
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         }
                     }
                     VALUEAT => {
@@ -117,22 +114,20 @@ action! {
                         match maybe_value {
                             Ok(v) => match v {
                                 Some(Some(value)) => {
-                                    unsafe {
-                                        // tsymbol is verified
-                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value)
-                                            .await?;
-                                    }
+                                    con.write_mono_length_prefixed_with_tsymbol(
+                                        &value, listmap.get_value_tsymbol()
+                                    ).await?;
                                 }
                                 Some(None) => {
                                     // bad index
-                                    conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                                    return Err(groups::LISTMAP_BAD_INDEX.into());
                                 }
                                 None => {
                                     // not found
-                                    conwrite!(con, groups::NIL)?;
+                                    return Err(groups::NIL.into());
                                 }
                             }
-                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         }
                     }
                     LAST => {
@@ -143,14 +138,14 @@ action! {
                         match maybe_value {
                             Ok(v) => match v {
                                 Some(Some(value)) => {
-                                    unsafe {
-                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value).await?;
-                                    }
+                                    con.write_mono_length_prefixed_with_tsymbol(
+                                        &value, listmap.get_value_tsymbol()
+                                    ).await?;
                                 },
-                                Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
-                                None => conwrite!(con, groups::NIL)?,
+                                Some(None) => return Err(groups::LISTMAP_LIST_IS_EMPTY.into()),
+                                None => return Err(groups::NIL.into()),
                             }
-                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         }
                     }
                     FIRST => {
@@ -161,14 +156,14 @@ action! {
                         match maybe_value {
                             Ok(v) => match v {
                                 Some(Some(value)) => {
-                                    unsafe {
-                                        writer::write_raw_mono(con, listmap.get_value_tsymbol(), &value).await?;
-                                    }
+                                    con.write_mono_length_prefixed_with_tsymbol(
+                                        &value, listmap.get_value_tsymbol()
+                                    ).await?;
                                 },
-                                Some(None) => conwrite!(con, groups::LISTMAP_LIST_IS_EMPTY)?,
-                                None => conwrite!(con, groups::NIL)?,
+                                Some(None) => return Err(groups::LISTMAP_LIST_IS_EMPTY.into()),
+                                None => return Err(groups::NIL.into()),
                             }
-                            Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         }
                     }
                     RANGE => {
@@ -193,17 +188,17 @@ action! {
                                             Some(ret) => {
                                                 writelist!(con, listmap, ret);
                                             },
-                                            None => conwrite!(con, groups::LISTMAP_BAD_INDEX)?,
+                                            None => return Err(groups::LISTMAP_BAD_INDEX.into()),
                                         }
                                     }
-                                    Ok(None) => conwrite!(con, groups::NIL)?,
-                                    Err(()) => conwrite!(con, groups::ENCODING_ERROR)?,
+                                    Ok(None) => return Err(groups::NIL.into()),
+                                    Err(()) => return Err(groups::ENCODING_ERROR.into()),
                                 }
                             }
-                            None => aerr!(con),
+                            None => return Err(groups::ACTION_ERR.into()),
                         }
                     }
-                    _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
+                    _ => return Err(groups::UNKNOWN_ACTION.into()),
                 }
             }
         }

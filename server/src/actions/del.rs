@@ -57,12 +57,12 @@ action!(
                         }
                     }
                     if let Some(done_howmany) = done_howmany {
-                        con.write_response(done_howmany).await?;
+                        con.write_usize(done_howmany).await?;
                     } else {
-                        con.write_response(responses::groups::SERVER_ERR).await?;
+                        con._write_raw(groups::SERVER_ERR).await?;
                     }
                 } else {
-                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+                    return util::err(groups::ENCODING_ERROR);
                 }
             }};
         }
@@ -74,7 +74,7 @@ action!(
                 remove!(kvlmap)
             }
             #[allow(unreachable_patterns)]
-            _ => conwrite!(con, groups::WRONG_MODEL)?,
+            _ => return util::err(groups::WRONG_MODEL),
         }
         Ok(())
     }

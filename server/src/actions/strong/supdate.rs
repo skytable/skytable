@@ -49,15 +49,15 @@ action! {
                 self::snapshot_and_update(kve, encoder, act.into_inner())
             };
             match outcome {
-                StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
+                StrongActionResult::Okay => con._write_raw(groups::OKAY).await?,
                 StrongActionResult::Nil => {
                     // good, it failed because some key didn't exist
-                    conwrite!(con, groups::NIL)?;
+                    return util::err(groups::NIL);
                 },
-                StrongActionResult::ServerError => conwrite!(con, groups::SERVER_ERR)?,
+                StrongActionResult::ServerError => return util::err(groups::SERVER_ERR),
                 StrongActionResult::EncodingError => {
                     // error we love to hate: encoding error, ugh
-                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?
+                    return util::err(groups::ENCODING_ERROR);
                 },
                 StrongActionResult::OverwriteError => unsafe {
                     // SAFETY check: never the case
@@ -65,7 +65,7 @@ action! {
                 }
             }
         } else {
-            conwrite!(con, groups::SERVER_ERR)?;
+            return util::err(groups::SERVER_ERR);
         }
         Ok(())
     }

@@ -41,9 +41,9 @@ action!(
                 let entity = handle_entity!(con, raw_entity);
                 get_tbl!(entity, handle, con).truncate_table();
             }
-            conwrite!(con, responses::groups::OKAY)?;
+            con._write_raw(groups::OKAY).await?;
         } else {
-            conwrite!(con, responses::groups::SERVER_ERR)?;
+            con._write_raw(groups::SERVER_ERR).await?;
         }
         Ok(())
     }

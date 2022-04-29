@@ -49,8 +49,7 @@ action! {
             TABLE => create_table(handle, con, act).await?,
             KEYSPACE => create_keyspace(handle, con, act).await?,
             _ => {
-                con.write_response(responses::groups::UNKNOWN_DDL_QUERY)
-                    .await?;
+                con._write_raw(groups::UNKNOWN_DDL_QUERY).await?;
             }
         }
         Ok(())
@@ -67,8 +66,7 @@ action! {
             TABLE => drop_table(handle, con, act).await?,
             KEYSPACE => drop_keyspace(handle, con, act).await?,
             _ => {
-                con.write_response(responses::groups::UNKNOWN_DDL_QUERY)
-                    .await?;
+                con._write_raw(groups::UNKNOWN_DDL_QUERY).await?;
             }
         }
         Ok(())
@@ -89,9 +87,9 @@ action! {
         };
         if registry::state_okay() {
             handle.create_table(table_entity, model_code, is_volatile)?;
-            con.write_response(responses::groups::OKAY).await?;
+            con._write_raw(groups::OKAY).await?;
         } else {
-            conwrite!(con, responses::groups::SERVER_ERR)?;
+            return util::err(groups::SERVER_ERR);
         }
         Ok(())
     }
@@ -108,12 +106,12 @@ action! {
                 let ksid = unsafe { ObjectID::from_slice(ksid_str) };
                 if registry::state_okay() {
                     handle.create_keyspace(ksid)?;
-                    con.write_response(responses::groups::OKAY).await?
+                    con._write_raw(groups::OKAY).await?
                 } else {
-                    conwrite!(con, responses::groups::SERVER_ERR)?;
+                    return util::err(groups::SERVER_ERR);
                 }
             }
-            None => con.write_response(responses::groups::ACTION_ERR).await?,
+            None => return util::err(groups::ACTION_ERR),
         }
         Ok(())
     }
@@ -126,12 +124,12 @@ action! {
                 let entity_group = parser::Entity::from_slice(eg)?;
                 if registry::state_okay() {
                     handle.drop_table(entity_group)?;
-                    con.write_response(responses::groups::OKAY).await?;
+                    con._write_raw(groups::OKAY).await?;
                 } else {
-                    conwrite!(con, responses::groups::SERVER_ERR)?;
+                    return util::err(groups::SERVER_ERR);
                 }
             },
-            None => con.write_response(responses::groups::ACTION_ERR).await?,
+            None => return util::err(groups::ACTION_ERR),
         }
         Ok(())
     }
@@ -157,12 +155,12 @@ action! {
                         handle.drop_keyspace(objid)
                     };
                     result?;
-                    con.write_response(responses::groups::OKAY).await?;
+                    con._write_raw(groups::OKAY).await?;
                 } else {
-                    conwrite!(con, responses::groups::SERVER_ERR)?;
+                    return util::err(groups::SERVER_ERR);
                 }
             },
-            None => con.write_response(responses::groups::ACTION_ERR).await?,
+            None => return util::err(groups::ACTION_ERR),
         }
         Ok(())
     }

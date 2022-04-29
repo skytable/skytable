@@ -61,7 +61,7 @@ mod __private {
     async fn test_lget_emptylist_okay() {
         lset!(con, "mysuperlist");
         let q = query!("lget", "mysuperlist");
-        runeq!(con, q, Element::Array(Array::Str(vec![])));
+        runeq!(con, q, Element::Array(Array::NonNullStr(vec![])));
     }
     async fn test_lget_list_with_elements_okay() {
         lset!(con, "mysuperlist", "elementa", "elementb", "elementc");

@@ -30,7 +30,7 @@ use crate::actions::{ActionError, ActionResult};
 use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::{iter::AnyArrayIter, responses, PipelinedQuery, SimpleQuery, UnsafeSlice};
+use crate::protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice};
 use crate::queryengine::parser::Entity;
 use crate::{actions, admin};
 mod ddl;
@@ -67,7 +67,7 @@ macro_rules! gen_constants_and_matches {
                 tags::$action2 => $fns2.await?,
             )*
             _ => {
-                $con.write_response(responses::groups::UNKNOWN_ACTION).await?;
+                $con._write_raw(groups::UNKNOWN_ACTION).await?;
             }
         }
     };
@@ -164,7 +164,7 @@ action! {
             act.next_unchecked()
         };
         handle.swap_entity(Entity::from_slice(entity)?)?;
-        con.write_response(groups::OKAY).await?;
+        con._write_raw(groups::OKAY).await?;
         Ok(())
     }
 }
@@ -188,7 +188,7 @@ async fn execute_stage_pedantic<
     };
     match ret.await {
         Ok(()) => Ok(()),
-        Err(ActionError::ActionError(e)) => con.write_response(e).await,
+        Err(ActionError::ActionError(e)) => con._write_raw(e).await,
         Err(ActionError::IoError(ioe)) => Err(ioe),
     }
 }

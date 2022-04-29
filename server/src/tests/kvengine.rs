@@ -1035,8 +1035,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Element::Array(Array::Str(arr)) = ret {
-            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
+        if let Element::Array(Array::NonNullStr(arr)) = ret {
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1070,8 +1069,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Element::Array(Array::Str(arr)) = ret {
-            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
+        if let Element::Array(Array::NonNullStr(arr)) = ret {
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1092,8 +1090,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Element::Array(Array::Str(arr)) = ret {
-            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
+        if let Element::Array(Array::NonNullStr(arr)) = ret {
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {
@@ -1115,8 +1112,7 @@ mod __private {
             .into_iter()
             .map(|element| element.to_owned())
             .collect();
-        if let Element::Array(Array::Str(arr)) = ret {
-            let arr: Vec<String> = arr.into_iter().map(|v| v.unwrap()).collect();
+        if let Element::Array(Array::NonNullStr(arr)) = ret {
             assert_eq!(ret_should_have.len(), arr.len());
             assert!(ret_should_have.into_iter().all(|key| arr.contains(&key)));
         } else {

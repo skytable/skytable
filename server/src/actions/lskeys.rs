@@ -27,7 +27,6 @@
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer::TypedArrayWriter;
 
 const DEFAULT_COUNT: usize = 10;
 
@@ -73,13 +72,9 @@ action!(
             DataModel::KV(kv) => kv.get_inner_ref().get_keys(count),
             DataModel::KVExtListmap(kv) => kv.get_inner_ref().get_keys(count),
         };
-        let mut writer = unsafe {
-            // SAFETY: We have checked kty ourselves
-            TypedArrayWriter::new(con, tsymbol, items.len())
-        }
-        .await?;
+        con.write_typed_non_null_array_header(items.len(), tsymbol).await?;
         for key in items {
-            writer.write_element(key).await?;
+            con.write_typed_non_null_array_element(&key).await?;
         }
         Ok(())
     }

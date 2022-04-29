@@ -121,16 +121,16 @@ pub fn ensure_cond_or_err(cond: bool, err: &'static [u8]) -> ActionResult<()> {
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
-    use crate::resp::BytesWrapper;
     action!(
         /// Returns a `HEY!` `Response`
         fn heya(_handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
             ensure_length(act.len(), |len| len == 0 || len == 1)?;
             if act.len() == 1 {
-                let raw_byte = unsafe { act.next_unchecked_bytes() };
-                con.write_response(BytesWrapper(raw_byte)).await?;
+                let raw_byte = unsafe { act.next_unchecked() };
+                con.write_mono_length_prefixed_with_tsymbol(raw_byte, b'+')
+                    .await?;
             } else {
-                con.write_response(responses::groups::HEYA).await?;
+                return util::err(groups::HEYA);
             }
             Ok(())
         }

@@ -25,7 +25,7 @@
 */
 
 use crate::protocol::{
-    interface::{ProtocolRead, ProtocolSpec},
+    interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
     Skyhash2,
 };
 use crate::{
@@ -108,7 +108,7 @@ pub struct RawListener<P> {
 
 impl<P: ProtocolSpec + 'static> RawListener<P>
 where
-    Connection<TcpStream>: ProtocolRead<P, TcpStream>,
+    Connection<TcpStream>: ProtocolRead<P, TcpStream> + ProtocolWrite<P, TcpStream>,
 {
     pub fn new(base: BaseListener) -> Self {
         Self {

@@ -45,10 +45,10 @@ action!(
         };
         if let Some(value) = res {
             // Good, we got the key's length, write it off to the stream
-            con.write_response(value).await?;
+            con.write_usize(value).await?;
         } else {
             // Ah, couldn't find that key
-            con.write_response(responses::groups::NIL).await?;
+            con._write_raw(groups::NIL).await?;
         }
         Ok(())
     }

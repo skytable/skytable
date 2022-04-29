@@ -27,9 +27,7 @@
 use crate::corestore;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::encoding::ENCODING_LUT_ITER;
-use crate::protocol::responses;
 use crate::queryengine::ActionIter;
-use crate::resp::writer::TypedArrayWriter;
 use crate::util::compiler;
 
 action!(
@@ -40,23 +38,20 @@ action!(
             let kve = handle.get_table_with::<KVEBlob>()?;
             let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());
             if compiler::likely(encoding_is_okay) {
-                let mut writer = unsafe {
-                    // SAFETY: We have verified the tsymbol ourselves
-                    TypedArrayWriter::new(con, kve.get_value_tsymbol(), act.len())
-                }
-                .await?;
+                con.write_typed_array_header(act.len(), kve.get_value_tsymbol())
+                    .await?;
                 for key in act {
                     match kve.pop_unchecked(key) {
-                        Some(val) => writer.write_element(val).await?,
-                        None => writer.write_null().await?,
+                        Some(val) => con.write_typed_array_element(&val).await?,
+                        None => con.write_typed_array_element_null().await?,
                     }
                 }
             } else {
-                compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+                return util::err(groups::ENCODING_ERROR);
             }
         } else {
             // don't begin the operation at all if the database is poisoned
-            con.write_response(responses::groups::SERVER_ERR).await?;
+            return util::err(groups::SERVER_ERR);
         }
         Ok(())
     }

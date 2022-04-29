@@ -24,7 +24,7 @@
  *
 */
 
-use super::{writer, OKAY_BADIDX_NIL_NLUT};
+use super::OKAY_BADIDX_NIL_NLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::util::compiler;
@@ -52,7 +52,7 @@ action! {
             () => {
                 match unsafe { String::from_utf8_lossy(act.next_unchecked()) }.parse::<usize>() {
                     Ok(int) => int,
-                    Err(_) => return conwrite!(con, groups::WRONGTYPE_ERR),
+                    Err(_) => return Err(groups::WRONGTYPE_ERR.into()),
                 }
             };
         }
@@ -62,7 +62,7 @@ action! {
                 ensure_length(act.len(), |len| len == 0)?;
                 let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
-                    _ => return conwrite!(con, groups::NIL),
+                    _ => return Err(groups::NIL.into()),
                 };
                 let okay = if registry::state_okay() {
                     list.write().clear();
@@ -70,13 +70,13 @@ action! {
                 } else {
                     groups::SERVER_ERR
                 };
-                conwrite!(con, okay)?;
+                con._write_raw(okay).await?
             }
             PUSH => {
                 ensure_boolean_or_aerr(!act.is_empty())?;
                 let list = match listmap.get_inner_ref().get(listname) {
                     Some(l) => l,
-                    _ => return conwrite!(con, groups::NIL),
+                    _ => return Err(groups::NIL.into()),
                 };
                 let venc_ok = listmap.get_val_encoder();
                 let ret = if compiler::likely(act.as_ref().all(venc_ok)) {
@@ -89,7 +89,7 @@ action! {
                 } else {
                     groups::ENCODING_ERROR
                 };
-                conwrite!(con, ret)?;
+                con._write_raw(ret).await?
             }
             REMOVE => {
                 ensure_length(act.len(), |len| len == 1)?;
@@ -104,9 +104,9 @@ action! {
                             false
                         }
                     });
-                    conwrite!(con, OKAY_BADIDX_NIL_NLUT[maybe_value])?;
+                    con._write_raw(OKAY_BADIDX_NIL_NLUT[maybe_value]).await?
                 } else {
-                    conwrite!(con, groups::SERVER_ERR)?;
+                    return Err(groups::SERVER_ERR.into());
                 }
             }
             INSERT => {
@@ -128,7 +128,7 @@ action! {
                                     false
                                 }
                             }),
-                            Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
+                            Err(()) => return Err(groups::ENCODING_ERROR.into()),
                         };
                         OKAY_BADIDX_NIL_NLUT[maybe_insert]
                     } else {
@@ -139,7 +139,7 @@ action! {
                     // encoding failed, uh
                     groups::ENCODING_ERROR
                 };
-                conwrite!(con, ret)?;
+                con._write_raw(ret).await?
             }
             POP => {
                 ensure_length(act.len(), |len| len < 2)?;
@@ -165,24 +165,24 @@ action! {
                                 wlock.pop()
                             }
                         }),
-                        Err(()) => return conwrite!(con, groups::ENCODING_ERROR),
+                        Err(()) => return Err(groups::ENCODING_ERROR.into()),
                     };
                     match maybe_pop {
                         Some(Some(val)) => {
-                            unsafe {
-                                writer::write_raw_mono(con, listmap.get_value_tsymbol(), &val).await?;
-                            }
+                            con.write_mono_length_prefixed_with_tsymbol(
+                                &val, listmap.get_value_tsymbol()
+                            ).await?;
                         }
                         Some(None) => {
-                            conwrite!(con, groups::LISTMAP_BAD_INDEX)?;
+                            con._write_raw(groups::LISTMAP_BAD_INDEX).await?;
                         }
-                        None => conwrite!(con, groups::NIL)?,
+                        None => con._write_raw(groups::NIL).await?,
                     }
                 } else {
-                    conwrite!(con, groups::SERVER_ERR)?;
+                    con._write_raw(groups::SERVER_ERR).await?
                 }
             }
-            _ => conwrite!(con, groups::UNKNOWN_ACTION)?,
+            _ => con._write_raw(groups::UNKNOWN_ACTION).await?,
         }
         Ok(())
     }

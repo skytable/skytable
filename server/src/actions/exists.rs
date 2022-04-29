@@ -45,9 +45,9 @@ action!(
                     act.for_each(|key| {
                         how_many_of_them_exist += $engine.exists_unchecked(key) as usize;
                     });
-                    conwrite!(con, how_many_of_them_exist)?;
+                    con.write_usize(how_many_of_them_exist).await?;
                 } else {
-                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?;
+                    return util::err(groups::ENCODING_ERROR);
                 }
             }};
         }
@@ -56,7 +56,7 @@ action!(
             DataModel::KV(kve) => exists!(kve),
             DataModel::KVExtListmap(kve) => exists!(kve),
             #[allow(unreachable_patterns)]
-            _ => conwrite!(con, groups::WRONG_MODEL)?,
+            _ => return util::err(groups::WRONG_MODEL),
         }
         Ok(())
     }

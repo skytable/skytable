@@ -35,7 +35,6 @@ use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::LockedVec;
-use crate::resp::writer;
 
 const OKAY_OVW_BLUT: BytesBoolTable = BytesBoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
 const OKAY_BADIDX_NIL_NLUT: BytesNicheLUT =
@@ -57,9 +56,9 @@ action! {
             } else {
                 false
             };
-            conwrite!(con, OKAY_OVW_BLUT[did])?;
+            con._write_raw(OKAY_OVW_BLUT[did]).await?
         } else {
-            conwrite!(con, groups::SERVER_ERR)?;
+            con._write_raw(groups::SERVER_ERR).await?
         }
         Ok(())
     }
