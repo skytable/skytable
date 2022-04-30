@@ -49,7 +49,7 @@ macro_rules! is_lowbit_unset {
 #[macro_export]
 macro_rules! get_tbl {
     ($entity:expr, $store:expr, $con:expr) => {{
-        $crate::actions::translate_ddl_error::<P, ::std::sync::Arc<crate::corestore::table::Table>>(
+        $crate::actions::translate_ddl_error::<P, ::std::sync::Arc<$crate::corestore::table::Table>>(
             $store.get_table($entity),
         )?
     }};

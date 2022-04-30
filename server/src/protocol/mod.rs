@@ -26,8 +26,6 @@
 
 use crate::corestore::heap_array::HeapArray;
 use core::{fmt, slice};
-#[cfg(feature = "nightly")]
-mod benches;
 // pub mods
 pub mod interface;
 pub mod iter;
@@ -73,8 +71,13 @@ impl UnsafeSlice {
         Self { start_ptr, len }
     }
     /// Return self as a slice
-    pub unsafe fn as_slice(&self) -> &[u8] {
-        slice::from_raw_parts(self.start_ptr, self.len)
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe {
+            // UNSAFE(@ohsayan): Just like core::slice, we resemble the same idea:
+            // we assume that the unsafe construction was correct and hence *assume*
+            // that calling this is safe
+            slice::from_raw_parts(self.start_ptr, self.len)
+        }
     }
 }
 
@@ -115,11 +118,7 @@ impl SimpleQuery {
     #[cfg(test)]
     fn into_owned(self) -> OwnedSimpleQuery {
         OwnedSimpleQuery {
-            data: self
-                .data
-                .iter()
-                .map(|v| unsafe { v.as_slice().to_owned() })
-                .collect(),
+            data: self.data.iter().map(|v| v.as_slice().to_owned()).collect(),
         }
     }
     pub fn as_slice(&self) -> &[UnsafeSlice] {
@@ -129,7 +128,7 @@ impl SimpleQuery {
 
 #[cfg(test)]
 struct OwnedSimpleQuery {
-    data: Vec<Vec<u8>>,
+    pub data: Vec<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -150,11 +149,7 @@ impl PipelinedQuery {
             data: self
                 .data
                 .iter()
-                .map(|v| {
-                    v.iter()
-                        .map(|v| unsafe { v.as_slice().to_owned() })
-                        .collect()
-                })
+                .map(|v| v.iter().map(|v| v.as_slice().to_owned()).collect())
                 .collect(),
         }
     }
@@ -162,5 +157,5 @@ impl PipelinedQuery {
 
 #[cfg(test)]
 struct OwnedPipelinedQuery {
-    data: Vec<Vec<Vec<u8>>>,
+    pub data: Vec<Vec<Vec<u8>>>,
 }

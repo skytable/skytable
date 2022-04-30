@@ -35,14 +35,12 @@ pub const AUTHKEY_SIZE: usize = 40;
 /// Size of an authn ID in bytes
 pub const AUTHID_SIZE: usize = 40;
 
-#[cfg(debug_assertions)]
 pub mod testsuite_data {
+    #![allow(unused)]
     //! Temporary users created by the testsuite in debug mode
     pub const TESTSUITE_ROOT_USER: &str = "root";
     pub const TESTSUITE_TEST_USER: &str = "testuser";
-    #[cfg(test)]
     pub const TESTSUITE_ROOT_TOKEN: &str = "XUOdVKhEONnnGwNwT7WeLqbspDgVtKex0/nwFwBSW7XJxioHwpg6H.";
-    #[cfg(all(not(feature = "persist-suite"), test))]
     pub const TESTSUITE_TEST_TOKEN: &str = "mpobAB7EY8vnBs70d/..h1VvfinKIeEJgt1rg4wUkwF6aWCvGGR9le";
 }
 

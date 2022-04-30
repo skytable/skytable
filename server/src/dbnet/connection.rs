@@ -113,7 +113,7 @@ pub mod prelude {
             Corestore,
         },
         get_tbl, handle_entity, is_lowbit_set,
-        protocol::interface::{ProtocolRead, ProtocolSpec},
+        protocol::interface::ProtocolSpec,
         queryengine::ActionIter,
         registry,
         util::{self, FutureResult, UnwrapActionError, Unwrappable},
@@ -124,8 +124,8 @@ pub mod prelude {
 /// # The `RawConnection` trait
 ///
 /// The `RawConnection` trait has low-level methods that can be used to interface with raw sockets. Any type
-/// that successfully implements this trait will get an implementation for `ProtocolRead` which augments and
-/// builds on these fundamental methods to provide high-level interfacing with queries.
+/// that successfully implements this trait will get an implementation for `ProtocolRead` and `ProtocolWrite`
+/// provided that it uses a protocol that implements the `ProtocolSpec` trait.
 ///
 /// ## Example of a `RawConnection` object
 /// Ideally a `RawConnection` object should look like (the generic parameter just exists for doc-tests, just think that

@@ -75,16 +75,14 @@ impl<'a> AnyArrayIter<'a> {
     }
     /// Returns the next value in uppercase
     pub fn next_uppercase(&mut self) -> Option<Box<[u8]>> {
-        self.iter.next().map(|v| unsafe {
-            // SAFETY: Only construction is unsafe, forwarding is not
-            v.as_slice().to_ascii_uppercase().into_boxed_slice()
-        })
+        self.iter
+            .next()
+            .map(|v| v.as_slice().to_ascii_uppercase().into_boxed_slice())
     }
     pub fn next_lowercase(&mut self) -> Option<Box<[u8]>> {
-        self.iter.next().map(|v| unsafe {
-            // SAFETY: Only construction is unsafe, forwarding is not
-            v.as_slice().to_ascii_lowercase().into_boxed_slice()
-        })
+        self.iter
+            .next()
+            .map(|v| v.as_slice().to_ascii_lowercase().into_boxed_slice())
     }
     pub unsafe fn next_lowercase_unchecked(&mut self) -> Box<[u8]> {
         self.next_lowercase().unwrap_or_else(|| impossible!())
@@ -143,7 +141,7 @@ unsafe impl DerefUnsafeSlice for Bytes {
 impl<'a> Iterator for AnyArrayIter<'a> {
     type Item = &'a [u8];
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|v| unsafe { v.as_slice() })
+        self.iter.next().map(|v| v.as_slice())
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
@@ -152,7 +150,7 @@ impl<'a> Iterator for AnyArrayIter<'a> {
 
 impl<'a> DoubleEndedIterator for AnyArrayIter<'a> {
     fn next_back(&mut self) -> Option<<Self as Iterator>::Item> {
-        self.iter.next_back().map(|v| unsafe { v.as_slice() })
+        self.iter.next_back().map(|v| v.as_slice())
     }
 }
 
@@ -162,13 +160,13 @@ impl<'a> FusedIterator for AnyArrayIter<'a> {}
 impl<'a> Iterator for BorrowedAnyArrayIter<'a> {
     type Item = &'a [u8];
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|v| unsafe { v.as_slice() })
+        self.iter.next().map(|v| v.as_slice())
     }
 }
 
 impl<'a> DoubleEndedIterator for BorrowedAnyArrayIter<'a> {
     fn next_back(&mut self) -> Option<<Self as Iterator>::Item> {
-        self.iter.next_back().map(|v| unsafe { v.as_slice() })
+        self.iter.next_back().map(|v| v.as_slice())
     }
 }
 

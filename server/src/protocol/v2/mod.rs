@@ -31,6 +31,8 @@ use crate::{
     protocol::{ParseError, ParseResult, PipelinedQuery, Query, SimpleQuery, UnsafeSlice},
 };
 use core::mem::transmute;
+#[cfg(feature = "nightly")]
+mod benches;
 #[cfg(test)]
 mod tests;
 
@@ -155,10 +157,7 @@ impl Parser {
     /// Attempt to read an `usize` from the buffer
     fn read_usize(&mut self) -> ParseResult<usize> {
         let line = self.read_line_pedantic()?;
-        let bytes = unsafe {
-            // UNSAFE(@ohsayan): We just extracted the slice
-            line.as_slice()
-        };
+        let bytes = line.as_slice();
         let mut ret = 0usize;
         for byte in bytes {
             if byte.is_ascii_digit() {
