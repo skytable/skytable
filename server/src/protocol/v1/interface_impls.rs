@@ -1,5 +1,5 @@
 /*
- * Created on Sat Apr 30 2022
+ * Created on Mon May 02 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,23 +24,25 @@
  *
 */
 
-use crate::{
-    corestore::buffers::Integer64,
-    dbnet::connection::{QueryWithAdvance, RawConnection, Stream},
-    protocol::{
-        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-        ParseError, Skyhash2,
+use {
+    crate::{
+        corestore::buffers::Integer64,
+        dbnet::connection::{QueryWithAdvance, RawConnection, Stream},
+        protocol::{
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            ParseError, Skyhash1,
+        },
+        util::FutureResult,
+        IoResult,
     },
-    util::FutureResult,
-    IoResult,
+    ::sky_macros::compiled_eresp_bytes_v1 as eresp,
+    tokio::io::AsyncWriteExt,
 };
-use ::sky_macros::compiled_eresp_bytes as eresp;
-use tokio::io::AsyncWriteExt;
 
-impl ProtocolSpec for Skyhash2 {
+impl ProtocolSpec for Skyhash1 {
     // spec information
-    const PROTOCOL_VERSION: f32 = 2.0;
-    const PROTOCOL_VERSIONSTRING: &'static str = "Skyhash-2.0";
+    const PROTOCOL_VERSION: f32 = 1.0;
+    const PROTOCOL_VERSIONSTRING: &'static str = "Skyhash-1.0";
 
     // type symbols
     const TSYMBOL_STRING: u8 = b'+';
@@ -53,11 +55,11 @@ impl ProtocolSpec for Skyhash2 {
     const TSYMBOL_FLAT_ARRAY: u8 = b'_';
 
     // typed array
-    const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8] = b"\0";
+    const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8] = b"\0\n";
 
     // metaframe
-    const SIMPLE_QUERY_HEADER: &'static [u8] = b"*";
-    const PIPELINED_QUERY_FIRST_BYTE: u8 = b'$';
+    const SIMPLE_QUERY_HEADER: &'static [u8] = b"*1\n";
+    const PIPELINED_QUERY_FIRST_BYTE: u8 = b'*';
 
     // respcodes
     /// Response code 0 as a array element
@@ -139,24 +141,24 @@ impl ProtocolSpec for Skyhash2 {
     const RSTRING_LISTMAP_LIST_IS_EMPTY: &'static [u8] = eresp!("list-is-empty");
 
     // full responses
-    const FULLRESP_RCODE_PACKET_ERR: &'static [u8] = b"*!4\n";
-    const FULLRESP_RCODE_WRONG_TYPE: &'static [u8] = b"*!7\n";
-    const FULLRESP_HEYA: &'static [u8] = b"+4\nHEY!";
+    const FULLRESP_RCODE_PACKET_ERR: &'static [u8] = b"*1\n!1\n4\n";
+    const FULLRESP_RCODE_WRONG_TYPE: &'static [u8] = b"*1\n!1\n7\n";
+    const FULLRESP_HEYA: &'static [u8] = b"*1\n+4\nHEY!\n";
 }
 
-impl<Strm, T> ProtocolRead<Skyhash2, Strm> for T
+impl<Strm, T> ProtocolRead<Skyhash1, Strm> for T
 where
-    T: RawConnection<Skyhash2, Strm> + Send + Sync,
+    T: RawConnection<Skyhash1, Strm> + Send + Sync,
     Strm: Stream,
 {
     fn try_query(&self) -> Result<QueryWithAdvance, ParseError> {
-        Skyhash2::parse(self.get_buffer())
+        Skyhash1::parse(self.get_buffer())
     }
 }
 
-impl<Strm, T> ProtocolWrite<Skyhash2, Strm> for T
+impl<Strm, T> ProtocolWrite<Skyhash1, Strm> for T
 where
-    T: RawConnection<Skyhash2, Strm> + Send + Sync,
+    T: RawConnection<Skyhash1, Strm> + Send + Sync,
     Strm: Stream,
 {
     fn write_string<'life0, 'life1, 'ret_life>(
@@ -171,14 +173,16 @@ where
         Box::pin(async move {
             let stream = self.get_mut_stream();
             // tsymbol
-            stream.write_all(&[Skyhash2::TSYMBOL_STRING]).await?;
+            stream.write_all(&[Skyhash1::TSYMBOL_STRING]).await?;
             // length
             let len_bytes = Integer64::from(string.len());
             stream.write_all(&len_bytes).await?;
             // LF
-            stream.write_all(&[Skyhash2::LF]).await?;
+            stream.write_all(&[Skyhash1::LF]).await?;
             // payload
-            stream.write_all(string.as_bytes()).await
+            stream.write_all(string.as_bytes()).await?;
+            // final LF
+            stream.write_all(&[Skyhash1::LF]).await
         })
     }
     fn write_binary<'life0, 'life1, 'ret_life>(
@@ -193,14 +197,16 @@ where
         Box::pin(async move {
             let stream = self.get_mut_stream();
             // tsymbol
-            stream.write_all(&[Skyhash2::TSYMBOL_BINARY]).await?;
+            stream.write_all(&[Skyhash1::TSYMBOL_BINARY]).await?;
             // length
             let len_bytes = Integer64::from(binary.len());
             stream.write_all(&len_bytes).await?;
             // LF
-            stream.write_all(&[Skyhash2::LF]).await?;
+            stream.write_all(&[Skyhash1::LF]).await?;
             // payload
-            stream.write_all(binary).await
+            stream.write_all(binary).await?;
+            // final LF
+            stream.write_all(&[Skyhash1::LF]).await
         })
     }
     fn write_usize<'life0, 'ret_life>(
@@ -224,11 +230,18 @@ where
         Box::pin(async move {
             let stream = self.get_mut_stream();
             // tsymbol
-            stream.write_all(&[Skyhash2::TSYMBOL_INT64]).await?;
+            stream.write_all(&[Skyhash1::TSYMBOL_INT64]).await?;
+            // get body and sizeline
+            let body = Integer64::from(int);
+            let body_len = Integer64::from(body.len());
+            // len of body
+            stream.write_all(&body_len).await?;
+            // sizeline LF
+            stream.write_all(&[Skyhash1::LF]).await?;
             // body
-            stream.write_all(&Integer64::from(int)).await?;
+            stream.write_all(&body).await?;
             // LF
-            stream.write_all(&[Skyhash2::LF]).await
+            stream.write_all(&[Skyhash1::LF]).await
         })
     }
     fn write_float<'life0, 'ret_life>(
@@ -242,11 +255,19 @@ where
         Box::pin(async move {
             let stream = self.get_mut_stream();
             // tsymbol
-            stream.write_all(&[Skyhash2::TSYMBOL_FLOAT]).await?;
+            stream.write_all(&[Skyhash1::TSYMBOL_FLOAT]).await?;
+            // get body and sizeline
+            let body = float.to_string();
+            let body = body.as_bytes();
+            let sizeline = Integer64::from(body.len());
+            // sizeline
+            stream.write_all(&sizeline).await?;
+            // sizeline LF
+            stream.write_all(&[Skyhash1::LF]).await?;
             // body
-            stream.write_all(float.to_string().as_bytes()).await?;
+            stream.write_all(body).await?;
             // LF
-            stream.write_all(&[Skyhash2::LF]).await
+            stream.write_all(&[Skyhash1::LF]).await
         })
     }
     fn write_typed_array_element<'life0, 'life1, 'ret_life>(
@@ -263,9 +284,11 @@ where
             // len
             stream.write_all(&Integer64::from(element.len())).await?;
             // LF
-            stream.write_all(&[Skyhash2::LF]).await?;
+            stream.write_all(&[Skyhash1::LF]).await?;
             // body
-            stream.write_all(element).await
+            stream.write_all(element).await?;
+            // LF
+            stream.write_all(&[Skyhash1::LF]).await
         })
     }
 }

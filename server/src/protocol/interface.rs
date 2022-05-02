@@ -38,6 +38,13 @@ use std::io::{Error as IoError, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub trait ProtocolSpec {
+    // spec information
+
+    /// The Skyhash protocol version
+    const PROTOCOL_VERSION: f32;
+    /// The Skyhash protocol version string (Skyhash-x.y)
+    const PROTOCOL_VERSIONSTRING: &'static str;
+
     // type symbols
     const TSYMBOL_STRING: u8;
     const TSYMBOL_BINARY: u8;
@@ -100,6 +107,7 @@ pub trait ProtocolSpec {
 
     // full responses
     const FULLRESP_RCODE_PACKET_ERR: &'static [u8];
+    const FULLRESP_RCODE_WRONG_TYPE: &'static [u8];
     const FULLRESP_HEYA: &'static [u8];
 
     // LUTs
@@ -168,6 +176,9 @@ where
                     Err(ParseError::DatatypeParseFailure) => return Ok(QueryResult::Wrongtype),
                     Err(ParseError::UnexpectedByte | ParseError::BadPacket) => {
                         return Ok(QueryResult::E(P::FULLRESP_RCODE_PACKET_ERR));
+                    }
+                    Err(ParseError::WrongType) => {
+                        return Ok(QueryResult::E(P::FULLRESP_RCODE_WRONG_TYPE));
                     }
                 }
             }

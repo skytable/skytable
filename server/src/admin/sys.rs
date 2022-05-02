@@ -25,9 +25,7 @@
 */
 
 use crate::{
-    corestore::booltable::BoolTable,
-    dbnet::connection::prelude::*,
-    protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING},
+    corestore::booltable::BoolTable, dbnet::connection::prelude::*,
     storage::v1::interface::DIR_ROOT,
 };
 use ::libsky::VERSION;
@@ -56,8 +54,8 @@ action! {
     }
     fn sys_info(con: &mut T, iter: &mut ActionIter<'_>) {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
-            INFO_PROTOCOL => con.write_string(PROTOCOL_VERSIONSTRING).await?,
-            INFO_PROTOVER => con.write_float(PROTOCOL_VERSION).await?,
+            INFO_PROTOCOL => con.write_string(P::PROTOCOL_VERSIONSTRING).await?,
+            INFO_PROTOVER => con.write_float(P::PROTOCOL_VERSION).await?,
             INFO_VERSION => con.write_string(VERSION).await?,
             _ => return util::err(ERR_UNKNOWN_PROPERTY),
         }

@@ -24,20 +24,28 @@
  *
 */
 
-use crate::corestore::heap_array::HeapArray;
-use core::{fmt, slice};
+#[cfg(test)]
+use self::interface::ProtocolSpec;
+use {
+    crate::corestore::heap_array::HeapArray,
+    core::{fmt, slice},
+};
 // pub mods
 pub mod interface;
 pub mod iter;
 // versions
+mod v1;
 mod v2;
 // endof pub mods
 
-/// The Skyhash protocol version
-pub const PROTOCOL_VERSION: f32 = 2.0;
-/// The Skyhash protocol version string (Skyhash-x.y)
-pub const PROTOCOL_VERSIONSTRING: &str = "Skyhash-2.0";
 pub type Skyhash2 = v2::Parser;
+pub type Skyhash1 = v1::Parser;
+#[cfg(test)]
+/// The latest protocol version supported by this version
+pub const LATEST_PROTOCOL_VERSION: f32 = Skyhash2::PROTOCOL_VERSION;
+#[cfg(test)]
+/// The latest protocol version supported by this version (`Skyhash-x.y`)
+pub const LATEST_PROTOCOL_VERSIONSTRING: &str = Skyhash2::PROTOCOL_VERSIONSTRING;
 
 #[derive(PartialEq)]
 /// As its name says, an [`UnsafeSlice`] is a terribly unsafe slice. It's guarantess are
@@ -90,7 +98,6 @@ pub enum ParseError {
     /// Didn't get the number of expected bytes
     NotEnough = 0u8,
     /// The packet simply contains invalid data
-    #[allow(dead_code)] // HACK(@ohsayan): rustc can't "guess" the transmutation
     BadPacket = 1u8,
     /// The query contains an unexpected byte
     UnexpectedByte = 2u8,
@@ -98,6 +105,8 @@ pub enum ParseError {
     ///
     /// This can happen not just for elements but can also happen for their sizes ([`Self::parse_into_u64`])
     DatatypeParseFailure = 3u8,
+    /// The client supplied the wrong query data type for the given query
+    WrongType = 4u8,
 }
 
 /// A generic result to indicate parsing errors thorugh the [`ParseError`] enum
@@ -121,6 +130,9 @@ impl SimpleQuery {
             data: self.data.iter().map(|v| v.as_slice().to_owned()).collect(),
         }
     }
+    pub const fn new(data: HeapArray<UnsafeSlice>) -> Self {
+        Self { data }
+    }
     pub fn as_slice(&self) -> &[UnsafeSlice] {
         &self.data
     }
@@ -137,6 +149,9 @@ pub struct PipelinedQuery {
 }
 
 impl PipelinedQuery {
+    pub const fn new(data: HeapArray<HeapArray<UnsafeSlice>>) -> Self {
+        Self { data }
+    }
     pub fn len(&self) -> usize {
         self.data.len()
     }
