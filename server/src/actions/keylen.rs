@@ -31,9 +31,9 @@ action!(
     ///
     /// At this moment, `keylen` only supports a single key
     fn keylen(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
+        ensure_length::<P>(act.len(), |len| len == 1)?;
         let res: Option<usize> = {
-            let reader = handle.get_table_with::<KVEBlob>()?;
+            let reader = handle.get_table_with::<P, KVEBlob>()?;
             unsafe {
                 // UNSAFE(@ohsayan): this is completely safe as we've already checked
                 // the number of arguments is one
@@ -45,10 +45,10 @@ action!(
         };
         if let Some(value) = res {
             // Good, we got the key's length, write it off to the stream
-            con.write_response(value).await?;
+            con.write_usize(value).await?;
         } else {
             // Ah, couldn't find that key
-            con.write_response(responses::groups::NIL).await?;
+            con._write_raw(P::RCODE_NIL).await?;
         }
         Ok(())
     }

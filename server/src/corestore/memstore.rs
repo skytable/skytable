@@ -132,6 +132,7 @@ mod cluster {
 
 #[derive(Debug, PartialEq)]
 /// Errors arising from trying to modify/access containers
+#[allow(dead_code)]
 pub enum DdlError {
     /// The object is still in use
     StillInUse,

@@ -51,7 +51,7 @@ pub mod update;
 pub mod uset;
 pub mod whereami;
 use crate::corestore::memstore::DdlError;
-use crate::protocol::responses::groups;
+use crate::protocol::interface::ProtocolSpec;
 use crate::util;
 use std::io::Error as IoError;
 
@@ -63,6 +63,16 @@ pub type ActionResult<T> = Result<T, ActionError>;
 pub enum ActionError {
     ActionError(&'static [u8]),
     IoError(std::io::Error),
+}
+
+impl PartialEq for ActionError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::ActionError(a1), Self::ActionError(a2)) => a1 == a2,
+            (Self::IoError(ioe1), Self::IoError(ioe2)) => ioe1.to_string() == ioe2.to_string(),
+            _ => false,
+        }
+    }
 }
 
 impl From<&'static [u8]> for ActionError {
@@ -77,36 +87,44 @@ impl From<IoError> for ActionError {
     }
 }
 
-impl From<DdlError> for ActionError {
-    fn from(e: DdlError) -> Self {
-        let ret = match e {
-            DdlError::AlreadyExists => groups::ALREADY_EXISTS,
-            DdlError::DdlTransactionFailure => groups::DDL_TRANSACTIONAL_FAILURE,
-            DdlError::DefaultNotFound => groups::DEFAULT_UNSET,
-            DdlError::NotEmpty => groups::KEYSPACE_NOT_EMPTY,
-            DdlError::NotReady => groups::NOT_READY,
-            DdlError::ObjectNotFound => groups::CONTAINER_NOT_FOUND,
-            DdlError::ProtectedObject => groups::PROTECTED_OBJECT,
-            DdlError::StillInUse => groups::STILL_IN_USE,
-            DdlError::WrongModel => groups::WRONG_MODEL,
-        };
-        Self::ActionError(ret)
+#[cold]
+#[inline(never)]
+fn map_ddl_error_to_status<P: ProtocolSpec>(e: DdlError) -> ActionError {
+    let r = match e {
+        DdlError::AlreadyExists => P::RSTRING_ALREADY_EXISTS,
+        DdlError::DdlTransactionFailure => P::RSTRING_DDL_TRANSACTIONAL_FAILURE,
+        DdlError::DefaultNotFound => P::RSTRING_DEFAULT_UNSET,
+        DdlError::NotEmpty => P::RSTRING_KEYSPACE_NOT_EMPTY,
+        DdlError::NotReady => P::RSTRING_NOT_READY,
+        DdlError::ObjectNotFound => P::RSTRING_CONTAINER_NOT_FOUND,
+        DdlError::ProtectedObject => P::RSTRING_PROTECTED_OBJECT,
+        DdlError::StillInUse => P::RSTRING_STILL_IN_USE,
+        DdlError::WrongModel => P::RSTRING_WRONG_MODEL,
+    };
+    ActionError::ActionError(r)
+}
+
+#[inline(always)]
+pub fn translate_ddl_error<P: ProtocolSpec, T>(r: Result<T, DdlError>) -> Result<T, ActionError> {
+    match r {
+        Ok(r) => Ok(r),
+        Err(e) => Err(map_ddl_error_to_status::<P>(e)),
     }
 }
 
-pub fn ensure_length(len: usize, is_valid: fn(usize) -> bool) -> ActionResult<()> {
+pub fn ensure_length<P: ProtocolSpec>(len: usize, is_valid: fn(usize) -> bool) -> ActionResult<()> {
     if util::compiler::likely(is_valid(len)) {
         Ok(())
     } else {
-        util::err(groups::ACTION_ERR)
+        util::err(P::RCODE_ACTION_ERR)
     }
 }
 
-pub fn ensure_boolean_or_aerr(boolean: bool) -> ActionResult<()> {
+pub fn ensure_boolean_or_aerr<P: ProtocolSpec>(boolean: bool) -> ActionResult<()> {
     if util::compiler::likely(boolean) {
         Ok(())
     } else {
-        util::err(groups::ACTION_ERR)
+        util::err(P::RCODE_ACTION_ERR)
     }
 }
 
@@ -121,16 +139,16 @@ pub fn ensure_cond_or_err(cond: bool, err: &'static [u8]) -> ActionResult<()> {
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;
-    use crate::resp::BytesWrapper;
     action!(
         /// Returns a `HEY!` `Response`
         fn heya(_handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-            ensure_length(act.len(), |len| len == 0 || len == 1)?;
+            ensure_length::<P>(act.len(), |len| len == 0 || len == 1)?;
             if act.len() == 1 {
-                let raw_byte = unsafe { act.next_unchecked_bytes() };
-                con.write_response(BytesWrapper(raw_byte)).await?;
+                let raw_byte = unsafe { act.next_unchecked() };
+                con.write_mono_length_prefixed_with_tsymbol(raw_byte, b'+')
+                    .await?;
             } else {
-                con.write_response(responses::groups::HEYA).await?;
+                con._write_raw(P::ELEMRESP_HEYA).await?;
             }
             Ok(())
         }

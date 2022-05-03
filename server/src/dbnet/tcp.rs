@@ -24,28 +24,35 @@
  *
 */
 
-use crate::{
-    dbnet::{
-        connection::{ConnectionHandler, ExecutorFn},
-        BaseListener, Terminator,
-    },
-    protocol, IoResult,
-};
-use bytes::BytesMut;
-use libsky::BUF_CAP;
 pub use protocol::{ParseResult, Query};
-use std::{cell::Cell, time::Duration};
-use tokio::{
-    io::{AsyncWrite, BufWriter},
-    net::TcpStream,
-    time,
+use {
+    crate::{
+        dbnet::{
+            connection::{ConnectionHandler, ExecutorFn},
+            BaseListener, Terminator,
+        },
+        protocol::{
+            self,
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            Skyhash1, Skyhash2,
+        },
+        IoResult,
+    },
+    bytes::BytesMut,
+    libsky::BUF_CAP,
+    std::{cell::Cell, time::Duration},
+    tokio::{
+        io::{AsyncWrite, BufWriter},
+        net::TcpStream,
+        time,
+    },
 };
 
 pub trait BufferedSocketStream: AsyncWrite {}
 
 impl BufferedSocketStream for TcpStream {}
 
-type TcpExecutorFn = ExecutorFn<Connection<TcpStream>, TcpStream>;
+type TcpExecutorFn<P> = ExecutorFn<P, Connection<TcpStream>, TcpStream>;
 
 /// A TCP/SSL connection wrapper
 pub struct Connection<T>
@@ -94,13 +101,19 @@ impl TcpBackoff {
     }
 }
 
+pub type Listener = RawListener<Skyhash2>;
+pub type ListenerV1 = RawListener<Skyhash1>;
+
 /// A listener
-pub struct Listener {
+pub struct RawListener<P> {
     pub base: BaseListener,
-    executor_fn: TcpExecutorFn,
+    executor_fn: TcpExecutorFn<P>,
 }
 
-impl Listener {
+impl<P: ProtocolSpec + 'static> RawListener<P>
+where
+    Connection<TcpStream>: ProtocolRead<P, TcpStream> + ProtocolWrite<P, TcpStream>,
+{
     pub fn new(base: BaseListener) -> Self {
         Self {
             executor_fn: if base.auth.is_enabled() {

@@ -2,6 +2,18 @@
 
 All changes in this project will be noted in this file.
 
+## Version 0.8.0
+
+### Additions
+
+- New protocol: Skyhash 2.0
+  - Reduced bandwidth usage (as much as 50%)
+  - Even simpler client implementations
+- Backward compatibility with Skyhash 1.0:
+  - Simply set the protocol version you want to use in the config file, env vars or pass it as a CLI
+    argument
+  - Even faster implementation, even for Skyhash 1.0
+
 ## Version 0.7.5
 
 ### Additions

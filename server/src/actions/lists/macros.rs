@@ -26,11 +26,10 @@
 
 macro_rules! writelist {
     ($con:expr, $listmap:expr, $items:expr) => {{
-        let mut typed_array_writer =
-            unsafe { TypedArrayWriter::new($con, $listmap.get_value_tsymbol(), $items.len()) }
-                .await?;
+        $con.write_typed_non_null_array_header($items.len(), $listmap.get_value_tsymbol())
+            .await?;
         for item in $items {
-            typed_array_writer.write_element(item).await?;
+            $con.write_typed_non_null_array_element(&item).await?;
         }
     }};
 }

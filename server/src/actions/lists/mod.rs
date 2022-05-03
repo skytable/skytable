@@ -30,23 +30,16 @@ mod macros;
 pub mod lget;
 pub mod lmod;
 
-use crate::corestore::booltable::BytesBoolTable;
-use crate::corestore::booltable::BytesNicheLUT;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
 use crate::kvengine::LockedVec;
-use crate::resp::writer;
-
-const OKAY_OVW_BLUT: BytesBoolTable = BytesBoolTable::new(groups::OKAY, groups::OVERWRITE_ERR);
-const OKAY_BADIDX_NIL_NLUT: BytesNicheLUT =
-    BytesNicheLUT::new(groups::NIL, groups::OKAY, groups::LISTMAP_BAD_INDEX);
 
 action! {
     /// Handle an `LSET` query for the list model
     /// Syntax: `LSET <listname> <values ...>`
     fn lset(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len > 0)?;
-        let listmap = handle.get_table_with::<KVEList>()?;
+        ensure_length::<P>(act.len(), |len| len > 0)?;
+        let listmap = handle.get_table_with::<P, KVEList>()?;
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.get_inner_ref();
         if registry::state_okay() {
@@ -57,9 +50,9 @@ action! {
             } else {
                 false
             };
-            conwrite!(con, OKAY_OVW_BLUT[did])?;
+            con._write_raw(P::OKAY_OVW_BLUT[did]).await?
         } else {
-            conwrite!(con, groups::SERVER_ERR)?;
+            con._write_raw(P::RCODE_SERVER_ERR).await?
         }
         Ok(())
     }

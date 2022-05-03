@@ -115,3 +115,9 @@ args:
       takes_value: true
       help: Set the authentication origin key
       value_name: origin_key
+  - protover:
+      required: false
+      long: protover
+      takes_value: true
+      help: Set the protocol version
+      value_name: protover

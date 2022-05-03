@@ -66,9 +66,17 @@ impl FeedbackStack {
 impl fmt::Display for FeedbackStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.is_empty() {
-            write!(f, "{} {}:", self.feedback_source, self.feedback_type)?;
-            for err in self.stack.iter() {
-                write!(f, "\n{}- {}", TAB, err)?;
+            if self.len() == 1 {
+                write!(
+                    f,
+                    "{} {}: {}",
+                    self.feedback_source, self.feedback_type, self.stack[0]
+                )?;
+            } else {
+                write!(f, "{} {}:", self.feedback_source, self.feedback_type)?;
+                for err in self.stack.iter() {
+                    write!(f, "\n{}- {}", TAB, err)?;
+                }
             }
         }
         Ok(())
@@ -265,8 +273,7 @@ mod test {
     #[test]
     fn errorstack_fmt() {
         const EXPECTED: &str = "\
-Environment errors:
-    - Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer\
+Environment errors: Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer\
 ";
         let mut estk = ErrorStack::new(EMSG_ENV);
         estk.push("Invalid value for `SKY_SYSTEM_PORT`. Expected a 16-bit integer");

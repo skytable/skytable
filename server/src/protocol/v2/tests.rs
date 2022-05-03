@@ -24,8 +24,11 @@
  *
 */
 
-use super::{Parser, PipelinedQuery, Query, SimpleQuery};
-use crate::protocol::ParseError;
+use super::{
+    super::raw_parser::{RawParser, RawParserExt, RawParserMeta},
+    Parser, PipelinedQuery, Query, SimpleQuery,
+};
+use crate::protocol::{iter::AnyArrayIter, ParseError};
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;
 
@@ -67,11 +70,9 @@ fn get_slices(slices: &[&[u8]]) -> Packets {
 
 fn ensure_zero_reads(parser: &mut Parser) {
     let r = parser.read_until(0).unwrap();
-    unsafe {
-        let slice = r.as_slice();
-        assert_eq!(slice, b"");
-        assert!(slice.is_empty());
-    }
+    let slice = r.as_slice();
+    assert_eq!(slice, b"");
+    assert!(slice.is_empty());
 }
 
 // We do this intentionally for "heap simulation"
@@ -317,11 +318,9 @@ fn read_until_nonempty() {
         ensure_zero_reads(&mut parser);
         // now read the entire length; should always work
         let r = parser.read_until(len).unwrap();
-        unsafe {
-            let slice = r.as_slice();
-            assert_eq!(slice, src.as_slice());
-            assert_eq!(slice.len(), len);
-        }
+        let slice = r.as_slice();
+        assert_eq!(slice, src.as_slice());
+        assert_eq!(slice.len(), len);
         // even after the buffer is exhausted, `0` should always work
         ensure_zero_reads(&mut parser);
     }
@@ -346,23 +345,19 @@ fn read_until_not_enough() {
 fn read_until_more_bytes() {
     let sample1 = v!(b"abcd1");
     let mut p1 = Parser::new(&sample1);
-    unsafe {
-        assert_eq!(
-            p1.read_until(&sample1.len() - 1).unwrap().as_slice(),
-            &sample1[..&sample1.len() - 1]
-        );
-        // ensure we have not exhasuted
-        ensure_not_exhausted(&p1);
-        ensure_remaining(&p1, 1);
-    }
+    assert_eq!(
+        p1.read_until(&sample1.len() - 1).unwrap().as_slice(),
+        &sample1[..&sample1.len() - 1]
+    );
+    // ensure we have not exhasuted
+    ensure_not_exhausted(&p1);
+    ensure_remaining(&p1, 1);
     let sample2 = v!(b"abcd1234567890!@#$");
     let mut p2 = Parser::new(&sample2);
-    unsafe {
-        assert_eq!(p2.read_until(4).unwrap().as_slice(), &sample2[..4]);
-        // ensure we have not exhasuted
-        ensure_not_exhausted(&p2);
-        ensure_remaining(&p2, sample2.len() - 4);
-    }
+    assert_eq!(p2.read_until(4).unwrap().as_slice(), &sample2[..4]);
+    // ensure we have not exhasuted
+    ensure_not_exhausted(&p2);
+    ensure_remaining(&p2, sample2.len() - 4);
 }
 
 // read_line
@@ -370,12 +365,10 @@ fn read_until_more_bytes() {
 fn read_line_special_case_only_lf() {
     let b = v!(b"\n");
     let mut parser = Parser::new(&b);
-    unsafe {
-        let r = parser.read_line().unwrap();
-        let slice = r.as_slice();
-        assert_eq!(slice, b"");
-        assert!(slice.is_empty());
-    };
+    let r = parser.read_line().unwrap();
+    let slice = r.as_slice();
+    assert_eq!(slice, b"");
+    assert!(slice.is_empty());
     // ensure it is exhausted
     ensure_exhausted(&parser);
 }
@@ -389,12 +382,10 @@ fn read_line() {
             assert_eq!(parser.read_line().unwrap_err(), ParseError::NotEnough);
         } else {
             // should work
-            unsafe {
-                assert_eq!(
-                    parser.read_line().unwrap().as_slice(),
-                    &src.as_slice()[..len - 1]
-                );
-            }
+            assert_eq!(
+                parser.read_line().unwrap().as_slice(),
+                &src.as_slice()[..len - 1]
+            );
             // now, we attempt to read which should work
             ensure_zero_reads(&mut parser);
         }
@@ -414,9 +405,7 @@ fn read_line_more_bytes() {
     let sample1 = v!(b"abcd\n1");
     let mut p1 = Parser::new(&sample1);
     let line = p1.read_line().unwrap();
-    unsafe {
-        assert_eq!(line.as_slice(), b"abcd");
-    }
+    assert_eq!(line.as_slice(), b"abcd");
     // we should still have one remaining
     ensure_not_exhausted(&p1);
     ensure_remaining(&p1, 1);
@@ -427,17 +416,13 @@ fn read_line_subsequent_lf() {
     let sample1 = v!(b"abcd\n1\n");
     let mut p1 = Parser::new(&sample1);
     let line = p1.read_line().unwrap();
-    unsafe {
-        assert_eq!(line.as_slice(), b"abcd");
-    }
+    assert_eq!(line.as_slice(), b"abcd");
     // we should still have two octets remaining
     ensure_not_exhausted(&p1);
     ensure_remaining(&p1, 2);
     // and we should be able to read in another line
     let line = p1.read_line().unwrap();
-    unsafe {
-        assert_eq!(line.as_slice(), b"1");
-    }
+    assert_eq!(line.as_slice(), b"1");
     ensure_exhausted(&p1);
 }
 
@@ -453,12 +438,10 @@ fn read_line_pedantic_okay() {
             );
         } else {
             // should work
-            unsafe {
-                assert_eq!(
-                    parser.read_line_pedantic().unwrap().as_slice(),
-                    &src.as_slice()[..len - 1]
-                );
-            }
+            assert_eq!(
+                parser.read_line_pedantic().unwrap().as_slice(),
+                &src.as_slice()[..len - 1]
+            );
             // now, we attempt to read which should work
             ensure_zero_reads(&mut parser);
         }
@@ -640,4 +623,19 @@ fn pipelined_query_fail_because_not_enough() {
         let ret = Parser::parse(&body).unwrap_err();
         assert_eq!(ret, ParseError::NotEnough)
     }
+}
+
+#[test]
+fn test_iter() {
+    use super::{Parser, Query};
+    let (q, _fwby) = Parser::parse(b"*3\n3\nset1\nx3\n100").unwrap();
+    let r = match q {
+        Query::Simple(q) => q,
+        _ => panic!("Wrong query"),
+    };
+    let it = r.as_slice().iter();
+    let mut iter = unsafe { AnyArrayIter::new(it) };
+    assert_eq!(iter.next_uppercase().unwrap().as_ref(), "SET".as_bytes());
+    assert_eq!(iter.next().unwrap(), "x".as_bytes());
+    assert_eq!(iter.next().unwrap(), "100".as_bytes());
 }

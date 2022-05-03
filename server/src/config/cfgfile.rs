@@ -25,7 +25,8 @@
 */
 
 use super::{
-    AuthSettings, ConfigSourceParseResult, Configset, Modeset, OptString, TryFromConfigSource,
+    AuthSettings, ConfigSourceParseResult, Configset, Modeset, OptString, ProtocolVersion,
+    TryFromConfigSource,
 };
 use serde::Deserialize;
 use std::net::IpAddr;
@@ -59,6 +60,7 @@ pub struct ConfigKeyServer {
     pub(super) maxclient: Option<usize>,
     /// The deployment mode
     pub(super) mode: Option<Modeset>,
+    pub(super) protocol: Option<ProtocolVersion>,
 }
 
 /// The BGSAVE section in the config file
@@ -175,6 +177,7 @@ pub fn from_file(file: ConfigFile) -> Configset {
         Optional::some(server.port),
         "server.port",
     );
+    set.protocol_settings(server.protocol, "server.protocol");
     set.server_maxcon(Optional::from(server.maxclient), "server.maxcon");
     set.server_noart(Optional::from(server.noart), "server.noart");
     set.server_mode(Optional::from(server.mode), "server.mode");

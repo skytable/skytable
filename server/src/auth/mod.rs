@@ -38,10 +38,7 @@
 
 mod keys;
 pub mod provider;
-use crate::resp::{writer::NonNullArrayWriter, TSYMBOL_UNICODE_STRING};
-pub use provider::{AuthProvider, AuthResult, Authmap};
-pub mod errors;
-pub use errors::AuthError;
+pub use provider::{AuthProvider, Authmap};
 
 #[cfg(test)]
 mod tests;
@@ -61,103 +58,102 @@ action! {
     /// Handle auth. Should have passed the `auth` token
     fn auth(
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
-        match iter.next_lowercase().unwrap_or_aerr()?.as_ref() {
+        match iter.next_lowercase().unwrap_or_aerr::<P>()?.as_ref() {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
             AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             AUTH_ADDUSER => {
-                ensure_boolean_or_aerr(iter.len() == 1)?; // just the username
+                ensure_boolean_or_aerr::<P>(iter.len() == 1)?; // just the username
                 let username = unsafe { iter.next_unchecked() };
-                let key = auth.provider_mut().claim_user(username)?;
-                con.write_response(StringWrapper(key)).await?;
+                let key = auth.provider_mut().claim_user::<P>(username)?;
+                con.write_string(&key).await?;
                 Ok(())
             }
             AUTH_LOGOUT => {
-                ensure_boolean_or_aerr(iter.is_empty())?; // nothing else
-                auth.provider_mut().logout()?;
+                ensure_boolean_or_aerr::<P>(iter.is_empty())?; // nothing else
+                auth.provider_mut().logout::<P>()?;
                 auth.swap_executor_to_anonymous();
-                con.write_response(groups::OKAY).await?;
+                con._write_raw(P::RCODE_OKAY).await?;
                 Ok(())
             }
             AUTH_DELUSER => {
-                ensure_boolean_or_aerr(iter.len() == 1)?; // just the username
-                auth.provider_mut().delete_user(unsafe { iter.next_unchecked() })?;
-                con.write_response(groups::OKAY).await?;
+                ensure_boolean_or_aerr::<P>(iter.len() == 1)?; // just the username
+                auth.provider_mut().delete_user::<P>(unsafe { iter.next_unchecked() })?;
+                con._write_raw(P::RCODE_OKAY).await?;
                 Ok(())
             }
             AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
             AUTH_LISTUSER => self::auth_listuser(con, auth, &mut iter).await,
             AUTH_WHOAMI => self::auth_whoami(con, auth, &mut iter).await,
-            _ => util::err(groups::UNKNOWN_ACTION),
+            _ => util::err(P::RCODE_UNKNOWN_ACTION),
         }
     }
-    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
-        con.write_response(StringWrapper(auth.provider().whoami()?)).await?;
+    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+        ensure_boolean_or_aerr::<P>(ActionIter::is_empty(iter))?;
+        con.write_string(&auth.provider().whoami::<P>()?).await?;
         Ok(())
     }
-    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        ensure_boolean_or_aerr(ActionIter::is_empty(iter))?;
-        let usernames = auth.provider().collect_usernames()?;
-        let mut array_writer = unsafe {
-            // The symbol is definitely correct, obvious from this context
-            NonNullArrayWriter::new(con, TSYMBOL_UNICODE_STRING, usernames.len())
-        }.await?;
+    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+        ensure_boolean_or_aerr::<P>(ActionIter::is_empty(iter))?;
+        let usernames = auth.provider().collect_usernames::<P>()?;
+        con.write_typed_non_null_array_header(usernames.len(), b'+').await?;
         for username in usernames {
-            array_writer.write_element(username).await?;
+            con.write_typed_non_null_array_element(username.as_bytes()).await?;
         }
         Ok(())
     }
-    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         let newkey = match iter.len() {
             1 => {
                 // so this fella thinks they're root
-                auth.provider().regenerate(unsafe {iter.next_unchecked()})?
+                auth.provider().regenerate::<P>(
+                    unsafe { iter.next_unchecked() }
+                )?
             }
             2 => {
                 // so this fella is giving us the origin key
                 let origin = unsafe { iter.next_unchecked() };
                 let id = unsafe { iter.next_unchecked() };
-                auth.provider().regenerate_using_origin(origin, id)?
+                auth.provider().regenerate_using_origin::<P>(origin, id)?
             }
-            _ => return util::err(groups::ACTION_ERR),
+            _ => return util::err(P::RCODE_ACTION_ERR),
         };
-        con.write_response(StringWrapper(newkey)).await?;
+        con.write_string(&newkey).await?;
         Ok(())
     }
-    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
-        ensure_boolean_or_aerr(iter.len() == 1)?; // just the origin key
+    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+        ensure_boolean_or_aerr::<P>(iter.len() == 1)?; // just the origin key
         let origin_key = unsafe { iter.next_unchecked() };
-        let key = auth.provider_mut().claim_root(origin_key)?;
+        let key = auth.provider_mut().claim_root::<P>(origin_key)?;
         auth.swap_executor_to_authenticated();
-        con.write_response(StringWrapper(key)).await?;
+        con.write_string(&key).await?;
         Ok(())
     }
     /// Handle a login operation only. The **`login` token is expected to be present**
     fn auth_login_only(
         con: &mut T,
-        auth: &mut AuthProviderHandle<'_, T, Strm>,
+        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
-        match iter.next_lowercase().unwrap_or_aerr()?.as_ref() {
+        match iter.next_lowercase().unwrap_or_aerr::<P>()?.as_ref() {
             AUTH_LOGIN => self::_auth_login(con, auth, &mut iter).await,
             AUTH_CLAIM => self::_auth_claim(con, auth, &mut iter).await,
             AUTH_RESTORE => self::auth_restore(con, auth, &mut iter).await,
             AUTH_WHOAMI => self::auth_whoami(con, auth, &mut iter).await,
-            _ => util::err(errors::AUTH_CODE_PERMS),
+            _ => util::err(P::AUTH_CODE_PERMS),
         }
     }
-    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
         // sweet, where's our username and password
-        ensure_boolean_or_aerr(iter.len() == 2)?; // just the uname and pass
+        ensure_boolean_or_aerr::<P>(iter.len() == 2)?; // just the uname and pass
         let (username, password) = unsafe { (iter.next_unchecked(), iter.next_unchecked()) };
-        auth.provider_mut().login(username, password)?;
+        auth.provider_mut().login::<P>(username, password)?;
         auth.swap_executor_to_authenticated();
-        con.write_response(groups::OKAY).await?;
+        con._write_raw(P::RCODE_OKAY).await?;
         Ok(())
     }
 }

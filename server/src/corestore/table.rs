@@ -32,22 +32,22 @@ use crate::corestore::Data;
 use crate::corestore::{memstore::DdlError, KeyspaceResult};
 use crate::dbnet::connection::prelude::Corestore;
 use crate::kvengine::{KVEListmap, KVEStandard, LockedVec};
-use crate::protocol::responses::groups;
+use crate::protocol::interface::ProtocolSpec;
 use crate::util;
 
 pub trait DescribeTable {
     type Table;
     fn try_get(table: &Table) -> Option<&Self::Table>;
-    fn get(store: &Corestore) -> ActionResult<&Self::Table> {
+    fn get<P: ProtocolSpec>(store: &Corestore) -> ActionResult<&Self::Table> {
         match store.estate.table {
             Some((_, ref table)) => {
                 // so we do have a table
                 match Self::try_get(table) {
                     Some(tbl) => Ok(tbl),
-                    None => util::err(groups::WRONG_MODEL),
+                    None => util::err(P::RSTRING_WRONG_MODEL),
                 }
             }
-            None => util::err(groups::DEFAULT_UNSET),
+            None => util::err(P::RSTRING_DEFAULT_UNSET),
         }
     }
 }

@@ -25,11 +25,14 @@
 */
 
 use super::ddl::{KEYSPACE, TABLE};
-use crate::corestore::memstore::ObjectID;
+use crate::corestore::{
+    memstore::{Keyspace, ObjectID},
+    table::Table,
+};
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer::TypedArrayWriter;
 
 const KEYSPACES: &[u8] = "KEYSPACES".as_bytes();
+
 action! {
     /// Runs an inspect query:
     /// - `INSPECT KEYSPACES` is run by this function itself
@@ -44,7 +47,7 @@ action! {
                     KEYSPACE => inspect_keyspace(handle, con, act).await?,
                     TABLE => inspect_table(handle, con, act).await?,
                     KEYSPACES => {
-                        ensure_length(act.len(), |len| len == 0)?;
+                        ensure_length::<P>(act.len(), |len| len == 0)?;
                         // let's return what all keyspaces exist
                         let ks_list: Vec<ObjectID> = handle
                             .get_store()
@@ -52,66 +55,62 @@ action! {
                             .iter()
                             .map(|kv| kv.key().clone())
                             .collect();
-                        let mut writer = unsafe {
-                            TypedArrayWriter::new(con, b'+', ks_list.len())
-                        }.await?;
-                        for tbl in ks_list {
-                            writer.write_element(tbl).await?;
+                        con.write_typed_non_null_array_header(ks_list.len(), b'+').await?;
+                        for ks in ks_list {
+                            con.write_typed_non_null_array_element(&ks).await?;
                         }
                     }
-                    _ => conwrite!(con, responses::groups::UNKNOWN_INSPECT_QUERY)?,
+                    _ => return util::err(P::RSTRING_UNKNOWN_INSPECT_QUERY),
                 }
             }
-            None => aerr!(con),
+            None => return util::err(P::RCODE_ACTION_ERR),
         }
         Ok(())
     }
 
     /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len < 2)?;
-        let tbl_list: Vec<ObjectID>;
+        ensure_length::<P>(act.len(), |len| len < 2)?;
+        let tbl_list: Vec<ObjectID> =
         match act.next() {
             Some(keyspace_name) => {
                 // inspect the provided keyspace
                 let ksid = if keyspace_name.len() > 64 {
-                    return conwrite!(con, responses::groups::BAD_CONTAINER_NAME);
+                    return util::err(P::RSTRING_BAD_CONTAINER_NAME);
                 } else {
                     keyspace_name
                 };
                 let ks = match handle.get_keyspace(ksid) {
                     Some(kspace) => kspace,
-                    None => return conwrite!(con, responses::groups::CONTAINER_NOT_FOUND),
+                    None => return util::err(P::RSTRING_CONTAINER_NOT_FOUND),
                 };
-                tbl_list = ks.tables.iter().map(|kv| kv.key().clone()).collect();
+                ks.tables.iter().map(|kv| kv.key().clone()).collect()
             },
             None => {
                 // inspect the current keyspace
-                let cks = handle.get_cks()?;
-                tbl_list = cks.tables.iter().map(|kv| kv.key().clone()).collect();
+                let cks = translate_ddl_error::<P, &Keyspace>(handle.get_cks())?;
+                cks.tables.iter().map(|kv| kv.key().clone()).collect()
             },
-        }
-        let mut writer = unsafe {
-            TypedArrayWriter::new(con, b'+', tbl_list.len())
-        }.await?;
+        };
+        con.write_typed_non_null_array_header(tbl_list.len(), b'+').await?;
         for tbl in tbl_list {
-            writer.write_element(tbl).await?;
+            con.write_typed_non_null_array_element(&tbl).await?;
         }
         Ok(())
     }
 
     /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len < 2)?;
+        ensure_length::<P>(act.len(), |len| len < 2)?;
         match act.next() {
             Some(entity) => {
                 let entity = handle_entity!(con, entity);
-                conwrite!(con, get_tbl!(entity, handle, con).describe_self())?;
+                con.write_string(get_tbl!(entity, handle, con).describe_self()).await?;
             },
             None => {
                 // inspect the current table
-                let tbl = handle.get_table_result()?;
-                con.write_response(tbl.describe_self()).await?;
+                let tbl = translate_ddl_error::<P, &Table>(handle.get_table_result())?;
+                con.write_string(tbl.describe_self()).await?;
             },
         }
         Ok(())

@@ -25,9 +25,7 @@
 */
 
 use crate::{
-    corestore::booltable::BoolTable,
-    dbnet::connection::prelude::*,
-    protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING},
+    corestore::booltable::BoolTable, dbnet::connection::prelude::*,
     storage::v1::interface::DIR_ROOT,
 };
 use ::libsky::VERSION;
@@ -47,18 +45,18 @@ const HEALTH_TABLE: BoolTable<&str> = BoolTable::new("good", "critical");
 action! {
     fn sys(_handle: &Corestore, con: &mut T, iter: ActionIter<'_>) {
         let mut iter = iter;
-        ensure_boolean_or_aerr(iter.len() == 2)?;
+        ensure_boolean_or_aerr::<P>(iter.len() == 2)?;
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             INFO => sys_info(con, &mut iter).await,
             METRIC => sys_metric(con, &mut iter).await,
-            _ => util::err(groups::UNKNOWN_ACTION),
+            _ => util::err(P::RCODE_UNKNOWN_ACTION),
         }
     }
     fn sys_info(con: &mut T, iter: &mut ActionIter<'_>) {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
-            INFO_PROTOCOL => con.write_response(PROTOCOL_VERSIONSTRING).await?,
-            INFO_PROTOVER => con.write_response(PROTOCOL_VERSION).await?,
-            INFO_VERSION => con.write_response(VERSION).await?,
+            INFO_PROTOCOL => con.write_string(P::PROTOCOL_VERSIONSTRING).await?,
+            INFO_PROTOVER => con.write_float(P::PROTOCOL_VERSION).await?,
+            INFO_VERSION => con.write_string(VERSION).await?,
             _ => return util::err(ERR_UNKNOWN_PROPERTY),
         }
         Ok(())
@@ -66,14 +64,14 @@ action! {
     fn sys_metric(con: &mut T, iter: &mut ActionIter<'_>) {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             METRIC_HEALTH => {
-                con.write_response(HEALTH_TABLE[registry::state_okay()]).await?
+                con.write_string(HEALTH_TABLE[registry::state_okay()]).await?
             }
             METRIC_STORAGE_USAGE => {
                 match util::os::dirsize(DIR_ROOT) {
-                    Ok(size) => con.write_response(size).await?,
+                    Ok(size) => con.write_int64(size).await?,
                     Err(e) => {
                         log::error!("Failed to get storage usage with: {e}");
-                        con.write_response(groups::SERVER_ERR).await?
+                        return util::err(P::RCODE_SERVER_ERR);
                     },
                 }
             }

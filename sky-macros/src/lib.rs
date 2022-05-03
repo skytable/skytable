@@ -106,18 +106,40 @@ pub fn dbtest_func(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Get a compile time respcode/respstring array. For example, if you pass: "Unknown action",
 /// it will return: `!14\nUnknown Action\n`
 pub fn compiled_eresp_array(tokens: TokenStream) -> TokenStream {
-    _get_eresp_array(tokens)
+    _get_eresp_array(tokens, false)
 }
 
-fn _get_eresp_array(tokens: TokenStream) -> TokenStream {
+#[proc_macro]
+/// Get a compile time respcode/respstring array. For example, if you pass: "Unknown action",
+/// it will return: `!14\n14\nUnknown Action\n`
+pub fn compiled_eresp_array_v1(tokens: TokenStream) -> TokenStream {
+    _get_eresp_array(tokens, true)
+}
+
+fn _get_eresp_array(tokens: TokenStream, sizeline: bool) -> TokenStream {
     let payload_str = match syn::parse_macro_input!(tokens as Lit) {
         Lit::Str(st) => st.value(),
         _ => panic!("Expected a string literal"),
     };
-    let payload_bytes = payload_str.as_bytes();
     let mut processed = quote! {
         b'!',
     };
+    if sizeline {
+        let payload_len = payload_str.as_bytes().len();
+        let payload_len_str = payload_len.to_string();
+        let payload_len_bytes = payload_len_str.as_bytes();
+        for byte in payload_len_bytes {
+            processed = quote! {
+                #processed
+                #byte,
+            };
+        }
+        processed = quote! {
+            #processed
+            b'\n',
+        };
+    }
+    let payload_bytes = payload_str.as_bytes();
     for byte in payload_bytes {
         processed = quote! {
             #processed
@@ -139,6 +161,18 @@ fn _get_eresp_array(tokens: TokenStream) -> TokenStream {
 /// it will return: `!14\nUnknown Action\n`
 pub fn compiled_eresp_bytes(tokens: TokenStream) -> TokenStream {
     let ret = compiled_eresp_array(tokens);
+    let ret = syn::parse_macro_input!(ret as syn::Expr);
+    quote! {
+        &#ret
+    }
+    .into()
+}
+
+#[proc_macro]
+/// Get a compile time respcode/respstring slice. For example, if you pass: "Unknown action",
+/// it will return: `!14\nUnknown Action\n`
+pub fn compiled_eresp_bytes_v1(tokens: TokenStream) -> TokenStream {
+    let ret = compiled_eresp_array_v1(tokens);
     let ret = syn::parse_macro_input!(ret as syn::Expr);
     quote! {
         &#ret

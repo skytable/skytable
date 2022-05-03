@@ -52,7 +52,7 @@ mod tls {
 }
 
 mod sys {
-    use crate::protocol::{PROTOCOL_VERSION, PROTOCOL_VERSIONSTRING};
+    use crate::protocol::{LATEST_PROTOCOL_VERSION, LATEST_PROTOCOL_VERSIONSTRING};
     use libsky::VERSION;
     use sky_macros::dbtest_func as dbtest;
     use skytable::{query, Element, RespCode};
@@ -79,7 +79,7 @@ mod sys {
         runeq!(
             con,
             query!("sys", "info", "protocol"),
-            Element::String(PROTOCOL_VERSIONSTRING.to_owned())
+            Element::String(LATEST_PROTOCOL_VERSIONSTRING.to_owned())
         )
     }
     #[dbtest]
@@ -87,7 +87,7 @@ mod sys {
         runeq!(
             con,
             query!("sys", "info", "protover"),
-            Element::Float(PROTOCOL_VERSION)
+            Element::Float(LATEST_PROTOCOL_VERSION)
         )
     }
     #[dbtest]

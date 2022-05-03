@@ -47,30 +47,16 @@ macro_rules! is_lowbit_unset {
 }
 
 #[macro_export]
-macro_rules! conwrite {
-    ($con:expr, $what:expr) => {
-        $con.write_response($what)
-            .await
-            .map_err(|e| $crate::actions::ActionError::IoError(e))
-    };
-}
-
-#[macro_export]
-macro_rules! aerr {
-    ($con:expr) => {
-        return conwrite!($con, $crate::protocol::responses::groups::ACTION_ERR)
-    };
-}
-
-#[macro_export]
 macro_rules! get_tbl {
     ($entity:expr, $store:expr, $con:expr) => {{
-        $store.get_table($entity)?
+        $crate::actions::translate_ddl_error::<P, ::std::sync::Arc<$crate::corestore::table::Table>>(
+            $store.get_table($entity),
+        )?
     }};
     ($store:expr, $con:expr) => {{
         match $store.get_ctable() {
             Some(tbl) => tbl,
-            None => return $crate::util::err($crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return $crate::util::err(P::RSTRING_DEFAULT_UNSET),
         }
     }};
 }
@@ -80,7 +66,7 @@ macro_rules! get_tbl_ref {
     ($store:expr, $con:expr) => {{
         match $store.get_ctable_ref() {
             Some(tbl) => tbl,
-            None => return $crate::util::err($crate::protocol::responses::groups::DEFAULT_UNSET),
+            None => return $crate::util::err(P::RSTRING_DEFAULT_UNSET),
         }
     }};
 }
@@ -88,9 +74,9 @@ macro_rules! get_tbl_ref {
 #[macro_export]
 macro_rules! handle_entity {
     ($con:expr, $ident:expr) => {{
-        match $crate::queryengine::parser::Entity::from_slice(&$ident) {
+        match $crate::queryengine::parser::Entity::from_slice::<P>(&$ident) {
             Ok(e) => e,
-            Err(e) => return conwrite!($con, e),
+            Err(e) => return Err(e.into()),
         }
     }};
 }

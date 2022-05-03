@@ -27,10 +27,10 @@
 #[macro_use]
 mod macros;
 pub mod compiler;
-pub mod os;
 pub mod error;
+pub mod os;
 use crate::actions::{ActionError, ActionResult};
-use crate::protocol::responses::groups;
+use crate::protocol::interface::ProtocolSpec;
 use core::fmt::Debug;
 use core::future::Future;
 use core::ops::Deref;
@@ -79,15 +79,15 @@ unsafe impl<T> Unwrappable<T> for Option<T> {
 
 pub trait UnwrapActionError<T> {
     fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T>;
-    fn unwrap_or_aerr(self) -> ActionResult<T>;
+    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T>;
 }
 
 impl<T> UnwrapActionError<T> for Option<T> {
     fn unwrap_or_custom_aerr(self, e: impl Into<ActionError>) -> ActionResult<T> {
         self.ok_or_else(|| e.into())
     }
-    fn unwrap_or_aerr(self) -> ActionResult<T> {
-        self.ok_or_else(|| groups::ACTION_ERR.into())
+    fn unwrap_or_aerr<P: ProtocolSpec>(self) -> ActionResult<T> {
+        self.ok_or_else(|| P::RCODE_ACTION_ERR.into())
     }
 }
 

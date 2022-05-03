@@ -29,6 +29,7 @@ use crate::corestore::{
     memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
     table::{DescribeTable, Table},
 };
+use crate::protocol::interface::ProtocolSpec;
 use crate::queryengine::parser::{Entity, OwnedEntity};
 use crate::registry;
 use crate::storage;
@@ -210,8 +211,8 @@ impl Corestore {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.as_ref())
     }
     /// Returns a table with the provided specification
-    pub fn get_table_with<T: DescribeTable>(&self) -> ActionResult<&T::Table> {
-        T::get(self)
+    pub fn get_table_with<P: ProtocolSpec, T: DescribeTable>(&self) -> ActionResult<&T::Table> {
+        T::get::<P>(self)
     }
     /// Create a table: in-memory; **no transactional guarantees**. Two tables can be created
     /// simultaneously, but are never flushed unless we are very lucky. If the global flush

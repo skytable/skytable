@@ -68,6 +68,54 @@ impl BGSave {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq)]
+pub enum ProtocolVersion {
+    V1,
+    V2,
+}
+
+impl Default for ProtocolVersion {
+    fn default() -> Self {
+        Self::V2
+    }
+}
+
+impl ToString for ProtocolVersion {
+    fn to_string(&self) -> String {
+        match self {
+            Self::V1 => "Skyhash 1.0".to_owned(),
+            Self::V2 => "Skyhash 2.0".to_owned(),
+        }
+    }
+}
+
+struct ProtocolVersionVisitor;
+
+impl<'de> Visitor<'de> for ProtocolVersionVisitor {
+    type Value = ProtocolVersion;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "a 40 character ASCII string")
+    }
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        value.parse().map_err(|_| {
+            E::custom("Invalid value for protocol version. Valid inputs: 1.0, 1.1, 1.2, 2.0")
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ProtocolVersion {
+    fn deserialize<D>(deserializer: D) -> Result<ProtocolVersion, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(ProtocolVersionVisitor)
+    }
+}
+
 /// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
@@ -87,9 +135,12 @@ pub struct ConfigurationSet {
     pub mode: Modeset,
     /// The auth settings
     pub auth: AuthSettings,
+    /// The protocol version
+    pub protocol: ProtocolVersion,
 }
 
 impl ConfigurationSet {
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         noart: bool,
         bgsave: BGSave,
@@ -98,6 +149,7 @@ impl ConfigurationSet {
         maxcon: usize,
         mode: Modeset,
         auth: AuthSettings,
+        protocol: ProtocolVersion,
     ) -> Self {
         Self {
             noart,
@@ -107,6 +159,7 @@ impl ConfigurationSet {
             maxcon,
             mode,
             auth,
+            protocol,
         }
     }
     /// Create a default `ConfigurationSet` with the following setup defaults:
@@ -125,6 +178,7 @@ impl ConfigurationSet {
             MAXIMUM_CONNECTION_LIMIT,
             Modeset::Dev,
             AuthSettings::default(),
+            ProtocolVersion::V2,
         )
     }
     /// Returns `false` if `noart` is enabled. Otherwise it returns `true`
@@ -207,14 +261,14 @@ impl PortConfig {
             Self::Multi { host, port, ssl } => {
                 format!(
                     "skyhash://{host}:{port} and skyhash-secure://{host}:{tlsport}",
-                    tlsport = ssl.get_port()
+                    tlsport = ssl.get_port(),
                 )
             }
             Self::SecureOnly {
                 host,
                 ssl: SslOpts { port, .. },
             } => format!("skyhash-secure://{host}:{port}"),
-            Self::InsecureOnly { host, port } => format!("skyhash://{host}:{port}"),
+            Self::InsecureOnly { host, port } => format!("skyhash://{host}:{port}",),
         }
     }
 }

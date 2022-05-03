@@ -25,20 +25,19 @@
 */
 
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer::NonNullArrayWriter;
 
 action! {
     fn whereami(store: &Corestore, con: &mut T, act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 0)?;
+        ensure_length::<P>(act.len(), |len| len == 0)?;
         match store.get_ids() {
             (Some(ks), Some(tbl)) =>  {
-                let mut writer = unsafe { NonNullArrayWriter::new(con, b'+', 2).await? };
-                writer.write_element(ks).await?;
-                writer.write_element(tbl).await?;
+                con.write_typed_non_null_array_header(2, b'+').await?;
+                con.write_typed_non_null_array_element(ks).await?;
+                con.write_typed_non_null_array_element(tbl).await?;
             },
             (Some(ks), None) => {
-                let mut writer = unsafe { NonNullArrayWriter::new(con, b'+', 1).await? };
-                writer.write_element(ks).await?;
+                con.write_typed_non_null_array_header(1, b'+').await?;
+                con.write_typed_non_null_array_element(ks).await?;
             },
             _ => unsafe { impossible!() }
         }

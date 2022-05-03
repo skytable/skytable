@@ -28,19 +28,21 @@
 //! This module provides functions to work with `GET` queries
 
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer;
 use crate::util::compiler;
 
 action!(
     /// Run a `GET` query
     fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |len| len == 1)?;
-        let kve = handle.get_table_with::<KVEBlob>()?;
+        ensure_length::<P>(act.len(), |len| len == 1)?;
+        let kve = handle.get_table_with::<P, KVEBlob>()?;
         unsafe {
             match kve.get_cloned(act.next_unchecked()) {
-                Ok(Some(val)) => writer::write_raw_mono(con, kve.get_value_tsymbol(), &val).await?,
-                Err(_) => compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?,
-                Ok(_) => conwrite!(con, groups::NIL)?,
+                Ok(Some(val)) => {
+                    con.write_mono_length_prefixed_with_tsymbol(&val, kve.get_value_tsymbol())
+                        .await?
+                }
+                Err(_) => compiler::cold_err(con._write_raw(P::RCODE_ENCODING_ERROR)).await?,
+                Ok(_) => con._write_raw(P::RCODE_NIL).await?,
             }
         }
         Ok(())

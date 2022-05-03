@@ -40,8 +40,8 @@ action! {
     /// or code `1`
     fn supdate(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
         let howmany = act.len();
-        ensure_length(howmany, |size| size & 1 == 0 && size != 0)?;
-        let kve = handle.get_table_with::<KVEBlob>()?;
+        ensure_length::<P>(howmany, |size| size & 1 == 0 && size != 0)?;
+        let kve = handle.get_table_with::<P, KVEBlob>()?;
         if registry::state_okay() {
             let encoder = kve.get_double_encoder();
             let outcome = unsafe {
@@ -49,15 +49,15 @@ action! {
                 self::snapshot_and_update(kve, encoder, act.into_inner())
             };
             match outcome {
-                StrongActionResult::Okay => conwrite!(con, groups::OKAY)?,
+                StrongActionResult::Okay => con._write_raw(P::RCODE_OKAY).await?,
                 StrongActionResult::Nil => {
                     // good, it failed because some key didn't exist
-                    conwrite!(con, groups::NIL)?;
+                    return util::err(P::RCODE_NIL);
                 },
-                StrongActionResult::ServerError => conwrite!(con, groups::SERVER_ERR)?,
+                StrongActionResult::ServerError => return util::err(P::RCODE_SERVER_ERR),
                 StrongActionResult::EncodingError => {
                     // error we love to hate: encoding error, ugh
-                    compiler::cold_err(conwrite!(con, groups::ENCODING_ERROR))?
+                    return util::err(P::RCODE_ENCODING_ERROR);
                 },
                 StrongActionResult::OverwriteError => unsafe {
                     // SAFETY check: never the case
@@ -65,7 +65,7 @@ action! {
                 }
             }
         } else {
-            conwrite!(con, groups::SERVER_ERR)?;
+            return util::err(P::RCODE_SERVER_ERR);
         }
         Ok(())
     }

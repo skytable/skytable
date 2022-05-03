@@ -34,7 +34,7 @@ mod __private {
         query.push("KEYSPACES");
         assert!(matches!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::Array(Array::Str(_))
+            Element::Array(Array::NonNullStr(_))
         ))
     }
     async fn test_inspect_keyspace() {
@@ -43,7 +43,7 @@ mod __private {
         query.push(&__MYKS__);
         assert!(matches!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::Array(Array::Str(_))
+            Element::Array(Array::NonNullStr(_))
         ))
     }
     async fn test_inspect_current_keyspace() {

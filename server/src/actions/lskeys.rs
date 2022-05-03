@@ -27,14 +27,13 @@
 use crate::corestore::table::DataModel;
 use crate::corestore::Data;
 use crate::dbnet::connection::prelude::*;
-use crate::resp::writer::TypedArrayWriter;
 
 const DEFAULT_COUNT: usize = 10;
 
 action!(
     /// Run an `LSKEYS` query
     fn lskeys(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length(act.len(), |size| size < 4)?;
+        ensure_length::<P>(act.len(), |size| size < 4)?;
         let (table, count) = if act.is_empty() {
             (get_tbl!(handle, con), DEFAULT_COUNT)
         } else if act.len() == 1 {
@@ -45,7 +44,7 @@ action!(
                 let count = if let Ok(cnt) = String::from_utf8_lossy(nextret).parse::<usize>() {
                     cnt
                 } else {
-                    return util::err(groups::WRONGTYPE_ERR);
+                    return util::err(P::RCODE_WRONGTYPE_ERR);
                 };
                 (get_tbl!(handle, con), count)
             } else {
@@ -61,7 +60,7 @@ action!(
             let count = if let Ok(cnt) = String::from_utf8_lossy(count_ret).parse::<usize>() {
                 cnt
             } else {
-                return util::err(groups::WRONGTYPE_ERR);
+                return util::err(P::RCODE_WRONGTYPE_ERR);
             };
             (get_tbl!(entity, handle, con), count)
         };
@@ -73,13 +72,9 @@ action!(
             DataModel::KV(kv) => kv.get_inner_ref().get_keys(count),
             DataModel::KVExtListmap(kv) => kv.get_inner_ref().get_keys(count),
         };
-        let mut writer = unsafe {
-            // SAFETY: We have checked kty ourselves
-            TypedArrayWriter::new(con, tsymbol, items.len())
-        }
-        .await?;
+        con.write_typed_non_null_array_header(items.len(), tsymbol).await?;
         for key in items {
-            writer.write_element(key).await?;
+            con.write_typed_non_null_array_element(&key).await?;
         }
         Ok(())
     }

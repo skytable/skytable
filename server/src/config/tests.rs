@@ -345,7 +345,7 @@ mod cfg_file_tests {
     use crate::config::AuthkeyWrapper;
     use crate::config::{
         cfgfile, AuthSettings, BGSave, Configset, ConfigurationSet, Modeset, PortConfig,
-        SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
+        ProtocolVersion, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4, DEFAULT_PORT,
     };
     use crate::dbnet::MAXIMUM_CONNECTION_LIMIT;
     use std::net::{IpAddr, Ipv6Addr};
@@ -401,6 +401,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         );
     }
@@ -422,6 +423,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         );
     }
@@ -447,7 +449,8 @@ mod cfg_file_tests {
                 ),
                 MAXIMUM_CONNECTION_LIMIT,
                 Modeset::Dev,
-                AuthSettings::new(AuthkeyWrapper::try_new(crate::TEST_AUTH_ORIGIN_KEY).unwrap())
+                AuthSettings::new(AuthkeyWrapper::try_new(crate::TEST_AUTH_ORIGIN_KEY).unwrap()),
+                ProtocolVersion::default()
             )
         );
     }
@@ -473,6 +476,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         );
     }
@@ -495,6 +499,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         )
     }
@@ -517,6 +522,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         )
     }
@@ -535,6 +541,7 @@ mod cfg_file_tests {
                 maxcon: MAXIMUM_CONNECTION_LIMIT,
                 mode: Modeset::Dev,
                 auth: AuthSettings::default(),
+                protocol: ProtocolVersion::default(),
             }
         );
     }
