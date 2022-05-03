@@ -24,12 +24,16 @@
  *
 */
 
-use super::{ParseError, ParseResult, PipelinedQuery, Query, SimpleQuery, UnsafeSlice};
-use crate::{
-    corestore::heap_array::{HeapArray, HeapArrayWriter},
-    dbnet::connection::QueryWithAdvance,
+use {
+    super::{
+        raw_parser::{RawParser, RawParserExt},
+        ParseError, ParseResult, PipelinedQuery, Query, SimpleQuery, UnsafeSlice,
+    },
+    crate::{
+        corestore::heap_array::{HeapArray, HeapArrayWriter},
+        dbnet::connection::QueryWithAdvance,
+    },
 };
-use core::mem::transmute;
 
 mod interface_impls;
 // test and bench modules
@@ -56,6 +60,18 @@ pub struct Parser {
     cursor: *const u8,
 }
 
+unsafe impl RawParser for Parser {
+    fn cursor_ptr(&self) -> *const u8 {
+        self.cursor
+    }
+    fn cursor_ptr_mut(&mut self) -> &mut *const u8 {
+        &mut self.cursor
+    }
+    fn data_end_ptr(&self) -> *const u8 {
+        self.end
+    }
+}
+
 unsafe impl Send for Parser {}
 unsafe impl Sync for Parser {}
 
@@ -68,52 +84,6 @@ impl Parser {
                 cursor: slice.as_ptr(),
             }
         }
-    }
-}
-
-// basic methods
-impl Parser {
-    /// Returns a ptr one byte past the allocation of the buffer
-    const fn data_end_ptr(&self) -> *const u8 {
-        self.end
-    }
-    /// Returns the position of the cursor
-    /// WARNING: Deref might led to a segfault
-    const fn cursor_ptr(&self) -> *const u8 {
-        self.cursor
-    }
-    /// Check how many bytes we have left
-    fn remaining(&self) -> usize {
-        self.data_end_ptr() as usize - self.cursor_ptr() as usize
-    }
-    /// Check if we have `size` bytes remaining
-    fn has_remaining(&self, size: usize) -> bool {
-        self.remaining() >= size
-    }
-    /// Check if we have exhausted the buffer
-    fn exhausted(&self) -> bool {
-        self.cursor_ptr() >= self.data_end_ptr()
-    }
-    /// Check if the buffer is not exhausted
-    fn not_exhausted(&self) -> bool {
-        self.cursor_ptr() < self.data_end_ptr()
-    }
-    /// Attempts to return the byte pointed at by the cursor.
-    /// WARNING: The same segfault warning
-    const unsafe fn get_byte_at_cursor(&self) -> u8 {
-        *self.cursor_ptr()
-    }
-}
-
-// mutable refs
-impl Parser {
-    /// Increment the cursor by `by` positions
-    unsafe fn incr_cursor_by(&mut self, by: usize) {
-        self.cursor = self.cursor.add(by);
-    }
-    /// Increment the position of the cursor by one position
-    unsafe fn incr_cursor(&mut self) {
-        self.incr_cursor_by(1);
     }
 }
 
@@ -148,58 +118,6 @@ impl Parser {
 
 // higher level abstractions
 impl Parser {
-    /// Attempt to read `len` bytes
-    fn read_until(&mut self, len: usize) -> ParseResult<UnsafeSlice> {
-        if self.has_remaining(len) {
-            unsafe {
-                // UNSAFE(@ohsayan): Already verified lengths
-                let slice = UnsafeSlice::new(self.cursor_ptr(), len);
-                self.incr_cursor_by(len);
-                Ok(slice)
-            }
-        } else {
-            Err(ParseError::NotEnough)
-        }
-    }
-    /// Attempt to read a line, **rejecting an empty payload**
-    fn read_line_pedantic(&mut self) -> ParseResult<UnsafeSlice> {
-        let start_ptr = self.cursor_ptr();
-        unsafe {
-            while self.not_exhausted() && self.get_byte_at_cursor() != b'\n' {
-                self.incr_cursor();
-            }
-            let len = self.cursor_ptr() as usize - start_ptr as usize;
-            let has_lf = self.not_exhausted() && self.get_byte_at_cursor() == b'\n';
-            if has_lf && len != 0 {
-                self.incr_cursor(); // skip LF
-                Ok(UnsafeSlice::new(start_ptr, len))
-            } else {
-                // just some silly hackery
-                Err(transmute(has_lf))
-            }
-        }
-    }
-    /// Attempt to read an `usize` from the buffer
-    fn read_usize(&mut self) -> ParseResult<usize> {
-        let line = self.read_line_pedantic()?;
-        let bytes = line.as_slice();
-        let mut ret = 0usize;
-        for byte in bytes {
-            if byte.is_ascii_digit() {
-                ret = match ret.checked_mul(10) {
-                    Some(r) => r,
-                    None => return Err(ParseError::DatatypeParseFailure),
-                };
-                ret = match ret.checked_add((byte & 0x0F) as _) {
-                    Some(r) => r,
-                    None => return Err(ParseError::DatatypeParseFailure),
-                };
-            } else {
-                return Err(ParseError::DatatypeParseFailure);
-            }
-        }
-        Ok(ret)
-    }
     /// Parse the next blob. **The cursor should be at the tsymbol (passed)**
     fn parse_next_blob(&mut self) -> ParseResult<UnsafeSlice> {
         {

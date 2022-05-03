@@ -24,7 +24,10 @@
  *
 */
 
-use super::{Parser, PipelinedQuery, Query, SimpleQuery};
+use super::{
+    super::raw_parser::{RawParser, RawParserExt},
+    Parser, PipelinedQuery, Query, SimpleQuery,
+};
 use crate::protocol::{iter::AnyArrayIter, ParseError};
 use std::iter::Map;
 use std::vec::IntoIter as VecIntoIter;

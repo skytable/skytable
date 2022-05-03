@@ -33,6 +33,8 @@ use {
 // pub mods
 pub mod interface;
 pub mod iter;
+// internal mods
+mod raw_parser;
 // versions
 mod v1;
 mod v2;
