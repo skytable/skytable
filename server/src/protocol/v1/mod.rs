@@ -26,7 +26,7 @@
 
 use {
     super::{
-        raw_parser::{RawParser, RawParserExt},
+        raw_parser::{RawParser, RawParserExt, RawParserMeta},
         ParseError, ParseResult, PipelinedQuery, Query, SimpleQuery, UnsafeSlice,
     },
     crate::{

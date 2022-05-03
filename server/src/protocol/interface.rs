@@ -37,6 +37,21 @@ use crate::{
 use std::io::{Error as IoError, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
+/*
+NOTE TO SELF (@ohsayan): Why do we split everything into separate traits? To avoid mistakes
+in the future. We don't want any action to randomly call `read_query`, which was possible
+with the earlier `ProtcolConnectionExt` trait, since it was imported by every action from
+the prelude.
+- `ProtocolSpec`: this is like a charset definition of the protocol along with some other
+good stuff
+- `ProtocolRead`: should only read from the stream and never write
+- `ProtocolWrite`: should only write data and never read
+
+These distinctions reduce the likelihood of making mistakes while implementing the traits
+
+-- Sayan (May, 2022)
+*/
+
 pub trait ProtocolSpec {
     // spec information
 

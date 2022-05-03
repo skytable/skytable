@@ -25,7 +25,7 @@
 */
 
 use super::{
-    super::raw_parser::{RawParser, RawParserExt},
+    super::raw_parser::{RawParser, RawParserExt, RawParserMeta},
     Parser, PipelinedQuery, Query, SimpleQuery,
 };
 use crate::protocol::{iter::AnyArrayIter, ParseError};

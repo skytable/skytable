@@ -29,10 +29,25 @@ use {
     core::mem::transmute,
 };
 
+/*
+NOTE TO SELF (@ohsayan): The reason we split this into three traits is because:
+- `RawParser` is the only one that is to be implemented. Just provide information about the cursor
+- `RawParserMeta` provides information about the buffer based on cursor and end ptr information
+- `RawParserExt` provides high-level abstractions over `RawParserMeta`. It is like the "super trait"
+
+These distinctions reduce the likelihood of "accidentally incorrect impls" (we could've easily included
+`RawParserMeta` inside `RawParser`).
+
+-- Sayan (May, 2022)
+*/
+
 /// The `RawParser` trait has three methods that implementors must define:
+///
 /// - `cursor_ptr` -> Should point to the current position in the buffer for the parser
 /// - `cursor_ptr_mut` -> a mutable reference to the cursor
 /// - `data_end_ptr` -> a ptr to one byte past the allocated area of the buffer
+///
+/// All implementors of `RawParser` get a free implementation for `RawParserMeta` and `RawParserExt`
 ///
 /// # Safety
 /// - `cursor_ptr` must point to a valid location in memory
@@ -41,6 +56,12 @@ pub(super) unsafe trait RawParser {
     fn cursor_ptr(&self) -> *const u8;
     fn cursor_ptr_mut(&mut self) -> &mut *const u8;
     fn data_end_ptr(&self) -> *const u8;
+}
+
+/// The `RawParserMeta` trait builds on top of the `RawParser` trait to provide low-level interactions
+/// and information with the parser's buffer. It is implemented for any type that implements the `RawParser`
+/// trait. Manual implementation is discouraged
+pub(super) trait RawParserMeta: RawParser {
     /// Check how many bytes we have left
     fn remaining(&self) -> usize {
         self.data_end_ptr() as usize - self.cursor_ptr() as usize
@@ -73,7 +94,12 @@ pub(super) unsafe trait RawParser {
     }
 }
 
-pub(super) trait RawParserExt: RawParser {
+impl<T> RawParserMeta for T where T: RawParser {}
+
+/// `RawParserExt` builds on the `RawParser` and `RawParserMeta` traits to provide high level abstractions
+/// like reading lines, or a slice of a given length. It is implemented for any type that
+/// implements the `RawParser` trait. Manual implementation is discouraged
+pub(super) trait RawParserExt: RawParser + RawParserMeta {
     /// Attempt to read `len` bytes
     fn read_until(&mut self, len: usize) -> ParseResult<UnsafeSlice> {
         if self.has_remaining(len) {
@@ -145,4 +171,4 @@ pub(super) trait RawParserExt: RawParser {
     }
 }
 
-impl<T> RawParserExt for T where T: RawParser {}
+impl<T> RawParserExt for T where T: RawParser + RawParserMeta {}
