@@ -35,77 +35,88 @@ mod keys {
 }
 
 mod authn {
-    use crate::auth::{AuthError, AuthProvider};
+    use crate::actions::ActionError;
+    use crate::auth::AuthProvider;
+    use crate::protocol::{interface::ProtocolSpec, Skyhash2};
 
     const ORIG: &[u8; 40] = b"c4299d190fb9a00626797fcc138c56eae9971664";
 
     #[test]
     fn claim_root_okay() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
-        let _ = provider.claim_root(ORIG).unwrap();
+        let _ = provider.claim_root::<Skyhash2>(ORIG).unwrap();
     }
     #[test]
     fn claim_root_wrongkey() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
-        let claim_err = provider.claim_root(&ORIG[1..]).unwrap_err();
-        assert_eq!(claim_err, AuthError::BadCredentials);
+        let claim_err = provider.claim_root::<Skyhash2>(&ORIG[1..]).unwrap_err();
+        assert_eq!(
+            claim_err,
+            ActionError::ActionError(Skyhash2::AUTH_CODE_BAD_CREDENTIALS)
+        );
     }
     #[test]
     fn claim_root_disabled() {
         let mut provider = AuthProvider::new_disabled();
         assert_eq!(
-            provider.claim_root(b"abcd").unwrap_err(),
-            AuthError::Disabled
+            provider.claim_root::<Skyhash2>(b"abcd").unwrap_err(),
+            ActionError::ActionError(Skyhash2::AUTH_ERROR_DISABLED)
         );
     }
     #[test]
     fn claim_root_already_claimed() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
-        let _ = provider.claim_root(ORIG).unwrap();
+        let _ = provider.claim_root::<Skyhash2>(ORIG).unwrap();
         assert_eq!(
-            provider.claim_root(ORIG).unwrap_err(),
-            AuthError::AlreadyClaimed
+            provider.claim_root::<Skyhash2>(ORIG).unwrap_err(),
+            ActionError::ActionError(Skyhash2::AUTH_ERROR_ALREADYCLAIMED)
         );
     }
     #[test]
     fn claim_user_okay_with_login() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
-        let rootkey = provider.claim_root(ORIG).unwrap();
+        let rootkey = provider.claim_root::<Skyhash2>(ORIG).unwrap();
         // login as root
-        provider.login(b"root", rootkey.as_bytes()).unwrap();
+        provider
+            .login::<Skyhash2>(b"root", rootkey.as_bytes())
+            .unwrap();
         // claim user
-        let _ = provider.claim_user(b"sayan").unwrap();
+        let _ = provider.claim_user::<Skyhash2>(b"sayan").unwrap();
     }
 
     #[test]
     fn claim_user_fail_not_root_with_login() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
-        let rootkey = provider.claim_root(ORIG).unwrap();
+        let rootkey = provider.claim_root::<Skyhash2>(ORIG).unwrap();
         // login as root
-        provider.login(b"root", rootkey.as_bytes()).unwrap();
+        provider
+            .login::<Skyhash2>(b"root", rootkey.as_bytes())
+            .unwrap();
         // claim user
-        let userkey = provider.claim_user(b"user").unwrap();
+        let userkey = provider.claim_user::<Skyhash2>(b"user").unwrap();
         // login as user
-        provider.login(b"user", userkey.as_bytes()).unwrap();
+        provider
+            .login::<Skyhash2>(b"user", userkey.as_bytes())
+            .unwrap();
         // now try to claim an user being a non-root account
         assert_eq!(
-            provider.claim_user(b"otheruser").unwrap_err(),
-            AuthError::PermissionDenied
+            provider.claim_user::<Skyhash2>(b"otheruser").unwrap_err(),
+            ActionError::ActionError(Skyhash2::AUTH_CODE_PERMS)
         );
     }
     #[test]
     fn claim_user_fail_anonymous() {
         let mut provider = AuthProvider::new_blank(Some(*ORIG));
         // claim root
-        let _ = provider.claim_root(ORIG).unwrap();
+        let _ = provider.claim_root::<Skyhash2>(ORIG).unwrap();
         // logout
-        provider.logout().unwrap();
+        provider.logout::<Skyhash2>().unwrap();
         // try to claim as an anonymous user
         assert_eq!(
-            provider.claim_user(b"newuser").unwrap_err(),
-            AuthError::Anonymous
+            provider.claim_user::<Skyhash2>(b"newuser").unwrap_err(),
+            ActionError::ActionError(Skyhash2::AUTH_CODE_PERMS)
         );
     }
 }

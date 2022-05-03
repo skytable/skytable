@@ -24,9 +24,12 @@
  *
 */
 
-use super::{errors, keys, AuthError};
+use super::keys;
+use crate::actions::{ActionError, ActionResult};
 use crate::corestore::array::Array;
 use crate::corestore::htable::Coremap;
+use crate::protocol::interface::ProtocolSpec;
+use crate::util::err;
 use std::sync::Arc;
 
 // constants
@@ -54,8 +57,6 @@ const USER_ROOT: AuthID = unsafe { AuthID::from_const(USER_ROOT_ARRAY, 4) };
 type AuthID = Array<u8, AUTHID_SIZE>;
 /// An authn key
 pub type Authkey = [u8; AUTHKEY_SIZE];
-/// Result of an auth operation
-pub type AuthResult<T> = Result<T, AuthError>;
 /// Authmap
 pub type Authmap = Arc<Coremap<AuthID, Authkey>>;
 
@@ -119,8 +120,8 @@ impl AuthProvider {
     pub const fn is_enabled(&self) -> bool {
         matches!(self.origin, Some(_))
     }
-    pub fn claim_root(&mut self, origin_key: &[u8]) -> AuthResult<String> {
-        self.verify_origin(origin_key)?;
+    pub fn claim_root<P: ProtocolSpec>(&mut self, origin_key: &[u8]) -> ActionResult<String> {
+        self.verify_origin::<P>(origin_key)?;
         // the origin key was good, let's try claiming root
         let (key, store) = keys::generate_full();
         if self.authmap.true_if_insert(USER_ROOT, store) {
@@ -128,33 +129,33 @@ impl AuthProvider {
             self.whoami = Some(USER_ROOT);
             Ok(key)
         } else {
-            Err(AuthError::AlreadyClaimed)
+            err(P::AUTH_ERROR_ALREADYCLAIMED)
         }
     }
-    fn are_you_root(&self) -> AuthResult<bool> {
-        self.ensure_enabled()?;
+    fn are_you_root<P: ProtocolSpec>(&self) -> ActionResult<bool> {
+        self.ensure_enabled::<P>()?;
         match self.whoami.as_ref().map(|v| v.eq(&USER_ROOT)) {
             Some(v) => Ok(v),
-            None => Err(AuthError::Anonymous),
+            None => err(P::AUTH_CODE_PERMS),
         }
     }
-    pub fn claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
-        self.ensure_root()?;
-        self._claim_user(claimant)
+    pub fn claim_user<P: ProtocolSpec>(&self, claimant: &[u8]) -> ActionResult<String> {
+        self.ensure_root::<P>()?;
+        self._claim_user::<P>(claimant)
     }
-    pub fn _claim_user(&self, claimant: &[u8]) -> AuthResult<String> {
+    pub fn _claim_user<P: ProtocolSpec>(&self, claimant: &[u8]) -> ActionResult<String> {
         let (key, store) = keys::generate_full();
         if self
             .authmap
-            .true_if_insert(Self::try_auth_id(claimant)?, store)
+            .true_if_insert(Self::try_auth_id::<P>(claimant)?, store)
         {
             Ok(key)
         } else {
-            Err(AuthError::AlreadyClaimed)
+            err(P::AUTH_ERROR_ALREADYCLAIMED)
         }
     }
-    pub fn login(&mut self, account: &[u8], token: &[u8]) -> AuthResult<()> {
-        self.ensure_enabled()?;
+    pub fn login<P: ProtocolSpec>(&mut self, account: &[u8], token: &[u8]) -> ActionResult<()> {
+        self.ensure_enabled::<P>()?;
         match self
             .authmap
             .get(account)
@@ -162,84 +163,94 @@ impl AuthProvider {
         {
             Some(Some(true)) => {
                 // great, authenticated
-                self.whoami = Some(Self::try_auth_id(account)?);
+                self.whoami = Some(Self::try_auth_id::<P>(account)?);
                 Ok(())
             }
             _ => {
                 // either the password was wrong, or the username was wrong
-                Err(AuthError::BadCredentials)
+                err(P::AUTH_CODE_BAD_CREDENTIALS)
             }
         }
     }
-    pub fn regenerate_using_origin(&self, origin: &[u8], account: &[u8]) -> AuthResult<String> {
-        self.verify_origin(origin)?;
-        self._regenerate(account)
+    pub fn regenerate_using_origin<P: ProtocolSpec>(
+        &self,
+        origin: &[u8],
+        account: &[u8],
+    ) -> ActionResult<String> {
+        self.verify_origin::<P>(origin)?;
+        self._regenerate::<P>(account)
     }
-    pub fn regenerate(&self, account: &[u8]) -> AuthResult<String> {
-        self.ensure_root()?;
-        self._regenerate(account)
+    pub fn regenerate<P: ProtocolSpec>(&self, account: &[u8]) -> ActionResult<String> {
+        self.ensure_root::<P>()?;
+        self._regenerate::<P>(account)
     }
     /// Regenerate the token for the given user. This returns a new token
-    fn _regenerate(&self, account: &[u8]) -> AuthResult<String> {
-        let id = Self::try_auth_id(account)?;
+    fn _regenerate<P: ProtocolSpec>(&self, account: &[u8]) -> ActionResult<String> {
+        let id = Self::try_auth_id::<P>(account)?;
         let (key, store) = keys::generate_full();
         if self.authmap.true_if_update(id, store) {
             Ok(key)
         } else {
-            Err(AuthError::BadCredentials)
+            err(P::AUTH_CODE_BAD_CREDENTIALS)
         }
     }
-    fn try_auth_id(authid: &[u8]) -> AuthResult<AuthID> {
+    fn try_auth_id<P: ProtocolSpec>(authid: &[u8]) -> ActionResult<AuthID> {
         if authid.is_ascii() && authid.len() <= AUTHID_SIZE {
             Ok(unsafe {
                 // We just verified the length
                 AuthID::from_slice(authid)
             })
         } else {
-            Err(AuthError::Other(errors::AUTH_ERROR_ILLEGAL_USERNAME))
+            err(P::AUTH_ERROR_ILLEGAL_USERNAME)
         }
     }
-    pub fn logout(&mut self) -> AuthResult<()> {
-        self.ensure_enabled()?;
-        self.whoami.take().map(|_| ()).ok_or(AuthError::Anonymous)
+    pub fn logout<P: ProtocolSpec>(&mut self) -> ActionResult<()> {
+        self.ensure_enabled::<P>()?;
+        self.whoami
+            .take()
+            .map(|_| ())
+            .ok_or(ActionError::ActionError(P::AUTH_CODE_PERMS))
     }
-    fn ensure_enabled(&self) -> AuthResult<()> {
-        self.origin.as_ref().map(|_| ()).ok_or(AuthError::Disabled)
+    fn ensure_enabled<P: ProtocolSpec>(&self) -> ActionResult<()> {
+        self.origin
+            .as_ref()
+            .map(|_| ())
+            .ok_or(ActionError::ActionError(P::AUTH_ERROR_DISABLED))
     }
-    pub fn verify_origin(&self, origin: &[u8]) -> AuthResult<()> {
-        if self.get_origin()?.eq(origin) {
+    pub fn verify_origin<P: ProtocolSpec>(&self, origin: &[u8]) -> ActionResult<()> {
+        if self.get_origin::<P>()?.eq(origin) {
             Ok(())
         } else {
-            Err(AuthError::BadCredentials)
+            err(P::AUTH_CODE_BAD_CREDENTIALS)
         }
     }
-    fn get_origin(&self) -> AuthResult<&Authkey> {
+    fn get_origin<P: ProtocolSpec>(&self) -> ActionResult<&Authkey> {
         match self.origin.as_ref() {
             Some(key) => Ok(key),
-            None => Err(AuthError::Disabled),
+            None => err(P::AUTH_ERROR_DISABLED),
         }
     }
-    fn ensure_root(&self) -> AuthResult<()> {
-        if self.are_you_root()? {
+    fn ensure_root<P: ProtocolSpec>(&self) -> ActionResult<()> {
+        if self.are_you_root::<P>()? {
             Ok(())
         } else {
-            Err(AuthError::PermissionDenied)
+            err(P::AUTH_CODE_PERMS)
         }
     }
-    pub fn delete_user(&self, user: &[u8]) -> AuthResult<()> {
-        self.ensure_root()?;
+    pub fn delete_user<P: ProtocolSpec>(&self, user: &[u8]) -> ActionResult<()> {
+        self.ensure_root::<P>()?;
         if user.eq(&USER_ROOT) {
             // can't delete root!
-            Err(AuthError::Other(errors::AUTH_ERROR_FAILED_TO_DELETE_USER))
+            err(P::AUTH_ERROR_FAILED_TO_DELETE_USER)
         } else if self.authmap.true_if_removed(user) {
             Ok(())
         } else {
-            Err(AuthError::BadCredentials)
+            err(P::AUTH_CODE_BAD_CREDENTIALS)
         }
     }
     /// List all the users
-    pub fn collect_usernames(&self) -> AuthResult<Vec<String>> {
-        self.ensure_root()?;
+    pub fn collect_usernames<P: ProtocolSpec>(&self) -> ActionResult<Vec<String>> {
+        self.ensure_root::<P>()?;
         Ok(self
             .authmap
             .iter()
@@ -247,12 +258,12 @@ impl AuthProvider {
             .collect())
     }
     /// Return the AuthID of the current user
-    pub fn whoami(&self) -> AuthResult<String> {
-        self.ensure_enabled()?;
+    pub fn whoami<P: ProtocolSpec>(&self) -> ActionResult<String> {
+        self.ensure_enabled::<P>()?;
         self.whoami
             .as_ref()
             .map(|v| String::from_utf8_lossy(v).to_string())
-            .ok_or(AuthError::Anonymous)
+            .ok_or(ActionError::ActionError(P::AUTH_CODE_PERMS))
     }
 }
 

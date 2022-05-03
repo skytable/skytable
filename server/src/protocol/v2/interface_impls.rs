@@ -60,82 +60,45 @@ impl ProtocolSpec for Skyhash2 {
     const PIPELINED_QUERY_FIRST_BYTE: u8 = b'$';
 
     // respcodes
-    /// Response code 0 as a array element
     const RCODE_OKAY: &'static [u8] = eresp!("0");
-    /// Response code 1 as a array element
     const RCODE_NIL: &'static [u8] = eresp!("1");
-    /// Response code 2 as a array element
     const RCODE_OVERWRITE_ERR: &'static [u8] = eresp!("2");
-    /// Response code 3 as a array element
     const RCODE_ACTION_ERR: &'static [u8] = eresp!("3");
-    /// Response code 4 as a array element
     const RCODE_PACKET_ERR: &'static [u8] = eresp!("4");
-    /// Response code 5 as a array element
     const RCODE_SERVER_ERR: &'static [u8] = eresp!("5");
-    /// Response code 6 as a array element
     const RCODE_OTHER_ERR_EMPTY: &'static [u8] = eresp!("6");
-    /// "Unknown action" error response
     const RCODE_UNKNOWN_ACTION: &'static [u8] = eresp!("Unknown action");
-    /// Response code 7
     const RCODE_WRONGTYPE_ERR: &'static [u8] = eresp!("7");
-    /// Response code 8
     const RCODE_UNKNOWN_DATA_TYPE: &'static [u8] = eresp!("8");
-    /// Response code 9 as an array element
     const RCODE_ENCODING_ERROR: &'static [u8] = eresp!("9");
 
     // respstrings
-
-    /// Snapshot busy error
     const RSTRING_SNAPSHOT_BUSY: &'static [u8] = eresp!("err-snapshot-busy");
-    /// Snapshot disabled (other error)
     const RSTRING_SNAPSHOT_DISABLED: &'static [u8] = eresp!("err-snapshot-disabled");
-    /// Duplicate snapshot
     const RSTRING_SNAPSHOT_DUPLICATE: &'static [u8] = eresp!("duplicate-snapshot");
-    /// Snapshot has illegal name (other error)
     const RSTRING_SNAPSHOT_ILLEGAL_NAME: &'static [u8] = eresp!("err-invalid-snapshot-name");
-    /// Access after termination signal (other error)
     const RSTRING_ERR_ACCESS_AFTER_TERMSIG: &'static [u8] = eresp!("err-access-after-termsig");
 
     // keyspace related resps
-    /// The default container was not set
     const RSTRING_DEFAULT_UNSET: &'static [u8] = eresp!("default-container-unset");
-    /// The container was not found
     const RSTRING_CONTAINER_NOT_FOUND: &'static [u8] = eresp!("container-not-found");
-    /// The container is still in use and so cannot be removed
     const RSTRING_STILL_IN_USE: &'static [u8] = eresp!("still-in-use");
-    /// This is a protected object and hence cannot be accessed
     const RSTRING_PROTECTED_OBJECT: &'static [u8] = eresp!("err-protected-object");
-    /// The action was applied against the wrong model
     const RSTRING_WRONG_MODEL: &'static [u8] = eresp!("wrong-model");
-    /// The container already exists
     const RSTRING_ALREADY_EXISTS: &'static [u8] = eresp!("err-already-exists");
-    /// The container is not ready
     const RSTRING_NOT_READY: &'static [u8] = eresp!("not-ready");
-    /// A transactional failure occurred
     const RSTRING_DDL_TRANSACTIONAL_FAILURE: &'static [u8] = eresp!("transactional-failure");
-    /// An unknown DDL query was run
     const RSTRING_UNKNOWN_DDL_QUERY: &'static [u8] = eresp!("unknown-ddl-query");
-    /// The expression for a DDL query was malformed
     const RSTRING_BAD_EXPRESSION: &'static [u8] = eresp!("malformed-expression");
-    /// An unknown model was passed in a DDL query
     const RSTRING_UNKNOWN_MODEL: &'static [u8] = eresp!("unknown-model");
-    /// Too many arguments were passed to model constructor
     const RSTRING_TOO_MANY_ARGUMENTS: &'static [u8] = eresp!("too-many-args");
-    /// The container name is too long
     const RSTRING_CONTAINER_NAME_TOO_LONG: &'static [u8] = eresp!("container-name-too-long");
-    /// The container name contains invalid characters
     const RSTRING_BAD_CONTAINER_NAME: &'static [u8] = eresp!("bad-container-name");
-    /// An unknown inspect query
     const RSTRING_UNKNOWN_INSPECT_QUERY: &'static [u8] = eresp!("unknown-inspect-query");
-    /// An unknown table property was passed
     const RSTRING_UNKNOWN_PROPERTY: &'static [u8] = eresp!("unknown-property");
-    /// The keyspace is not empty and hence cannot be removed
     const RSTRING_KEYSPACE_NOT_EMPTY: &'static [u8] = eresp!("keyspace-not-empty");
-    /// Bad type supplied in a DDL query for the key
     const RSTRING_BAD_TYPE_FOR_KEY: &'static [u8] = eresp!("bad-type-for-key");
-    /// The index for the provided list was non-existent
     const RSTRING_LISTMAP_BAD_INDEX: &'static [u8] = eresp!("bad-list-index");
-    /// The list is empty
     const RSTRING_LISTMAP_LIST_IS_EMPTY: &'static [u8] = eresp!("list-is-empty");
 
     // elements
@@ -144,6 +107,14 @@ impl ProtocolSpec for Skyhash2 {
     // full responses
     const FULLRESP_RCODE_PACKET_ERR: &'static [u8] = b"*!4\n";
     const FULLRESP_RCODE_WRONG_TYPE: &'static [u8] = b"*!7\n";
+
+    // auth respcodes/strings
+    const AUTH_ERROR_ALREADYCLAIMED: &'static [u8] = eresp!("err-auth-already-claimed");
+    const AUTH_CODE_BAD_CREDENTIALS: &'static [u8] = eresp!("10");
+    const AUTH_ERROR_DISABLED: &'static [u8] = eresp!("err-auth-disabled");
+    const AUTH_CODE_PERMS: &'static [u8] = eresp!("11");
+    const AUTH_ERROR_ILLEGAL_USERNAME: &'static [u8] = eresp!("err-auth-illegal-username");
+    const AUTH_ERROR_FAILED_TO_DELETE_USER: &'static [u8] = eresp!("err-auth-deluser-fail");
 }
 
 impl<Strm, T> ProtocolRead<Skyhash2, Strm> for T
@@ -161,6 +132,25 @@ where
     T: RawConnection<Skyhash2, Strm> + Send + Sync,
     Strm: Stream,
 {
+    fn write_mono_length_prefixed_with_tsymbol<'life0, 'life1, 'ret_life>(
+        &'life0 mut self,
+        data: &'life1 [u8],
+        tsymbol: u8,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        'life1: 'ret_life,
+        Self: Send + 'ret_life,
+    {
+        Box::pin(async move {
+            let stream = self.get_mut_stream();
+            // <tsymbol><length><lf>
+            stream.write_all(&[tsymbol]).await?;
+            stream.write_all(&Integer64::from(data.len())).await?;
+            stream.write_all(&[Skyhash2::LF]).await?;
+            stream.write_all(data).await
+        })
+    }
     fn write_string<'life0, 'life1, 'ret_life>(
         &'life0 mut self,
         string: &'life1 str,

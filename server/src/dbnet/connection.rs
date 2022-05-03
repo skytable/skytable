@@ -37,7 +37,7 @@
 
 use crate::{
     actions::{ActionError, ActionResult},
-    auth::{self, AuthProvider},
+    auth::AuthProvider,
     corestore::Corestore,
     dbnet::{
         connection::prelude::FutureResult,
@@ -312,8 +312,7 @@ where
                 }
                 Query::Pipelined(_) => {
                     con.write_simple_query_header().await?;
-                    con._write_raw(auth::errors::AUTH_CODE_BAD_CREDENTIALS)
-                        .await?;
+                    con._write_raw(P::AUTH_CODE_BAD_CREDENTIALS).await?;
                 }
             }
             Ok(())

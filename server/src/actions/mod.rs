@@ -65,6 +65,16 @@ pub enum ActionError {
     IoError(std::io::Error),
 }
 
+impl PartialEq for ActionError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::ActionError(a1), Self::ActionError(a2)) => a1 == a2,
+            (Self::IoError(ioe1), Self::IoError(ioe2)) => ioe1.to_string() == ioe2.to_string(),
+            _ => false,
+        }
+    }
+}
+
 impl From<&'static [u8]> for ActionError {
     fn from(e: &'static [u8]) -> Self {
         Self::ActionError(e)
@@ -79,23 +89,26 @@ impl From<IoError> for ActionError {
 
 #[cold]
 #[inline(never)]
+fn map_ddl_error_to_status<P: ProtocolSpec>(e: DdlError) -> ActionError {
+    let r = match e {
+        DdlError::AlreadyExists => P::RSTRING_ALREADY_EXISTS,
+        DdlError::DdlTransactionFailure => P::RSTRING_DDL_TRANSACTIONAL_FAILURE,
+        DdlError::DefaultNotFound => P::RSTRING_DEFAULT_UNSET,
+        DdlError::NotEmpty => P::RSTRING_KEYSPACE_NOT_EMPTY,
+        DdlError::NotReady => P::RSTRING_NOT_READY,
+        DdlError::ObjectNotFound => P::RSTRING_CONTAINER_NOT_FOUND,
+        DdlError::ProtectedObject => P::RSTRING_PROTECTED_OBJECT,
+        DdlError::StillInUse => P::RSTRING_STILL_IN_USE,
+        DdlError::WrongModel => P::RSTRING_WRONG_MODEL,
+    };
+    ActionError::ActionError(r)
+}
+
+#[inline(always)]
 pub fn translate_ddl_error<P: ProtocolSpec, T>(r: Result<T, DdlError>) -> Result<T, ActionError> {
     match r {
         Ok(r) => Ok(r),
-        Err(e) => {
-            let err = match e {
-                DdlError::AlreadyExists => P::RSTRING_ALREADY_EXISTS,
-                DdlError::DdlTransactionFailure => P::RSTRING_DDL_TRANSACTIONAL_FAILURE,
-                DdlError::DefaultNotFound => P::RSTRING_DEFAULT_UNSET,
-                DdlError::NotEmpty => P::RSTRING_KEYSPACE_NOT_EMPTY,
-                DdlError::NotReady => P::RSTRING_NOT_READY,
-                DdlError::ObjectNotFound => P::RSTRING_CONTAINER_NOT_FOUND,
-                DdlError::ProtectedObject => P::RSTRING_PROTECTED_OBJECT,
-                DdlError::StillInUse => P::RSTRING_STILL_IN_USE,
-                DdlError::WrongModel => P::RSTRING_WRONG_MODEL,
-            };
-            Err(ActionError::ActionError(err))
-        }
+        Err(e) => Err(map_ddl_error_to_status::<P>(e)),
     }
 }
 

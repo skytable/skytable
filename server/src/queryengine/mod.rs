@@ -89,7 +89,7 @@ action! {
         };
         match iter.next_lowercase().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?.as_ref() {
             ACTION_AUTH => auth::auth_login_only(con, auth, iter).await,
-            _ => util::err(auth::errors::AUTH_CODE_BAD_CREDENTIALS),
+            _ => util::err(P::AUTH_CODE_BAD_CREDENTIALS),
         }
     }
     //// Execute a simple query
