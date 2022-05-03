@@ -57,6 +57,7 @@ pub async fn run(
         snapshot,
         maxcon,
         auth,
+        protocol,
         ..
     }: ConfigurationSet,
     restore_filepath: Option<String>,
@@ -100,8 +101,15 @@ pub async fn run(
     let termsig =
         TerminationSignal::init().map_err(|e| Error::ioerror_extra(e, "binding to signals"))?;
     // start the server (single or multiple listeners)
-    let mut server =
-        dbnet::connect(ports, maxcon, db.clone(), auth_provider, signal.clone()).await?;
+    let mut server = dbnet::connect(
+        ports,
+        protocol,
+        maxcon,
+        db.clone(),
+        auth_provider,
+        signal.clone(),
+    )
+    .await?;
 
     tokio::select! {
         _ = server.run_server() => {},

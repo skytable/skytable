@@ -24,32 +24,35 @@
  *
 */
 
-use crate::{
-    dbnet::{
-        connection::{ConnectionHandler, ExecutorFn},
-        tcp::{BufferedSocketStream, Connection, TcpBackoff},
-        BaseListener, Terminator,
+use {
+    crate::{
+        dbnet::{
+            connection::{ConnectionHandler, ExecutorFn},
+            tcp::{BufferedSocketStream, Connection, TcpBackoff},
+            BaseListener, Terminator,
+        },
+        protocol::{
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            Skyhash1, Skyhash2,
+        },
+        util::error::{Error, SkyResult},
+        IoResult,
     },
-    protocol::{
-        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-        Skyhash2,
+    openssl::{
+        pkey::PKey,
+        rsa::Rsa,
+        ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod},
     },
-    util::error::{Error, SkyResult},
-    IoResult,
+    std::{fs, pin::Pin},
+    tokio::net::TcpStream,
+    tokio_openssl::SslStream,
 };
-use openssl::{
-    pkey::PKey,
-    rsa::Rsa,
-    ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod},
-};
-use std::{fs, pin::Pin};
-use tokio::net::TcpStream;
-use tokio_openssl::SslStream;
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
 type SslExecutorFn<P> = ExecutorFn<P, Connection<SslStream<TcpStream>>, SslStream<TcpStream>>;
 
 pub type SslListener = SslListenerRaw<Skyhash2>;
+pub type SslListenerV1 = SslListenerRaw<Skyhash1>;
 
 pub struct SslListenerRaw<P> {
     pub base: BaseListener,

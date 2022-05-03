@@ -211,6 +211,34 @@ impl FromStr for OptString {
     }
 }
 
+impl FromStr for ProtocolVersion {
+    type Err = ();
+    fn from_str(st: &str) -> Result<Self, Self::Err> {
+        match st {
+            "1" | "1.0" | "1.1" | "1.2" => Ok(Self::V1),
+            "2" | "2.0" => Ok(Self::V2),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFromConfigSource<ProtocolVersion> for Option<ProtocolVersion> {
+    fn is_present(&self) -> bool {
+        self.is_some()
+    }
+    fn mutate_failed(self, target: &mut ProtocolVersion, trip: &mut bool) -> bool {
+        if let Some(v) = self {
+            *target = v;
+            *trip = true;
+        }
+        false
+    }
+    fn try_parse(self) -> ConfigSourceParseResult<ProtocolVersion> {
+        self.map(ConfigSourceParseResult::Okay)
+            .unwrap_or(ConfigSourceParseResult::Absent)
+    }
+}
+
 impl TryFromConfigSource<OptString> for OptString {
     fn is_present(&self) -> bool {
         self.base.is_some()
@@ -225,7 +253,7 @@ impl TryFromConfigSource<OptString> for OptString {
     fn try_parse(self) -> ConfigSourceParseResult<OptString> {
         self.base
             .map(|v| ConfigSourceParseResult::Okay(OptString { base: Some(v) }))
-            .unwrap_or(ConfigSourceParseResult::Okay(OptString::new_null()))
+            .unwrap_or(ConfigSourceParseResult::Absent)
     }
 }
 
@@ -365,12 +393,37 @@ impl Configset {
         } else {
             return Err(ConfigError::CfgError(self.estack));
         };
+        if target.config.protocol != ProtocolVersion::default() {
+            target.wpush(format!(
+                "{} is deprecated. Switch to {}",
+                target.config.protocol.to_string(),
+                ProtocolVersion::default().to_string()
+            ));
+        }
         if target.is_prod_mode() {
             self::feedback::evaluate_prod_settings(&target.config).map(|_| target)
         } else {
             target.wpush("Running in `user` mode. Set mode to `prod` in production");
             Ok(target)
         }
+    }
+}
+
+// protocol settings
+impl Configset {
+    pub fn protocol_settings(
+        &mut self,
+        nproto: impl TryFromConfigSource<ProtocolVersion>,
+        nproto_key: StaticStr,
+    ) {
+        let mut proto = ProtocolVersion::default();
+        self.try_mutate(
+            nproto,
+            &mut proto,
+            nproto_key,
+            "a protocol version like 2.0 or 1.0",
+        );
+        self.cfg.protocol = proto;
     }
 }
 

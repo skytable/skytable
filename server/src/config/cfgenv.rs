@@ -44,6 +44,8 @@ pub(super) fn parse_env_config() -> Configset {
             );
         };
     }
+    // protocol settings
+    fenv!(protocol_settings, SKY_PROTOCOL_VERSION);
     // server settings
     fenv!(server_tcp, SKY_SYSTEM_HOST, SKY_SYSTEM_PORT);
     fenv!(server_noart, SKY_SYSTEM_NOART);

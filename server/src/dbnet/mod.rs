@@ -39,19 +39,24 @@
 //! 5. Now errors are handled if they occur. Otherwise, the query is executed by `Corestore::execute_query()`
 //!
 
-use self::tcp::Listener;
-use crate::{
-    auth::AuthProvider,
-    config::{PortConfig, SslOpts},
-    corestore::Corestore,
-    util::error::{Error, SkyResult},
-    IoResult,
-};
-use std::{net::IpAddr, sync::Arc};
-use tls::SslListener;
-use tokio::{
-    net::TcpListener,
-    sync::{broadcast, mpsc, Semaphore},
+use {
+    self::{
+        tcp::{Listener, ListenerV1},
+        tls::{SslListener, SslListenerV1},
+    },
+    crate::{
+        auth::AuthProvider,
+        config::{PortConfig, ProtocolVersion, SslOpts},
+        corestore::Corestore,
+        util::error::{Error, SkyResult},
+        IoResult,
+    },
+    core::future::Future,
+    std::{net::IpAddr, sync::Arc},
+    tokio::{
+        net::TcpListener,
+        sync::{broadcast, mpsc, Semaphore},
+    },
 };
 pub mod connection;
 #[macro_use]
@@ -160,35 +165,93 @@ impl BaseListener {
 #[allow(clippy::large_enum_variant)]
 pub enum MultiListener {
     SecureOnly(SslListener),
+    SecureOnlyV1(SslListenerV1),
     InsecureOnly(Listener),
+    InsecureOnlyV1(ListenerV1),
     Multi(Listener, SslListener),
+    MultiV1(ListenerV1, SslListenerV1),
+}
+
+async fn wait_on_port_futures(
+    a: impl Future<Output = IoResult<()>>,
+    b: impl Future<Output = IoResult<()>>,
+) -> IoResult<()> {
+    let (e1, e2) = tokio::join!(a, b);
+    if let Err(e) = e1 {
+        log::error!("Insecure listener failed with: {}", e);
+    }
+    if let Err(e) = e2 {
+        log::error!("Secure listener failed with: {}", e);
+    }
+    Ok(())
 }
 
 impl MultiListener {
     /// Create a new `InsecureOnly` listener
-    pub fn new_insecure_only(base: BaseListener) -> Self {
-        MultiListener::InsecureOnly(Listener::new(base))
+    pub fn new_insecure_only(base: BaseListener, protocol: ProtocolVersion) -> Self {
+        match protocol {
+            ProtocolVersion::V2 => MultiListener::InsecureOnly(Listener::new(base)),
+            ProtocolVersion::V1 => MultiListener::InsecureOnlyV1(ListenerV1::new(base)),
+        }
     }
     /// Create a new `SecureOnly` listener
-    pub fn new_secure_only(base: BaseListener, ssl: SslOpts) -> SkyResult<Self> {
-        let listener =
-            SslListener::new_pem_based_ssl_connection(ssl.key, ssl.chain, base, ssl.passfile)?;
-        Ok(MultiListener::SecureOnly(listener))
+    pub fn new_secure_only(
+        base: BaseListener,
+        ssl: SslOpts,
+        protocol: ProtocolVersion,
+    ) -> SkyResult<Self> {
+        let listener = match protocol {
+            ProtocolVersion::V2 => {
+                let listener = SslListener::new_pem_based_ssl_connection(
+                    ssl.key,
+                    ssl.chain,
+                    base,
+                    ssl.passfile,
+                )?;
+                MultiListener::SecureOnly(listener)
+            }
+            ProtocolVersion::V1 => {
+                let listener = SslListenerV1::new_pem_based_ssl_connection(
+                    ssl.key,
+                    ssl.chain,
+                    base,
+                    ssl.passfile,
+                )?;
+                MultiListener::SecureOnlyV1(listener)
+            }
+        };
+        Ok(listener)
     }
     /// Create a new `Multi` listener that has both a secure and an insecure listener
     pub async fn new_multi(
         ssl_base_listener: BaseListener,
         tcp_base_listener: BaseListener,
         ssl: SslOpts,
+        protocol: ProtocolVersion,
     ) -> SkyResult<Self> {
-        let secure_listener = SslListener::new_pem_based_ssl_connection(
-            ssl.key,
-            ssl.chain,
-            ssl_base_listener,
-            ssl.passfile,
-        )?;
-        let insecure_listener = Listener::new(tcp_base_listener);
-        Ok(MultiListener::Multi(insecure_listener, secure_listener))
+        let mls = match protocol {
+            ProtocolVersion::V2 => {
+                let secure_listener = SslListener::new_pem_based_ssl_connection(
+                    ssl.key,
+                    ssl.chain,
+                    ssl_base_listener,
+                    ssl.passfile,
+                )?;
+                let insecure_listener = Listener::new(tcp_base_listener);
+                MultiListener::Multi(insecure_listener, secure_listener)
+            }
+            ProtocolVersion::V1 => {
+                let secure_listener = SslListenerV1::new_pem_based_ssl_connection(
+                    ssl.key,
+                    ssl.chain,
+                    ssl_base_listener,
+                    ssl.passfile,
+                )?;
+                let insecure_listener = ListenerV1::new(tcp_base_listener);
+                MultiListener::MultiV1(insecure_listener, secure_listener)
+            }
+        };
+        Ok(mls)
     }
     /// Start the server
     ///
@@ -197,18 +260,14 @@ impl MultiListener {
     pub async fn run_server(&mut self) -> IoResult<()> {
         match self {
             MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
+            MultiListener::SecureOnlyV1(secure_listener) => secure_listener.run().await,
             MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
+            MultiListener::InsecureOnlyV1(insecure_listener) => insecure_listener.run().await,
             MultiListener::Multi(insecure_listener, secure_listener) => {
-                let insec = insecure_listener.run();
-                let sec = secure_listener.run();
-                let (e1, e2) = tokio::join!(insec, sec);
-                if let Err(e) = e1 {
-                    log::error!("Insecure listener failed with: {}", e);
-                }
-                if let Err(e) = e2 {
-                    log::error!("Secure listener failed with: {}", e);
-                }
-                Ok(())
+                wait_on_port_futures(insecure_listener.run(), secure_listener.run()).await
+            }
+            MultiListener::MultiV1(insecure_listener, secure_listener) => {
+                wait_on_port_futures(insecure_listener.run(), secure_listener.run()).await
             }
         }
     }
@@ -218,9 +277,15 @@ impl MultiListener {
     /// make sure that the data is saved!**
     pub async fn finish_with_termsig(self) {
         match self {
-            MultiListener::InsecureOnly(server) => server.base.release_self().await,
-            MultiListener::SecureOnly(server) => server.base.release_self().await,
+            MultiListener::InsecureOnly(Listener { base, .. })
+            | MultiListener::SecureOnly(SslListener { base, .. })
+            | MultiListener::InsecureOnlyV1(ListenerV1 { base, .. })
+            | MultiListener::SecureOnlyV1(SslListenerV1 { base, .. }) => base.release_self().await,
             MultiListener::Multi(insecure, secure) => {
+                insecure.base.release_self().await;
+                secure.base.release_self().await;
+            }
+            MultiListener::MultiV1(insecure, secure) => {
                 insecure.base.release_self().await;
                 secure.base.release_self().await;
             }
@@ -231,6 +296,7 @@ impl MultiListener {
 /// Initialize the database networking
 pub async fn connect(
     ports: PortConfig,
+    protocol: ProtocolVersion,
     maxcon: usize,
     db: Corestore,
     auth: AuthProvider,
@@ -250,15 +316,17 @@ pub async fn connect(
     let description = ports.get_description();
     let server = match ports {
         PortConfig::InsecureOnly { host, port } => {
-            MultiListener::new_insecure_only(base_listener_init(host, port).await?)
+            MultiListener::new_insecure_only(base_listener_init(host, port).await?, protocol)
         }
-        PortConfig::SecureOnly { host, ssl } => {
-            MultiListener::new_secure_only(base_listener_init(host, ssl.port).await?, ssl)?
-        }
+        PortConfig::SecureOnly { host, ssl } => MultiListener::new_secure_only(
+            base_listener_init(host, ssl.port).await?,
+            ssl,
+            protocol,
+        )?,
         PortConfig::Multi { host, port, ssl } => {
             let secure_listener = base_listener_init(host, ssl.port).await?;
             let insecure_listener = base_listener_init(host, port).await?;
-            MultiListener::new_multi(secure_listener, insecure_listener, ssl).await?
+            MultiListener::new_multi(secure_listener, insecure_listener, ssl, protocol).await?
         }
     };
     log::info!("Server started on {description}");

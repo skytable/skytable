@@ -138,10 +138,12 @@ impl ProtocolSpec for Skyhash2 {
     /// The list is empty
     const RSTRING_LISTMAP_LIST_IS_EMPTY: &'static [u8] = eresp!("list-is-empty");
 
+    // elements
+    const ELEMRESP_HEYA: &'static [u8] = b"+4\nHEY!";
+
     // full responses
     const FULLRESP_RCODE_PACKET_ERR: &'static [u8] = b"*!4\n";
     const FULLRESP_RCODE_WRONG_TYPE: &'static [u8] = b"*!7\n";
-    const FULLRESP_HEYA: &'static [u8] = b"+4\nHEY!";
 }
 
 impl<Strm, T> ProtocolRead<Skyhash2, Strm> for T

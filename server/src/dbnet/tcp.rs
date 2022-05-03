@@ -24,25 +24,28 @@
  *
 */
 
-use crate::protocol::{
-    interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-    Skyhash2,
-};
-use crate::{
-    dbnet::{
-        connection::{ConnectionHandler, ExecutorFn},
-        BaseListener, Terminator,
-    },
-    protocol, IoResult,
-};
-use bytes::BytesMut;
-use libsky::BUF_CAP;
 pub use protocol::{ParseResult, Query};
-use std::{cell::Cell, time::Duration};
-use tokio::{
-    io::{AsyncWrite, BufWriter},
-    net::TcpStream,
-    time,
+use {
+    crate::{
+        dbnet::{
+            connection::{ConnectionHandler, ExecutorFn},
+            BaseListener, Terminator,
+        },
+        protocol::{
+            self,
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            Skyhash1, Skyhash2,
+        },
+        IoResult,
+    },
+    bytes::BytesMut,
+    libsky::BUF_CAP,
+    std::{cell::Cell, time::Duration},
+    tokio::{
+        io::{AsyncWrite, BufWriter},
+        net::TcpStream,
+        time,
+    },
 };
 
 pub trait BufferedSocketStream: AsyncWrite {}
@@ -99,6 +102,7 @@ impl TcpBackoff {
 }
 
 pub type Listener = RawListener<Skyhash2>;
+pub type ListenerV1 = RawListener<Skyhash1>;
 
 /// A listener
 pub struct RawListener<P> {

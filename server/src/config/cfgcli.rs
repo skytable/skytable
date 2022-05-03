@@ -72,6 +72,12 @@ pub(super) fn parse_cli_args(matches: ArgMatches) -> Configset {
             )
         };
     }
+    // protocol settings
+    fcli! {
+        protocol_settings,
+        matches.value_of("protover"),
+        "--protover"
+    };
     // server settings
     fcli!(
         server_tcp,

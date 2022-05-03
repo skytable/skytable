@@ -105,10 +105,12 @@ pub trait ProtocolSpec {
     const RSTRING_LISTMAP_BAD_INDEX: &'static [u8];
     const RSTRING_LISTMAP_LIST_IS_EMPTY: &'static [u8];
 
+    // element responses
+    const ELEMRESP_HEYA: &'static [u8];
+
     // full responses
     const FULLRESP_RCODE_PACKET_ERR: &'static [u8];
     const FULLRESP_RCODE_WRONG_TYPE: &'static [u8];
-    const FULLRESP_HEYA: &'static [u8];
 
     // LUTs
     const SET_NLUT: BytesNicheLUT = BytesNicheLUT::new(

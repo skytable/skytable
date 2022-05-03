@@ -135,7 +135,7 @@ pub mod heya {
                 con.write_mono_length_prefixed_with_tsymbol(raw_byte, b'+')
                     .await?;
             } else {
-                return util::err(P::FULLRESP_HEYA);
+                con._write_raw(P::ELEMRESP_HEYA).await?;
             }
             Ok(())
         }
