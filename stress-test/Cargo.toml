@@ -14,9 +14,9 @@ skytable = { git = "https://github.com/skytable/client-rust.git", branch = "next
 ] }
 devtimer = "4.0.1"
 # external deps
-sysinfo = "0.23.10"
+sysinfo = "0.23.11"
 env_logger = "0.9.0"
-log = "0.4.16"
+log = "0.4.17"
 rand = "0.8.5"
 crossbeam-channel = "0.5.4"
 num_cpus = "1.13.1"

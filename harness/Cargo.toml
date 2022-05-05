@@ -8,10 +8,10 @@ edition = "2021"
 [dependencies]
 libsky = { path = "../libsky" }
 env_logger = "0.9.0"
-log = "0.4.16"
+log = "0.4.17"
 zip = { version = "0.6.2", features = ["deflate"] }
 powershell_script = "1.0.2"
-openssl = { version = "0.10.38", features = ["vendored"] }
+openssl = { version = "0.10.40", features = ["vendored"] }
 skytable = { git = "https://github.com/skytable/client-rust.git", features = [
     "sync",
 ], default-features = false }

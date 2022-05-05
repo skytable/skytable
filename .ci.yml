@@ -25,6 +25,7 @@ steps:
         from_secret: srcenv
       CARGO_HOME:
         from_secret: cargohome
+      HACK_SKYD_TEST_IGNORE_TREE_TEST_M1: yes
     commands:
       - source $SRCENV/.cargo/env
       - export RUSTUP_HOME=$SRCENV/.rustup
