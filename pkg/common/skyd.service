@@ -9,7 +9,37 @@ Restart=always
 RestartSec=1
 User=skytable
 ExecStart=/usr/bin/skyd --noart
+StandardError=journal
 WorkingDirectory=/var/lib/skytable
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+#ProtectSystem=strict
+ProtectHome=yes
+CapabilityBoundingSet=
+RestrictNamespaces=true
+
+PrivateDevices=true
+DevicePolicy=strict
+DeviceAllow=/dev/null rw
+DeviceAllow=/dev/random r
+DeviceAllow=/dev/urandom r
+
+PrivateUsers=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+SystemCallArchitectures=native
+LockPersonality=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+MemoryDenyWriteExecute=true
+# Can be further constrained
+SystemCallFilter=@system-service
 
 [Install]
 WantedBy=multi-user.target
