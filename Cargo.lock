@@ -556,7 +556,7 @@ dependencies = [
  "log",
  "openssl",
  "powershell_script",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust.git)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust.git)",
  "zip",
 ]
 
@@ -625,9 +625,9 @@ checksum = "112c678d4050afce233f4f2852bb2eb519230b3cf12f33585275537d7e41578d"
 
 [[package]]
 name = "jemalloc-sys"
-version = "0.3.2"
+version = "0.5.0+5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d3b9f3f5c9b31aa0f5ed3260385ac205db665baa41d49bb8338008ae94ede45"
+checksum = "f655c3ecfa6b0d03634595b4b54551d4bd5ac208b9e0124873949a7ab168f70b"
 dependencies = [
  "cc",
  "fs_extra",
@@ -636,9 +636,9 @@ dependencies = [
 
 [[package]]
 name = "jemallocator"
-version = "0.3.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43ae63fcfc45e99ab3d1b29a46782ad679e98436c3169d15a167a1108a724b69"
+checksum = "16c2514137880c52b0b4822b563fadd38257c1f380858addb74a400889696ea6"
 dependencies = [
  "jemalloc-sys",
  "libc",
@@ -667,11 +667,11 @@ checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "libsky"
-version = "0.7.5"
+version = "0.8.0"
 
 [[package]]
 name = "libstress"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -812,9 +812,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.10.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
+checksum = "7709cef83f0c1f58f666e746a08b21e0085f7440fa6a29cc194d68aac97a4225"
 
 [[package]]
 name = "opaque-debug"
@@ -850,9 +850,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-src"
-version = "111.18.0+1.1.1n"
+version = "111.20.0+1.1.1o"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+checksum = "92892c4f87d56e376e469ace79f1128fdaded07646ddf73aa0be4706ff712dec"
 dependencies = [
  "cc",
 ]
@@ -1098,9 +1098,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.5.5"
+version = "1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a11647b6b25ff05a515cb92c365cec08801e83423a235b51e231e1808747286"
+checksum = "d83f127d94bdbcda4c8cc2e50f6f84f4b611f69c902699ca385a39c3a75f9ff1"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -1109,15 +1109,15 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.25"
+version = "0.6.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
+checksum = "49b3de9ec5dc0a3417da371aab17d729997c15010e7fd24ff707773a33bddb64"
 
 [[package]]
 name = "rustix"
-version = "0.34.7"
+version = "0.34.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f117495127afb702af6706f879fb2b5c008c38ccf3656afc514e26f35bdb8180"
+checksum = "2079c267b8394eb529872c3cf92e181c378b41fea36e68130357b52493701d2e"
 dependencies = [
  "bitflags",
  "errno",
@@ -1159,11 +1159,11 @@ checksum = "f3f6f92acf49d1b98f7a81226834412ada05458b7364277387724a237f062695"
 
 [[package]]
 name = "scheduled-thread-pool"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc6f74fd1204073fa02d5d5d68bec8021be4c38690b61264b2fdb48083d0e7d7"
+checksum = "977a7519bff143a44f842fd07e80ad1329295bd71686457f18e496736f4bf9bf"
 dependencies = [
- "parking_lot 0.11.2",
+ "parking_lot 0.12.0",
 ]
 
 [[package]]
@@ -1257,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "sky-bench"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "clap",
  "devtimer",
@@ -1265,23 +1265,23 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust?branch=next)",
 ]
 
 [[package]]
 name = "sky-migrate"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "bincode",
  "clap",
  "env_logger",
  "log",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust.git)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust.git)",
 ]
 
 [[package]]
 name = "sky_macros"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "skyd"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "ahash",
  "base64",
@@ -1315,7 +1315,7 @@ dependencies = [
  "regex",
  "serde",
  "sky_macros",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
  "tokio-openssl",
  "toml",
@@ -1324,20 +1324,20 @@ dependencies = [
 
 [[package]]
 name = "skysh"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "clap",
  "crossterm",
  "libsky",
  "rustyline",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "tokio",
 ]
 
 [[package]]
 name = "skytable"
-version = "0.7.0"
-source = "git+https://github.com/skytable/client-rust?branch=next#4c91bd8859e229b18dc099bf3f1f3e4bfc4b6c73"
+version = "0.8.0"
+source = "git+https://github.com/skytable/client-rust?branch=next#35a89b9b85fb22e58653751e837426a55c9f0b45"
 dependencies = [
  "async-trait",
  "bb8",
@@ -1350,8 +1350,8 @@ dependencies = [
 
 [[package]]
 name = "skytable"
-version = "0.7.0"
-source = "git+https://github.com/skytable/client-rust.git#4c91bd8859e229b18dc099bf3f1f3e4bfc4b6c73"
+version = "0.8.0"
+source = "git+https://github.com/skytable/client-rust.git#35a89b9b85fb22e58653751e837426a55c9f0b45"
 dependencies = [
  "r2d2",
 ]
@@ -1380,9 +1380,9 @@ dependencies = [
 
 [[package]]
 name = "str-buf"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d44a3643b4ff9caf57abcee9c2c621d6c03d9135e0d8b589bd9afb5992cb176a"
+checksum = "9e08d8363704e6c71fc928674353e6b7c23dcea9d82d7012c8faf2a3a025f8d0"
 
 [[package]]
 name = "stress-test"
@@ -1395,7 +1395,7 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "skytable 0.7.0 (git+https://github.com/skytable/client-rust?branch=next)",
+ "skytable 0.8.0 (git+https://github.com/skytable/client-rust?branch=next)",
  "sysinfo",
 ]
 
@@ -1424,9 +1424,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.23.12"
+version = "0.23.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56b1e20ee77901236c389ff74618a899ff5fd34719a7ff0fd1d64f0acca5179a"
+checksum = "3977ec2e0520829be45c8a2df70db2bf364714d8a748316a10c3c35d4d2b01c9"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
