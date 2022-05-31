@@ -59,8 +59,8 @@ fn main() {
         None => 2003,
     };
     let json_out = matches.is_present("json");
-    let max_connections = match matches.value_of("connections").map(|v| v.parse::<usize>()) {
-        Some(Ok(con)) => con,
+    let max_connections = match matches.value_of("connections").map(|v| v.parse::<u16>()) {
+        Some(Ok(con)) => con as _,
         None => DEFAULT_WORKER_COUNT,
         _ => err!("Bad value for maximum connections"),
     };

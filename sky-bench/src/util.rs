@@ -62,13 +62,6 @@ macro_rules! err {
         std::process::exit(0x01);
     }};
 }
-pub fn possible_permutations(r: usize) -> usize {
-    let mut ret = 1usize;
-    for i in (256 - r + 1)..=256 {
-        ret *= i;
-    }
-    ret
-}
 
 /// Returns the number of queries/sec
 pub fn calc(reqs: usize, time: u128) -> f64 {
@@ -93,8 +86,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     let mut query = Query::new();
     query.push("heya");
     if !connection
-        .run_query_raw(&query)
-        .unwrap()
+        .run_query_raw(&query)?
         .eq(&Element::String("HEY!".to_owned()))
     {
         return Err("HEYA test failed".into());
@@ -106,8 +98,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push(&key);
     query.push(&value);
     if !connection
-        .run_query_raw(&query)
-        .unwrap()
+        .run_query_raw(&query)?
         .eq(&Element::RespCode(RespCode::Okay))
     {
         return Err("SET test failed".into());
@@ -116,8 +107,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push("get");
     query.push(&key);
     if !connection
-        .run_query_raw(&query)
-        .unwrap()
+        .run_query_raw(&query)?
         .eq(&Element::Binstr(value.as_bytes().to_owned()))
     {
         return Err("GET test failed".into());
@@ -126,11 +116,52 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
     query.push("del");
     query.push(&key);
     if !connection
-        .run_query_raw(&query)
-        .unwrap()
+        .run_query_raw(&query)?
         .eq(&Element::UnsignedInt(1))
     {
         return Err("DEL test failed".into());
     }
     Ok(())
+}
+
+/// Check if the provided keysize has enough combinations to support the given `queries` count
+///
+/// This function is heavily optimized and should take Θ(1) time. The `ALWAYS_TRUE_FACTOR` is
+/// dependent on pointer width (more specifically the virtual address space size).
+/// - For 64-bit address spaces: `(256!)/r!(256-r!)`; for a value of r >= 12, we'll hit the maximum
+/// of the address space and hence this will always return true (because of the size of `usize`)
+///     > The value for r = 12 is `1.27309515e+20` which largely exceeds `1.8446744e+19`
+/// - For 32-bit address spaces: `(256!)/r!(256-r!)`; for a value of r >= 5, we'll hit the maximum
+/// of the address space and hence this will always return true (because of the size of `usize`)
+///     > The value for r = 5 is `8.81e+9` which largely exceeds `4.3e+9`
+pub const fn enough_ncr(keysize: usize, queries: usize) -> bool {
+    const LUT: [u64; 11] = [
+        // 1B
+        256,
+        // 2B
+        32640,
+        // 3B
+        2763520,
+        // 4B
+        174792640,
+        // 5B
+        8809549056,
+        // 6B
+        368532802176,
+        // 7B
+        13161885792000,
+        // 8B
+        409663695276000,
+        // 9B
+        11288510714272000,
+        // 10B
+        278826214642518400,
+        // 11B
+        6235568072914502400,
+    ];
+    #[cfg(target_pointer_width = "64")]
+    const ALWAYS_TRUE_FACTOR: usize = 12;
+    #[cfg(target_pointer_width = "32")]
+    const ALWAYS_TRUE_FACTOR: usize = 5;
+    keysize >= ALWAYS_TRUE_FACTOR || (LUT[keysize - 1] >= queries as _)
 }
