@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 # external deps
-num_cpus = "1.13.1"
 crossbeam-channel = "0.5.4"
 rayon = "1.5.3"
 log = "0.4.17"

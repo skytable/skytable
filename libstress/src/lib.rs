@@ -336,7 +336,7 @@ where
     ) -> Self {
         // we'll naively use the number of CPUs present on the system times 2 to determine
         // the number of workers (sure the scheduler does tricks all the time)
-        let worker_count = num_cpus::get() * 2;
+        let worker_count = thread::available_parallelism().map_or(1, usize::from) * 2;
         Self::new(
             worker_count,
             init_pre_loop_var,
