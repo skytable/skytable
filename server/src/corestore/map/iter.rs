@@ -24,14 +24,13 @@
  *
 */
 
-use super::bref::{RefMulti, RefMultiMut};
+use super::bref::RefMulti;
 use super::LowMap;
 use super::Skymap;
 use core::mem;
 use hashbrown::raw::RawIntoIter;
 use hashbrown::raw::RawIter;
 use parking_lot::RwLockReadGuard;
-use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
 use std::sync::Arc;
 
@@ -79,7 +78,6 @@ unsafe impl<K: Send, V: Send, S> Send for OwnedIter<K, V, S> {}
 unsafe impl<K: Sync, V: Sync, S> Sync for OwnedIter<K, V, S> {}
 
 type BorrowedIterGroup<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockReadGuard<'a, LowMap<K, V>>>);
-type BorrowedIterGroupMut<'a, K, V> = (RawIter<(K, V)>, Arc<RwLockWriteGuard<'a, LowMap<K, V>>>);
 
 /// A borrowed iterator for a [`Skymap`]
 pub struct BorrowedIter<'a, K, V, S = ahash::RandomState> {
@@ -132,50 +130,6 @@ impl<'a, K, V, S> Iterator for BorrowedIter<'a, K, V, S> {
 
 unsafe impl<'a, K: Send, V: Send, S> Send for BorrowedIter<'a, K, V, S> {}
 unsafe impl<'a, K: Sync, V: Sync, S> Sync for BorrowedIter<'a, K, V, S> {}
-
-/// A borrowed iterator with mutable references for a [`Skymap`]
-pub struct BorrowedIterMut<'a, K, V, S> {
-    map: &'a Skymap<K, V, S>,
-    cs: usize,
-    citer: Option<BorrowedIterGroupMut<'a, K, V>>,
-}
-
-#[allow(unused)] // TODO(@ohsayan): Plonk this
-impl<'a, K, V, S> BorrowedIterMut<'a, K, V, S> {
-    pub const fn new(map: &'a Skymap<K, V, S>) -> Self {
-        Self {
-            map,
-            cs: 0usize,
-            citer: None,
-        }
-    }
-}
-impl<'a, K, V, S> Iterator for BorrowedIterMut<'a, K, V, S> {
-    type Item = RefMultiMut<'a, K, V>;
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(current) = self.citer.as_mut() {
-                if let Some(bucket) = current.0.next() {
-                    let (kptr, vptr) = unsafe {
-                        // the lt guarantees that the map will outlive this
-                        // reference
-                        bucket.as_mut()
-                    };
-                    let guard = Arc::clone(&current.1);
-                    return Some(RefMultiMut::new(guard, kptr, vptr));
-                }
-            }
-            if self.cs == self.map.shards().len() {
-                // reached end of shards
-                return None;
-            }
-            let wshard = unsafe { self.map.get_wshard_unchecked(self.cs) };
-            let iter = unsafe { wshard.iter() };
-            self.citer = Some((iter, Arc::new(wshard)));
-            self.cs += 1;
-        }
-    }
-}
 
 #[test]
 fn test_iter() {

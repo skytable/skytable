@@ -39,8 +39,10 @@ use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::RandomState;
+use std::num::NonZeroUsize;
+use std::thread::available_parallelism;
 pub mod bref;
-use iter::{BorrowedIter, BorrowedIterMut, OwnedIter};
+use iter::{BorrowedIter, OwnedIter};
 pub mod iter;
 use bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry};
 
@@ -90,7 +92,7 @@ where
 }
 
 fn get_shard_count() -> usize {
-    (num_cpus::get() * 8).next_power_of_two()
+    (available_parallelism().map_or(1, usize::from) * 16).next_power_of_two()
 }
 
 const fn cttz(amount: usize) -> usize {
@@ -193,10 +195,6 @@ where
     /// Get a borrowed iterator for the Skymap. Bound to the lifetime
     pub fn get_iter(&self) -> BorrowedIter<K, V, S> {
         BorrowedIter::new(self)
-    }
-    /// Get a borrowed mutable iterator for the Skymap, Bound to the lifetime
-    pub fn get_iter_mut(&self) -> BorrowedIterMut<K, V, S> {
-        BorrowedIterMut::new(self)
     }
     /// Get an owned iterator to the Skymap
     pub fn get_owned_iter(self) -> OwnedIter<K, V, S> {

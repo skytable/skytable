@@ -1307,7 +1307,6 @@ dependencies = [
  "libsky",
  "libstress",
  "log",
- "num_cpus",
  "openssl",
  "parking_lot 0.12.0",
  "rand",
