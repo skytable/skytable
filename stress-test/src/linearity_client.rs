@@ -112,9 +112,15 @@ pub fn stress_linearity_concurrent_clients_set(
 
     // generate the random k/v pairs
     let keys = generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, true);
-    let values: Vec<String> =
+    let values =
         generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, false);
-
+    let (keys, values) = match (keys, values) {
+        (Ok(k), Ok(v)) => (k, v),
+        _ => {
+            eprintln!("Allocation error");
+            std::process::exit(0x01);
+        }
+    };
     // make sure the database is empty
     temp_con.flushdb().unwrap();
 
@@ -166,10 +172,17 @@ pub fn stress_linearity_concurrent_clients_get(
     );
     let mut current_thread_count = 1usize;
 
-    // Generate the random k/v pairs
+    // generate the random k/v pairs
     let keys = generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, true);
-    let values: Vec<String> =
+    let values =
         generate_random_string_vector(DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV, &mut rng, false);
+    let (keys, values) = match (keys, values) {
+        (Ok(k), Ok(v)) => (k, v),
+        _ => {
+            eprintln!("Allocation error");
+            std::process::exit(0x01);
+        }
+    };
 
     // Make sure that the database is empty
     temp_con.flushdb().unwrap();

@@ -25,6 +25,7 @@
 */
 
 use crate::{benchtool::validation::SQ_RESPCODE_SIZE, hoststr, sanity_test};
+use libstress::utils::generate_random_string_vector;
 use libstress::Workpool;
 use rand::thread_rng;
 use skytable::Query;
@@ -53,8 +54,12 @@ pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, si
         Some(connections),
     );
     println!("Generating keys ...");
-    let keys = libstress::utils::generate_random_string_vector(num, size, &mut rand, true);
-    let values = libstress::utils::generate_random_string_vector(num, size, &mut rand, false);
+    let keys = generate_random_string_vector(num, size, &mut rand, true);
+    let values = generate_random_string_vector(num, size, &mut rand, false);
+    let (keys, values) = match (keys, values) {
+        (Ok(k), Ok(v)) => (k, v),
+        _ => err!("Allocation error"),
+    };
     {
         let np = np;
         (0..num)

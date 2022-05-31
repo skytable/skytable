@@ -103,6 +103,10 @@ pub fn runner(
 
     let keys = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, true);
     let values = generate_random_byte_vector(max_queries, per_kv_size, &mut rand, false);
+    let (keys, values) = match (keys, values) {
+        (Ok(k), Ok(v)) => (k, v),
+        _ => err!("Allocation error"),
+    };
 
     /*
     We create three vectors of vectors: `set_packs`, `get_packs` and `del_packs`

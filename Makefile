@@ -2,6 +2,8 @@ BUILD_HARNESS:=cargo build -p harness
 RUN_HARNESS:= target/debug/harness
 .harness:
 	@${BUILD_HARNESS}
+build:
+	@cargo build
 test: .harness
 	@${RUN_HARNESS} test
 bundle: .harness

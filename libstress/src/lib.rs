@@ -365,6 +365,7 @@ pub mod utils {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     use rand::distributions::{Alphanumeric, Standard};
     use std::collections::HashSet;
+    use std::collections::TryReserveError;
 
     /// Generate a random UTF-8 string
     pub fn ran_string(len: usize, rand: impl rand::Rng) -> String {
@@ -385,9 +386,10 @@ pub mod utils {
         size: usize,
         mut rng: impl rand::Rng,
         unique: bool,
-    ) -> Vec<Vec<u8>> {
+    ) -> Result<Vec<Vec<u8>>, TryReserveError> {
         if unique {
-            let mut keys: HashSet<Vec<u8>> = HashSet::with_capacity(count);
+            let mut keys = HashSet::new();
+            keys.try_reserve(size)?;
             (0..count).into_iter().for_each(|_| {
                 let mut ran = ran_bytes(size, &mut rng);
                 while keys.contains(&ran) {
@@ -395,12 +397,15 @@ pub mod utils {
                 }
                 keys.insert(ran);
             });
-            keys.into_iter().collect()
+            Ok(keys.into_iter().collect())
         } else {
+            let mut keys = Vec::new();
+            keys.try_reserve_exact(size)?;
             (0..count)
                 .into_iter()
                 .map(|_| ran_bytes(size, &mut rng))
-                .collect()
+                .for_each(|bytes| keys.push(bytes));
+            Ok(keys)
         }
     }
     /// Generate a vector of random UTF-8 valid strings
@@ -409,9 +414,10 @@ pub mod utils {
         size: usize,
         mut rng: impl rand::Rng,
         unique: bool,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, TryReserveError> {
         if unique {
-            let mut keys: HashSet<String> = HashSet::with_capacity(count);
+            let mut keys = HashSet::new();
+            keys.try_reserve(size)?;
             (0..count).into_iter().for_each(|_| {
                 let mut ran = ran_string(size, &mut rng);
                 while keys.contains(&ran) {
@@ -419,12 +425,15 @@ pub mod utils {
                 }
                 keys.insert(ran);
             });
-            keys.into_iter().collect()
+            Ok(keys.into_iter().collect())
         } else {
+            let mut keys = Vec::new();
+            keys.try_reserve_exact(size)?;
             (0..count)
                 .into_iter()
                 .map(|_| ran_string(size, &mut rng))
-                .collect()
+                .for_each(|bytes| keys.push(bytes));
+            Ok(keys)
         }
     }
     pub fn rand_alphastring(len: usize, rng: &mut impl rand::Rng) -> String {

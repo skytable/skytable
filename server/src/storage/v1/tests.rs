@@ -69,8 +69,8 @@ cfg_test!(
         const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
+            generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
+            generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
         let cmap: Coremap<Data, Data> = keys
             .iter()
@@ -91,8 +91,8 @@ cfg_test!(
         const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
+            generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
+            generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
         let cmap: Coremap<Data, Data> = keys
             .iter()
@@ -115,8 +115,8 @@ cfg_test!(
         const LEN: usize = 8_usize;
         let mut rng = thread_rng();
         let (keys, values) = (
-            generate_random_string_vector(COUNT, LEN, &mut rng, true),
-            generate_random_string_vector(COUNT, LEN, &mut rng, false),
+            generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
+            generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
         let cmap: Coremap<Data, Data> = keys
             .iter()
