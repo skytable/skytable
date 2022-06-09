@@ -26,9 +26,12 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
 
+#[cfg(test)]
+mod tests;
+
 use {
     crate::util::Life,
-    core::{marker::PhantomData, slice},
+    core::{marker::PhantomData, mem::discriminant, slice},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -144,29 +147,28 @@ impl<'a> Scanner<'a> {
     }
 }
 
-#[test]
-fn scanner_tokenize() {
-    let tokens = b"create space app".to_vec();
-    let scanned_tokens = Scanner::parse_into_tokens(&tokens);
-    let scanned_tokens: Vec<String> = scanned_tokens
-        .into_iter()
-        .map(|tok| unsafe { String::from_utf8_lossy(tok.as_slice()).to_string() })
-        .collect();
-    assert_eq!(scanned_tokens, ["create", "space", "app"]);
+#[derive(Debug, Clone, Copy)]
+pub enum Token<'a> {
+    Create,
+    Drop,
+    Model,
+    Space,
+    String,
+    Binary,
+    Ident(Life<'a, Slice>),
+    Number(Life<'a, Slice>),
 }
 
-#[test]
-fn scanner_step_by_step_tokenize() {
-    let tokens = b"create space app".to_vec();
-    let mut scanner = Scanner::new(&tokens);
-    unsafe {
-        assert_eq!(scanner.next_token().as_slice(), b"create");
-        assert_eq!(scanner.next_token().as_slice(), b"space");
-        assert_eq!(scanner.next_token().as_slice(), b"app");
-        assert!(scanner.exhausted());
-        assert_eq!(scanner.next_token().as_slice(), b"");
-        assert_eq!(scanner.next_token().as_slice(), b"");
-        assert_eq!(scanner.next_token().as_slice(), b"");
+impl<'a> PartialEq for Token<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Ident(ref id_a), Self::Ident(ref id_b)) => unsafe {
+                id_a.as_slice() == id_b.as_slice()
+            },
+            (Self::Number(ref id_a), Self::Number(ref id_b)) => unsafe {
+                id_a.as_slice() == id_b.as_slice()
+            },
+            (a, b) => discriminant(a) == discriminant(b),
+        }
     }
-    assert!(scanner.exhausted());
 }

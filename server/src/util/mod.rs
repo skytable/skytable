@@ -152,6 +152,7 @@ impl<T: Clone> Clone for Wrapper<T> {
 /// - lifetimes are context captured by the compiler. so if this doesn't work, we'll need
 /// to explicitly annotate bounds
 /// - this type derefs to the base type
+#[derive(Copy, Clone)]
 pub struct Life<'a, T> {
     _lt: PhantomData<&'a T>,
     v: T,
