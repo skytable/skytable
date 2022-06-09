@@ -35,19 +35,20 @@
 //! is the most important part of the project. There are several modules within this crate; see
 //! the modules for their respective documentation.
 
-use crate::diskstore::flock::FileLock;
-pub use crate::util::exit_error;
-use env_logger::Builder;
-use libsky::URL;
-use libsky::VERSION;
-use std::env;
-use std::process;
+use {
+    crate::{config::ConfigurationSet, diskstore::flock::FileLock, util::exit_error},
+    env_logger::Builder,
+    libsky::{URL, VERSION},
+    std::{env, process},
+};
+
 #[macro_use]
 pub mod util;
 mod actions;
 mod admin;
 mod arbiter;
 mod auth;
+mod blueql;
 mod config;
 mod corestore;
 mod dbnet;
@@ -123,8 +124,6 @@ fn main() {
         std::fs::remove_file(PID_FILE_PATH).unwrap();
     }
 }
-
-use self::config::ConfigurationSet;
 
 /// This function checks the command line arguments and either returns a config object
 /// or prints an error to `stderr` and terminates the server

@@ -29,13 +29,14 @@ mod macros;
 pub mod compiler;
 pub mod error;
 pub mod os;
-use crate::actions::{ActionError, ActionResult};
-use crate::protocol::interface::ProtocolSpec;
-use core::fmt::Debug;
-use core::future::Future;
-use core::ops::Deref;
-use core::pin::Pin;
-use std::process;
+use {
+    crate::{
+        actions::{ActionError, ActionResult},
+        protocol::interface::ProtocolSpec,
+    },
+    core::{fmt::Debug, future::Future, marker::PhantomData, ops::Deref, pin::Pin},
+    std::process,
+};
 
 const EXITCODE_ONE: i32 = 0x01;
 pub type FutureResult<'s, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
@@ -135,3 +136,68 @@ impl<T: Clone> Clone for Wrapper<T> {
         }
     }
 }
+
+#[derive(Debug, PartialEq)]
+/// This is yet another compiler hack and has no "actual impact" in terms of memory alignment.
+///
+/// When it's hard to have a _split mutable borrow_, all across the source we use custom
+/// fat pointers which are inherently unbounded in their lifetime; this is needed in cases where
+/// it's **impossible** to do so. But when you can _somehow_ bind a lifetime without causing
+/// a compiler error, it is always good to do so to avoid misuse of the previously mentioned
+/// fat pointers. This is exactly what this type does. It binds a context-dependent lifetime
+/// to some type which preferably has no other lifetime (something like an `UnsafeSlice`, for
+/// example)
+///
+/// ## Important notes
+/// - lifetimes are context captured by the compiler. so if this doesn't work, we'll need
+/// to explicitly annotate bounds
+/// - this type derefs to the base type
+pub struct Life<'a, T> {
+    _lt: PhantomData<&'a T>,
+    v: T,
+}
+
+impl<'a, T> Life<'a, T> {
+    /// Ensure compile-time alignment (this is just a sanity check)
+    const _ENSURE_COMPILETIME_ALIGN: () =
+        assert!(std::mem::align_of::<Life<Vec<u8>>>() == std::mem::align_of::<Vec<u8>>());
+
+    #[inline(always)]
+    pub const fn new(v: T) -> Self {
+        Life {
+            v,
+            _lt: PhantomData,
+        }
+    }
+}
+
+impl<'a, T> From<T> for Life<'a, T> {
+    fn from(v: T) -> Self {
+        Self::new(v)
+    }
+}
+
+impl<'a, T> Deref for Life<'a, T> {
+    type Target = T;
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.v
+    }
+}
+
+impl<'a, T> AsRef<T> for Life<'a, T> {
+    #[inline(always)]
+    fn as_ref(&self) -> &T {
+        Deref::deref(self)
+    }
+}
+
+impl<'a, T: PartialEq> PartialEq<T> for Life<'a, T> {
+    #[inline(always)]
+    fn eq(&self, other: &T) -> bool {
+        PartialEq::eq(&self.v, other)
+    }
+}
+
+unsafe impl<'a, T: Send> Send for Life<'a, T> {}
+unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
