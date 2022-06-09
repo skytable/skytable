@@ -29,7 +29,10 @@ pub use unix::*;
 #[cfg(windows)]
 pub use windows::*;
 
-use std::ffi::OsStr;
+use {
+    crate::IoResult,
+    std::{ffi::OsStr, fs, path::Path},
+};
 
 #[cfg(unix)]
 mod unix {
@@ -147,10 +150,6 @@ mod windows {
         }
     }
 }
-
-use crate::IoResult;
-use std::fs;
-use std::path::Path;
 
 /// Recursively copy files from the given `src` to the provided `dest`
 pub fn recursive_copy(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> IoResult<()> {

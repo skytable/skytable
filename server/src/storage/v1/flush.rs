@@ -266,6 +266,17 @@ pub mod oneshot {
     use super::*;
     use std::fs::{self, File};
 
+    #[inline(always)]
+    fn cowfile(
+        cowfile_name: &str,
+        with_open: impl FnOnce(&mut File) -> IoResult<()>,
+    ) -> IoResult<()> {
+        let mut f = File::create(cowfile_name)?;
+        with_open(&mut f)?;
+        f.sync_all()?;
+        fs::rename(&cowfile_name, &cowfile_name[..cowfile_name.len() - 1])
+    }
+
     /// No `partmap` handling. Just flushes the table to the expected location
     pub fn flush_table<T: StorageTarget, U: FlushableTable>(
         target: &T,
@@ -278,11 +289,9 @@ pub mod oneshot {
             Ok(())
         } else {
             let path = unsafe { target.table_target(ksid.as_str(), tableid.as_str()) };
-            // fine, this needs to be flushed
-            let mut file = File::create(&path)?;
-            super::interface::serialize_into_slow_buffer(&mut file, table)?;
-            file.sync_all()?;
-            fs::rename(&path, &path[..path.len() - 1])
+            cowfile(&path, |file| {
+                super::interface::serialize_table_into_slow_buffer(file, table)
+            })
         }
     }
 
@@ -309,20 +318,16 @@ pub mod oneshot {
         K: FlushableKeyspace<Tbl, U>,
     {
         let path = unsafe { target.partmap_target(ksid.as_str()) };
-        let mut file = File::create(&path)?;
-        super::interface::serialize_partmap_into_slow_buffer(&mut file, keyspace)?;
-        file.sync_all()?;
-        fs::rename(&path, &path[..path.len() - 1])?;
-        Ok(())
+        cowfile(&path, |file| {
+            super::interface::serialize_partmap_into_slow_buffer(file, keyspace)
+        })
     }
 
     // Flush the `PRELOAD`
     pub fn flush_preload<T: StorageTarget>(target: &T, store: &Memstore) -> IoResult<()> {
         let preloadtmp = target.preload_target();
-        let mut file = File::create(&preloadtmp)?;
-        super::interface::serialize_preload_into_slow_buffer(&mut file, store)?;
-        file.sync_all()?;
-        fs::rename(&preloadtmp, &preloadtmp[..preloadtmp.len() - 1])?;
-        Ok(())
+        cowfile(&preloadtmp, |file| {
+            super::interface::serialize_preload_into_slow_buffer(file, store)
+        })
     }
 }

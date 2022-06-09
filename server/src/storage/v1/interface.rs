@@ -140,7 +140,7 @@ pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
 /// Uses a buffered writer under the hood to improve write performance as the provided
 /// writable interface might be very slow. The buffer does flush once done, however, it
 /// is important that you fsync yourself!
-pub fn serialize_into_slow_buffer<T: Write, U: FlushableTable>(
+pub fn serialize_table_into_slow_buffer<T: Write, U: FlushableTable>(
     buffer: &mut T,
     writable_item: &U,
 ) -> IoResult<()> {
