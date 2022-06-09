@@ -41,7 +41,7 @@ fn parse_simple_query() {
     let q: Vec<String> = if let Query::Simple(q) = q {
         q.as_slice()
             .iter()
-            .map(|v| String::from_utf8_lossy(v.as_slice()).to_string())
+            .map(|v| String::from_utf8_lossy(unsafe { v.as_slice() }).to_string())
             .collect()
     } else {
         panic!("Expected simple query")
@@ -67,7 +67,7 @@ fn parse_pipelined_query() {
             .iter()
             .map(|sq| {
                 sq.iter()
-                    .map(|v| String::from_utf8_lossy(v.as_slice()).to_string())
+                    .map(|v| String::from_utf8_lossy(unsafe { v.as_slice() }).to_string())
                     .collect()
             })
             .collect()
