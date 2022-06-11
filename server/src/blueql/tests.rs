@@ -24,7 +24,7 @@
  *
 */
 
-use super::Scanner;
+use super::{lex::Ident, Scanner};
 
 #[test]
 fn scanner_tokenize() {
@@ -42,13 +42,26 @@ fn scanner_step_by_step_tokenize() {
     let tokens = b"create space app".to_vec();
     let mut scanner = Scanner::new(&tokens);
     unsafe {
-        assert_eq!(scanner.next_token().as_slice(), b"create");
-        assert_eq!(scanner.next_token().as_slice(), b"space");
-        assert_eq!(scanner.next_token().as_slice(), b"app");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"create");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"space");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"app");
         assert!(scanner.exhausted());
-        assert_eq!(scanner.next_token().as_slice(), b"");
-        assert_eq!(scanner.next_token().as_slice(), b"");
-        assert_eq!(scanner.next_token().as_slice(), b"");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"");
+        assert_eq!(scanner.next_token_tl().as_slice(), b"");
     }
     assert!(scanner.exhausted());
+}
+
+// lexing
+#[test]
+fn lex_ident() {
+    let src = b"hello ".to_vec();
+    let mut scanner = Scanner::new(&src);
+    let ident: Ident = scanner.next().unwrap();
+    assert_eq!(unsafe { ident.as_slice() }, b"hello");
+    let src = b"hello:world".to_vec();
+    let mut scanner = Scanner::new(&src);
+    let ident: Ident = scanner.next().unwrap();
+    assert_eq!(unsafe { ident.as_slice() }, b"hello");
 }

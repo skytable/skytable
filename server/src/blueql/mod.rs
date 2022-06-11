@@ -28,6 +28,13 @@
 
 #[cfg(test)]
 mod tests;
+// endof tests
+mod error;
+mod lex;
+// imports
+use self::{error::LangError, lex::LexItem};
+
+pub type LangResult<T> = Result<T, LangError>;
 
 use {
     crate::util::Life,
@@ -106,15 +113,41 @@ impl<'a> Scanner<'a> {
     pub fn not_exhausted(&self) -> bool {
         self.cursor < self.end_ptr
     }
+    unsafe fn incr_cursor_by(&mut self, by: usize) {
+        self.cursor = self.cursor.add(by);
+    }
+    unsafe fn incr_cursor(&mut self) {
+        self.incr_cursor_by(1)
+    }
+    unsafe fn deref_cursor(&self) -> u8 {
+        *(self.cursor())
+    }
+    const fn cursor(&self) -> *const u8 {
+        self.cursor
+    }
+    const fn end_ptr(&self) -> *const u8 {
+        self.end_ptr
+    }
 }
 
 // parsing
 impl<'a> Scanner<'a> {
+    fn skip_separator(&mut self) {
+        self.cursor = unsafe {
+            self.cursor
+                .add((self.not_exhausted() && self.deref_cursor() == Self::SEPARATOR) as usize)
+        };
+    }
+    pub fn next<T: LexItem>(&mut self) -> LangResult<T> {
+        T::lex(self)
+    }
+    const SEPARATOR: u8 = b' ';
     #[inline(always)]
-    pub fn next_token(&mut self) -> Slice {
+    /// Returns the next token separated by the separator
+    pub fn next_token_tl(&mut self) -> Slice {
         let start_ptr = self.cursor;
         let mut ptr = self.cursor;
-        while self.end_ptr > ptr && unsafe { *ptr != b' ' } {
+        while self.end_ptr > ptr && unsafe { *ptr != Self::SEPARATOR } {
             ptr = unsafe {
                 // UNSAFE(@ohsayan): The loop init invariant ensures this is safe
                 ptr.add(1)
@@ -122,26 +155,24 @@ impl<'a> Scanner<'a> {
         }
         // update the cursor
         self.cursor = ptr;
-        // if self is not exhausted and the cursor is a whitespace
-        let ptr_is_whitespace = unsafe {
-            // UNSAFE(@ohsayan): The first operand ensures safety
-            self.not_exhausted() && *self.cursor == b' '
-        };
-        // if ptr is whitespace, then move the cursor ahead
-        self.cursor = unsafe {
-            // UNSAFE(@ohsayan): The definition of ptr_is_whitespace ensures correctness
-            self.cursor.add(ptr_is_whitespace as usize)
-        };
+        self.skip_separator();
         unsafe {
             // UNSAFE(@ohsayan): The start_ptr and size were verified by the above steps
             Slice::new(start_ptr, find_ptr_distance(start_ptr, ptr))
+        }
+    }
+    pub fn try_next_token(&mut self) -> LangResult<Slice> {
+        if self.not_exhausted() {
+            Ok(self.next_token_tl())
+        } else {
+            Err(LangError::UnexpectedEOF)
         }
     }
     pub fn parse_into_tokens(buf: &'a [u8]) -> Vec<Life<'a, Slice>> {
         let mut slf = Scanner::new(buf);
         let mut r = Vec::new();
         while slf.not_exhausted() {
-            r.push(Life::new(slf.next_token()));
+            r.push(Life::new(slf.next_token_tl()));
         }
         r
     }
