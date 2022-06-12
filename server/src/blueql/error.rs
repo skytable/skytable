@@ -33,6 +33,7 @@ pub enum LangError {
     TypeParseFailure,
     InvalidSyntax,
     UnexpectedEOF,
+    UnknownType,
 }
 
 impl From<Utf8Error> for LangError {

@@ -64,6 +64,7 @@ impl Ident {
 }
 
 impl LexItem for Ident {
+    #[inline(always)]
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         let start_ptr = scanner.cursor(); // look at the current cursor
         let is_okay = {
@@ -105,6 +106,7 @@ impl LexItem for Ident {
 pub struct LitNum(pub u64);
 
 impl LexItem for LitNum {
+    #[inline(always)]
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         let mut is_okay = true;
         let mut ret: u64 = 0;
@@ -149,6 +151,7 @@ impl LexItem for LitNum {
 pub struct LitString<'a>(pub &'a str);
 
 impl<'a> LexItem for LitString<'a> {
+    #[inline(always)]
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         // should start with '"'
         let mut is_okay = scanner.not_exhausted()
@@ -202,6 +205,7 @@ unsafe fn check_escaped(scanner: &mut Scanner, escape_what: u8) -> bool {
 pub struct LitStringEscaped(pub String);
 
 impl LexItem for LitStringEscaped {
+    #[inline(always)]
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         let mut stringbuf = Vec::new();
         // should start with  '"'
@@ -266,20 +270,21 @@ macro_rules! impl_punctuation {
                 const fn get_byte() -> u8 { $byte }
             }
             impl LexItem for $ty {
-            fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-                if scanner.not_exhausted() && unsafe {
-                    // UNSAFE(@ohsayan): The first operand ensures correctness
-                    scanner.deref_cursor() == $byte
-                } {
-                    unsafe {
-                        // UNSAFE(@ohsayan): The above condition guarantees safety
-                        scanner.incr_cursor()
-                    };
-                    Ok(Self)
-                } else {
-                    Err(LangError::InvalidSyntax)
+                #[inline(always)]
+                fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+                    if scanner.not_exhausted() && unsafe {
+                        // UNSAFE(@ohsayan): The first operand ensures correctness
+                        scanner.deref_cursor() == $byte
+                    } {
+                        unsafe {
+                            // UNSAFE(@ohsayan): The above condition guarantees safety
+                            scanner.incr_cursor()
+                        };
+                        Ok(Self)
+                    } else {
+                        Err(LangError::InvalidSyntax)
+                    }
                 }
-            }
             }
         )*
     };
@@ -294,4 +299,29 @@ impl_punctuation! {
     Semicolon: b';',
     SingleQuote: b'\'',
     DoubleQuote: b'"'
+}
+
+#[derive(Debug, PartialEq)]
+#[repr(u8)]
+pub enum Type {
+    String,
+    Binary,
+    List,
+}
+
+impl LexItem for Type {
+    #[inline(always)]
+    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+        let try_ident = Ident::lex(scanner)?;
+        let ret = match unsafe {
+            // UNSAFE(@ohsayan): The lifetime of the `scanner` ensures validity
+            try_ident.as_slice()
+        } {
+            b"string" => Self::String,
+            b"binary" => Self::Binary,
+            b"list" => Self::List,
+            _ => return Err(LangError::UnknownType),
+        };
+        Ok(ret)
+    }
 }

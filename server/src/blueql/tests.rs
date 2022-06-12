@@ -27,7 +27,7 @@
 use super::{
     lex::{
         CloseAngular, CloseParen, Colon, DoubleQuote, Ident, LitNum, LitString, LitStringEscaped,
-        OpenAngular, OpenParen, Semicolon, SingleQuote,
+        OpenAngular, OpenParen, Semicolon, SingleQuote, Type,
     },
     Scanner,
 };
@@ -102,9 +102,9 @@ fn lex_lit_string() {
 
 #[test]
 fn lex_lit_string_escaped() {
-    let src = br#""hello\\world""#.to_vec();
+    let src = br#""hello\\world\"""#.to_vec();
     let litstr = Scanner::new(&src).next::<LitStringEscaped>().unwrap().0;
-    assert_eq!(litstr, "hello\\world");
+    assert_eq!(litstr, "hello\\world\"");
 }
 
 #[test]
@@ -119,5 +119,15 @@ fn lex_punctutation() {
     scanner.next::<Semicolon>().unwrap();
     scanner.next::<SingleQuote>().unwrap();
     scanner.next::<DoubleQuote>().unwrap();
+    assert!(scanner.exhausted());
+}
+
+#[test]
+fn lex_type() {
+    let src = b"string binary list".to_vec();
+    let mut scanner = Scanner::new(&src);
+    assert_eq!(scanner.next::<Type>().unwrap(), Type::String);
+    assert_eq!(scanner.next::<Type>().unwrap(), Type::Binary);
+    assert_eq!(scanner.next::<Type>().unwrap(), Type::List);
     assert!(scanner.exhausted());
 }
