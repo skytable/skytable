@@ -104,7 +104,7 @@ pub struct LitNum(pub u64);
 impl LexItem for LitNum {
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         let mut is_okay = true;
-        let mut ret = 0;
+        let mut ret: u64 = 0;
         while scanner.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
@@ -117,8 +117,17 @@ impl LexItem for LitNum {
                 scanner.deref_cursor()
             };
             is_okay &= cbyte.is_ascii_digit();
-            ret = (ret * 10) + (cbyte & 0x0F) as u64;
-            // TODO(@ohsayan): Check overflow
+
+            // multiply
+            let (ret_on_mul, overflow_flag) = ret.overflowing_mul(10);
+            ret = ret_on_mul;
+            is_okay &= !overflow_flag;
+
+            // add
+            let (ret_on_add, overflow_flag) = ret.overflowing_add((cbyte & 0x0F) as u64);
+            ret = ret_on_add;
+            is_okay &= !overflow_flag;
+
             unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
                 // defined behavior in rust
