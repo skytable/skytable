@@ -132,11 +132,16 @@ impl<'a> Scanner<'a> {
 
 // parsing
 impl<'a> Scanner<'a> {
-    fn skip_separator(&mut self) {
+    #[inline(always)]
+    fn skip_char_if_present(&mut self, ch: u8) {
         self.cursor = unsafe {
             self.cursor
-                .add((self.not_exhausted() && self.deref_cursor() == Self::SEPARATOR) as usize)
+                .add((self.not_exhausted() && self.deref_cursor() == ch) as usize)
         };
+    }
+    #[inline(always)]
+    fn skip_separator(&mut self) {
+        self.skip_char_if_present(Self::SEPARATOR)
     }
     pub fn next<T: LexItem>(&mut self) -> LangResult<T> {
         T::lex(self)

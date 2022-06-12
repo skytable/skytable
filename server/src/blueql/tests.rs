@@ -25,7 +25,7 @@
 */
 
 use super::{
-    lex::{Ident, LitNum, LitString},
+    lex::{Ident, LitNum, LitString, LitStringEscaped},
     Scanner,
 };
 
@@ -95,4 +95,11 @@ fn lex_lit_string() {
         Scanner::new(&src).next::<LitString>().unwrap().0,
         "hello, world"
     );
+}
+
+#[test]
+fn lex_lit_string_escaped() {
+    let src = br#""hello\\world""#.to_vec();
+    let litstr = Scanner::new(&src).next::<LitStringEscaped>().unwrap().0;
+    assert_eq!(litstr, "hello\\world");
 }

@@ -25,6 +25,7 @@
 */
 
 use core::{num::ParseIntError, str::Utf8Error};
+use std::string::FromUtf8Error;
 
 #[derive(Debug, PartialEq)]
 pub enum LangError {
@@ -43,5 +44,11 @@ impl From<Utf8Error> for LangError {
 impl From<ParseIntError> for LangError {
     fn from(_: ParseIntError) -> Self {
         Self::TypeParseFailure
+    }
+}
+
+impl From<FromUtf8Error> for LangError {
+    fn from(_: FromUtf8Error) -> Self {
+        Self::NonUnicodeChar
     }
 }

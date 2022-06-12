@@ -150,7 +150,8 @@ pub struct LitString<'a>(pub &'a str);
 
 impl<'a> LexItem for LitString<'a> {
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-        let is_okay = scanner.not_exhausted()
+        // should start with '"'
+        let mut is_okay = scanner.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
                 let cond = scanner.deref_cursor() == b'"';
@@ -171,6 +172,12 @@ impl<'a> LexItem for LitString<'a> {
                 scanner.incr_cursor()
             };
         }
+        // should be terminated by a '"'
+        is_okay &= scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): First operand guarantees correctness
+                scanner.deref_cursor() == b'"'
+            };
         if is_okay {
             let len = find_ptr_distance(start_ptr, scanner.cursor());
             let string = str::from_utf8(unsafe { slice::from_raw_parts(start_ptr, len) })?;
@@ -178,6 +185,75 @@ impl<'a> LexItem for LitString<'a> {
             Ok(Self(string))
         } else {
             Err(LangError::TypeParseFailure)
+        }
+    }
+}
+
+#[inline(always)]
+/// # Safety
+/// - Ensure that the scanner is not exhausted
+unsafe fn check_escaped(scanner: &mut Scanner, escape_what: u8) -> bool {
+    debug_assert!(scanner.not_exhausted());
+    scanner.deref_cursor() == b'\\' && {
+        scanner.not_exhausted() && scanner.deref_cursor() == escape_what
+    }
+}
+
+pub struct LitStringEscaped(pub String);
+
+impl LexItem for LitStringEscaped {
+    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+        let mut stringbuf = Vec::new();
+        // should start with  '"'
+        let mut is_okay = scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): The first operand guarantees correctness
+                let cond = scanner.deref_cursor() == b'"';
+                scanner.incr_cursor();
+                cond
+            };
+        while is_okay
+            && scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): The second operand guarantees correctness
+                scanner.deref_cursor() != b'"'
+            }
+        {
+            let is_escaped_backslash = unsafe {
+                // UNSAFE(@ohsayan): The scanner is not exhausted, so this is fine
+                check_escaped(scanner, b'\\')
+            };
+            let is_escaped_quote = unsafe {
+                // UNSAFE(@ohsayan): The scanner is not exhausted, so this is fine
+                check_escaped(scanner, b'"')
+            };
+            let should_skip = (is_escaped_backslash as usize) + (is_escaped_quote as usize);
+            unsafe {
+                // UNSAFE(@ohsayan): If either is true, then it is correct to do this
+                scanner.incr_cursor_by(should_skip)
+            };
+            unsafe {
+                // UNSAFE(@ohsayan): if not escaped, this is fine. if escaped, this is still
+                // fine because the escaped byte was checked
+                stringbuf.push(scanner.deref_cursor());
+            }
+            unsafe {
+                // UNSAFE(@ohsayan): if escaped we have moved ahead by one but the escaped char
+                // is still one more so we go ahead. if not, then business as usual
+                scanner.incr_cursor()
+            };
+        }
+
+        // should be terminated by a '"'
+        is_okay &= scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): First operand guarantees correctness
+                scanner.deref_cursor() == b'"'
+            };
+
+        match String::from_utf8(stringbuf) {
+            Ok(s) if is_okay => Ok(Self(s)),
+            _ => Err(LangError::TypeParseFailure),
         }
     }
 }
