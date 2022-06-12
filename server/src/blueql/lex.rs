@@ -63,16 +63,19 @@ impl Ident {
 impl LexItem for Ident {
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
         let start_ptr = scanner.cursor(); // look at the current cursor
-        let is_okay = unsafe {
+        let is_okay = {
             // check the first byte
-            scanner.not_exhausted() && {
-                let byte = scanner.deref_cursor();
-                byte.is_ascii_alphabetic() || byte == b'_'
-            }
+            scanner.not_exhausted()
+                && unsafe {
+                    // UNSAFE(@ohsayan): The first operand guarantees correctness
+                    let byte = scanner.deref_cursor();
+                    byte.is_ascii_alphabetic() || byte == b'_'
+                }
         };
         while scanner.not_exhausted()
             && is_okay
             && unsafe {
+                // UNSAFE(@ohsayan): The first operand guarantees correctness
                 let byte = scanner.deref_cursor();
                 byte.is_ascii_alphanumeric() || byte == b'_'
             }
@@ -92,6 +95,41 @@ impl LexItem for Ident {
             }
         } else {
             Err(LangError::InvalidSyntax)
+        }
+    }
+}
+
+pub struct LitNum(pub u64);
+
+impl LexItem for LitNum {
+    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+        let mut is_okay = true;
+        let mut ret = 0;
+        while scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): The first operand guarantees correctness
+                scanner.deref_cursor() != b' '
+            }
+            && is_okay
+        {
+            let cbyte = unsafe {
+                // UNSAFE(@ohsayan): Loop invariant guarantees correctness
+                scanner.deref_cursor()
+            };
+            is_okay &= cbyte.is_ascii_digit();
+            ret = (ret * 10) + (cbyte & 0x0F) as u64;
+            // TODO(@ohsayan): Check overflow
+            unsafe {
+                // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
+                // defined behavior in rust
+                scanner.incr_cursor()
+            }
+        }
+        if is_okay {
+            scanner.skip_separator();
+            Ok(Self(ret))
+        } else {
+            Err(LangError::TypeParseFailure)
         }
     }
 }

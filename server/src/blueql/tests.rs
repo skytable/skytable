@@ -24,7 +24,10 @@
  *
 */
 
-use super::{lex::Ident, Scanner};
+use super::{
+    lex::{Ident, LitNum},
+    Scanner,
+};
 
 #[test]
 fn scanner_tokenize() {
@@ -60,8 +63,22 @@ fn lex_ident() {
     let mut scanner = Scanner::new(&src);
     let ident: Ident = scanner.next().unwrap();
     assert_eq!(unsafe { ident.as_slice() }, b"hello");
+    assert!(scanner.exhausted());
     let src = b"hello:world".to_vec();
     let mut scanner = Scanner::new(&src);
     let ident: Ident = scanner.next().unwrap();
     assert_eq!(unsafe { ident.as_slice() }, b"hello");
+    assert!(scanner.not_exhausted());
+}
+
+#[test]
+fn lex_lit_num() {
+    let src = b"123456".to_vec();
+    let mut scanner = Scanner::new(&src);
+    let num: LitNum = scanner.next().unwrap();
+    assert_eq!(num.0, 123456);
+    let src = b"123456 ".to_vec();
+    let mut scanner = Scanner::new(&src);
+    let num: LitNum = scanner.next().unwrap();
+    assert_eq!(num.0, 123456);
 }
