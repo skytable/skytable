@@ -128,6 +128,28 @@ impl<'a> Scanner<'a> {
     const fn end_ptr(&self) -> *const u8 {
         self.end_ptr
     }
+    fn peek(&self) -> Option<u8> {
+        if self.not_exhausted() {
+            Some(unsafe { self.deref_cursor() })
+        } else {
+            None
+        }
+    }
+    fn peek_eq(&self, eq_byte: u8) -> bool {
+        unsafe { self.not_exhausted() && self.deref_cursor() == eq_byte }
+    }
+    fn peek_eq_and_forward(&mut self, eq_byte: u8) -> bool {
+        let eq = self.peek_eq(eq_byte);
+        unsafe {
+            self.incr_cursor_by(eq as usize);
+        }
+        eq
+    }
+    unsafe fn deref_cursor_and_forward(&mut self) -> u8 {
+        let ret = self.deref_cursor();
+        self.incr_cursor();
+        ret
+    }
 }
 
 // parsing

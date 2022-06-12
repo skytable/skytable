@@ -48,7 +48,7 @@ Minimal spec:
 
 use {
     super::{find_ptr_distance, LangError, LangResult, Scanner, Slice},
-    core::{slice, str},
+    core::{mem::transmute, slice, str},
 };
 
 pub trait LexItem: Sized {
@@ -231,10 +231,9 @@ impl LexItem for LitStringEscaped {
                 // UNSAFE(@ohsayan): The scanner is not exhausted, so this is fine
                 check_escaped(scanner, b'"')
             };
-            let should_skip = (is_escaped_backslash as usize) + (is_escaped_quote as usize);
             unsafe {
                 // UNSAFE(@ohsayan): If either is true, then it is correct to do this
-                scanner.incr_cursor_by(should_skip)
+                scanner.incr_cursor_by((is_escaped_backslash | is_escaped_quote) as usize)
             };
             unsafe {
                 // UNSAFE(@ohsayan): if not escaped, this is fine. if escaped, this is still
@@ -323,5 +322,69 @@ impl LexItem for Type {
             _ => return Err(LangError::UnknownType),
         };
         Ok(ret)
+    }
+}
+
+#[derive(PartialEq)]
+pub struct TypeExpression(pub Vec<Type>);
+
+impl LexItem for TypeExpression {
+    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+        /*
+        A type expression looks like ty<ty<ty<...>>>
+        */
+        let mut type_expr = Vec::with_capacity(2);
+        #[repr(u8)]
+        #[derive(Clone, Copy)]
+        enum Expect {
+            Type = 0,
+            Close = 1,
+        }
+        let mut expect = Expect::Type;
+        let mut valid_expr = true;
+        let mut open_c = 0;
+        let mut close_c = 0;
+        while scanner.not_exhausted() && valid_expr {
+            match expect {
+                Expect::Close => {
+                    valid_expr &=
+                        unsafe { scanner.deref_cursor_and_forward() } == CloseAngular::get_byte();
+                    close_c += 1;
+                    expect = Expect::Close;
+                }
+                Expect::Type => {
+                    // we expect a type
+                    match Type::lex(scanner) {
+                        Ok(ty) => {
+                            type_expr.push(ty);
+                            // see if next is open '<'; if it is, then we expect a type, if it is a
+                            // `>`, then we expect '>'
+                            let next_is_open = scanner.peek_eq(OpenAngular::get_byte());
+                            let next_is_close = scanner.peek_eq(CloseAngular::get_byte());
+                            // this is important! if both of the above fail, then something is broken!
+                            // this expression ensures that we catch the error
+                            valid_expr &= next_is_open | next_is_close;
+                            open_c += next_is_open as usize;
+                            close_c += next_is_close as usize;
+                            unsafe {
+                                scanner.incr_cursor_by((next_is_open | next_is_close) as usize);
+                            }
+                            expect = unsafe {
+                                // UNSAFE(@ohsayan): This is all good! Atmost value is 1, which resolves
+                                // to Expect::Close
+                                transmute(next_is_close)
+                            };
+                        }
+                        Err(_) => valid_expr = false,
+                    }
+                }
+            }
+        }
+        valid_expr &= open_c == close_c;
+        if valid_expr {
+            Ok(Self(type_expr))
+        } else {
+            Err(LangError::BadExpression)
+        }
     }
 }

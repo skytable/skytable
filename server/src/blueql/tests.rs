@@ -27,7 +27,7 @@
 use super::{
     lex::{
         CloseAngular, CloseParen, Colon, DoubleQuote, Ident, LitNum, LitString, LitStringEscaped,
-        OpenAngular, OpenParen, Semicolon, SingleQuote, Type,
+        OpenAngular, OpenParen, Semicolon, SingleQuote, Type, TypeExpression,
     },
     Scanner,
 };
@@ -130,4 +130,11 @@ fn lex_type() {
     assert_eq!(scanner.next::<Type>().unwrap(), Type::Binary);
     assert_eq!(scanner.next::<Type>().unwrap(), Type::List);
     assert!(scanner.exhausted());
+}
+
+#[test]
+fn lex_type_expression() {
+    let ty_expr = b"list<list<list<string>>>".to_vec();
+    let ty = Scanner::new(&ty_expr).next::<TypeExpression>().unwrap();
+    assert_eq!(ty.0, vec![Type::List, Type::List, Type::List, Type::String])
 }

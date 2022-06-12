@@ -34,6 +34,7 @@ pub enum LangError {
     InvalidSyntax,
     UnexpectedEOF,
     UnknownType,
+    BadExpression,
 }
 
 impl From<Utf8Error> for LangError {
