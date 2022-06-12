@@ -257,3 +257,41 @@ impl LexItem for LitStringEscaped {
         }
     }
 }
+
+macro_rules! impl_punctuation {
+    ($($ty:ident: $byte:literal),*) => {
+        $(
+            pub struct $ty;
+            impl $ty {
+                const fn get_byte() -> u8 { $byte }
+            }
+            impl LexItem for $ty {
+            fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+                if scanner.not_exhausted() && unsafe {
+                    // UNSAFE(@ohsayan): The first operand ensures correctness
+                    scanner.deref_cursor() == $byte
+                } {
+                    unsafe {
+                        // UNSAFE(@ohsayan): The above condition guarantees safety
+                        scanner.incr_cursor()
+                    };
+                    Ok(Self)
+                } else {
+                    Err(LangError::InvalidSyntax)
+                }
+            }
+            }
+        )*
+    };
+}
+
+impl_punctuation! {
+    OpenParen: b'(',
+    CloseParen: b')',
+    OpenAngular: b'<',
+    CloseAngular: b'>',
+    Colon: b':',
+    Semicolon: b';',
+    SingleQuote: b'\'',
+    DoubleQuote: b'"'
+}

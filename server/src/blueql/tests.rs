@@ -25,7 +25,10 @@
 */
 
 use super::{
-    lex::{Ident, LitNum, LitString, LitStringEscaped},
+    lex::{
+        CloseAngular, CloseParen, Colon, DoubleQuote, Ident, LitNum, LitString, LitStringEscaped,
+        OpenAngular, OpenParen, Semicolon, SingleQuote,
+    },
     Scanner,
 };
 
@@ -102,4 +105,19 @@ fn lex_lit_string_escaped() {
     let src = br#""hello\\world""#.to_vec();
     let litstr = Scanner::new(&src).next::<LitStringEscaped>().unwrap().0;
     assert_eq!(litstr, "hello\\world");
+}
+
+#[test]
+fn lex_punctutation() {
+    let src = br#"()<>:;'""#.to_vec();
+    let mut scanner = Scanner::new(&src);
+    scanner.next::<OpenParen>().unwrap();
+    scanner.next::<CloseParen>().unwrap();
+    scanner.next::<OpenAngular>().unwrap();
+    scanner.next::<CloseAngular>().unwrap();
+    scanner.next::<Colon>().unwrap();
+    scanner.next::<Semicolon>().unwrap();
+    scanner.next::<SingleQuote>().unwrap();
+    scanner.next::<DoubleQuote>().unwrap();
+    assert!(scanner.exhausted());
 }
