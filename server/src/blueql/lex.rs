@@ -46,7 +46,10 @@ Minimal spec:
 - <field declaration> ::= <ident> <colon>
 */
 
-use super::{find_ptr_distance, LangError, LangResult, Scanner, Slice};
+use {
+    super::{find_ptr_distance, LangError, LangResult, Scanner, Slice},
+    core::{slice, str},
+};
 
 pub trait LexItem: Sized {
     fn lex(scanner: &mut Scanner) -> LangResult<Self>;
@@ -137,6 +140,42 @@ impl LexItem for LitNum {
         if is_okay {
             scanner.skip_separator();
             Ok(Self(ret))
+        } else {
+            Err(LangError::TypeParseFailure)
+        }
+    }
+}
+
+pub struct LitString<'a>(pub &'a str);
+
+impl<'a> LexItem for LitString<'a> {
+    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+        let is_okay = scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): The first operand guarantees correctness
+                let cond = scanner.deref_cursor() == b'"';
+                scanner.incr_cursor();
+                cond
+            };
+        let start_ptr = scanner.cursor();
+        while is_okay
+            && scanner.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): The first operand guarantees correctness
+                scanner.deref_cursor() != b'"'
+            }
+        {
+            unsafe {
+                // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
+                // defined behavior in rust
+                scanner.incr_cursor()
+            };
+        }
+        if is_okay {
+            let len = find_ptr_distance(start_ptr, scanner.cursor());
+            let string = str::from_utf8(unsafe { slice::from_raw_parts(start_ptr, len) })?;
+            scanner.skip_separator();
+            Ok(Self(string))
         } else {
             Err(LangError::TypeParseFailure)
         }

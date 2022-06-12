@@ -25,7 +25,7 @@
 */
 
 use super::{
-    lex::{Ident, LitNum},
+    lex::{Ident, LitNum, LitString},
     Scanner,
 };
 
@@ -81,4 +81,18 @@ fn lex_lit_num() {
     let mut scanner = Scanner::new(&src);
     let num: LitNum = scanner.next().unwrap();
     assert_eq!(num.0, 123456);
+}
+
+#[test]
+fn lex_lit_string() {
+    let src = br#""hello, world""#.to_vec();
+    assert_eq!(
+        Scanner::new(&src).next::<LitString>().unwrap().0,
+        "hello, world"
+    );
+    let src = br#""hello, world" "#.to_vec();
+    assert_eq!(
+        Scanner::new(&src).next::<LitString>().unwrap().0,
+        "hello, world"
+    );
 }
