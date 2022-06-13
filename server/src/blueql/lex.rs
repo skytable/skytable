@@ -66,24 +66,12 @@ impl Ident {
 impl LexItem for Ident {
     #[inline(always)]
     fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
-        let start_ptr = qp.cursor(); // look at the current cursor
-        let is_okay = {
-            // check the first byte
-            qp.not_exhausted()
-                && unsafe {
-                    // UNSAFE(@ohsayan): The first operand guarantees correctness
-                    let byte = qp.deref_cursor();
-                    byte.is_ascii_alphabetic() || byte == b'_'
-                }
-        };
-        while qp.not_exhausted()
-            && is_okay
-            && unsafe {
-                // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let byte = qp.deref_cursor();
-                byte.is_ascii_alphanumeric() || byte == b'_'
-            }
-            && unsafe { qp.deref_cursor() != b' ' }
+        let start_ptr = qp.cursor();
+        // check the first byte
+        let is_okay = qp.peek_is(|byte| byte.is_ascii_alphabetic() || byte == b'_');
+        while is_okay
+            && qp.peek_is(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            && qp.peek_neq(b' ')
         {
             unsafe {
                 // UNSAFE(@ohsayan): The loop init invariant ensures this is correct
@@ -110,13 +98,7 @@ impl LexItem for LitNum {
     fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         let mut is_okay = true;
         let mut ret: u64 = 0;
-        while qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): The first operand guarantees correctness
-                qp.deref_cursor() != b' '
-            }
-            && is_okay
-        {
+        while is_okay && qp.peek_neq(b' ') {
             let cbyte = unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness
                 qp.deref_cursor()
@@ -139,8 +121,9 @@ impl LexItem for LitNum {
                 qp.incr_cursor()
             }
         }
+        // IMPORTANT: By grammar rules, a number can only be followed by EOF or whitespace
+        is_okay &= qp.did_skip_delimiter_or_eof();
         if is_okay {
-            qp.skip_delimiter();
             Ok(Self(ret))
         } else {
             Err(LangError::TypeParseFailure)
@@ -154,37 +137,23 @@ impl<'a> LexItem for LitString<'a> {
     #[inline(always)]
     fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         // should start with '"'
-        let mut is_okay = qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let cond = qp.deref_cursor() == b'"';
-                qp.incr_cursor();
-                cond
-            };
+        let mut is_okay = qp.peek_eq_and_forward(b'"');
         let start_ptr = qp.cursor();
-        while is_okay
-            && qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): The first operand guarantees correctness
-                qp.deref_cursor() != b'"'
-            }
-        {
+        while is_okay && qp.peek_neq(b'"') {
             unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
                 // defined behavior in rust
                 qp.incr_cursor()
             };
         }
+        let stop_ptr = qp.cursor();
         // should be terminated by a '"'
-        is_okay &= qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): First operand guarantees correctness
-                qp.deref_cursor() == b'"'
-            };
+        is_okay &= qp.peek_eq_and_forward(b'"');
+        // IMPORTANT: By grammar rules, a literal can only be followed by EOF or whitespace
+        is_okay &= qp.did_skip_delimiter_or_eof();
         if is_okay {
-            let len = find_ptr_distance(start_ptr, qp.cursor());
+            let len = find_ptr_distance(start_ptr, stop_ptr);
             let string = str::from_utf8(unsafe { slice::from_raw_parts(start_ptr, len) })?;
-            qp.skip_delimiter();
             Ok(Self(string))
         } else {
             Err(LangError::TypeParseFailure)
@@ -207,20 +176,8 @@ impl LexItem for LitStringEscaped {
     fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         let mut stringbuf = Vec::new();
         // should start with  '"'
-        let mut is_okay = qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let cond = qp.deref_cursor() == b'"';
-                qp.incr_cursor();
-                cond
-            };
-        while is_okay
-            && qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): The second operand guarantees correctness
-                qp.deref_cursor() != b'"'
-            }
-        {
+        let mut is_okay = qp.peek_eq_and_forward(b'"');
+        while is_okay && qp.peek_neq(b'"') {
             let is_escaped_backslash = unsafe {
                 // UNSAFE(@ohsayan): The qp is not exhausted, so this is fine
                 check_escaped(qp, b'\\')
@@ -231,7 +188,7 @@ impl LexItem for LitStringEscaped {
             };
             unsafe {
                 // UNSAFE(@ohsayan): If either is true, then it is correct to do this
-                qp.incr_cursor_by((is_escaped_backslash | is_escaped_quote) as usize)
+                qp.incr_cursor_if(is_escaped_backslash | is_escaped_quote)
             };
             unsafe {
                 // UNSAFE(@ohsayan): if not escaped, this is fine. if escaped, this is still
@@ -244,14 +201,10 @@ impl LexItem for LitStringEscaped {
                 qp.incr_cursor()
             };
         }
-
         // should be terminated by a '"'
-        is_okay &= qp.not_exhausted()
-            && unsafe {
-                // UNSAFE(@ohsayan): First operand guarantees correctness
-                qp.deref_cursor() == b'"'
-            };
-        qp.skip_delimiter();
+        is_okay &= qp.peek_eq_and_forward(b'"');
+        // IMPORTANT: By grammar rules, a literal can only be followed by EOF or whitespace
+        is_okay &= qp.did_skip_delimiter_or_eof();
         match String::from_utf8(stringbuf) {
             Ok(s) if is_okay => Ok(Self(s)),
             _ => Err(LangError::TypeParseFailure),
@@ -269,14 +222,7 @@ macro_rules! impl_punctuation {
             impl LexItem for $ty {
                 #[inline(always)]
                 fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
-                    if qp.not_exhausted() && unsafe {
-                        // UNSAFE(@ohsayan): The first operand ensures correctness
-                        qp.deref_cursor() == $byte
-                    } {
-                        unsafe {
-                            // UNSAFE(@ohsayan): The above condition guarantees safety
-                            qp.incr_cursor()
-                        };
+                    if qp.peek_eq_and_forward($byte) {
                         qp.skip_delimiter();
                         Ok(Self)
                     } else {
@@ -371,7 +317,7 @@ impl LexItem for TypeExpression {
                             open_c += next_is_open as usize;
                             close_c += next_is_close as usize;
                             unsafe {
-                                qp.incr_cursor_by((next_is_open | next_is_close) as usize);
+                                qp.incr_cursor_if(next_is_open | next_is_close);
                             }
                             expect = unsafe {
                                 // UNSAFE(@ohsayan): This is all good! Atmost value is 1, which resolves

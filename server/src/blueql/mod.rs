@@ -125,6 +125,11 @@ impl<'a> QueryProcessor<'a> {
     unsafe fn incr_cursor_by(&mut self, by: usize) {
         self.cursor = self.cursor.add(by);
     }
+    /// Moves the cursor ahead by `1` if `cond` is true
+    #[inline(always)]
+    unsafe fn incr_cursor_if(&mut self, cond: bool) {
+        self.incr_cursor_by(cond as usize)
+    }
     /// Move the cursor ahead by 1
     #[inline(always)]
     unsafe fn incr_cursor(&mut self) {
@@ -160,12 +165,16 @@ impl<'a> QueryProcessor<'a> {
     fn peek_eq(&self, eq_byte: u8) -> bool {
         unsafe { self.not_exhausted() && self.deref_cursor() == eq_byte }
     }
+    #[inline(always)]
+    fn peek_neq(&self, eq_byte: u8) -> bool {
+        unsafe { self.not_exhausted() && self.deref_cursor() != eq_byte }
+    }
     /// Same as `Self::peek_eq`, but forwards the cursor on match
     #[inline(always)]
     fn peek_eq_and_forward(&mut self, eq_byte: u8) -> bool {
         let eq = self.peek_eq(eq_byte);
         unsafe {
-            self.incr_cursor_by(eq as usize);
+            self.incr_cursor_if(eq);
         }
         eq
     }
@@ -183,18 +192,32 @@ impl<'a> QueryProcessor<'a> {
     /// Meant to be used in places where you want to either match a predicate, but return
     /// true if you've reached EOF
     #[inline(always)]
-    fn peek_eq_and_forward_or_true(&mut self, byte: u8) -> bool {
+    fn peek_eq_or_eof(&mut self, byte: u8) -> bool {
         self.peek_eq(byte) | self.exhausted()
+    }
+    #[inline(always)]
+    /// Returns true if the peeked value matches the predicate. Returns false if EOF
+    fn peek_is<F: Fn(u8) -> bool>(&mut self, predicate: F) -> bool {
+        self.not_exhausted() && unsafe { predicate(self.deref_cursor()) }
+    }
+    #[inline(always)]
+    /// Same as peek_eq_or_true, with one difference: this will move the cursor ahead
+    fn peek_eq_and_forward_or_eof(&mut self, byte: u8) -> bool {
+        self.peek_eq_and_forward(byte) | self.exhausted()
     }
     #[inline(always)]
     /// Peeks ahead and moves the cursor ahead if the peeked byte matches the predicate
     fn skip_char_if_present(&mut self, ch: u8) {
-        unsafe { self.incr_cursor_by(self.peek_eq(ch) as usize) }
+        unsafe { self.incr_cursor_if(self.peek_eq(ch)) }
     }
     #[inline(always)]
     /// Skips the delimiter
     fn skip_delimiter(&mut self) {
         self.skip_char_if_present(Self::DELIMITER)
+    }
+    #[inline(always)]
+    fn did_skip_delimiter_or_eof(&mut self) -> bool {
+        self.peek_eq_and_forward_or_eof(Self::DELIMITER)
     }
 }
 
