@@ -29,6 +29,7 @@
 #[cfg(test)]
 mod tests;
 // endof tests
+mod ast;
 mod error;
 mod lex;
 // imports
@@ -38,10 +39,11 @@ pub type LangResult<T> = Result<T, LangError>;
 
 use {
     crate::util::Life,
-    core::{marker::PhantomData, mem::discriminant, slice},
+    core::{marker::PhantomData, slice},
 };
 
 #[derive(Debug, Clone, Copy)]
+/// A raw slice that resembles the same structure as a fat ptr
 pub struct Slice {
     start_ptr: *const u8,
     len: usize,
@@ -79,10 +81,12 @@ where
 }
 
 #[inline(always)]
+/// Finds the distance between two pointers. Panics if the stop ptr is behind the start ptr
 fn find_ptr_distance(start: *const u8, stop: *const u8) -> usize {
     stop as usize - start as usize
 }
 
+/// A `QueryProcessor` provides functions to parse queries
 pub struct QueryProcessor<'a> {
     cursor: *const u8,
     end_ptr: *const u8,
@@ -92,6 +96,7 @@ pub struct QueryProcessor<'a> {
 // init
 impl<'a> QueryProcessor<'a> {
     #[inline(always)]
+    /// Init a new query processor
     const fn new(buf: &[u8]) -> Self {
         unsafe {
             Self {
@@ -106,28 +111,42 @@ impl<'a> QueryProcessor<'a> {
 // helpers
 impl<'a> QueryProcessor<'a> {
     #[inline(always)]
+    /// Check if we have exhausted the buffer
     pub fn exhausted(&self) -> bool {
         self.cursor >= self.end_ptr
     }
     #[inline(always)]
+    /// Check if we still have something left in the buffer
     pub fn not_exhausted(&self) -> bool {
         self.cursor < self.end_ptr
     }
+    /// Move the cursor ahead by `by` positions
+    #[inline(always)]
     unsafe fn incr_cursor_by(&mut self, by: usize) {
         self.cursor = self.cursor.add(by);
     }
+    /// Move the cursor ahead by 1
+    #[inline(always)]
     unsafe fn incr_cursor(&mut self) {
         self.incr_cursor_by(1)
     }
+    /// Deref the cursor
+    #[inline(always)]
     unsafe fn deref_cursor(&self) -> u8 {
         *(self.cursor())
     }
+    /// Returns the cursor
+    #[inline(always)]
     const fn cursor(&self) -> *const u8 {
         self.cursor
     }
+    /// Returns the EOA ptr
+    #[inline(always)]
     const fn end_ptr(&self) -> *const u8 {
         self.end_ptr
     }
+    /// Peeks at the byte ahead if it exists
+    #[inline(always)]
     fn peek(&self) -> Option<u8> {
         if self.not_exhausted() {
             Some(unsafe { self.deref_cursor() })
@@ -135,9 +154,14 @@ impl<'a> QueryProcessor<'a> {
             None
         }
     }
+    /// Peeks at the byte ahead to see if it matches the given byte. Returns false if
+    /// we've reached end of allocation
+    #[inline(always)]
     fn peek_eq(&self, eq_byte: u8) -> bool {
         unsafe { self.not_exhausted() && self.deref_cursor() == eq_byte }
     }
+    /// Same as `Self::peek_eq`, but forwards the cursor on match
+    #[inline(always)]
     fn peek_eq_and_forward(&mut self, eq_byte: u8) -> bool {
         let eq = self.peek_eq(eq_byte);
         unsafe {
@@ -145,36 +169,49 @@ impl<'a> QueryProcessor<'a> {
         }
         eq
     }
+    /// Returns the byte at cursor and moves it ahead
+    #[inline(always)]
     unsafe fn deref_cursor_and_forward(&mut self) -> u8 {
         let ret = self.deref_cursor();
         self.incr_cursor();
         ret
     }
+    /// Returns true if:
+    /// - The byte ahead matches the provided `byte`
+    /// - If we have reached end of allocation
+    ///
+    /// Meant to be used in places where you want to either match a predicate, but return
+    /// true if you've reached EOF
+    #[inline(always)]
+    fn peek_eq_and_forward_or_true(&mut self, byte: u8) -> bool {
+        self.peek_eq(byte) | self.exhausted()
+    }
+    #[inline(always)]
+    /// Peeks ahead and moves the cursor ahead if the peeked byte matches the predicate
+    fn skip_char_if_present(&mut self, ch: u8) {
+        unsafe { self.incr_cursor_by(self.peek_eq(ch) as usize) }
+    }
+    #[inline(always)]
+    /// Skips the delimiter
+    fn skip_delimiter(&mut self) {
+        self.skip_char_if_present(Self::DELIMITER)
+    }
 }
 
 // parsing
 impl<'a> QueryProcessor<'a> {
+    const DELIMITER: u8 = b' ';
+
     #[inline(always)]
-    fn skip_char_if_present(&mut self, ch: u8) {
-        self.cursor = unsafe {
-            self.cursor
-                .add((self.not_exhausted() && self.deref_cursor() == ch) as usize)
-        };
-    }
-    #[inline(always)]
-    fn skip_separator(&mut self) {
-        self.skip_char_if_present(Self::SEPARATOR)
-    }
     pub fn next<T: LexItem>(&mut self) -> LangResult<T> {
         T::lex(self)
     }
-    const SEPARATOR: u8 = b' ';
     #[inline(always)]
-    /// Returns the next token separated by the separator
+    /// Returns the next token separated by the DELIMITER
     pub fn next_token_tl(&mut self) -> Slice {
         let start_ptr = self.cursor;
         let mut ptr = self.cursor;
-        while self.end_ptr > ptr && unsafe { *ptr != Self::SEPARATOR } {
+        while self.end_ptr > ptr && unsafe { *ptr != Self::DELIMITER } {
             ptr = unsafe {
                 // UNSAFE(@ohsayan): The loop init invariant ensures this is safe
                 ptr.add(1)
@@ -182,12 +219,13 @@ impl<'a> QueryProcessor<'a> {
         }
         // update the cursor
         self.cursor = ptr;
-        self.skip_separator();
+        self.skip_delimiter();
         unsafe {
             // UNSAFE(@ohsayan): The start_ptr and size were verified by the above steps
             Slice::new(start_ptr, find_ptr_distance(start_ptr, ptr))
         }
     }
+    #[inline(always)]
     pub fn try_next_token(&mut self) -> LangResult<Slice> {
         if self.not_exhausted() {
             Ok(self.next_token_tl())
@@ -195,6 +233,7 @@ impl<'a> QueryProcessor<'a> {
             Err(LangError::UnexpectedEOF)
         }
     }
+    #[inline(always)]
     pub fn parse_into_tokens(buf: &'a [u8]) -> Vec<Life<'a, Slice>> {
         let mut slf = QueryProcessor::new(buf);
         let mut r = Vec::new();
@@ -202,31 +241,5 @@ impl<'a> QueryProcessor<'a> {
             r.push(Life::new(slf.next_token_tl()));
         }
         r
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Token<'a> {
-    Create,
-    Drop,
-    Model,
-    Space,
-    String,
-    Binary,
-    Ident(Life<'a, Slice>),
-    Number(Life<'a, Slice>),
-}
-
-impl<'a> PartialEq for Token<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Ident(ref id_a), Self::Ident(ref id_b)) => unsafe {
-                id_a.as_slice() == id_b.as_slice()
-            },
-            (Self::Number(ref id_a), Self::Number(ref id_b)) => unsafe {
-                id_a.as_slice() == id_b.as_slice()
-            },
-            (a, b) => discriminant(a) == discriminant(b),
-        }
     }
 }

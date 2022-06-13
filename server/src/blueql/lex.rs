@@ -92,7 +92,7 @@ impl LexItem for Ident {
         }
         if is_okay {
             let len = find_ptr_distance(start_ptr, qp.cursor());
-            qp.skip_separator(); // skip whitespace (if any)
+            qp.skip_delimiter(); // skip whitespace (if any)
             unsafe {
                 // UNSAFE(@ohsayan): The above procedure ensures validity
                 Ok(Self(Slice::new(start_ptr, len)))
@@ -140,7 +140,7 @@ impl LexItem for LitNum {
             }
         }
         if is_okay {
-            qp.skip_separator();
+            qp.skip_delimiter();
             Ok(Self(ret))
         } else {
             Err(LangError::TypeParseFailure)
@@ -184,7 +184,7 @@ impl<'a> LexItem for LitString<'a> {
         if is_okay {
             let len = find_ptr_distance(start_ptr, qp.cursor());
             let string = str::from_utf8(unsafe { slice::from_raw_parts(start_ptr, len) })?;
-            qp.skip_separator();
+            qp.skip_delimiter();
             Ok(Self(string))
         } else {
             Err(LangError::TypeParseFailure)
@@ -251,7 +251,7 @@ impl LexItem for LitStringEscaped {
                 // UNSAFE(@ohsayan): First operand guarantees correctness
                 qp.deref_cursor() == b'"'
             };
-        qp.skip_separator();
+        qp.skip_delimiter();
         match String::from_utf8(stringbuf) {
             Ok(s) if is_okay => Ok(Self(s)),
             _ => Err(LangError::TypeParseFailure),
@@ -277,7 +277,7 @@ macro_rules! impl_punctuation {
                             // UNSAFE(@ohsayan): The above condition guarantees safety
                             qp.incr_cursor()
                         };
-                        qp.skip_separator();
+                        qp.skip_delimiter();
                         Ok(Self)
                     } else {
                         Err(LangError::InvalidSyntax)
@@ -307,24 +307,25 @@ pub enum Type {
     List,
 }
 
+impl Type {
+    pub fn try_from_ident(id: &Ident) -> LangResult<Self> {
+        let ret = match unsafe {
+            // UNSAFE(@ohsayan): The lifetime of the `qp` ensures validity
+            id.as_slice()
+        } {
+            b"string" => Self::String,
+            b"binary" => Self::Binary,
+            b"list" => Self::List,
+            _ => return Err(LangError::UnknownType),
+        };
+        Ok(ret)
+    }
+}
+
 impl LexItem for Type {
     #[inline(always)]
     fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
-        let ret = match qp.next::<Ident>() {
-            Ok(ret) => {
-                match unsafe {
-                    // UNSAFE(@ohsayan): The lifetime of the `qp` ensures validity
-                    ret.as_slice()
-                } {
-                    b"string" => Self::String,
-                    b"binary" => Self::Binary,
-                    b"list" => Self::List,
-                    _ => return Err(LangError::UnknownType),
-                }
-            }
-            Err(_) => return Err(LangError::InvalidSyntax),
-        };
-        Ok(ret)
+        qp.next::<Ident>().and_then(|id| Self::try_from_ident(&id))
     }
 }
 
@@ -385,7 +386,7 @@ impl LexItem for TypeExpression {
         }
         valid_expr &= open_c == close_c;
         if valid_expr {
-            qp.skip_separator();
+            qp.skip_delimiter();
             Ok(Self(type_expr))
         } else {
             Err(LangError::BadExpression)
