@@ -47,12 +47,12 @@ Minimal spec:
 */
 
 use {
-    super::{find_ptr_distance, LangError, LangResult, Scanner, Slice},
+    super::{find_ptr_distance, LangError, LangResult, QueryProcessor, Slice},
     core::{mem::transmute, slice, str},
 };
 
 pub trait LexItem: Sized {
-    fn lex(scanner: &mut Scanner) -> LangResult<Self>;
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self>;
 }
 
 pub struct Ident(Slice);
@@ -65,34 +65,34 @@ impl Ident {
 
 impl LexItem for Ident {
     #[inline(always)]
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-        let start_ptr = scanner.cursor(); // look at the current cursor
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
+        let start_ptr = qp.cursor(); // look at the current cursor
         let is_okay = {
             // check the first byte
-            scanner.not_exhausted()
+            qp.not_exhausted()
                 && unsafe {
                     // UNSAFE(@ohsayan): The first operand guarantees correctness
-                    let byte = scanner.deref_cursor();
+                    let byte = qp.deref_cursor();
                     byte.is_ascii_alphabetic() || byte == b'_'
                 }
         };
-        while scanner.not_exhausted()
+        while qp.not_exhausted()
             && is_okay
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let byte = scanner.deref_cursor();
+                let byte = qp.deref_cursor();
                 byte.is_ascii_alphanumeric() || byte == b'_'
             }
-            && unsafe { scanner.deref_cursor() != b' ' }
+            && unsafe { qp.deref_cursor() != b' ' }
         {
             unsafe {
                 // UNSAFE(@ohsayan): The loop init invariant ensures this is correct
-                scanner.incr_cursor()
+                qp.incr_cursor()
             };
         }
         if is_okay {
-            let len = find_ptr_distance(start_ptr, scanner.cursor());
-            scanner.skip_separator(); // skip whitespace (if any)
+            let len = find_ptr_distance(start_ptr, qp.cursor());
+            qp.skip_separator(); // skip whitespace (if any)
             unsafe {
                 // UNSAFE(@ohsayan): The above procedure ensures validity
                 Ok(Self(Slice::new(start_ptr, len)))
@@ -107,19 +107,19 @@ pub struct LitNum(pub u64);
 
 impl LexItem for LitNum {
     #[inline(always)]
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         let mut is_okay = true;
         let mut ret: u64 = 0;
-        while scanner.not_exhausted()
+        while qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
-                scanner.deref_cursor() != b' '
+                qp.deref_cursor() != b' '
             }
             && is_okay
         {
             let cbyte = unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness
-                scanner.deref_cursor()
+                qp.deref_cursor()
             };
             is_okay &= cbyte.is_ascii_digit();
 
@@ -136,11 +136,11 @@ impl LexItem for LitNum {
             unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
                 // defined behavior in rust
-                scanner.incr_cursor()
+                qp.incr_cursor()
             }
         }
         if is_okay {
-            scanner.skip_separator();
+            qp.skip_separator();
             Ok(Self(ret))
         } else {
             Err(LangError::TypeParseFailure)
@@ -152,39 +152,39 @@ pub struct LitString<'a>(pub &'a str);
 
 impl<'a> LexItem for LitString<'a> {
     #[inline(always)]
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         // should start with '"'
-        let mut is_okay = scanner.not_exhausted()
+        let mut is_okay = qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let cond = scanner.deref_cursor() == b'"';
-                scanner.incr_cursor();
+                let cond = qp.deref_cursor() == b'"';
+                qp.incr_cursor();
                 cond
             };
-        let start_ptr = scanner.cursor();
+        let start_ptr = qp.cursor();
         while is_okay
-            && scanner.not_exhausted()
+            && qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
-                scanner.deref_cursor() != b'"'
+                qp.deref_cursor() != b'"'
             }
         {
             unsafe {
                 // UNSAFE(@ohsayan): Loop invariant guarantees correctness. 1B past EOA is also
                 // defined behavior in rust
-                scanner.incr_cursor()
+                qp.incr_cursor()
             };
         }
         // should be terminated by a '"'
-        is_okay &= scanner.not_exhausted()
+        is_okay &= qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): First operand guarantees correctness
-                scanner.deref_cursor() == b'"'
+                qp.deref_cursor() == b'"'
             };
         if is_okay {
-            let len = find_ptr_distance(start_ptr, scanner.cursor());
+            let len = find_ptr_distance(start_ptr, qp.cursor());
             let string = str::from_utf8(unsafe { slice::from_raw_parts(start_ptr, len) })?;
-            scanner.skip_separator();
+            qp.skip_separator();
             Ok(Self(string))
         } else {
             Err(LangError::TypeParseFailure)
@@ -194,66 +194,64 @@ impl<'a> LexItem for LitString<'a> {
 
 #[inline(always)]
 /// # Safety
-/// - Ensure that the scanner is not exhausted
-unsafe fn check_escaped(scanner: &mut Scanner, escape_what: u8) -> bool {
-    debug_assert!(scanner.not_exhausted());
-    scanner.deref_cursor() == b'\\' && {
-        scanner.not_exhausted() && scanner.deref_cursor() == escape_what
-    }
+/// - Ensure that the qp is not exhausted
+unsafe fn check_escaped(qp: &mut QueryProcessor, escape_what: u8) -> bool {
+    debug_assert!(qp.not_exhausted());
+    qp.deref_cursor() == b'\\' && { qp.not_exhausted() && qp.deref_cursor() == escape_what }
 }
 
 pub struct LitStringEscaped(pub String);
 
 impl LexItem for LitStringEscaped {
     #[inline(always)]
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         let mut stringbuf = Vec::new();
         // should start with  '"'
-        let mut is_okay = scanner.not_exhausted()
+        let mut is_okay = qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The first operand guarantees correctness
-                let cond = scanner.deref_cursor() == b'"';
-                scanner.incr_cursor();
+                let cond = qp.deref_cursor() == b'"';
+                qp.incr_cursor();
                 cond
             };
         while is_okay
-            && scanner.not_exhausted()
+            && qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): The second operand guarantees correctness
-                scanner.deref_cursor() != b'"'
+                qp.deref_cursor() != b'"'
             }
         {
             let is_escaped_backslash = unsafe {
-                // UNSAFE(@ohsayan): The scanner is not exhausted, so this is fine
-                check_escaped(scanner, b'\\')
+                // UNSAFE(@ohsayan): The qp is not exhausted, so this is fine
+                check_escaped(qp, b'\\')
             };
             let is_escaped_quote = unsafe {
-                // UNSAFE(@ohsayan): The scanner is not exhausted, so this is fine
-                check_escaped(scanner, b'"')
+                // UNSAFE(@ohsayan): The qp is not exhausted, so this is fine
+                check_escaped(qp, b'"')
             };
             unsafe {
                 // UNSAFE(@ohsayan): If either is true, then it is correct to do this
-                scanner.incr_cursor_by((is_escaped_backslash | is_escaped_quote) as usize)
+                qp.incr_cursor_by((is_escaped_backslash | is_escaped_quote) as usize)
             };
             unsafe {
                 // UNSAFE(@ohsayan): if not escaped, this is fine. if escaped, this is still
                 // fine because the escaped byte was checked
-                stringbuf.push(scanner.deref_cursor());
+                stringbuf.push(qp.deref_cursor());
             }
             unsafe {
                 // UNSAFE(@ohsayan): if escaped we have moved ahead by one but the escaped char
                 // is still one more so we go ahead. if not, then business as usual
-                scanner.incr_cursor()
+                qp.incr_cursor()
             };
         }
 
         // should be terminated by a '"'
-        is_okay &= scanner.not_exhausted()
+        is_okay &= qp.not_exhausted()
             && unsafe {
                 // UNSAFE(@ohsayan): First operand guarantees correctness
-                scanner.deref_cursor() == b'"'
+                qp.deref_cursor() == b'"'
             };
-        scanner.skip_separator();
+        qp.skip_separator();
         match String::from_utf8(stringbuf) {
             Ok(s) if is_okay => Ok(Self(s)),
             _ => Err(LangError::TypeParseFailure),
@@ -266,20 +264,20 @@ macro_rules! impl_punctuation {
         $(
             pub struct $ty;
             impl $ty {
-                const fn get_byte() -> u8 { $byte }
+                pub(super) const fn get_byte() -> u8 { $byte }
             }
             impl LexItem for $ty {
                 #[inline(always)]
-                fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-                    if scanner.not_exhausted() && unsafe {
+                fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
+                    if qp.not_exhausted() && unsafe {
                         // UNSAFE(@ohsayan): The first operand ensures correctness
-                        scanner.deref_cursor() == $byte
+                        qp.deref_cursor() == $byte
                     } {
                         unsafe {
                             // UNSAFE(@ohsayan): The above condition guarantees safety
-                            scanner.incr_cursor()
+                            qp.incr_cursor()
                         };
-                        scanner.skip_separator();
+                        qp.skip_separator();
                         Ok(Self)
                     } else {
                         Err(LangError::InvalidSyntax)
@@ -311,11 +309,11 @@ pub enum Type {
 
 impl LexItem for Type {
     #[inline(always)]
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-        let ret = match Ident::lex(scanner) {
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
+        let ret = match qp.next::<Ident>() {
             Ok(ret) => {
                 match unsafe {
-                    // UNSAFE(@ohsayan): The lifetime of the `scanner` ensures validity
+                    // UNSAFE(@ohsayan): The lifetime of the `qp` ensures validity
                     ret.as_slice()
                 } {
                     b"string" => Self::String,
@@ -330,11 +328,11 @@ impl LexItem for Type {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct TypeExpression(pub Vec<Type>);
 
 impl LexItem for TypeExpression {
-    fn lex(scanner: &mut Scanner) -> LangResult<Self> {
+    fn lex(qp: &mut QueryProcessor) -> LangResult<Self> {
         /*
         A type expression looks like ty<ty<ty<...>>>
         */
@@ -349,30 +347,30 @@ impl LexItem for TypeExpression {
         let mut valid_expr = true;
         let mut open_c = 0;
         let mut close_c = 0;
-        while scanner.not_exhausted() && valid_expr {
+        while qp.not_exhausted() && valid_expr {
             match expect {
                 Expect::Close => {
                     valid_expr &=
-                        unsafe { scanner.deref_cursor_and_forward() } == CloseAngular::get_byte();
+                        unsafe { qp.deref_cursor_and_forward() } == CloseAngular::get_byte();
                     close_c += 1;
                     expect = Expect::Close;
                 }
                 Expect::Type => {
                     // we expect a type
-                    match Type::lex(scanner) {
+                    match qp.next::<Type>() {
                         Ok(ty) => {
                             type_expr.push(ty);
                             // see if next is open '<'; if it is, then we expect a type, if it is a
                             // `>`, then we expect '>'
-                            let next_is_open = scanner.peek_eq(OpenAngular::get_byte());
-                            let next_is_close = scanner.peek_eq(CloseAngular::get_byte());
+                            let next_is_open = qp.peek_eq(OpenAngular::get_byte());
+                            let next_is_close = qp.peek_eq(CloseAngular::get_byte());
                             // this is important! if both of the above fail, then something is broken!
                             // this expression ensures that we catch the error
                             valid_expr &= next_is_open | next_is_close;
                             open_c += next_is_open as usize;
                             close_c += next_is_close as usize;
                             unsafe {
-                                scanner.incr_cursor_by((next_is_open | next_is_close) as usize);
+                                qp.incr_cursor_by((next_is_open | next_is_close) as usize);
                             }
                             expect = unsafe {
                                 // UNSAFE(@ohsayan): This is all good! Atmost value is 1, which resolves
@@ -387,7 +385,7 @@ impl LexItem for TypeExpression {
         }
         valid_expr &= open_c == close_c;
         if valid_expr {
-            scanner.skip_separator();
+            qp.skip_separator();
             Ok(Self(type_expr))
         } else {
             Err(LangError::BadExpression)

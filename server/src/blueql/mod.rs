@@ -83,14 +83,14 @@ fn find_ptr_distance(start: *const u8, stop: *const u8) -> usize {
     stop as usize - start as usize
 }
 
-pub struct Scanner<'a> {
+pub struct QueryProcessor<'a> {
     cursor: *const u8,
     end_ptr: *const u8,
     _lt: PhantomData<&'a [u8]>,
 }
 
 // init
-impl<'a> Scanner<'a> {
+impl<'a> QueryProcessor<'a> {
     #[inline(always)]
     const fn new(buf: &[u8]) -> Self {
         unsafe {
@@ -104,7 +104,7 @@ impl<'a> Scanner<'a> {
 }
 
 // helpers
-impl<'a> Scanner<'a> {
+impl<'a> QueryProcessor<'a> {
     #[inline(always)]
     pub fn exhausted(&self) -> bool {
         self.cursor >= self.end_ptr
@@ -153,7 +153,7 @@ impl<'a> Scanner<'a> {
 }
 
 // parsing
-impl<'a> Scanner<'a> {
+impl<'a> QueryProcessor<'a> {
     #[inline(always)]
     fn skip_char_if_present(&mut self, ch: u8) {
         self.cursor = unsafe {
@@ -196,7 +196,7 @@ impl<'a> Scanner<'a> {
         }
     }
     pub fn parse_into_tokens(buf: &'a [u8]) -> Vec<Life<'a, Slice>> {
-        let mut slf = Scanner::new(buf);
+        let mut slf = QueryProcessor::new(buf);
         let mut r = Vec::new();
         while slf.not_exhausted() {
             r.push(Life::new(slf.next_token_tl()));
