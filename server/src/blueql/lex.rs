@@ -253,7 +253,7 @@ impl LexItem for LitStringEscaped {
                 // UNSAFE(@ohsayan): First operand guarantees correctness
                 scanner.deref_cursor() == b'"'
             };
-
+        scanner.skip_separator();
         match String::from_utf8(stringbuf) {
             Ok(s) if is_okay => Ok(Self(s)),
             _ => Err(LangError::TypeParseFailure),
@@ -279,6 +279,7 @@ macro_rules! impl_punctuation {
                             // UNSAFE(@ohsayan): The above condition guarantees safety
                             scanner.incr_cursor()
                         };
+                        scanner.skip_separator();
                         Ok(Self)
                     } else {
                         Err(LangError::InvalidSyntax)
@@ -311,15 +312,19 @@ pub enum Type {
 impl LexItem for Type {
     #[inline(always)]
     fn lex(scanner: &mut Scanner) -> LangResult<Self> {
-        let try_ident = Ident::lex(scanner)?;
-        let ret = match unsafe {
-            // UNSAFE(@ohsayan): The lifetime of the `scanner` ensures validity
-            try_ident.as_slice()
-        } {
-            b"string" => Self::String,
-            b"binary" => Self::Binary,
-            b"list" => Self::List,
-            _ => return Err(LangError::UnknownType),
+        let ret = match Ident::lex(scanner) {
+            Ok(ret) => {
+                match unsafe {
+                    // UNSAFE(@ohsayan): The lifetime of the `scanner` ensures validity
+                    ret.as_slice()
+                } {
+                    b"string" => Self::String,
+                    b"binary" => Self::Binary,
+                    b"list" => Self::List,
+                    _ => return Err(LangError::UnknownType),
+                }
+            }
+            Err(_) => return Err(LangError::InvalidSyntax),
         };
         Ok(ret)
     }
@@ -382,6 +387,7 @@ impl LexItem for TypeExpression {
         }
         valid_expr &= open_c == close_c;
         if valid_expr {
+            scanner.skip_separator();
             Ok(Self(type_expr))
         } else {
             Err(LangError::BadExpression)
