@@ -1,5 +1,5 @@
 /*
- * Created on Sat Jun 11 2022
+ * Created on Tue Jun 14 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,33 +24,23 @@
  *
 */
 
-use core::{num::ParseIntError, str::Utf8Error};
-use std::string::FromUtf8Error;
-
 #[derive(Debug, PartialEq)]
+#[repr(u8)]
+/// BlueQL errors
 pub enum LangError {
-    NonUnicodeChar,
-    TypeParseFailure,
+    /// Invalid syntax
     InvalidSyntax,
+    /// Invalid numeric literal
+    InvalidNumericLiteral,
+    /// Unexpected end-of-statement
     UnexpectedEOF,
-    UnknownType,
+    /// Expected a statement but found some other token
+    ExpectedStatement,
+    /// Got an unknown create query
+    UnknownCreateQuery,
+    /// Bad expression
     BadExpression,
 }
 
-impl From<Utf8Error> for LangError {
-    fn from(_: Utf8Error) -> Self {
-        Self::NonUnicodeChar
-    }
-}
-
-impl From<ParseIntError> for LangError {
-    fn from(_: ParseIntError) -> Self {
-        Self::TypeParseFailure
-    }
-}
-
-impl From<FromUtf8Error> for LangError {
-    fn from(_: FromUtf8Error) -> Self {
-        Self::NonUnicodeChar
-    }
-}
+/// Results for BlueQL
+pub type LangResult<T> = Result<T, LangError>;

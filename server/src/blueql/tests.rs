@@ -1,5 +1,5 @@
 /*
- * Created on Thu Jun 09 2022
+ * Created on Tue Jun 14 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,122 +24,70 @@
  *
 */
 
+// lexer tests
 use super::{
-    lex::{
-        CloseAngular, CloseParen, Colon, DoubleQuote, Ident, LitNum, LitString, LitStringEscaped,
-        OpenAngular, OpenParen, Semicolon, SingleQuote, Type, TypeExpression,
-    },
-    QueryProcessor,
+    ast::{Compiler, FieldConfig, Statement},
+    lexer::{Keyword, Lexer, Token, Type, TypeExpression},
 };
 
 #[test]
-fn qp_tokenize() {
-    let tokens = b"create space app".to_vec();
-    let scanned_tokens = QueryProcessor::parse_into_tokens(&tokens);
-    let scanned_tokens: Vec<String> = scanned_tokens
-        .into_iter()
-        .map(|tok| unsafe { String::from_utf8_lossy(tok.as_slice()).to_string() })
-        .collect();
-    assert_eq!(scanned_tokens, ["create", "space", "app"]);
-}
-
-#[test]
-fn qp_step_by_step_tokenize() {
-    let tokens = b"create space app".to_vec();
-    let mut qp = QueryProcessor::new(&tokens);
-    unsafe {
-        assert_eq!(qp.next_token_tl().as_slice(), b"create");
-        assert_eq!(qp.next_token_tl().as_slice(), b"space");
-        assert_eq!(qp.next_token_tl().as_slice(), b"app");
-        assert!(qp.exhausted());
-        assert_eq!(qp.next_token_tl().as_slice(), b"");
-        assert_eq!(qp.next_token_tl().as_slice(), b"");
-        assert_eq!(qp.next_token_tl().as_slice(), b"");
-    }
-    assert!(qp.exhausted());
-}
-
-// lexing
-#[test]
 fn lex_ident() {
-    let src = b"hello ".to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    let ident: Ident = qp.next().unwrap();
-    assert_eq!(unsafe { ident.as_slice() }, b"hello");
-    assert!(qp.exhausted());
-    let src = b"hello:world".to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    let ident: Ident = qp.next().unwrap();
-    assert_eq!(unsafe { ident.as_slice() }, b"hello");
-    assert!(qp.not_exhausted());
+    let src = b"mytbl";
+    assert_eq!(
+        Lexer::lex(src).unwrap(),
+        vec![Token::Identifier("mytbl".into())]
+    )
 }
 
 #[test]
-fn lex_lit_num() {
-    let src = b"123456".to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    let num: LitNum = qp.next().unwrap();
-    assert_eq!(num.0, 123456);
-    let src = b"123456 ".to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    let num: LitNum = qp.next().unwrap();
-    assert_eq!(num.0, 123456);
+fn lex_keyword() {
+    let src = b"create";
+    assert_eq!(
+        Lexer::lex(src).unwrap(),
+        vec![Token::Keyword(Keyword::Create)]
+    )
 }
 
 #[test]
-fn lex_lit_string() {
-    let src = br#""hello, world""#.to_vec();
+fn lex_number() {
+    let src = b"123456";
+    assert_eq!(Lexer::lex(src).unwrap(), vec![Token::Number(123456)])
+}
+
+#[test]
+fn lex_full() {
+    let src = b"create model tweet";
     assert_eq!(
-        QueryProcessor::new(&src).next::<LitString>().unwrap().0,
-        "hello, world"
-    );
-    let src = br#""hello, world" "#.to_vec();
-    assert_eq!(
-        QueryProcessor::new(&src).next::<LitString>().unwrap().0,
-        "hello, world"
+        Lexer::lex(src).unwrap(),
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Model),
+            Token::Identifier("tweet".into())
+        ]
     );
 }
 
-#[test]
-fn lex_lit_string_escaped() {
-    let src = br#""hello\\world\"""#.to_vec();
-    let litstr = QueryProcessor::new(&src)
-        .next::<LitStringEscaped>()
-        .unwrap()
-        .0;
-    assert_eq!(litstr, "hello\\world\"");
-}
+// AST tests
 
-#[test]
-fn lex_punctutation() {
-    let src = br#"()<>:;'""#.to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    qp.next::<OpenParen>().unwrap();
-    qp.next::<CloseParen>().unwrap();
-    qp.next::<OpenAngular>().unwrap();
-    qp.next::<CloseAngular>().unwrap();
-    qp.next::<Colon>().unwrap();
-    qp.next::<Semicolon>().unwrap();
-    qp.next::<SingleQuote>().unwrap();
-    qp.next::<DoubleQuote>().unwrap();
-    assert!(qp.exhausted());
+#[cfg(test)]
+fn setup_src_stmt() -> (Vec<u8>, Statement) {
+    let src =
+        b"create model tweet(username: string, password: binary, posts: list<string>)".to_vec();
+    let stmt = Statement::CreateModel {
+        name: "tweet".into(),
+        model: FieldConfig {
+            types: vec![
+                TypeExpression(vec![Type::String]),
+                TypeExpression(vec![Type::Binary]),
+                TypeExpression(vec![Type::List, Type::String]),
+            ],
+            names: vec!["username".into(), "password".into(), "posts".into()],
+        },
+    };
+    (src, stmt)
 }
-
 #[test]
-fn lex_type() {
-    let src = b"string binary list".to_vec();
-    let mut qp = QueryProcessor::new(&src);
-    assert_eq!(qp.next::<Type>().unwrap(), Type::String);
-    assert_eq!(qp.next::<Type>().unwrap(), Type::Binary);
-    assert_eq!(qp.next::<Type>().unwrap(), Type::List);
-    assert!(qp.exhausted());
-}
-
-#[test]
-fn lex_type_expression() {
-    let ty_expr = b"list<list<list<string>>>".to_vec();
-    let ty = QueryProcessor::new(&ty_expr)
-        .next::<TypeExpression>()
-        .unwrap();
-    assert_eq!(ty.0, vec![Type::List, Type::List, Type::List, Type::String])
+fn compile_full() {
+    let (src, stmt) = setup_src_stmt();
+    assert_eq!(Compiler::compile(&src).unwrap(), stmt)
 }
