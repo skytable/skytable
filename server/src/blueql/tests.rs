@@ -26,6 +26,7 @@
 
 use super::{
     ast::{Compiler, Entity, FieldConfig, Statement},
+    error::LangError,
     lexer::{Keyword, Lexer, Token, Type, TypeExpression},
 };
 
@@ -157,6 +158,15 @@ mod ast {
             volatile: true,
         };
         (src, stmt)
+    }
+
+    #[test]
+    fn stmt_create_named_unnamed_mixed() {
+        let src = b"create model twitter.tweet(username: string, binary)".to_vec();
+        assert_eq!(
+            Compiler::compile(&src).unwrap_err(),
+            LangError::BadExpression
+        );
     }
     #[test]
     fn stmt_drop_space() {

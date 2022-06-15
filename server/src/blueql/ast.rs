@@ -297,7 +297,6 @@ impl<'a> Compiler<'a> {
                 }
                 Some(Token::Keyword(Keyword::Type(ty))) => {
                     // we have a type name
-                    fc.names.push("unnamed".into());
                     fc.types.push(self.parse_type_expression(ty)?);
                     is_good_expr &= self.peek_eq(&Token::CloseParen) || self.next_eq(&Token::Comma);
                 }
@@ -306,6 +305,11 @@ impl<'a> Compiler<'a> {
         }
         is_good_expr &= self.next_eq(&Token::CloseParen);
         is_good_expr &= fc.names.len() >= 2;
+        // important; we either have all unnamed fields or all named fields; having some unnamed
+        // and some named is ambiguous because there's not "straightforward" way to query them
+        // without introducing some funky naming conventions ($<field_number> if you don't have the
+        // right name sounds like an outrageous idea)
+        is_good_expr &= fc.names.len() == fc.types.len();
         let volatile = self.next_eq(&Token::Keyword(Keyword::Volatile));
         if is_good_expr {
             Ok(Statement::CreateModel {
