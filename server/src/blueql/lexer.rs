@@ -46,6 +46,7 @@ pub enum Token {
     DoubleQuote,  // "
     Colon,        // :
     Period,       // .
+    QuotedString(String),
     Identifier(RawSlice),
     Number(u64),
     Keyword(Keyword),
@@ -54,12 +55,6 @@ pub enum Token {
 impl From<Keyword> for Token {
     fn from(kw: Keyword) -> Self {
         Self::Keyword(kw)
-    }
-}
-
-impl From<RawSlice> for Token {
-    fn from(sl: RawSlice) -> Self {
-        Self::Identifier(sl)
     }
 }
 
@@ -203,6 +198,12 @@ impl<'a> Lexer<'a> {
         self.not_exhausted() && unsafe { self.deref_cursor() == eq }
     }
     #[inline(always)]
+    /// Check if the byte ahead is not equal to the provided byte. Returns false
+    /// if reached EOA
+    fn peek_neq(&self, neq: u8) -> bool {
+        self.not_exhausted() && unsafe { self.deref_cursor() != neq }
+    }
+    #[inline(always)]
     /// Same as `peek_eq`, but forwards the cursor if the byte is matched
     fn peek_eq_and_forward(&mut self, eq: u8) -> bool {
         let did_peek = self.peek_eq(eq);
@@ -221,9 +222,25 @@ impl<'a> Lexer<'a> {
     fn trim_ahead(&mut self) {
         while self.peek_eq_and_forward(b' ') {}
     }
+    #[inline(always)]
+    unsafe fn check_escaped(&mut self, escape_what: u8) -> bool {
+        debug_assert!(self.not_exhausted());
+        self.deref_cursor() == b'\\' && {
+            self.not_exhausted() && self.deref_cursor() == escape_what
+        }
+    }
 }
 
 impl<'a> Lexer<'a> {
+    #[inline(always)]
+    /// Forwards the cursor until it encounters the `stop_byte` or EOA. Returns true if
+    /// the `stop_byte` was found and false if it wasn't found or we reached EOA
+    fn scan_until(&mut self, stop_byte: u8) -> bool {
+        while self.peek_neq(stop_byte) {
+            unsafe { self.incr_cursor() }
+        }
+        self.peek_eq(stop_byte)
+    }
     #[inline(always)]
     /// Attempt to scan a number
     fn scan_number(&mut self) -> LangResult<u64> {
@@ -249,6 +266,44 @@ impl<'a> Lexer<'a> {
         let len = find_ptr_distance(start, self.cursor());
         unsafe { RawSlice::new(start, len) }
     }
+    #[inline(always)]
+    /// Scan a quoted string
+    fn scan_quoted_string(&mut self, quote_style: u8) -> LangResult<String> {
+        // a doubly quoted string?
+        let mut stringbuf = Vec::new();
+        // should start with  '"'
+        let mut is_okay = true;
+        while is_okay && self.peek_neq(quote_style) {
+            let is_escaped_backslash = unsafe {
+                // UNSAFE(@ohsayan): The qp is not exhausted, so this is fine
+                self.check_escaped(b'\\')
+            };
+            let is_escaped_quote = unsafe {
+                // UNSAFE(@ohsayan): The qp is not exhausted, so this is fine
+                self.check_escaped(b'"')
+            };
+            unsafe {
+                // UNSAFE(@ohsayan): If either is true, then it is correct to do this
+                self.incr_cursor_if(is_escaped_backslash | is_escaped_quote)
+            };
+            unsafe {
+                // UNSAFE(@ohsayan): if not escaped, this is fine. if escaped, this is still
+                // fine because the escaped byte was checked
+                stringbuf.push(self.deref_cursor());
+            }
+            unsafe {
+                // UNSAFE(@ohsayan): if escaped we have moved ahead by one but the escaped char
+                // is still one more so we go ahead. if not, then business as usual
+                self.incr_cursor()
+            };
+        }
+        // should be terminated by a '"'
+        is_okay &= self.peek_eq_and_forward(quote_style);
+        match String::from_utf8(stringbuf) {
+            Ok(s) if is_okay => Ok(s),
+            _ => Err(LangError::InvalidStringLiteral),
+        }
+    }
 }
 
 impl<'a> Lexer<'a> {
@@ -269,7 +324,7 @@ impl<'a> Lexer<'a> {
                     let id = self.scan_ident();
                     match Keyword::try_from_slice(id.as_slice()) {
                         Some(kw) => tokens.push(kw.into()),
-                        None => tokens.push(id.into()),
+                        None => tokens.push(Token::Identifier(id)),
                     }
                 }
                 byte if byte.is_ascii_digit() => match self.scan_number() {
@@ -281,6 +336,10 @@ impl<'a> Lexer<'a> {
                     Err(e) => return Err(e),
                 },
                 b' ' => self.trim_ahead(),
+                quote_style @ (b'"' | b'\'') => {
+                    unsafe { self.incr_cursor() };
+                    tokens.push(Token::QuotedString(self.scan_quoted_string(quote_style)?));
+                }
                 byte => {
                     let r = match byte {
                         b'<' => Token::OpenAngular,

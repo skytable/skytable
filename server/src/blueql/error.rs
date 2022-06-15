@@ -40,6 +40,8 @@ pub enum LangError {
     UnknownCreateQuery,
     /// Bad expression
     BadExpression,
+    /// An invalid string literal
+    InvalidStringLiteral,
 }
 
 /// Results for BlueQL
