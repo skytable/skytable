@@ -158,6 +158,34 @@ mod ast {
         (src, stmt)
     }
     #[test]
+    fn stmt_drop_space() {
+        assert_eq!(
+            Compiler::compile(b"drop space twitter").unwrap(),
+            Statement::DropSpace("twitter".into())
+        );
+    }
+    #[test]
+    fn stmt_drop_model() {
+        assert_eq!(
+            Compiler::compile(b"drop model twitter.tweet").unwrap(),
+            Statement::DropModel(Entity::Full("twitter".into(), "tweet".into()))
+        );
+    }
+    #[test]
+    fn stmt_inspect_space() {
+        assert_eq!(
+            Compiler::compile(b"inspect space twitter").unwrap(),
+            Statement::InspectSpace("twitter".into())
+        );
+    }
+    #[test]
+    fn stmt_inspect_model() {
+        assert_eq!(
+            Compiler::compile(b"inspect model twitter.tweet").unwrap(),
+            Statement::InspectModel(Entity::Full("twitter".into(), "tweet".into()))
+        );
+    }
+    #[test]
     fn compile_full() {
         let (src, stmt) = setup_src_stmt();
         assert_eq!(Compiler::compile(&src).unwrap(), stmt)

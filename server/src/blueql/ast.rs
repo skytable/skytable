@@ -42,7 +42,7 @@ pub enum Statement {
     /// Create a new model with the provided configuration
     CreateModel { entity: Entity, model: FieldConfig },
     /// Drop the given model
-    DropModel(RawSlice),
+    DropModel(Entity),
     /// Drop the given space
     DropSpace(RawSlice),
     /// Inspect the given space
@@ -244,9 +244,9 @@ impl<'a> Compiler<'a> {
     /// Parse a drop statement
     fn parse_drop(&mut self) -> LangResult<Statement> {
         match (self.next(), self.next()) {
-            (Some(Token::Keyword(Keyword::Model)), Some(Token::Identifier(model_name))) => {
-                Ok(Statement::DropModel(model_name))
-            }
+            (Some(Token::Keyword(Keyword::Model)), Some(Token::Identifier(model_name))) => Ok(
+                Statement::DropModel(self.parse_entity_name_with_start(model_name)?),
+            ),
             (Some(Token::Keyword(Keyword::Space)), Some(Token::Identifier(space_name))) => {
                 Ok(Statement::DropSpace(space_name))
             }
@@ -352,6 +352,14 @@ impl<'a> Compiler<'a> {
             Some(Token::Identifier(model_name)) => Ok(Statement::CreateSpace(model_name)),
             Some(_) => Err(LangError::InvalidSyntax),
             None => Err(LangError::UnexpectedEOF),
+        }
+    }
+    fn parse_entity_name_with_start(&mut self, start: RawSlice) -> LangResult<Entity> {
+        if self.peek_eq(&Token::Period) {
+            unsafe { self.incr_cursor() };
+            Ok(Entity::Full(start, self.next_ident()?))
+        } else {
+            Ok(Entity::Current(start))
         }
     }
     #[inline(always)]
