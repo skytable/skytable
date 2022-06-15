@@ -142,7 +142,7 @@ mod ast {
     #[cfg(test)]
     fn setup_src_stmt() -> (Vec<u8>, Statement) {
         let src =
-            b"create model twitter.tweet(username: string, password: binary, posts: list<string>)"
+            b"create model twitter.tweet(username: string, password: binary, posts: list<string>) volatile"
                 .to_vec();
         let stmt = Statement::CreateModel {
             entity: Entity::Full("twitter".into(), "tweet".into()),
@@ -154,6 +154,7 @@ mod ast {
                 ],
                 names: vec!["username".into(), "password".into(), "posts".into()],
             },
+            volatile: true,
         };
         (src, stmt)
     }

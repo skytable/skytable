@@ -86,6 +86,7 @@ pub enum Keyword {
     Inspect,
     Model,
     Space,
+    Volatile,
     Type(Type),
 }
 
@@ -111,6 +112,7 @@ impl Keyword {
             b"inspect" => Keyword::Inspect,
             b"model" => Keyword::Model,
             b"space" => Keyword::Space,
+            b"volatile" => Keyword::Volatile,
             b"string" => Keyword::Type(Type::String),
             b"binary" => Keyword::Type(Type::Binary),
             b"list" => Keyword::Type(Type::List),

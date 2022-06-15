@@ -40,7 +40,11 @@ pub enum Statement {
     /// Create a new space with the provided ID
     CreateSpace(RawSlice),
     /// Create a new model with the provided configuration
-    CreateModel { entity: Entity, model: FieldConfig },
+    CreateModel {
+        entity: Entity,
+        model: FieldConfig,
+        volatile: bool,
+    },
     /// Drop the given model
     DropModel(Entity),
     /// Drop the given space
@@ -55,6 +59,10 @@ pub enum Statement {
 pub enum Entity {
     Current(RawSlice),
     Full(RawSlice, RawSlice),
+}
+
+impl Entity {
+    const MAX_LENGTH_EX: usize = 64;
 }
 
 #[derive(PartialEq, Debug)]
@@ -298,8 +306,13 @@ impl<'a> Compiler<'a> {
         }
         is_good_expr &= self.next_eq(&Token::CloseParen);
         is_good_expr &= fc.names.len() >= 2;
+        let volatile = self.next_eq(&Token::Keyword(Keyword::Volatile));
         if is_good_expr {
-            Ok(Statement::CreateModel { entity, model: fc })
+            Ok(Statement::CreateModel {
+                entity,
+                model: fc,
+                volatile,
+            })
         } else {
             Err(LangError::BadExpression)
         }
@@ -354,6 +367,7 @@ impl<'a> Compiler<'a> {
             None => Err(LangError::UnexpectedEOF),
         }
     }
+    #[inline(always)]
     fn parse_entity_name_with_start(&mut self, start: RawSlice) -> LangResult<Entity> {
         if self.peek_eq(&Token::Period) {
             unsafe { self.incr_cursor() };
@@ -366,11 +380,13 @@ impl<'a> Compiler<'a> {
     pub(super) fn parse_entity_name(&mut self) -> LangResult<Entity> {
         // let's peek the next token
         match self.next_result()? {
-            Token::Identifier(id) if self.peek_eq(&Token::Period) => {
+            Token::Identifier(id)
+                if self.peek_eq(&Token::Period) && id.len() < Entity::MAX_LENGTH_EX =>
+            {
                 unsafe { self.incr_cursor() };
                 Ok(Entity::Full(id, self.next_ident()?))
             }
-            Token::Identifier(id) => Ok(Entity::Current(id)),
+            Token::Identifier(id) if id.len() < Entity::MAX_LENGTH_EX => Ok(Entity::Current(id)),
             _ => Err(LangError::InvalidSyntax),
         }
     }

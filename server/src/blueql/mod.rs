@@ -61,6 +61,9 @@ impl RawSlice {
     pub fn as_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr, self.len) }
     }
+    pub const fn len(&self) -> usize {
+        self.len
+    }
 }
 
 impl<T> From<T> for RawSlice
