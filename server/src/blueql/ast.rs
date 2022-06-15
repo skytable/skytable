@@ -45,6 +45,10 @@ pub enum Statement {
     DropModel(RawSlice),
     /// Drop the given space
     DropSpace(RawSlice),
+    /// Inspect the given space
+    InspectSpace(RawSlice),
+    /// Inspect the given model
+    InspectModel(Entity),
 }
 
 #[derive(Debug, PartialEq)]
@@ -168,6 +172,14 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
+    fn next_ident(&mut self) -> LangResult<RawSlice> {
+        match self.next() {
+            Some(Token::Identifier(rws)) => Ok(rws),
+            Some(_) => Err(LangError::InvalidSyntax),
+            None => Err(LangError::UnexpectedEOF),
+        }
+    }
+    #[inline(always)]
     /// Returns the remaining number of tokens
     fn remaining(&self) -> usize {
         self.end_ptr as usize - self.cursor as usize
@@ -198,6 +210,7 @@ impl<'a> Compiler<'a> {
             Some(tok) => match tok {
                 Token::Keyword(Keyword::Create) => self.parse_create(),
                 Token::Keyword(Keyword::Drop) => self.parse_drop(),
+                Token::Keyword(Keyword::Inspect) => self.parse_inspect(),
                 _ => Err(LangError::ExpectedStatement),
             },
             None => Err(LangError::UnexpectedEOF),
@@ -208,6 +221,26 @@ impl<'a> Compiler<'a> {
             Err(LangError::InvalidSyntax)
         }
     }
+    #[inline(always)]
+    /// Parse an inspect statement
+    fn parse_inspect(&mut self) -> LangResult<Statement> {
+        match self.next_result()? {
+            Token::Keyword(Keyword::Model) => self.parse_inspect_model(),
+            Token::Keyword(Keyword::Space) => self.parse_inspect_space(),
+            _ => Err(LangError::InvalidSyntax),
+        }
+    }
+    #[inline(always)]
+    /// Parse `inspect model <model>`
+    fn parse_inspect_model(&mut self) -> LangResult<Statement> {
+        Ok(Statement::InspectModel(self.parse_entity_name()?))
+    }
+    #[inline(always)]
+    /// Parse `inspect space <space>`
+    fn parse_inspect_space(&mut self) -> LangResult<Statement> {
+        Ok(Statement::InspectSpace(self.next_ident()?))
+    }
+    #[inline(always)]
     /// Parse a drop statement
     fn parse_drop(&mut self) -> LangResult<Statement> {
         match (self.next(), self.next()) {
@@ -237,7 +270,7 @@ impl<'a> Compiler<'a> {
         self.parse_fields(entity)
     }
     #[inline(always)]
-    /// Parse a field expression and return a `Statement::CreateTable`
+    /// Parse a field expression and return a `Statement::CreateModel`
     fn parse_fields(&mut self, entity: Entity) -> LangResult<Statement> {
         let mut fc = FieldConfig::new();
         let mut is_good_expr = self.next_eq(&Token::OpenParen);
@@ -322,36 +355,15 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
-    fn parse_entity_name(&mut self) -> LangResult<Entity> {
+    pub(super) fn parse_entity_name(&mut self) -> LangResult<Entity> {
         // let's peek the next token
         match self.next_result()? {
             Token::Identifier(id) if self.peek_eq(&Token::Period) => {
                 unsafe { self.incr_cursor() };
-                let id_2 = self.next_result()?;
-                if let Token::Identifier(id_2) = id_2 {
-                    Ok(Entity::Full(id, id_2))
-                } else {
-                    Err(LangError::InvalidSyntax)
-                }
+                Ok(Entity::Full(id, self.next_ident()?))
             }
             Token::Identifier(id) => Ok(Entity::Current(id)),
             _ => Err(LangError::InvalidSyntax),
         }
     }
-}
-
-#[test]
-fn parse_entity_name_test() {
-    assert_eq!(
-        Compiler::new(&Lexer::lex(b"hello").unwrap())
-            .parse_entity_name()
-            .unwrap(),
-        Entity::Current("hello".into())
-    );
-    assert_eq!(
-        Compiler::new(&Lexer::lex(b"hello.world").unwrap())
-            .parse_entity_name()
-            .unwrap(),
-        Entity::Full("hello".into(), "world".into())
-    );
 }

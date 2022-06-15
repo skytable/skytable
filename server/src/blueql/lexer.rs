@@ -83,6 +83,7 @@ impl From<Type> for Token {
 pub enum Keyword {
     Create,
     Drop,
+    Inspect,
     Model,
     Space,
     Type(Type),
@@ -107,6 +108,7 @@ impl Keyword {
         let r = match slice {
             b"create" => Keyword::Create,
             b"drop" => Keyword::Drop,
+            b"inspect" => Keyword::Inspect,
             b"model" => Keyword::Model,
             b"space" => Keyword::Space,
             b"string" => Keyword::Type(Type::String),

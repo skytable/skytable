@@ -121,6 +121,23 @@ mod lexer {
 
 mod ast {
     //! AST tests
+
+    #[test]
+    fn parse_entity_name_test() {
+        assert_eq!(
+            Compiler::new(&Lexer::lex(b"hello").unwrap())
+                .parse_entity_name()
+                .unwrap(),
+            Entity::Current("hello".into())
+        );
+        assert_eq!(
+            Compiler::new(&Lexer::lex(b"hello.world").unwrap())
+                .parse_entity_name()
+                .unwrap(),
+            Entity::Full("hello".into(), "world".into())
+        );
+    }
+
     use super::*;
     #[cfg(test)]
     fn setup_src_stmt() -> (Vec<u8>, Statement) {
