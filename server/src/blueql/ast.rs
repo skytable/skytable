@@ -34,7 +34,8 @@ use {
     core::{marker::PhantomData, mem::transmute, ptr},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 #[repr(u8)]
 /// A statement that can be executed
 pub enum Statement {
@@ -56,7 +57,8 @@ pub enum Statement {
     InspectModel(Entity),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum Entity {
     Current(RawSlice),
     Full(RawSlice, RawSlice),
@@ -66,7 +68,8 @@ impl Entity {
     const MAX_LENGTH_EX: usize = 65;
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 /// The field configuration used when declaring the fields for a model
 pub struct FieldConfig {
     /// the types of the fields

@@ -328,7 +328,10 @@ impl<'a> Lexer<'a> {
             match unsafe { self.deref_cursor() } {
                 byte if byte.is_ascii_alphabetic() => {
                     let id = self.scan_ident();
-                    match Keyword::try_from_slice(id.as_slice()) {
+                    match Keyword::try_from_slice(unsafe {
+                        // UNSAFE(@ohsayan): The source buffer's presence guarantees that this is correct
+                        id.as_slice()
+                    }) {
                         Some(kw) => tokens.push(kw.into()),
                         None => tokens.push(Token::Identifier(id)),
                     }

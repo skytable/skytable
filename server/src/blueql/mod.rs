@@ -35,22 +35,28 @@ mod tests;
 // re-export
 pub use ast::Compiler;
 
-use core::{fmt::Debug, slice};
+#[cfg(test)]
+use core::fmt;
+use core::slice;
 
+#[cfg_attr(not(test), derive(Debug))]
+#[cfg_attr(not(test), derive(PartialEq))]
 pub struct RawSlice {
     ptr: *const u8,
     len: usize,
 }
 
-impl Debug for RawSlice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", String::from_utf8_lossy(self.as_slice()))
+#[cfg(test)]
+impl fmt::Debug for RawSlice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", String::from_utf8_lossy(unsafe { self.as_slice() }))
     }
 }
 
+#[cfg(test)]
 impl PartialEq for RawSlice {
     fn eq(&self, other: &Self) -> bool {
-        self.as_slice() == other.as_slice()
+        unsafe { self.as_slice() == other.as_slice() }
     }
 }
 
@@ -58,8 +64,8 @@ impl RawSlice {
     pub const unsafe fn new(ptr: *const u8, len: usize) -> Self {
         Self { ptr, len }
     }
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr, self.len) }
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        slice::from_raw_parts(self.ptr, self.len)
     }
     pub const fn len(&self) -> usize {
         self.len
