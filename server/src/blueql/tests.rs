@@ -25,7 +25,7 @@
 */
 
 use super::{
-    ast::{Compiler, FieldConfig, Statement},
+    ast::{Compiler, Entity, FieldConfig, Statement},
     lexer::{Keyword, Lexer, Token, Type, TypeExpression},
 };
 
@@ -106,9 +106,10 @@ mod ast {
     #[cfg(test)]
     fn setup_src_stmt() -> (Vec<u8>, Statement) {
         let src =
-            b"create model tweet(username: string, password: binary, posts: list<string>)".to_vec();
+            b"create model twitter.tweet(username: string, password: binary, posts: list<string>)"
+                .to_vec();
         let stmt = Statement::CreateModel {
-            name: "tweet".into(),
+            entity: Entity::Full("twitter".into(), "tweet".into()),
             model: FieldConfig {
                 types: vec![
                     TypeExpression(vec![Type::String]),

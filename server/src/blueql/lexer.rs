@@ -45,6 +45,7 @@ pub enum Token {
     SingleQuote,  // '
     DoubleQuote,  // "
     Colon,        // :
+    Period,       // .
     Identifier(RawSlice),
     Number(u64),
     Keyword(Keyword),
@@ -288,6 +289,7 @@ impl<'a> Lexer<'a> {
                         b')' => Token::CloseParen,
                         b',' => Token::Comma,
                         b':' => Token::Colon,
+                        b'.' => Token::Period,
                         _ => return Err(LangError::InvalidSyntax),
                     };
                     tokens.push(r);

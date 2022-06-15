@@ -40,11 +40,17 @@ pub enum Statement {
     /// Create a new space with the provided ID
     CreateSpace(RawSlice),
     /// Create a new model with the provided configuration
-    CreateModel { name: RawSlice, model: FieldConfig },
+    CreateModel { entity: Entity, model: FieldConfig },
     /// Drop the given model
     DropModel(RawSlice),
     /// Drop the given space
     DropSpace(RawSlice),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Entity {
+    Current(RawSlice),
+    Full(RawSlice, RawSlice),
 }
 
 #[derive(PartialEq, Debug)]
@@ -109,6 +115,27 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
+    fn peek_neq(&self, token: &Token) -> bool {
+        self.not_exhausted() && unsafe { self.deref_cursor() != token }
+    }
+    #[inline(always)]
+    /// Check if the token ahead equals the given token
+    fn peek_eq(&self, tok: &Token) -> bool {
+        self.not_exhausted() && unsafe { self.deref_cursor() == tok }
+    }
+    #[inline(always)]
+    /// Check if the token ahead equals the given token, moving the cursor ahead if so
+    fn next_eq(&mut self, tok: &Token) -> bool {
+        let next_is_eq = self.not_exhausted() && unsafe { self.deref_cursor() == tok };
+        unsafe { self.incr_cursor_if(next_is_eq) };
+        next_is_eq
+    }
+    #[inline(always)]
+    /// Increment the cursor if the condition is true
+    unsafe fn incr_cursor_if(&mut self, cond: bool) {
+        self.incr_cursor_by(cond as usize)
+    }
+    #[inline(always)]
     /// Move the cursor ahead by `by` positions
     unsafe fn incr_cursor_by(&mut self, by: usize) {
         self.cursor = self.cursor.add(by)
@@ -131,6 +158,16 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
+    fn next_result(&mut self) -> LangResult<Token> {
+        if self.not_exhausted() {
+            let r = unsafe { ptr::read(self.cursor) };
+            unsafe { self.incr_cursor() };
+            Ok(r)
+        } else {
+            Err(LangError::UnexpectedEOF)
+        }
+    }
+    #[inline(always)]
     /// Returns the remaining number of tokens
     fn remaining(&self) -> usize {
         self.end_ptr as usize - self.cursor as usize
@@ -142,6 +179,10 @@ impl<'a> Compiler<'a> {
     /// Compile the given BlueQL source
     pub fn compile(src: &[u8]) -> LangResult<Statement> {
         let tokens = Lexer::lex(src)?;
+        Self::new(&tokens).eval()
+    }
+    #[inline(always)]
+    pub const fn new(tokens: &[Token]) -> Self {
         unsafe {
             Self {
                 cursor: tokens.as_ptr(),
@@ -149,7 +190,6 @@ impl<'a> Compiler<'a> {
                 _lt: PhantomData,
             }
         }
-        .eval()
     }
     #[inline(always)]
     /// The inner eval method
@@ -193,45 +233,40 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Parse a `create model` statement
     fn parse_create_model(&mut self) -> LangResult<Statement> {
-        match self.next() {
-            Some(Token::Identifier(model_name)) => self.parse_fields(model_name),
-            Some(_) => Err(LangError::InvalidSyntax),
-            None => Err(LangError::UnexpectedEOF),
-        }
+        let entity = self.parse_entity_name()?;
+        self.parse_fields(entity)
     }
     #[inline(always)]
     /// Parse a field expression and return a `Statement::CreateTable`
-    fn parse_fields(&mut self, name: RawSlice) -> LangResult<Statement> {
+    fn parse_fields(&mut self, entity: Entity) -> LangResult<Statement> {
         let mut fc = FieldConfig::new();
-        let mut is_good_expr = self.next() == Some(Token::OpenParen);
-        while is_good_expr && self.peek() != Some(&Token::CloseParen) {
+        let mut is_good_expr = self.next_eq(&Token::OpenParen);
+        while is_good_expr && self.peek_neq(&Token::CloseParen) {
             match self.next() {
                 Some(Token::Identifier(field_name)) => {
                     // we have a field name
-                    is_good_expr &= self.next() == Some(Token::Colon);
+                    is_good_expr &= self.next_eq(&Token::Colon);
                     if let Some(Token::Keyword(Keyword::Type(ty))) = self.next() {
                         fc.names.push(field_name);
                         fc.types.push(self.parse_type_expression(ty)?);
                     } else {
                         is_good_expr = false;
                     }
-                    is_good_expr &= self.peek() == Some(&Token::CloseParen)
-                        || self.next() == Some(Token::Comma);
+                    is_good_expr &= self.peek_eq(&Token::CloseParen) || self.next_eq(&Token::Comma);
                 }
                 Some(Token::Keyword(Keyword::Type(ty))) => {
                     // we have a type name
                     fc.names.push("unnamed".into());
                     fc.types.push(self.parse_type_expression(ty)?);
-                    is_good_expr &= self.peek() == Some(&Token::CloseParen)
-                        || self.next() == Some(Token::Comma);
+                    is_good_expr &= self.peek_eq(&Token::CloseParen) || self.next_eq(&Token::Comma);
                 }
                 _ => is_good_expr = false,
             }
         }
-        is_good_expr &= self.next() == Some(Token::CloseParen);
+        is_good_expr &= self.next_eq(&Token::CloseParen);
         is_good_expr &= fc.names.len() >= 2;
         if is_good_expr {
-            Ok(Statement::CreateModel { name, model: fc })
+            Ok(Statement::CreateModel { entity, model: fc })
         } else {
             Err(LangError::BadExpression)
         }
@@ -248,10 +283,10 @@ impl<'a> Compiler<'a> {
         let mut valid_expr = true;
 
         // we already have the starting type; next is either nothing or open angular
-        let has_more_args = self.peek() == Some(&Token::OpenAngular);
+        let has_more_args = self.peek_eq(&Token::OpenAngular);
 
         let mut expect = Expect::Type;
-        while valid_expr && has_more_args && self.peek() != Some(&Token::CloseParen) {
+        while valid_expr && has_more_args && self.peek_neq(&Token::CloseParen) {
             match self.next() {
                 Some(Token::OpenAngular) => p_open += 1,
                 Some(Token::Keyword(Keyword::Type(ty))) if expect == Expect::Type => {
@@ -286,4 +321,37 @@ impl<'a> Compiler<'a> {
             None => Err(LangError::UnexpectedEOF),
         }
     }
+    #[inline(always)]
+    fn parse_entity_name(&mut self) -> LangResult<Entity> {
+        // let's peek the next token
+        match self.next_result()? {
+            Token::Identifier(id) if self.peek_eq(&Token::Period) => {
+                unsafe { self.incr_cursor() };
+                let id_2 = self.next_result()?;
+                if let Token::Identifier(id_2) = id_2 {
+                    Ok(Entity::Full(id, id_2))
+                } else {
+                    Err(LangError::InvalidSyntax)
+                }
+            }
+            Token::Identifier(id) => Ok(Entity::Current(id)),
+            _ => Err(LangError::InvalidSyntax),
+        }
+    }
+}
+
+#[test]
+fn parse_entity_name_test() {
+    assert_eq!(
+        Compiler::new(&Lexer::lex(b"hello").unwrap())
+            .parse_entity_name()
+            .unwrap(),
+        Entity::Current("hello".into())
+    );
+    assert_eq!(
+        Compiler::new(&Lexer::lex(b"hello.world").unwrap())
+            .parse_entity_name()
+            .unwrap(),
+        Entity::Full("hello".into(), "world".into())
+    );
 }
