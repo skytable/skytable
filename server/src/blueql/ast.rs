@@ -30,6 +30,7 @@ use {
         lexer::{Keyword, Lexer, Token, Type, TypeExpression},
         RawSlice,
     },
+    crate::util::Life,
     core::{marker::PhantomData, mem::transmute, ptr},
 };
 
@@ -197,9 +198,9 @@ impl<'a> Compiler<'a> {
 impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Compile the given BlueQL source
-    pub fn compile(src: &[u8]) -> LangResult<Statement> {
+    pub fn compile(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
         let tokens = Lexer::lex(src)?;
-        Self::new(&tokens).eval()
+        Self::new(&tokens).eval().map(Life::new)
     }
     #[inline(always)]
     pub const fn new(tokens: &[Token]) -> Self {

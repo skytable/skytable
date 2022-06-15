@@ -146,7 +146,11 @@ impl<T: Clone> Clone for Wrapper<T> {
 /// a compiler error, it is always good to do so to avoid misuse of the previously mentioned
 /// fat pointers. This is exactly what this type does. It binds a context-dependent lifetime
 /// to some type which preferably has no other lifetime (something like an `UnsafeSlice`, for
-/// example)
+/// example).
+///
+/// How do you access this? Always consider using [`AsRef::as_ref`] to get a ref to the inner
+/// type and then do whatever you like. Move semantics to the inner type are prohibited (and
+/// marked unsafe)
 ///
 /// ## Important notes
 /// - lifetimes are context captured by the compiler. so if this doesn't work, we'll need
@@ -169,6 +173,12 @@ impl<'a, T> Life<'a, T> {
             v,
             _lt: PhantomData,
         }
+    }
+    /// Get the inner value
+    /// # Safety
+    /// The caller must ensure that the returned value outlives the proposed lifetime
+    pub unsafe fn into_inner(self) -> T {
+        self.v
     }
 }
 
