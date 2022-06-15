@@ -101,20 +101,20 @@ mod lexer {
 
     #[test]
     fn lex_quoted_string() {
-        let src_a = b"'hello, world!'";
-        let src_b = br#" "hello, world!" "#;
-        let src_c = br#" "\"hello, world!\"" "#;
+        let src_a = "'hello, world🦀!'".as_bytes();
+        let src_b = r#" "hello, world🦀!" "#.as_bytes();
+        let src_c = r#" "\"hello, world🦀!\"" "#.as_bytes();
         assert_eq!(
             Lexer::lex(src_a).unwrap(),
-            vec![Token::QuotedString("hello, world!".into())]
+            vec![Token::QuotedString("hello, world🦀!".into())]
         );
         assert_eq!(
             Lexer::lex(src_b).unwrap(),
-            vec![Token::QuotedString("hello, world!".into())]
+            vec![Token::QuotedString("hello, world🦀!".into())]
         );
         assert_eq!(
             Lexer::lex(src_c).unwrap(),
-            vec![Token::QuotedString("\"hello, world!\"".into())]
+            vec![Token::QuotedString("\"hello, world🦀!\"".into())]
         )
     }
 }
