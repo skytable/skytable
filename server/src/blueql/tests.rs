@@ -24,70 +24,105 @@
  *
 */
 
-// lexer tests
 use super::{
     ast::{Compiler, FieldConfig, Statement},
     lexer::{Keyword, Lexer, Token, Type, TypeExpression},
 };
 
-#[test]
-fn lex_ident() {
-    let src = b"mytbl";
-    assert_eq!(
-        Lexer::lex(src).unwrap(),
-        vec![Token::Identifier("mytbl".into())]
-    )
+mod lexer {
+    //! Lexer tests
+    use super::*;
+
+    #[test]
+    fn lex_ident() {
+        let src = b"mytbl";
+        assert_eq!(
+            Lexer::lex(src).unwrap(),
+            vec![Token::Identifier("mytbl".into())]
+        )
+    }
+
+    #[test]
+    fn lex_keyword() {
+        let src = b"create";
+        assert_eq!(
+            Lexer::lex(src).unwrap(),
+            vec![Token::Keyword(Keyword::Create)]
+        )
+    }
+
+    #[test]
+    fn lex_number() {
+        let src = b"123456";
+        assert_eq!(Lexer::lex(src).unwrap(), vec![Token::Number(123456)])
+    }
+
+    #[test]
+    fn lex_full() {
+        let src = b"create model tweet";
+        assert_eq!(
+            Lexer::lex(src).unwrap(),
+            vec![
+                Token::Keyword(Keyword::Create),
+                Token::Keyword(Keyword::Model),
+                Token::Identifier("tweet".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn lex_combined_tokens() {
+        let src = b"create model tweet(name: string, pic: binary, posts: list<string>)";
+        assert_eq!(
+            Lexer::lex(src).unwrap(),
+            vec![
+                Keyword::Create.into(),
+                Keyword::Model.into(),
+                "tweet".into(),
+                Token::OpenParen,
+                Token::Identifier("name".into()),
+                Token::Colon,
+                Type::String.into(),
+                Token::Comma,
+                Token::Identifier("pic".into()),
+                Token::Colon,
+                Type::Binary.into(),
+                Token::Comma,
+                Token::Identifier("posts".into()),
+                Token::Colon,
+                Type::List.into(),
+                Token::OpenAngular,
+                Type::String.into(),
+                Token::CloseAngular,
+                Token::CloseParen
+            ]
+        );
+    }
 }
 
-#[test]
-fn lex_keyword() {
-    let src = b"create";
-    assert_eq!(
-        Lexer::lex(src).unwrap(),
-        vec![Token::Keyword(Keyword::Create)]
-    )
-}
-
-#[test]
-fn lex_number() {
-    let src = b"123456";
-    assert_eq!(Lexer::lex(src).unwrap(), vec![Token::Number(123456)])
-}
-
-#[test]
-fn lex_full() {
-    let src = b"create model tweet";
-    assert_eq!(
-        Lexer::lex(src).unwrap(),
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Model),
-            Token::Identifier("tweet".into())
-        ]
-    );
-}
-
-// AST tests
-
-#[cfg(test)]
-fn setup_src_stmt() -> (Vec<u8>, Statement) {
-    let src =
-        b"create model tweet(username: string, password: binary, posts: list<string>)".to_vec();
-    let stmt = Statement::CreateModel {
-        name: "tweet".into(),
-        model: FieldConfig {
-            types: vec![
-                TypeExpression(vec![Type::String]),
-                TypeExpression(vec![Type::Binary]),
-                TypeExpression(vec![Type::List, Type::String]),
-            ],
-            names: vec!["username".into(), "password".into(), "posts".into()],
-        },
-    };
-    (src, stmt)
-}
-#[test]
-fn compile_full() {
-    let (src, stmt) = setup_src_stmt();
-    assert_eq!(Compiler::compile(&src).unwrap(), stmt)
+mod ast {
+    //! AST tests
+    use super::*;
+    #[cfg(test)]
+    fn setup_src_stmt() -> (Vec<u8>, Statement) {
+        let src =
+            b"create model tweet(username: string, password: binary, posts: list<string>)".to_vec();
+        let stmt = Statement::CreateModel {
+            name: "tweet".into(),
+            model: FieldConfig {
+                types: vec![
+                    TypeExpression(vec![Type::String]),
+                    TypeExpression(vec![Type::Binary]),
+                    TypeExpression(vec![Type::List, Type::String]),
+                ],
+                names: vec!["username".into(), "password".into(), "posts".into()],
+            },
+        };
+        (src, stmt)
+    }
+    #[test]
+    fn compile_full() {
+        let (src, stmt) = setup_src_stmt();
+        assert_eq!(Compiler::compile(&src).unwrap(), stmt)
+    }
 }

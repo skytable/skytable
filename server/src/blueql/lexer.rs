@@ -62,9 +62,22 @@ impl From<RawSlice> for Token {
     }
 }
 
+#[cfg(test)]
+impl From<&'static str> for Token {
+    fn from(sl: &'static str) -> Self {
+        Self::Identifier(sl.into())
+    }
+}
+
 impl From<u64> for Token {
     fn from(num: u64) -> Self {
         Self::Number(num)
+    }
+}
+
+impl From<Type> for Token {
+    fn from(ty: Type) -> Self {
+        Self::Keyword(Keyword::Type(ty))
     }
 }
 
