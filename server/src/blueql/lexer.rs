@@ -87,6 +87,7 @@ pub enum Keyword {
     Model,
     Space,
     Volatile,
+    Force,
     Type(Type),
 }
 
@@ -116,6 +117,7 @@ impl Keyword {
             b"string" => Keyword::Type(Type::String),
             b"binary" => Keyword::Type(Type::Binary),
             b"list" => Keyword::Type(Type::List),
+            b"force" => Keyword::Force,
             _ => return None,
         };
         Some(r)

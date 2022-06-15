@@ -46,9 +46,9 @@ pub enum Statement {
         volatile: bool,
     },
     /// Drop the given model
-    DropModel(Entity),
+    DropModel { entity: Entity, force: bool },
     /// Drop the given space
-    DropSpace(RawSlice),
+    DropSpace { entity: RawSlice, force: bool },
     /// Inspect the given space
     InspectSpace(RawSlice),
     /// Inspect the given model
@@ -62,7 +62,7 @@ pub enum Entity {
 }
 
 impl Entity {
-    const MAX_LENGTH_EX: usize = 64;
+    const MAX_LENGTH_EX: usize = 65;
 }
 
 #[derive(PartialEq, Debug)]
@@ -251,12 +251,19 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Parse a drop statement
     fn parse_drop(&mut self) -> LangResult<Statement> {
-        match (self.next(), self.next()) {
-            (Some(Token::Keyword(Keyword::Model)), Some(Token::Identifier(model_name))) => Ok(
-                Statement::DropModel(self.parse_entity_name_with_start(model_name)?),
-            ),
+        let (drop_container, drop_id) = (self.next(), self.next());
+        match (drop_container, drop_id) {
+            (Some(Token::Keyword(Keyword::Model)), Some(Token::Identifier(model_name))) => {
+                Ok(Statement::DropModel {
+                    entity: self.parse_entity_name_with_start(model_name)?,
+                    force: self.next_eq(&Token::Keyword(Keyword::Force)),
+                })
+            }
             (Some(Token::Keyword(Keyword::Space)), Some(Token::Identifier(space_name))) => {
-                Ok(Statement::DropSpace(space_name))
+                Ok(Statement::DropSpace {
+                    entity: space_name,
+                    force: self.next_eq(&Token::Keyword(Keyword::Force)),
+                })
             }
             _ => Err(LangError::InvalidSyntax),
         }

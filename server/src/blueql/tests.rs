@@ -171,15 +171,21 @@ mod ast {
     #[test]
     fn stmt_drop_space() {
         assert_eq!(
-            Compiler::compile(b"drop space twitter").unwrap(),
-            Statement::DropSpace("twitter".into())
+            Compiler::compile(b"drop space twitter force").unwrap(),
+            Statement::DropSpace {
+                entity: "twitter".into(),
+                force: true
+            }
         );
     }
     #[test]
     fn stmt_drop_model() {
         assert_eq!(
-            Compiler::compile(b"drop model twitter.tweet").unwrap(),
-            Statement::DropModel(Entity::Full("twitter".into(), "tweet".into()))
+            Compiler::compile(b"drop model twitter.tweet force").unwrap(),
+            Statement::DropModel {
+                entity: Entity::Full("twitter".into(), "tweet".into()),
+                force: true
+            }
         );
     }
     #[test]
