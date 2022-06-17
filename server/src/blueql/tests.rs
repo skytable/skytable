@@ -169,6 +169,29 @@ mod ast {
         );
     }
     #[test]
+    fn stmt_create_unnamed() {
+        let r = FieldConfig {
+            names: vec![],
+            types: vec![
+                TypeExpression(vec![Type::String]),
+                TypeExpression(vec![Type::Binary]),
+            ],
+        };
+        let src = b"create model twitter.passwords(string, binary)".to_vec();
+        let expected = Statement::CreateModel {
+            entity: Entity::Full("twitter".into(), "passwords".into()),
+            model: FieldConfig {
+                names: vec![],
+                types: vec![
+                    TypeExpression(vec![Type::String]),
+                    TypeExpression(vec![Type::Binary]),
+                ],
+            },
+            volatile: false,
+        };
+        assert_eq!(Compiler::compile(&src).unwrap(), expected);
+    }
+    #[test]
     fn stmt_drop_space() {
         assert_eq!(
             Compiler::compile(b"drop space twitter force").unwrap(),

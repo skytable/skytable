@@ -92,9 +92,11 @@ impl FieldConfig {
     }
     // TODO(@ohsayan): Completely deprecate the model-code based API
     pub fn get_model_code(&self) -> LangResult<u8> {
-        let Self { types, .. } = self;
+        let Self { types, names } = self;
         let invalid_expr = {
-            types.len() != 2
+            // the model API doesn't support named fields (it's super limited; we need to drop it)
+            !names.is_empty()
+            || types.len() != 2
             // the key type cannot be compound
             || types[0].0.len() != 1
             // the key type cannot be a list
@@ -361,12 +363,12 @@ impl<'a> Compiler<'a> {
             }
         }
         is_good_expr &= self.next_eq(&Token::CloseParen);
-        is_good_expr &= fc.names.len() >= 2;
+        is_good_expr &= fc.types.len() >= 2;
         // important; we either have all unnamed fields or all named fields; having some unnamed
         // and some named is ambiguous because there's not "straightforward" way to query them
         // without introducing some funky naming conventions ($<field_number> if you don't have the
         // right name sounds like an outrageous idea)
-        is_good_expr &= fc.names.len() == fc.types.len();
+        is_good_expr &= fc.names.is_empty() || fc.names.len() == fc.types.len();
         let volatile = self.next_eq(&Token::Keyword(Keyword::Volatile));
         if is_good_expr {
             Ok(Statement::CreateModel {
