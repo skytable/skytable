@@ -467,6 +467,26 @@ where
         'life1: 'ret_life,
         Self: 'ret_life;
 
+    fn write_typed_non_null_array<'life0, 'ret_life, T>(
+        &'life0 mut self,
+        body: &'life0 [T],
+        tsymbol: u8,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        Self: Send + 'ret_life,
+        T: AsRef<[u8]> + 'life0 + Sync,
+    {
+        Box::pin(async move {
+            self.write_typed_non_null_array_header(body.len(), tsymbol)
+                .await?;
+            for element in body {
+                self.write_typed_non_null_array_element(element.as_ref())
+                    .await?;
+            }
+            Ok(())
+        })
+    }
     // typed non-null array
     fn write_typed_non_null_array_header<'life0, 'ret_life>(
         &'life0 mut self,

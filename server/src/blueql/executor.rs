@@ -69,6 +69,11 @@ where
             Err(e) => return error::map_ql_err_to_resp::<(), P>(Err(e)),
         },
         Statement::DropModel { entity, force } => handle.drop_table(entity.into(), *force),
+        Statement::InspectSpaces => {
+            con.write_typed_non_null_array(&handle.get_store().list_keyspaces(), b'+')
+                .await?;
+            Ok(())
+        }
         _ => todo!(),
     };
     actions::translate_ddl_error::<P, ()>(result)?;

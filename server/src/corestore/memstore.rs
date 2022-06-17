@@ -326,6 +326,9 @@ impl Memstore {
             }
         }
     }
+    pub fn list_keyspaces(&self) -> Vec<ObjectID> {
+        self.keyspaces.iter().map(|kv| kv.key().clone()).collect()
+    }
 }
 
 /// System keyspace

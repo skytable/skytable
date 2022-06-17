@@ -49,16 +49,10 @@ action! {
                     KEYSPACES => {
                         ensure_length::<P>(act.len(), |len| len == 0)?;
                         // let's return what all keyspaces exist
-                        let ks_list: Vec<ObjectID> = handle
-                            .get_store()
-                            .keyspaces
-                            .iter()
-                            .map(|kv| kv.key().clone())
-                            .collect();
-                        con.write_typed_non_null_array_header(ks_list.len(), b'+').await?;
-                        for ks in ks_list {
-                            con.write_typed_non_null_array_element(&ks).await?;
-                        }
+                        con.write_typed_non_null_array(
+                            &handle.get_store().list_keyspaces(),
+                            b'+'
+                        ).await?
                     }
                     _ => return util::err(P::RSTRING_UNKNOWN_INSPECT_QUERY),
                 }

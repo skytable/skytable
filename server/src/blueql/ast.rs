@@ -55,6 +55,8 @@ pub enum Statement {
     InspectSpace(RawSlice),
     /// Inspect the given model
     InspectModel(Entity),
+    /// Inspect all the spaces in the database
+    InspectSpaces,
 }
 
 pub type StatementLT<'a> = Life<'a, Statement>;
@@ -268,6 +270,11 @@ impl<'a> Compiler<'a> {
         match self.next_result()? {
             Token::Keyword(Keyword::Model) => self.parse_inspect_model(),
             Token::Keyword(Keyword::Space) => self.parse_inspect_space(),
+            Token::Identifier(spaces)
+                if unsafe { spaces.as_slice() }.eq_ignore_ascii_case(b"spaces") =>
+            {
+                Ok(Statement::InspectSpaces)
+            }
             _ => Err(LangError::InvalidSyntax),
         }
     }
