@@ -41,9 +41,6 @@ pub enum Token {
     OpenAngular,  // <
     CloseAngular, // >
     Comma,        // ,
-    Whitespace,   // ' '
-    SingleQuote,  // '
-    DoubleQuote,  // "
     Colon,        // :
     Period,       // .
     QuotedString(String),
@@ -238,15 +235,6 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    #[inline(always)]
-    /// Forwards the cursor until it encounters the `stop_byte` or EOA. Returns true if
-    /// the `stop_byte` was found and false if it wasn't found or we reached EOA
-    fn scan_until(&mut self, stop_byte: u8) -> bool {
-        while self.peek_neq(stop_byte) {
-            unsafe { self.incr_cursor() }
-        }
-        self.peek_eq(stop_byte)
-    }
     #[inline(always)]
     /// Attempt to scan a number
     fn scan_number(&mut self) -> LangResult<u64> {

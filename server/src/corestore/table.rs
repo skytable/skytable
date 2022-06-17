@@ -179,6 +179,9 @@ impl Table {
             DataModel::KVExtListmap(ref kv) => kv.truncate_table(),
         }
     }
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
     /// Returns the storage type as an 8-bit uint
     pub const fn storage_type(&self) -> u8 {
         self.volatile as u8

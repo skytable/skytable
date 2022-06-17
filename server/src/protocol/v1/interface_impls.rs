@@ -117,6 +117,16 @@ impl ProtocolSpec for Skyhash1 {
     const AUTH_CODE_PERMS: &'static [u8] = eresp!("11");
     const AUTH_ERROR_ILLEGAL_USERNAME: &'static [u8] = eresp!("err-auth-illegal-username");
     const AUTH_ERROR_FAILED_TO_DELETE_USER: &'static [u8] = eresp!("err-auth-deluser-fail");
+
+    // bql respstrings
+    const BQL_BAD_EXPRESSION: &'static [u8] = eresp!("bql-bad-expression");
+    const BQL_EXPECTED_STMT: &'static [u8] = eresp!("bql-expected-statement");
+    const BQL_INVALID_NUMERIC_LITERAL: &'static [u8] = eresp!("bql-bad-numeric-literal");
+    const BQL_INVALID_STRING_LITERAL: &'static [u8] = eresp!("bql-bad-string-literal");
+    const BQL_INVALID_SYNTAX: &'static [u8] = eresp!("bql-invalid-syntax");
+    const BQL_UNEXPECTED_EOF: &'static [u8] = eresp!("bql-unexpected-eof");
+    const BQL_UNKNOWN_CREATE_QUERY: &'static [u8] = eresp!("bql-unknown-create-query");
+    const BQL_UNSUPPORTED_MODEL_DECL: &'static [u8] = eresp!("bql-unsupported-model-decl");
 }
 
 impl<Strm, T> ProtocolRead<Skyhash1, Strm> for T

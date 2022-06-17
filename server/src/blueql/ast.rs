@@ -57,6 +57,8 @@ pub enum Statement {
     InspectModel(Entity),
 }
 
+pub type StatementLT<'a> = Life<'a, Statement>;
+
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum Entity {
@@ -84,6 +86,42 @@ impl FieldConfig {
         Self {
             types: Vec::new(),
             names: Vec::new(),
+        }
+    }
+    // TODO(@ohsayan): Completely deprecate the model-code based API
+    pub fn get_model_code(&self) -> LangResult<u8> {
+        let Self { types, .. } = self;
+        let invalid_expr = {
+            types.len() != 2
+            // the key type cannot be compound
+            || types[0].0.len() != 1
+            // the key type cannot be a list
+            || types[0].0[0] == Type::List
+            // the value cannot have a depth more than two
+            || types[1].0.len() > 2
+            // if the value is a string or binary, it cannot have a depth more than 1
+            || ((types[1].0[0] == Type::Binary || types[1].0[0] == Type::String) && types[1].0.len() != 1)
+            // if the value is a list, it must have a depth of two
+            || (types[1].0[0] == Type::List && types[1].0.len() != 2)
+            // if the value is a list, the type argument cannot be a list (it's stupid, I know; that's exactly
+            // why I'll be ditching this API in the next two PRs)
+            || (types[1].0[0] == Type::List && types[1].0[1] == Type::List)
+        };
+        if invalid_expr {
+            // the value type cannot have a depth more than 2
+            return Err(LangError::UnsupportedModelDeclaration);
+        }
+        let key_expr = &types[0].0;
+        let value_expr = &types[1].0;
+        if value_expr[0] == Type::List {
+            let k_enc = key_expr[0] == Type::String;
+            let v_enc = value_expr[1] == Type::String;
+            Ok(((k_enc as u8) << 1) + (v_enc as u8) + 4)
+        } else {
+            let k_enc = key_expr[0] == Type::String;
+            let v_enc = value_expr[0] == Type::String;
+            let ret = k_enc as u8 + v_enc as u8;
+            Ok((ret & 1) + ((k_enc as u8) << 1))
         }
     }
 }
@@ -120,15 +158,6 @@ impl<'a> Compiler<'a> {
     /// Deref the cursor
     unsafe fn deref_cursor(&self) -> &Token {
         &*self.cursor
-    }
-    #[inline(always)]
-    /// Attempt to look ahead of the cursor
-    fn peek(&self) -> Option<&Token> {
-        if self.not_exhausted() {
-            Some(unsafe { self.deref_cursor() })
-        } else {
-            None
-        }
     }
     #[inline(always)]
     fn peek_neq(&self, token: &Token) -> bool {

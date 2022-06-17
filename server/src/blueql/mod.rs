@@ -24,20 +24,29 @@
  *
 */
 
-#![allow(dead_code)] // TODO(@ohsayan): Remove this once we're done
-
 mod ast;
 mod error;
+mod executor;
 mod lexer;
 // test modules
 #[cfg(test)]
 mod tests;
 // re-export
-pub use ast::Compiler;
+use {
+    self::{ast::Statement, error::LangResult},
+    crate::util::Life,
+};
+pub use {ast::Compiler, ast::Entity, executor::execute};
 
 #[cfg(test)]
 use core::fmt;
 use core::slice;
+
+#[allow(clippy::needless_lifetimes)]
+#[inline(always)]
+pub fn compile<'a>(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
+    Compiler::compile(src)
+}
 
 #[cfg_attr(not(test), derive(Debug))]
 #[cfg_attr(not(test), derive(PartialEq))]
@@ -45,6 +54,9 @@ pub struct RawSlice {
     ptr: *const u8,
     len: usize,
 }
+
+unsafe impl Send for RawSlice {}
+unsafe impl Sync for RawSlice {}
 
 #[cfg(test)]
 impl fmt::Debug for RawSlice {

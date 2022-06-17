@@ -150,6 +150,18 @@ pub enum Entity<'a> {
     Partial(ByteSlice<'a>),
 }
 
+impl<'a> From<&'a crate::blueql::Entity> for Entity<'a> {
+    fn from(e: &'a crate::blueql::Entity) -> Entity<'a> {
+        unsafe {
+            // UNSAFE(@ohsayan): Lifetime guarantees safety
+            match e {
+                crate::blueql::Entity::Current(c) => Entity::Single(c.as_slice()),
+                crate::blueql::Entity::Full(k, t) => Entity::Full(k.as_slice(), t.as_slice()),
+            }
+        }
+    }
+}
+
 #[derive(PartialEq)]
 pub enum OwnedEntity {
     Full(ObjectID, ObjectID),

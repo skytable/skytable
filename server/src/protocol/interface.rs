@@ -218,6 +218,16 @@ pub trait ProtocolSpec: Send + Sync {
     const AUTH_ERROR_ILLEGAL_USERNAME: &'static [u8];
     /// respstring: ID is protected/in use
     const AUTH_ERROR_FAILED_TO_DELETE_USER: &'static [u8];
+
+    // BlueQL respstrings
+    const BQL_BAD_EXPRESSION: &'static [u8];
+    const BQL_EXPECTED_STMT: &'static [u8];
+    const BQL_INVALID_NUMERIC_LITERAL: &'static [u8];
+    const BQL_INVALID_STRING_LITERAL: &'static [u8];
+    const BQL_INVALID_SYNTAX: &'static [u8];
+    const BQL_UNEXPECTED_EOF: &'static [u8];
+    const BQL_UNKNOWN_CREATE_QUERY: &'static [u8];
+    const BQL_UNSUPPORTED_MODEL_DECL: &'static [u8];
 }
 
 /// # The `ProtocolRead` trait

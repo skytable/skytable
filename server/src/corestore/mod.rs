@@ -278,14 +278,14 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, entity: Entity<'_>) -> KeyspaceResult<()> {
+    pub fn drop_table(&self, entity: Entity<'_>, force: bool) -> KeyspaceResult<()> {
         match entity {
             Entity::Single(tblid) | Entity::Partial(tblid) => match &self.estate.ks {
-                Some((_, ks)) => ks.drop_table(tblid),
+                Some((_, ks)) => ks.drop_table(tblid, force),
                 None => Err(DdlError::DefaultNotFound),
             },
             Entity::Full(ksid, tblid) => match self.store.get_keyspace_atomic_ref(ksid) {
-                Some(ks) => ks.drop_table(tblid),
+                Some(ks) => ks.drop_table(tblid, force),
                 None => Err(DdlError::ObjectNotFound),
             },
         }

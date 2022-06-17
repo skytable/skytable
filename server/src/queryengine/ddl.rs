@@ -123,7 +123,7 @@ action! {
             Some(eg) => {
                 let entity_group = parser::Entity::from_slice::<P>(eg)?;
                 if registry::state_okay() {
-                    translate_ddl_error::<P, ()>(handle.drop_table(entity_group))?;
+                    translate_ddl_error::<P, ()>(handle.drop_table(entity_group, false))?;
                     con._write_raw(P::RCODE_OKAY).await?;
                 } else {
                     return util::err(P::RCODE_SERVER_ERR);

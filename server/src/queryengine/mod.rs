@@ -26,13 +26,15 @@
 
 //! # The Query Engine
 
-use crate::actions::{ActionError, ActionResult};
-use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice};
-use crate::queryengine::parser::Entity;
-use crate::{actions, admin};
+
+use crate::{
+    actions::{self, ActionError, ActionResult},
+    admin, auth, blueql,
+    protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice},
+    queryengine::parser::Entity,
+};
 mod ddl;
 mod inspect;
 pub mod parser;
@@ -58,7 +60,8 @@ macro_rules! gen_constants_and_matches {
                 pub const $action2: &[u8] = stringify!($action2).as_bytes();
             )*
         }
-        let first = $buf.next_uppercase().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?;
+        let first_slice = $buf.next().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?;
+        let first = first_slice.to_ascii_uppercase();
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
@@ -67,7 +70,7 @@ macro_rules! gen_constants_and_matches {
                 tags::$action2 => $fns2.await?,
             )*
             _ => {
-                $con._write_raw(P::RCODE_UNKNOWN_ACTION).await?;
+                blueql::execute($db, $con, first_slice).await?;
             }
         }
     };

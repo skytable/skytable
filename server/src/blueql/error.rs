@@ -24,6 +24,11 @@
  *
 */
 
+use crate::{
+    actions::{ActionError, ActionResult},
+    protocol::interface::ProtocolSpec,
+};
+
 #[derive(Debug, PartialEq)]
 #[repr(u8)]
 /// BlueQL errors
@@ -42,7 +47,31 @@ pub enum LangError {
     BadExpression,
     /// An invalid string literal
     InvalidStringLiteral,
+    /// Unsupported model declaration
+    UnsupportedModelDeclaration,
 }
 
 /// Results for BlueQL
 pub type LangResult<T> = Result<T, LangError>;
+
+#[inline(never)]
+#[cold]
+const fn cold_err<P: ProtocolSpec>(e: LangError) -> &'static [u8] {
+    match e {
+        LangError::BadExpression => P::BQL_BAD_EXPRESSION,
+        LangError::ExpectedStatement => P::BQL_EXPECTED_STMT,
+        LangError::InvalidNumericLiteral => P::BQL_INVALID_NUMERIC_LITERAL,
+        LangError::InvalidStringLiteral => P::BQL_INVALID_STRING_LITERAL,
+        LangError::InvalidSyntax => P::BQL_INVALID_SYNTAX,
+        LangError::UnexpectedEOF => P::BQL_UNEXPECTED_EOF,
+        LangError::UnknownCreateQuery => P::BQL_UNKNOWN_CREATE_QUERY,
+        LangError::UnsupportedModelDeclaration => P::BQL_UNSUPPORTED_MODEL_DECL,
+    }
+}
+
+pub fn map_ql_err_to_resp<T, P: ProtocolSpec>(e: LangResult<T>) -> ActionResult<T> {
+    match e {
+        Ok(v) => Ok(v),
+        Err(e) => Err(ActionError::ActionError(cold_err::<P>(e))),
+    }
+}
