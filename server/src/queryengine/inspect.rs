@@ -25,8 +25,11 @@
 */
 
 use {
-    super::ddl::{KEYSPACE, TABLE},
-    crate::{corestore::table::Table, dbnet::connection::prelude::*},
+    super::{
+        ddl::{KEYSPACE, TABLE},
+        parser::Entity,
+    },
+    crate::dbnet::connection::prelude::*,
 };
 
 const KEYSPACES: &[u8] = "KEYSPACES".as_bytes();
@@ -70,17 +73,11 @@ action! {
     /// INSPECT a table. This should only have the table ID
     fn inspect_table(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len < 2)?;
-        match act.next() {
-            Some(entity) => {
-                let entity = handle_entity!(con, entity);
-                con.write_string(get_tbl!(entity, handle, con).describe_self()).await?;
-            },
-            None => {
-                // inspect the current table
-                let tbl = translate_ddl_error::<P, &Table>(handle.get_table_result())?;
-                con.write_string(tbl.describe_self()).await?;
-            },
-        }
+        let maybe_entity = match act.next() {
+            Some(e) => Some(Entity::from_slice::<P>(e)?),
+            None => None,
+        };
+        con.write_string(&handle.describe_table::<P>(maybe_entity)?).await?;
         Ok(())
     }
 }

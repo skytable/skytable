@@ -82,7 +82,11 @@ where
             .await?;
             Ok(())
         }
-        _ => todo!(),
+        Statement::InspectModel(model) => {
+            con.write_string(&handle.describe_table::<P>(model.as_ref().map(|v| v.into()))?)
+                .await?;
+            Ok(())
+        }
     };
     actions::translate_ddl_error::<P, ()>(result)?;
     con._write_raw(P::RCODE_OKAY).await?;

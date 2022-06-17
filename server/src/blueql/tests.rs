@@ -199,7 +199,7 @@ mod ast {
     fn stmt_inspect_model() {
         assert_eq!(
             Compiler::compile(b"inspect model twitter.tweet").unwrap(),
-            Statement::InspectModel(Entity::Full("twitter".into(), "tweet".into()))
+            Statement::InspectModel(Some(Entity::Full("twitter".into(), "tweet".into())))
         );
     }
     #[test]

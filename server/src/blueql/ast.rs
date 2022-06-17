@@ -54,7 +54,7 @@ pub enum Statement {
     /// Inspect the given space
     InspectSpace(Option<RawSlice>),
     /// Inspect the given model
-    InspectModel(Entity),
+    InspectModel(Option<Entity>),
     /// Inspect all the spaces in the database
     InspectSpaces,
 }
@@ -281,7 +281,13 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Parse `inspect model <model>`
     fn parse_inspect_model(&mut self) -> LangResult<Statement> {
-        Ok(Statement::InspectModel(self.parse_entity_name()?))
+        match self.next() {
+            Some(Token::Identifier(ident)) => Ok(Statement::InspectModel(Some(
+                self.parse_entity_name_with_start(ident)?,
+            ))),
+            Some(_) => Err(LangError::InvalidSyntax),
+            None => Ok(Statement::InspectModel(None)),
+        }
     }
     #[inline(always)]
     /// Parse `inspect space <space>`

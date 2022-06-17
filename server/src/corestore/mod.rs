@@ -178,6 +178,13 @@ impl Corestore {
             _ => Err(DdlError::DefaultNotFound),
         }
     }
+    /// Returns the current table, if set
+    pub fn get_ctable_result(&self) -> KeyspaceResult<&Table> {
+        match self.estate.table {
+            Some((_, ref tbl)) => Ok(tbl),
+            _ => Err(DdlError::DefaultNotFound),
+        }
+    }
     pub fn get_keyspace<Q>(&self, ksid: &Q) -> Option<Arc<Keyspace>>
     where
         ObjectID: Borrow<Q>,
@@ -206,12 +213,6 @@ impl Corestore {
     }
     pub fn get_ctable(&self) -> Option<Arc<Table>> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.clone())
-    }
-    pub fn get_table_result(&self) -> KeyspaceResult<&Table> {
-        match self.estate.table {
-            Some((_, ref table)) => Ok(table),
-            _ => Err(DdlError::DefaultNotFound),
-        }
     }
     pub fn get_ctable_ref(&self) -> Option<&Table> {
         self.estate.table.as_ref().map(|(_, tbl)| tbl.as_ref())
@@ -354,5 +355,12 @@ impl Corestore {
                 cks.tables.iter().map(|kv| kv.key().clone()).collect()
             }
         })
+    }
+    pub fn describe_table<P: ProtocolSpec>(&self, table: Option<Entity>) -> ActionResult<String> {
+        let r = match table {
+            Some(tbl) => translate_ddl_error::<P, Arc<Table>>(self.get_table(tbl))?.describe_self(),
+            None => translate_ddl_error::<P, &Table>(self.get_ctable_result())?.describe_self(),
+        };
+        Ok(r.to_owned())
     }
 }
