@@ -52,7 +52,7 @@ pub enum Statement {
     /// Drop the given space
     DropSpace { entity: RawSlice, force: bool },
     /// Inspect the given space
-    InspectSpace(RawSlice),
+    InspectSpace(Option<RawSlice>),
     /// Inspect the given model
     InspectModel(Entity),
     /// Inspect all the spaces in the database
@@ -286,7 +286,11 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Parse `inspect space <space>`
     fn parse_inspect_space(&mut self) -> LangResult<Statement> {
-        Ok(Statement::InspectSpace(self.next_ident()?))
+        match self.next() {
+            Some(Token::Identifier(ident)) => Ok(Statement::InspectSpace(Some(ident))),
+            Some(_) => Err(LangError::InvalidSyntax),
+            None => Ok(Statement::InspectSpace(None)),
+        }
     }
     #[inline(always)]
     /// Parse a drop statement

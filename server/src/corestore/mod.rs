@@ -24,21 +24,27 @@
  *
 */
 
-use crate::actions::ActionResult;
-use crate::corestore::{
-    memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
-    table::{DescribeTable, Table},
+use {
+    crate::{
+        actions::{translate_ddl_error, ActionResult},
+        corestore::{
+            memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
+            table::{DescribeTable, Table},
+        },
+        protocol::interface::ProtocolSpec,
+        queryengine::parser::{Entity, OwnedEntity},
+        registry,
+        storage::{
+            self,
+            v1::{error::StorageEngineResult, sengine::SnapshotEngine},
+        },
+        util::{self, Unwrappable},
+    },
+    core::{borrow::Borrow, hash::Hash},
+    std::sync::Arc,
 };
-use crate::protocol::interface::ProtocolSpec;
-use crate::queryengine::parser::{Entity, OwnedEntity};
-use crate::registry;
-use crate::storage;
-use crate::storage::v1::{error::StorageEngineResult, sengine::SnapshotEngine};
-use crate::util::Unwrappable;
-use core::borrow::Borrow;
-use core::hash::Hash;
+
 pub use htable::Data;
-use std::sync::Arc;
 pub mod array;
 pub mod backoff;
 pub mod booltable;
@@ -326,5 +332,27 @@ impl Corestore {
     }
     pub fn get_ids(&self) -> (Option<&ObjectID>, Option<&ObjectID>) {
         self.estate.get_id_pack()
+    }
+    pub fn list_tables<P: ProtocolSpec>(&self, ksid: Option<&[u8]>) -> ActionResult<Vec<ObjectID>> {
+        Ok(match ksid {
+            Some(keyspace_name) => {
+                // inspect the provided keyspace
+                let ksid = if keyspace_name.len() > 64 {
+                    return util::err(P::RSTRING_BAD_CONTAINER_NAME);
+                } else {
+                    keyspace_name
+                };
+                let ks = match self.get_keyspace(ksid) {
+                    Some(kspace) => kspace,
+                    None => return util::err(P::RSTRING_CONTAINER_NOT_FOUND),
+                };
+                ks.tables.iter().map(|kv| kv.key().clone()).collect()
+            }
+            None => {
+                // inspect the current keyspace
+                let cks = translate_ddl_error::<P, &Keyspace>(self.get_cks())?;
+                cks.tables.iter().map(|kv| kv.key().clone()).collect()
+            }
+        })
     }
 }

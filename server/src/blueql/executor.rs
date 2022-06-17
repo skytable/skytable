@@ -74,6 +74,14 @@ where
                 .await?;
             Ok(())
         }
+        Statement::InspectSpace(space) => {
+            con.write_typed_non_null_array(
+                handle.list_tables::<P>(space.as_ref().map(|v| unsafe { v.as_slice() }))?,
+                b'+',
+            )
+            .await?;
+            Ok(())
+        }
         _ => todo!(),
     };
     actions::translate_ddl_error::<P, ()>(result)?;

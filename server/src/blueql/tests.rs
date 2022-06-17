@@ -192,7 +192,7 @@ mod ast {
     fn stmt_inspect_space() {
         assert_eq!(
             Compiler::compile(b"inspect space twitter").unwrap(),
-            Statement::InspectSpace("twitter".into())
+            Statement::InspectSpace(Some("twitter".into()))
         );
     }
     #[test]

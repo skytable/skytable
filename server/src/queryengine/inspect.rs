@@ -24,12 +24,10 @@
  *
 */
 
-use super::ddl::{KEYSPACE, TABLE};
-use crate::corestore::{
-    memstore::{Keyspace, ObjectID},
-    table::Table,
+use {
+    super::ddl::{KEYSPACE, TABLE},
+    crate::{corestore::table::Table, dbnet::connection::prelude::*},
 };
-use crate::dbnet::connection::prelude::*;
 
 const KEYSPACES: &[u8] = "KEYSPACES".as_bytes();
 
@@ -50,7 +48,7 @@ action! {
                         ensure_length::<P>(act.len(), |len| len == 0)?;
                         // let's return what all keyspaces exist
                         con.write_typed_non_null_array(
-                            &handle.get_store().list_keyspaces(),
+                            handle.get_store().list_keyspaces(),
                             b'+'
                         ).await?
                     }
@@ -65,31 +63,7 @@ action! {
     /// INSPECT a keyspace. This should only have the keyspace ID
     fn inspect_keyspace(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len < 2)?;
-        let tbl_list: Vec<ObjectID> =
-        match act.next() {
-            Some(keyspace_name) => {
-                // inspect the provided keyspace
-                let ksid = if keyspace_name.len() > 64 {
-                    return util::err(P::RSTRING_BAD_CONTAINER_NAME);
-                } else {
-                    keyspace_name
-                };
-                let ks = match handle.get_keyspace(ksid) {
-                    Some(kspace) => kspace,
-                    None => return util::err(P::RSTRING_CONTAINER_NOT_FOUND),
-                };
-                ks.tables.iter().map(|kv| kv.key().clone()).collect()
-            },
-            None => {
-                // inspect the current keyspace
-                let cks = translate_ddl_error::<P, &Keyspace>(handle.get_cks())?;
-                cks.tables.iter().map(|kv| kv.key().clone()).collect()
-            },
-        };
-        con.write_typed_non_null_array_header(tbl_list.len(), b'+').await?;
-        for tbl in tbl_list {
-            con.write_typed_non_null_array_element(&tbl).await?;
-        }
+        con.write_typed_non_null_array(handle.list_tables::<P>(act.next())?, b'+').await?;
         Ok(())
     }
 
