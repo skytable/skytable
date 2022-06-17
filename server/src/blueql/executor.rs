@@ -48,12 +48,13 @@ where
     Strm: Stream,
 {
     let statement = error::map_ql_err_to_resp::<StatementLT, P>(blueql::compile(maybe_statement))?;
+    let system_health_okay = registry::state_okay();
     let result = match statement.as_ref() {
-        Statement::CreateSpace(space_name) => {
+        Statement::CreateSpace(space_name) if system_health_okay => {
             // ret okay
             handle.create_keyspace(unsafe { ObjectID::from_slice(space_name.as_slice()) })
         }
-        Statement::DropSpace { entity, force } => {
+        Statement::DropSpace { entity, force } if system_health_okay => {
             // ret okay
             let entity = unsafe { ObjectID::from_slice(entity.as_slice()) };
             if *force {
@@ -62,7 +63,7 @@ where
                 handle.drop_keyspace(entity)
             }
         }
-        Statement::DropModel { entity, force } => {
+        Statement::DropModel { entity, force } if system_health_okay => {
             // ret okay
             handle.drop_table(entity.into(), *force)
         }
@@ -70,11 +71,13 @@ where
             entity,
             model,
             volatile,
-        } => match model.get_model_code() {
-            // ret okay
-            Ok(code) => handle.create_table(entity.into(), code, *volatile),
-            Err(e) => return error::map_ql_err_to_resp::<(), P>(Err(e)),
-        },
+        } if system_health_okay => {
+            match model.get_model_code() {
+                // ret okay
+                Ok(code) => handle.create_table(entity.into(), code, *volatile),
+                Err(e) => return error::map_ql_err_to_resp::<(), P>(Err(e)),
+            }
+        }
         Statement::InspectSpaces => {
             // ret directly
             con.write_typed_non_null_array(&handle.get_store().list_keyspaces(), b'+')
@@ -94,6 +97,11 @@ where
             // ret directly
             con.write_string(&handle.describe_table::<P>(model.as_ref().map(|v| v.into()))?)
                 .await?;
+            return Ok(());
+        }
+        _ => {
+            // the server is broken
+            con._write_raw(P::RCODE_SERVER_ERR).await?;
             return Ok(());
         }
     };

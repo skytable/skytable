@@ -170,13 +170,6 @@ mod ast {
     }
     #[test]
     fn stmt_create_unnamed() {
-        let r = FieldConfig {
-            names: vec![],
-            types: vec![
-                TypeExpression(vec![Type::String]),
-                TypeExpression(vec![Type::Binary]),
-            ],
-        };
         let src = b"create model twitter.passwords(string, binary)".to_vec();
         let expected = Statement::CreateModel {
             entity: Entity::Full("twitter".into(), "passwords".into()),

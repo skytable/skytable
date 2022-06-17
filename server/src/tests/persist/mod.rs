@@ -45,6 +45,7 @@ async fn load_keyspace() {
     switch_entity!(con, "universe:warp");
     runeq!(con, query!("get", "x"), Element::String("100".to_owned()));
     switch_entity!(con, "default");
+    assert_okay!(con, query!("flushdb", "universe:warp"));
     assert_okay!(con, query!("drop", "table", "universe:warp"));
     assert_okay!(con, query!("drop", "keyspace", "universe"));
 }
@@ -228,6 +229,7 @@ async fn persist_load<K: PersistKey, V: PersistValue>(
     }
     // now delete this table, freeing it up for the next suite run
     switch_entity!(con, "default:default");
+    assert_okay!(con, query!("flushdb", table_id));
     runeq!(
         con,
         query!("drop", "table", table_id),
