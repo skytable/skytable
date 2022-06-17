@@ -50,9 +50,11 @@ where
     let statement = error::map_ql_err_to_resp::<StatementLT, P>(blueql::compile(maybe_statement))?;
     let result = match statement.as_ref() {
         Statement::CreateSpace(space_name) => {
+            // ret okay
             handle.create_keyspace(unsafe { ObjectID::from_slice(space_name.as_slice()) })
         }
         Statement::DropSpace { entity, force } => {
+            // ret okay
             let entity = unsafe { ObjectID::from_slice(entity.as_slice()) };
             if *force {
                 handle.force_drop_keyspace(entity)
@@ -60,32 +62,39 @@ where
                 handle.drop_keyspace(entity)
             }
         }
+        Statement::DropModel { entity, force } => {
+            // ret okay
+            handle.drop_table(entity.into(), *force)
+        }
         Statement::CreateModel {
             entity,
             model,
             volatile,
         } => match model.get_model_code() {
+            // ret okay
             Ok(code) => handle.create_table(entity.into(), code, *volatile),
             Err(e) => return error::map_ql_err_to_resp::<(), P>(Err(e)),
         },
-        Statement::DropModel { entity, force } => handle.drop_table(entity.into(), *force),
         Statement::InspectSpaces => {
+            // ret directly
             con.write_typed_non_null_array(&handle.get_store().list_keyspaces(), b'+')
                 .await?;
-            Ok(())
+            return Ok(());
         }
         Statement::InspectSpace(space) => {
+            // ret directly
             con.write_typed_non_null_array(
                 handle.list_tables::<P>(space.as_ref().map(|v| unsafe { v.as_slice() }))?,
                 b'+',
             )
             .await?;
-            Ok(())
+            return Ok(());
         }
         Statement::InspectModel(model) => {
+            // ret directly
             con.write_string(&handle.describe_table::<P>(model.as_ref().map(|v| v.into()))?)
                 .await?;
-            Ok(())
+            return Ok(());
         }
     };
     actions::translate_ddl_error::<P, ()>(result)?;
