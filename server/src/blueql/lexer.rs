@@ -248,7 +248,11 @@ impl<'a> Lexer<'a> {
                 find_ptr_distance(start, self.cursor()),
             ))
         };
-        slice.parse().map_err(|_| LangError::InvalidNumericLiteral)
+        let next_is_ws_or_eof = self.peek_eq_or_eof_and_forward(b' ');
+        match slice.parse() {
+            Ok(num) if next_is_ws_or_eof => Ok(num),
+            _ => Err(LangError::InvalidNumericLiteral),
+        }
     }
     #[inline(always)]
     /// Attempt to scan an ident
@@ -310,9 +314,8 @@ impl<'a> Lexer<'a> {
     #[inline(always)]
     /// The inner lex method
     fn _lex(&mut self) -> LangResult<Vec<Token>> {
-        let mut is_okay = true;
         let mut tokens = Vec::new();
-        while self.not_exhausted() && is_okay {
+        while self.not_exhausted() {
             match unsafe { self.deref_cursor() } {
                 byte if byte.is_ascii_alphabetic() => {
                     let id = self.scan_ident();
@@ -325,11 +328,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 byte if byte.is_ascii_digit() => match self.scan_number() {
-                    Ok(num) => {
-                        // a number has to end with a whitespace
-                        is_okay &= self.peek_eq_or_eof_and_forward(b' ');
-                        tokens.push(num.into())
-                    }
+                    Ok(num) => tokens.push(num.into()),
                     Err(e) => return Err(e),
                 },
                 b' ' => self.trim_ahead(),
@@ -353,10 +352,6 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        if is_okay {
-            Ok(tokens)
-        } else {
-            Err(LangError::InvalidSyntax)
-        }
+        Ok(tokens)
     }
 }

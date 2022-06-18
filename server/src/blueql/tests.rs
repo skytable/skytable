@@ -34,6 +34,12 @@ mod lexer {
     //! Lexer tests
     use super::*;
 
+    macro_rules! src {
+        ($name:ident, $($src:expr),*) => {
+            const $name: &[&[u8]] = &[$($src),*];
+        };
+    }
+
     #[test]
     fn lex_ident() {
         let src = b"mytbl";
@@ -137,6 +143,17 @@ mod lexer {
             assert_eq!(
                 Lexer::lex(source).unwrap_err(),
                 LangError::InvalidStringLiteral
+            );
+        }
+    }
+
+    #[test]
+    fn lex_fail_litnum() {
+        src!(SOURCES, b"12345f", b"123!", b"123'");
+        for source in SOURCES {
+            assert_eq!(
+                Lexer::lex(source).unwrap_err(),
+                LangError::InvalidNumericLiteral
             );
         }
     }
