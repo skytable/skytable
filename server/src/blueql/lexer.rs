@@ -346,7 +346,7 @@ impl<'a> Lexer<'a> {
                         b',' => Token::Comma,
                         b':' => Token::Colon,
                         b'.' => Token::Period,
-                        _ => return Err(LangError::InvalidSyntax),
+                        _ => return Err(LangError::UnexpectedChar),
                     };
                     tokens.push(r);
                     unsafe { self.incr_cursor() }

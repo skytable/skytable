@@ -118,6 +118,28 @@ mod lexer {
             vec![Token::QuotedString("\"hello, world🦀!\"".into())]
         )
     }
+
+    #[test]
+    fn lex_fail_unknown_chars() {
+        const SOURCES: &[&[u8]] = &[
+            b"!", b"@", b"#", b"$", b"%", b"^", b"&", b"*", b"[", b"]", b"{", b"}", b"|", b"\\",
+            b"/", b"~", b"`", b";", b"hello?",
+        ];
+        for source in SOURCES {
+            assert_eq!(Lexer::lex(source).unwrap_err(), LangError::UnexpectedChar);
+        }
+    }
+
+    #[test]
+    fn lex_fail_unclosed_litstring() {
+        const SOURCES: &[&[u8]] = &[b"'hello, world", br#""hello, world"#];
+        for source in SOURCES {
+            assert_eq!(
+                Lexer::lex(source).unwrap_err(),
+                LangError::InvalidStringLiteral
+            );
+        }
+    }
 }
 
 mod ast {

@@ -127,6 +127,7 @@ impl ProtocolSpec for Skyhash1 {
     const BQL_UNEXPECTED_EOF: &'static [u8] = eresp!("bql-unexpected-eof");
     const BQL_UNKNOWN_CREATE_QUERY: &'static [u8] = eresp!("bql-unknown-create-query");
     const BQL_UNSUPPORTED_MODEL_DECL: &'static [u8] = eresp!("bql-unsupported-model-decl");
+    const BQL_UNEXPECTED_CHAR: &'static [u8] = eresp!("bql-unexpected-char");
 }
 
 impl<Strm, T> ProtocolRead<Skyhash1, Strm> for T

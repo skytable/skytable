@@ -228,6 +228,7 @@ pub trait ProtocolSpec: Send + Sync {
     const BQL_UNEXPECTED_EOF: &'static [u8];
     const BQL_UNKNOWN_CREATE_QUERY: &'static [u8];
     const BQL_UNSUPPORTED_MODEL_DECL: &'static [u8];
+    const BQL_UNEXPECTED_CHAR: &'static [u8];
 }
 
 /// # The `ProtocolRead` trait

@@ -49,6 +49,8 @@ pub enum LangError {
     InvalidStringLiteral,
     /// Unsupported model declaration
     UnsupportedModelDeclaration,
+    /// Unexpected character
+    UnexpectedChar,
 }
 
 /// Results for BlueQL
@@ -66,9 +68,11 @@ const fn cold_err<P: ProtocolSpec>(e: LangError) -> &'static [u8] {
         LangError::UnexpectedEOF => P::BQL_UNEXPECTED_EOF,
         LangError::UnknownCreateQuery => P::BQL_UNKNOWN_CREATE_QUERY,
         LangError::UnsupportedModelDeclaration => P::BQL_UNSUPPORTED_MODEL_DECL,
+        LangError::UnexpectedChar => P::BQL_UNEXPECTED_CHAR,
     }
 }
 
+#[inline(always)]
 pub fn map_ql_err_to_resp<T, P: ProtocolSpec>(e: LangResult<T>) -> ActionResult<T> {
     match e {
         Ok(v) => Ok(v),
