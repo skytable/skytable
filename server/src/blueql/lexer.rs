@@ -103,6 +103,7 @@ pub struct TypeExpression(pub Vec<Type>);
 
 impl Keyword {
     /// Attempt to parse a keyword from the given slice
+    #[inline(always)]
     pub const fn try_from_slice(slice: &[u8]) -> Option<Self> {
         let r = match slice {
             b"create" => Keyword::Create,
@@ -132,7 +133,12 @@ pub struct Lexer<'a> {
     cursor: *const u8,
     end_ptr: *const u8,
     _lt: PhantomData<&'a [u8]>,
+    last_error: Option<LangError>,
+    tokens: Vec<Token>,
 }
+
+const _ENSURE_EQ_SIZE: () =
+    assert!(std::mem::size_of::<Option<LangError>>() == std::mem::size_of::<LangError>());
 
 impl<'a> Lexer<'a> {
     #[inline(always)]
@@ -142,6 +148,8 @@ impl<'a> Lexer<'a> {
             Self {
                 cursor: buf.as_ptr(),
                 end_ptr: buf.as_ptr().add(buf.len()),
+                last_error: None,
+                tokens: Vec::new(),
                 _lt: PhantomData,
             }
         }
@@ -232,12 +240,16 @@ impl<'a> Lexer<'a> {
             self.not_exhausted() && self.deref_cursor() == escape_what
         }
     }
+    #[inline(always)]
+    fn push_token(&mut self, token: impl Into<Token>) {
+        self.tokens.push(token.into())
+    }
 }
 
 impl<'a> Lexer<'a> {
     #[inline(always)]
     /// Attempt to scan a number
-    fn scan_number(&mut self) -> LangResult<u64> {
+    fn scan_number(&mut self) {
         let start = self.cursor();
         while self.peek_is(|byte| byte.is_ascii_digit()) {
             unsafe { self.incr_cursor() }
@@ -250,8 +262,14 @@ impl<'a> Lexer<'a> {
         };
         let next_is_ws_or_eof = self.peek_eq_or_eof_and_forward(b' ');
         match slice.parse() {
-            Ok(num) if next_is_ws_or_eof => Ok(num),
-            _ => Err(LangError::InvalidNumericLiteral),
+            Ok(num) if next_is_ws_or_eof => {
+                // this is a good number; push it in
+                self.push_token(Token::Number(num));
+            }
+            _ => {
+                // that breaks the state
+                self.last_error = Some(LangError::InvalidNumericLiteral);
+            }
         }
     }
     #[inline(always)]
@@ -265,9 +283,21 @@ impl<'a> Lexer<'a> {
         unsafe { RawSlice::new(start, len) }
     }
     #[inline(always)]
+    fn scan_ident_or_keyword(&mut self) {
+        let ident = self.scan_ident();
+        match Keyword::try_from_slice(unsafe {
+            // UNSAFE(@ohsayan): The source buffer's presence guarantees that this is correct
+            ident.as_slice()
+        }) {
+            Some(kw) => self.push_token(kw),
+            None => self.push_token(Token::Identifier(ident)),
+        }
+    }
+    #[inline(always)]
     /// Scan a quoted string
-    fn scan_quoted_string(&mut self, quote_style: u8) -> LangResult<String> {
-        // a doubly quoted string?
+    fn scan_quoted_string(&mut self, quote_style: u8) {
+        unsafe { self.incr_cursor() }
+        // a quoted string with the given quote style
         let mut stringbuf = Vec::new();
         // should start with  '"'
         let mut is_okay = true;
@@ -298,9 +328,33 @@ impl<'a> Lexer<'a> {
         // should be terminated by a '"'
         is_okay &= self.peek_eq_and_forward(quote_style);
         match String::from_utf8(stringbuf) {
-            Ok(s) if is_okay => Ok(s),
-            _ => Err(LangError::InvalidStringLiteral),
+            Ok(s) if is_okay => {
+                // valid string literal
+                self.push_token(Token::QuotedString(s));
+            }
+            _ => {
+                // state broken
+                self.last_error = Some(LangError::InvalidStringLiteral)
+            }
         }
+    }
+    #[inline(always)]
+    fn scan_arbitrary_byte(&mut self, byte: u8) {
+        let r = match byte {
+            b'<' => Token::OpenAngular,
+            b'>' => Token::CloseAngular,
+            b'(' => Token::OpenParen,
+            b')' => Token::CloseParen,
+            b',' => Token::Comma,
+            b':' => Token::Colon,
+            b'.' => Token::Period,
+            _ => {
+                self.last_error = Some(LangError::UnexpectedChar);
+                return;
+            }
+        };
+        unsafe { self.incr_cursor() };
+        self.push_token(r);
     }
 }
 
@@ -308,50 +362,23 @@ impl<'a> Lexer<'a> {
     #[inline(always)]
     /// Lex the input stream into tokens
     pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
-        let mut slf = Self::new(src);
-        slf._lex()
+        Self::new(src)._lex()
     }
     #[inline(always)]
     /// The inner lex method
-    fn _lex(&mut self) -> LangResult<Vec<Token>> {
-        let mut tokens = Vec::new();
-        while self.not_exhausted() {
+    fn _lex(mut self) -> LangResult<Vec<Token>> {
+        while self.not_exhausted() && self.last_error.is_none() {
             match unsafe { self.deref_cursor() } {
-                byte if byte.is_ascii_alphabetic() => {
-                    let id = self.scan_ident();
-                    match Keyword::try_from_slice(unsafe {
-                        // UNSAFE(@ohsayan): The source buffer's presence guarantees that this is correct
-                        id.as_slice()
-                    }) {
-                        Some(kw) => tokens.push(kw.into()),
-                        None => tokens.push(Token::Identifier(id)),
-                    }
-                }
-                byte if byte.is_ascii_digit() => match self.scan_number() {
-                    Ok(num) => tokens.push(num.into()),
-                    Err(e) => return Err(e),
-                },
+                byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
+                byte if byte.is_ascii_digit() => self.scan_number(),
                 b' ' => self.trim_ahead(),
-                quote_style @ (b'"' | b'\'') => {
-                    unsafe { self.incr_cursor() };
-                    tokens.push(Token::QuotedString(self.scan_quoted_string(quote_style)?));
-                }
-                byte => {
-                    let r = match byte {
-                        b'<' => Token::OpenAngular,
-                        b'>' => Token::CloseAngular,
-                        b'(' => Token::OpenParen,
-                        b')' => Token::CloseParen,
-                        b',' => Token::Comma,
-                        b':' => Token::Colon,
-                        b'.' => Token::Period,
-                        _ => return Err(LangError::UnexpectedChar),
-                    };
-                    tokens.push(r);
-                    unsafe { self.incr_cursor() }
-                }
+                quote_style @ (b'"' | b'\'') => self.scan_quoted_string(quote_style),
+                byte => self.scan_arbitrary_byte(byte),
             }
         }
-        Ok(tokens)
+        match self.last_error {
+            None => Ok(self.tokens),
+            Some(e) => Err(e),
+        }
     }
 }
