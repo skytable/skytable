@@ -99,6 +99,7 @@ where
                 .await?;
             return Ok(());
         }
+        Statement::Use(entity) => handle.swap_entity(entity.into()),
         _ => {
             // the server is broken
             con._write_raw(P::RCODE_SERVER_ERR).await?;

@@ -57,6 +57,8 @@ pub enum Statement {
     InspectModel(Option<Entity>),
     /// Inspect all the spaces in the database
     InspectSpaces,
+    /// Switch to the given entity
+    Use(Entity),
 }
 
 pub type StatementLT<'a> = Life<'a, Statement>;
@@ -256,6 +258,7 @@ impl<'a> Compiler<'a> {
                 Token::Keyword(Keyword::Create) => self.parse_create(),
                 Token::Keyword(Keyword::Drop) => self.parse_drop(),
                 Token::Keyword(Keyword::Inspect) => self.parse_inspect(),
+                Token::Keyword(Keyword::Use) => self.parse_use(),
                 _ => Err(LangError::ExpectedStatement),
             },
             None => Err(LangError::UnexpectedEOF),
@@ -265,6 +268,10 @@ impl<'a> Compiler<'a> {
         } else {
             Err(LangError::InvalidSyntax)
         }
+    }
+    #[inline(always)]
+    fn parse_use(&mut self) -> LangResult<Statement> {
+        Ok(Statement::Use(self.parse_entity_name()?))
     }
     #[inline(always)]
     /// Parse an inspect statement
@@ -442,14 +449,12 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     pub(super) fn parse_entity_name(&mut self) -> LangResult<Entity> {
         // let's peek the next token
-        match self.next_result()? {
-            Token::Identifier(id)
-                if self.peek_eq(&Token::Period) && id.len() < Entity::MAX_LENGTH_EX =>
-            {
+        match self.next_ident()? {
+            id if self.peek_eq(&Token::Period) && id.len() < Entity::MAX_LENGTH_EX => {
                 unsafe { self.incr_cursor() };
                 Ok(Entity::Full(id, self.next_ident()?))
             }
-            Token::Identifier(id) if id.len() < Entity::MAX_LENGTH_EX => Ok(Entity::Current(id)),
+            id if id.len() < Entity::MAX_LENGTH_EX => Ok(Entity::Current(id)),
             _ => Err(LangError::InvalidSyntax),
         }
     }

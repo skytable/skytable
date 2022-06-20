@@ -79,6 +79,7 @@ impl From<Type> for Token {
 /// BlueQL keywords
 pub enum Keyword {
     Create,
+    Use,
     Drop,
     Inspect,
     Model,
@@ -116,6 +117,7 @@ impl Keyword {
             b"binary" => Keyword::Type(Type::Binary),
             b"list" => Keyword::Type(Type::List),
             b"force" => Keyword::Force,
+            b"use" => Keyword::Use,
             _ => return None,
         };
         Some(r)
