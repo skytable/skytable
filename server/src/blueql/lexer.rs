@@ -105,8 +105,8 @@ pub struct TypeExpression(pub Vec<Type>);
 impl Keyword {
     /// Attempt to parse a keyword from the given slice
     #[inline(always)]
-    pub const fn try_from_slice(slice: &[u8]) -> Option<Self> {
-        let r = match slice {
+    pub fn try_from_slice(slice: &[u8]) -> Option<Self> {
+        let r = match slice.to_ascii_lowercase().as_slice() {
             b"create" => Keyword::Create,
             b"drop" => Keyword::Drop,
             b"inspect" => Keyword::Inspect,

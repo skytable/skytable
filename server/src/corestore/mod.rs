@@ -27,12 +27,12 @@
 use {
     crate::{
         actions::{translate_ddl_error, ActionResult},
+        blueql::Entity,
         corestore::{
             memstore::{DdlError, Keyspace, Memstore, ObjectID, DEFAULT},
             table::{DescribeTable, Table},
         },
         protocol::interface::ProtocolSpec,
-        queryengine::parser::{Entity, OwnedEntity},
         registry,
         storage::{
             self,
@@ -135,39 +135,34 @@ impl Corestore {
     ///
     /// If the table is non-existent or the default keyspace was unset, then
     /// false is returned. Else true is returned
-    pub fn swap_entity(&mut self, entity: Entity<'_>) -> KeyspaceResult<()> {
+    pub fn swap_entity(&mut self, entity: &Entity) -> KeyspaceResult<()> {
         match entity {
             // Switch to the provided keyspace
-            Entity::Single(ks) => match self.store.get_keyspace_atomic_ref(ks) {
-                Some(ksref) => self
-                    .estate
-                    .set_ks(ksref, unsafe { ObjectID::from_slice(ks) }),
-                None => return Err(DdlError::ObjectNotFound),
-            },
+            Entity::Current(ks) => {
+                match self.store.get_keyspace_atomic_ref(unsafe { ks.as_slice() }) {
+                    Some(ksref) => self
+                        .estate
+                        .set_ks(ksref, unsafe { ObjectID::from_slice(ks.as_slice()) }),
+                    None => return Err(DdlError::ObjectNotFound),
+                }
+            }
             // Switch to the provided table in the given keyspace
-            Entity::Full(ks, tbl) => match self.store.get_keyspace_atomic_ref(ks) {
-                Some(kspace) => match kspace.get_table_atomic_ref(tbl) {
-                    Some(tblref) => unsafe {
-                        self.estate.set_table(
-                            kspace,
-                            ObjectID::from_slice(ks),
-                            tblref,
-                            ObjectID::from_slice(tbl),
-                        )
+            Entity::Full(ks, tbl) => {
+                match self.store.get_keyspace_atomic_ref(unsafe { ks.as_slice() }) {
+                    Some(kspace) => match kspace.get_table_atomic_ref(unsafe { tbl.as_slice() }) {
+                        Some(tblref) => unsafe {
+                            self.estate.set_table(
+                                kspace,
+                                ObjectID::from_slice(ks.as_slice()),
+                                tblref,
+                                ObjectID::from_slice(tbl.as_slice()),
+                            )
+                        },
+                        None => return Err(DdlError::ObjectNotFound),
                     },
                     None => return Err(DdlError::ObjectNotFound),
-                },
-                None => return Err(DdlError::ObjectNotFound),
-            },
-            Entity::Partial(tbl) => match &self.estate.ks {
-                Some((_, ks)) => match ks.get_table_atomic_ref(tbl) {
-                    Some(tblref) => {
-                        self.estate.table = Some((unsafe { ObjectID::from_slice(tbl) }, tblref));
-                    }
-                    None => return Err(DdlError::ObjectNotFound),
-                },
-                None => return Err(DdlError::DefaultNotFound),
-            },
+                }
+            }
         }
         Ok(())
     }
@@ -193,17 +188,22 @@ impl Corestore {
         self.store.get_keyspace_atomic_ref(ksid)
     }
     /// Get an atomic reference to a table
-    pub fn get_table(&self, entity: Entity<'_>) -> KeyspaceResult<Arc<Table>> {
+    pub fn get_table(&self, entity: &Entity) -> KeyspaceResult<Arc<Table>> {
         match entity {
-            Entity::Full(ksid, table) => match self.store.get_keyspace_atomic_ref(ksid) {
-                Some(ks) => match ks.get_table_atomic_ref(table) {
-                    Some(tbl) => Ok(tbl),
+            Entity::Full(ksid, table) => {
+                match self
+                    .store
+                    .get_keyspace_atomic_ref(unsafe { ksid.as_slice() })
+                {
+                    Some(ks) => match ks.get_table_atomic_ref(unsafe { table.as_slice() }) {
+                        Some(tbl) => Ok(tbl),
+                        None => Err(DdlError::ObjectNotFound),
+                    },
                     None => Err(DdlError::ObjectNotFound),
-                },
-                None => Err(DdlError::ObjectNotFound),
-            },
-            Entity::Single(tbl) | Entity::Partial(tbl) => match &self.estate.ks {
-                Some((_, ks)) => match ks.get_table_atomic_ref(tbl) {
+                }
+            }
+            Entity::Current(tbl) => match &self.estate.ks {
+                Some((_, ks)) => match ks.get_table_atomic_ref(unsafe { tbl.as_slice() }) {
                     Some(tbl) => Ok(tbl),
                     None => Err(DdlError::ObjectNotFound),
                 },
@@ -231,21 +231,23 @@ impl Corestore {
     /// **Trip switch handled:** Yes
     pub fn create_table(
         &self,
-        entity: Entity<'_>,
+        entity: &Entity,
         modelcode: u8,
         volatile: bool,
     ) -> KeyspaceResult<()> {
-        let entity = entity.into_owned();
         // first lock the global flush state
         let flush_lock = registry::lock_flush_state();
         let ret = match entity {
             // Important: create table <tblname> is only ks
-            OwnedEntity::Single(tblid) | OwnedEntity::Partial(tblid) => {
+            Entity::Current(tblid) => {
                 match &self.estate.ks {
                     Some((_, ks)) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
-                            if ks.create_table(tblid, tbl) {
+                            if ks.create_table(
+                                unsafe { ObjectID::from_slice(tblid.as_slice()) },
+                                tbl,
+                            ) {
                                 // we need to re-init tree; so trip
                                 registry::get_preload_tripswitch().trip();
                                 Ok(())
@@ -259,12 +261,18 @@ impl Corestore {
                     None => Err(DdlError::DefaultNotFound),
                 }
             }
-            OwnedEntity::Full(ksid, tblid) => {
-                match self.store.get_keyspace_atomic_ref(&ksid) {
+            Entity::Full(ksid, tblid) => {
+                match self
+                    .store
+                    .get_keyspace_atomic_ref(unsafe { ksid.as_slice() })
+                {
                     Some(kspace) => {
                         let tbl = Table::from_model_code(modelcode, volatile);
                         if let Some(tbl) = tbl {
-                            if kspace.create_table(tblid, tbl) {
+                            if kspace.create_table(
+                                unsafe { ObjectID::from_slice(tblid.as_slice()) },
+                                tbl,
+                            ) {
                                 // trip the preload switch
                                 registry::get_preload_tripswitch().trip();
                                 Ok(())
@@ -285,16 +293,21 @@ impl Corestore {
     }
 
     /// Drop a table
-    pub fn drop_table(&self, entity: Entity<'_>, force: bool) -> KeyspaceResult<()> {
+    pub fn drop_table(&self, entity: &Entity, force: bool) -> KeyspaceResult<()> {
         match entity {
-            Entity::Single(tblid) | Entity::Partial(tblid) => match &self.estate.ks {
-                Some((_, ks)) => ks.drop_table(tblid, force),
+            Entity::Current(tblid) => match &self.estate.ks {
+                Some((_, ks)) => ks.drop_table(unsafe { tblid.as_slice() }, force),
                 None => Err(DdlError::DefaultNotFound),
             },
-            Entity::Full(ksid, tblid) => match self.store.get_keyspace_atomic_ref(ksid) {
-                Some(ks) => ks.drop_table(tblid, force),
-                None => Err(DdlError::ObjectNotFound),
-            },
+            Entity::Full(ksid, tblid) => {
+                match self
+                    .store
+                    .get_keyspace_atomic_ref(unsafe { ksid.as_slice() })
+                {
+                    Some(ks) => ks.drop_table(unsafe { tblid.as_slice() }, force),
+                    None => Err(DdlError::ObjectNotFound),
+                }
+            }
         }
     }
 
@@ -356,7 +369,7 @@ impl Corestore {
             }
         })
     }
-    pub fn describe_table<P: ProtocolSpec>(&self, table: Option<Entity>) -> ActionResult<String> {
+    pub fn describe_table<P: ProtocolSpec>(&self, table: &Option<Entity>) -> ActionResult<String> {
         let r = match table {
             Some(tbl) => translate_ddl_error::<P, Arc<Table>>(self.get_table(tbl))?.describe_self(),
             None => translate_ddl_error::<P, &Table>(self.get_ctable_result())?.describe_self(),

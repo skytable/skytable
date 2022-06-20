@@ -33,13 +33,7 @@ use crate::{
     actions::{self, ActionError, ActionResult},
     admin, auth, blueql,
     protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice},
-    queryengine::parser::Entity,
 };
-mod ddl;
-mod inspect;
-pub mod parser;
-#[cfg(test)]
-mod tests;
 
 pub type ActionIter<'a> = AnyArrayIter<'a>;
 
@@ -139,10 +133,6 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
             MKSNAP => admin::mksnap::mksnap,
             LSKEYS => actions::lskeys::lskeys,
             POP => actions::pop::pop,
-            CREATE => ddl::create,
-            DROP => ddl::ddl_drop,
-            USE => self::entity_swap,
-            INSPECT => inspect::inspect,
             MPOP => actions::mpop::mpop,
             LSET => actions::lists::lset,
             LGET => actions::lists::lget::lget,
@@ -156,20 +146,6 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
         );
     }
     Ok(())
-}
-
-action! {
-    /// Handle `use <entity>` like queries
-    fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length::<P>(act.len(), |len| len == 1)?;
-        let entity = unsafe {
-            // SAFETY: Already checked len
-            act.next_unchecked()
-        };
-        translate_ddl_error::<P, ()>(handle.swap_entity(Entity::from_slice::<P>(entity)?))?;
-        con._write_raw(P::RCODE_OKAY).await?;
-        Ok(())
-    }
 }
 
 /// Execute a stage **completely**. This means that action errors are never propagated

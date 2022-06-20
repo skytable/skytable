@@ -58,7 +58,7 @@ pub type LangResult<T> = Result<T, LangError>;
 
 #[inline(never)]
 #[cold]
-const fn cold_err<P: ProtocolSpec>(e: LangError) -> &'static [u8] {
+pub(super) const fn cold_err<P: ProtocolSpec>(e: LangError) -> &'static [u8] {
     match e {
         LangError::BadExpression => P::BQL_BAD_EXPRESSION,
         LangError::ExpectedStatement => P::BQL_EXPECTED_STMT,

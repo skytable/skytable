@@ -1,5 +1,5 @@
 /*
- * Created on Thu Sep 24 2020
+ * Created on Mon Jun 20 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,21 +24,18 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
+use {
+    super::{ast::Entity, error},
+    crate::{
+        actions::{ActionError, ActionResult},
+        protocol::interface::ProtocolSpec,
+        util::Life,
+    },
+};
 
-action!(
-    /// Returns the number of keys in the database
-    fn dbsize(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
-        ensure_length::<P>(act.len(), |len| len < 2)?;
-        if act.is_empty() {
-            let len = get_tbl_ref!(handle, con).count();
-            con.write_usize(len).await?;
-        } else {
-            let raw_entity = unsafe { act.next().unsafe_unwrap() };
-            let entity = handle_entity!(con, raw_entity);
-            con.write_usize(get_tbl!(&entity, handle, con).count())
-                .await?;
-        }
-        Ok(())
+pub fn from_slice_action_result<P: ProtocolSpec>(slice: &[u8]) -> ActionResult<Life<'_, Entity>> {
+    match Entity::from_slice(slice) {
+        Ok(slc) => Ok(Life::new(slc)),
+        Err(e) => Err(ActionError::ActionError(error::cold_err::<P>(e))),
     }
-);
+}

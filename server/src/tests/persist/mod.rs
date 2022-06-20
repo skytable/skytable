@@ -34,20 +34,19 @@ use skytable::{
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true, port = 2007)]
 async fn store_keyspace() {
-    assert_okay!(con, query!("create", "keyspace", "universe"));
+    assert_okay!(con, query!("create space universe"));
     switch_entity!(con, "universe");
-    assert_okay!(con, query!("create", "table", "warp", "keymap(str,str)"));
-    switch_entity!(con, "universe:warp");
+    assert_okay!(con, query!("create model warp(string,string)"));
+    switch_entity!(con, "universe.warp");
     assert_okay!(con, query!("set", "x", "100"));
 }
 #[dbtest(run_if_cfg = "persist-suite", norun = true, port = 2007)]
 async fn load_keyspace() {
-    switch_entity!(con, "universe:warp");
+    switch_entity!(con, "universe.warp");
     runeq!(con, query!("get", "x"), Element::String("100".to_owned()));
     switch_entity!(con, "default");
-    assert_okay!(con, query!("flushdb", "universe:warp"));
-    assert_okay!(con, query!("drop", "table", "universe:warp"));
-    assert_okay!(con, query!("drop", "keyspace", "universe"));
+    assert_okay!(con, query!("drop model universe.warp force"));
+    assert_okay!(con, query!("drop space universe"));
 }
 
 macro_rules! bin {
@@ -228,11 +227,10 @@ async fn persist_load<K: PersistKey, V: PersistValue>(
         runeq!(con, q, value.response_load());
     }
     // now delete this table, freeing it up for the next suite run
-    switch_entity!(con, "default:default");
-    assert_okay!(con, query!("flushdb", table_id));
+    switch_entity!(con, "default.default");
     runeq!(
         con,
-        query!("drop", "table", table_id),
+        query!(format!("drop model {table_id} force")),
         Element::RespCode(RespCode::Okay)
     );
 }

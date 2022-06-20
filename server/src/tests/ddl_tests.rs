@@ -32,9 +32,7 @@ mod __private {
     async fn test_create_keyspace() {
         let mut rng = rand::thread_rng();
         let ksname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("keyspace");
-        query.push(&ksname);
+        query.push(format!("create space {ksname}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -43,17 +41,13 @@ mod __private {
     async fn test_drop_keyspace() {
         let mut rng = rand::thread_rng();
         let ksname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("keyspace");
-        query.push(&ksname);
+        query.push(format!("create space {ksname}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
         let mut query = Query::new();
-        query.push("drop");
-        query.push("keyspace");
-        query.push(ksname);
+        query.push(format!("drop space {ksname}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -62,10 +56,7 @@ mod __private {
     async fn test_create_table() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("table");
-        query.push(&tblname);
-        query.push("keymap(str,str)");
+        query.push(format!("create model {tblname}(string, string)"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -74,11 +65,7 @@ mod __private {
     async fn test_create_volatile() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("table");
-        query.push(&tblname);
-        query.push("keymap(str,str)");
-        query.push("volatile");
+        query.push(format!("create model {tblname}(string, string) volatile"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -87,10 +74,7 @@ mod __private {
     async fn test_create_table_fully_qualified_entity() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("table");
-        query.push(__MYKS__.to_owned() + ":" + &tblname);
-        query.push("keymap(str,str)");
+        query.push(format!("create model {__MYKS__}.{tblname}(string, string)"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -99,11 +83,9 @@ mod __private {
     async fn test_create_table_volatile_fully_qualified_entity() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("table");
-        query.push(__MYKS__.to_owned() + ":" + &tblname);
-        query.push("keymap(str,str)");
-        query.push("volatile");
+        query.push(format!(
+            "create model {__MYKS__}.{tblname}(string, string) volatile"
+        ));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -112,18 +94,12 @@ mod __private {
     async fn test_drop_table() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        query.push("create");
-        query.push("table");
-        query.push(&tblname);
-        query.push("keymap(str,str)");
+        query.push(format!("create model {tblname}(string, string)"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
-        let mut query = Query::new();
-        query.push("drop");
-        query.push("table");
-        query.push(&tblname);
+        let query = Query::from(format!("drop model {tblname}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
@@ -132,39 +108,30 @@ mod __private {
     async fn test_drop_table_fully_qualified_entity() {
         let mut rng = rand::thread_rng();
         let tblname = utils::rand_alphastring(10, &mut rng);
-        let my_fqe = __MYKS__.to_owned() + ":" + &tblname;
-        query.push("create");
-        query.push("table");
-        query.push(&my_fqe);
-        query.push("keymap(str,str)");
+        let my_fqe = __MYKS__.to_owned() + "." + &tblname;
+        query.push(format!("create model {my_fqe}(string, string)"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
-        let mut query = Query::new();
-        query.push("drop");
-        query.push("table");
-        query.push(my_fqe);
+        let query = Query::from(format!("drop model {my_fqe}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         );
     }
     async fn test_use() {
-        query.push("USE");
-        query.push(&__MYENTITY__);
+        query.push(format!("USE {__MYENTITY__}"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
             Element::RespCode(RespCode::Okay)
         )
     }
     async fn test_use_syntax_error() {
-        query.push("USE");
-        query.push(&__MYENTITY__);
-        query.push("wiwofjwjfio");
+        query.push(format!("USE {__MYENTITY__} wiwofjwjfio"));
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::RespCode(RespCode::ActionError)
+            Element::RespCode(RespCode::ErrorString("bql-invalid-syntax".into()))
         )
     }
     async fn test_whereami() {
@@ -175,7 +142,7 @@ mod __private {
         );
         runeq!(
             con,
-            query!("use", "default"),
+            query!("use default"),
             Element::RespCode(RespCode::Okay)
         );
         runeq!(
@@ -185,7 +152,7 @@ mod __private {
         );
         runeq!(
             con,
-            query!("use", "default:default"),
+            query!("use default.default"),
             Element::RespCode(RespCode::Okay)
         );
         runeq!(

@@ -28,6 +28,7 @@ mod ast;
 mod error;
 mod executor;
 mod lexer;
+pub mod util;
 // test modules
 #[cfg(test)]
 mod tests;
@@ -40,7 +41,7 @@ pub use {ast::Compiler, ast::Entity, executor::execute};
 
 #[cfg(test)]
 use core::fmt;
-use core::slice;
+use core::{mem, slice};
 
 #[allow(clippy::needless_lifetimes)]
 #[inline(always)]
@@ -73,6 +74,7 @@ impl PartialEq for RawSlice {
 }
 
 impl RawSlice {
+    const _ENSURE_ALIGN: () = assert!(mem::align_of::<RawSlice>() == mem::align_of::<&[u8]>());
     pub const unsafe fn new(ptr: *const u8, len: usize) -> Self {
         Self { ptr, len }
     }

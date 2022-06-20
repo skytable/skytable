@@ -72,6 +72,9 @@ pub enum Entity {
 
 impl Entity {
     const MAX_LENGTH_EX: usize = 65;
+    pub fn from_slice(slice: &[u8]) -> LangResult<Self> {
+        Compiler::new(&Lexer::lex(slice)?).parse_entity_name()
+    }
 }
 
 #[derive(Debug)]
