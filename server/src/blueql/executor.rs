@@ -30,7 +30,7 @@ use {
         error,
     },
     crate::{
-        actions::{self, ActionResult},
+        actions::{self, ActionError, ActionResult},
         blueql,
         corestore::memstore::ObjectID,
         dbnet::connection::prelude::*,
@@ -76,7 +76,7 @@ where
             match model.get_model_code() {
                 // ret okay
                 Ok(code) => handle.create_table(entity, code, *volatile),
-                Err(e) => return error::map_ql_err_to_resp::<(), P>(Err(e)),
+                Err(e) => return Err(ActionError::ActionError(error::cold_err::<P>(e))),
             }
         }
         Statement::InspectSpaces => {

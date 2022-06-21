@@ -30,15 +30,15 @@ use super::{
     lexer::{Keyword, Lexer, Token, Type, TypeExpression},
 };
 
+macro_rules! src {
+    ($name:ident, $($src:expr),* $(,)?) => {
+        const $name: &[&[u8]] = &[$($src.as_bytes()),*];
+    };
+}
+
 mod lexer {
     //! Lexer tests
     use super::*;
-
-    macro_rules! src {
-        ($name:ident, $($src:expr),*) => {
-            const $name: &[&[u8]] = &[$($src),*];
-        };
-    }
 
     #[test]
     fn lex_ident() {
@@ -149,7 +149,7 @@ mod lexer {
 
     #[test]
     fn lex_fail_litnum() {
-        src!(SOURCES, b"12345f", b"123!", b"123'");
+        src!(SOURCES, "12345f", "123!", "123'");
         for source in SOURCES {
             assert_eq!(
                 Lexer::lex(source).unwrap_err(),
@@ -261,5 +261,44 @@ mod ast {
     fn compile_full() {
         let (src, stmt) = setup_src_stmt();
         assert_eq!(Compiler::compile(&src).unwrap(), stmt)
+    }
+    #[test]
+    fn bad_model_code() {
+        let get_model_code = |src| {
+            let l = Lexer::lex(src).unwrap();
+            let stmt = Compiler::new(&l)
+                .parse_fields(Entity::Current("jotsy".into()))
+                .unwrap();
+            match stmt {
+                Statement::CreateModel { model, .. } => model.get_model_code(),
+                x => panic!("Expected model found {:?}", x),
+            }
+        };
+        // check rules
+        // first type cannot be list
+        src!(
+            SRC,
+            // rule: first cannot be list
+            "(list, string)",
+            "(list, binary)",
+            "(list<string>, string)",
+            "(list<binary>, string)",
+            // rule: cannot have more than two args
+            "(list<string>, string, string)",
+            // rule: non-compound types cannot have type arguments
+            "(string<binary>, binary<string>)",
+            // rule: fields can't be named
+            "(id: string, posts: list<string>)",
+            // rule: nested lists are disallowed
+            "(string, list<list<string>>)"
+        );
+        for src in SRC {
+            assert_eq!(
+                get_model_code(src).unwrap_err(),
+                LangError::UnsupportedModelDeclaration,
+                "{}",
+                String::from_utf8_lossy(src)
+            );
+        }
     }
 }

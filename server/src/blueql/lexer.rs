@@ -29,6 +29,7 @@ use {
         error::{LangError, LangResult},
         RawSlice,
     },
+    crate::util::compiler,
     core::{marker::PhantomData, slice, str},
 };
 
@@ -264,7 +265,7 @@ impl<'a> Lexer<'a> {
         };
         let next_is_ws_or_eof = self.peek_eq_or_eof_and_forward(b' ');
         match slice.parse() {
-            Ok(num) if next_is_ws_or_eof => {
+            Ok(num) if compiler::likely(next_is_ws_or_eof) => {
                 // this is a good number; push it in
                 self.push_token(Token::Number(num));
             }
@@ -330,7 +331,7 @@ impl<'a> Lexer<'a> {
         // should be terminated by a '"'
         is_okay &= self.peek_eq_and_forward(quote_style);
         match String::from_utf8(stringbuf) {
-            Ok(s) if is_okay => {
+            Ok(s) if compiler::likely(is_okay) => {
                 // valid string literal
                 self.push_token(Token::QuotedString(s));
             }

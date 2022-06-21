@@ -30,7 +30,7 @@ use {
         lexer::{Keyword, Lexer, Token, Type, TypeExpression},
         RawSlice,
     },
-    crate::util::Life,
+    crate::util::{compiler, Life},
     core::{marker::PhantomData, mem::transmute, ptr},
 };
 
@@ -116,7 +116,7 @@ impl FieldConfig {
             // why I'll be ditching this API in the next two PRs)
             || (types[1].0[0] == Type::List && types[1].0[1] == Type::List)
         };
-        if invalid_expr {
+        if compiler::unlikely(invalid_expr) {
             // the value type cannot have a depth more than 2
             return Err(LangError::UnsupportedModelDeclaration);
         }
@@ -213,7 +213,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn next_result(&mut self) -> LangResult<Token> {
-        if self.not_exhausted() {
+        if compiler::likely(self.not_exhausted()) {
             let r = unsafe { ptr::read(self.cursor) };
             unsafe { self.incr_cursor() };
             Ok(r)
@@ -266,7 +266,7 @@ impl<'a> Compiler<'a> {
             },
             None => Err(LangError::UnexpectedEOF),
         };
-        if self.remaining() == 0 {
+        if compiler::likely(self.remaining() == 0) {
             stmt
         } else {
             Err(LangError::InvalidSyntax)
@@ -348,7 +348,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse a field expression and return a `Statement::CreateModel`
-    fn parse_fields(&mut self, entity: Entity) -> LangResult<Statement> {
+    pub(super) fn parse_fields(&mut self, entity: Entity) -> LangResult<Statement> {
         let mut fc = FieldConfig::new();
         let mut is_good_expr = self.next_eq(&Token::OpenParen);
         while is_good_expr && self.peek_neq(&Token::CloseParen) {
@@ -380,7 +380,7 @@ impl<'a> Compiler<'a> {
         // right name sounds like an outrageous idea)
         is_good_expr &= fc.names.is_empty() || fc.names.len() == fc.types.len();
         let volatile = self.next_eq(&Token::Keyword(Keyword::Volatile));
-        if is_good_expr {
+        if compiler::likely(is_good_expr) {
             Ok(Statement::CreateModel {
                 entity,
                 model: fc,
@@ -425,7 +425,7 @@ impl<'a> Compiler<'a> {
             }
         }
         valid_expr &= p_open == p_close;
-        if valid_expr {
+        if compiler::likely(valid_expr) {
             Ok(TypeExpression(expr))
         } else {
             Err(LangError::InvalidSyntax)
@@ -453,11 +453,13 @@ impl<'a> Compiler<'a> {
     pub(super) fn parse_entity_name(&mut self) -> LangResult<Entity> {
         // let's peek the next token
         match self.next_ident()? {
-            id if self.peek_eq(&Token::Period) && id.len() < Entity::MAX_LENGTH_EX => {
+            id if self.peek_eq(&Token::Period)
+                && compiler::likely(id.len() < Entity::MAX_LENGTH_EX) =>
+            {
                 unsafe { self.incr_cursor() };
                 Ok(Entity::Full(id, self.next_ident()?))
             }
-            id if id.len() < Entity::MAX_LENGTH_EX => Ok(Entity::Current(id)),
+            id if compiler::likely(id.len() < Entity::MAX_LENGTH_EX) => Ok(Entity::Current(id)),
             _ => Err(LangError::InvalidSyntax),
         }
     }
