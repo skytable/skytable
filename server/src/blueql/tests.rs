@@ -201,7 +201,7 @@ mod ast {
 
     #[test]
     fn stmt_create_named_unnamed_mixed() {
-        let src = b"create model twitter.tweet(username: string, binary)".to_vec();
+        let src = b"create model twitter.tweet(username: string, binary,)".to_vec();
         assert_eq!(
             Compiler::compile(&src).unwrap_err(),
             LangError::BadExpression
@@ -267,8 +267,8 @@ mod ast {
         let get_model_code = |src| {
             let l = Lexer::lex(src).unwrap();
             let stmt = Compiler::new(&l)
-                .parse_fields(Entity::Current("jotsy".into()))
-                .unwrap();
+                .parse_create_model1(Entity::Current("jotsy".into()))
+                .unwrap_or_else(|_| panic!("Failed for payload: {}", String::from_utf8_lossy(src)));
             match stmt {
                 Statement::CreateModel { model, .. } => model.get_model_code(),
                 x => panic!("Expected model found {:?}", x),

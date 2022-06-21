@@ -200,6 +200,14 @@ impl<'a> Compiler<'a> {
         self.incr_cursor_by(1)
     }
     #[inline(always)]
+    unsafe fn decr_cursor(&mut self) {
+        self.decr_cursor_by(1)
+    }
+    #[inline(always)]
+    unsafe fn decr_cursor_by(&mut self, by: usize) {
+        self.cursor = self.cursor.sub(by)
+    }
+    #[inline(always)]
     /// Read the element ahead if we have not exhausted the token stream. This
     /// will forward the cursor
     fn next(&mut self) -> Option<Token> {
@@ -258,10 +266,10 @@ impl<'a> Compiler<'a> {
     fn eval(&mut self) -> LangResult<Statement> {
         let stmt = match self.next() {
             Some(tok) => match tok {
-                Token::Keyword(Keyword::Create) => self.parse_create(),
-                Token::Keyword(Keyword::Drop) => self.parse_drop(),
-                Token::Keyword(Keyword::Inspect) => self.parse_inspect(),
-                Token::Keyword(Keyword::Use) => self.parse_use(),
+                Token::Keyword(Keyword::Create) => self.parse_create0(),
+                Token::Keyword(Keyword::Drop) => self.parse_drop0(),
+                Token::Keyword(Keyword::Inspect) => self.parse_inspect0(),
+                Token::Keyword(Keyword::Use) => self.parse_use0(),
                 _ => Err(LangError::ExpectedStatement),
             },
             None => Err(LangError::UnexpectedEOF),
@@ -273,15 +281,15 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
-    fn parse_use(&mut self) -> LangResult<Statement> {
+    fn parse_use0(&mut self) -> LangResult<Statement> {
         Ok(Statement::Use(self.parse_entity_name()?))
     }
     #[inline(always)]
     /// Parse an inspect statement
-    fn parse_inspect(&mut self) -> LangResult<Statement> {
+    fn parse_inspect0(&mut self) -> LangResult<Statement> {
         match self.next_result()? {
-            Token::Keyword(Keyword::Model) => self.parse_inspect_model(),
-            Token::Keyword(Keyword::Space) => self.parse_inspect_space(),
+            Token::Keyword(Keyword::Model) => self.parse_inspect_model0(),
+            Token::Keyword(Keyword::Space) => self.parse_inspect_space0(),
             Token::Identifier(spaces)
                 if unsafe { spaces.as_slice() }.eq_ignore_ascii_case(b"spaces") =>
             {
@@ -292,7 +300,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse `inspect model <model>`
-    fn parse_inspect_model(&mut self) -> LangResult<Statement> {
+    fn parse_inspect_model0(&mut self) -> LangResult<Statement> {
         match self.next() {
             Some(Token::Identifier(ident)) => Ok(Statement::InspectModel(Some(
                 self.parse_entity_name_with_start(ident)?,
@@ -303,7 +311,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse `inspect space <space>`
-    fn parse_inspect_space(&mut self) -> LangResult<Statement> {
+    fn parse_inspect_space0(&mut self) -> LangResult<Statement> {
         match self.next() {
             Some(Token::Identifier(ident)) => Ok(Statement::InspectSpace(Some(ident))),
             Some(_) => Err(LangError::InvalidSyntax),
@@ -312,7 +320,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse a drop statement
-    fn parse_drop(&mut self) -> LangResult<Statement> {
+    fn parse_drop0(&mut self) -> LangResult<Statement> {
         let (drop_container, drop_id) = (self.next(), self.next());
         match (drop_container, drop_id) {
             (Some(Token::Keyword(Keyword::Model)), Some(Token::Identifier(model_name))) => {
@@ -332,23 +340,23 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse a create statement
-    fn parse_create(&mut self) -> LangResult<Statement> {
+    fn parse_create0(&mut self) -> LangResult<Statement> {
         match self.next() {
-            Some(Token::Keyword(Keyword::Model)) => self.parse_create_model(),
-            Some(Token::Keyword(Keyword::Space)) => self.parse_create_space(),
+            Some(Token::Keyword(Keyword::Model)) => self.parse_create_model0(),
+            Some(Token::Keyword(Keyword::Space)) => self.parse_create_space0(),
             Some(_) => Err(LangError::UnknownCreateQuery),
             None => Err(LangError::UnexpectedEOF),
         }
     }
     #[inline(always)]
     /// Parse a `create model` statement
-    fn parse_create_model(&mut self) -> LangResult<Statement> {
+    fn parse_create_model0(&mut self) -> LangResult<Statement> {
         let entity = self.parse_entity_name()?;
-        self.parse_fields(entity)
+        self.parse_create_model1(entity)
     }
     #[inline(always)]
     /// Parse a field expression and return a `Statement::CreateModel`
-    pub(super) fn parse_fields(&mut self, entity: Entity) -> LangResult<Statement> {
+    pub(super) fn parse_create_model1(&mut self, entity: Entity) -> LangResult<Statement> {
         let mut fc = FieldConfig::new();
         let mut is_good_expr = self.next_eq(&Token::OpenParen);
         while is_good_expr && self.peek_neq(&Token::CloseParen) {
@@ -402,7 +410,7 @@ impl<'a> Compiler<'a> {
         let mut valid_expr = true;
 
         // we already have the starting type; next is either nothing or open angular
-        let has_more_args = self.peek_eq(&Token::OpenAngular);
+        let mut has_more_args = self.peek_eq(&Token::OpenAngular);
 
         let mut expect = Expect::Type;
         while valid_expr && has_more_args && self.peek_neq(&Token::CloseParen) {
@@ -421,6 +429,10 @@ impl<'a> Compiler<'a> {
                     p_close += 1;
                     expect = Expect::Close;
                 }
+                Some(Token::Comma) => {
+                    unsafe { self.decr_cursor() }
+                    has_more_args = false
+                }
                 _ => valid_expr = false,
             }
         }
@@ -433,7 +445,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// Parse a `create space` statement
-    fn parse_create_space(&mut self) -> LangResult<Statement> {
+    fn parse_create_space0(&mut self) -> LangResult<Statement> {
         match self.next() {
             Some(Token::Identifier(model_name)) => Ok(Statement::CreateSpace(model_name)),
             Some(_) => Err(LangError::InvalidSyntax),
