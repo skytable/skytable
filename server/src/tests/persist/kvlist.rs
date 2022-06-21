@@ -69,14 +69,14 @@ const DATA_BIN_LISTBIN: ListData<ListIDBin, Bin> = listdata!(
     binid!(b"list3") => binlist!(b"e1", b"e2", b"e3", b"e4"),
     binid!(b"list4") => binlist!(b"e1", b"e2", b"e3", b"e4")
 );
-const TABLE_BIN_LISTBIN: &str = "testsuite:persist_bin_listbin";
+const TABLE_BIN_LISTBIN: &str = "testsuite.persist_bin_listbin";
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
 async fn store_bin_bin() {
     persist_store(
         &mut con,
         TABLE_BIN_LISTBIN,
-        "keymap(binstr,list<binstr>)",
+        "(binary, list<binary>)",
         DATA_BIN_LISTBIN,
     )
     .await;
@@ -95,14 +95,14 @@ const DATA_BIN_LISTSTR: ListData<ListIDBin, Str> = listdata!(
     binid!(b"list4") => ["e1", "e2", "e3", "e4"]
 );
 
-const TABLE_BIN_LISTSTR: &str = "testsuite:persist_bin_liststr";
+const TABLE_BIN_LISTSTR: &str = "testsuite.persist_bin_liststr";
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
 async fn store_bin_str() {
     persist_store(
         &mut con,
         TABLE_BIN_LISTSTR,
-        "keymap(binstr,list<str>)",
+        "(binary, list<string>)",
         DATA_BIN_LISTSTR,
     )
     .await;
@@ -121,14 +121,14 @@ const DATA_STR_LISTBIN: ListData<ListIDStr, Bin> = listdata!(
     ListIDStr("list4") => binlist!(b"e1", b"e2", b"e3", b"e4")
 );
 
-const TABLE_STR_LISTBIN: &str = "testsuite:persist_str_listbin";
+const TABLE_STR_LISTBIN: &str = "testsuite.persist_str_listbin";
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
 async fn store_str_bin() {
     persist_store(
         &mut con,
         TABLE_STR_LISTBIN,
-        "keymap(str,list<binstr>)",
+        "(string, list<binary>)",
         DATA_STR_LISTBIN,
     )
     .await;
@@ -147,14 +147,14 @@ const DATA_STR_LISTSTR: ListData<ListIDStr, Str> = listdata!(
     ListIDStr("list4") => ["e1", "e2", "e3", "e4"]
 );
 
-const TABLE_STR_LISTSTR: &str = "testsuite:persist_str_liststr";
+const TABLE_STR_LISTSTR: &str = "testsuite.persist_str_liststr";
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true)]
 async fn store_str_str() {
     persist_store(
         &mut con,
         TABLE_STR_LISTSTR,
-        "keymap(str,list<str>)",
+        "(string, list<string>)",
         DATA_STR_LISTSTR,
     )
     .await;

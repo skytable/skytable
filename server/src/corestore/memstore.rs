@@ -326,6 +326,9 @@ impl Memstore {
             }
         }
     }
+    pub fn list_keyspaces(&self) -> Vec<ObjectID> {
+        self.keyspaces.iter().map(|kv| kv.key().clone()).collect()
+    }
 }
 
 /// System keyspace
@@ -405,7 +408,7 @@ impl Keyspace {
     // FIXME(@ohsayan): Should we actually care?
     ///
     /// **Trip switch handled:** Yes
-    pub fn drop_table<Q>(&self, table_identifier: &Q) -> KeyspaceResult<()>
+    fn drop_table_inner<Q>(&self, table_identifier: &Q, should_force: bool) -> KeyspaceResult<()>
     where
         ObjectID: Borrow<Q>,
         Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
@@ -421,6 +424,7 @@ impl Keyspace {
                     .true_remove_if(table_identifier, |_table_id, table_atomic_ref| {
                         // 1 because this should just be us, the one instance
                         Arc::strong_count(table_atomic_ref) == 1
+                            && (table_atomic_ref.is_empty() || should_force)
                     });
             if did_remove {
                 // we need to re-init tree; so trip
@@ -433,6 +437,13 @@ impl Keyspace {
             }
         }
     }
+    pub fn drop_table<Q>(&self, tblid: &Q, force: bool) -> KeyspaceResult<()>
+    where
+        ObjectID: Borrow<Q>,
+        Q: Hash + Eq + PartialEq<ObjectID> + ?Sized,
+    {
+        self.drop_table_inner(tblid, force)
+    }
 }
 
 #[test]
@@ -443,7 +454,7 @@ fn test_keyspace_drop_no_atomic_ref() {
         Table::new_default_kve()
     ));
     assert!(our_keyspace
-        .drop_table(&unsafe_objectid_from_slice!("apps"))
+        .drop_table(&unsafe_objectid_from_slice!("apps"), false)
         .is_ok());
 }
 
@@ -459,7 +470,7 @@ fn test_keyspace_drop_fail_with_atomic_ref() {
         .unwrap();
     assert_eq!(
         our_keyspace
-            .drop_table(&unsafe_objectid_from_slice!("apps"))
+            .drop_table(&unsafe_objectid_from_slice!("apps"), false)
             .unwrap_err(),
         DdlError::StillInUse
     );
@@ -470,7 +481,7 @@ fn test_keyspace_try_delete_protected_table() {
     let our_keyspace = Keyspace::empty_default();
     assert_eq!(
         our_keyspace
-            .drop_table(&unsafe_objectid_from_slice!("default"))
+            .drop_table(&unsafe_objectid_from_slice!("default"), false)
             .unwrap_err(),
         DdlError::ProtectedObject
     );

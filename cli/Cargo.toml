@@ -10,11 +10,12 @@ edition = "2021"
 # internal deps
 libsky = { path = "../libsky" }
 skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
-    "aio",
-    "aio-sslv",
+  "aio",
+  "aio-sslv",
 ], default-features = false }
 # external deps
 tokio = { version = "1.19.1", features = ["full"] }
 clap = { version = "2", features = ["yaml"] }
 rustyline = "9.1.2"
 crossterm = "0.23.2"
+lazy_static = "1.4.0"

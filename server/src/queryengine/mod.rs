@@ -26,18 +26,14 @@
 
 //! # The Query Engine
 
-use crate::actions::{ActionError, ActionResult};
-use crate::auth;
 use crate::corestore::Corestore;
 use crate::dbnet::connection::prelude::*;
-use crate::protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice};
-use crate::queryengine::parser::Entity;
-use crate::{actions, admin};
-mod ddl;
-mod inspect;
-pub mod parser;
-#[cfg(test)]
-mod tests;
+
+use crate::{
+    actions::{self, ActionError, ActionResult},
+    admin, auth, blueql,
+    protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice},
+};
 
 pub type ActionIter<'a> = AnyArrayIter<'a>;
 
@@ -58,7 +54,8 @@ macro_rules! gen_constants_and_matches {
                 pub const $action2: &[u8] = stringify!($action2).as_bytes();
             )*
         }
-        let first = $buf.next_uppercase().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?;
+        let first_slice = $buf.next().unwrap_or_custom_aerr(P::RCODE_PACKET_ERR)?;
+        let first = first_slice.to_ascii_uppercase();
         match first.as_ref() {
             $(
                 tags::$action => $fns($db, $con, $buf).await?,
@@ -67,7 +64,7 @@ macro_rules! gen_constants_and_matches {
                 tags::$action2 => $fns2.await?,
             )*
             _ => {
-                $con._write_raw(P::RCODE_UNKNOWN_ACTION).await?;
+                blueql::execute($db, $con, first_slice, $buf.len()).await?;
             }
         }
     };
@@ -136,10 +133,6 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
             MKSNAP => admin::mksnap::mksnap,
             LSKEYS => actions::lskeys::lskeys,
             POP => actions::pop::pop,
-            CREATE => ddl::create,
-            DROP => ddl::ddl_drop,
-            USE => self::entity_swap,
-            INSPECT => inspect::inspect,
             MPOP => actions::mpop::mpop,
             LSET => actions::lists::lset,
             LGET => actions::lists::lget::lget,
@@ -153,20 +146,6 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
         );
     }
     Ok(())
-}
-
-action! {
-    /// Handle `use <entity>` like queries
-    fn entity_swap(handle: &mut Corestore, con: &mut T, mut act: ActionIter<'a>) {
-        ensure_length::<P>(act.len(), |len| len == 1)?;
-        let entity = unsafe {
-            // SAFETY: Already checked len
-            act.next_unchecked()
-        };
-        translate_ddl_error::<P, ()>(handle.swap_entity(Entity::from_slice::<P>(entity)?))?;
-        con._write_raw(P::RCODE_OKAY).await?;
-        Ok(())
-    }
 }
 
 /// Execute a stage **completely**. This means that action errors are never propagated

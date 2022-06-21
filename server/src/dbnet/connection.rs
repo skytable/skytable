@@ -107,7 +107,7 @@ pub mod prelude {
     //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
     pub use super::{AuthProviderHandle, ClientConnection, Stream};
     pub use crate::{
-        actions::{ensure_boolean_or_aerr, ensure_cond_or_err, ensure_length, translate_ddl_error},
+        actions::{ensure_boolean_or_aerr, ensure_length, translate_ddl_error},
         corestore::{
             table::{KVEBlob, KVEList},
             Corestore,

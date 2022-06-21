@@ -59,7 +59,7 @@ macro_rules! switch_entity {
     ($con:expr, $entity:expr) => {
         runeq!(
             $con,
-            ::skytable::query!("use", $entity),
+            ::skytable::query!(format!("use {}", $entity)),
             ::skytable::Element::RespCode(::skytable::RespCode::Okay)
         )
     };
@@ -69,7 +69,7 @@ macro_rules! create_table_and_switch {
     ($con:expr, $table:expr, $decl:expr) => {{
         runeq!(
             $con,
-            ::skytable::query!("create", "table", $table, $decl),
+            ::skytable::query!(format!("create model {}{}", $table, $decl)),
             ::skytable::Element::RespCode(::skytable::RespCode::Okay)
         );
         switch_entity!($con, $table);

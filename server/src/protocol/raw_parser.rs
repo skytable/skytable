@@ -151,7 +151,7 @@ pub(super) trait RawParserExt: RawParser + RawParserMeta {
     /// Attempt to read an `usize` from the buffer
     fn read_usize(&mut self) -> ParseResult<usize> {
         let line = self.read_line_pedantic()?;
-        let bytes = line.as_slice();
+        let bytes = unsafe { line.as_slice() };
         let mut ret = 0usize;
         for byte in bytes {
             if byte.is_ascii_digit() {

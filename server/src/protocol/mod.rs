@@ -77,17 +77,20 @@ impl fmt::Debug for UnsafeSlice {
 
 impl UnsafeSlice {
     /// Create a new `UnsafeSlice`
-    pub const unsafe fn new(start_ptr: *const u8, len: usize) -> Self {
+    #[inline(always)]
+    pub const fn new(start_ptr: *const u8, len: usize) -> Self {
         Self { start_ptr, len }
     }
     /// Return self as a slice
-    pub fn as_slice(&self) -> &[u8] {
-        unsafe {
-            // UNSAFE(@ohsayan): Just like core::slice, we resemble the same idea:
-            // we assume that the unsafe construction was correct and hence *assume*
-            // that calling this is safe
-            slice::from_raw_parts(self.start_ptr, self.len)
-        }
+    /// ## Safety
+    /// The caller must ensure that the pointer and length used when constructing the slice
+    /// are valid when this is called
+    #[inline(always)]
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        // UNSAFE(@ohsayan): Just like core::slice, we resemble the same idea:
+        // we assume that the unsafe construction was correct and hence *assume*
+        // that calling this is safe
+        slice::from_raw_parts(self.start_ptr, self.len)
     }
 }
 
@@ -129,12 +132,17 @@ impl SimpleQuery {
     #[cfg(test)]
     fn into_owned(self) -> OwnedSimpleQuery {
         OwnedSimpleQuery {
-            data: self.data.iter().map(|v| v.as_slice().to_owned()).collect(),
+            data: self
+                .data
+                .iter()
+                .map(|v| unsafe { v.as_slice() }.to_owned())
+                .collect(),
         }
     }
     pub const fn new(data: HeapArray<UnsafeSlice>) -> Self {
         Self { data }
     }
+    #[inline(always)]
     pub fn as_slice(&self) -> &[UnsafeSlice] {
         &self.data
     }
@@ -166,7 +174,11 @@ impl PipelinedQuery {
             data: self
                 .data
                 .iter()
-                .map(|v| v.iter().map(|v| v.as_slice().to_owned()).collect())
+                .map(|v| {
+                    v.iter()
+                        .map(|v| unsafe { v.as_slice() }.to_owned())
+                        .collect()
+                })
                 .collect(),
         }
     }

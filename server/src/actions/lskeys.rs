@@ -50,7 +50,7 @@ action!(
             } else {
                 // sigh, an entity
                 let entity = handle_entity!(con, nextret);
-                (get_tbl!(entity, handle, con), DEFAULT_COUNT)
+                (get_tbl!(&entity, handle, con), DEFAULT_COUNT)
             }
         } else {
             // an entity and a count, gosh this fella is really trying us
@@ -62,7 +62,7 @@ action!(
             } else {
                 return util::err(P::RCODE_WRONGTYPE_ERR);
             };
-            (get_tbl!(entity, handle, con), count)
+            (get_tbl!(&entity, handle, con), count)
         };
         let tsymbol = match table.get_model_ref() {
             DataModel::KV(kv) => kv.get_value_tsymbol(),

@@ -74,7 +74,7 @@ macro_rules! get_tbl_ref {
 #[macro_export]
 macro_rules! handle_entity {
     ($con:expr, $ident:expr) => {{
-        match $crate::queryengine::parser::Entity::from_slice::<P>(&$ident) {
+        match $crate::blueql::util::from_slice_action_result::<P>(&$ident) {
             Ok(e) => e,
             Err(e) => return Err(e.into()),
         }

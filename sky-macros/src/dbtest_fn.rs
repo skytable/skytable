@@ -46,7 +46,7 @@ pub struct DBTestFunctionConfig {
 impl DBTestFunctionConfig {
     pub fn default() -> Self {
         Self {
-            table_decl: "keymap(str,str)".to_owned(),
+            table_decl: "(string, string)".to_owned(),
             port: 2003,
             host: "127.0.0.1".to_owned(),
             tls_cert: None,
@@ -82,13 +82,7 @@ impl DBTestFunctionConfig {
         let Self { table_decl, .. } = self;
         quote! {
             con.run_query_raw(
-                &skytable::query!(
-                    "create",
-                    "table",
-                    #table_name,
-                    #table_decl,
-                    "volatile"
-                )
+                &skytable::query!(format!("create model {}{} volatile", #table_name, #table_decl))
             ).await.unwrap()
         }
     }
@@ -242,7 +236,7 @@ fn generate_dbtest(
             #body
             let __create_ks =
                 con.run_query_raw(
-                    &skytable::query!("create", "keyspace", "testsuite")
+                    &skytable::query!("create space testsuite")
                 ).await.unwrap();
             if !(
                 __create_ks == skytable::Element::RespCode(skytable::RespCode::Okay) ||
@@ -260,7 +254,7 @@ fn generate_dbtest(
             #body
             let __switch_ks =
                 con.run_query_raw(
-                    &skytable::query!("use", "testsuite")
+                    &skytable::query!("use testsuite")
                 ).await.unwrap();
             if (__switch_ks != skytable::Element::RespCode(skytable::RespCode::Okay)) {
                 panic!("Failed to switch keyspace: {:?}", __switch_ks);
@@ -280,7 +274,7 @@ fn generate_dbtest(
         body = quote! {
             #body
             let mut __concat_entity = std::string::String::new();
-            __concat_entity.push_str("testsuite:");
+            __concat_entity.push_str("testsuite.");
             __concat_entity.push_str(&#rand_string);
             let __MYTABLE__ : String = #rand_string.to_string();
             let __MYKS__: String = "testsuite".to_owned();
@@ -291,7 +285,7 @@ fn generate_dbtest(
             #body
             let __switch_entity =
                 con.run_query_raw(
-                    &skytable::query!("use", __concat_entity)
+                    &skytable::query!(format!("use {}", __concat_entity))
                 ).await.unwrap();
             assert_eq!(
                 __switch_entity, skytable::Element::RespCode(skytable::RespCode::Okay), "Failed to switch"

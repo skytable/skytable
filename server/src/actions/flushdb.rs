@@ -39,7 +39,7 @@ action!(
                 // flush the entity
                 let raw_entity = unsafe { act.next_unchecked() };
                 let entity = handle_entity!(con, raw_entity);
-                get_tbl!(entity, handle, con).truncate_table();
+                get_tbl!(&entity, handle, con).truncate_table();
             }
             con._write_raw(P::RCODE_OKAY).await?;
         } else {

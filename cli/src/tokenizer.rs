@@ -28,8 +28,22 @@
 //! tokenizes char-by-char analyzing quotes et al as required
 //!
 
-use core::fmt;
-use skytable::{types::RawString, Query};
+use {
+    core::fmt,
+    skytable::{types::RawString, Query},
+    std::collections::HashSet,
+};
+
+lazy_static::lazy_static! {
+    static ref BLUEQL_KW: HashSet<&'static [u8]> = {
+        let mut hs = HashSet::new();
+        hs.insert("create".as_bytes());
+        hs.insert(b"inspect");
+        hs.insert(b"drop");
+        hs.insert(b"use");
+        hs
+    };
+}
 
 #[derive(Debug, PartialEq)]
 pub enum TokenizerError {
@@ -55,12 +69,16 @@ impl fmt::Display for TokenizerError {
 pub trait SequentialQuery {
     fn push(&mut self, input: &[u8]);
     fn new() -> Self;
+    fn is_empty(&self) -> bool;
 }
 
 // #[cfg(test)]
 impl SequentialQuery for Vec<String> {
     fn push(&mut self, input: &[u8]) {
         Vec::push(self, String::from_utf8_lossy(input).to_string())
+    }
+    fn is_empty(&self) -> bool {
+        Vec::len(self) == 0
     }
     fn new() -> Self {
         Vec::new()
@@ -71,11 +89,15 @@ impl SequentialQuery for Query {
     fn push(&mut self, input: &[u8]) {
         Query::push(self, RawString::from(input.to_owned()))
     }
+    fn is_empty(&self) -> bool {
+        Query::len(self) == 0
+    }
     fn new() -> Self {
         Query::new()
     }
 }
 
+// FIXME(@ohsayan): Fix this entire impl. At this point, it's almost like legacy code
 pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
     assert!(!inp.is_empty(), "Input is empty");
     let mut query = T::new();
@@ -99,6 +121,23 @@ pub fn get_query<T: SequentialQuery>(inp: &[u8]) -> Result<T, TokenizerError> {
                 None => {}
             }
         };
+    }
+    // skip useless starting whitespace
+    while let Some(b' ') = it.next() {}
+    let end_of_first = match it.position(|x| *x == b' ') {
+        Some(e) => e + 1,
+        None if it.len() == 0 => inp.len(),
+        None => {
+            return Err(TokenizerError::ExpectedWhitespace(
+                String::from_utf8_lossy(inp).to_string(),
+            ))
+        }
+    };
+    if BLUEQL_KW.contains(inp[..end_of_first].to_ascii_lowercase().as_slice()) {
+        query.push(inp);
+        return Ok(query);
+    } else {
+        it = inp.iter().peekable();
     }
     'outer: while let Some(tok) = it.next() {
         match tok {

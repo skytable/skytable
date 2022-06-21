@@ -128,14 +128,6 @@ pub fn ensure_boolean_or_aerr<P: ProtocolSpec>(boolean: bool) -> ActionResult<()
     }
 }
 
-pub fn ensure_cond_or_err(cond: bool, err: &'static [u8]) -> ActionResult<()> {
-    if util::compiler::likely(cond) {
-        Ok(())
-    } else {
-        util::err(err)
-    }
-}
-
 pub mod heya {
     //! Respond to `HEYA` queries
     use crate::dbnet::connection::prelude::*;

@@ -70,7 +70,7 @@ fn get_slices(slices: &[&[u8]]) -> Packets {
 
 fn ensure_zero_reads(parser: &mut Parser) {
     let r = parser.read_until(0).unwrap();
-    let slice = r.as_slice();
+    let slice = unsafe { r.as_slice() };
     assert_eq!(slice, b"");
     assert!(slice.is_empty());
 }
@@ -318,7 +318,7 @@ fn read_until_nonempty() {
         ensure_zero_reads(&mut parser);
         // now read the entire length; should always work
         let r = parser.read_until(len).unwrap();
-        let slice = r.as_slice();
+        let slice = unsafe { r.as_slice() };
         assert_eq!(slice, src.as_slice());
         assert_eq!(slice.len(), len);
         // even after the buffer is exhausted, `0` should always work
@@ -346,7 +346,7 @@ fn read_until_more_bytes() {
     let sample1 = v!(b"abcd1");
     let mut p1 = Parser::new(&sample1);
     assert_eq!(
-        p1.read_until(&sample1.len() - 1).unwrap().as_slice(),
+        unsafe { p1.read_until(&sample1.len() - 1).unwrap().as_slice() },
         &sample1[..&sample1.len() - 1]
     );
     // ensure we have not exhasuted
@@ -354,7 +354,10 @@ fn read_until_more_bytes() {
     ensure_remaining(&p1, 1);
     let sample2 = v!(b"abcd1234567890!@#$");
     let mut p2 = Parser::new(&sample2);
-    assert_eq!(p2.read_until(4).unwrap().as_slice(), &sample2[..4]);
+    assert_eq!(
+        unsafe { p2.read_until(4).unwrap().as_slice() },
+        &sample2[..4]
+    );
     // ensure we have not exhasuted
     ensure_not_exhausted(&p2);
     ensure_remaining(&p2, sample2.len() - 4);
@@ -366,7 +369,7 @@ fn read_line_special_case_only_lf() {
     let b = v!(b"\n");
     let mut parser = Parser::new(&b);
     let r = parser.read_line().unwrap();
-    let slice = r.as_slice();
+    let slice = unsafe { r.as_slice() };
     assert_eq!(slice, b"");
     assert!(slice.is_empty());
     // ensure it is exhausted
@@ -383,7 +386,7 @@ fn read_line() {
         } else {
             // should work
             assert_eq!(
-                parser.read_line().unwrap().as_slice(),
+                unsafe { parser.read_line().unwrap().as_slice() },
                 &src.as_slice()[..len - 1]
             );
             // now, we attempt to read which should work
@@ -405,7 +408,7 @@ fn read_line_more_bytes() {
     let sample1 = v!(b"abcd\n1");
     let mut p1 = Parser::new(&sample1);
     let line = p1.read_line().unwrap();
-    assert_eq!(line.as_slice(), b"abcd");
+    assert_eq!(unsafe { line.as_slice() }, b"abcd");
     // we should still have one remaining
     ensure_not_exhausted(&p1);
     ensure_remaining(&p1, 1);
@@ -416,13 +419,13 @@ fn read_line_subsequent_lf() {
     let sample1 = v!(b"abcd\n1\n");
     let mut p1 = Parser::new(&sample1);
     let line = p1.read_line().unwrap();
-    assert_eq!(line.as_slice(), b"abcd");
+    assert_eq!(unsafe { line.as_slice() }, b"abcd");
     // we should still have two octets remaining
     ensure_not_exhausted(&p1);
     ensure_remaining(&p1, 2);
     // and we should be able to read in another line
     let line = p1.read_line().unwrap();
-    assert_eq!(line.as_slice(), b"1");
+    assert_eq!(unsafe { line.as_slice() }, b"1");
     ensure_exhausted(&p1);
 }
 
@@ -439,7 +442,7 @@ fn read_line_pedantic_okay() {
         } else {
             // should work
             assert_eq!(
-                parser.read_line_pedantic().unwrap().as_slice(),
+                unsafe { parser.read_line_pedantic().unwrap().as_slice() },
                 &src.as_slice()[..len - 1]
             );
             // now, we attempt to read which should work

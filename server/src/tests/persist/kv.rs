@@ -27,7 +27,7 @@
 use super::{persist_load, persist_store, PERSIST_TEST_SET_SIZE};
 use sky_macros::dbtest_func as dbtest;
 
-const PERSIST_CFG_KEYMAP_BIN_BIN_TABLE: &str = "testsuite:persist_bin_bin_tbl";
+const PERSIST_CFG_KEYMAP_BIN_BIN_TABLE: &str = "testsuite.persist_bin_bin_tbl";
 const PERSIST_DATA_KEYMAP_BIN_BIN_TABLE: [(&[u8], &[u8]); PERSIST_TEST_SET_SIZE] = [
     (bin!(b"mykey1"), bin!(b"myval1")),
     (bin!(b"mykey2"), bin!(b"myval2")),
@@ -40,7 +40,7 @@ async fn store_keymap_bin_bin() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_BIN_TABLE,
-        "keymap(binstr,binstr)",
+        "(binary, binary)",
         PERSIST_DATA_KEYMAP_BIN_BIN_TABLE,
     )
     .await;
@@ -56,7 +56,7 @@ async fn load_keymap_bin_bin() {
     .await;
 }
 
-const PERSIST_CFG_KEYMAP_BIN_STR_TABLE: &str = "testsuite:persist_bin_str_tbl";
+const PERSIST_CFG_KEYMAP_BIN_STR_TABLE: &str = "testsuite.persist_bin_str_tbl";
 const PERSIST_DATA_KEYMAP_BIN_STR_TABLE: [(&[u8], &str); PERSIST_TEST_SET_SIZE] = [
     (bin!(b"mykey1"), "myval1"),
     (bin!(b"mykey2"), "myval2"),
@@ -69,7 +69,7 @@ async fn store_keymap_bin_str() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_BIN_STR_TABLE,
-        "keymap(binstr,str)",
+        "(binary, string)",
         PERSIST_DATA_KEYMAP_BIN_STR_TABLE,
     )
     .await;
@@ -85,7 +85,7 @@ async fn load_keymap_bin_str() {
     .await;
 }
 
-const PERSIST_CFG_KEYMAP_STR_STR_TABLE: &str = "testsuite:persist_str_str_tbl";
+const PERSIST_CFG_KEYMAP_STR_STR_TABLE: &str = "testsuite.persist_str_str_tbl";
 const PERSIST_DATA_KEYMAP_STR_STR_TABLE: [(&str, &str); PERSIST_TEST_SET_SIZE] = [
     ("mykey1", "myval1"),
     ("mykey2", "myval2"),
@@ -98,7 +98,7 @@ async fn store_keymap_str_str() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_STR_TABLE,
-        "keymap(str,str)",
+        "(string, string)",
         PERSIST_DATA_KEYMAP_STR_STR_TABLE,
     )
     .await;
@@ -114,7 +114,7 @@ async fn load_keymap_str_str() {
     .await;
 }
 
-const PERSIST_CFG_KEYMAP_STR_BIN_TABLE: &str = "testsuite:persist_str_bin_tbl";
+const PERSIST_CFG_KEYMAP_STR_BIN_TABLE: &str = "testsuite.persist_str_bin_tbl";
 const PERSIST_DATA_KEYMAP_STR_BIN_TABLE: [(&str, &[u8]); PERSIST_TEST_SET_SIZE] = [
     ("mykey1", bin!(b"myval1")),
     ("mykey2", bin!(b"myval2")),
@@ -127,7 +127,7 @@ async fn store_keymap_str_bin() {
     persist_store(
         &mut con,
         PERSIST_CFG_KEYMAP_STR_BIN_TABLE,
-        "keymap(str,binstr)",
+        "(string, binary)",
         PERSIST_DATA_KEYMAP_STR_BIN_TABLE,
     )
     .await;

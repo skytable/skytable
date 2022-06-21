@@ -185,3 +185,12 @@ fn test_ignore_comment() {
         vec!["set".to_owned(), "x".to_owned(), "#".to_owned()]
     );
 }
+
+#[test]
+fn test_blueql_query() {
+    let input = b"create model mymodel(string, binary)";
+    assert_eq!(
+        query_from(input).unwrap(),
+        vec!["create model mymodel(string, binary)"]
+    );
+}

@@ -128,3 +128,14 @@ mod sys {
         )
     }
 }
+
+use skytable::{query, Element, RespCode};
+
+#[sky_macros::dbtest_func]
+async fn blueql_extra_args() {
+    runeq!(
+        con,
+        query!("use default.default", "extra useless arg"),
+        Element::RespCode(RespCode::ErrorString("bql-invalid-syntax".into()))
+    );
+}

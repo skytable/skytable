@@ -30,32 +30,26 @@ const TABLE_DECL_KM_STR_STR_VOLATILE: &str = "Keymap { data:(str,str), volatile:
 mod __private {
     use skytable::{types::Array, Element, RespCode};
     async fn test_inspect_keyspaces() {
-        query.push("INSPECT");
-        query.push("KEYSPACES");
+        query.push("INSPECT SPACES");
         assert!(matches!(
             con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::NonNullStr(_))
         ))
     }
     async fn test_inspect_keyspace() {
-        query.push("INSPECT");
-        query.push("KEYSPACE");
-        query.push(&__MYKS__);
+        query.push(format!("INSPECT SPACE {__MYKS__}"));
         assert!(matches!(
             con.run_query_raw(&query).await.unwrap(),
             Element::Array(Array::NonNullStr(_))
         ))
     }
     async fn test_inspect_current_keyspace() {
-        query.push("INSPECT");
-        query.push("KEYSPACE");
+        query.push("INSPECT SPACE");
         let ret: Vec<String> = con.run_query(&query).await.unwrap();
         assert!(ret.contains(&__MYTABLE__));
     }
     async fn test_inspect_table() {
-        query.push("INSPECT");
-        query.push("TABLE");
-        query.push(__MYTABLE__);
+        query.push(format!("INSPECT MODEL {__MYTABLE__}"));
         match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
                 assert_eq!(st, TABLE_DECL_KM_STR_STR_VOLATILE.to_owned())
@@ -64,15 +58,12 @@ mod __private {
         }
     }
     async fn test_inspect_current_table() {
-        query.push("INSPECT");
-        query.push("TABLE");
+        query.push("INSPECT MODEL");
         let ret: String = con.run_query(&query).await.unwrap();
         assert_eq!(ret, TABLE_DECL_KM_STR_STR_VOLATILE);
     }
     async fn test_inspect_table_fully_qualified_entity() {
-        query.push("INSPECT");
-        query.push("TABLE");
-        query.push(__MYENTITY__);
+        query.push(format!("INSPECT MODEL {__MYENTITY__}"));
         match con.run_query_raw(&query).await.unwrap() {
             Element::String(st) => {
                 assert_eq!(st, TABLE_DECL_KM_STR_STR_VOLATILE.to_owned())
@@ -81,32 +72,24 @@ mod __private {
         }
     }
     async fn test_inspect_keyspaces_syntax_error() {
-        query.push("INSPECT");
-        query.push("KEYSPACES");
-        query.push("iowjfjofoe");
+        query.push("INSPECT SPACES iowjfjofoe");
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::RespCode(RespCode::ActionError)
+            Element::RespCode(RespCode::ErrorString("bql-invalid-syntax".into()))
         );
     }
     async fn test_inspect_keyspace_syntax_error() {
-        query.push("INSPECT");
-        query.push("KEYSPACE");
-        query.push("ijfwijifwjo");
-        query.push("oijfwirfjwo");
+        query.push("INSPECT SPACE ijfwijifwjo oijfwirfjwo");
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::RespCode(RespCode::ActionError)
+            Element::RespCode(RespCode::ErrorString("bql-invalid-syntax".into()))
         );
     }
     async fn test_inspect_table_syntax_error() {
-        query.push("INSPECT");
-        query.push("TABLE");
-        query.push("ijfwijifwjo");
-        query.push("oijfwirfjwo");
+        query.push("INSPECT MODEL ijfwijifwjo oijfwirfjwo");
         assert_eq!(
             con.run_query_raw(&query).await.unwrap(),
-            Element::RespCode(RespCode::ActionError)
+            Element::RespCode(RespCode::ErrorString("bql-invalid-syntax".into()))
         );
     }
 }

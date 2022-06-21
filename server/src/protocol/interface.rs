@@ -218,6 +218,17 @@ pub trait ProtocolSpec: Send + Sync {
     const AUTH_ERROR_ILLEGAL_USERNAME: &'static [u8];
     /// respstring: ID is protected/in use
     const AUTH_ERROR_FAILED_TO_DELETE_USER: &'static [u8];
+
+    // BlueQL respstrings
+    const BQL_BAD_EXPRESSION: &'static [u8];
+    const BQL_EXPECTED_STMT: &'static [u8];
+    const BQL_INVALID_NUMERIC_LITERAL: &'static [u8];
+    const BQL_INVALID_STRING_LITERAL: &'static [u8];
+    const BQL_INVALID_SYNTAX: &'static [u8];
+    const BQL_UNEXPECTED_EOF: &'static [u8];
+    const BQL_UNKNOWN_CREATE_QUERY: &'static [u8];
+    const BQL_UNSUPPORTED_MODEL_DECL: &'static [u8];
+    const BQL_UNEXPECTED_CHAR: &'static [u8];
 }
 
 /// # The `ProtocolRead` trait
@@ -457,6 +468,28 @@ where
         'life1: 'ret_life,
         Self: 'ret_life;
 
+    fn write_typed_non_null_array<'life0, 'ret_life, T, U>(
+        &'life0 mut self,
+        body: U,
+        tsymbol: u8,
+    ) -> FutureResult<'ret_life, IoResult<()>>
+    where
+        'life0: 'ret_life,
+        Self: Send + 'ret_life,
+        T: AsRef<[u8]> + 'life0 + Sync,
+        U: AsRef<[T]> + 'life0 + Sync + Send,
+    {
+        Box::pin(async move {
+            let body = body.as_ref();
+            self.write_typed_non_null_array_header(body.len(), tsymbol)
+                .await?;
+            for element in body {
+                self.write_typed_non_null_array_element(element.as_ref())
+                    .await?;
+            }
+            Ok(())
+        })
+    }
     // typed non-null array
     fn write_typed_non_null_array_header<'life0, 'ret_life>(
         &'life0 mut self,
