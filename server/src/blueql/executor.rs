@@ -41,13 +41,15 @@ pub async fn execute<'a, P, Strm, T>(
     handle: &'a mut Corestore,
     con: &'a mut T,
     maybe_statement: &[u8],
+    extra: usize,
 ) -> ActionResult<()>
 where
     P: ProtocolSpec,
     T: ClientConnection<P, Strm>,
     Strm: Stream,
 {
-    let statement = error::map_ql_err_to_resp::<StatementLT, P>(blueql::compile(maybe_statement))?;
+    let statement =
+        error::map_ql_err_to_resp::<StatementLT, P>(blueql::compile(maybe_statement, extra))?;
     let system_health_okay = registry::state_okay();
     let result = match statement.as_ref() {
         Statement::Use(entity) => handle.swap_entity(entity),

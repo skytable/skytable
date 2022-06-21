@@ -64,7 +64,7 @@ macro_rules! gen_constants_and_matches {
                 tags::$action2 => $fns2.await?,
             )*
             _ => {
-                blueql::execute($db, $con, first_slice).await?;
+                blueql::execute($db, $con, first_slice, $buf.len()).await?;
             }
         }
     };

@@ -45,8 +45,8 @@ use core::{mem, slice};
 
 #[allow(clippy::needless_lifetimes)]
 #[inline(always)]
-pub fn compile<'a>(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
-    Compiler::compile(src)
+pub fn compile<'a>(src: &'a [u8], extra: usize) -> LangResult<Life<'a, Statement>> {
+    Compiler::compile_with_extra(src, extra)
 }
 
 #[cfg_attr(not(test), derive(Debug))]

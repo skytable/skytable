@@ -246,10 +246,17 @@ impl<'a> Compiler<'a> {
 
 impl<'a> Compiler<'a> {
     #[inline(always)]
+    #[cfg(test)]
     /// Compile the given BlueQL source
     pub fn compile(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
+        Self::compile_with_extra(src, 0)
+    }
+    #[inline(always)]
+    /// Compile the given BlueQL source with optionally supplied extra arguments
+    /// HACK: Just helps us omit an additional check
+    pub fn compile_with_extra(src: &'a [u8], len: usize) -> LangResult<Life<'a, Statement>> {
         let tokens = Lexer::lex(src)?;
-        Self::new(&tokens).eval().map(Life::new)
+        Self::new(&tokens).eval(len).map(Life::new)
     }
     #[inline(always)]
     pub const fn new(tokens: &[Token]) -> Self {
@@ -263,7 +270,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     /// The inner eval method
-    fn eval(&mut self) -> LangResult<Statement> {
+    fn eval(&mut self, extra_len: usize) -> LangResult<Statement> {
         let stmt = match self.next() {
             Some(tok) => match tok {
                 Token::Keyword(Keyword::Create) => self.parse_create0(),
@@ -274,7 +281,7 @@ impl<'a> Compiler<'a> {
             },
             None => Err(LangError::UnexpectedEOF),
         };
-        if compiler::likely(self.remaining() == 0) {
+        if compiler::likely(self.remaining() == 0 && extra_len == 0) {
             stmt
         } else {
             Err(LangError::InvalidSyntax)
