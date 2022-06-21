@@ -1324,6 +1324,7 @@ version = "0.8.0"
 dependencies = [
  "clap",
  "crossterm",
+ "lazy_static",
  "libsky",
  "rustyline",
  "skytable 0.8.0 (git+https://github.com/skytable/client-rust?branch=next)",
