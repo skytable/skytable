@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 # external deps
-crossbeam-channel = "0.5.4"
+crossbeam-channel = "0.5.5"
 rayon = "1.5.3"
 log = "0.4.17"
 rand = "0.8.5"
