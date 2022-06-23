@@ -3,8 +3,8 @@
 <img src="assets/logo.jpg" height=64 width=64>
 <h1>Skytable</h1><h3>Your next NoSQL database</h3>
 
-![GitHub Workflow Status](<https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)?style=flat-square>) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
-[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://docs.skytable.io) [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064?style=flat-square)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square)](https://discord.gg/QptWFdx)
+![GitHub Workflow Status](<https://img.shields.io/github/workflow/status/skybasedb/skybase/Test%20(push)>) ![Development](https://img.shields.io/badge/development-regular-32CD32?style=flat-square) ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/skybasedb/skybase?include_prereleases&sort=semver&style=flat-square)
+[![Docs](https://img.shields.io/badge/readthedocs-here-blueviolet?style=flat-square)](https://docs.skytable.io) [![Contribute Now](https://img.shields.io/badge/%F0%9F%8C%9Fcontribute-now-a94064)](https://ohsayan.github.io/skythanks) [![Discord](https://img.shields.io/badge/talk-on%20discord-7289DA?logo=discord&style=flat-square")](https://discord.gg/QptWFdx)
 
 </div>
 </html>
@@ -48,7 +48,7 @@ The project currently maintains an official [Rust driver](https://github.com/sky
 to support more languages along the way!
 We also maintain a list of [community supported drivers here](https://github.com/skytable/skytable/wiki/Drivers).
 
-If you want to use a different language, for now, you'll just need to implement the simple and performant [Skyhash Protocol](https://docs.skytable.io/protocol/skyhash).
+If you want to use a different language, for now you'll just need to implement the simple and performant [Skyhash Protocol](https://docs.skytable.io/protocol/skyhash).
 
 ## Community 👐
 
@@ -61,7 +61,7 @@ A project which is powered by the community believes in the power of community! 
 
 ## Platforms 💻
 
-![Linux supported](https://img.shields.io/badge/Linux%2032--bit%2F64--bit-Supported%20✓-%23228B22?style=flat-square&logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64%2Farm64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%2032--bit%2F64--bit-supported%20✓-228B22?style=flat-square&logo=windows)
+![Linux supported](https://img.shields.io/badge/Linux%2032--bit%2F64--bit-Supported%20✓-%23228B22?logo=linux) ![macOS supported](https://img.shields.io/badge/macOS%20x86__64%2Farm64-supported%20✓-228B22?style=flat-square&logo=apple) ![Windows supported](https://img.shields.io/badge/Windows%2032--bit%2F64--bit-supported%20✓-228B22?style=flat-square&logo=windows)
 
 ## Versioning
 
