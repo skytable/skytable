@@ -27,8 +27,7 @@
 //! # `GET` queries
 //! This module provides functions to work with `GET` queries
 
-use crate::dbnet::connection::prelude::*;
-use crate::util::compiler;
+use crate::{dbnet::connection::prelude::*, util::compiler};
 
 action!(
     /// Run a `GET` query

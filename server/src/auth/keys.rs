@@ -24,8 +24,11 @@
  *
 */
 
-use super::provider::{Authkey, AUTHKEY_SIZE};
-use crate::corestore::array::Array;
+use {
+    super::provider::{Authkey, AUTHKEY_SIZE},
+    crate::corestore::array::Array,
+};
+
 type AuthkeyArray = Array<u8, { AUTHKEY_SIZE }>;
 const RAN_BYTES_SIZE: usize = 40;
 

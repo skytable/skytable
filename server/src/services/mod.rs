@@ -26,11 +26,9 @@
 
 pub mod bgsave;
 pub mod snapshot;
-use crate::corestore::memstore::Memstore;
-use crate::diskstore::flock::FileLock;
-use crate::storage;
-use crate::util::os;
-use crate::IoResult;
+use crate::{
+    corestore::memstore::Memstore, diskstore::flock::FileLock, storage, util::os, IoResult,
+};
 
 pub fn restore_data(src: Option<String>) -> IoResult<()> {
     if let Some(src) = src {

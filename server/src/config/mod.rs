@@ -24,14 +24,16 @@
  *
 */
 
-// external imports
-use crate::auth::provider::Authkey;
-use clap::{load_yaml, App};
-// std imports
-use core::str::FromStr;
-use std::env::VarError;
-use std::fs;
-use std::net::{IpAddr, Ipv4Addr};
+use {
+    crate::auth::provider::Authkey,
+    clap::{load_yaml, App},
+    core::str::FromStr,
+    std::{
+        env::VarError,
+        fs,
+        net::{IpAddr, Ipv4Addr},
+    },
+};
 
 // internal modules
 mod cfgcli;

@@ -24,15 +24,13 @@
  *
 */
 
-use super::bref::RefMulti;
-use super::LowMap;
-use super::Skymap;
-use core::mem;
-use hashbrown::raw::RawIntoIter;
-use hashbrown::raw::RawIter;
-use parking_lot::RwLockReadGuard;
-use std::collections::hash_map::RandomState;
-use std::sync::Arc;
+use {
+    super::{bref::RefMulti, LowMap, Skymap},
+    core::mem,
+    hashbrown::raw::{RawIntoIter, RawIter},
+    parking_lot::RwLockReadGuard,
+    std::{collections::hash_map::RandomState, sync::Arc},
+};
 
 /// An owned iterator for a [`Skymap`]
 pub struct OwnedIter<K, V, S = RandomState> {

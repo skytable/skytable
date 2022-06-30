@@ -43,9 +43,7 @@
 //!     - `__MYENTITY__` - `String` with entity
 //!
 
-use proc_macro::TokenStream;
-use quote::quote;
-use syn::Lit;
+use {proc_macro::TokenStream, quote::quote, syn::Lit};
 
 mod dbtest_fn;
 mod dbtest_mod;

@@ -24,10 +24,7 @@
  *
 */
 
-use crate::util;
-use proc_macro::TokenStream;
-use quote::quote;
-use syn::AttributeArgs;
+use {crate::util, proc_macro::TokenStream, quote::quote, syn::AttributeArgs};
 
 type OptString = Option<String>;
 

@@ -26,9 +26,11 @@
 
 #[sky_macros::dbtest_module]
 mod __private {
-    use libstress::utils;
-    use skytable::types::Array;
-    use skytable::{query, Element, Query, RespCode};
+    use {
+        libstress::utils,
+        skytable::{query, types::Array, Element, Query, RespCode},
+    };
+
     async fn test_create_keyspace() {
         let mut rng = rand::thread_rng();
         let ksname = utils::rand_alphastring(10, &mut rng);

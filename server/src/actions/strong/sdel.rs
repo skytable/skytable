@@ -24,12 +24,16 @@
  *
 */
 
-use crate::actions::strong::StrongActionResult;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::{KVEStandard, SingleEncoder};
-use crate::protocol::iter::DerefUnsafeSlice;
-use crate::util::compiler;
-use core::slice::Iter;
+use {
+    crate::{
+        actions::strong::StrongActionResult,
+        dbnet::connection::prelude::*,
+        kvengine::{KVEStandard, SingleEncoder},
+        protocol::iter::DerefUnsafeSlice,
+        util::compiler,
+    },
+    core::slice::Iter,
+};
 
 action! {
     /// Run an `SDEL` query

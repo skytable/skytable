@@ -24,11 +24,10 @@
  *
 */
 
-use crate::corestore;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT_ITER;
-use crate::queryengine::ActionIter;
-use crate::util::compiler;
+use crate::{
+    corestore, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER,
+    queryengine::ActionIter, util::compiler,
+};
 
 action!(
     /// Run an MPOP action

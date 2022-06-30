@@ -26,16 +26,20 @@
 
 //! Interfaces with the file system
 
-use crate::corestore::memstore::Memstore;
-use crate::registry;
-use crate::storage::v1::flush::FlushableKeyspace;
-use crate::storage::v1::flush::FlushableTable;
-use crate::storage::v1::flush::StorageTarget;
-use crate::IoResult;
-use core::ops::Deref;
-use std::collections::HashSet;
-use std::fs;
-use std::io::{BufWriter, Write};
+use {
+    crate::{
+        corestore::memstore::Memstore,
+        registry,
+        storage::v1::flush::{FlushableKeyspace, FlushableTable, StorageTarget},
+        IoResult,
+    },
+    core::ops::Deref,
+    std::{
+        collections::HashSet,
+        fs,
+        io::{BufWriter, Write},
+    },
+};
 
 pub const DIR_KSROOT: &str = "data/ks";
 pub const DIR_SNAPROOT: &str = "data/snaps";

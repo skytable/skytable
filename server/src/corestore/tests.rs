@@ -25,8 +25,7 @@
 */
 
 mod memstore_keyspace_tests {
-    use super::super::memstore::*;
-    use super::super::table::Table;
+    use super::super::{memstore::*, table::Table};
 
     #[test]
     fn test_drop_keyspace_empty() {
@@ -121,9 +120,11 @@ mod memstore_keyspace_tests {
 }
 
 mod modelcode_tests {
-    use super::super::table::Table;
-    use crate::kvengine::KVEListmap;
-    use crate::kvengine::KVEngine;
+    use {
+        super::super::table::Table,
+        crate::kvengine::{KVEListmap, KVEngine},
+    };
+
     #[test]
     fn test_model_code_pure_kve() {
         // binstr, binstr

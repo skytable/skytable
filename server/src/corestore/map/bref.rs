@@ -24,18 +24,17 @@
  *
 */
 
-use super::LowMap;
-use crate::util::compiler;
-use crate::util::Unwrappable;
-use core::hash::BuildHasher;
-use core::hash::Hash;
-use core::mem;
-use core::ops::Deref;
-use core::ops::DerefMut;
-use parking_lot::RwLockReadGuard;
-use parking_lot::RwLockWriteGuard;
-use std::collections::hash_map::RandomState;
-use std::sync::Arc;
+use {
+    super::LowMap,
+    crate::util::{compiler, Unwrappable},
+    core::{
+        hash::{BuildHasher, Hash},
+        mem,
+        ops::{Deref, DerefMut},
+    },
+    parking_lot::{RwLockReadGuard, RwLockWriteGuard},
+    std::{collections::hash_map::RandomState, sync::Arc},
+};
 
 /// A read-only reference to a bucket
 pub struct Ref<'a, K, V> {

@@ -52,10 +52,13 @@ mod tls {
 }
 
 mod sys {
-    use crate::protocol::{LATEST_PROTOCOL_VERSION, LATEST_PROTOCOL_VERSIONSTRING};
-    use libsky::VERSION;
-    use sky_macros::dbtest_func as dbtest;
-    use skytable::{query, Element, RespCode};
+    use {
+        crate::protocol::{LATEST_PROTOCOL_VERSION, LATEST_PROTOCOL_VERSIONSTRING},
+        libsky::VERSION,
+        sky_macros::dbtest_func as dbtest,
+        skytable::{query, Element, RespCode},
+    };
+
     #[dbtest]
     async fn sys_info_aerr() {
         runeq!(

@@ -24,17 +24,19 @@
  *
 */
 
-use crate::{
-    util::{self},
-    HarnessError, HarnessResult, ROOT_DIR,
-};
-use skytable::{error::Error, Connection, SkyResult};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
-use std::{
-    io::ErrorKind,
-    path::Path,
-    process::{Child, Command},
+use {
+    crate::{
+        util::{self},
+        HarnessError, HarnessResult, ROOT_DIR,
+    },
+    skytable::{error::Error, Connection, SkyResult},
+    std::{
+        io::ErrorKind,
+        path::Path,
+        process::{Child, Command},
+    },
 };
 
 #[cfg(windows)]

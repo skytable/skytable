@@ -24,27 +24,29 @@
  *
 */
 
-use crate::{
-    auth::AuthProvider,
-    config::{ConfigurationSet, SnapshotConfig, SnapshotPref},
-    corestore::Corestore,
-    dbnet::{self, Terminator},
-    diskstore::flock::FileLock,
-    services,
-    storage::v1::sengine::SnapshotEngine,
-    util::{
-        error::{Error, SkyResult},
-        os::TerminationSignal,
+use {
+    crate::{
+        auth::AuthProvider,
+        config::{ConfigurationSet, SnapshotConfig, SnapshotPref},
+        corestore::Corestore,
+        dbnet::{self, Terminator},
+        diskstore::flock::FileLock,
+        services,
+        storage::v1::sengine::SnapshotEngine,
+        util::{
+            error::{Error, SkyResult},
+            os::TerminationSignal,
+        },
     },
-};
-use std::{sync::Arc, thread::sleep};
-use tokio::{
-    sync::{
-        broadcast,
-        mpsc::{self, Sender},
+    std::{sync::Arc, thread::sleep},
+    tokio::{
+        sync::{
+            broadcast,
+            mpsc::{self, Sender},
+        },
+        task::{self, JoinHandle},
+        time::Duration,
     },
-    task::{self, JoinHandle},
-    time::Duration,
 };
 
 const TERMSIG_THRESHOLD: usize = 3;

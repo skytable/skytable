@@ -24,16 +24,17 @@
  *
 */
 
-use crate::actions::ActionResult;
-use crate::auth::Authmap;
-use crate::corestore::htable::Coremap;
-use crate::corestore::Data;
 #[cfg(test)]
 use crate::corestore::{memstore::DdlError, KeyspaceResult};
-use crate::dbnet::connection::prelude::Corestore;
-use crate::kvengine::{KVEListmap, KVEStandard, LockedVec};
-use crate::protocol::interface::ProtocolSpec;
-use crate::util;
+use crate::{
+    actions::ActionResult,
+    auth::Authmap,
+    corestore::{htable::Coremap, Data},
+    dbnet::connection::prelude::Corestore,
+    kvengine::{KVEListmap, KVEStandard, LockedVec},
+    protocol::interface::ProtocolSpec,
+    util,
+};
 
 pub trait DescribeTable {
     type Table;

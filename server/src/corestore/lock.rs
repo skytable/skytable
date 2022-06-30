@@ -31,12 +31,14 @@
 //! the primitives that are defined here
 //!
 
-use super::backoff::Backoff;
-use std::cell::UnsafeCell;
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use {
+    super::backoff::Backoff,
+    std::{
+        cell::UnsafeCell,
+        ops::{Deref, DerefMut},
+        sync::atomic::{AtomicBool, Ordering},
+    },
+};
 
 const ORD_ACQUIRE: Ordering = Ordering::Acquire;
 const ORD_RELEASE: Ordering = Ordering::Release;

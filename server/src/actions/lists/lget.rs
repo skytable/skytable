@@ -24,8 +24,8 @@
  *
 */
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
+use crate::{corestore::Data, dbnet::connection::prelude::*};
+
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
 const VALUEAT: &[u8] = "VALUEAT".as_bytes();

@@ -59,13 +59,14 @@
 #![deny(unused_imports)]
 
 pub mod traits;
-use core::marker::PhantomData;
-use crossbeam_channel::Receiver as CReceiver;
-use crossbeam_channel::Sender as CSender;
-use crossbeam_channel::{bounded, unbounded};
 pub use rayon;
-use rayon::prelude::*;
-use std::thread;
+
+use {
+    core::marker::PhantomData,
+    crossbeam_channel::{bounded, unbounded, Receiver as CReceiver, Sender as CSender},
+    rayon::prelude::{IntoParallelIterator, ParallelIterator},
+    std::thread,
+};
 
 /// A Job. The UIn type parameter is the type that will be used to execute the action
 /// Nothing is a variant used by the drop implementation to terminate all the workers

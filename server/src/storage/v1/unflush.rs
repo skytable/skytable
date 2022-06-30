@@ -28,24 +28,26 @@
 //!
 //! Routines for unflushing data
 
-use super::bytemarks;
-use crate::{
-    corestore::{
-        memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace, SYSTEM},
-        table::{SystemTable, Table},
+use {
+    super::bytemarks,
+    crate::{
+        corestore::{
+            memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace, SYSTEM},
+            table::{SystemTable, Table},
+        },
+        storage::v1::{
+            de::DeserializeInto,
+            error::{ErrorContext, StorageEngineError, StorageEngineResult},
+            flush::Autoflush,
+            interface::DIR_KSROOT,
+            preload::LoadedPartfile,
+            Coremap,
+        },
+        util::Wrapper,
     },
-    storage::v1::{
-        de::DeserializeInto,
-        error::{ErrorContext, StorageEngineError, StorageEngineResult},
-        flush::Autoflush,
-        interface::DIR_KSROOT,
-        preload::LoadedPartfile,
-        Coremap,
-    },
-    util::Wrapper,
+    core::mem::transmute,
+    std::{fs, io::ErrorKind, path::Path, sync::Arc},
 };
-use core::mem::transmute;
-use std::{fs, io::ErrorKind, path::Path, sync::Arc};
 
 type PreloadSet = std::collections::HashSet<ObjectID>;
 const PRELOAD_PATH: &str = "data/ks/PRELOAD";

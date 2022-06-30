@@ -24,11 +24,14 @@
  *
 */
 
-use crate::util;
-use crate::HarnessResult;
-use std::path::Path;
-use std::{path::PathBuf, process::Command};
-use zip::CompressionMethod;
+use {
+    crate::{util, HarnessResult},
+    std::{
+        path::{Path, PathBuf},
+        process::Command,
+    },
+    zip::CompressionMethod,
+};
 
 /// The binaries that will be present in a bundle
 pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];

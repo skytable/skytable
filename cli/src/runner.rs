@@ -23,15 +23,15 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-use crate::tokenizer;
-use core::fmt;
-use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
-use skytable::error::Error;
-use skytable::types::Array;
-use skytable::types::FlatElement;
-use skytable::Pipeline;
-use skytable::Query;
-use skytable::{aio, Element, RespCode};
+
+use {
+    crate::tokenizer,
+    core::fmt,
+    crossterm::style::{Color, Print, ResetColor, SetForegroundColor},
+    skytable::{
+        aio, error::Error, types::Array, types::FlatElement, Element, Pipeline, Query, RespCode,
+    },
+};
 
 type SkyResult<T> = Result<T, Error>;
 

@@ -24,12 +24,14 @@
  *
 */
 
-use sky_macros::dbtest_func as dbtest;
-use skytable::{
-    aio::Connection,
-    query,
-    types::{Array, RawString},
-    Element, Query, RespCode,
+use {
+    sky_macros::dbtest_func as dbtest,
+    skytable::{
+        aio::Connection,
+        query,
+        types::{Array, RawString},
+        Element, Query, RespCode,
+    },
 };
 
 #[dbtest(skip_if_cfg = "persist-suite", norun = true, port = 2007)]

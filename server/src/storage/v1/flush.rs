@@ -29,19 +29,22 @@
 //! This module contains multiple flush routines: at the memstore level, the keyspace level and
 //! the table level
 
-use super::{bytemarks, interface};
-use crate::corestore::memstore::SYSTEM;
-use crate::corestore::{
-    map::iter::BorrowedIter,
-    memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace},
-    table::{DataModel, SystemDataModel, SystemTable, Table},
+use {
+    super::{bytemarks, interface},
+    crate::{
+        corestore::{
+            map::iter::BorrowedIter,
+            memstore::SYSTEM,
+            memstore::{Keyspace, Memstore, ObjectID, SystemKeyspace},
+            table::{DataModel, SystemDataModel, SystemTable, Table},
+        },
+        registry,
+        util::Wrapper,
+        IoResult,
+    },
+    core::ops::Deref,
+    std::{io::Write, sync::Arc},
 };
-use crate::registry;
-use crate::util::Wrapper;
-use crate::IoResult;
-use core::ops::Deref;
-use std::io::Write;
-use std::sync::Arc;
 
 pub trait StorageTarget {
     /// This storage target needs a reinit of the tree despite no preload trip.

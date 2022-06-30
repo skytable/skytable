@@ -26,12 +26,11 @@
 
 //! # The Query Engine
 
-use crate::corestore::Corestore;
-use crate::dbnet::connection::prelude::*;
-
 use crate::{
     actions::{self, ActionError, ActionResult},
     admin, auth, blueql,
+    corestore::Corestore,
+    dbnet::connection::prelude::*,
     protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice},
 };
 

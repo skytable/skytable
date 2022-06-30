@@ -24,8 +24,10 @@
  *
 */
 
-use sky_macros::dbtest_func as dbtest;
-use skytable::{query, Element, RespCode};
+use {
+    sky_macros::dbtest_func as dbtest,
+    skytable::{query, Element, RespCode},
+};
 
 const SNAPSHOT_DISABLED: &str = "err-snapshot-disabled";
 

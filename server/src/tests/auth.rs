@@ -24,8 +24,10 @@
  *
 */
 
-use crate::auth::provider::testsuite_data;
-use skytable::{query, Element, RespCode};
+use {
+    crate::auth::provider::testsuite_data,
+    skytable::{query, Element, RespCode},
+};
 
 macro_rules! assert_autherror {
     ($con:expr, $query:expr, $eq:expr) => {

@@ -32,14 +32,18 @@
 //! 2. the `PARTMAP` preload that is placed in the ks directory
 //!
 
-use crate::corestore::memstore::Memstore;
-use crate::corestore::memstore::ObjectID;
-use crate::storage::v1::error::{StorageEngineError, StorageEngineResult};
-use crate::IoResult;
-use core::ptr;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::io::Write;
+use {
+    crate::{
+        corestore::memstore::{Memstore, ObjectID},
+        storage::v1::error::{StorageEngineError, StorageEngineResult},
+        IoResult,
+    },
+    core::ptr,
+    std::{
+        collections::{HashMap, HashSet},
+        io::Write,
+    },
+};
 
 pub type LoadedPartfile = HashMap<ObjectID, (u8, u8)>;
 

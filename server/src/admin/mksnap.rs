@@ -24,11 +24,14 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding;
-use crate::storage::v1::sengine::SnapshotActionResult;
-use core::str;
-use std::path::{Component, PathBuf};
+use {
+    crate::{
+        dbnet::connection::prelude::*, kvengine::encoding,
+        storage::v1::sengine::SnapshotActionResult,
+    },
+    core::str,
+    std::path::{Component, PathBuf},
+};
 
 action!(
     /// Create a snapshot

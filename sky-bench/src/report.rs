@@ -24,10 +24,11 @@
  *
 */
 
-use crate::util;
-use core::cmp::Ordering;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use {
+    crate::util,
+    core::cmp::Ordering,
+    std::collections::{hash_map::Entry, HashMap},
+};
 
 /// A map of reports
 pub struct AggregatedReport {

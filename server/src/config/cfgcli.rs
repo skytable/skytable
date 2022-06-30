@@ -24,8 +24,10 @@
  *
 */
 
-use super::{ConfigSourceParseResult, Configset, TryFromConfigSource};
-use clap::ArgMatches;
+use {
+    super::{ConfigSourceParseResult, Configset, TryFromConfigSource},
+    clap::ArgMatches,
+};
 
 /// A flag. The flag is said to be set if `self.set` is true and unset if `self.set` is false. However,
 /// if the flag is set, the value of SWITCH determines what value it is set to

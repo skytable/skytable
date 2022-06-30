@@ -54,10 +54,10 @@
  * - Sayan N. <ohsayan@outlook.com> (July, 2021)
 */
 
-use crate::corestore::booltable::BoolTable;
-use crate::corestore::booltable::TwoBitLUT;
-use crate::protocol::iter::AnyArrayIter;
-use crate::protocol::iter::BorrowedAnyArrayIter;
+use crate::{
+    corestore::booltable::{BoolTable, TwoBitLUT},
+    protocol::iter::{AnyArrayIter, BorrowedAnyArrayIter},
+};
 
 type PairFn = fn(&[u8], &[u8]) -> bool;
 

@@ -33,10 +33,10 @@
  and we won't read into others' memory (or corrupt our own).
 */
 
-use crate::storage::v1::Data;
-use core::mem;
-use core::ptr;
-use core::slice;
+use {
+    crate::storage::v1::Data,
+    core::{mem, ptr, slice},
+};
 
 const SIZE_64BIT: usize = mem::size_of::<u64>();
 const SIZE_128BIT: usize = SIZE_64BIT * 2;

@@ -30,9 +30,7 @@ mod macros;
 pub mod lget;
 pub mod lmod;
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::LockedVec;
+use crate::{corestore::Data, dbnet::connection::prelude::*, kvengine::LockedVec};
 
 action! {
     /// Handle an `LSET` query for the list model

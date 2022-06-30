@@ -27,24 +27,26 @@
 #![allow(clippy::manual_map)] // avoid LLVM bloat
 #![allow(unused)] // TODO(@ohsayan): Plonk this
 
-use crate::util::compiler;
-use core::borrow::Borrow;
-use core::fmt;
-use core::hash::BuildHasher;
-use core::hash::Hash;
-use core::hash::Hasher;
-use core::iter::FromIterator;
-use core::mem;
-use parking_lot::RwLock;
-use parking_lot::RwLockReadGuard;
-use parking_lot::RwLockWriteGuard;
-use std::collections::hash_map::RandomState;
-use std::num::NonZeroUsize;
-use std::thread::available_parallelism;
+use {
+    self::{
+        bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry},
+        iter::{BorrowedIter, OwnedIter},
+    },
+    crate::util::compiler,
+    core::{
+        borrow::Borrow,
+        fmt,
+        hash::{BuildHasher, Hash, Hasher},
+        iter::FromIterator,
+        mem,
+        num::NonZeroUsize,
+    },
+    parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+    std::{collections::hash_map::RandomState, thread::available_parallelism},
+};
+
 pub mod bref;
-use iter::{BorrowedIter, OwnedIter};
 pub mod iter;
-use bref::{Entry, OccupiedEntry, Ref, RefMut, VacantEntry};
 
 type LowMap<K, V> = hashbrown::raw::RawTable<(K, V)>;
 type ShardSlice<K, V> = [RwLock<LowMap<K, V>>];

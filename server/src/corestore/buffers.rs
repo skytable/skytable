@@ -24,9 +24,10 @@
  *
 */
 
-use super::array::Array;
-use core::ops::Deref;
-use core::str;
+use {
+    super::array::Array,
+    core::{ops::Deref, str},
+};
 
 macro_rules! push_self {
     ($self:expr, $what:expr) => {

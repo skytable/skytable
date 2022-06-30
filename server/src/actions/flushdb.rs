@@ -24,8 +24,7 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
-use crate::queryengine::ActionIter;
+use crate::{dbnet::connection::prelude::*, queryengine::ActionIter};
 
 action!(
     /// Delete all the keys in the database

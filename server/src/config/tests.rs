@@ -24,9 +24,11 @@
  *
 */
 
-use super::{BGSave, Configset, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4};
-use crate::ROOT_DIR;
-use std::fs;
+use {
+    super::{BGSave, Configset, PortConfig, SnapshotConfig, SnapshotPref, SslOpts, DEFAULT_IPV4},
+    crate::ROOT_DIR,
+    std::fs,
+};
 
 // server tests
 // TCP

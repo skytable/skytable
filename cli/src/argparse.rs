@@ -24,17 +24,18 @@
  *
 */
 
-use crate::{runner::Runner, tokenizer};
-use clap::{load_yaml, App};
-use crossterm::{
-    cursor, execute,
-    terminal::{Clear, ClearType},
+use {
+    crate::{runner::Runner, tokenizer},
+    clap::{load_yaml, App},
+    crossterm::{
+        cursor, execute,
+        terminal::{Clear, ClearType},
+    },
+    libsky::{URL, VERSION},
+    rustyline::{config::Configurer, error::ReadlineError, Editor},
+    skytable::{Pipeline, Query},
+    std::{io::stdout, process},
 };
-use libsky::{URL, VERSION};
-use readline::{config::Configurer, error::ReadlineError, Editor};
-use rustyline as readline;
-use skytable::{Pipeline, Query};
-use std::{io::stdout, process};
 
 const ADDR: &str = "127.0.0.1";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";

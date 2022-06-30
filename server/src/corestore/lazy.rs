@@ -24,13 +24,15 @@
  *
 */
 
-use super::backoff::Backoff;
-use core::mem;
-use core::ops::Deref;
-use core::ptr;
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::Ordering;
+use {
+    super::backoff::Backoff,
+    core::{
+        mem,
+        ops::Deref,
+        ptr,
+        sync::atomic::{AtomicBool, AtomicPtr, Ordering},
+    },
+};
 
 const ORD_ACQ: Ordering = Ordering::Acquire;
 const ORD_SEQ: Ordering = Ordering::SeqCst;

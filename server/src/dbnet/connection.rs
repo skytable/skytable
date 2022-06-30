@@ -35,28 +35,30 @@
 //! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
 //! respones in compliance with the Skyhash protocol.
 
-use crate::{
-    actions::{ActionError, ActionResult},
-    auth::AuthProvider,
-    corestore::Corestore,
-    dbnet::{
-        connection::prelude::FutureResult,
-        tcp::{BufferedSocketStream, Connection},
-        Terminator,
-    },
-    protocol::{
-        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-        Query,
-    },
-    queryengine, IoResult,
-};
-use bytes::{Buf, BytesMut};
 #[cfg(windows)]
 use std::io::ErrorKind;
-use std::{marker::PhantomData, sync::Arc};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
-    sync::{mpsc, Semaphore},
+use {
+    crate::{
+        actions::{ActionError, ActionResult},
+        auth::AuthProvider,
+        corestore::Corestore,
+        dbnet::{
+            connection::prelude::FutureResult,
+            tcp::{BufferedSocketStream, Connection},
+            Terminator,
+        },
+        protocol::{
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            Query,
+        },
+        queryengine, IoResult,
+    },
+    bytes::{Buf, BytesMut},
+    std::{marker::PhantomData, sync::Arc},
+    tokio::{
+        io::{AsyncReadExt, AsyncWriteExt, BufWriter},
+        sync::{mpsc, Semaphore},
+    },
 };
 
 pub type QueryWithAdvance = (Query, usize);

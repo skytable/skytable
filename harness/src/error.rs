@@ -24,8 +24,7 @@
  *
 */
 
-use crate::util::ExitCode;
-use std::fmt;
+use {crate::util::ExitCode, std::fmt};
 
 pub type HarnessResult<T> = Result<T, HarnessError>;
 #[derive(Debug)]

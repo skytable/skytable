@@ -24,13 +24,16 @@
  *
 */
 
-use super::keys;
-use crate::actions::{ActionError, ActionResult};
-use crate::corestore::array::Array;
-use crate::corestore::htable::Coremap;
-use crate::protocol::interface::ProtocolSpec;
-use crate::util::err;
-use std::sync::Arc;
+use {
+    super::keys,
+    crate::{
+        actions::{ActionError, ActionResult},
+        corestore::{array::Array, htable::Coremap},
+        protocol::interface::ProtocolSpec,
+        util::err,
+    },
+    std::sync::Arc,
+};
 
 // constants
 /// Size of an authn key in bytes

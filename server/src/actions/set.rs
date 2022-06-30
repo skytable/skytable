@@ -27,10 +27,7 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
-use crate::corestore;
-use crate::dbnet::connection::prelude::*;
-use crate::queryengine::ActionIter;
-use corestore::Data;
+use crate::{corestore::Data, dbnet::connection::prelude::*, queryengine::ActionIter};
 
 action!(
     /// Run a `SET` query

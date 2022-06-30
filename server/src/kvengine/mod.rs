@@ -30,10 +30,14 @@ pub mod encoding;
 #[cfg(test)]
 mod tests;
 
-use self::encoding::{ENCODING_LUT, ENCODING_LUT_PAIR};
-use crate::corestore::{booltable::BoolTable, htable::Coremap, map::bref::Ref, Data};
-use crate::util::compiler;
-use parking_lot::RwLock;
+use {
+    self::encoding::{ENCODING_LUT, ENCODING_LUT_PAIR},
+    crate::{
+        corestore::{booltable::BoolTable, htable::Coremap, map::bref::Ref, Data},
+        util::compiler,
+    },
+    parking_lot::RwLock,
+};
 
 pub type KVEStandard = KVEngine<Data>;
 pub type KVEListmap = KVEngine<LockedVec>;

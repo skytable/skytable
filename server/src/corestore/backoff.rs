@@ -24,9 +24,7 @@
  *
 */
 
-use std::cell::Cell;
-use std::hint::spin_loop;
-use std::thread;
+use std::{cell::Cell, hint::spin_loop, thread};
 
 /// Type to perform exponential backoff
 pub struct Backoff {

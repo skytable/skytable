@@ -24,11 +24,13 @@
  *
 */
 
-use crate::{
-    corestore::booltable::BoolTable, dbnet::connection::prelude::*,
-    storage::v1::interface::DIR_ROOT,
+use {
+    crate::{
+        corestore::booltable::BoolTable, dbnet::connection::prelude::*,
+        storage::v1::interface::DIR_ROOT,
+    },
+    libsky::VERSION,
 };
-use ::libsky::VERSION;
 
 const INFO: &[u8] = b"info";
 const METRIC: &[u8] = b"metric";

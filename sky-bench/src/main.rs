@@ -36,13 +36,12 @@ mod util;
 mod benchtool;
 mod report;
 mod testkey;
-use crate::util::DEFAULT_PACKET_SIZE;
-use crate::util::DEFAULT_QUERY_COUNT;
-use crate::util::DEFAULT_REPEAT;
-use crate::util::DEFAULT_WORKER_COUNT;
-// external imports
-use clap::{load_yaml, App};
-use core::hint::unreachable_unchecked;
+
+use {
+    crate::util::{DEFAULT_PACKET_SIZE, DEFAULT_QUERY_COUNT, DEFAULT_REPEAT, DEFAULT_WORKER_COUNT},
+    clap::{load_yaml, App},
+    core::hint::unreachable_unchecked,
+};
 
 fn main() {
     let cfg_layout = load_yaml!("./cli.yml");

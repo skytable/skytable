@@ -24,13 +24,16 @@
  *
 */
 
-use crate::{benchtool::validation::SQ_RESPCODE_SIZE, hoststr, sanity_test};
-use libstress::utils::generate_random_string_vector;
-use libstress::Workpool;
-use rand::thread_rng;
-use skytable::Query;
-use std::io::{Read, Write};
-use std::net::{self, TcpStream};
+use {
+    crate::{benchtool::validation::SQ_RESPCODE_SIZE, hoststr, sanity_test},
+    libstress::{utils::generate_random_string_vector, Workpool},
+    rand::thread_rng,
+    skytable::Query,
+    std::{
+        io::{Read, Write},
+        net::{self, TcpStream},
+    },
+};
 
 pub fn create_testkeys(host: &str, port: u16, num: usize, connections: usize, size: usize) {
     if let Err(e) = sanity_test!(host, port) {

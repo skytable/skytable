@@ -26,8 +26,8 @@
 
 #[sky_macros::dbtest_module(table = "(string, string)")]
 mod __private {
-    use skytable::types::RawString;
-    use skytable::{Element, RespCode};
+    use skytable::{types::RawString, Element, RespCode};
+
     async fn test_bad_encoding_set() {
         query.push("set");
         query.push("x");

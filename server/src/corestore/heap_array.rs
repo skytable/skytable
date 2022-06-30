@@ -24,8 +24,10 @@
  *
 */
 
-use core::{alloc::Layout, fmt, marker::PhantomData, mem::ManuallyDrop, ops::Deref, ptr, slice};
-use std::alloc::dealloc;
+use {
+    core::{alloc::Layout, fmt, marker::PhantomData, mem::ManuallyDrop, ops::Deref, ptr, slice},
+    std::alloc::dealloc,
+};
 
 /// A heap-allocated array
 pub struct HeapArray<T> {

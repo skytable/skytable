@@ -24,9 +24,7 @@
  *
 */
 
-use crate::corestore::memstore::ObjectID;
-use core::fmt;
-use std::io::Error as IoError;
+use {crate::corestore::memstore::ObjectID, core::fmt, std::io::Error as IoError};
 
 pub type StorageEngineResult<T> = Result<T, StorageEngineError>;
 

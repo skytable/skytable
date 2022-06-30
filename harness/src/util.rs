@@ -24,12 +24,19 @@
  *
 */
 
-use crate::build::BuildMode;
-use crate::{HarnessError, HarnessResult};
-use std::env;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output};
+use {
+    crate::{
+        build::BuildMode,
+        {HarnessError, HarnessResult},
+    },
+    std::{
+        env,
+        ffi::OsStr,
+        path::{Path, PathBuf},
+        process::{Child, Command, Output},
+    },
+};
+
 pub type ExitCode = Option<i32>;
 
 #[cfg(not(test))]

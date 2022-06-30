@@ -24,9 +24,13 @@
  *
 */
 
-use crate::build::{self, BuildMode};
-use crate::{util, HarnessResult};
-use libsky::VERSION;
+use {
+    crate::{
+        build::{self, BuildMode},
+        {util, HarnessResult},
+    },
+    libsky::VERSION,
+};
 
 /// The Linux package type
 #[derive(Copy, Clone)]

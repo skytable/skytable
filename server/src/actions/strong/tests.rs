@@ -25,11 +25,12 @@
 */
 
 mod sdel_concurrency_tests {
-    use super::super::sdel;
-    use crate::corestore::Data;
-    use crate::kvengine::KVEStandard;
-    use std::sync::Arc;
-    use std::thread;
+    use {
+        super::super::sdel,
+        crate::{corestore::Data, kvengine::KVEStandard},
+        std::{sync::Arc, thread},
+    };
+
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEStandard::init(true, true);
@@ -69,11 +70,12 @@ mod sdel_concurrency_tests {
 }
 
 mod sset_concurrency_tests {
-    use super::super::sset;
-    use crate::corestore::Data;
-    use crate::kvengine::KVEStandard;
-    use std::sync::Arc;
-    use std::thread;
+    use {
+        super::super::sset,
+        crate::{corestore::Data, kvengine::KVEStandard},
+        std::{sync::Arc, thread},
+    };
+
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEStandard::init(true, true);
@@ -110,11 +112,12 @@ mod sset_concurrency_tests {
 }
 
 mod supdate_concurrency_tests {
-    use super::super::supdate;
-    use crate::corestore::Data;
-    use crate::kvengine::KVEStandard;
-    use std::sync::Arc;
-    use std::thread;
+    use {
+        super::super::supdate,
+        crate::{corestore::Data, kvengine::KVEStandard},
+        std::{sync::Arc, thread},
+    };
+
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEStandard::init(true, true);

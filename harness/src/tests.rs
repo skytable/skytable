@@ -24,14 +24,15 @@
  *
 */
 
-use crate::util::WORKSPACE_ROOT;
-use crate::{
-    build::{self, BuildMode},
-    bundle, linuxpkg, util,
+use {
+    crate::{
+        build::{self, BuildMode},
+        bundle, linuxpkg, util,
+        util::WORKSPACE_ROOT,
+    },
+    libsky::VERSION,
+    std::{env, path::PathBuf},
 };
-use libsky::VERSION;
-use std::env;
-use std::path::PathBuf;
 
 #[test]
 fn file_names() {

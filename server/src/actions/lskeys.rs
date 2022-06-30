@@ -24,9 +24,10 @@
  *
 */
 
-use crate::corestore::table::DataModel;
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
+use crate::{
+    corestore::{table::DataModel, Data},
+    dbnet::connection::prelude::*,
+};
 
 const DEFAULT_COUNT: usize = 10;
 
@@ -72,7 +73,8 @@ action!(
             DataModel::KV(kv) => kv.get_inner_ref().get_keys(count),
             DataModel::KVExtListmap(kv) => kv.get_inner_ref().get_keys(count),
         };
-        con.write_typed_non_null_array_header(items.len(), tsymbol).await?;
+        con.write_typed_non_null_array_header(items.len(), tsymbol)
+            .await?;
         for key in items {
             con.write_typed_non_null_array_element(&key).await?;
         }

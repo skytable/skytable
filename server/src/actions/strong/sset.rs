@@ -24,14 +24,17 @@
  *
 */
 
-use crate::actions::strong::StrongActionResult;
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::DoubleEncoder;
-use crate::kvengine::KVEStandard;
-use crate::protocol::iter::DerefUnsafeSlice;
-use crate::util::compiler;
-use core::slice::Iter;
+use {
+    crate::{
+        actions::strong::StrongActionResult,
+        corestore::Data,
+        dbnet::connection::prelude::*,
+        kvengine::{DoubleEncoder, KVEStandard},
+        protocol::iter::DerefUnsafeSlice,
+        util::compiler,
+    },
+    core::slice::Iter,
+};
 
 action! {
     /// Run an `SSET` query

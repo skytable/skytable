@@ -24,9 +24,11 @@
  *
 */
 
-use crate::storage::v1::{error::StorageEngineError, sengine::SnapshotEngineError};
-use openssl::{error::ErrorStack as SslErrorStack, ssl::Error as SslError};
-use std::{fmt, io::Error as IoError};
+use {
+    crate::storage::v1::{error::StorageEngineError, sengine::SnapshotEngineError},
+    openssl::{error::ErrorStack as SslErrorStack, ssl::Error as SslError},
+    std::{fmt, io::Error as IoError},
+};
 
 pub type SkyResult<T> = Result<T, Error>;
 

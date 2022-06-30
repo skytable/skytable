@@ -37,12 +37,14 @@ mod presetup;
 mod test;
 #[cfg(test)]
 mod tests;
-use crate::{
-    cli::HarnessWhat,
-    error::{HarnessError, HarnessResult},
-};
-use env_logger::Builder;
 use std::{env, process};
+use {
+    crate::{
+        cli::HarnessWhat,
+        error::{HarnessError, HarnessResult},
+    },
+    env_logger::Builder,
+};
 
 const ROOT_DIR: &str = env!("ROOT_DIR");
 

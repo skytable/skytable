@@ -29,9 +29,10 @@
 //! The registry module provides interfaces for system-wide, global state management
 //!
 
-use crate::corestore::lock::{QLGuard, QuickLock};
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::Ordering;
+use {
+    crate::corestore::lock::{QLGuard, QuickLock},
+    core::sync::atomic::{AtomicBool, Ordering},
+};
 
 const ORD_ACQ: Ordering = Ordering::Acquire;
 const ORD_REL: Ordering = Ordering::Release;

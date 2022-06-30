@@ -24,11 +24,12 @@
  *
 */
 
-use core::fmt::Display;
-use core::str::FromStr;
-use proc_macro2::Span;
-use rand::Rng;
-use syn::{Lit, MetaNameValue};
+use {
+    core::{fmt::Display, str::FromStr},
+    proc_macro2::Span,
+    rand::Rng,
+    syn::{Lit, MetaNameValue},
+};
 
 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 

@@ -24,8 +24,10 @@
  *
 */
 
-use sky_macros::dbtest_func as dbtest;
-use skytable::{query, Element};
+use {
+    sky_macros::dbtest_func as dbtest,
+    skytable::{query, Element},
+};
 
 const USERID: &str = "steinbeck";
 

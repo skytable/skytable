@@ -26,21 +26,15 @@
 
 #![allow(clippy::unit_arg)]
 
-use clap::{load_yaml, App};
-use core::hint::unreachable_unchecked;
-use env_logger::Builder;
-use log::error as err;
-use log::info;
-use skytable::query;
-use skytable::sync::Connection;
-use skytable::Element;
-use skytable::Query;
-use skytable::RespCode;
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::path::PathBuf;
-use std::process;
+use {
+    clap::{load_yaml, App},
+    core::hint::unreachable_unchecked,
+    env_logger::Builder,
+    log::{error as err, info},
+    skytable::{query, sync::Connection, Element, Query, RespCode},
+    std::{collections::HashMap, env, fs, path::PathBuf, process},
+};
+
 type Bytes = Vec<u8>;
 
 fn main() {

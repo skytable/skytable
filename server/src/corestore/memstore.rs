@@ -54,17 +54,21 @@
 //! So, all your data is at the mercy of [`Memstore`]'s constructor
 //! and destructor.
 
-use super::KeyspaceResult;
-use crate::auth::Authmap;
-use crate::corestore::array::Array;
-use crate::corestore::htable::Coremap;
-use crate::corestore::table::Table;
-use crate::corestore::table::{SystemDataModel, SystemTable};
-use crate::registry;
-use crate::util::Wrapper;
-use core::borrow::Borrow;
-use core::hash::Hash;
-use std::sync::Arc;
+use {
+    super::KeyspaceResult,
+    crate::{
+        auth::Authmap,
+        corestore::{
+            array::Array,
+            htable::Coremap,
+            table::{SystemDataModel, SystemTable, Table},
+        },
+        registry,
+        util::Wrapper,
+    },
+    core::{borrow::Borrow, hash::Hash},
+    std::sync::Arc,
+};
 
 uninit_array! {
     const DEFAULT_ARRAY: [u8; 64] = [b'd', b'e', b'f', b'a', b'u', b'l', b't'];

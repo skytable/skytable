@@ -24,8 +24,10 @@
  *
 */
 
-use super::{persist_load, persist_store, Bin, ListIDBin, ListIDStr, Str, PERSIST_TEST_SET_SIZE};
-use sky_macros::dbtest_func as dbtest;
+use {
+    super::{persist_load, persist_store, Bin, ListIDBin, ListIDStr, Str, PERSIST_TEST_SET_SIZE},
+    sky_macros::dbtest_func as dbtest,
+};
 
 type ListData<K, V> = [(K, [V; PERSIST_TEST_SET_SIZE]); PERSIST_TEST_SET_SIZE];
 

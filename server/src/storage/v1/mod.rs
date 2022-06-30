@@ -51,14 +51,12 @@ think of using them anywhere outside. This is a specialized parser built for the
 
 */
 
-use crate::corestore::array::Array;
-use crate::corestore::htable::Coremap;
-use crate::corestore::Data;
-use core::hash::Hash;
-use core::mem;
-use core::slice;
-use std::collections::HashSet;
-use std::io::Write;
+use {
+    crate::corestore::{array::Array, htable::Coremap, Data},
+    core::{hash::Hash, mem, slice},
+    std::{collections::HashSet, io::Write},
+};
+
 // for some astronomical reasons do not mess with this
 #[macro_use]
 mod macros;

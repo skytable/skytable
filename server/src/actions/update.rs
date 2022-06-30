@@ -28,8 +28,7 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
+use crate::{corestore::Data, dbnet::connection::prelude::*};
 
 action!(
     /// Run an `UPDATE` query

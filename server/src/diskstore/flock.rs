@@ -166,18 +166,27 @@ mod __sys {
     //! # Windows platform-specific file locking
     //! This module contains methods used by the `FileLock` object in this module to lock and/or
     //! unlock files.
-    use std::fs::File;
-    use std::io::{Error, Result};
-    use std::mem;
-    use std::os::windows::io::AsRawHandle;
-    use std::os::windows::io::FromRawHandle;
-    use std::ptr;
-    use winapi::shared::minwindef::{BOOL, DWORD};
-    use winapi::um::fileapi::{LockFileEx, UnlockFile};
-    use winapi::um::handleapi::DuplicateHandle;
-    use winapi::um::minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY};
-    use winapi::um::processthreadsapi::GetCurrentProcess;
-    use winapi::um::winnt::{DUPLICATE_SAME_ACCESS, MAXDWORD};
+
+    use {
+        std::{
+            fs::File,
+            io::{Error, Result},
+            mem,
+            os::windows::io::{AsRawHandle, FromRawHandle},
+            ptr,
+        },
+        winapi::{
+            shared::minwindef::{BOOL, DWORD},
+            um::{
+                fileapi::{LockFileEx, UnlockFile},
+                handleapi::DuplicateHandle,
+                minwinbase::{LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY},
+                processthreadsapi::GetCurrentProcess,
+                winnt::{DUPLICATE_SAME_ACCESS, MAXDWORD},
+            },
+        },
+    };
+
     /// Obtain an exclusive lock and **block** until we acquire it
     pub fn lock_ex(file: &File) -> Result<()> {
         lock_file(file, LOCKFILE_EXCLUSIVE_LOCK)
@@ -259,12 +268,14 @@ mod __sys {
     //! # Unix platform-specific file locking
     //! This module contains methods used by the `FileLock` object in this module to lock and/or
     //! unlock files.
-    use libc::c_int;
-    use std::fs::File;
-    use std::io::Error;
-    use std::io::Result;
-    use std::os::unix::io::AsRawFd;
-    use std::os::unix::io::FromRawFd;
+    use {
+        libc::c_int,
+        std::{
+            fs::File,
+            io::{Error, Result},
+            os::unix::io::{AsRawFd, FromRawFd},
+        },
+    };
 
     extern "C" {
         /// Block and acquire an exclusive lock with `libc`'s `flock`
@@ -327,11 +338,11 @@ mod __sys {
 #[cfg(all(target_os = "solaris", unix))]
 mod __sys {
     //! Solaris doesn't have flock so we'll have to simulate that using fcntl
-    use std::fs::File;
-    use std::io::Error;
-    use std::io::Result;
-    use std::os::unix::io::AsRawFd;
-    use std::os::unix::io::FromRawFd;
+    use std::{
+        fs::File,
+        io::{Error, Result},
+        os::unix::io::{AsRawFd, FromRawFd},
+    };
 
     fn simulate_flock(file: &File, flag: libc::c_int) -> Result<()> {
         let mut fle = libc::flock {

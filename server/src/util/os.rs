@@ -36,8 +36,16 @@ use {
 
 #[cfg(unix)]
 mod unix {
-    use libc::{rlimit, RLIMIT_NOFILE};
-    use std::io::Error as IoError;
+    use {
+        libc::{rlimit, RLIMIT_NOFILE},
+        std::{
+            future::Future,
+            io::Error as IoError,
+            pin::Pin,
+            task::{Context, Poll},
+        },
+        tokio::signal::unix::{signal, Signal, SignalKind},
+    };
 
     #[derive(Debug)]
     pub struct ResourceLimit {
@@ -87,11 +95,6 @@ mod unix {
         let _ = ResourceLimit::get().unwrap();
     }
 
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-    use tokio::signal::unix::{signal, Signal, SignalKind};
-
     pub struct TerminationSignal {
         sigint: Signal,
         sigterm: Signal,
@@ -121,10 +124,14 @@ mod unix {
 
 #[cfg(windows)]
 mod windows {
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-    use tokio::signal::windows::{ctrl_break, ctrl_c, CtrlBreak, CtrlC};
+    use {
+        std::{
+            future::Future,
+            pin::Pin,
+            task::{Context, Poll},
+        },
+        tokio::signal::windows::{ctrl_break, ctrl_c, CtrlBreak, CtrlC},
+    };
 
     pub struct TerminationSignal {
         ctrl_c: CtrlC,

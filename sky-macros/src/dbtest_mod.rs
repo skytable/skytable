@@ -24,14 +24,16 @@
  *
 */
 
-use crate::{
-    dbtest_fn::{self, DBTestFunctionConfig},
-    util,
+use {
+    crate::{
+        dbtest_fn::{self, DBTestFunctionConfig},
+        util,
+    },
+    proc_macro::TokenStream,
+    quote::quote,
+    std::collections::HashSet,
+    syn::{self, AttributeArgs},
 };
-use proc_macro::TokenStream;
-use quote::quote;
-use std::collections::HashSet;
-use syn::{self, AttributeArgs};
 
 struct DBTestModuleConfig {
     fcfg: DBTestFunctionConfig,

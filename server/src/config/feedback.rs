@@ -24,16 +24,14 @@
  *
 */
 
-// external imports
-use toml::de::Error as TomlError;
-// std imports
-use core::fmt;
-use core::ops;
-use std::io::Error as IoError;
-// internal imports
-use super::{ConfigurationSet, SnapshotConfig, SnapshotPref};
 #[cfg(unix)]
 use crate::util::os::ResourceLimit;
+use {
+    super::{ConfigurationSet, SnapshotConfig, SnapshotPref},
+    core::{fmt, ops},
+    std::io::Error as IoError,
+    toml::de::Error as TomlError,
+};
 
 #[cfg(test)]
 const EMSG_ENV: &str = "Environment";

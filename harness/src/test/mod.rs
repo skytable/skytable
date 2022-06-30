@@ -24,24 +24,26 @@
  *
 */
 
-use crate::{
-    build::BuildMode,
-    util::{self},
-    HarnessError, HarnessResult,
-};
-use openssl::{
-    asn1::Asn1Time,
-    bn::{BigNum, MsbOption},
-    error::ErrorStack,
-    hash::MessageDigest,
-    pkey::{PKey, Private},
-    rsa::Rsa,
-    x509::{
-        extension::{BasicConstraints, KeyUsage, SubjectKeyIdentifier},
-        X509NameBuilder, X509,
+use {
+    crate::{
+        build::BuildMode,
+        util::{self},
+        HarnessError, HarnessResult,
     },
+    openssl::{
+        asn1::Asn1Time,
+        bn::{BigNum, MsbOption},
+        error::ErrorStack,
+        hash::MessageDigest,
+        pkey::{PKey, Private},
+        rsa::Rsa,
+        x509::{
+            extension::{BasicConstraints, KeyUsage, SubjectKeyIdentifier},
+            X509NameBuilder, X509,
+        },
+    },
+    std::{fs, io::Write},
 };
-use std::{fs, io::Write};
 mod svc;
 
 /// Run the test suite

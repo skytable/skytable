@@ -24,17 +24,19 @@
  *
 */
 
-use crate::{report::AggregatedReport, util};
-use devtimer::DevTime;
-use libstress::{utils::generate_random_byte_vector, PoolConfig};
-use rand::thread_rng;
-use skytable::{types::RawString, Query};
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
+use {
+    self::validation::SQ_RESPCODE_SIZE,
+    crate::{report::AggregatedReport, util},
+    devtimer::DevTime,
+    libstress::{utils::generate_random_byte_vector, PoolConfig},
+    rand::thread_rng,
+    skytable::{types::RawString, Query},
+    std::{
+        io::{Read, Write},
+        net::TcpStream,
+    },
 };
 pub mod validation;
-use self::validation::SQ_RESPCODE_SIZE;
 
 const NOTICE_INIT_BENCH: &str = "Finished sanity test. Initializing benchmark ...";
 const NOTICE_INIT_COMPLETE: &str = "Initialization complete! Benchmark started";

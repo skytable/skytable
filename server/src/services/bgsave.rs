@@ -24,15 +24,17 @@
  *
 */
 
-use crate::{
-    config::BGSave,
-    corestore::Corestore,
-    dbnet::Terminator,
-    registry,
-    storage::{self, v1::flush::Autoflush},
-    IoResult,
+use {
+    crate::{
+        config::BGSave,
+        corestore::Corestore,
+        dbnet::Terminator,
+        registry,
+        storage::{self, v1::flush::Autoflush},
+        IoResult,
+    },
+    tokio::time::{self, Duration},
 };
-use tokio::time::{self, Duration};
 
 /// The bgsave_scheduler calls the bgsave task in `Corestore` after `every` seconds
 ///

@@ -24,9 +24,11 @@
  *
 */
 
-use super::UnsafeSlice;
-use bytes::Bytes;
-use core::{hint::unreachable_unchecked, iter::FusedIterator, ops::Deref, slice::Iter};
+use {
+    super::UnsafeSlice,
+    bytes::Bytes,
+    core::{hint::unreachable_unchecked, iter::FusedIterator, ops::Deref, slice::Iter},
+};
 
 /// An iterator over an [`AnyArray`] (an [`UnsafeSlice`]). The validity of the iterator is
 /// left to the caller who has to guarantee:

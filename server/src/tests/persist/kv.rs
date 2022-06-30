@@ -24,8 +24,10 @@
  *
 */
 
-use super::{persist_load, persist_store, PERSIST_TEST_SET_SIZE};
-use sky_macros::dbtest_func as dbtest;
+use {
+    super::{persist_load, persist_store, PERSIST_TEST_SET_SIZE},
+    sky_macros::dbtest_func as dbtest,
+};
 
 const PERSIST_CFG_KEYMAP_BIN_BIN_TABLE: &str = "testsuite.persist_bin_bin_tbl";
 const PERSIST_DATA_KEYMAP_BIN_BIN_TABLE: [(&[u8], &[u8]); PERSIST_TEST_SET_SIZE] = [

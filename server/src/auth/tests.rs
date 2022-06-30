@@ -35,9 +35,11 @@ mod keys {
 }
 
 mod authn {
-    use crate::actions::ActionError;
-    use crate::auth::AuthProvider;
-    use crate::protocol::{interface::ProtocolSpec, Skyhash2};
+    use crate::{
+        actions::ActionError,
+        auth::AuthProvider,
+        protocol::{interface::ProtocolSpec, Skyhash2},
+    };
 
     const ORIG: &[u8; 40] = b"c4299d190fb9a00626797fcc138c56eae9971664";
 

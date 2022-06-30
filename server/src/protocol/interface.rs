@@ -24,18 +24,20 @@
  *
 */
 
-use super::ParseError;
-use crate::{
-    corestore::{
-        booltable::{BytesBoolTable, BytesNicheLUT},
-        buffers::Integer64,
+use {
+    super::ParseError,
+    crate::{
+        corestore::{
+            booltable::{BytesBoolTable, BytesNicheLUT},
+            buffers::Integer64,
+        },
+        dbnet::connection::{QueryResult, QueryWithAdvance, RawConnection, Stream},
+        util::FutureResult,
+        IoResult,
     },
-    dbnet::connection::{QueryResult, QueryWithAdvance, RawConnection, Stream},
-    util::FutureResult,
-    IoResult,
+    std::io::{Error as IoError, ErrorKind},
+    tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 };
-use std::io::{Error as IoError, ErrorKind};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 /*
 NOTE TO SELF (@ohsayan): Why do we split everything into separate traits? To avoid mistakes

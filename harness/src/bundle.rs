@@ -24,17 +24,19 @@
  *
 */
 
-use crate::{
-    build::{self, BuildMode},
-    util, HarnessError, HarnessResult,
+use {
+    crate::{
+        build::{self, BuildMode},
+        util, HarnessError, HarnessResult,
+    },
+    libsky::VERSION,
+    std::{
+        fs,
+        io::{Read, Write},
+        path::{Path, PathBuf},
+    },
+    zip::{write::FileOptions, ZipWriter},
 };
-use libsky::VERSION;
-use std::fs;
-use std::io::Read;
-use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
-use zip::{write::FileOptions, ZipWriter};
 
 /// Returns the bundle name
 pub fn get_bundle_name() -> String {

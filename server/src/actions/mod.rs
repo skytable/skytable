@@ -50,10 +50,10 @@ pub mod strong;
 pub mod update;
 pub mod uset;
 pub mod whereami;
-use crate::corestore::memstore::DdlError;
-use crate::protocol::interface::ProtocolSpec;
-use crate::util;
-use std::io::Error as IoError;
+use {
+    crate::{corestore::memstore::DdlError, protocol::interface::ProtocolSpec, util},
+    std::io::Error as IoError,
+};
 
 /// A generic result for actions
 pub type ActionResult<T> = Result<T, ActionError>;

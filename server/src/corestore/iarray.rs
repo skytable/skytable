@@ -26,22 +26,21 @@
 
 #![allow(dead_code)] // TODO(@ohsayan): Remove this lint or remove offending methods
 
-use crate::corestore::array::LenScopeGuard;
-use core::alloc::Layout;
-use core::borrow::Borrow;
-use core::borrow::BorrowMut;
-use core::cmp;
-use core::fmt;
-use core::hash::{self, Hash};
-use core::iter::FromIterator;
-use core::mem;
-use core::mem::ManuallyDrop;
-use core::mem::MaybeUninit;
-use core::ops;
-use core::ptr;
-use core::ptr::NonNull;
-use core::slice;
-use std::alloc as std_alloc;
+use {
+    crate::corestore::array::LenScopeGuard,
+    core::{
+        alloc::Layout,
+        borrow::{Borrow, BorrowMut},
+        cmp, fmt,
+        hash::{self, Hash},
+        iter::FromIterator,
+        mem::{self, ManuallyDrop, MaybeUninit},
+        ops,
+        ptr::{self, NonNull},
+        slice,
+    },
+    std::alloc as std_alloc,
+};
 
 pub const fn new_const_iarray<T, const N: usize>() -> IArray<[T; N]> {
     IArray {

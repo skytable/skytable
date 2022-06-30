@@ -24,9 +24,7 @@
  *
 */
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::util::compiler;
+use crate::{corestore::Data, dbnet::connection::prelude::*, util::compiler};
 
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();

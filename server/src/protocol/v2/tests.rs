@@ -24,13 +24,14 @@
  *
 */
 
-use super::{
-    super::raw_parser::{RawParser, RawParserExt, RawParserMeta},
-    Parser, PipelinedQuery, Query, SimpleQuery,
+use {
+    super::{
+        super::raw_parser::{RawParser, RawParserExt, RawParserMeta},
+        Parser, PipelinedQuery, Query, SimpleQuery,
+    },
+    crate::protocol::{iter::AnyArrayIter, ParseError},
+    std::{iter::Map, vec::IntoIter as VecIntoIter},
 };
-use crate::protocol::{iter::AnyArrayIter, ParseError};
-use std::iter::Map;
-use std::vec::IntoIter as VecIntoIter;
 
 type IterPacketWithLen = Map<VecIntoIter<Vec<u8>>, fn(Vec<u8>) -> (usize, Vec<u8>)>;
 type Packets = Vec<Vec<u8>>;

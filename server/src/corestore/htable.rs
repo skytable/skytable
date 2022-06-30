@@ -26,17 +26,16 @@
 
 #![allow(unused)] // TODO(@ohsayan): Plonk this
 
-use crate::corestore::map::{
-    bref::{Entry, OccupiedEntry, Ref, VacantEntry},
-    iter::{BorrowedIter, OwnedIter},
-    Skymap,
+use {
+    crate::corestore::map::{
+        bref::{Entry, OccupiedEntry, Ref, VacantEntry},
+        iter::{BorrowedIter, OwnedIter},
+        Skymap,
+    },
+    ahash::RandomState,
+    bytes::Bytes,
+    std::{borrow::Borrow, hash::Hash, iter::FromIterator, ops::Deref},
 };
-use ahash::RandomState;
-use bytes::Bytes;
-use std::borrow::Borrow;
-use std::hash::Hash;
-use std::iter::FromIterator;
-use std::ops::Deref;
 
 type HashTable<K, V> = Skymap<K, V, RandomState>;
 

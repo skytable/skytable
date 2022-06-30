@@ -24,12 +24,14 @@
  *
 */
 
-use super::{
-    AuthSettings, ConfigSourceParseResult, Configset, Modeset, OptString, ProtocolVersion,
-    TryFromConfigSource,
+use {
+    super::{
+        AuthSettings, ConfigSourceParseResult, Configset, Modeset, OptString, ProtocolVersion,
+        TryFromConfigSource,
+    },
+    serde::Deserialize,
+    std::net::IpAddr,
 };
-use serde::Deserialize;
-use std::net::IpAddr;
 
 /// This struct is an _object representation_ used for parsing the TOML file
 #[derive(Deserialize, Debug, PartialEq)]

@@ -27,12 +27,14 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
 
-use libstress::traits::ExitError;
-use log::{info, trace, warn};
-use rand::thread_rng;
-use skytable::Connection;
-use std::env;
-use sysinfo::{RefreshKind, System, SystemExt};
+use {
+    libstress::traits::ExitError,
+    log::{info, trace, warn},
+    rand::thread_rng,
+    skytable::Connection,
+    std::env,
+    sysinfo::{RefreshKind, System, SystemExt},
+};
 mod linearity_client;
 mod utils;
 

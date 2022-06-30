@@ -24,22 +24,20 @@
  *
 */
 
-use bytes::Bytes;
-use core::any;
-use core::borrow::Borrow;
-use core::borrow::BorrowMut;
-use core::cmp::Ordering;
-use core::convert::TryFrom;
-use core::fmt;
-use core::hash::Hash;
-use core::hash::Hasher;
-use core::iter::FromIterator;
-use core::mem::ManuallyDrop;
-use core::mem::MaybeUninit;
-use core::ops;
-use core::ptr;
-use core::slice;
-use core::str;
+use {
+    bytes::Bytes,
+    core::{
+        any,
+        borrow::{Borrow, BorrowMut},
+        cmp::Ordering,
+        convert::TryFrom,
+        fmt,
+        hash::{Hash, Hasher},
+        iter::FromIterator,
+        mem::{ManuallyDrop, MaybeUninit},
+        ops, ptr, slice, str,
+    },
+};
 
 /// A compile-time, fixed size array that can have unintialized memory. This array is as
 /// efficient as you'd expect a normal array to be, but with the added benefit that you

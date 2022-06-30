@@ -27,10 +27,10 @@
 //! # `DEL` queries
 //! This module provides functions to work with `DEL` queries
 
-use crate::corestore::table::DataModel;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT_ITER;
-use crate::util::compiler;
+use crate::{
+    corestore::table::DataModel, dbnet::connection::prelude::*,
+    kvengine::encoding::ENCODING_LUT_ITER, util::compiler,
+};
 
 action!(
     /// Run a `DEL` query

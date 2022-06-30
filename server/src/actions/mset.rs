@@ -24,10 +24,10 @@
  *
 */
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT_ITER_PAIR;
-use crate::util::compiler;
+use crate::{
+    corestore::Data, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER_PAIR,
+    util::compiler,
+};
 
 action!(
     /// Run an `MSET` query

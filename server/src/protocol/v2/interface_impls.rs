@@ -24,18 +24,20 @@
  *
 */
 
-use crate::{
-    corestore::buffers::Integer64,
-    dbnet::connection::{QueryWithAdvance, RawConnection, Stream},
-    protocol::{
-        interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-        ParseError, Skyhash2,
+use {
+    crate::{
+        corestore::buffers::Integer64,
+        dbnet::connection::{QueryWithAdvance, RawConnection, Stream},
+        protocol::{
+            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
+            ParseError, Skyhash2,
+        },
+        util::FutureResult,
+        IoResult,
     },
-    util::FutureResult,
-    IoResult,
+    ::sky_macros::compiled_eresp_bytes as eresp,
+    tokio::io::AsyncWriteExt,
 };
-use ::sky_macros::compiled_eresp_bytes as eresp;
-use tokio::io::AsyncWriteExt;
 
 impl ProtocolSpec for Skyhash2 {
     // spec information

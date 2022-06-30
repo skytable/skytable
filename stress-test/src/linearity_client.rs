@@ -32,17 +32,13 @@
 //! concurrent clients.
 //!
 
-use crate::logstress;
-use crate::{DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV};
-use crossbeam_channel::bounded;
-use devtimer::SimpleTimer;
-use libstress::rayon::prelude::*;
-use libstress::utils::generate_random_string_vector;
-use libstress::Workpool;
-use skytable::actions::Actions;
-use skytable::query;
-use skytable::Connection;
-use skytable::{Element, Query, RespCode};
+use {
+    crate::{logstress, DEFAULT_QUERY_COUNT, DEFAULT_SIZE_KV},
+    crossbeam_channel::bounded,
+    devtimer::SimpleTimer,
+    libstress::{rayon::prelude::*, utils::generate_random_string_vector, Workpool},
+    skytable::{actions::Actions, query, Connection, Element, Query, RespCode},
+};
 
 macro_rules! log_client_linearity {
     ($stressid:expr, $counter:expr, $what:expr) => {

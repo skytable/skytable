@@ -24,10 +24,10 @@
  *
 */
 
-use crate::build::BuildMode;
-use crate::linuxpkg::LinuxPackageType;
-use crate::{HarnessError, HarnessResult};
-use std::{env, process};
+use {
+    crate::{build::BuildMode, linuxpkg::LinuxPackageType, HarnessError, HarnessResult},
+    std::{env, process},
+};
 
 const HELP: &str = "\
 harness

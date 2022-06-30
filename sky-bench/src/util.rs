@@ -24,9 +24,7 @@
  *
 */
 
-use libstress::utils::ran_string;
-use rand::thread_rng;
-use std::error::Error;
+use {libstress::utils::ran_string, rand::thread_rng, std::error::Error};
 
 pub const DEFAULT_WORKER_COUNT: usize = 10;
 pub const DEFAULT_PACKET_SIZE: usize = 4;

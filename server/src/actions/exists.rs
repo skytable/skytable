@@ -27,11 +27,10 @@
 //! # `EXISTS` queries
 //! This module provides functions to work with `EXISTS` queries
 
-use crate::corestore::table::DataModel;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT_ITER;
-use crate::queryengine::ActionIter;
-use crate::util::compiler;
+use crate::{
+    corestore::table::DataModel, dbnet::connection::prelude::*,
+    kvengine::encoding::ENCODING_LUT_ITER, queryengine::ActionIter, util::compiler,
+};
 
 action!(
     /// Run an `EXISTS` query

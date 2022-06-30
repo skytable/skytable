@@ -24,13 +24,17 @@
  *
 */
 
-use crate::config::SnapshotConfig;
-use crate::corestore::Corestore;
-use crate::dbnet::Terminator;
-use crate::registry;
-use crate::storage::v1::sengine::{SnapshotActionResult, SnapshotEngine};
-use std::sync::Arc;
-use tokio::time::{self, Duration};
+use {
+    crate::{
+        config::SnapshotConfig,
+        corestore::Corestore,
+        dbnet::Terminator,
+        registry,
+        storage::v1::sengine::{SnapshotActionResult, SnapshotEngine},
+    },
+    std::sync::Arc,
+    tokio::time::{self, Duration},
+};
 
 /// The snapshot service
 ///

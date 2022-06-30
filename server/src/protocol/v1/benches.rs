@@ -25,8 +25,10 @@
 */
 
 extern crate test;
-use super::{super::Query, Parser};
-use test::Bencher;
+use {
+    super::{super::Query, Parser},
+    test::Bencher,
+};
 
 #[bench]
 fn simple_query(b: &mut Bencher) {

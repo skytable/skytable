@@ -24,23 +24,19 @@
  *
 */
 
-use self::queue::Queue;
-use super::interface::{DIR_RSNAPROOT, DIR_SNAPROOT};
-use crate::corestore::iarray::IArray;
-use crate::corestore::lazy::Lazy;
-use crate::corestore::lock::QuickLock;
-use crate::corestore::memstore::Memstore;
-use crate::storage::v1::flush::{LocalSnapshot, RemoteSnapshot};
-use bytes::Bytes;
-use chrono::prelude::Utc;
-use core::fmt;
-use core::str;
-use regex::Regex;
-use std::collections::HashSet;
-use std::fs;
-use std::io::Error as IoError;
-use std::path::Path;
-use std::sync::Arc;
+use {
+    self::queue::Queue,
+    super::interface::{DIR_RSNAPROOT, DIR_SNAPROOT},
+    crate::{
+        corestore::{iarray::IArray, lazy::Lazy, lock::QuickLock, memstore::Memstore},
+        storage::v1::flush::{LocalSnapshot, RemoteSnapshot},
+    },
+    bytes::Bytes,
+    chrono::prelude::Utc,
+    core::{fmt, str},
+    regex::Regex,
+    std::{collections::HashSet, fs, io::Error as IoError, path::Path, sync::Arc},
+};
 
 type QStore = IArray<[String; 64]>;
 type SnapshotResult<T> = Result<T, SnapshotEngineError>;

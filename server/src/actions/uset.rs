@@ -24,11 +24,10 @@
  *
 */
 
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::kvengine::encoding::ENCODING_LUT_ITER_PAIR;
-use crate::queryengine::ActionIter;
-use crate::util::compiler;
+use crate::{
+    corestore::Data, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER_PAIR,
+    queryengine::ActionIter, util::compiler,
+};
 
 action!(
     /// Run an `USET` query
