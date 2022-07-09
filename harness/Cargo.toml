@@ -6,12 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# internal deps
+skytable = { git = "https://github.com/skytable/client-rust.git", features = [
+    "sync",
+], default-features = false }
 libsky = { path = "../libsky" }
+# external deps
 env_logger = "0.9.0"
 log = "0.4.17"
 zip = { version = "0.6.2", features = ["deflate"] }
 powershell_script = "1.0.2"
 openssl = { version = "0.10.40", features = ["vendored"] }
-skytable = { git = "https://github.com/skytable/client-rust.git", features = [
-    "sync",
-], default-features = false }

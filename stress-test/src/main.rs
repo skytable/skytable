@@ -27,6 +27,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(unused_imports)]
 
+use std::thread::available_parallelism;
+
 use {
     libstress::traits::ExitError,
     log::{info, trace, warn},
@@ -61,7 +63,7 @@ fn main() {
     let to_refresh = RefreshKind::new().with_memory();
     let mut sys = System::new_with_specifics(to_refresh);
     sys.refresh_specifics(to_refresh);
-    let core_count = num_cpus::get();
+    let core_count = available_parallelism().map_or(1, usize::from);
     let max_workers = core_count * 2;
     trace!(
         "This host has {} logical cores. Will spawn a maximum of {} threads",
