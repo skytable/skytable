@@ -375,6 +375,13 @@ impl<'a> Lexer<'a> {
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
                 byte if byte.is_ascii_digit() => self.scan_number(),
                 b' ' => self.trim_ahead(),
+                b'\n' | b'\t' => {
+                    // simply ignore
+                    unsafe {
+                        // UNSAFE(@ohsayan): This is totally fine. We just looked at the byte
+                        self.incr_cursor()
+                    }
+                }
                 quote_style @ (b'"' | b'\'') => self.scan_quoted_string(quote_style),
                 byte => self.scan_arbitrary_byte(byte),
             }

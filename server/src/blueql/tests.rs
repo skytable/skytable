@@ -38,6 +38,7 @@ macro_rules! src {
 
 mod lexer {
     //! Lexer tests
+
     use super::*;
 
     #[test]
@@ -156,6 +157,24 @@ mod lexer {
                 LangError::InvalidNumericLiteral
             );
         }
+    }
+
+    #[test]
+    fn lex_ignore_lf() {
+        let test_slice = b"create\n";
+        assert_eq!(
+            Lexer::lex(test_slice).unwrap(),
+            vec![Token::Keyword(Keyword::Create)]
+        )
+    }
+
+    #[test]
+    fn lex_ignore_tab() {
+        let test_slice = b"create\t";
+        assert_eq!(
+            Lexer::lex(test_slice).unwrap(),
+            vec![Token::Keyword(Keyword::Create)]
+        )
     }
 }
 
