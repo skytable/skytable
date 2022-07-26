@@ -86,6 +86,7 @@ impl RawSlice {
     }
 }
 
+#[cfg(test)]
 impl<T> From<T> for RawSlice
 where
     T: AsRef<[u8]>,

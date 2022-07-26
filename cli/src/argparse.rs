@@ -110,7 +110,10 @@ pub async fn start_repl() {
         },
         None => 2003,
     };
-    let mut editor = Editor::<()>::new();
+    let mut editor = match Editor::<()>::new() {
+        Ok(e) => e,
+        Err(e) => fatal!("Editor init error: {}", e),
+    };
     editor.set_auto_add_history(true);
     editor.set_history_ignore_dups(true);
     editor.bind_sequence(
