@@ -11,7 +11,7 @@ proc-macro = true
 
 [dependencies]
 # external deps
-proc-macro2 = "1.0.42"
-quote = "1.0.20"
+proc-macro2 = "1.0.43"
+quote = "1.0.21"
 rand = "0.8.5"
-syn = { version = "1.0.98", features = ["full"] }
+syn = { version = "1.0.99", features = ["full"] }
