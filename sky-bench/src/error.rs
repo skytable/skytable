@@ -24,40 +24,40 @@
  *
 */
 
-use {
-    clap::{load_yaml, App},
-    config::ServerConfig,
-    env_logger::Builder,
-    std::{env, process},
-};
-#[macro_use]
-extern crate log;
+use std::collections::TryReserveError;
 
-mod bench;
-mod config;
-mod error;
-mod util;
+use {skytable::error::Error as SkyError, std::fmt::Display};
 
-fn main() {
-    Builder::new()
-        .parse_filters(&env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
-        .init();
-    if let Err(e) = run() {
-        error!("sky-bench exited with error: {}", e);
-        process::exit(0x01);
+pub type BResult<T> = Result<T, Error>;
+
+/// Benchmark tool errors
+pub enum Error {
+    /// An error originating from the Skytable client
+    ClientError(SkyError),
+    /// An error originating from the benchmark/server configuration
+    ConfigError(String),
+    /// A runtime error
+    RuntimeError(String),
+}
+
+impl From<SkyError> for Error {
+    fn from(e: SkyError) -> Self {
+        Self::ClientError(e)
     }
 }
 
-fn run() -> error::BResult<()> {
-    // init CLI arg parser
-    let cli_args = load_yaml!("cli.yml");
-    let cli = App::from_yaml(cli_args);
-    let matches = cli.get_matches();
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::ClientError(e) => write!(f, "client error: {}", e),
+            Error::ConfigError(e) => write!(f, "config error: {}", e),
+            Error::RuntimeError(e) => write!(f, "runtime error: {}", e),
+        }
+    }
+}
 
-    // parse args
-    let cfg = ServerConfig::new(&matches)?;
-
-    // run our task
-    bench::run_bench(&cfg, matches)?;
-    util::cleanup(&cfg)
+impl From<TryReserveError> for Error {
+    fn from(e: TryReserveError) -> Self {
+        Error::RuntimeError(format!("memory reserve error: {}", e.to_string()))
+    }
 }

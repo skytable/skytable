@@ -120,14 +120,7 @@ impl Worker {
 
 /// A pool configuration setting to easily generate [`Workpool`]s without
 /// having to clone an entire pool and its threads upfront
-pub struct PoolConfig<Inp, UIn, Lv, Lp, Ex>
-where
-    UIn: Send + Sync + 'static,
-    Inp: Sync,
-    Ex: Fn(&mut Inp) + Send + Sync + 'static + Clone,
-    Lv: Fn() -> Inp + Send + Sync + 'static + Clone,
-    Lp: Fn(&mut Inp, UIn) + Clone + Send + Sync + 'static,
-{
+pub struct PoolConfig<Inp, UIn, Lv, Lp, Ex> {
     /// the pool size
     count: usize,
     /// the function that sets the pre-loop variable
@@ -402,10 +395,8 @@ pub mod utils {
         } else {
             let mut keys = Vec::new();
             keys.try_reserve_exact(size)?;
-            (0..count)
-                .into_iter()
-                .map(|_| ran_bytes(size, &mut rng))
-                .for_each(|bytes| keys.push(bytes));
+            let ran_byte_key = ran_bytes(size, &mut rng);
+            (0..count).for_each(|_| keys.push(ran_byte_key.clone()));
             Ok(keys)
         }
     }

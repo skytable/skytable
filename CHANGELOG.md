@@ -19,6 +19,11 @@ All changes in this project will be noted in this file.
   - Similary, all `inspect` queries have been changed
   - Entities are now of the form `space.model` instead of `ks:tbl`
 
+### Breaking changes
+
+- The `testkey` subcommand was removed. This was done due to the addition of different data types making this command
+  redundant since it only works with simple key/value pairs
+
 ## Version 0.7.5
 
 ### Additions
