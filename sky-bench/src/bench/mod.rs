@@ -56,6 +56,13 @@ macro_rules! binfo {
     };
 }
 
+#[inline(always)]
+fn vec_with_cap<T>(cap: usize) -> BResult<Vec<T>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(cap)?;
+    Ok(v)
+}
+
 pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     // init bench config
     let bench_config = BenchmarkConfig::new(servercfg, matches)?;
@@ -118,15 +125,16 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     // such an approach helps us keep memory usage low
     // bench set
     binfo!("Benchmarking SET ...");
-    let set_packets: Vec<Box<[u8]>> = (0..bench_config.query_count())
-        .map(|i| {
+    let mut set_packets: Vec<Box<[u8]>> = vec_with_cap(bench_config.query_count())?;
+    (0..bench_config.query_count()).for_each(|i| {
+        set_packets.push(
             Query::from("SET")
                 .arg(RawString::from(keys[i].clone()))
                 .arg(RawString::from(values[i].clone()))
                 .into_raw_query()
-                .into_boxed_slice()
-        })
-        .collect();
+                .into_boxed_slice(),
+        )
+    });
     run_bench_for(
         &pool_config,
         move |sock, packet: Box<[u8]>| {
@@ -150,15 +158,16 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
 
     // bench update
     binfo!("Benchmarking UPDATE ...");
-    let update_packets: Vec<Box<[u8]>> = (0..bench_config.query_count())
-        .map(|i| {
+    let mut update_packets = vec_with_cap(bench_config.query_count())?;
+    (0..bench_config.query_count()).for_each(|i| {
+        update_packets.push(
             Query::from("UPDATE")
                 .arg(RawString::from(keys[i].clone()))
                 .arg(RawString::from(new_updated_key.clone()))
                 .into_raw_query()
-                .into_boxed_slice()
-        })
-        .collect();
+                .into_boxed_slice(),
+        )
+    });
     run_bench_for(
         &pool_config,
         move |sock, packet: Box<[u8]>| {
@@ -178,14 +187,15 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
 
     // bench get
     binfo!("Benchmarking GET ...");
-    let get_packets: Vec<Box<[u8]>> = (0..bench_config.query_count())
-        .map(|i| {
+    let mut get_packets: Vec<Box<[u8]>> = vec_with_cap(bench_config.query_count())?;
+    (0..bench_config.query_count()).for_each(|i| {
+        get_packets.push(
             Query::from("GET")
                 .arg(RawString::from(keys[i].clone()))
                 .into_raw_query()
-                .into_boxed_slice()
-        })
-        .collect();
+                .into_boxed_slice(),
+        )
+    });
     run_bench_for(
         &pool_config,
         move |sock, packet: Box<[u8]>| {
