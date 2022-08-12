@@ -33,13 +33,21 @@ mod issue_276 {
     async fn first_run() {
         // create the space
         let r: Element = con
-            .run_query(Query::from("create space please_do_not_vanish"))
+            .run_query(
+                Query::from("create")
+                    .arg("keyspace")
+                    .arg("please_do_not_vanish"),
+            )
             .await
             .unwrap();
         assert_eq!(r, Element::RespCode(RespCode::Okay));
         // drop the space
         let r: Element = con
-            .run_query(Query::from("drop space please_do_not_vanish"))
+            .run_query(
+                Query::from("drop")
+                    .arg("keyspace")
+                    .arg("please_do_not_vanish"),
+            )
             .await
             .unwrap();
         assert_eq!(r, Element::RespCode(RespCode::Okay));
