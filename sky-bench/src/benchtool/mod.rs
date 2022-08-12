@@ -53,7 +53,7 @@ pub fn runner(
     json_out: bool,
     runs: usize,
 ) {
-    if util::possible_permutations(per_kv_size) < max_queries {
+    if util::enough_ncr(max_queries, per_kv_size) {
         err!("Too low sample space for given k/v size and query count. Try a higher k/v size.");
     }
 

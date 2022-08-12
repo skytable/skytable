@@ -62,12 +62,37 @@ macro_rules! err {
         std::process::exit(0x01);
     }};
 }
-pub fn possible_permutations(r: usize) -> usize {
-    let mut ret = 1usize;
-    for i in (256 - r + 1)..=256 {
-        ret *= i;
-    }
-    ret
+
+pub fn enough_ncr(queries: usize, keysize: usize) -> bool {
+    const LUT: [u64; 11] = [
+        // 1B
+        256,
+        // 2B
+        32640,
+        // 3B
+        2763520,
+        // 4B
+        174792640,
+        // 5B
+        8809549056,
+        // 6B
+        368532802176,
+        // 7B
+        13161885792000,
+        // 8B
+        409663695276000,
+        // 9B
+        11288510714272000,
+        // 10B
+        278826214642518400,
+        // 11B
+        6235568072914502400,
+    ];
+    #[cfg(target_pointer_width = "64")]
+    const ALWAYS_TRUE_FACTOR: usize = 12;
+    #[cfg(target_pointer_width = "32")]
+    const ALWAYS_TRUE_FACTOR: usize = 5;
+    keysize >= ALWAYS_TRUE_FACTOR || (LUT[keysize - 1] >= queries as _)
 }
 
 /// Returns the number of queries/sec
