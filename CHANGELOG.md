@@ -2,7 +2,7 @@
 
 All changes in this project will be noted in this file.
 
-## Version 0.8.0
+## Unreleased
 
 ### Additions
 
@@ -18,6 +18,12 @@ All changes in this project will be noted in this file.
   - `create table` is now `create model`
   - Similary, all `inspect` queries have been changed
   - Entities are now of the form `space.model` instead of `ks:tbl`
+
+## Version 0.7.6
+
+### Fixes
+
+- Fixed erroneous removal of `auth` system table during tree cleanup (see #276)
 
 ## Version 0.7.5
 

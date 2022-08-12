@@ -26,6 +26,8 @@
 
 //! Interfaces with the file system
 
+use std::collections::HashMap;
+
 use {
     crate::{
         corestore::memstore::Memstore,
@@ -86,55 +88,58 @@ pub fn create_tree_fresh<T: StorageTarget>(target: &T, memroot: &Memstore) -> Io
 /// throughout the lifecycle of the server
 pub fn cleanup_tree(memroot: &Memstore) -> IoResult<()> {
     if registry::get_cleanup_tripswitch().is_tripped() {
+        log::info!("We're cleaning up ...");
         // only run a cleanup if someone tripped the switch
         // hashset because the fs itself will not allow duplicate entries
         // the keyspaces directory will contain the PRELOAD file, but we'll just
         // remove it from the list
         let mut dir_keyspaces: HashSet<String> = read_dir_to_col!(DIR_KSROOT);
         dir_keyspaces.remove("PRELOAD");
-        let our_keyspaces: HashSet<String> = memroot
+        let our_keyspaces: HashMap<String, HashSet<String>> = memroot
             .keyspaces
             .iter()
-            .map(|kv| unsafe { kv.key().as_str() }.to_owned())
+            .map(|kv| {
+                let ksid = unsafe { kv.key().as_str() }.to_owned();
+                let tables: HashSet<String> = kv
+                    .value()
+                    .tables
+                    .iter()
+                    .map(|tbl| unsafe { tbl.key().as_str() }.to_owned())
+                    .collect();
+                (ksid, tables)
+            })
             .collect();
+
         // these are the folders that we need to remove; plonk the deleted keyspaces first
-        for folder in dir_keyspaces.difference(&our_keyspaces) {
+        let keyspaces_to_remove: Vec<&String> = dir_keyspaces
+            .iter()
+            .filter(|ksname| !our_keyspaces.contains_key(ksname.as_str()))
+            .collect();
+        for folder in keyspaces_to_remove {
             let ks_path = concat_str!(DIR_KSROOT, "/", folder);
             fs::remove_dir_all(ks_path)?;
         }
-        // now remove the tables
-        for keyspace in memroot.keyspaces.iter() {
-            let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
+
+        // HACK(@ohsayan): Due to the nature of how system tables are stored in v1, we need to get rid of this
+        // ensuring that system tables don't end up being removed (since no system tables are actually
+        // purged at this time)
+        let mut our_keyspaces = our_keyspaces;
+        our_keyspaces.remove("system").unwrap();
+        let our_keyspaces = our_keyspaces;
+
+        // now remove the dropped tables
+        for (keyspace, tables) in our_keyspaces {
+            let ks_path = concat_str!(DIR_KSROOT, "/", keyspace.as_str());
+            // read what is present in the tables directory
             let mut dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
             // in the list of directories we collected, remove PARTMAP because we should NOT
             // delete it
             dir_tbls.remove("PARTMAP");
-            let our_tbls: HashSet<String> = keyspace
-                .value()
-                .tables
-                .iter()
-                .map(|v| unsafe { v.key().as_str() }.to_owned())
-                .collect();
-            for old_file in dir_tbls.difference(&our_tbls) {
-                let fpath = concat_path!(&ks_path, old_file);
+            // find what tables we should remove
+            let tables_to_remove = dir_tbls.difference(&tables);
+            for removed_table in tables_to_remove {
+                let fpath = concat_path!(&ks_path, removed_table);
                 fs::remove_file(&fpath)?;
-            }
-        }
-        // now plonk the data files
-        for keyspace in memroot.keyspaces.iter() {
-            let ks_path = unsafe { concat_str!(DIR_KSROOT, "/", keyspace.key().as_str()) };
-            let dir_tbls: HashSet<String> = read_dir_to_col!(&ks_path);
-            let our_tbls: HashSet<String> = keyspace
-                .value()
-                .tables
-                .iter()
-                .map(|v| unsafe { v.key().as_str() }.to_owned())
-                .collect();
-            for old_file in dir_tbls.difference(&our_tbls) {
-                if old_file != "PARTMAP" {
-                    // plonk this data file; we don't need it anymore
-                    fs::remove_file(concat_path!(&ks_path, old_file))?;
-                }
             }
         }
     }
