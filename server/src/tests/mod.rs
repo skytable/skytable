@@ -38,6 +38,7 @@ mod kvengine_list;
 mod persist;
 mod pipeline;
 mod snapshot;
+mod issue_tests;
 
 mod tls {
     use skytable::{query, Element};
