@@ -25,7 +25,7 @@
 */
 
 use {
-    self::report::{AggregateReport, SingleReport},
+    self::report::AggregateReport,
     crate::{
         config,
         config::{BenchmarkConfig, ServerConfig},
@@ -34,17 +34,11 @@ use {
     },
     clap::ArgMatches,
     devtimer::SimpleTimer,
-    libstress::{
-        utils::{generate_random_byte_vector, ran_bytes},
-        PoolConfig,
-    },
-    skytable::{types::RawString, Connection, Element, Query, RespCode},
-    std::{
-        io::{Read, Write},
-        net::TcpStream,
-    },
+    libstress::utils::{generate_random_byte_vector, ran_bytes},
+    skytable::{Connection, Element, Query, RespCode},
 };
 
+mod benches;
 mod report;
 mod validation;
 
@@ -56,13 +50,136 @@ macro_rules! binfo {
     };
 }
 
+/// The loop monitor can be used for maintaining a loop for a given benchmark
+struct LoopMonitor<'a> {
+    /// cleanup instructions
+    inner: Option<CleanupInner<'a>>,
+    /// maximum iterations
+    max: usize,
+    /// current iteration
+    current: usize,
+    /// total time
+    time: u128,
+    /// name of test
+    name: &'static str,
+}
+
+impl<'a> LoopMonitor<'a> {
+    /// Create a benchmark loop monitor that doesn't need any cleanup
+    pub fn new(max: usize, name: &'static str) -> Self {
+        Self {
+            inner: None,
+            max,
+            current: 0,
+            time: 0,
+            name,
+        }
+    }
+    /// Create a new benchmark loop monitor that uses the given cleanup instructions:
+    /// - `max`: Total iterations
+    /// - `name`: Name of benchmark
+    /// - `connection`: A connection to use for cleanup instructions
+    /// - `query`: Query to run for cleanup
+    /// - `response`: Response expected when cleaned up
+    /// - `skip_on_last`: Skip running the cleanup instructions on the last loop
+    pub fn new_cleanup(
+        max: usize,
+        name: &'static str,
+        connection: &'a mut Connection,
+        query: Query,
+        response: Element,
+        skip_on_last: bool,
+    ) -> Self {
+        Self {
+            inner: Some(CleanupInner::new(query, response, connection, skip_on_last)),
+            max,
+            current: 0,
+            time: 0,
+            name: name,
+        }
+    }
+    /// Run cleanup
+    fn cleanup(&mut self) -> BResult<()> {
+        let last_iter = self.is_last_iter();
+        if let Some(ref mut cleanup) = self.inner {
+            let should_run_cleanup = (!last_iter) || (last_iter && !cleanup.skip_on_last);
+            if should_run_cleanup {
+                return cleanup.cleanup(self.name);
+            }
+        }
+        Ok(())
+    }
+    /// Check if this is the last iteration
+    fn is_last_iter(&self) -> bool {
+        (self.max - 1) == self.current
+    }
+    /// Step the counter ahead
+    fn step(&mut self) {
+        self.current += 1;
+    }
+    /// Determine if we should continue executing
+    fn should_continue(&self) -> bool {
+        self.current < self.max
+    }
+    /// Append a new time to the sum
+    fn incr_time(&mut self, dt: &SimpleTimer) {
+        self.time += dt.time_in_nanos().unwrap();
+    }
+    /// Return the sum
+    fn sum(&self) -> u128 {
+        self.time
+    }
+    /// Return the name of the benchmark
+    fn name(&self) -> &'static str {
+        self.name
+    }
+}
+
+/// Cleanup instructions
+struct CleanupInner<'a> {
+    /// the connection to use for cleanup processes
+    connection: &'a mut Connection,
+    /// the query to be run
+    query: Query,
+    /// the response to expect
+    response: Element,
+    /// whether we should skip on the last loop
+    skip_on_last: bool,
+}
+
+impl<'a> CleanupInner<'a> {
+    /// Init cleanup instructions
+    fn new(q: Query, r: Element, connection: &'a mut Connection, skip_on_last: bool) -> Self {
+        Self {
+            query: q,
+            response: r,
+            connection,
+            skip_on_last,
+        }
+    }
+    /// Run cleanup
+    fn cleanup(&mut self, name: &'static str) -> BResult<()> {
+        let r: Element = self.connection.run_query(&self.query)?;
+        if r.ne(&self.response) {
+            return Err(Error::RuntimeError(format!(
+                "Failed to run cleanup for benchmark `{}`",
+                name
+            )));
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[inline(always)]
+/// Returns a vec with the given cap, ensuring that we don't overflow memory
 fn vec_with_cap<T>(cap: usize) -> BResult<Vec<T>> {
     let mut v = Vec::new();
     v.try_reserve_exact(cap)?;
     Ok(v)
 }
 
+/// Run the actual benchmarks
 pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     // init bench config
     let bench_config = BenchmarkConfig::new(servercfg, matches)?;
@@ -79,30 +196,12 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     // pool pre-exec setup
     let servercfg = servercfg.clone();
     let switch_table = Query::from("use default.tmpbench").into_raw_query();
-    let get_response_size = validation::calculate_response_size(bench_config.kvsize());
-    let rcode_okay_size = validation::RESPCODE_OKAY.len();
 
     // init pool config; side_connection is for cleanups
     let mut misc_connection = Connection::new(servercfg.host(), servercfg.port())?;
-    let pool_config = PoolConfig::new(
-        servercfg.connections(),
-        move || {
-            let mut stream = TcpStream::connect((servercfg.host(), servercfg.port())).unwrap();
-            stream.write_all(&switch_table.clone()).unwrap();
-            let mut v = vec![0; rcode_okay_size];
-            let _ = stream.read_exact(&mut v).unwrap();
-            stream
-        },
-        move |_sock, _packet: Box<[u8]>| panic!("on_loop exec unset"),
-        |socket| {
-            socket.shutdown(std::net::Shutdown::Both).unwrap();
-        },
-        true,
-        Some(bench_config.query_count()),
-    );
 
     // init timer and reports
-    let mut report = AggregateReport::new(bench_config.query_count());
+    let mut reports = AggregateReport::new(bench_config.query_count());
 
     // init test data
     binfo!("Initializing test data ...");
@@ -125,92 +224,28 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     // such an approach helps us keep memory usage low
     // bench set
     binfo!("Benchmarking SET ...");
-    let mut set_packets: Vec<Box<[u8]>> = vec_with_cap(bench_config.query_count())?;
-    (0..bench_config.query_count()).for_each(|i| {
-        set_packets.push(
-            Query::from("SET")
-                .arg(RawString::from(keys[i].clone()))
-                .arg(RawString::from(values[i].clone()))
-                .into_raw_query()
-                .into_boxed_slice(),
-        )
-    });
-    run_bench_for(
-        &pool_config,
-        move |sock, packet: Box<[u8]>| {
-            sock.write_all(&packet).unwrap();
-            // expect rcode 0
-            let mut v = vec![0; rcode_okay_size];
-            let _ = sock.read_exact(&mut v).unwrap();
-            assert_eq!(v, validation::RESPCODE_OKAY);
-        },
-        "set",
-        &mut report,
-        set_packets,
-        bench_config.runs(),
+    benches::bench_set(
+        &keys,
+        &values,
         &mut misc_connection,
-        Some((
-            Query::from("FLUSHDB").arg("default.tmpbench"),
-            Element::RespCode(RespCode::Okay),
-            true,
-        )),
+        &bench_config,
+        &switch_table,
+        &mut reports,
     )?;
 
     // bench update
     binfo!("Benchmarking UPDATE ...");
-    let mut update_packets = vec_with_cap(bench_config.query_count())?;
-    (0..bench_config.query_count()).for_each(|i| {
-        update_packets.push(
-            Query::from("UPDATE")
-                .arg(RawString::from(keys[i].clone()))
-                .arg(RawString::from(new_updated_key.clone()))
-                .into_raw_query()
-                .into_boxed_slice(),
-        )
-    });
-    run_bench_for(
-        &pool_config,
-        move |sock, packet: Box<[u8]>| {
-            sock.write_all(&packet).unwrap();
-            // expect rcode 0
-            let mut v = vec![0; rcode_okay_size];
-            let _ = sock.read_exact(&mut v).unwrap();
-            assert_eq!(v, validation::RESPCODE_OKAY);
-        },
-        "update",
-        &mut report,
-        update_packets,
-        bench_config.runs(),
-        &mut misc_connection,
-        None,
+    benches::bench_update(
+        &keys,
+        &new_updated_key,
+        &bench_config,
+        &switch_table,
+        &mut reports,
     )?;
 
     // bench get
     binfo!("Benchmarking GET ...");
-    let mut get_packets: Vec<Box<[u8]>> = vec_with_cap(bench_config.query_count())?;
-    (0..bench_config.query_count()).for_each(|i| {
-        get_packets.push(
-            Query::from("GET")
-                .arg(RawString::from(keys[i].clone()))
-                .into_raw_query()
-                .into_boxed_slice(),
-        )
-    });
-    run_bench_for(
-        &pool_config,
-        move |sock, packet: Box<[u8]>| {
-            sock.write_all(&packet).unwrap();
-            // expect kvsize byte count
-            let mut v = vec![0; get_response_size];
-            let _ = sock.read_exact(&mut v).unwrap();
-        },
-        "get",
-        &mut report,
-        get_packets,
-        bench_config.runs(),
-        &mut misc_connection,
-        None,
-    )?;
+    benches::bench_get(&keys, &bench_config, &switch_table, &mut reports)?;
 
     // remove all test data
     binfo!("Finished benchmarks. Cleaning up ...");
@@ -224,7 +259,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     if config::should_output_messages() {
         // normal output
         println!("===========RESULTS===========");
-        let (maxpad, reports) = report.finish();
+        let (maxpad, reports) = reports.finish();
         for report in reports {
             let padding = " ".repeat(maxpad - report.name().len());
             println!(
@@ -237,53 +272,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
         println!("=============================");
     } else {
         // JSON
-        println!("{}", report.into_json())
+        println!("{}", reports.into_json())
     }
-    Ok(())
-}
-
-fn run_bench_for<F, Inp, UIn, Lv, Lp, Ex>(
-    pool: &PoolConfig<Inp, UIn, Lv, Lp, Ex>,
-    closure: F,
-    name: &'static str,
-    reports: &mut AggregateReport,
-    input: Vec<UIn>,
-    runs: usize,
-    tmp_con: &mut Connection,
-    cleanup: Option<(Query, Element, bool)>,
-) -> BResult<()>
-where
-    F: Send + Sync + Fn(&mut Inp, UIn) + Clone + 'static,
-    Ex: Clone + Fn(&mut Inp) + Send + Sync + 'static,
-    Inp: Sync + 'static,
-    Lp: Clone + Fn(&mut Inp, UIn) + Send + Sync + 'static,
-    Lv: Clone + Fn() -> Inp + Send + 'static + Sync,
-    UIn: Clone + Send + Sync + 'static,
-{
-    let mut sum: u128 = 0;
-    for i in 0..runs {
-        // run local copy
-        let this_input = input.clone();
-        let pool = pool.with_loop_closure(closure.clone());
-        // time
-        let mut tm = SimpleTimer::new();
-        tm.start();
-        pool.execute_and_finish_iter(this_input);
-        tm.stop();
-        sum += tm.time_in_nanos().unwrap();
-        // cleanup
-        if let Some((ref cleanup_after_run, ref resp_cleanup_after_run, skip_on_last)) = cleanup {
-            if !(skip_on_last && (i == runs - 1)) {
-                let r: Element = tmp_con.run_query(cleanup_after_run)?;
-                if r.ne(resp_cleanup_after_run) {
-                    return Err(Error::RuntimeError(format!(
-                        "Failed to run cleanup for benchmark `{name}` in iteration {i}"
-                    )));
-                }
-            }
-        }
-    }
-    // return average time
-    reports.push(SingleReport::new(name, sum as f64 / runs as f64));
     Ok(())
 }

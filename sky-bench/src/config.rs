@@ -103,20 +103,21 @@ impl ServerConfig {
 }
 
 /// Benchmark configuration
-pub struct BenchmarkConfig<'a> {
-    pub server: &'a ServerConfig,
+#[derive(Clone)]
+pub struct BenchmarkConfig {
+    pub server: ServerConfig,
     kvsize: usize,
     queries: usize,
     runs: usize,
 }
 
-impl<'a> BenchmarkConfig<'a> {
+impl BenchmarkConfig {
     const DEFAULT_QUERIES: usize = 100_000;
     const DEFAULT_KVSIZE: usize = 3;
     const DEFAULT_RUNS: usize = 5;
-    pub fn new(server: &'a ServerConfig, matches: ArgMatches) -> BResult<Self> {
+    pub fn new(server: &ServerConfig, matches: ArgMatches) -> BResult<Self> {
         let mut slf = Self {
-            server,
+            server: server.clone(),
             queries: Self::DEFAULT_QUERIES,
             kvsize: Self::DEFAULT_KVSIZE,
             runs: Self::DEFAULT_RUNS,

@@ -304,20 +304,21 @@ where
         }
     }
     /// Execute something
-    pub fn execute(&self, inp: UIn) {
-        self.job_distributor.send(JobType::Task(inp)).unwrap();
+    pub fn execute(&self, inp: UIn) -> bool {
+        self.job_distributor.send(JobType::Task(inp)).is_ok()
     }
     /// Execute something that can be executed as a parallel iterator
     /// For the best performance, it is recommended that you pass true for `needs_iterator_pool`
     /// on initialization of the [`Workpool`]
-    pub fn execute_iter(&self, iter: impl IntoParallelIterator<Item = UIn>) {
-        iter.into_par_iter().for_each(|inp| self.execute(inp));
+    pub fn execute_iter(&self, iter: impl IntoParallelIterator<Item = UIn>) -> bool {
+        iter.into_par_iter().all(|inp| self.execute(inp))
     }
     /// Does the same thing as [`execute_iter`] but drops self ensuring that all the
     /// workers actually finish their tasks
-    pub fn execute_and_finish_iter(self, iter: impl IntoParallelIterator<Item = UIn>) {
-        self.execute_iter(iter);
+    pub fn execute_and_finish_iter(self, iter: impl IntoParallelIterator<Item = UIn>) -> bool {
+        let ret = self.execute_iter(iter);
         drop(self);
+        ret
     }
     /// Initialize a new [`Workpool`] with the default count of threads. This is equal
     /// to 2 * the number of logical cores.
