@@ -24,9 +24,11 @@
  *
 */
 
-use std::collections::TryReserveError;
-
-use {skytable::error::Error as SkyError, std::fmt::Display};
+use {
+    libstress::WorkpoolError,
+    skytable::error::Error as SkyError,
+    std::{collections::TryReserveError, fmt::Display},
+};
 
 pub type BResult<T> = Result<T, Error>;
 
@@ -59,5 +61,11 @@ impl Display for Error {
 impl From<TryReserveError> for Error {
     fn from(e: TryReserveError) -> Self {
         Error::RuntimeError(format!("memory reserve error: {}", e.to_string()))
+    }
+}
+
+impl From<WorkpoolError> for Error {
+    fn from(e: WorkpoolError) -> Self {
+        Error::RuntimeError(format!("threadpool error: {}", e))
     }
 }

@@ -26,8 +26,6 @@
  *
 */
 
-use crate::error::Error;
-
 use {
     super::{
         report::{AggregateReport, SingleReport},
@@ -61,9 +59,8 @@ where
 {
     // now do our runs
     let mut loopmon = loopmon;
-    let mut run_okay = true;
 
-    while loopmon.should_continue() && run_okay {
+    while loopmon.should_continue() {
         // now create our connection pool
         let pool = Workpool::new(
             bench_config.server.connections(),
@@ -72,7 +69,7 @@ where
             on_loop_exit.clone(),
             true,
             Some(bench_config.query_count()),
-        );
+        )?;
 
         // get our local copy
         let this_packets = packets.clone();
@@ -80,28 +77,21 @@ where
         // run and time our operations
         let mut dt = SimpleTimer::new();
         dt.start();
-        let ok = pool.execute_and_finish_iter(this_packets);
+        pool.execute_and_finish_iter(this_packets);
         dt.stop();
         loopmon.incr_time(&dt);
-        run_okay = ok;
 
         // cleanup
         loopmon.cleanup()?;
         loopmon.step();
     }
-    if run_okay {
-        // save time
-        reports.push(SingleReport::new(
-            loopmon.name(),
-            loopmon.sum() as f64 / bench_config.runs() as f64,
-        ));
-        Ok(())
-    } else {
-        Err(Error::RuntimeError(format!(
-            "Worker thread for test `{}` crashed. Unable to send job",
-            loopmon.name()
-        )))
-    }
+
+    // save time
+    reports.push(SingleReport::new(
+        loopmon.name(),
+        loopmon.sum() as f64 / bench_config.runs() as f64,
+    ));
+    Ok(())
 }
 
 #[inline(always)]
