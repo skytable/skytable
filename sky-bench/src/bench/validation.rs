@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 08 2022
+ * Created on Tue Aug 09 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,40 +24,16 @@
  *
 */
 
-use {
-    clap::{load_yaml, App},
-    config::ServerConfig,
-    env_logger::Builder,
-    std::{env, process},
-};
-#[macro_use]
-extern crate log;
+pub const RESPCODE_OKAY: &[u8] = b"*!0\n";
 
-mod bench;
-mod config;
-mod error;
-mod util;
-
-fn main() {
-    Builder::new()
-        .parse_filters(&env::var("SKYBENCH_LOG").unwrap_or_else(|_| "info".to_owned()))
-        .init();
-    if let Err(e) = run() {
-        error!("sky-bench exited with error: {}", e);
-        process::exit(0x01);
-    }
-}
-
-fn run() -> error::BResult<()> {
-    // init CLI arg parser
-    let cli_args = load_yaml!("cli.yml");
-    let cli = App::from_yaml(cli_args);
-    let matches = cli.get_matches();
-
-    // parse args
-    let cfg = ServerConfig::new(&matches)?;
-
-    // run our task
-    bench::run_bench(&cfg, matches)?;
-    util::cleanup(&cfg)
+pub fn calculate_response_size(keylen: usize) -> usize {
+    /*
+    *+5\n
+    hello
+    */
+    let mut size = 2; // simple query byte + tsymbol
+    size += keylen.to_string().len(); // bytes in length
+    size += 1; // LF
+    size += keylen; // payload
+    size
 }

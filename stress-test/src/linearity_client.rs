@@ -142,7 +142,8 @@ pub fn stress_linearity_concurrent_clients_set(
             |_| {},
             true,
             Some(DEFAULT_QUERY_COUNT),
-        );
+        )
+        .unwrap();
         let mut timer = SimpleTimer::new();
         timer.start();
         workpool.execute_and_finish_iter(set_packs);
@@ -200,7 +201,8 @@ pub fn stress_linearity_concurrent_clients_get(
         |_| {},
         true,
         Some(DEFAULT_QUERY_COUNT),
-    );
+    )
+    .unwrap();
     workpool.execute_and_finish_iter(set_packs);
 
     // initialize the linearity counter
@@ -225,7 +227,8 @@ pub fn stress_linearity_concurrent_clients_get(
             |_| {},
             true,
             Some(DEFAULT_QUERY_COUNT),
-        );
+        )
+        .unwrap();
         let mut timer = SimpleTimer::new();
         timer.start();
         wp.execute_and_finish_iter(get_packs);

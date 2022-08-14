@@ -6,24 +6,33 @@ All changes in this project will be noted in this file.
 
 ### Additions
 
-- New protocol: Skyhash 2.0
-  - Reduced bandwidth usage (as much as 50%)
-  - Even simpler client implementations
-- Backward compatibility with Skyhash 1.0:
-  - Simply set the protocol version you want to use in the config file, env vars or pass it as a CLI
-    argument
-  - Even faster implementation, even for Skyhash 1.0
-- New query language: BlueQL
-  - `create keyspace` is now `create space`
-  - `create table` is now `create model`
-  - Similary, all `inspect` queries have been changed
-  - Entities are now of the form `space.model` instead of `ks:tbl`
+- `skyd`:
+  - New protocol: Skyhash 2.0
+    - Reduced bandwidth usage (as much as 50%)
+    - Even simpler client implementations
+  - Backward compatibility with Skyhash 1.0:
+    - Simply set the protocol version you want to use in the config file, env vars or pass it as a CLI
+      argument
+    - Even faster implementation, even for Skyhash 1.0
+  - New query language: BlueQL
+    - `create keyspace` is now `create space`
+    - `create table` is now `create model`
+    - Similary, all `inspect` queries have been changed
+    - Entities are now of the form `space.model` instead of `ks:tbl`
 
 ## Version 0.7.6
 
 ### Fixes
 
-- Fixed erroneous removal of `auth` system table during tree cleanup (see #276)
+- `skyd`:
+  - Fixed erroneous removal of `auth` system table during tree cleanup (see #276)
+- `sky-bench`:
+  - Fixed sample space calculation
+
+### Breaking changes
+
+- The `testkey` subcommand was removed. This was done due to the addition of different data types making this command
+  redundant since it only works with simple key/value pairs
 
 ## Version 0.7.5
 

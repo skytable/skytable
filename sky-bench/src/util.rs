@@ -1,5 +1,5 @@
 /*
- * Created on Thu Jun 17 2021
+ * Created on Tue Aug 09 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2021, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,103 +24,14 @@
  *
 */
 
-use {libstress::utils::ran_string, rand::thread_rng, std::error::Error};
-
-pub const DEFAULT_WORKER_COUNT: usize = 10;
-pub const DEFAULT_PACKET_SIZE: usize = 4;
-pub const DEFAULT_QUERY_COUNT: usize = 100_000;
-pub const DEFAULT_REPEAT: usize = 5;
-
-#[macro_export]
-macro_rules! hoststr {
-    ($host:expr, $port:expr) => {{
-        let mut hst: String = $host.to_string();
-        hst.push(':');
-        hst.push_str(&$port.to_string());
-        hst
-    }};
-}
-
-#[macro_export]
-macro_rules! sanity_test {
-    ($host:expr, $port:expr) => {{
-        // Run a sanity test
-        if let Err(e) = $crate::util::run_sanity_test(&$host, $port) {
-            Err(e)
-        } else {
-            Ok(())
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! err {
-    ($note:expr) => {{
-        eprintln!("ERROR: {}", $note);
-        std::process::exit(0x01);
-    }};
-}
-
-/// Returns the number of queries/sec
-pub fn calc(reqs: usize, time: u128) -> f64 {
-    reqs as f64 / (time as f64 / 1_000_000_000_f64)
-}
-
-/// # Sanity Test
-///
-/// This function performs a 'sanity test' to determine if the benchmarks should be run; this test ensures
-/// that the server is functioning as expected and we'll run the benchmarks assuming that the server will
-/// act similarly in the future. This test currently runs a HEYA, SET, GET and DEL test, the latter three of which
-/// are the ones that are benchmarked
-///
-/// ## Limitations
-/// A 65535 character long key/value pair is created and fetched. This random string has extremely low
-/// chances of colliding with any existing key
-pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
-    use skytable::{Connection, Element, Query, RespCode};
-    let mut rng = thread_rng();
-    let mut connection = Connection::new(host, port)?;
-    // test heya
-    let mut query = Query::new();
-    query.push("heya");
-    if !connection
-        .run_query_raw(&query)?
-        .eq(&Element::String("HEY!".to_owned()))
-    {
-        return Err("HEYA test failed".into());
-    }
-    let key = ran_string(65536, &mut rng);
-    let value = ran_string(65536, &mut rng);
-    let mut query = Query::new();
-    query.push("set");
-    query.push(&key);
-    query.push(&value);
-    if !connection
-        .run_query_raw(&query)?
-        .eq(&Element::RespCode(RespCode::Okay))
-    {
-        return Err("SET test failed".into());
-    }
-    let mut query = Query::new();
-    query.push("get");
-    query.push(&key);
-    if !connection
-        .run_query_raw(&query)?
-        .eq(&Element::Binstr(value.as_bytes().to_owned()))
-    {
-        return Err("GET test failed".into());
-    }
-    let mut query = Query::new();
-    query.push("del");
-    query.push(&key);
-    if !connection
-        .run_query_raw(&query)?
-        .eq(&Element::UnsignedInt(1))
-    {
-        return Err("DEL test failed".into());
-    }
-    Ok(())
-}
+use {
+    crate::{
+        config::ServerConfig,
+        error::{BResult, Error},
+    },
+    skytable::{Connection, Element, Query, RespCode},
+    std::thread,
+};
 
 /// Check if the provided keysize has enough combinations to support the given `queries` count
 ///
@@ -132,7 +43,7 @@ pub fn run_sanity_test(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
 /// - For 32-bit address spaces: `(256!)/r!(256-r!)`; for a value of r >= 5, we'll hit the maximum
 /// of the address space and hence this will always return true (because of the size of `usize`)
 ///     > The value for r = 5 is `8.81e+9` which largely exceeds `4.3e+9`
-pub const fn enough_ncr(keysize: usize, queries: usize) -> bool {
+pub const fn has_enough_ncr(keysize: usize, queries: usize) -> bool {
     const LUT: [u64; 11] = [
         // 1B
         256,
@@ -162,4 +73,71 @@ pub const fn enough_ncr(keysize: usize, queries: usize) -> bool {
     #[cfg(target_pointer_width = "32")]
     const ALWAYS_TRUE_FACTOR: usize = 5;
     keysize >= ALWAYS_TRUE_FACTOR || (LUT[keysize - 1] >= queries as _)
+}
+
+/// Run a sanity test, making sure that the server is ready for benchmarking. This function will do the
+/// following tests:
+/// - Connect to the instance
+/// - Run a `heya` as a preliminary test
+/// - Create a new table `tmpbench`. This is where we're supposed to run all the benchmarks.
+/// - Switch to the new table
+/// - Set a key, and get it checking the equality of the returned value
+pub fn run_sanity_test(server_config: &ServerConfig) -> BResult<()> {
+    let mut con = Connection::new(server_config.host(), server_config.port())?;
+    let tests: [(Query, Element, &str); 5] = [
+        (
+            Query::from("HEYA"),
+            Element::String("HEY!".to_owned()),
+            "heya",
+        ),
+        (
+            Query::from("CREATE MODEL default.tmpbench(binary, binary)"),
+            Element::RespCode(RespCode::Okay),
+            "create model",
+        ),
+        (
+            Query::from("use default.tmpbench"),
+            Element::RespCode(RespCode::Okay),
+            "use",
+        ),
+        (
+            Query::from("set").arg("x").arg("100"),
+            Element::RespCode(RespCode::Okay),
+            "set",
+        ),
+        (
+            Query::from("get").arg("x"),
+            Element::Binstr("100".as_bytes().to_owned()),
+            "get",
+        ),
+    ];
+    for (query, expected, test_kind) in tests {
+        let r: Element = con.run_query(query)?;
+        if r != expected {
+            return Err(Error::RuntimeError(format!(
+                "sanity test for `{test_kind}` failed"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Ensures that the current thread is the main thread. If not, this function will panic
+pub fn ensure_main_thread() {
+    assert_eq!(
+        thread::current().name().unwrap(),
+        "main",
+        "unsafe function called from non-main thread"
+    )
+}
+
+/// Run a cleanup. This function attempts to remove the `default.tmpbench` entity
+pub fn cleanup(server_config: &ServerConfig) -> BResult<()> {
+    let mut c = Connection::new(server_config.host(), server_config.port())?;
+    let r: Element = c.run_query(Query::from("drop model default.tmpbench force"))?;
+    if r == Element::RespCode(RespCode::Okay) {
+        Err(Error::RuntimeError("failed to run cleanup".into()))
+    } else {
+        Ok(())
+    }
 }
