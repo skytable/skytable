@@ -88,6 +88,7 @@ impl SharedSlice {
         drop(Box::from_raw(self.inner.as_ptr()))
     }
     /// Returns a local slice for the shared slice
+    #[inline(always)]
     pub fn as_slice(&self) -> &[u8] {
         unsafe {
             // UNSAFE(@ohsayan): The dtor guarantees that we will never end up shooting ourselves in the foot
@@ -181,12 +182,14 @@ impl<'a> From<&'a str> for SharedSlice {
 }
 
 impl From<String> for SharedSlice {
+    #[inline(always)]
     fn from(s: String) -> Self {
         Self::new(s.as_bytes())
     }
 }
 
 impl From<Vec<u8>> for SharedSlice {
+    #[inline(always)]
     fn from(v: Vec<u8>) -> Self {
         Self::new(v.as_slice())
     }
@@ -219,4 +222,33 @@ impl SharedSliceInner {
             rc: AtomicUsize::new(1),
         }
     }
+}
+
+#[test]
+fn basic() {
+    let slice = SharedSlice::from("hello");
+    assert_eq!(slice, b"hello");
+}
+
+#[test]
+fn basic_cloned() {
+    let slice_a = SharedSlice::from("hello");
+    let slice_a_clone = slice_a.clone();
+    drop(slice_a);
+    assert_eq!(slice_a_clone, b"hello");
+}
+
+#[test]
+fn basic_cloned_across_threads() {
+    use std::thread;
+    const ST: &str = "world";
+    const THREADS: usize = 8;
+    let slice = SharedSlice::from(ST);
+    let mut handles = Vec::with_capacity(THREADS);
+    for _ in 0..THREADS {
+        let clone = slice.clone();
+        handles.push(thread::spawn(move || assert_eq!(clone, ST)))
+    }
+    handles.into_iter().for_each(|h| h.join().unwrap());
+    assert_eq!(slice, ST);
 }
