@@ -24,7 +24,7 @@
  *
 */
 
-use crate::{corestore::Data, dbnet::connection::prelude::*};
+use crate::{corestore::SharedSlice, dbnet::connection::prelude::*};
 
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
@@ -45,7 +45,7 @@ impl Range {
     pub fn set_stop(&mut self, stop: usize) {
         self.stop = Some(stop);
     }
-    pub fn into_vec(self, slice: &[Data]) -> Option<Vec<Data>> {
+    pub fn into_vec(self, slice: &[SharedSlice]) -> Option<Vec<SharedSlice>> {
         slice
             .get(self.start..self.stop.unwrap_or(slice.len()))
             .map(|slc| slc.to_vec())

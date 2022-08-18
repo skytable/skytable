@@ -24,19 +24,15 @@
  *
 */
 
-use {
-    bytes::Bytes,
-    core::{
-        any,
-        borrow::{Borrow, BorrowMut},
-        cmp::Ordering,
-        convert::TryFrom,
-        fmt,
-        hash::{Hash, Hasher},
-        iter::FromIterator,
-        mem::{ManuallyDrop, MaybeUninit},
-        ops, ptr, slice, str,
-    },
+use core::{
+    any,
+    borrow::{Borrow, BorrowMut},
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+    iter::FromIterator,
+    mem::{ManuallyDrop, MaybeUninit},
+    ops, ptr, slice, str,
 };
 
 /// A compile-time, fixed size array that can have unintialized memory. This array is as
@@ -554,18 +550,6 @@ where
     }
 }
 
-impl<const N: usize> PartialEq<Bytes> for Array<u8, N> {
-    fn eq(&self, oth: &Bytes) -> bool {
-        self.as_ref() == oth.as_ref()
-    }
-}
-
-impl<const N: usize> PartialEq<Array<u8, N>> for Bytes {
-    fn eq(&self, oth: &Array<u8, N>) -> bool {
-        self.as_ref() == oth.as_ref()
-    }
-}
-
 impl<const N: usize> Borrow<str> for Array<u8, N> {
     fn borrow(&self) -> &str {
         unsafe { self.as_str() }
@@ -574,22 +558,6 @@ impl<const N: usize> Borrow<str> for Array<u8, N> {
 
 unsafe impl<T, const N: usize> Send for Array<T, N> where T: Send {}
 unsafe impl<T, const N: usize> Sync for Array<T, N> where T: Sync {}
-
-impl<const N: usize> TryFrom<Bytes> for Array<u8, N> {
-    type Error = ();
-    fn try_from(oth: Bytes) -> Result<Self, Self::Error> {
-        if oth.len() != N {
-            Err(())
-        } else {
-            Ok(unsafe {
-                // we have maintained the invariant that the len is not
-                // greater than N. Also, the byte slice cannot _just be modified_
-                // since the calling method is expected to uphold that guarantee
-                Self::from_slice(oth)
-            })
-        }
-    }
-}
 
 #[test]
 fn test_basic() {

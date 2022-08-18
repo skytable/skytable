@@ -34,7 +34,7 @@
 */
 
 use {
-    crate::storage::v1::Data,
+    crate::storage::v1::SharedSlice,
     core::{mem, ptr, slice},
 };
 
@@ -139,7 +139,7 @@ impl<'a> RawSliceIter<'a> {
         }
     }
     /// Get the next owned [`Data`] with the provided length
-    pub fn next_owned_data(&mut self, len: usize) -> Option<Data> {
+    pub fn next_owned_data(&mut self, len: usize) -> Option<SharedSlice> {
         if self.remaining() < len {
             // not enough left
             None
@@ -147,7 +147,7 @@ impl<'a> RawSliceIter<'a> {
             // we have something to look at
             unsafe {
                 let d = slice::from_raw_parts(self.cursor, len);
-                let d = Some(Data::copy_from_slice(d));
+                let d = Some(SharedSlice::new(d));
                 self.incr_cursor_by(len);
                 d
             }
@@ -216,13 +216,13 @@ impl<'a> RawSliceIterBorrowed<'a> {
             }
         }
     }
-    pub fn next_owned_data(&mut self, len: usize) -> Option<Data> {
+    pub fn next_owned_data(&mut self, len: usize) -> Option<SharedSlice> {
         if self.remaining() < len {
             None
         } else {
             unsafe {
                 let d = slice::from_raw_parts(self.cursor, len);
-                let d = Some(Data::copy_from_slice(d));
+                let d = Some(SharedSlice::new(d));
                 self.incr_cursor_by(len);
                 d
             }

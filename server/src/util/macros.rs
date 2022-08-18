@@ -177,13 +177,13 @@ macro_rules! action {
 #[macro_export]
 macro_rules! byt {
     ($f:expr) => {
-        bytes::Bytes::from($f)
+        $crate::corestore::rc::SharedSlice::from($f)
     };
 }
 #[macro_export]
 macro_rules! bi {
     ($($x:expr),+ $(,)?) => {{
-        vec![$(bytes::Bytes::from($x),)*].into_iter()
+        vec![$($crate::corestore::rc::SharedSlice::from($x),)*].into_iter()
     }};
 }
 

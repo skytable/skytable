@@ -37,10 +37,16 @@ fn test_serialize_deserialize_empty() {
 #[test]
 fn test_serialize_deserialize_map_with_empty_elements() {
     let cmap = Coremap::new();
-    cmap.true_if_insert(Data::from("sayan"), Data::from(""));
-    cmap.true_if_insert(Data::from("sayan's second key"), Data::from(""));
-    cmap.true_if_insert(Data::from("sayan's third key"), Data::from(""));
-    cmap.true_if_insert(Data::from(""), Data::from(""));
+    cmap.true_if_insert(SharedSlice::from("sayan"), SharedSlice::from(""));
+    cmap.true_if_insert(
+        SharedSlice::from("sayan's second key"),
+        SharedSlice::from(""),
+    );
+    cmap.true_if_insert(
+        SharedSlice::from("sayan's third key"),
+        SharedSlice::from(""),
+    );
+    cmap.true_if_insert(SharedSlice::from(""), SharedSlice::from(""));
     let ser = se::serialize_map(&cmap).unwrap();
     let de = de::deserialize_map(&ser).unwrap();
     assert_eq!(de.len(), cmap.len());
@@ -72,10 +78,15 @@ cfg_test!(
             generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
             generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
-        let cmap: Coremap<Data, Data> = keys
+        let cmap: Coremap<SharedSlice, SharedSlice> = keys
             .iter()
             .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
+            .map(|(k, v)| {
+                (
+                    SharedSlice::from(k.to_owned()),
+                    SharedSlice::from(v.to_owned()),
+                )
+            })
             .collect();
         let ser = se::serialize_map(&cmap).unwrap();
         let de = de::deserialize_map(&ser).unwrap();
@@ -94,10 +105,15 @@ cfg_test!(
             generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
             generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
-        let cmap: Coremap<Data, Data> = keys
+        let cmap: Coremap<SharedSlice, SharedSlice> = keys
             .iter()
             .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
+            .map(|(k, v)| {
+                (
+                    SharedSlice::from(k.to_owned()),
+                    SharedSlice::from(v.to_owned()),
+                )
+            })
             .collect();
         let mut se = se::serialize_map(&cmap).unwrap();
         // random chop
@@ -118,10 +134,15 @@ cfg_test!(
             generate_random_string_vector(COUNT, LEN, &mut rng, true).unwrap(),
             generate_random_string_vector(COUNT, LEN, &mut rng, false).unwrap(),
         );
-        let cmap: Coremap<Data, Data> = keys
+        let cmap: Coremap<SharedSlice, SharedSlice> = keys
             .iter()
             .zip(values.iter())
-            .map(|(k, v)| (Data::from(k.to_owned()), Data::from(v.to_owned())))
+            .map(|(k, v)| {
+                (
+                    SharedSlice::from(k.to_owned()),
+                    SharedSlice::from(v.to_owned()),
+                )
+            })
             .collect();
         let mut se = se::serialize_map(&cmap).unwrap();
         // random patch
@@ -269,7 +290,7 @@ mod bytemark_actual_table_restore {
     use crate::corestore::{
         memstore::ObjectID,
         table::{DescribeTable, KVEBlob, KVEList, Table},
-        Data,
+        SharedSlice,
     };
     use crate::kvengine::LockedVec;
     use crate::storage::v1::{
@@ -280,7 +301,7 @@ mod bytemark_actual_table_restore {
     macro_rules! insert {
         ($table:ident, $k:expr, $v:expr) => {
             assert!(gtable::<KVEBlob>(&$table)
-                .set(Data::from($k), Data::from($v))
+                .set(SharedSlice::from($k), SharedSlice::from($v))
                 .unwrap())
         };
     }
@@ -342,11 +363,11 @@ mod bytemark_actual_table_restore {
         ($table:ident) => {
             gtable::<KVEList>(&$table)
                 .get_inner_ref()
-                .fresh_entry(Data::from("super"))
+                .fresh_entry(SharedSlice::from("super"))
                 .unwrap()
                 .insert(LockedVec::new(vec![
-                    Data::from("hello"),
-                    Data::from("world"),
+                    SharedSlice::from("hello"),
+                    SharedSlice::from("world"),
                 ]))
         };
     }
@@ -401,15 +422,15 @@ mod bytemark_actual_table_restore {
 }
 
 mod flush_routines {
-    use crate::corestore::memstore::Keyspace;
-    use crate::corestore::memstore::ObjectID;
-    use crate::corestore::table::DataModel;
-    use crate::corestore::table::Table;
-    use crate::corestore::Data;
-    use crate::kvengine::LockedVec;
-    use crate::storage::v1::bytemarks;
-    use crate::storage::v1::flush::Autoflush;
-    use crate::storage::v1::Coremap;
+    use crate::{
+        corestore::{
+            memstore::{Keyspace, ObjectID},
+            table::{DataModel, Table},
+            SharedSlice,
+        },
+        kvengine::LockedVec,
+        storage::v1::{bytemarks, flush::Autoflush, Coremap},
+    };
     use std::fs;
     #[test]
     fn test_flush_unflush_table_pure_kve() {
@@ -434,11 +455,11 @@ mod flush_routines {
         assert_eq!(
             ret.get_kvstore()
                 .unwrap()
-                .get(&Data::from("hello"))
+                .get(&SharedSlice::from("hello"))
                 .unwrap()
                 .unwrap()
                 .clone(),
-            Data::from("world")
+            SharedSlice::from("world")
         );
     }
 
@@ -515,11 +536,11 @@ mod flush_routines {
             tbl1_ret
                 .get_kvstore()
                 .unwrap()
-                .get(&Data::from("hello"))
+                .get(&SharedSlice::from("hello"))
                 .unwrap()
                 .unwrap()
                 .clone(),
-            Data::from("world")
+            SharedSlice::from("world")
         );
         // should be a volatile table with no values
         assert_eq!(tbl2_ret.count(), 0);
@@ -543,13 +564,17 @@ mod flush_routines {
 mod list_tests {
     use super::iter::RawSliceIter;
     use super::{de, se};
-    use crate::corestore::{htable::Coremap, Data};
+    use crate::corestore::{htable::Coremap, SharedSlice};
     use crate::kvengine::LockedVec;
     use core::ops::Deref;
     use parking_lot::RwLock;
     #[test]
     fn test_list_se_de() {
-        let mylist = vec![Data::from("a"), Data::from("b"), Data::from("c")];
+        let mylist = vec![
+            SharedSlice::from("a"),
+            SharedSlice::from("b"),
+            SharedSlice::from("c"),
+        ];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
         let mut rawiter = RawSliceIter::new(&v);
@@ -559,10 +584,10 @@ mod list_tests {
     #[test]
     fn test_list_se_de_with_empty_element() {
         let mylist = vec![
-            Data::from("a"),
-            Data::from("b"),
-            Data::from("c"),
-            Data::from(""),
+            SharedSlice::from("a"),
+            SharedSlice::from("b"),
+            SharedSlice::from("c"),
+            SharedSlice::from(""),
         ];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
@@ -572,7 +597,7 @@ mod list_tests {
     }
     #[test]
     fn test_empty_list_se_de() {
-        let mylist: Vec<Data> = vec![];
+        let mylist: Vec<SharedSlice> = vec![];
         let mut v = Vec::new();
         se::raw_serialize_nested_list(&mut v, &mylist).unwrap();
         let mut rawiter = RawSliceIter::new(&v);
@@ -583,7 +608,7 @@ mod list_tests {
     fn test_list_map_monoelement_se_de() {
         let mymap = Coremap::new();
         let vals = lvec!["apples", "bananas", "carrots"];
-        mymap.true_if_insert(Data::from("mykey"), RwLock::new(vals.read().clone()));
+        mymap.true_if_insert(SharedSlice::from("mykey"), RwLock::new(vals.read().clone()));
         let mut v = Vec::new();
         se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
@@ -599,16 +624,16 @@ mod list_tests {
             mykey_value,
             vals.into_inner()
                 .into_iter()
-                .map(Data::from)
-                .collect::<Vec<Data>>()
+                .map(SharedSlice::from)
+                .collect::<Vec<SharedSlice>>()
         );
     }
     #[test]
     fn test_list_map_se_de() {
-        let mymap: Coremap<Data, LockedVec> = Coremap::new();
-        let key1: Data = "mykey1".into();
+        let mymap: Coremap<SharedSlice, LockedVec> = Coremap::new();
+        let key1: SharedSlice = "mykey1".into();
         let val1 = lvec!["apples", "bananas", "carrots"];
-        let key2: Data = "mykey2long".into();
+        let key2: SharedSlice = "mykey2long".into();
         let val2 = lvec!["code", "coffee", "cats"];
         mymap.true_if_insert(key1.clone(), RwLock::new(val1.read().clone()));
         mymap.true_if_insert(key2.clone(), RwLock::new(val2.read().clone()));
@@ -620,20 +645,20 @@ mod list_tests {
             de.get(&key1).unwrap().value().deref().read().clone(),
             val1.into_inner()
                 .into_iter()
-                .map(Data::from)
-                .collect::<Vec<Data>>()
+                .map(SharedSlice::from)
+                .collect::<Vec<SharedSlice>>()
         );
         assert_eq!(
             de.get(&key2).unwrap().value().deref().read().clone(),
             val2.into_inner()
                 .into_iter()
-                .map(Data::from)
-                .collect::<Vec<Data>>()
+                .map(SharedSlice::from)
+                .collect::<Vec<SharedSlice>>()
         );
     }
     #[test]
     fn test_list_map_empty_se_de() {
-        let mymap: Coremap<Data, LockedVec> = Coremap::new();
+        let mymap: Coremap<SharedSlice, LockedVec> = Coremap::new();
         let mut v = Vec::new();
         se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
@@ -643,7 +668,7 @@ mod list_tests {
 
 mod corruption_tests {
     use crate::corestore::htable::Coremap;
-    use crate::corestore::Data;
+    use crate::corestore::SharedSlice;
     use crate::kvengine::LockedVec;
     #[test]
     fn test_corruption_map_basic() {
@@ -673,7 +698,7 @@ mod corruption_tests {
     }
     #[test]
     fn test_listmap_corruption_basic() {
-        let mymap: Coremap<Data, LockedVec> = Coremap::new();
+        let mymap: Coremap<SharedSlice, LockedVec> = Coremap::new();
         mymap.upsert("hello".into(), lvec!("hello-1"));
         // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
         // sanity test
@@ -685,7 +710,7 @@ mod corruption_tests {
     }
     #[test]
     fn test_listmap_corruption_midway() {
-        let mymap: Coremap<Data, LockedVec> = Coremap::new();
+        let mymap: Coremap<SharedSlice, LockedVec> = Coremap::new();
         mymap.upsert("hello".into(), lvec!("hello-1"));
         // current repr: [1u64][5u64]["hello"][1u64][7u64]["hello-1"]
         // sanity test

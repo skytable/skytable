@@ -33,20 +33,20 @@ mod tests;
 use {
     self::encoding::{ENCODING_LUT, ENCODING_LUT_PAIR},
     crate::{
-        corestore::{booltable::BoolTable, htable::Coremap, map::bref::Ref, Data},
+        corestore::{booltable::BoolTable, htable::Coremap, map::bref::Ref, SharedSlice},
         util::compiler,
     },
     parking_lot::RwLock,
 };
 
-pub type KVEStandard = KVEngine<Data>;
+pub type KVEStandard = KVEngine<SharedSlice>;
 pub type KVEListmap = KVEngine<LockedVec>;
-pub type LockedVec = RwLock<Vec<Data>>;
+pub type LockedVec = RwLock<Vec<SharedSlice>>;
 pub type SingleEncoder = fn(&[u8]) -> bool;
 pub type DoubleEncoder = fn(&[u8], &[u8]) -> bool;
-type EntryRef<'a, T> = Ref<'a, Data, T>;
+type EntryRef<'a, T> = Ref<'a, SharedSlice, T>;
 type EncodingResult<T> = Result<T, ()>;
-type OptionRef<'a, T> = Option<Ref<'a, Data, T>>;
+type OptionRef<'a, T> = Option<Ref<'a, SharedSlice, T>>;
 type EncodingResultRef<'a, T> = EncodingResult<OptionRef<'a, T>>;
 
 const TSYMBOL_LUT: BoolTable<u8> = BoolTable::new(b'+', b'?');
@@ -55,7 +55,7 @@ pub trait KVEValue {
     fn verify_encoding(&self, e_v: bool) -> EncodingResult<()>;
 }
 
-impl KVEValue for Data {
+impl KVEValue for SharedSlice {
     fn verify_encoding(&self, e_v: bool) -> EncodingResult<()> {
         if ENCODING_LUT[e_v](self) {
             Ok(())
@@ -78,7 +78,7 @@ impl KVEValue for LockedVec {
 
 #[derive(Debug)]
 pub struct KVEngine<T> {
-    data: Coremap<Data, T>,
+    data: Coremap<SharedSlice, T>,
     e_k: bool,
     e_v: bool,
 }
@@ -86,7 +86,7 @@ pub struct KVEngine<T> {
 // basic method impls
 impl<T> KVEngine<T> {
     /// Create a new KVEBlob
-    pub fn new(e_k: bool, e_v: bool, data: Coremap<Data, T>) -> Self {
+    pub fn new(e_k: bool, e_v: bool, data: Coremap<SharedSlice, T>) -> Self {
         Self { data, e_k, e_v }
     }
     /// Create a new empty KVEBlob
@@ -102,7 +102,7 @@ impl<T> KVEngine<T> {
         self.data.clear()
     }
     /// Returns a reference to the inner structure
-    pub fn get_inner_ref(&self) -> &Coremap<Data, T> {
+    pub fn get_inner_ref(&self) -> &Coremap<SharedSlice, T> {
         &self.data
     }
     /// Check the encoding of the key
@@ -173,13 +173,13 @@ impl<T: KVEValue> KVEngine<T> {
         self.data.get(key.as_ref())
     }
     /// Set the value of the given key
-    pub fn set(&self, key: Data, val: T) -> EncodingResult<bool> {
+    pub fn set(&self, key: SharedSlice, val: T) -> EncodingResult<bool> {
         self.check_key_encoding(&key)
             .and_then(|_| val.verify_encoding(self.e_v))
             .map(|_| self.set_unchecked(key, val))
     }
     /// Same as set, but doesn't check encoding. Caller must check encoding
-    pub fn set_unchecked(&self, key: Data, val: T) -> bool {
+    pub fn set_unchecked(&self, key: SharedSlice, val: T) -> bool {
         self.data.true_if_insert(key, val)
     }
     /// Check if the provided key exists
@@ -191,24 +191,24 @@ impl<T: KVEValue> KVEngine<T> {
         self.data.contains_key(key.as_ref())
     }
     /// Update the value of an existing key. Returns `true` if updated
-    pub fn update(&self, key: Data, val: T) -> EncodingResult<bool> {
+    pub fn update(&self, key: SharedSlice, val: T) -> EncodingResult<bool> {
         self.check_key_encoding(&key)?;
         val.verify_encoding(self.e_v)?;
         Ok(self.update_unchecked(key, val))
     }
     /// Update the value of an existing key without encoding checks
-    pub fn update_unchecked(&self, key: Data, val: T) -> bool {
+    pub fn update_unchecked(&self, key: SharedSlice, val: T) -> bool {
         self.data.true_if_update(key, val)
     }
     /// Update or insert an entry
-    pub fn upsert(&self, key: Data, val: T) -> EncodingResult<()> {
+    pub fn upsert(&self, key: SharedSlice, val: T) -> EncodingResult<()> {
         self.check_key_encoding(&key)?;
         val.verify_encoding(self.e_v)?;
         self.upsert_unchecked(key, val);
         Ok(())
     }
     /// Update or insert an entry without encoding checks
-    pub fn upsert_unchecked(&self, key: Data, val: T) {
+    pub fn upsert_unchecked(&self, key: SharedSlice, val: T) {
         self.data.upsert(key, val)
     }
     /// Remove an entry
@@ -242,7 +242,7 @@ impl<T: Clone> KVEngine<T> {
 }
 
 impl KVEStandard {
-    pub fn take_snapshot_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> Option<Data> {
+    pub fn take_snapshot_unchecked<Q: AsRef<[u8]>>(&self, key: Q) -> Option<SharedSlice> {
         self.data.get_cloned(key.as_ref())
     }
     /// Returns an encoder that checks each key and each value in turn
@@ -260,7 +260,7 @@ impl KVEStandard {
 // list impls
 impl KVEListmap {
     #[cfg(test)]
-    pub fn add_list(&self, listname: Data) -> EncodingResult<bool> {
+    pub fn add_list(&self, listname: SharedSlice) -> EncodingResult<bool> {
         self.check_key_encoding(&listname)?;
         Ok(self.data.true_if_insert(listname, LockedVec::new(vec![])))
     }
@@ -268,14 +268,18 @@ impl KVEListmap {
         self.check_key_encoding(listname)?;
         Ok(self.data.get(listname).map(|list| list.read().len()))
     }
-    pub fn list_cloned(&self, listname: &[u8], count: usize) -> EncodingResult<Option<Vec<Data>>> {
+    pub fn list_cloned(
+        &self,
+        listname: &[u8],
+        count: usize,
+    ) -> EncodingResult<Option<Vec<SharedSlice>>> {
         self.check_key_encoding(listname)?;
         Ok(self
             .data
             .get(listname)
             .map(|list| list.read().iter().take(count).cloned().collect()))
     }
-    pub fn list_cloned_full(&self, listname: &[u8]) -> EncodingResult<Option<Vec<Data>>> {
+    pub fn list_cloned_full(&self, listname: &[u8]) -> EncodingResult<Option<Vec<SharedSlice>>> {
         self.check_key_encoding(listname)?;
         Ok(self
             .data

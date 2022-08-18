@@ -27,7 +27,7 @@
 use {
     crate::{
         actions::strong::StrongActionResult,
-        corestore::Data,
+        corestore::SharedSlice,
         dbnet::connection::prelude::*,
         kvengine::{DoubleEncoder, KVEStandard},
         protocol::iter::DerefUnsafeSlice,
@@ -124,10 +124,10 @@ pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
                     // When we snapshotted, we looked at `snapshot`. If the value is still the
                     // same, then we'll update it. Otherwise, let it be
                     if let Some(mut mutable) =
-                        lowtable.mut_entry(Data::copy_from_slice(key.deref_slice()))
+                        lowtable.mut_entry(SharedSlice::new(key.deref_slice()))
                     {
                         if mutable.value().eq(&snapshot) {
-                            mutable.insert(Data::copy_from_slice(value.deref_slice()));
+                            mutable.insert(SharedSlice::new(value.deref_slice()));
                         } else {
                             drop(mutable);
                         }

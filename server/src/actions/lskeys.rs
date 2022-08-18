@@ -25,7 +25,7 @@
 */
 
 use crate::{
-    corestore::{table::DataModel, Data},
+    corestore::{table::DataModel, SharedSlice},
     dbnet::connection::prelude::*,
 };
 
@@ -69,7 +69,7 @@ action!(
             DataModel::KV(kv) => kv.get_value_tsymbol(),
             DataModel::KVExtListmap(kv) => kv.get_value_tsymbol(),
         };
-        let items: Vec<Data> = match table.get_model_ref() {
+        let items: Vec<SharedSlice> = match table.get_model_ref() {
             DataModel::KV(kv) => kv.get_inner_ref().get_keys(count),
             DataModel::KVExtListmap(kv) => kv.get_inner_ref().get_keys(count),
         };

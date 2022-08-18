@@ -27,15 +27,17 @@
 mod sdel_concurrency_tests {
     use {
         super::super::sdel,
-        crate::{corestore::Data, kvengine::KVEStandard},
+        crate::{corestore::SharedSlice, kvengine::KVEStandard},
         std::{sync::Arc, thread},
     };
 
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEStandard::init(true, true);
-        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
-        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+        kve.upsert(SharedSlice::from("k1"), SharedSlice::from("v1"))
+            .unwrap();
+        kve.upsert(SharedSlice::from("k2"), SharedSlice::from("v2"))
+            .unwrap();
         let encoder = kve.get_key_encoder();
         let it = bi!("k1", "k2");
         let ret = sdel::snapshot_and_del(&kve, encoder, it.as_ref().iter().as_ref().iter());
@@ -47,8 +49,10 @@ mod sdel_concurrency_tests {
         let kve1 = kve.clone();
         let encoder = kve.get_key_encoder();
         {
-            kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
-            kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+            kve.upsert(SharedSlice::from("k1"), SharedSlice::from("v1"))
+                .unwrap();
+            kve.upsert(SharedSlice::from("k2"), SharedSlice::from("v2"))
+                .unwrap();
         }
         let it = bi!("k1", "k2");
         // sdel will wait 10s for us
@@ -58,21 +62,21 @@ mod sdel_concurrency_tests {
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
         assert!(kve
-            .update(Data::from("k1"), Data::from("updated-v1"))
+            .update(SharedSlice::from("k1"), SharedSlice::from("updated-v1"))
             .unwrap());
         // let us join t1
         let ret = t1handle.join().unwrap();
         assert!(ret.is_ok());
         // although we told sdel to delete it, it.as_ref().iter() shouldn't because we externally
         // updated the value
-        assert!(kve.exists(&Data::from("k1")).unwrap());
+        assert!(kve.exists(&SharedSlice::from("k1")).unwrap());
     }
 }
 
 mod sset_concurrency_tests {
     use {
         super::super::sset,
-        crate::{corestore::Data, kvengine::KVEStandard},
+        crate::{corestore::SharedSlice, kvengine::KVEStandard},
         std::{sync::Arc, thread},
     };
 
@@ -96,7 +100,9 @@ mod sset_concurrency_tests {
         // we have 10s: we sleep 5 to let the snapshot complete (thread spawning takes time)
         do_sleep!(5 s);
         // update the value externally
-        assert!(kve.set(Data::from("k1"), Data::from("updated-v1")).unwrap());
+        assert!(kve
+            .set(SharedSlice::from("k1"), SharedSlice::from("updated-v1"))
+            .unwrap());
         // let us join t1
         let ret = t1handle.join().unwrap();
         // but set won't fail because someone set it before it did; this is totally
@@ -105,8 +111,8 @@ mod sset_concurrency_tests {
         assert!(ret.is_ok());
         // although we told sset to set a key, but it shouldn't because we updated it
         assert_eq!(
-            kve.get(&Data::from("k1")).unwrap().unwrap().clone(),
-            Data::from("updated-v1")
+            kve.get(&SharedSlice::from("k1")).unwrap().unwrap().clone(),
+            SharedSlice::from("updated-v1")
         );
     }
 }
@@ -114,15 +120,17 @@ mod sset_concurrency_tests {
 mod supdate_concurrency_tests {
     use {
         super::super::supdate,
-        crate::{corestore::Data, kvengine::KVEStandard},
+        crate::{corestore::SharedSlice, kvengine::KVEStandard},
         std::{sync::Arc, thread},
     };
 
     #[test]
     fn test_snapshot_okay() {
         let kve = KVEStandard::init(true, true);
-        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
-        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+        kve.upsert(SharedSlice::from("k1"), SharedSlice::from("v1"))
+            .unwrap();
+        kve.upsert(SharedSlice::from("k2"), SharedSlice::from("v2"))
+            .unwrap();
         let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
         let ret = supdate::snapshot_and_update(&kve, encoder, it.as_ref().iter());
@@ -131,8 +139,10 @@ mod supdate_concurrency_tests {
     #[test]
     fn test_supdate_snapshot_fail_with_t2() {
         let kve = Arc::new(KVEStandard::init(true, true));
-        kve.upsert(Data::from("k1"), Data::from("v1")).unwrap();
-        kve.upsert(Data::from("k2"), Data::from("v2")).unwrap();
+        kve.upsert(SharedSlice::from("k1"), SharedSlice::from("v1"))
+            .unwrap();
+        kve.upsert(SharedSlice::from("k2"), SharedSlice::from("v2"))
+            .unwrap();
         let kve1 = kve.clone();
         let encoder = kve.get_double_encoder();
         let it = bi!("k1", "v1", "k2", "v2");
@@ -143,7 +153,7 @@ mod supdate_concurrency_tests {
         do_sleep!(5 s);
         // lets update the value externally
         assert!(kve
-            .update(Data::from("k1"), Data::from("updated-v1"))
+            .update(SharedSlice::from("k1"), SharedSlice::from("updated-v1"))
             .unwrap());
         // let us join t1
         let ret = t1handle.join().unwrap();
@@ -151,8 +161,8 @@ mod supdate_concurrency_tests {
         // although we told supdate to update the key, it.as_ref().iter() shouldn't because we updated it
         // externally; hence our `updated-v1` value should persist
         assert_eq!(
-            kve.get(&Data::from("k1")).unwrap().unwrap().clone(),
-            Data::from("updated-v1")
+            kve.get(&SharedSlice::from("k1")).unwrap().unwrap().clone(),
+            SharedSlice::from("updated-v1")
         );
     }
 }

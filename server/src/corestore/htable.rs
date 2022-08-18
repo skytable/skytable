@@ -33,7 +33,6 @@ use {
         Skymap,
     },
     ahash::RandomState,
-    bytes::Bytes,
     std::{borrow::Borrow, hash::Hash, iter::FromIterator, ops::Deref},
 };
 
@@ -203,31 +202,6 @@ impl<K: Eq + Hash, V> IntoIterator for Coremap<K, V> {
     }
 }
 
-impl Deref for Data {
-    type Target = [u8];
-    fn deref(&self) -> &<Self>::Target {
-        &self.blob
-    }
-}
-
-impl Borrow<[u8]> for Data {
-    fn borrow(&self) -> &[u8] {
-        self.blob.borrow()
-    }
-}
-
-impl Borrow<Bytes> for Data {
-    fn borrow(&self) -> &Bytes {
-        &self.blob
-    }
-}
-
-impl AsRef<[u8]> for Data {
-    fn as_ref(&self) -> &[u8] {
-        &self.blob
-    }
-}
-
 impl<K, V> FromIterator<(K, V)> for Coremap<K, V>
 where
     K: Eq + Hash,
@@ -239,61 +213,5 @@ where
         Coremap {
             inner: Skymap::from_iter(iter),
         }
-    }
-}
-
-/// A wrapper for `Bytes`
-#[derive(Debug, Clone, Hash)]
-pub struct Data {
-    /// The blob of data
-    blob: Bytes,
-}
-
-impl PartialEq<str> for Data {
-    fn eq(&self, oth: &str) -> bool {
-        self.blob.eq(oth)
-    }
-}
-
-impl<T: AsRef<[u8]>> PartialEq<T> for Data {
-    fn eq(&self, oth: &T) -> bool {
-        self.blob.eq(oth.as_ref())
-    }
-}
-
-impl Data {
-    /// Create a new blob from a string
-    pub fn from_string(val: String) -> Self {
-        Data {
-            blob: Bytes::from(val.into_bytes()),
-        }
-    }
-    /// Create a new blob from an existing `Bytes` instance
-    pub const fn from_blob(blob: Bytes) -> Self {
-        Data { blob }
-    }
-    /// Get the inner blob (raw `Bytes`)
-    pub const fn get_blob(&self) -> &Bytes {
-        &self.blob
-    }
-    pub fn into_inner(self) -> Bytes {
-        self.blob
-    }
-    #[allow(clippy::needless_lifetimes)]
-    pub fn copy_from_slice<'a>(slice: &'a [u8]) -> Self {
-        Self {
-            blob: Bytes::copy_from_slice(slice),
-        }
-    }
-}
-
-impl Eq for Data {}
-
-impl<T> From<T> for Data
-where
-    T: Into<Bytes>,
-{
-    fn from(dat: T) -> Self {
-        Self { blob: dat.into() }
     }
 }

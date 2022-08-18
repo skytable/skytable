@@ -27,7 +27,7 @@
 use {
     crate::{
         actions::strong::StrongActionResult,
-        corestore::Data,
+        corestore::SharedSlice,
         dbnet::connection::prelude::*,
         kvengine::{DoubleEncoder, KVEStandard},
         protocol::iter::DerefUnsafeSlice,
@@ -109,9 +109,9 @@ pub(super) fn snapshot_and_insert<'a, T: 'a + DerefUnsafeSlice>(
             while let (Some(key), Some(value)) = (act.next(), act.next()) {
                 unsafe {
                     if let Some(fresh) =
-                        lowtable.fresh_entry(Data::copy_from_slice(key.deref_slice()))
+                        lowtable.fresh_entry(SharedSlice::new(key.deref_slice()))
                     {
-                        fresh.insert(Data::copy_from_slice(value.deref_slice()));
+                        fresh.insert(SharedSlice::new(value.deref_slice()));
                     }
                     // we don't care if some other thread initialized the value we checked
                     // it. We expected a fresh entry, so that's what we'll check and use

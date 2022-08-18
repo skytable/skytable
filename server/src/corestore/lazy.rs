@@ -141,13 +141,13 @@ impl<T, F> Drop for Lazy<T, F> {
 }
 
 cfg_test!(
-    use crate::corestore::Data;
+    use crate::corestore::SharedSlice;
     use crate::corestore::lazy;
     use std::collections::HashMap;
     use std::thread;
 
     #[allow(clippy::type_complexity)]
-    static LAZY_VALUE: lazy::Lazy<HashMap<Data, Data>, fn() -> HashMap<Data, Data>> = lazy::Lazy::new(|| {
+    static LAZY_VALUE: lazy::Lazy<HashMap<SharedSlice, SharedSlice>, fn() -> HashMap<SharedSlice, SharedSlice>> = lazy::Lazy::new(|| {
         #[allow(clippy::mutable_key_type)]
         let mut ht = HashMap::new();
         ht.insert("sayan".into(), "is doing something".into());
@@ -158,7 +158,7 @@ cfg_test!(
     fn test_lazy() {
         assert_eq!(
             LAZY_VALUE.get("sayan".as_bytes()).unwrap().clone(),
-            Data::from("is doing something")
+            SharedSlice::from("is doing something")
         );
     }
 
@@ -168,12 +168,12 @@ cfg_test!(
             thread::spawn(|| {
                 assert_eq!(
                     LAZY_VALUE.get("sayan".as_bytes()).unwrap().clone(),
-                    Data::from("is doing something")
+                    SharedSlice::from("is doing something")
                 );}),
             thread::spawn(|| {
                 assert_eq!(
                     LAZY_VALUE.get("sayan".as_bytes()).unwrap().clone(),
-                    Data::from("is doing something")
+                    SharedSlice::from("is doing something")
                 );
             })
         );

@@ -29,7 +29,7 @@ use crate::corestore::{memstore::DdlError, KeyspaceResult};
 use crate::{
     actions::ActionResult,
     auth::Authmap,
-    corestore::{htable::Coremap, Data},
+    corestore::{htable::Coremap, SharedSlice},
     dbnet::connection::prelude::Corestore,
     kvengine::{KVEListmap, KVEStandard, LockedVec},
     protocol::interface::ProtocolSpec,
@@ -193,7 +193,7 @@ impl Table {
     }
     /// Create a new KVEBlob Table with the provided settings
     pub fn new_pure_kve_with_data(
-        data: Coremap<Data, Data>,
+        data: Coremap<SharedSlice, SharedSlice>,
         volatile: bool,
         k_enc: bool,
         v_enc: bool,
@@ -204,7 +204,7 @@ impl Table {
         }
     }
     pub fn new_kve_listmap_with_data(
-        data: Coremap<Data, LockedVec>,
+        data: Coremap<SharedSlice, LockedVec>,
         volatile: bool,
         k_enc: bool,
         payload_enc: bool,
