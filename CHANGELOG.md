@@ -7,6 +7,7 @@ All changes in this project will be noted in this file.
 ### Fixes
 
 - Fixed erroneous removal of `auth` system table during tree cleanup (see #276)
+- Fixed benchmark tool reporting incorrect sample space requirements
 
 ## Version 0.7.5
 
