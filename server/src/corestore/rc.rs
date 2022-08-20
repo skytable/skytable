@@ -29,6 +29,7 @@ use std::{
     borrow::Borrow,
     fmt::Debug,
     hash::Hash,
+    mem::transmute,
     ops::Deref,
     ptr::{self, NonNull},
     slice,
@@ -76,14 +77,17 @@ impl SharedSlice {
     #[inline(never)]
     /// A slow-path to deallocating all the heap allocations
     unsafe fn slow_drop(&self) {
-        let inner = self.inner();
-        // heap array dtor
-        ptr::drop_in_place(slice::from_raw_parts_mut(inner.data as *mut u8, inner.len));
-        // dealloc heap array
-        dealloc(
-            inner.data as *mut u8,
-            Layout::array::<u8>(inner.len).unwrap(),
-        );
+        if self.len() != 0 {
+            // IMPORTANT: Do not use the aligned pointer as a sentinel
+            let inner = self.inner();
+            // heap array dtor
+            ptr::drop_in_place(slice::from_raw_parts_mut(inner.data as *mut u8, inner.len));
+            // dealloc heap array
+            dealloc(
+                inner.data as *mut u8,
+                Layout::array::<u8>(inner.len).unwrap(),
+            )
+        }
         // destroy shared state alloc
         drop(Box::from_raw(self.inner.as_ptr()))
     }
@@ -91,7 +95,12 @@ impl SharedSlice {
     #[inline(always)]
     pub fn as_slice(&self) -> &[u8] {
         unsafe {
-            // UNSAFE(@ohsayan): The dtor guarantees that we will never end up shooting ourselves in the foot
+            /*
+                UNSAFE(@ohsayan): The dtor guarantees that:
+                1. we will never end up shooting ourselves in the foot
+                2. the ptr is either valid, or invalid but well aligned. this upholds the raw_parts contract
+                3. the len is either valid, or zero
+            */
             let inner = self.inner();
             slice::from_raw_parts(inner.data, inner.len)
         }
@@ -210,11 +219,17 @@ struct SharedSliceInner {
 impl SharedSliceInner {
     #[inline(always)]
     fn new(slice: &[u8]) -> Self {
+        let layout = Layout::array::<u8>(slice.len()).unwrap();
         let data = unsafe {
-            // UNSAFE(@ohsayan): Come on, just a malloc and memcpy
-            let array_ptr = alloc(Layout::array::<u8>(slice.len()).unwrap());
-            ptr::copy_nonoverlapping(slice.as_ptr(), array_ptr, slice.len());
-            array_ptr
+            if slice.len() == 0 {
+                // HACK(@ohsayan): Just ensure that the address is aligned for this
+                transmute(layout.align())
+            } else {
+                // UNSAFE(@ohsayan): Come on, just a malloc and memcpy
+                let array_ptr = alloc(layout);
+                ptr::copy_nonoverlapping(slice.as_ptr(), array_ptr, slice.len());
+                array_ptr
+            }
         };
         Self {
             data,
