@@ -31,7 +31,6 @@ use {
         corestore::{iarray::IArray, lazy::Lazy, lock::QuickLock, memstore::Memstore},
         storage::v1::flush::{LocalSnapshot, RemoteSnapshot},
     },
-    bytes::Bytes,
     chrono::prelude::Utc,
     core::{fmt, str},
     regex::Regex,
@@ -90,7 +89,7 @@ pub struct SnapshotEngine {
     /// the local snapshot queue
     local_queue: QuickLock<Queue>,
     /// the remote snapshot lock
-    remote_queue: QuickLock<HashSet<Bytes>>,
+    remote_queue: QuickLock<HashSet<Box<[u8]>>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -151,7 +150,7 @@ impl SnapshotEngine {
             DIR_RSNAPROOT,
             |_| true,
             |rsnap| {
-                remote_queue.insert(Bytes::from(rsnap));
+                remote_queue.insert(rsnap.into_boxed_str().into_boxed_bytes());
             },
         )?;
         Ok(())
@@ -231,15 +230,15 @@ impl SnapshotEngine {
     /// - `1` => Error
     /// - `3` => Busy
     /// (consistent with mksnap)
-    pub async fn mkrsnap(&self, name: Bytes, store: Arc<Memstore>) -> SnapshotActionResult {
+    pub async fn mkrsnap(&self, name: &[u8], store: Arc<Memstore>) -> SnapshotActionResult {
         let mut remq = match self.remote_queue.try_lock() {
             Some(q) => q,
             None => return SnapshotActionResult::Busy,
         };
-        if remq.contains(&name) {
+        if remq.contains(name) {
             SnapshotActionResult::AlreadyExists
         } else {
-            let nameclone = name.clone();
+            let nameclone = name.to_owned();
             let ret = tokio::task::spawn_blocking(move || {
                 let name_str = unsafe {
                     // SAFETY: We have already checked if name is UTF-8
@@ -255,7 +254,7 @@ impl SnapshotEngine {
             })
             .await
             .expect("rmksnap thread panicked");
-            assert!(remq.insert(name));
+            assert!(remq.insert(name.to_owned().into_boxed_slice()));
             ret
         }
     }

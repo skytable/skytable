@@ -52,7 +52,7 @@ think of using them anywhere outside. This is a specialized parser built for the
 */
 
 use {
-    crate::corestore::{array::Array, htable::Coremap, Data},
+    crate::corestore::{array::Array, htable::Coremap, SharedSlice},
     core::{hash::Hash, mem, slice},
     std::{collections::HashSet, io::Write},
 };
@@ -198,7 +198,7 @@ mod se {
 
     #[cfg(test)]
     /// Serialize a map into a _writable_ thing
-    pub fn serialize_map(map: &Coremap<Data, Data>) -> IoResult<Vec<u8>> {
+    pub fn serialize_map(map: &Coremap<SharedSlice, SharedSlice>) -> IoResult<Vec<u8>> {
         /*
         [LEN:8B][KLEN:8B|VLEN:8B][K][V][KLEN:8B][VLEN:8B]...
         */
@@ -281,7 +281,10 @@ mod se {
         }
         Ok(())
     }
-    pub fn raw_serialize_list_map<W>(data: &Coremap<Data, LockedVec>, w: &mut W) -> IoResult<()>
+    pub fn raw_serialize_list_map<W>(
+        data: &Coremap<SharedSlice, LockedVec>,
+        w: &mut W,
+    ) -> IoResult<()>
     where
         W: Write,
     {
@@ -297,7 +300,7 @@ mod se {
                 let k = key.key();
                 // list payload
                 let vread = key.value().read();
-                let v: &Vec<Data> = &vread;
+                let v: &Vec<SharedSlice> = &vread;
                 // write the key extent
                 w.write_all(unsafe_sz_byte_repr!(k.len()))?;
                 // write the key
@@ -338,7 +341,7 @@ mod se {
 
 mod de {
     use super::iter::{RawSliceIter, RawSliceIterBorrowed};
-    use super::{Array, Coremap, Data, Hash, HashSet};
+    use super::{Array, Coremap, Hash, HashSet, SharedSlice};
     use crate::kvengine::LockedVec;
     use core::ptr;
     use parking_lot::RwLock;
@@ -354,7 +357,7 @@ mod de {
         fn from_slice(slice: &[u8]) -> Option<Self>;
     }
 
-    impl DeserializeInto for Coremap<Data, Data> {
+    impl DeserializeInto for Coremap<SharedSlice, SharedSlice> {
         fn new_empty() -> Self {
             Coremap::new()
         }
@@ -363,7 +366,7 @@ mod de {
         }
     }
 
-    impl DeserializeInto for Coremap<Data, LockedVec> {
+    impl DeserializeInto for Coremap<SharedSlice, LockedVec> {
         fn new_empty() -> Self {
             Coremap::new()
         }
@@ -493,7 +496,7 @@ mod de {
         }
     }
     /// Deserialize a file that contains a serialized map. This also returns the model code
-    pub fn deserialize_map(data: &[u8]) -> Option<Coremap<Data, Data>> {
+    pub fn deserialize_map(data: &[u8]) -> Option<Coremap<SharedSlice, SharedSlice>> {
         let mut rawiter = RawSliceIter::new(data);
         let len = rawiter.next_64bit_integer_to_usize()?;
         let hm = Coremap::try_with_capacity(len).ok()?;
@@ -512,7 +515,7 @@ mod de {
         }
     }
 
-    pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<Data, LockedVec>> {
+    pub fn deserialize_list_map(bytes: &[u8]) -> Option<Coremap<SharedSlice, LockedVec>> {
         let mut rawiter = RawSliceIter::new(bytes);
         // get the len
         let len = rawiter.next_64bit_integer_to_usize()?;
@@ -538,7 +541,7 @@ mod de {
 
     /// Deserialize a nested list: `[EXTENT]([EL_EXT][EL])*`
     ///
-    pub fn deserialize_nested_list(mut iter: RawSliceIterBorrowed<'_>) -> Option<Vec<Data>> {
+    pub fn deserialize_nested_list(mut iter: RawSliceIterBorrowed<'_>) -> Option<Vec<SharedSlice>> {
         // get list payload len
         let list_payload_extent = iter.next_64bit_integer_to_usize()?;
         let mut list = Vec::new();

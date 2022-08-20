@@ -28,7 +28,7 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::{corestore::Data, dbnet::connection::prelude::*};
+use crate::{corestore::SharedSlice, dbnet::connection::prelude::*};
 
 action!(
     /// Run an `UPDATE` query
@@ -41,8 +41,8 @@ action!(
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     writer.update(
-                        Data::copy_from_slice(act.next_unchecked()),
-                        Data::copy_from_slice(act.next_unchecked()),
+                        SharedSlice::new(act.next_unchecked()),
+                        SharedSlice::new(act.next_unchecked()),
                     )
                 } {
                     Ok(true) => Some(true),

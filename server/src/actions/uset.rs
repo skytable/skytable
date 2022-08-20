@@ -25,8 +25,8 @@
 */
 
 use crate::{
-    corestore::Data, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER_PAIR,
-    queryengine::ActionIter, util::compiler,
+    corestore::SharedSlice, dbnet::connection::prelude::*,
+    kvengine::encoding::ENCODING_LUT_ITER_PAIR, queryengine::ActionIter, util::compiler,
 };
 
 action!(
@@ -41,7 +41,7 @@ action!(
         if compiler::likely(encoding_is_okay) {
             if registry::state_okay() {
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    kve.upsert_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val));
+                    kve.upsert_unchecked(SharedSlice::new(key), SharedSlice::new(val));
                 }
                 con.write_usize(howmany / 2).await?;
             } else {

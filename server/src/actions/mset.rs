@@ -25,8 +25,8 @@
 */
 
 use crate::{
-    corestore::Data, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER_PAIR,
-    util::compiler,
+    corestore::SharedSlice, dbnet::connection::prelude::*,
+    kvengine::encoding::ENCODING_LUT_ITER_PAIR, util::compiler,
 };
 
 action!(
@@ -40,9 +40,8 @@ action!(
             let done_howmany: Option<usize> = if registry::state_okay() {
                 let mut didmany = 0;
                 while let (Some(key), Some(val)) = (act.next(), act.next()) {
-                    didmany += kve
-                        .set_unchecked(Data::copy_from_slice(key), Data::copy_from_slice(val))
-                        as usize;
+                    didmany +=
+                        kve.set_unchecked(SharedSlice::new(key), SharedSlice::new(val)) as usize;
                 }
                 Some(didmany)
             } else {

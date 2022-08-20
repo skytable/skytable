@@ -24,7 +24,7 @@
  *
 */
 
-use super::{Data, KVEStandard};
+use super::{KVEStandard, SharedSlice};
 
 #[test]
 fn test_ignore_encoding() {
@@ -40,14 +40,18 @@ fn test_ignore_encoding() {
 fn test_bad_unicode_key() {
     let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
     let tbl = KVEStandard::init(true, false);
-    assert!(tbl.set(Data::from(bad_unicode), Data::from("123")).is_err());
+    assert!(tbl
+        .set(SharedSlice::from(bad_unicode), SharedSlice::from("123"))
+        .is_err());
 }
 
 #[test]
 fn test_bad_unicode_value() {
     let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
     let tbl = KVEStandard::init(false, true);
-    assert!(tbl.set(Data::from("123"), Data::from(bad_unicode)).is_err());
+    assert!(tbl
+        .set(SharedSlice::from("123"), SharedSlice::from(bad_unicode))
+        .is_err());
 }
 
 #[test]
@@ -55,7 +59,10 @@ fn test_bad_unicode_key_value() {
     let bad_unicode = b"Hello \xF0\x90\x80World".to_vec();
     let tbl = KVEStandard::init(true, true);
     assert!(tbl
-        .set(Data::from(bad_unicode.clone()), Data::from(bad_unicode))
+        .set(
+            SharedSlice::from(bad_unicode.clone()),
+            SharedSlice::from(bad_unicode)
+        )
         .is_err());
 }
 
@@ -79,8 +86,8 @@ fn test_with_bincode() {
     };
     assert!(tbl
         .set(
-            Data::from("Joe"),
-            Data::from(bincode::serialize(&joe).unwrap(),),
+            SharedSlice::from("Joe"),
+            SharedSlice::from(bincode::serialize(&joe).unwrap(),),
         )
         .is_ok(),);
     assert_eq!(

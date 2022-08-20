@@ -79,7 +79,7 @@ action!(
             }
 
             // now make the snapshot
-            match engine.mkrsnap(name, handle.clone_store()).await {
+            match engine.mkrsnap(&name, handle.clone_store()).await {
                 SnapshotActionResult::Ok => con._write_raw(P::RCODE_OKAY).await?,
                 SnapshotActionResult::Failure => return util::err(P::RCODE_SERVER_ERR),
                 SnapshotActionResult::Busy => return util::err(P::RSTRING_SNAPSHOT_BUSY),

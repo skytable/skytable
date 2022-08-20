@@ -27,7 +27,7 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
-use crate::{corestore::Data, dbnet::connection::prelude::*, queryengine::ActionIter};
+use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, queryengine::ActionIter};
 
 action!(
     /// Run a `SET` query
@@ -40,8 +40,8 @@ action!(
                     // UNSAFE(@ohsayan): This is completely safe as we've already checked
                     // that there are exactly 2 arguments
                     writer.set(
-                        Data::copy_from_slice(act.next().unsafe_unwrap()),
-                        Data::copy_from_slice(act.next().unsafe_unwrap()),
+                        SharedSlice::new(act.next().unsafe_unwrap()),
+                        SharedSlice::new(act.next().unsafe_unwrap()),
                     )
                 } {
                     Ok(true) => Some(true),

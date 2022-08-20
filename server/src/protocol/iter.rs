@@ -24,9 +24,10 @@
  *
 */
 
+use crate::corestore::SharedSlice;
+
 use {
     super::UnsafeSlice,
-    bytes::Bytes,
     core::{hint::unreachable_unchecked, iter::FusedIterator, ops::Deref, slice::Iter},
 };
 
@@ -126,8 +127,8 @@ impl<'a> AnyArrayIter<'a> {
     }
     #[inline(always)]
     /// Returns the next value without any checks as an owned copy of [`Bytes`]
-    pub unsafe fn next_unchecked_bytes(&mut self) -> Bytes {
-        Bytes::copy_from_slice(self.next_unchecked())
+    pub unsafe fn next_unchecked_bytes(&mut self) -> SharedSlice {
+        SharedSlice::new(self.next_unchecked())
     }
     #[inline(always)]
     pub fn map_next<T>(&mut self, cls: fn(&[u8]) -> T) -> Option<T> {
@@ -157,7 +158,7 @@ unsafe impl DerefUnsafeSlice for UnsafeSlice {
 }
 
 #[cfg(test)]
-unsafe impl DerefUnsafeSlice for Bytes {
+unsafe impl DerefUnsafeSlice for SharedSlice {
     #[inline(always)]
     unsafe fn deref_slice(&self) -> &[u8] {
         self.as_ref()

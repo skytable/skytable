@@ -30,7 +30,7 @@ mod macros;
 pub mod lget;
 pub mod lmod;
 
-use crate::{corestore::Data, dbnet::connection::prelude::*, kvengine::LockedVec};
+use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, kvengine::LockedVec};
 
 action! {
     /// Handle an `LSET` query for the list model
@@ -42,7 +42,7 @@ action! {
         let list = listmap.get_inner_ref();
         if registry::state_okay() {
             let did = if let Some(entry) = list.fresh_entry(listname.into()) {
-                let v: Vec<Data> = act.map(Data::copy_from_slice).collect();
+                let v: Vec<SharedSlice> = act.map(SharedSlice::new).collect();
                 entry.insert(LockedVec::new(v));
                 true
             } else {

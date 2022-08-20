@@ -44,7 +44,6 @@ use {
     std::sync::Arc,
 };
 
-pub use htable::Data;
 pub mod array;
 pub mod backoff;
 pub mod booltable;
@@ -56,9 +55,12 @@ pub mod lazy;
 pub mod lock;
 pub mod map;
 pub mod memstore;
+pub mod rc;
 pub mod table;
 #[cfg(test)]
 mod tests;
+
+pub use self::rc::SharedSlice;
 
 pub(super) type KeyspaceResult<T> = Result<T, DdlError>;
 

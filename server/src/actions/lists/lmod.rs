@@ -24,7 +24,7 @@
  *
 */
 
-use crate::{corestore::Data, dbnet::connection::prelude::*, util::compiler};
+use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, util::compiler};
 
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
@@ -78,7 +78,7 @@ action! {
                 let venc_ok = listmap.get_val_encoder();
                 let ret = if compiler::likely(act.as_ref().all(venc_ok)) {
                     if registry::state_okay() {
-                        list.write().extend(act.map(Data::copy_from_slice));
+                        list.write().extend(act.map(SharedSlice::new));
                         P::RCODE_OKAY
                     } else {
                         P::RCODE_SERVER_ERR
@@ -118,7 +118,7 @@ action! {
                                 let mut wlock = list.write();
                                 if idx_to_insert_at < wlock.len() {
                                     // we can insert
-                                    wlock.insert(idx_to_insert_at, Data::copy_from_slice(bts));
+                                    wlock.insert(idx_to_insert_at, SharedSlice::new(bts));
                                     true
                                 } else {
                                     // oops, out of bounds
