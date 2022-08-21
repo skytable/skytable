@@ -24,10 +24,10 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
+use crate::dbnet::prelude::*;
 
 action! {
-    fn pop(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
+    fn pop(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len == 1)?;
         let key = unsafe {
             // SAFETY: We have checked for there to be one arg

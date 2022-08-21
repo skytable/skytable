@@ -28,7 +28,7 @@ use {
     crate::{
         actions::strong::StrongActionResult,
         corestore::SharedSlice,
-        dbnet::connection::prelude::*,
+        dbnet::prelude::*,
         kvengine::{DoubleEncoder, KVEStandard},
         protocol::iter::DerefUnsafeSlice,
         util::compiler,
@@ -41,7 +41,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were set, or it returns an
     /// `Overwrite Error` or code `2`
-    fn sset(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
+    fn sset(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         let howmany = act.len();
         ensure_length::<P>(howmany, |size| size & 1 == 0 && size != 0)?;
         let kve = handle.get_table_with::<P, KVEBlob>()?;

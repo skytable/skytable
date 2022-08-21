@@ -25,13 +25,13 @@
 */
 
 use crate::{
-    corestore, dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER,
+    corestore, dbnet::prelude::*, kvengine::encoding::ENCODING_LUT_ITER,
     queryengine::ActionIter, util::compiler,
 };
 
 action!(
     /// Run an MPOP action
-    fn mpop(handle: &corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
+    fn mpop(handle: &corestore::Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len != 0)?;
         if registry::state_okay() {
             let kve = handle.get_table_with::<P, KVEBlob>()?;

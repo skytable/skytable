@@ -27,14 +27,9 @@
 use {
     crate::{
         dbnet::{
-            connection::{ConnectionHandler, ExecutorFn},
-            tcp::{BufferedSocketStream, Connection, TcpBackoff},
-            BaseListener, Terminator,
+            listener::BaseListener, BufferedSocketStream, Connection, ConnectionHandler, NetBackoff,
         },
-        protocol::{
-            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-            Skyhash1, Skyhash2,
-        },
+        protocol::{interface::ProtocolSpec, Skyhash1, Skyhash2},
         util::error::{Error, SkyResult},
         IoResult,
     },
@@ -43,13 +38,12 @@ use {
         rsa::Rsa,
         ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod},
     },
-    std::{fs, pin::Pin},
+    std::{fs, marker::PhantomData, pin::Pin},
     tokio::net::TcpStream,
     tokio_openssl::SslStream,
 };
 
 impl BufferedSocketStream for SslStream<TcpStream> {}
-type SslExecutorFn<P> = ExecutorFn<P, Connection<SslStream<TcpStream>>, SslStream<TcpStream>>;
 
 pub type SslListener = SslListenerRaw<Skyhash2>;
 pub type SslListenerV1 = SslListenerRaw<Skyhash1>;
@@ -57,14 +51,10 @@ pub type SslListenerV1 = SslListenerRaw<Skyhash1>;
 pub struct SslListenerRaw<P> {
     pub base: BaseListener,
     acceptor: SslAcceptor,
-    executor_fn: SslExecutorFn<P>,
+    _marker: PhantomData<P>,
 }
 
-impl<P: ProtocolSpec + 'static> SslListenerRaw<P>
-where
-    Connection<SslStream<TcpStream>>:
-        ProtocolRead<P, SslStream<TcpStream>> + ProtocolWrite<P, SslStream<TcpStream>>,
-{
+impl<P: ProtocolSpec + 'static> SslListenerRaw<P> {
     pub fn new_pem_based_ssl_connection(
         key_file: String,
         chain_file: String,
@@ -92,16 +82,12 @@ where
         }
         Ok(Self {
             acceptor: acceptor_builder.build(),
-            executor_fn: if base.auth.is_enabled() {
-                ConnectionHandler::execute_unauth
-            } else {
-                ConnectionHandler::execute_auth
-            },
             base,
+            _marker: PhantomData,
         })
     }
     async fn accept(&mut self) -> SkyResult<SslStream<TcpStream>> {
-        let backoff = TcpBackoff::new();
+        let backoff = NetBackoff::new();
         loop {
             match self.base.listener.accept().await {
                 // We don't need the bindaddr
@@ -138,13 +124,12 @@ where
              in a crash
             */
             let stream = skip_loop_err!(self.accept().await);
-            let mut sslhandle = ConnectionHandler::new(
+            let mut sslhandle = ConnectionHandler::<SslStream<TcpStream>, P>::new(
                 self.base.db.clone(),
                 Connection::new(stream),
                 self.base.auth.clone(),
-                self.executor_fn,
                 self.base.climit.clone(),
-                Terminator::new(self.base.signal.subscribe()),
+                self.base.signal.subscribe(),
                 self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {

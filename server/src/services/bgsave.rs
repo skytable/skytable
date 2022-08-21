@@ -28,12 +28,14 @@ use {
     crate::{
         config::BGSave,
         corestore::Corestore,
-        dbnet::Terminator,
         registry,
         storage::{self, v1::flush::Autoflush},
         IoResult,
     },
-    tokio::time::{self, Duration},
+    tokio::{
+        sync::broadcast::Receiver,
+        time::{self, Duration},
+    },
 };
 
 /// The bgsave_scheduler calls the bgsave task in `Corestore` after `every` seconds
@@ -41,7 +43,7 @@ use {
 /// The time after which the scheduler will wake up the BGSAVE task is determined by
 /// `bgsave_cfg` which is to be passed as an argument. If BGSAVE is disabled, this function
 /// immediately returns
-pub async fn bgsave_scheduler(handle: Corestore, bgsave_cfg: BGSave, mut terminator: Terminator) {
+pub async fn bgsave_scheduler(handle: Corestore, bgsave_cfg: BGSave, mut terminator: Receiver<()>) {
     match bgsave_cfg {
         BGSave::Enabled(duration) => {
             // If we're here - the user doesn't trust his power supply or just values
@@ -60,7 +62,7 @@ pub async fn bgsave_scheduler(handle: Corestore, bgsave_cfg: BGSave, mut termina
                         }).await.expect("Something caused the background service to panic");
                     }
                     // Otherwise wait for a notification
-                    _ = terminator.receive_signal() => {
+                    _ = terminator.recv() => {
                         // we got a notification to quit; so break out
                         break;
                     }

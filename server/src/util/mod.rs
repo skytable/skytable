@@ -34,12 +34,11 @@ use {
         actions::{ActionError, ActionResult},
         protocol::interface::ProtocolSpec,
     },
-    core::{fmt::Debug, future::Future, marker::PhantomData, ops::Deref, pin::Pin},
+    core::{fmt::Debug, marker::PhantomData, ops::Deref},
     std::process,
 };
 
 const EXITCODE_ONE: i32 = 0x01;
-pub type FutureResult<'s, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 's>>;
 
 /// # Unsafe unwrapping
 ///

@@ -116,15 +116,14 @@ macro_rules! assert_hmeq {
 macro_rules! action {
     (
         $($(#[$attr:meta])*
-        fn $fname:ident($($argname:ident: $argty:ty),*)
+        fn $fname:ident($($argname:ident: $argty:ty),* $(,)?)
         $block:block)*
     ) => {
             $($(#[$attr])*
             pub async fn $fname<
                 'a,
-                T: 'a + $crate::dbnet::connection::ClientConnection<P, Strm>,
-                Strm: $crate::dbnet::connection::Stream,
-                P: $crate::protocol::interface::ProtocolSpec
+                C: 'a + $crate::dbnet::BufferedSocketStream,
+                P: $crate::protocol::interface::ProtocolSpec,
             > (
                 $($argname: $argty,)*
             ) -> $crate::actions::ActionResult<()>
@@ -135,15 +134,14 @@ macro_rules! action {
         fn $fname:ident(
             $argone:ident: $argonety:ty,
             $argtwo:ident: $argtwoty:ty,
-            mut $argthree:ident: $argthreety:ty
+            mut $argthree:ident: $argthreety:ty $(,)?
         ) $block:block)*
     ) => {
             $($(#[$attr])*
             pub async fn $fname<
-                'a,
-                T: 'a + $crate::dbnet::connection::ClientConnection<P, Strm>,
-                Strm: $crate::dbnet::connection::Stream,
-                P: $crate::protocol::interface::ProtocolSpec
+            'a,
+                C: 'a + $crate::dbnet::BufferedSocketStream,
+                P: $crate::protocol::interface::ProtocolSpec,
             >(
                 $argone: $argonety,
                 $argtwo: $argtwoty,

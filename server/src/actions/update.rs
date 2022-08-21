@@ -28,11 +28,11 @@
 //! This module provides functions to work with `UPDATE` queries
 //!
 
-use crate::{corestore::SharedSlice, dbnet::connection::prelude::*};
+use crate::{corestore::SharedSlice, dbnet::prelude::*};
 
 action!(
     /// Run an `UPDATE` query
-    fn update(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
+    fn update(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {

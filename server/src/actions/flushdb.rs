@@ -24,11 +24,11 @@
  *
 */
 
-use crate::{dbnet::connection::prelude::*, queryengine::ActionIter};
+use crate::{dbnet::prelude::*, queryengine::ActionIter};
 
 action!(
     /// Delete all the keys in the database
-    fn flushdb(handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
+    fn flushdb(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len < 2)?;
         if registry::state_okay() {
             if act.is_empty() {

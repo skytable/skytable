@@ -1,5 +1,5 @@
 /*
- * Created on Sun Apr 25 2021
+ * Created on Sun Aug 21 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,352 +24,225 @@
  *
 */
 
-//! # Generic connection traits
-//! The `con` module defines the generic connection traits `RawConnection` and `ProtocolRead`.
-//! These two traits can be used to interface with sockets that are used for communication through the Skyhash
-//! protocol.
-//!
-//! The `RawConnection` trait provides a basic set of methods that are required by prospective connection
-//! objects to be eligible for higher level protocol interactions (such as interactions with high-level query objects).
-//! Once a type implements this trait, it automatically gets a free `ProtocolRead` implementation. This immediately
-//! enables this connection object/type to use methods like read_query enabling it to read and interact with queries and write
-//! respones in compliance with the Skyhash protocol.
-
-#[cfg(windows)]
-use std::io::ErrorKind;
 use {
+    super::{BufferedSocketStream, QueryResult},
     crate::{
-        actions::{ActionError, ActionResult},
-        auth::AuthProvider,
-        corestore::Corestore,
-        dbnet::{
-            connection::prelude::FutureResult,
-            tcp::{BufferedSocketStream, Connection},
-            Terminator,
-        },
-        protocol::{
-            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-            Query,
-        },
-        queryengine, IoResult,
+        corestore::buffers::Integer64,
+        protocol::{interface::ProtocolSpec, ParseError},
+        IoResult,
     },
-    bytes::{Buf, BytesMut},
-    std::{marker::PhantomData, sync::Arc},
-    tokio::{
-        io::{AsyncReadExt, AsyncWriteExt, BufWriter},
-        sync::{mpsc, Semaphore},
+    bytes::BytesMut,
+    std::{
+        io::{Error as IoError, ErrorKind},
+        marker::PhantomData,
     },
+    tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter},
 };
 
-pub type QueryWithAdvance = (Query, usize);
+const BUF_WRITE_CAP: usize = 8192;
+const BUF_READ_CAP: usize = 8192;
 
-pub enum QueryResult {
-    Q(QueryWithAdvance),
-    E(&'static [u8]),
-    Wrongtype,
-    Disconnected,
-}
-
-pub struct AuthProviderHandle<'a, P, T, Strm> {
-    provider: &'a mut AuthProvider,
-    executor: &'a mut ExecutorFn<P, T, Strm>,
-    _phantom: PhantomData<(T, Strm)>,
-}
-
-impl<'a, P, T, Strm> AuthProviderHandle<'a, P, T, Strm>
-where
-    T: ClientConnection<P, Strm>,
-    Strm: Stream,
-    P: ProtocolSpec,
-{
-    pub fn new(provider: &'a mut AuthProvider, executor: &'a mut ExecutorFn<P, T, Strm>) -> Self {
-        Self {
-            provider,
-            executor,
-            _phantom: PhantomData,
-        }
-    }
-    pub fn provider_mut(&mut self) -> &mut AuthProvider {
-        self.provider
-    }
-    pub fn provider(&self) -> &AuthProvider {
-        self.provider
-    }
-    pub fn swap_executor_to_anonymous(&mut self) {
-        *self.executor = ConnectionHandler::execute_unauth;
-    }
-    pub fn swap_executor_to_authenticated(&mut self) {
-        *self.executor = ConnectionHandler::execute_auth;
-    }
-}
-
-pub mod prelude {
-    //! A 'prelude' for callers that would like to use the `RawConnection` and `ProtocolRead` traits
-    //!
-    //! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
-    pub use super::{AuthProviderHandle, ClientConnection, Stream};
-    pub use crate::{
-        actions::{ensure_boolean_or_aerr, ensure_length, translate_ddl_error},
-        corestore::{
-            table::{KVEBlob, KVEList},
-            Corestore,
-        },
-        get_tbl, handle_entity, is_lowbit_set,
-        protocol::interface::ProtocolSpec,
-        queryengine::ActionIter,
-        registry,
-        util::{self, FutureResult, UnwrapActionError, Unwrappable},
-    };
-    pub use tokio::io::{AsyncReadExt, AsyncWriteExt};
-}
-
-/// # The `RawConnection` trait
+/// A generic connection type
 ///
-/// The `RawConnection` trait has low-level methods that can be used to interface with raw sockets. Any type
-/// that successfully implements this trait will get an implementation for `ProtocolRead` and `ProtocolWrite`
-/// provided that it uses a protocol that implements the `ProtocolSpec` trait.
-///
-/// ## Example of a `RawConnection` object
-/// Ideally a `RawConnection` object should look like (the generic parameter just exists for doc-tests, just think that
-/// there is a type `Strm`):
-/// ```no_run
-/// struct Connection<Strm> {
-///     pub buffer: bytes::BytesMut,
-///     pub stream: Strm,
-/// }
-/// ```
-///
-/// `Strm` should be a stream, i.e something like an SSL connection/TCP connection.
-pub trait RawConnection<P: ProtocolSpec, Strm>: Send + Sync {
-    /// Returns an **immutable** reference to the underlying read buffer
-    fn get_buffer(&self) -> &BytesMut;
-    /// Returns an **immutable** reference to the underlying stream
-    fn get_stream(&self) -> &BufWriter<Strm>;
-    /// Returns a **mutable** reference to the underlying read buffer
-    fn get_mut_buffer(&mut self) -> &mut BytesMut;
-    /// Returns a **mutable** reference to the underlying stream
-    fn get_mut_stream(&mut self) -> &mut BufWriter<Strm>;
-    /// Returns a **mutable** reference to (buffer, stream)
-    ///
-    /// This is to avoid double mutable reference errors
-    fn get_mut_both(&mut self) -> (&mut BytesMut, &mut BufWriter<Strm>);
-    /// Advance the read buffer by `forward_by` positions
-    fn advance_buffer(&mut self, forward_by: usize) {
-        self.get_mut_buffer().advance(forward_by)
-    }
-    /// Clear the internal buffer completely
-    fn clear_buffer(&mut self) {
-        self.get_mut_buffer().clear()
-    }
+/// The generic connection type allows you to choose:
+/// 1. A stream (TCP, TLS(TCP), UDS, ...)
+/// 2. A protocol (one that implements [`ProtocolSpec`])
+pub struct Connection<T, P> {
+    pub(super) stream: BufWriter<T>,
+    pub(super) buffer: BytesMut,
+    _marker: PhantomData<P>,
 }
 
-impl<T, P> RawConnection<P, T> for Connection<T>
-where
-    T: BufferedSocketStream + Sync + Send,
-    P: ProtocolSpec,
-{
-    fn get_buffer(&self) -> &BytesMut {
-        &self.buffer
-    }
-    fn get_stream(&self) -> &BufWriter<T> {
-        &self.stream
-    }
-    fn get_mut_buffer(&mut self) -> &mut BytesMut {
-        &mut self.buffer
-    }
-    fn get_mut_stream(&mut self) -> &mut BufWriter<T> {
-        &mut self.stream
-    }
-    fn get_mut_both(&mut self) -> (&mut BytesMut, &mut BufWriter<T>) {
-        (&mut self.buffer, &mut self.stream)
-    }
-}
-
-pub(super) type ExecutorFn<P, T, Strm> =
-    for<'s> fn(&'s mut ConnectionHandler<P, T, Strm>, Query) -> FutureResult<'s, ActionResult<()>>;
-
-/// # A generic connection handler
-///
-/// A [`ConnectionHandler`] object is a generic connection handler for any object that implements the [`RawConnection`] trait (or
-/// the [`ProtocolRead`] trait). This function will accept such a type `T`, possibly a listener object and then use it to read
-/// a query, parse it and return an appropriate response through [`corestore::Corestore::execute_query`]
-pub struct ConnectionHandler<P, T, Strm> {
-    db: Corestore,
-    con: T,
-    climit: Arc<Semaphore>,
-    auth: AuthProvider,
-    executor: ExecutorFn<P, T, Strm>,
-    terminator: Terminator,
-    _term_sig_tx: mpsc::Sender<()>,
-    _marker: PhantomData<Strm>,
-}
-
-impl<P, T, Strm> ConnectionHandler<P, T, Strm>
-where
-    T: ProtocolRead<P, Strm> + ProtocolWrite<P, Strm> + Send + Sync,
-    Strm: Stream,
-    P: ProtocolSpec,
-{
-    pub fn new(
-        db: Corestore,
-        con: T,
-        auth: AuthProvider,
-        executor: ExecutorFn<P, T, Strm>,
-        climit: Arc<Semaphore>,
-        terminator: Terminator,
-        _term_sig_tx: mpsc::Sender<()>,
-    ) -> Self {
-        Self {
-            db,
-            con,
-            auth,
-            climit,
-            executor,
-            terminator,
-            _term_sig_tx,
+impl<T: BufferedSocketStream, P: ProtocolSpec> Connection<T, P> {
+    pub fn new(stream: T) -> Self {
+        Connection {
+            stream: BufWriter::with_capacity(BUF_WRITE_CAP, stream),
+            buffer: BytesMut::with_capacity(BUF_READ_CAP),
             _marker: PhantomData,
         }
     }
-    pub async fn run(&mut self) -> IoResult<()> {
-        while !self.terminator.is_termination_signal() {
-            let try_df = tokio::select! {
-                tdf = self.con.read_query() => tdf,
-                _ = self.terminator.receive_signal() => {
-                    return Ok(());
-                }
-            };
-            match try_df {
-                Ok(QueryResult::Q((query, advance_by))) => {
-                    // the mutable reference to self ensures that the buffer is not modified
-                    // hence ensuring that the pointers will remain valid
-                    #[cfg(debug_assertions)]
-                    let len_at_start = self.con.get_buffer().len();
-                    #[cfg(debug_assertions)]
-                    let sptr_at_start = self.con.get_buffer().as_ptr() as usize;
-                    #[cfg(debug_assertions)]
-                    let eptr_at_start = sptr_at_start + len_at_start;
-                    {
-                        match self.execute_query(query).await {
-                            Ok(()) => {}
-                            Err(ActionError::ActionError(e)) => {
-                                self.con.close_conn_with_error(e).await?;
-                            }
-                            Err(ActionError::IoError(e)) => {
-                                return Err(e);
-                            }
-                        }
-                    }
-                    {
-                        // do these assertions to ensure memory safety (this is just for sanity sake)
-                        #[cfg(debug_assertions)]
-                        // len should be unchanged. no functions should **ever** touch the buffer
-                        debug_assert_eq!(self.con.get_buffer().len(), len_at_start);
-                        #[cfg(debug_assertions)]
-                        // start of allocation should be unchanged
-                        debug_assert_eq!(self.con.get_buffer().as_ptr() as usize, sptr_at_start);
-                        #[cfg(debug_assertions)]
-                        // end of allocation should be unchanged. else we're entirely violating
-                        // memory safety guarantees
-                        debug_assert_eq!(
-                            unsafe {
-                                // UNSAFE(@ohsayan): THis is always okay
-                                self.con.get_buffer().as_ptr().add(len_at_start)
-                            } as usize,
-                            eptr_at_start
-                        );
-                        // this is only when we clear the buffer. since execute_query is not called
-                        // at this point, it's totally fine (so invalidating ptrs is totally cool)
-                        self.con.advance_buffer(advance_by);
+}
+
+// protocol read
+impl<T: BufferedSocketStream, P: ProtocolSpec> Connection<T, P> {
+    /// Attempt to read a query
+    pub(super) async fn read_query(&mut self) -> IoResult<QueryResult> {
+        loop {
+            match self.stream.read_buf(&mut self.buffer).await {
+                Ok(0) => {
+                    if self.buffer.is_empty() {
+                        // buffer is empty, and the remote pulled off (simple disconnection)
+                        return Ok(QueryResult::Disconnected);
+                    } else {
+                        // wrote something, and then died. nope, that's an error
+                        return Err(IoError::from(ErrorKind::ConnectionReset));
                     }
                 }
-                Ok(QueryResult::E(r)) => self.con.close_conn_with_error(r).await?,
-                Ok(QueryResult::Wrongtype) => {
-                    self.con
-                        .close_conn_with_error(P::RCODE_WRONGTYPE_ERR)
-                        .await?
-                }
-                Ok(QueryResult::Disconnected) => return Ok(()),
-                #[cfg(windows)]
-                Err(e) => match e.kind() {
-                    ErrorKind::ConnectionReset => return Ok(()),
-                    _ => return Err(e),
-                },
-                #[cfg(not(windows))]
+                Ok(_) => {}
                 Err(e) => return Err(e),
             }
+            // see if we have buffered enough data to run anything
+            match P::decode_packet(self.buffer.as_ref()) {
+                Ok(query_with_advance) => return Ok(QueryResult::Q(query_with_advance)),
+                Err(ParseError::NotEnough) => {}
+                Err(e) => {
+                    self.write_error(P::SKYHASH_PARSE_ERROR_LUT[e as usize - 1])
+                        .await?;
+                    return Ok(QueryResult::NextLoop);
+                }
+            }
+        }
+    }
+}
+
+// protocol write (metaframe)
+impl<T: BufferedSocketStream, P: ProtocolSpec> Connection<T, P> {
+    /// Write a simple query header to the stream
+    pub(super) async fn write_simple_query_header(&mut self) -> IoResult<()> {
+        self.stream.write_all(P::SIMPLE_QUERY_HEADER).await
+    }
+
+    /// Write the pipeline query header
+    pub(super) async fn write_pipelined_query_header(&mut self, count: usize) -> IoResult<()> {
+        // write pipeline first byte
+        self.stream.write_u8(P::PIPELINED_QUERY_FIRST_BYTE).await?;
+        // write pipeline query count
+        self.stream.write_all(&Integer64::from(count)).await?;
+        // write the LF
+        self.stream.write_u8(P::LF).await
+    }
+}
+
+// protocol write (helpers)
+impl<T: BufferedSocketStream, P: ProtocolSpec> Connection<T, P> {
+    /// Write an error to the stream (just used to differentiate between "normal" and "errored" writes)
+    pub(super) async fn write_error(&mut self, error: &[u8]) -> IoResult<()> {
+        self.stream.write_all(error).await?;
+        self.stream.flush().await
+    }
+    /// Write something "raw" to the stream (intentional underscore to avoid misuse)
+    pub async fn _write_raw(&mut self, raw: &[u8]) -> IoResult<()> {
+        self.stream.write_all(raw).await
+    }
+}
+
+// protocol write (dataframe)
+impl<T: BufferedSocketStream, P: ProtocolSpec> Connection<T, P> {
+    // monoelements
+    /// Encode and write a length-prefixed monoelement
+    pub async fn write_mono_length_prefixed_with_tsymbol(
+        &mut self,
+        data: &[u8],
+        tsymbol: u8,
+    ) -> IoResult<()> {
+        // first write the tsymbol
+        self.stream.write_u8(tsymbol).await?;
+        // now write length
+        self.stream.write_all(&Integer64::from(data.len())).await?;
+        // now write LF
+        self.stream.write_u8(P::LF).await?;
+        // now write the actual body
+        self.stream.write_all(data).await?;
+        if P::NEEDS_TERMINAL_LF {
+            self.stream.write_u8(P::LF).await
+        } else {
+            Ok(())
+        }
+    }
+    /// Encode and write a mon element (**without** length-prefixing)
+    pub async fn write_mono_with_tsymbol(&mut self, data: &[u8], tsymbol: u8) -> IoResult<()> {
+        // first write the tsymbol
+        self.stream.write_u8(tsymbol).await?;
+        // now write the actual body
+        self.stream.write_all(data).await?;
+        self.stream.write_u8(P::LF).await
+    }
+    /// Encode and write an unicode string
+    pub async fn write_string(&mut self, string: &str) -> IoResult<()> {
+        self.write_mono_length_prefixed_with_tsymbol(string.as_bytes(), P::TSYMBOL_STRING)
+            .await
+    }
+    /// Encode and write a blob
+    #[allow(unused)]
+    pub async fn write_binary(&mut self, binary: &[u8]) -> IoResult<()> {
+        self.write_mono_length_prefixed_with_tsymbol(binary, P::TSYMBOL_BINARY)
+            .await
+    }
+    /// Encode and write an `usize`
+    pub async fn write_usize(&mut self, size: usize) -> IoResult<()> {
+        self.write_mono_with_tsymbol(&Integer64::from(size), P::TSYMBOL_INT64)
+            .await
+    }
+    /// Encode and write an `u64`
+    pub async fn write_int64(&mut self, int: u64) -> IoResult<()> {
+        self.write_mono_with_tsymbol(&Integer64::from(int), P::TSYMBOL_INT64)
+            .await
+    }
+    /// Encode and write an `f32`
+    pub async fn write_float(&mut self, float: f32) -> IoResult<()> {
+        self.write_mono_with_tsymbol(float.to_string().as_bytes(), P::TSYMBOL_FLOAT)
+            .await
+    }
+
+    // typed array
+    /// Write a typed array header (including type information and size)
+    pub async fn write_typed_array_header(&mut self, len: usize, tsymbol: u8) -> IoResult<()> {
+        self.stream
+            .write_all(&[P::TSYMBOL_TYPED_ARRAY, tsymbol])
+            .await?;
+        self.stream.write_all(&Integer64::from(len)).await?;
+        self.stream.write_u8(P::LF).await
+    }
+    /// Encode and write a null element for a typed array
+    pub async fn write_typed_array_element_null(&mut self) -> IoResult<()> {
+        self.stream
+            .write_all(P::TYPE_TYPED_ARRAY_ELEMENT_NULL)
+            .await
+    }
+    /// Encode and write a typed array element
+    pub async fn write_typed_array_element(&mut self, element: &[u8]) -> IoResult<()> {
+        self.stream
+            .write_all(&Integer64::from(element.len()))
+            .await?;
+        self.stream.write_u8(P::LF).await?;
+        self.stream.write_all(element).await?;
+        if P::NEEDS_TERMINAL_LF {
+            self.stream.write_u8(P::LF).await
+        } else {
+            Ok(())
+        }
+    }
+
+    // typed non-null array
+    /// write typed non-null array header
+    pub async fn write_typed_non_null_array_header(
+        &mut self,
+        len: usize,
+        tsymbol: u8,
+    ) -> IoResult<()> {
+        self.stream
+            .write_all(&[P::TSYMBOL_TYPED_NON_NULL_ARRAY, tsymbol])
+            .await?;
+        self.stream.write_all(&Integer64::from(len)).await?;
+        self.stream.write_all(&[P::LF]).await
+    }
+    /// Encode and write typed non-null array element
+    pub async fn write_typed_non_null_array_element(&mut self, element: &[u8]) -> IoResult<()> {
+        self.write_typed_array_element(element).await
+    }
+    /// Encode and write a typed non-null array
+    pub async fn write_typed_non_null_array<A, B>(&mut self, body: B, tsymbol: u8) -> IoResult<()>
+    where
+        B: AsRef<[A]>,
+        A: AsRef<[u8]>,
+    {
+        let body = body.as_ref();
+        self.write_typed_non_null_array_header(body.len(), tsymbol)
+            .await?;
+        for element in body {
+            self.write_typed_non_null_array_element(element.as_ref())
+                .await?;
         }
         Ok(())
     }
-
-    /// Execute queries for an unauthenticated user
-    pub(super) fn execute_unauth(&mut self, query: Query) -> FutureResult<'_, ActionResult<()>> {
-        Box::pin(async move {
-            let con = &mut self.con;
-            let db = &mut self.db;
-            let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
-            match query {
-                Query::Simple(sq) => {
-                    con.write_simple_query_header().await?;
-                    queryengine::execute_simple_noauth(db, con, &mut auth_provider, sq).await?;
-                }
-                Query::Pipelined(_) => {
-                    con.write_simple_query_header().await?;
-                    con._write_raw(P::AUTH_CODE_BAD_CREDENTIALS).await?;
-                }
-            }
-            Ok(())
-        })
-    }
-
-    /// Execute queries for an authenticated user
-    pub(super) fn execute_auth(&mut self, query: Query) -> FutureResult<'_, ActionResult<()>> {
-        Box::pin(async move {
-            let con = &mut self.con;
-            let db = &mut self.db;
-            let mut auth_provider = AuthProviderHandle::new(&mut self.auth, &mut self.executor);
-            match query {
-                Query::Simple(q) => {
-                    con.write_simple_query_header().await?;
-                    queryengine::execute_simple(db, con, &mut auth_provider, q).await?;
-                }
-                Query::Pipelined(pipeline) => {
-                    con.write_pipelined_query_header(pipeline.len()).await?;
-                    queryengine::execute_pipeline(db, con, &mut auth_provider, pipeline).await?;
-                }
-            }
-            Ok(())
-        })
-    }
-
-    /// Execute a query that has already been validated by `Connection::read_query`
-    async fn execute_query(&mut self, query: Query) -> ActionResult<()> {
-        (self.executor)(self, query).await?;
-        self.con._flush_stream().await?;
-        Ok(())
-    }
-}
-
-impl<P, T, Strm> Drop for ConnectionHandler<P, T, Strm> {
-    fn drop(&mut self) {
-        // Make sure that the permit is returned to the semaphore
-        // in the case that there is a panic inside
-        self.climit.add_permits(1);
-    }
-}
-
-/// A simple _shorthand trait_ for the insanely long definition of the TCP-based stream generic type
-pub trait Stream: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
-impl<T> Stream for T where T: AsyncReadExt + AsyncWriteExt + Unpin + Send + Sync {}
-
-/// A simple _shorthand trait_ for the insanely long definition of the connection generic type
-pub trait ClientConnection<P: ProtocolSpec, Strm: Stream>:
-    ProtocolWrite<P, Strm> + ProtocolRead<P, Strm> + Send + Sync
-{
-}
-impl<P, T, Strm> ClientConnection<P, Strm> for T
-where
-    T: ProtocolWrite<P, Strm> + ProtocolRead<P, Strm> + Send + Sync,
-    Strm: Stream,
-    P: ProtocolSpec,
-{
 }

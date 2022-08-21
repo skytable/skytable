@@ -29,7 +29,7 @@ use {
         auth::AuthProvider,
         config::{ConfigurationSet, SnapshotConfig, SnapshotPref},
         corestore::Corestore,
-        dbnet::{self, Terminator},
+        dbnet,
         diskstore::flock::FileLock,
         services,
         storage::v1::sengine::SnapshotEngine,
@@ -90,13 +90,13 @@ pub async fn run(
     let bgsave_handle = tokio::spawn(services::bgsave::bgsave_scheduler(
         db.clone(),
         bgsave,
-        Terminator::new(signal.subscribe()),
+        signal.subscribe(),
     ));
     let snapshot_handle = tokio::spawn(services::snapshot::snapshot_service(
         engine,
         db.clone(),
         snapshot,
-        Terminator::new(signal.subscribe()),
+        signal.subscribe(),
     ));
 
     // bind to signals

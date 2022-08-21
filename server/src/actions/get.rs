@@ -27,11 +27,15 @@
 //! # `GET` queries
 //! This module provides functions to work with `GET` queries
 
-use crate::{dbnet::connection::prelude::*, util::compiler};
+use crate::{dbnet::prelude::*, util::compiler};
 
 action!(
     /// Run a `GET` query
-    fn get(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn get(
+        handle: &crate::corestore::Corestore,
+        con: &mut Connection<C, P>,
+        mut act: ActionIter<'a>,
+    ) {
         ensure_length::<P>(act.len(), |len| len == 1)?;
         let kve = handle.get_table_with::<P, KVEBlob>()?;
         unsafe {

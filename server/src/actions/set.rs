@@ -27,11 +27,11 @@
 //! # `SET` queries
 //! This module provides functions to work with `SET` queries
 
-use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, queryengine::ActionIter};
+use crate::{corestore::SharedSlice, dbnet::prelude::*, queryengine::ActionIter};
 
 action!(
     /// Run a `SET` query
-    fn set(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn set(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len == 2)?;
         if registry::state_okay() {
             let did_we = {

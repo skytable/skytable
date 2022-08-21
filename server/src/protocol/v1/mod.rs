@@ -31,7 +31,7 @@ use {
     },
     crate::{
         corestore::heap_array::{HeapArray, HeapArrayWriter},
-        dbnet::connection::QueryWithAdvance,
+        dbnet::QueryWithAdvance,
     },
 };
 

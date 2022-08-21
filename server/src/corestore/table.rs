@@ -30,7 +30,7 @@ use crate::{
     actions::ActionResult,
     auth::Authmap,
     corestore::{htable::Coremap, SharedSlice},
-    dbnet::connection::prelude::Corestore,
+    dbnet::prelude::Corestore,
     kvengine::{KVEListmap, KVEStandard, LockedVec},
     protocol::interface::ProtocolSpec,
     util,

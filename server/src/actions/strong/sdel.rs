@@ -27,7 +27,7 @@
 use {
     crate::{
         actions::strong::StrongActionResult,
-        dbnet::connection::prelude::*,
+        dbnet::prelude::*,
         kvengine::{KVEStandard, SingleEncoder},
         protocol::iter::DerefUnsafeSlice,
         util::compiler,
@@ -40,7 +40,7 @@ action! {
     ///
     /// This either returns `Okay` if all the keys were `del`eted, or it returns a
     /// `Nil`, which is code `1`
-    fn sdel(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
+    fn sdel(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len != 0)?;
         let kve = handle.get_table_with::<P, KVEBlob>()?;
         if registry::state_okay() {

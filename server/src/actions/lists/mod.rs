@@ -30,12 +30,12 @@ mod macros;
 pub mod lget;
 pub mod lmod;
 
-use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, kvengine::LockedVec};
+use crate::{corestore::SharedSlice, dbnet::prelude::*, kvengine::LockedVec};
 
 action! {
     /// Handle an `LSET` query for the list model
     /// Syntax: `LSET <listname> <values ...>`
-    fn lset(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn lset(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len > 0)?;
         let listmap = handle.get_table_with::<P, KVEList>()?;
         let listname = unsafe { act.next_unchecked_bytes() };
