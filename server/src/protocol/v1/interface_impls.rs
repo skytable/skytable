@@ -51,7 +51,7 @@ impl ProtocolSpec for Skyhash1 {
     const TYPE_TYPED_ARRAY_ELEMENT_NULL: &'static [u8] = b"\0";
 
     // metaframe
-    const SIMPLE_QUERY_HEADER: &'static [u8] = b"*";
+    const SIMPLE_QUERY_HEADER: &'static [u8] = b"*1\n";
     const PIPELINED_QUERY_FIRST_BYTE: u8 = b'$';
 
     // respcodes
