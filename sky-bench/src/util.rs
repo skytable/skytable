@@ -114,7 +114,7 @@ pub fn run_sanity_test(server_config: &ServerConfig) -> BResult<()> {
     for (query, expected, test_kind) in tests {
         let r: Element = con.run_query(query)?;
         if r != expected {
-            return Err(Error::RuntimeError(format!(
+            return Err(Error::Runtime(format!(
                 "sanity test for `{test_kind}` failed"
             )));
         }
@@ -136,7 +136,7 @@ pub fn cleanup(server_config: &ServerConfig) -> BResult<()> {
     let mut c = Connection::new(server_config.host(), server_config.port())?;
     let r: Element = c.run_query(Query::from("drop model default.tmpbench force"))?;
     if r == Element::RespCode(RespCode::Okay) {
-        Err(Error::RuntimeError("failed to run cleanup".into()))
+        Err(Error::Runtime("failed to run cleanup".into()))
     } else {
         Ok(())
     }

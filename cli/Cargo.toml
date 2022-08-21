@@ -17,5 +17,5 @@ skytable = { git = "https://github.com/skytable/client-rust", branch = "next", f
 tokio = { version = "1.20.1", features = ["full"] }
 clap = { version = "2", features = ["yaml"] }
 rustyline = "10.0.0"
-crossterm = "0.24.0"
+crossterm = "0.25.0"
 lazy_static = "1.4.0"

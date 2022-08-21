@@ -321,7 +321,7 @@ where
             Err(WorkpoolError::ThreadStartFailure(count, sum))
         }
     }
-    pub fn clone(&self) -> WorkpoolResult<Self> {
+    pub fn clone_pool(&self) -> WorkpoolResult<Self> {
         Self::new(
             self.workers.len(),
             self.init_pre_loop_var.clone(),

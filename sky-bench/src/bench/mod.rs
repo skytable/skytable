@@ -95,14 +95,14 @@ impl<'a> LoopMonitor<'a> {
             max,
             current: 0,
             time: 0,
-            name: name,
+            name,
         }
     }
     /// Run cleanup
     fn cleanup(&mut self) -> BResult<()> {
         let last_iter = self.is_last_iter();
         if let Some(ref mut cleanup) = self.inner {
-            let should_run_cleanup = (!last_iter) || (last_iter && !cleanup.skip_on_last);
+            let should_run_cleanup = !(last_iter && cleanup.skip_on_last);
             if should_run_cleanup {
                 return cleanup.cleanup(self.name);
             }
@@ -161,10 +161,10 @@ impl<'a> CleanupInner<'a> {
     fn cleanup(&mut self, name: &'static str) -> BResult<()> {
         let r: Element = self.connection.run_query(&self.query)?;
         if r.ne(&self.response) {
-            return Err(Error::RuntimeError(format!(
+            Err(Error::Runtime(format!(
                 "Failed to run cleanup for benchmark `{}`",
                 name
-            )));
+            )))
         } else {
             Ok(())
         }
@@ -185,7 +185,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     let bench_config = BenchmarkConfig::new(servercfg, matches)?;
     // check if we have enough combinations for the given query count and key size
     if !util::has_enough_ncr(bench_config.kvsize(), bench_config.query_count()) {
-        return Err(Error::RuntimeError(
+        return Err(Error::Runtime(
             "too low sample space for given query count. use larger kvsize".into(),
         ));
     }
@@ -251,7 +251,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     binfo!("Finished benchmarks. Cleaning up ...");
     let r: Element = misc_connection.run_query(Query::from("drop model default.tmpbench force"))?;
     if r != Element::RespCode(RespCode::Okay) {
-        return Err(Error::RuntimeError(
+        return Err(Error::Runtime(
             "failed to clean up after benchmarks".into(),
         ));
     }

@@ -177,7 +177,7 @@ mod tests;
 /// DISCLAIMER: THIS FUNCTION CAN DO TERRIBLE THINGS (especially when you think about padding)
 unsafe fn raw_byte_repr<'a, T: 'a>(len: &'a T) -> &'a [u8] {
     {
-        let ptr: *const u8 = mem::transmute(len);
+        let ptr: *const u8 = len as *const T as *const u8;
         slice::from_raw_parts::<'a>(ptr, mem::size_of::<T>())
     }
 }

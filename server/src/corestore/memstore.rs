@@ -97,11 +97,11 @@ pub const AUTH: ObjectID = unsafe {
 #[test]
 fn test_def_macro_sanity() {
     // just make sure our macro is working as expected
-    let mut def = DEFAULT.clone();
+    let mut def = DEFAULT;
     def.push(b'?');
     unsafe {
         assert_eq!(def.as_str(), "default?");
-        let mut sys = SYSTEM.clone();
+        let mut sys = SYSTEM;
         sys.push(b'?');
         assert_eq!(sys.as_str(), "system?");
     }

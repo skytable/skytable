@@ -52,7 +52,7 @@ where
         let parsed = input
             .as_ref()
             .parse::<T>()
-            .map_err(|e| Error::ConfigError(format!("parse error: `{}`", e)))?;
+            .map_err(|e| Error::Config(format!("parse error: `{}`", e)))?;
         *target = parsed;
     }
     Ok(())

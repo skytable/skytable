@@ -41,7 +41,7 @@ action! {
         let listname = unsafe { act.next_unchecked_bytes() };
         let list = listmap.get_inner_ref();
         if registry::state_okay() {
-            let did = if let Some(entry) = list.fresh_entry(listname.into()) {
+            let did = if let Some(entry) = list.fresh_entry(listname) {
                 let v: Vec<SharedSlice> = act.map(SharedSlice::new).collect();
                 entry.insert(LockedVec::new(v));
                 true

@@ -444,7 +444,7 @@ impl<'de> Visitor<'de> for ModesetVisitor {
         match value {
             "dev" => Ok(Modeset::Dev),
             "prod" => Ok(Modeset::Prod),
-            _ => return Err(E::custom(format!("Bad value `{value}` for modeset"))),
+            _ => Err(E::custom(format!("Bad value `{value}` for modeset"))),
         }
     }
 }

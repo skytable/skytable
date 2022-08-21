@@ -29,7 +29,6 @@ use std::{
     borrow::Borrow,
     fmt::Debug,
     hash::Hash,
-    mem::transmute,
     ops::Deref,
     ptr::{self, NonNull},
     slice,
@@ -221,9 +220,9 @@ impl SharedSliceInner {
     fn new(slice: &[u8]) -> Self {
         let layout = Layout::array::<u8>(slice.len()).unwrap();
         let data = unsafe {
-            if slice.len() == 0 {
+            if slice.is_empty() {
                 // HACK(@ohsayan): Just ensure that the address is aligned for this
-                transmute(layout.align())
+                layout.align() as *mut u8
             } else {
                 // UNSAFE(@ohsayan): Come on, just a malloc and memcpy
                 let array_ptr = alloc(layout);

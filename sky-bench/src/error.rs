@@ -35,37 +35,37 @@ pub type BResult<T> = Result<T, Error>;
 /// Benchmark tool errors
 pub enum Error {
     /// An error originating from the Skytable client
-    ClientError(SkyError),
+    Client(SkyError),
     /// An error originating from the benchmark/server configuration
-    ConfigError(String),
+    Config(String),
     /// A runtime error
-    RuntimeError(String),
+    Runtime(String),
 }
 
 impl From<SkyError> for Error {
     fn from(e: SkyError) -> Self {
-        Self::ClientError(e)
+        Self::Client(e)
     }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::ClientError(e) => write!(f, "client error: {}", e),
-            Error::ConfigError(e) => write!(f, "config error: {}", e),
-            Error::RuntimeError(e) => write!(f, "runtime error: {}", e),
+            Error::Client(e) => write!(f, "client error: {}", e),
+            Error::Config(e) => write!(f, "config error: {}", e),
+            Error::Runtime(e) => write!(f, "runtime error: {}", e),
         }
     }
 }
 
 impl From<TryReserveError> for Error {
     fn from(e: TryReserveError) -> Self {
-        Error::RuntimeError(format!("memory reserve error: {}", e.to_string()))
+        Error::Runtime(format!("memory reserve error: {}", e))
     }
 }
 
 impl From<WorkpoolError> for Error {
     fn from(e: WorkpoolError) -> Self {
-        Error::RuntimeError(format!("threadpool error: {}", e))
+        Error::Runtime(format!("threadpool error: {}", e))
     }
 }
