@@ -28,12 +28,14 @@ use {
     crate::{
         config::SnapshotConfig,
         corestore::Corestore,
-        dbnet::Terminator,
         registry,
         storage::v1::sengine::{SnapshotActionResult, SnapshotEngine},
     },
     std::sync::Arc,
-    tokio::time::{self, Duration},
+    tokio::{
+        sync::broadcast::Receiver,
+        time::{self, Duration},
+    },
 };
 
 /// The snapshot service
@@ -47,7 +49,7 @@ pub async fn snapshot_service(
     engine: Arc<SnapshotEngine>,
     handle: Corestore,
     ss_config: SnapshotConfig,
-    mut termination_signal: Terminator,
+    mut termination_signal: Receiver<()>,
 ) {
     match ss_config {
         SnapshotConfig::Disabled => {
@@ -79,7 +81,7 @@ pub async fn snapshot_service(
                             registry::poison();
                         }
                     },
-                    _ = termination_signal.receive_signal() => {
+                    _ = termination_signal.recv() => {
                         // time to terminate; goodbye!
                         break;
                     }

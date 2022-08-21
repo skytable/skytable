@@ -24,13 +24,13 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
+use crate::dbnet::prelude::*;
 
 action!(
     /// Run a `KEYLEN` query
     ///
     /// At this moment, `keylen` only supports a single key
-    fn keylen(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn keylen(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len == 1)?;
         let res: Option<usize> = {
             let reader = handle.get_table_with::<P, KVEBlob>()?;

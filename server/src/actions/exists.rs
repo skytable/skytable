@@ -28,13 +28,13 @@
 //! This module provides functions to work with `EXISTS` queries
 
 use crate::{
-    corestore::table::DataModel, dbnet::connection::prelude::*,
+    corestore::table::DataModel, dbnet::prelude::*,
     kvengine::encoding::ENCODING_LUT_ITER, queryengine::ActionIter, util::compiler,
 };
 
 action!(
     /// Run an `EXISTS` query
-    fn exists(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
+    fn exists(handle: &Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len != 0)?;
         let mut how_many_of_them_exist = 0usize;
         macro_rules! exists {

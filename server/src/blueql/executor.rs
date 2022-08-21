@@ -24,6 +24,8 @@
  *
 */
 
+use crate::dbnet::BufferedSocketStream;
+
 use {
     super::{
         ast::{Statement, StatementLT},
@@ -33,20 +35,19 @@ use {
         actions::{self, ActionError, ActionResult},
         blueql,
         corestore::memstore::ObjectID,
-        dbnet::connection::prelude::*,
+        dbnet::prelude::*,
     },
 };
 
-pub async fn execute<'a, P, Strm, T>(
+pub async fn execute<'a, P, C>(
     handle: &'a mut Corestore,
-    con: &'a mut T,
+    con: &mut Connection<C, P>,
     maybe_statement: &[u8],
     extra: usize,
 ) -> ActionResult<()>
 where
     P: ProtocolSpec,
-    T: ClientConnection<P, Strm>,
-    Strm: Stream,
+    C: BufferedSocketStream,
 {
     let statement =
         error::map_ql_err_to_resp::<StatementLT, P>(blueql::compile(maybe_statement, extra))?;

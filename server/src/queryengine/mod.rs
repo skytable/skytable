@@ -30,7 +30,7 @@ use crate::{
     actions::{self, ActionError, ActionResult},
     admin, auth, blueql,
     corestore::Corestore,
-    dbnet::connection::prelude::*,
+    dbnet::{prelude::*, BufferedSocketStream},
     protocol::{iter::AnyArrayIter, PipelinedQuery, SimpleQuery, UnsafeSlice},
 };
 
@@ -73,8 +73,8 @@ action! {
     /// Execute queries for an anonymous user
     fn execute_simple_noauth(
         _db: &mut Corestore,
-        con: &mut T,
-        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+        con: &mut Connection<C, P>,
+        auth: &mut AuthProviderHandle,
         buf: SimpleQuery
     ) {
         let bufref = buf.as_slice();
@@ -91,18 +91,18 @@ action! {
     //// Execute a simple query
     fn execute_simple(
         db: &mut Corestore,
-        con: &mut T,
-        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+        con: &mut Connection<C, P>,
+        auth: &mut AuthProviderHandle,
         buf: SimpleQuery
     ) {
         self::execute_stage(db, con, auth, buf.as_slice()).await
     }
 }
 
-async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, Strm: Stream>(
+async fn execute_stage<'a, P: ProtocolSpec, C: BufferedSocketStream>(
     db: &mut Corestore,
-    con: &'a mut T,
-    auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+    con: &mut Connection<C, P>,
+    auth: &mut AuthProviderHandle,
     buf: &[UnsafeSlice],
 ) -> ActionResult<()> {
     let mut iter = unsafe {
@@ -149,15 +149,10 @@ async fn execute_stage<'a, P: ProtocolSpec, T: 'a + ClientConnection<P, Strm>, S
 
 /// Execute a stage **completely**. This means that action errors are never propagated
 /// over the try operator
-async fn execute_stage_pedantic<
-    'a,
-    P: ProtocolSpec,
-    T: ClientConnection<P, Strm> + 'a,
-    Strm: Stream + 'a,
->(
+async fn execute_stage_pedantic<'a, C: BufferedSocketStream, P: ProtocolSpec>(
     handle: &mut Corestore,
-    con: &mut T,
-    auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+    con: &mut Connection<C, P>,
+    auth: &mut AuthProviderHandle,
     stage: &[UnsafeSlice],
 ) -> crate::IoResult<()> {
     let ret = async {
@@ -175,8 +170,8 @@ action! {
     /// Execute a basic pipelined query
     fn execute_pipeline(
         handle: &mut Corestore,
-        con: &mut T,
-        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+        con: &mut Connection<C, P>,
+        auth: &mut AuthProviderHandle,
         pipeline: PipelinedQuery
     ) {
         for stage in pipeline.into_inner().iter() {

@@ -28,7 +28,7 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::{
-    corestore::table::DataModel, dbnet::connection::prelude::*,
+    corestore::table::DataModel, dbnet::prelude::*,
     kvengine::encoding::ENCODING_LUT_ITER, util::compiler,
 };
 
@@ -37,7 +37,7 @@ action!(
     ///
     /// Do note that this function is blocking since it acquires a write lock.
     /// It will write an entire datagroup, for this `del` action
-    fn del(handle: &Corestore, con: &'a mut T, act: ActionIter<'a>) {
+    fn del(handle: &Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |size| size != 0)?;
         let table = get_tbl_ref!(handle, con);
         macro_rules! remove {

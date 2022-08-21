@@ -1,5 +1,5 @@
 /*
- * Created on Thu Sep 24 2020
+ * Created on Sun Aug 21 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,21 +24,23 @@
  *
 */
 
-use crate::dbnet::prelude::*;
+//! A 'prelude' for imports to interface with the database and the client
+//!
+//! This module is hollow itself, it only re-exports from `dbnet::con` and `tokio::io`
 
-action!(
-    /// Returns the number of keys in the database
-    fn dbsize(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
-        ensure_length::<P>(act.len(), |len| len < 2)?;
-        if act.is_empty() {
-            let len = get_tbl_ref!(handle, con).count();
-            con.write_usize(len).await?;
-        } else {
-            let raw_entity = unsafe { act.next().unsafe_unwrap() };
-            let entity = handle_entity!(con, raw_entity);
-            con.write_usize(get_tbl!(&entity, handle, con).count())
-                .await?;
-        }
-        Ok(())
-    }
-);
+pub use {
+    super::{connection::Connection, AuthProviderHandle},
+    crate::{
+        actions::{ensure_boolean_or_aerr, ensure_length, translate_ddl_error},
+        corestore::{
+            table::{KVEBlob, KVEList},
+            Corestore,
+        },
+        get_tbl, handle_entity, is_lowbit_set,
+        protocol::interface::ProtocolSpec,
+        queryengine::ActionIter,
+        registry,
+        util::{self, UnwrapActionError, Unwrappable},
+    },
+    tokio::io::{AsyncReadExt, AsyncWriteExt},
+};

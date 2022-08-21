@@ -25,14 +25,14 @@
 */
 
 use crate::{
-    dbnet::connection::prelude::*, kvengine::encoding::ENCODING_LUT_ITER, queryengine::ActionIter,
+    dbnet::prelude::*, kvengine::encoding::ENCODING_LUT_ITER, queryengine::ActionIter,
     util::compiler,
 };
 
 action!(
     /// Run an `MGET` query
     ///
-    fn mget(handle: &crate::corestore::Corestore, con: &mut T, act: ActionIter<'a>) {
+    fn mget(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |size| size != 0)?;
         let kve = handle.get_table_with::<P, KVEBlob>()?;
         let encoding_is_okay = ENCODING_LUT_ITER[kve.is_key_encoded()](act.as_ref());

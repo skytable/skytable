@@ -26,80 +26,17 @@
 
 pub use protocol::{ParseResult, Query};
 use {
+    super::NetBackoff,
     crate::{
-        dbnet::{
-            connection::{ConnectionHandler, ExecutorFn},
-            BaseListener, Terminator,
-        },
-        protocol::{
-            self,
-            interface::{ProtocolRead, ProtocolSpec, ProtocolWrite},
-            Skyhash1, Skyhash2,
-        },
+        dbnet::{listener::BaseListener, BufferedSocketStream, Connection, ConnectionHandler},
+        protocol::{self, interface::ProtocolSpec, Skyhash1, Skyhash2},
         IoResult,
     },
-    bytes::BytesMut,
-    libsky::BUF_CAP,
-    std::{cell::Cell, time::Duration},
-    tokio::{
-        io::{AsyncWrite, BufWriter},
-        net::TcpStream,
-        time,
-    },
+    std::marker::PhantomData,
+    tokio::net::TcpStream,
 };
 
-pub trait BufferedSocketStream: AsyncWrite {}
-
 impl BufferedSocketStream for TcpStream {}
-
-type TcpExecutorFn<P> = ExecutorFn<P, Connection<TcpStream>, TcpStream>;
-
-/// A TCP/SSL connection wrapper
-pub struct Connection<T>
-where
-    T: BufferedSocketStream,
-{
-    /// The connection to the remote socket, wrapped in a buffer to speed
-    /// up writing
-    pub stream: BufWriter<T>,
-    /// The in-memory read buffer. The size is given by `BUF_CAP`
-    pub buffer: BytesMut,
-}
-
-impl<T> Connection<T>
-where
-    T: BufferedSocketStream,
-{
-    /// Initiailize a new `Connection` instance
-    pub fn new(stream: T) -> Self {
-        Connection {
-            stream: BufWriter::new(stream),
-            buffer: BytesMut::with_capacity(BUF_CAP),
-        }
-    }
-}
-
-pub struct TcpBackoff {
-    current: Cell<u8>,
-}
-
-impl TcpBackoff {
-    const MAX_BACKOFF: u8 = 64;
-    pub const fn new() -> Self {
-        Self {
-            current: Cell::new(1),
-        }
-    }
-    pub async fn spin(&self) {
-        // we can guarantee that this won't wrap around beyond u8::MAX because we always
-        // check if we `should_disconnect` before sleeping and spinning
-        time::sleep(Duration::from_secs(self.current.get() as u64)).await;
-        self.current.set(self.current.get() << 1);
-    }
-    pub fn should_disconnect(&self) -> bool {
-        self.current.get() > Self::MAX_BACKOFF
-    }
-}
 
 pub type Listener = RawListener<Skyhash2>;
 pub type ListenerV1 = RawListener<Skyhash1>;
@@ -107,26 +44,19 @@ pub type ListenerV1 = RawListener<Skyhash1>;
 /// A listener
 pub struct RawListener<P> {
     pub base: BaseListener,
-    executor_fn: TcpExecutorFn<P>,
+    _marker: PhantomData<P>,
 }
 
-impl<P: ProtocolSpec + 'static> RawListener<P>
-where
-    Connection<TcpStream>: ProtocolRead<P, TcpStream> + ProtocolWrite<P, TcpStream>,
-{
+impl<P: ProtocolSpec + 'static> RawListener<P> {
     pub fn new(base: BaseListener) -> Self {
         Self {
-            executor_fn: if base.auth.is_enabled() {
-                ConnectionHandler::execute_unauth
-            } else {
-                ConnectionHandler::execute_auth
-            },
             base,
+            _marker: PhantomData,
         }
     }
     /// Accept an incoming connection
     async fn accept(&mut self) -> IoResult<TcpStream> {
-        let backoff = TcpBackoff::new();
+        let backoff = NetBackoff::new();
         loop {
             match self.base.listener.accept().await {
                 // We don't need the bindaddr
@@ -157,13 +87,12 @@ where
              in a crash
             */
             let stream = skip_loop_err!(self.accept().await);
-            let mut chandle = ConnectionHandler::new(
+            let mut chandle = ConnectionHandler::<TcpStream, P>::new(
                 self.base.db.clone(),
                 Connection::new(stream),
                 self.base.auth.clone(),
-                self.executor_fn,
                 self.base.climit.clone(),
-                Terminator::new(self.base.signal.subscribe()),
+                self.base.signal.subscribe(),
                 self.base.terminate_tx.clone(),
             );
             tokio::spawn(async move {

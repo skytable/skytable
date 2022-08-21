@@ -26,7 +26,7 @@
 
 use {
     crate::{
-        corestore::booltable::BoolTable, dbnet::connection::prelude::*,
+        corestore::booltable::BoolTable, dbnet::prelude::*,
         storage::v1::interface::DIR_ROOT,
     },
     libsky::VERSION,
@@ -45,7 +45,7 @@ const ERR_UNKNOWN_METRIC: &[u8] = b"!14\nunknown-metric\n";
 const HEALTH_TABLE: BoolTable<&str> = BoolTable::new("good", "critical");
 
 action! {
-    fn sys(_handle: &Corestore, con: &mut T, iter: ActionIter<'_>) {
+    fn sys(_handle: &Corestore, con: &mut Connection<C, P>, iter: ActionIter<'_>) {
         let mut iter = iter;
         ensure_boolean_or_aerr::<P>(iter.len() == 2)?;
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
@@ -54,7 +54,7 @@ action! {
             _ => util::err(P::RCODE_UNKNOWN_ACTION),
         }
     }
-    fn sys_info(con: &mut T, iter: &mut ActionIter<'_>) {
+    fn sys_info(con: &mut Connection<C, P>, iter: &mut ActionIter<'_>) {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             INFO_PROTOCOL => con.write_string(P::PROTOCOL_VERSIONSTRING).await?,
             INFO_PROTOVER => con.write_float(P::PROTOCOL_VERSION).await?,
@@ -63,7 +63,7 @@ action! {
         }
         Ok(())
     }
-    fn sys_metric(con: &mut T, iter: &mut ActionIter<'_>) {
+    fn sys_metric(con: &mut Connection<C, P>, iter: &mut ActionIter<'_>) {
         match unsafe { iter.next_lowercase_unchecked() }.as_ref() {
             METRIC_HEALTH => {
                 con.write_string(HEALTH_TABLE[registry::state_okay()]).await?

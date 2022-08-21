@@ -130,10 +130,10 @@ pub fn ensure_boolean_or_aerr<P: ProtocolSpec>(boolean: bool) -> ActionResult<()
 
 pub mod heya {
     //! Respond to `HEYA` queries
-    use crate::dbnet::connection::prelude::*;
+    use crate::dbnet::prelude::*;
     action!(
         /// Returns a `HEY!` `Response`
-        fn heya(_handle: &Corestore, con: &'a mut T, mut act: ActionIter<'a>) {
+        fn heya(_handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
             ensure_length::<P>(act.len(), |len| len == 0 || len == 1)?;
             if act.len() == 1 {
                 let raw_byte = unsafe { act.next_unchecked() };

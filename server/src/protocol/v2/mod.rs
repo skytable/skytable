@@ -31,7 +31,7 @@ use {
         raw_parser::{RawParser, RawParserExt, RawParserMeta},
         ParseError, ParseResult, PipelinedQuery, Query, SimpleQuery, UnsafeSlice,
     },
-    crate::{corestore::heap_array::HeapArray, dbnet::connection::QueryWithAdvance},
+    crate::{corestore::heap_array::HeapArray, dbnet::QueryWithAdvance},
 };
 
 #[cfg(feature = "nightly")]

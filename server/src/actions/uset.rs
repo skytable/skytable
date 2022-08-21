@@ -25,7 +25,7 @@
 */
 
 use crate::{
-    corestore::SharedSlice, dbnet::connection::prelude::*,
+    corestore::SharedSlice, dbnet::prelude::*,
     kvengine::encoding::ENCODING_LUT_ITER_PAIR, queryengine::ActionIter, util::compiler,
 };
 
@@ -33,7 +33,7 @@ action!(
     /// Run an `USET` query
     ///
     /// This is like "INSERT or UPDATE"
-    fn uset(handle: &crate::corestore::Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn uset(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         let howmany = act.len();
         ensure_length::<P>(howmany, |size| size & 1 == 0 && size != 0)?;
         let kve = handle.get_table_with::<P, KVEBlob>()?;

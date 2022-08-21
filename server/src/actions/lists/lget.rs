@@ -24,7 +24,7 @@
  *
 */
 
-use crate::{corestore::SharedSlice, dbnet::connection::prelude::*};
+use crate::{corestore::SharedSlice, dbnet::prelude::*};
 
 const LEN: &[u8] = "LEN".as_bytes();
 const LIMIT: &[u8] = "LIMIT".as_bytes();
@@ -62,7 +62,7 @@ action! {
     /// - `LGET <mylist> FIRST` will return the first item
     /// - `LGET <mylist> LAST` will return the last item
     /// if it exists
-    fn lget(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn lget(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len != 0)?;
         let listmap = handle.get_table_with::<P, KVEList>()?;
         // get the list name

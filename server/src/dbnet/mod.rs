@@ -1,5 +1,5 @@
 /*
- * Created on Tue Jul 21 2020
+ * Created on Sun Aug 21 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2020, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,312 +24,241 @@
  *
 */
 
-//! # `DBNET` - Database Networking
-//! This module provides low-level interaction with sockets. It handles the creation of
-//! a task for an incoming connection, handling errors if required and finally processing an incoming
-//! query.
-//!
-//! ## Typical flow
-//! This is how connections are handled:
-//! 1. A remote client creates a TCP connection to the server
-//! 2. An asynchronous is spawned on the Tokio runtime
-//! 3. Data from the socket is asynchronously read into an 8KB read buffer
-//! 4. Once the data is read completely (i.e the source sends an EOF byte), the `protocol` module
-//! is used to parse the stream
-//! 5. Now errors are handled if they occur. Otherwise, the query is executed by `Corestore::execute_query()`
-//!
-
 use {
-    self::{
-        tcp::{Listener, ListenerV1},
-        tls::{SslListener, SslListenerV1},
-    },
+    self::connection::Connection,
     crate::{
+        actions::{ActionError, ActionResult},
         auth::AuthProvider,
-        config::{PortConfig, ProtocolVersion, SslOpts},
         corestore::Corestore,
-        util::error::{Error, SkyResult},
+        protocol::{interface::ProtocolSpec, Query},
+        util::compiler,
         IoResult,
     },
-    core::future::Future,
-    std::{net::IpAddr, sync::Arc},
+    bytes::Buf,
+    std::{cell::Cell, sync::Arc, time::Duration},
     tokio::{
-        net::TcpListener,
-        sync::{broadcast, mpsc, Semaphore},
+        io::{AsyncReadExt, AsyncWriteExt},
+        sync::{
+            broadcast::{self},
+            mpsc::{self},
+            Semaphore,
+        },
+        time,
     },
 };
 
-pub mod connection;
+pub type QueryWithAdvance = (Query, usize);
+pub const MAXIMUM_CONNECTION_LIMIT: usize = 50000;
+use crate::queryengine;
+
+pub use self::listener::connect;
+
+mod connection;
 #[macro_use]
 mod macros;
+mod listener;
+pub mod prelude;
 mod tcp;
 mod tls;
 
-pub const MAXIMUM_CONNECTION_LIMIT: usize = 50000;
+/// This is a "marker trait" that ensures that no silly types are
+/// passed into the [`Connection`] type
+pub trait BufferedSocketStream: AsyncWriteExt + AsyncReadExt + Unpin {}
 
-/// Responsible for gracefully shutting down the server instead of dying randomly
-// Sounds very sci-fi ;)
-pub struct Terminator {
-    terminate: bool,
-    signal: broadcast::Receiver<()>,
+/// Result of [`Connection::read_query`]
+enum QueryResult {
+    /// A [`Query`] read to be run
+    Q(QueryWithAdvance),
+    /// Simply proceed to the next run loop iter
+    NextLoop,
+    /// The client disconnected
+    Disconnected,
 }
 
-impl Terminator {
-    /// Create a new `Terminator` instance
-    pub const fn new(signal: broadcast::Receiver<()>) -> Self {
-        Terminator {
-            // Don't terminate on creation!
-            terminate: false,
-            signal,
+/// A backoff implementation that is meant to be used in connection loops
+pub(self) struct NetBackoff {
+    c: Cell<u8>,
+}
+
+impl NetBackoff {
+    /// The maximum backoff duration
+    const MAX_BACKOFF: u8 = 64;
+    /// Create a new [`NetBackoff`] instance
+    pub const fn new() -> Self {
+        Self { c: Cell::new(1) }
+    }
+    /// Wait for the current backoff duration
+    pub async fn spin(&self) {
+        time::sleep(Duration::from_secs(self.c.get() as _)).await;
+        self.c.set(self.c.get() << 1);
+    }
+    /// Should we disconnect the stream?
+    pub fn should_disconnect(&self) -> bool {
+        self.c.get() > Self::MAX_BACKOFF
+    }
+}
+
+pub struct AuthProviderHandle {
+    /// the source authentication provider
+    provider: AuthProvider,
+    /// authenticated
+    auth_good: bool,
+}
+
+impl AuthProviderHandle {
+    pub fn new(provider: AuthProvider) -> Self {
+        let auth_good = !provider.is_enabled();
+        Self {
+            provider,
+            auth_good,
         }
     }
-    /// Check if the signal is a termination signal
-    pub const fn is_termination_signal(&self) -> bool {
-        self.terminate
+    /// This returns `true` if:
+    /// 1. Authn is disabled
+    /// 2. The connection is authenticated
+    pub const fn authenticated(&self) -> bool {
+        self.auth_good
     }
-    /// Wait to receive a shutdown signal
-    pub async fn receive_signal(&mut self) {
-        // The server may have already been terminated
-        // In that event, just return
-        if self.terminate {
-            return;
-        }
-        let _ = self.signal.recv().await;
-        self.terminate = true;
+    pub fn set_auth(&mut self) {
+        self.auth_good = true;
     }
-}
-
-/// The base TCP listener
-pub struct BaseListener {
-    /// An atomic reference to the coretable
-    pub db: Corestore,
-    /// The auth provider
-    pub auth: AuthProvider,
-    /// The incoming connection listener (binding)
-    pub listener: TcpListener,
-    /// The maximum number of connections
-    pub climit: Arc<Semaphore>,
-    /// The shutdown broadcaster
-    pub signal: broadcast::Sender<()>,
-    // When all `Sender`s are dropped - the `Receiver` gets a `None` value
-    // We send a clone of `terminate_tx` to each `CHandler`
-    pub terminate_tx: mpsc::Sender<()>,
-    pub terminate_rx: mpsc::Receiver<()>,
-}
-
-impl BaseListener {
-    pub async fn init(
-        db: &Corestore,
-        auth: AuthProvider,
-        host: IpAddr,
-        port: u16,
-        semaphore: Arc<Semaphore>,
-        signal: broadcast::Sender<()>,
-    ) -> SkyResult<Self> {
-        let (terminate_tx, terminate_rx) = mpsc::channel(1);
-        let listener = TcpListener::bind((host, port))
-            .await
-            .map_err(|e| Error::ioerror_extra(e, format!("binding to port {port}")))?;
-        Ok(Self {
-            db: db.clone(),
-            auth,
-            listener,
-            climit: semaphore,
-            signal,
-            terminate_tx,
-            terminate_rx,
-        })
+    pub fn set_unauth(&mut self) {
+        self.auth_good = false;
     }
-    pub async fn release_self(self) {
-        let Self {
-            mut terminate_rx,
-            terminate_tx,
-            signal,
-            ..
-        } = self;
-        drop(signal);
-        drop(terminate_tx);
-        let _ = terminate_rx.recv().await;
+    pub fn provider_mut(&mut self) -> &mut AuthProvider {
+        &mut self.provider
+    }
+    pub fn provider(&self) -> &AuthProvider {
+        &self.provider
     }
 }
 
-/// Multiple Listener Interface
-///
-/// A `MultiListener` is an abstraction over an `SslListener` or a `Listener` to facilitate
-/// easier asynchronous listening on multiple ports.
-///
-/// - The `SecureOnly` variant holds an `SslListener`
-/// - The `InsecureOnly` variant holds a `Listener`
-/// - The `Multi` variant holds both an `SslListener` and a `Listener`
-///     This variant enables listening to both secure and insecure sockets at the same time
-///     asynchronously
-#[allow(clippy::large_enum_variant)]
-pub enum MultiListener {
-    SecureOnly(SslListener),
-    SecureOnlyV1(SslListenerV1),
-    InsecureOnly(Listener),
-    InsecureOnlyV1(ListenerV1),
-    Multi(Listener, SslListener),
-    MultiV1(ListenerV1, SslListenerV1),
-}
-
-async fn wait_on_port_futures(
-    a: impl Future<Output = IoResult<()>>,
-    b: impl Future<Output = IoResult<()>>,
-) -> IoResult<()> {
-    let (e1, e2) = tokio::join!(a, b);
-    if let Err(e) = e1 {
-        log::error!("Insecure listener failed with: {}", e);
-    }
-    if let Err(e) = e2 {
-        log::error!("Secure listener failed with: {}", e);
-    }
-    Ok(())
-}
-
-impl MultiListener {
-    /// Create a new `InsecureOnly` listener
-    pub fn new_insecure_only(base: BaseListener, protocol: ProtocolVersion) -> Self {
-        match protocol {
-            ProtocolVersion::V2 => MultiListener::InsecureOnly(Listener::new(base)),
-            ProtocolVersion::V1 => MultiListener::InsecureOnlyV1(ListenerV1::new(base)),
-        }
-    }
-    /// Create a new `SecureOnly` listener
-    pub fn new_secure_only(
-        base: BaseListener,
-        ssl: SslOpts,
-        protocol: ProtocolVersion,
-    ) -> SkyResult<Self> {
-        let listener = match protocol {
-            ProtocolVersion::V2 => {
-                let listener = SslListener::new_pem_based_ssl_connection(
-                    ssl.key,
-                    ssl.chain,
-                    base,
-                    ssl.passfile,
-                )?;
-                MultiListener::SecureOnly(listener)
-            }
-            ProtocolVersion::V1 => {
-                let listener = SslListenerV1::new_pem_based_ssl_connection(
-                    ssl.key,
-                    ssl.chain,
-                    base,
-                    ssl.passfile,
-                )?;
-                MultiListener::SecureOnlyV1(listener)
-            }
-        };
-        Ok(listener)
-    }
-    /// Create a new `Multi` listener that has both a secure and an insecure listener
-    pub async fn new_multi(
-        ssl_base_listener: BaseListener,
-        tcp_base_listener: BaseListener,
-        ssl: SslOpts,
-        protocol: ProtocolVersion,
-    ) -> SkyResult<Self> {
-        let mls = match protocol {
-            ProtocolVersion::V2 => {
-                let secure_listener = SslListener::new_pem_based_ssl_connection(
-                    ssl.key,
-                    ssl.chain,
-                    ssl_base_listener,
-                    ssl.passfile,
-                )?;
-                let insecure_listener = Listener::new(tcp_base_listener);
-                MultiListener::Multi(insecure_listener, secure_listener)
-            }
-            ProtocolVersion::V1 => {
-                let secure_listener = SslListenerV1::new_pem_based_ssl_connection(
-                    ssl.key,
-                    ssl.chain,
-                    ssl_base_listener,
-                    ssl.passfile,
-                )?;
-                let insecure_listener = ListenerV1::new(tcp_base_listener);
-                MultiListener::MultiV1(insecure_listener, secure_listener)
-            }
-        };
-        Ok(mls)
-    }
-    /// Start the server
-    ///
-    /// The running of single and/or parallel listeners is handled by this function by
-    /// exploiting the working of async functions
-    pub async fn run_server(&mut self) -> IoResult<()> {
-        match self {
-            MultiListener::SecureOnly(secure_listener) => secure_listener.run().await,
-            MultiListener::SecureOnlyV1(secure_listener) => secure_listener.run().await,
-            MultiListener::InsecureOnly(insecure_listener) => insecure_listener.run().await,
-            MultiListener::InsecureOnlyV1(insecure_listener) => insecure_listener.run().await,
-            MultiListener::Multi(insecure_listener, secure_listener) => {
-                wait_on_port_futures(insecure_listener.run(), secure_listener.run()).await
-            }
-            MultiListener::MultiV1(insecure_listener, secure_listener) => {
-                wait_on_port_futures(insecure_listener.run(), secure_listener.run()).await
-            }
-        }
-    }
-    /// Signal the ports to shut down and only return after they have shut down
-    ///
-    /// **Do note:** This function doesn't flush the `Corestore` object! The **caller has to
-    /// make sure that the data is saved!**
-    pub async fn finish_with_termsig(self) {
-        match self {
-            MultiListener::InsecureOnly(Listener { base, .. })
-            | MultiListener::SecureOnly(SslListener { base, .. })
-            | MultiListener::InsecureOnlyV1(ListenerV1 { base, .. })
-            | MultiListener::SecureOnlyV1(SslListenerV1 { base, .. }) => base.release_self().await,
-            MultiListener::Multi(insecure, secure) => {
-                insecure.base.release_self().await;
-                secure.base.release_self().await;
-            }
-            MultiListener::MultiV1(insecure, secure) => {
-                insecure.base.release_self().await;
-                secure.base.release_self().await;
-            }
-        }
-    }
-}
-
-/// Initialize the database networking
-pub async fn connect(
-    ports: PortConfig,
-    protocol: ProtocolVersion,
-    maxcon: usize,
+/// A generic connection handler. You have two choices:
+/// 1. Choose the connection kind
+/// 2. Choose the protocol implementation
+pub struct ConnectionHandler<C, P> {
+    /// an atomic reference to the shared in-memory engine
     db: Corestore,
-    auth: AuthProvider,
-    signal: broadcast::Sender<()>,
-) -> SkyResult<MultiListener> {
-    let climit = Arc::new(Semaphore::new(maxcon));
-    let base_listener_init = |host, port| {
-        BaseListener::init(
-            &db,
-            auth.clone(),
-            host,
-            port,
-            climit.clone(),
-            signal.clone(),
-        )
-    };
-    let description = ports.get_description();
-    let server = match ports {
-        PortConfig::InsecureOnly { host, port } => {
-            MultiListener::new_insecure_only(base_listener_init(host, port).await?, protocol)
+    /// the connection
+    con: Connection<C, P>,
+    /// the semaphore used to impose limits on number of connections
+    climit: Arc<Semaphore>,
+    /// the authentication handle
+    auth: AuthProviderHandle,
+    /// check for termination signals
+    termination_signal: broadcast::Receiver<()>,
+    /// the sender that we drop when we're done with handling a connection (used for gracefule exit)
+    _term_sig_tx: mpsc::Sender<()>,
+}
+
+impl<C, P> ConnectionHandler<C, P>
+where
+    C: BufferedSocketStream,
+    P: ProtocolSpec,
+{
+    /// Create a new connection handler
+    pub fn new(
+        db: Corestore,
+        con: Connection<C, P>,
+        auth_data: AuthProvider,
+        climit: Arc<Semaphore>,
+        termination_signal: broadcast::Receiver<()>,
+        _term_sig_tx: mpsc::Sender<()>,
+    ) -> Self {
+        Self {
+            db,
+            con,
+            climit,
+            auth: AuthProviderHandle::new(auth_data),
+            termination_signal,
+            _term_sig_tx,
         }
-        PortConfig::SecureOnly { host, ssl } => MultiListener::new_secure_only(
-            base_listener_init(host, ssl.port).await?,
-            ssl,
-            protocol,
-        )?,
-        PortConfig::Multi { host, port, ssl } => {
-            let secure_listener = base_listener_init(host, ssl.port).await?;
-            let insecure_listener = base_listener_init(host, port).await?;
-            MultiListener::new_multi(secure_listener, insecure_listener, ssl, protocol).await?
+    }
+    pub async fn run(&mut self) -> IoResult<()> {
+        loop {
+            let packet = tokio::select! {
+                pkt = self.con.read_query() => pkt,
+                _ = self.termination_signal.recv() => {
+                    return Ok(());
+                }
+            };
+            match packet {
+                Ok(QueryResult::Q((query, advance))) => {
+                    // the mutable reference to self ensures that the buffer is not modified
+                    // hence ensuring that the pointers will remain valid
+                    #[cfg(debug_assertions)]
+                    let len_at_start = self.con.buffer.len();
+                    #[cfg(debug_assertions)]
+                    let sptr_at_start = self.con.buffer.as_ptr() as usize;
+                    #[cfg(debug_assertions)]
+                    let eptr_at_start = sptr_at_start + len_at_start;
+                    {
+                        // The actual execution (the assertions are just debug build sanity checks)
+                        match self.execute_query(query).await {
+                            Ok(()) => {}
+                            Err(ActionError::ActionError(e)) => self.con.write_error(e).await?,
+                            Err(ActionError::IoError(e)) => return Err(e),
+                        }
+                    }
+                    {
+                        // do these assertions to ensure memory safety (this is just for sanity sake)
+                        #[cfg(debug_assertions)]
+                        // len should be unchanged. no functions should **ever** touch the buffer
+                        debug_assert_eq!(self.con.buffer.len(), len_at_start);
+                        #[cfg(debug_assertions)]
+                        // start of allocation should be unchanged
+                        debug_assert_eq!(self.con.buffer.as_ptr() as usize, sptr_at_start);
+                        #[cfg(debug_assertions)]
+                        // end of allocation should be unchanged. else we're entirely violating
+                        // memory safety guarantees
+                        debug_assert_eq!(
+                            unsafe {
+                                // UNSAFE(@ohsayan): THis is always okay
+                                self.con.buffer.as_ptr().add(len_at_start)
+                            } as usize,
+                            eptr_at_start
+                        );
+                        // this is only when we clear the buffer. since execute_query is not called
+                        // at this point, it's totally fine (so invalidating ptrs is totally cool)
+                        self.con.buffer.advance(advance);
+                    }
+                }
+                Ok(QueryResult::Disconnected) => return Ok(()),
+                Ok(QueryResult::NextLoop) => {}
+                Err(e) => return Err(e),
+            }
         }
-    };
-    log::info!("Server started on {description}");
-    Ok(server)
+    }
+    async fn execute_query(&mut self, query: Query) -> ActionResult<()> {
+        let Self { db, con, auth, .. } = self;
+        match query {
+            Query::Simple(q) => {
+                con.write_simple_query_header().await?;
+                if compiler::likely(auth.authenticated()) {
+                    queryengine::execute_simple(db, con, auth, q).await?;
+                } else {
+                    queryengine::execute_simple_noauth(db, con, auth, q).await?;
+                }
+            }
+            Query::Pipelined(p) => {
+                if compiler::likely(auth.authenticated()) {
+                    con.write_pipelined_query_header(p.len()).await?;
+                    queryengine::execute_pipeline(db, con, auth, p).await?;
+                } else {
+                    con.write_simple_query_header().await?;
+                    con.write_error(P::AUTH_CODE_BAD_CREDENTIALS).await?;
+                }
+            }
+        }
+        con.stream.flush().await?;
+        Ok(())
+    }
+}
+
+impl<C, T> Drop for ConnectionHandler<C, T> {
+    fn drop(&mut self) {
+        // Make sure that the permit is returned to the semaphore
+        // in the case that there is a panic inside
+        self.climit.add_permits(1);
+    }
 }

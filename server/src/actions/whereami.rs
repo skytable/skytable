@@ -24,10 +24,10 @@
  *
 */
 
-use crate::dbnet::connection::prelude::*;
+use crate::dbnet::prelude::*;
 
 action! {
-    fn whereami(store: &Corestore, con: &mut T, act: ActionIter<'a>) {
+    fn whereami(store: &Corestore, con: &mut Connection<C, P>, act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len == 0)?;
         match store.get_ids() {
             (Some(ks), Some(tbl)) =>  {

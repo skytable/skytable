@@ -24,7 +24,7 @@
  *
 */
 
-use crate::{corestore::SharedSlice, dbnet::connection::prelude::*, util::compiler};
+use crate::{corestore::SharedSlice, dbnet::prelude::*, util::compiler};
 
 const CLEAR: &[u8] = "CLEAR".as_bytes();
 const PUSH: &[u8] = "PUSH".as_bytes();
@@ -40,7 +40,7 @@ action! {
     /// - `LMOD <mylist> insert <index> <value>`
     /// - `LMOD <mylist> remove <index>`
     /// - `LMOD <mylist> clear`
-    fn lmod(handle: &Corestore, con: &mut T, mut act: ActionIter<'a>) {
+    fn lmod(handle: &Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
         ensure_length::<P>(act.len(), |len| len > 1)?;
         let listmap = handle.get_table_with::<P, KVEList>()?;
         // get the list name

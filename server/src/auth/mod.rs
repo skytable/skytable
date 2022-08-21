@@ -43,7 +43,7 @@ pub use provider::{AuthProvider, Authmap};
 #[cfg(test)]
 mod tests;
 
-use crate::dbnet::connection::prelude::*;
+use crate::dbnet::prelude::*;
 
 const AUTH_CLAIM: &[u8] = b"claim";
 const AUTH_LOGIN: &[u8] = b"login";
@@ -57,8 +57,8 @@ const AUTH_WHOAMI: &[u8] = b"whoami";
 action! {
     /// Handle auth. Should have passed the `auth` token
     fn auth(
-        con: &mut T,
-        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+        con: &mut Connection<C, P>,
+        auth: &mut AuthProviderHandle,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
@@ -75,7 +75,7 @@ action! {
             AUTH_LOGOUT => {
                 ensure_boolean_or_aerr::<P>(iter.is_empty())?; // nothing else
                 auth.provider_mut().logout::<P>()?;
-                auth.swap_executor_to_anonymous();
+                auth.set_unauth();
                 con._write_raw(P::RCODE_OKAY).await?;
                 Ok(())
             }
@@ -91,12 +91,12 @@ action! {
             _ => util::err(P::RCODE_UNKNOWN_ACTION),
         }
     }
-    fn auth_whoami(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_whoami(con: &mut Connection<C, P>, auth: &mut AuthProviderHandle, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr::<P>(ActionIter::is_empty(iter))?;
         con.write_string(&auth.provider().whoami::<P>()?).await?;
         Ok(())
     }
-    fn auth_listuser(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_listuser(con: &mut Connection<C, P>, auth: &mut AuthProviderHandle, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr::<P>(ActionIter::is_empty(iter))?;
         let usernames = auth.provider().collect_usernames::<P>()?;
         con.write_typed_non_null_array_header(usernames.len(), b'+').await?;
@@ -105,7 +105,7 @@ action! {
         }
         Ok(())
     }
-    fn auth_restore(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn auth_restore(con: &mut Connection<C, P>, auth: &mut AuthProviderHandle, iter: &mut ActionIter<'_>) {
         let newkey = match iter.len() {
             1 => {
                 // so this fella thinks they're root
@@ -124,18 +124,18 @@ action! {
         con.write_string(&newkey).await?;
         Ok(())
     }
-    fn _auth_claim(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn _auth_claim(con: &mut Connection<C, P>, auth: &mut AuthProviderHandle, iter: &mut ActionIter<'_>) {
         ensure_boolean_or_aerr::<P>(iter.len() == 1)?; // just the origin key
         let origin_key = unsafe { iter.next_unchecked() };
         let key = auth.provider_mut().claim_root::<P>(origin_key)?;
-        auth.swap_executor_to_authenticated();
+        auth.set_auth();
         con.write_string(&key).await?;
         Ok(())
     }
     /// Handle a login operation only. The **`login` token is expected to be present**
     fn auth_login_only(
-        con: &mut T,
-        auth: &mut AuthProviderHandle<'_, P, T, Strm>,
+        con: &mut Connection<C, P>,
+        auth: &mut AuthProviderHandle,
         iter: ActionIter<'_>
     ) {
         let mut iter = iter;
@@ -147,12 +147,12 @@ action! {
             _ => util::err(P::AUTH_CODE_PERMS),
         }
     }
-    fn _auth_login(con: &mut T, auth: &mut AuthProviderHandle<'_, P, T, Strm>, iter: &mut ActionIter<'_>) {
+    fn _auth_login(con: &mut Connection<C, P>, auth: &mut AuthProviderHandle, iter: &mut ActionIter<'_>) {
         // sweet, where's our username and password
         ensure_boolean_or_aerr::<P>(iter.len() == 2)?; // just the uname and pass
         let (username, password) = unsafe { (iter.next_unchecked(), iter.next_unchecked()) };
         auth.provider_mut().login::<P>(username, password)?;
-        auth.swap_executor_to_authenticated();
+        auth.set_auth();
         con._write_raw(P::RCODE_OKAY).await?;
         Ok(())
     }
