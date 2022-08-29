@@ -44,6 +44,7 @@ use {
 
 #[macro_use]
 pub mod util;
+mod engine;
 mod actions;
 mod admin;
 mod arbiter;
