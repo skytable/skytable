@@ -350,7 +350,7 @@ keyvalue:
           desc: |
             Removes the element from the end of the list if no index is provided or from the provided
             index while shifting elements to the right if required.
-          return: [String, Binstr, Rcode 0, Rcode 1, Rcode 5, bad-list-index]
+          return: [String, Binstr, Rcode 1, Rcode 5, bad-list-index]
         - name: remove
           complexity: O(1)
           accept: [AnyArray]
@@ -377,4 +377,4 @@ keyvalue:
           desc: |
             Creates a list with the provided values, or simply creates an empty list if it doesn't
             already exist in the table.
-          return: [Rcode 0, Rcode 1, Rcode 5]
+          return: [Rcode 0, Rcode 2, Rcode 5]
