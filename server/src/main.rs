@@ -53,6 +53,7 @@ mod config;
 mod corestore;
 mod dbnet;
 mod diskstore;
+mod engine;
 mod kvengine;
 mod protocol;
 mod queryengine;
