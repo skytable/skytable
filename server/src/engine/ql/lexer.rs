@@ -1,5 +1,5 @@
 /*
- * Created on Mon Sep 12 2022
+ * Created on Tue Sep 13 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,91 +24,13 @@
  *
 */
 
-macro_rules! boxed {
-    ([] $ty:ty) => {
-        ::std::boxed::Box::<[$ty]>
-    };
-}
+use crate::util::Life;
 
-/*
-    Definitions
-*/
-
-use crate::util::compiler;
-use std::{
-    fmt,
-    marker::PhantomData,
-    mem::{self, transmute},
-    ops::Deref,
-    slice, str,
+use {
+    super::{dptr, LangError, LangResult, RawSlice},
+    crate::util::compiler,
+    core::{marker::PhantomData, slice, str},
 };
-
-/// An unsafe, C-like slice that holds a ptr and length. Construction and usage is at the risk of the user
-pub struct RawSlice {
-    ptr: *const u8,
-    len: usize,
-}
-
-impl RawSlice {
-    const _EALIGN: () = assert!(mem::align_of::<Self>() == mem::align_of::<&[u8]>());
-    const unsafe fn new(ptr: *const u8, len: usize) -> Self {
-        Self { ptr, len }
-    }
-    unsafe fn as_slice(&self) -> &[u8] {
-        slice::from_raw_parts(self.ptr, self.len)
-    }
-}
-
-#[cfg(debug_assertions)]
-impl fmt::Debug for RawSlice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(unsafe {
-                // UNSAFE(@ohsayan): Note, the caller is responsible for ensuring validity as long the
-                // slice is used. also note, the Debug impl only exists for Debug builds so we never use
-                // this in release builds
-                self.as_slice()
-            })
-            .finish()
-    }
-}
-
-#[cfg(debug_assertions)]
-impl PartialEq for RawSlice {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            // UNSAFE(@ohsayan): Callers must ensure validity during usage
-            self.as_slice() == other.as_slice()
-        }
-    }
-}
-
-#[cfg(debug_assertions)]
-impl<U> PartialEq<U> for RawSlice
-where
-    U: Deref<Target = [u8]>,
-{
-    fn eq(&self, other: &U) -> bool {
-        unsafe {
-            // UNSAFE(@ohsayan): Callers must ensure validity during usage
-            self.as_slice() == other.deref()
-        }
-    }
-}
-
-/*
-    Lang errors
-*/
-
-type LangResult<T> = Result<T, LangError>;
-
-#[derive(Debug, PartialEq)]
-pub enum LangError {
-    InvalidNumericLiteral,
-    InvalidStringLiteral,
-    UnexpectedChar,
-    InvalidTypeExpression,
-}
 
 /*
     Lex meta
@@ -116,22 +38,24 @@ pub enum LangError {
 
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(PartialEq))]
+#[repr(u8)]
 pub enum Token {
-    OpenParen,            // (
-    CloseParen,           // )
-    OpenAngular,          // <
-    CloseAngular,         // >
-    OpenSqBracket,        // [
-    CloseSqBracket,       // ]
-    Comma,                // ,
-    Colon,                // :
-    Period,               // .
-    LitString(String),    // str lit
-    Identifier(RawSlice), // ident
-    LitNum(u64),          // num lit
-    Keyword(Kw),          // kw
-    OperatorEq,           // =
-    OperatorAdd,          // +
+    OpenParen,       // (
+    CloseParen,      // )
+    OpenAngular,     // <
+    CloseAngular,    // >
+    OpenSqBracket,   // [
+    CloseSqBracket,  // ]
+    OpenBrace,       // {
+    CloseBrace,      // }
+    Comma,           // ,
+    Colon,           // :
+    Period,          // .
+    Ident(RawSlice), // ident
+    Keyword(Kw),     // kw
+    OperatorEq,      // =
+    OperatorAdd,     // +
+    Lit(Lit),        // literal
 }
 
 impl From<Kw> for Token {
@@ -141,16 +65,53 @@ impl From<Kw> for Token {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Kw {
+pub enum Lit {
+    Str(String),
+    Bool(bool),
+    Num(u64),
+}
+
+impl From<Lit> for Token {
+    fn from(l: Lit) -> Self {
+        Self::Lit(l)
+    }
+}
+
+impl From<u64> for Lit {
+    fn from(n: u64) -> Self {
+        Self::Num(n)
+    }
+}
+
+impl From<String> for Lit {
+    fn from(s: String) -> Self {
+        Self::Str(s)
+    }
+}
+
+impl From<bool> for Lit {
+    fn from(b: bool) -> Self {
+        Self::Bool(b)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum Stmt {
     Use,
     Create,
     Drop,
     Inspect,
     Alter,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
+pub enum Kw {
+    Stmt(Stmt),
+    Type(Ty),
     Space,
     Model,
-    Force,
-    Type(Ty),
 }
 
 impl From<Ty> for Kw {
@@ -161,19 +122,20 @@ impl From<Ty> for Kw {
 
 impl Kw {
     // FIXME(@ohsayan): Use our pf hack
-    pub fn try_from_slice(s: &[u8]) -> Option<Kw> {
+    pub fn try_from_slice(s: &[u8]) -> Option<Token> {
         let r = match s.to_ascii_lowercase().as_slice() {
-            b"use" => Self::Use,
-            b"create" => Self::Create,
-            b"drop" => Self::Drop,
-            b"inspect" => Self::Inspect,
-            b"alter" => Self::Alter,
-            b"space" => Self::Space,
-            b"model" => Self::Model,
-            b"force" => Self::Force,
-            b"string" => Self::Type(Ty::String),
-            b"binary" => Self::Type(Ty::Binary),
-            b"list" => Self::Type(Ty::Ls),
+            b"use" => Self::Stmt(Stmt::Use).into(),
+            b"create" => Self::Stmt(Stmt::Create).into(),
+            b"drop" => Self::Stmt(Stmt::Drop).into(),
+            b"inspect" => Self::Stmt(Stmt::Inspect).into(),
+            b"alter" => Self::Stmt(Stmt::Alter).into(),
+            b"space" => Self::Space.into(),
+            b"model" => Self::Model.into(),
+            b"string" => Self::Type(Ty::String).into(),
+            b"binary" => Self::Type(Ty::Binary).into(),
+            b"list" => Self::Type(Ty::Ls).into(),
+            b"true" => Token::Lit(Lit::Bool(true)),
+            b"false" => Token::Lit(Lit::Bool(false)),
             _ => return None,
         };
         return Some(r);
@@ -192,14 +154,9 @@ pub enum Ty {
     Lexer impl
 */
 
-#[inline(always)]
-fn dptr(s: *const u8, e: *const u8) -> usize {
-    e as usize - s as usize
-}
-
 pub struct Lexer<'a> {
     c: *const u8,
-    eptr: *const u8,
+    e: *const u8,
     last_error: Option<LangError>,
     tokens: Vec<Token>,
     _lt: PhantomData<&'a [u8]>,
@@ -210,7 +167,7 @@ impl<'a> Lexer<'a> {
         unsafe {
             Self {
                 c: src.as_ptr(),
-                eptr: src.as_ptr().add(src.len()),
+                e: src.as_ptr().add(src.len()),
                 last_error: None,
                 tokens: Vec::new(),
                 _lt: PhantomData,
@@ -227,7 +184,7 @@ impl<'a> Lexer<'a> {
     }
     #[inline(always)]
     const fn data_end_ptr(&self) -> *const u8 {
-        self.eptr
+        self.e
     }
     #[inline(always)]
     fn not_exhausted(&self) -> bool {
@@ -237,12 +194,16 @@ impl<'a> Lexer<'a> {
     fn exhausted(&self) -> bool {
         self.cursor() == self.data_end_ptr()
     }
+    #[inline(always)]
+    fn remaining(&self) -> usize {
+        dptr(self.c, self.e)
+    }
     unsafe fn deref_cursor(&self) -> u8 {
         *self.cursor()
     }
     #[inline(always)]
     unsafe fn incr_cursor_by(&mut self, by: usize) {
-        debug_assert!(self.not_exhausted());
+        debug_assert!(self.remaining() >= by);
         self.c = self.cursor().add(by)
     }
     #[inline(always)]
@@ -263,7 +224,11 @@ impl<'a> Lexer<'a> {
     }
     #[inline(always)]
     fn peek_is_and_forward(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
-        self.not_exhausted() && unsafe { f(self.deref_cursor()) }
+        let did_fw = self.not_exhausted() && unsafe { f(self.deref_cursor()) };
+        unsafe {
+            self.incr_cursor_if(did_fw);
+        }
+        did_fw
     }
     #[inline(always)]
     fn peek_eq_and_forward_or_eof(&mut self, eq: u8) -> bool {
@@ -286,11 +251,6 @@ impl<'a> Lexer<'a> {
         }
     }
     #[inline(always)]
-    unsafe fn check_escaped(&self, b: u8) -> bool {
-        debug_assert!(self.not_exhausted());
-        self.deref_cursor() == b'\\' && { self.not_exhausted() && self.deref_cursor() == b }
-    }
-    #[inline(always)]
     fn trim_ahead(&mut self) {
         while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
     }
@@ -309,8 +269,8 @@ impl<'a> Lexer<'a> {
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
         match Kw::try_from_slice(unsafe { s.as_slice() }) {
-            Some(kw) => self.tokens.push(kw.into()),
-            None => self.tokens.push(Token::Identifier(s)),
+            Some(kw) => self.tokens.push(kw),
+            None => self.tokens.push(Token::Ident(s)),
         }
     }
     fn scan_number(&mut self) {
@@ -322,7 +282,7 @@ impl<'a> Lexer<'a> {
             let wseof = self.peek_eq_and_forward_or_eof(b' ');
             match str::from_utf8_unchecked(slice::from_raw_parts(s, dptr(s, self.cursor()))).parse()
             {
-                Ok(num) if compiler::likely(wseof) => self.tokens.push(Token::LitNum(num)),
+                Ok(num) if compiler::likely(wseof) => self.tokens.push(Token::Lit(Lit::Num(num))),
                 _ => self.last_error = Some(LangError::InvalidNumericLiteral),
             }
         }
@@ -336,16 +296,30 @@ impl<'a> Lexer<'a> {
         let mut buf = Vec::new();
         unsafe {
             while self.peek_neq(quote_style) {
-                let esc_backslash = self.check_escaped(b'\\');
-                let esc_quote = self.check_escaped(quote_style);
-                // mutually exclusive
-                self.incr_cursor_if(esc_backslash | esc_quote);
-                buf.push(self.deref_cursor());
+                match self.deref_cursor() {
+                    b if b != b'\\' => {
+                        buf.push(b);
+                    }
+                    _ => {
+                        self.incr_cursor();
+                        if self.exhausted() {
+                            break;
+                        }
+                        let b = self.deref_cursor();
+                        let quote = b == quote_style;
+                        let bs = b == b'\\';
+                        if quote | bs {
+                            buf.push(b);
+                        } else {
+                            break; // what on good earth is that escape?
+                        }
+                    }
+                }
                 self.incr_cursor();
             }
-            let eq = self.peek_eq_and_forward(quote_style);
+            let terminated = self.peek_eq_and_forward(quote_style);
             match String::from_utf8(buf) {
-                Ok(st) if eq => self.tokens.push(Token::LitString(st)),
+                Ok(st) if terminated => self.tokens.push(Token::Lit(st.into())),
                 _ => self.last_error = Some(LangError::InvalidStringLiteral),
             }
         }
@@ -359,6 +333,8 @@ impl<'a> Lexer<'a> {
             b'>' => Token::CloseAngular,
             b'[' => Token::OpenSqBracket,
             b']' => Token::CloseSqBracket,
+            b'{' => Token::OpenBrace,
+            b'}' => Token::CloseBrace,
             b',' => Token::Comma,
             b'.' => Token::Period,
             b'=' => Token::OperatorEq,
@@ -383,61 +359,12 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
+    pub fn lex(src: &'a [u8]) -> LangResult<Life<'a, Vec<Token>>> {
         let mut slf = Self::new(src);
         slf._lex();
         match slf.last_error {
-            None => Ok(slf.tokens),
+            None => Ok(Life::new(slf.tokens)),
             Some(e) => Err(e),
         }
-    }
-}
-
-/*
-    AST
-*/
-
-#[derive(Debug, PartialEq)]
-pub struct TypeExpr(Vec<Ty>);
-
-#[repr(u8)]
-#[derive(Debug)]
-enum FTy {
-    String = 0,
-    Binary = 1,
-}
-
-#[derive(Debug)]
-struct TypeDefintion {
-    d: usize,
-    b: Ty,
-    f: FTy,
-}
-
-impl TypeDefintion {
-    const PRIM: usize = 1;
-    pub fn eval(s: TypeExpr) -> LangResult<Self> {
-        let TypeExpr(ex) = s;
-        let l = ex.len();
-        #[inline(always)]
-        fn ls(t: &Ty) -> bool {
-            *t == Ty::Ls
-        }
-        let d = ex.iter().map(|v| ls(v) as usize).sum::<usize>();
-        let v = (l == 1 && ex[0] != Ty::Ls) || (l > 1 && (d == l - 1) && ex[l - 1] != Ty::Ls);
-        if compiler::likely(v) {
-            unsafe {
-                Ok(Self {
-                    d: d + 1,
-                    b: ex[0],
-                    f: transmute(ex[l - 1]),
-                })
-            }
-        } else {
-            compiler::cold_err(Err(LangError::InvalidTypeExpression))
-        }
-    }
-    pub const fn is_prim(&self) -> bool {
-        self.d == Self::PRIM
     }
 }

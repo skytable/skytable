@@ -1,5 +1,5 @@
 /*
- * Created on Mon Sep 12 2022
+ * Created on Tue Sep 13 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,7 +24,57 @@
  *
 */
 
-#![allow(dead_code)]
-#![allow(unused_macros)]
+use {
+    super::{
+        ast::{Compiler, Statement},
+        lexer::{Lit, Ty},
+        LangResult, RawSlice,
+    },
+    std::collections::HashMap,
+};
 
-mod ql;
+macro_rules! boxed {
+    ([] $ty:ty) => {
+        ::std::boxed::Box::<[$ty]>
+    };
+}
+
+/*
+    Meta
+*/
+
+struct FieldMeta {
+    field_name: Option<RawSlice>,
+    unprocessed_layers: boxed![[] TypeConfig],
+}
+
+type Dictionary = HashMap<String, Lit>;
+
+struct TypeConfig {
+    ty: Ty,
+    dict: Dictionary,
+}
+
+struct CreateStatement {
+    entity: RawSlice,
+}
+
+/*
+    Validation
+*/
+
+fn parse_dictionary(_c: &mut Compiler) -> LangResult<Dictionary> {
+    todo!()
+}
+
+fn parse_field(_c: &mut Compiler) -> LangResult<FieldMeta> {
+    todo!()
+}
+
+fn parse_type_definition(_c: &mut Compiler) -> LangResult<boxed![[] TypeConfig]> {
+    todo!()
+}
+
+pub(super) fn parse_schema(_c: &mut Compiler, _model: RawSlice) -> LangResult<Statement> {
+    todo!()
+}
