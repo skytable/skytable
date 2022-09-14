@@ -24,6 +24,8 @@
  *
 */
 
+use core::slice;
+
 use {
     super::{
         dptr,
@@ -129,7 +131,7 @@ impl<'a> Compiler<'a> {
         Self::new(&token_stream).compile_link_lt()
     }
     #[inline(always)]
-    const fn new(token_stream: &[Token]) -> Self {
+    pub(super) const fn new(token_stream: &[Token]) -> Self {
         unsafe {
             Self {
                 c: token_stream.as_ptr(),
@@ -211,12 +213,20 @@ impl<'a> Compiler<'a> {
         }
     }
     #[inline(always)]
-    fn nxtok_nofw_opt(&self) -> Option<&Token> {
+    pub(super) const fn cursor(&self) -> *const Token {
+        self.c
+    }
+    #[inline(always)]
+    pub(super) fn nxtok_nofw_opt(&self) -> Option<&Token> {
         if self.not_exhausted() {
             unsafe { Some(&*self.c) }
         } else {
             None
         }
+    }
+    #[inline(always)]
+    pub(super) fn remslice(&'a self) -> &'a [Token] {
+        unsafe { slice::from_raw_parts(self.c, self.remaining()) }
     }
     #[inline(always)]
     pub(super) fn not_exhausted(&self) -> bool {
@@ -230,15 +240,22 @@ impl<'a> Compiler<'a> {
     pub(super) fn remaining(&self) -> usize {
         dptr(self.c, self.e)
     }
-    unsafe fn deref_cursor(&self) -> &Token {
+    pub(super) unsafe fn deref_cursor(&self) -> &Token {
         &*self.c
     }
     pub(super) fn peek_eq_and_forward(&mut self, t: &Token) -> bool {
-        self.not_exhausted() && unsafe { self.deref_cursor() == t }
+        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor() == t };
+        unsafe {
+            self.incr_cursor_if(did_fw);
+        }
+        did_fw
     }
     #[inline(always)]
     pub(super) unsafe fn incr_cursor(&mut self) {
         self.incr_cursor_by(1)
+    }
+    pub(super) unsafe fn incr_cursor_if(&mut self, did_fw: bool) {
+        self.incr_cursor_by(did_fw as _)
     }
     #[inline(always)]
     pub(super) unsafe fn incr_cursor_by(&mut self, by: usize) {

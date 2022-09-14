@@ -64,7 +64,7 @@ impl From<Kw> for Token {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Lit {
     Str(String),
     Bool(bool),
@@ -279,7 +279,15 @@ impl<'a> Lexer<'a> {
             while self.peek_is(|b| b.is_ascii_digit()) {
                 self.incr_cursor();
             }
-            let wseof = self.peek_eq_and_forward_or_eof(b' ');
+            /*
+                1234; // valid
+                1234} // valid
+                1234{ // invalid
+                1234, // valid
+                1234a // invalid
+            */
+            static TERMINAL_CHAR: [u8; 6] = [b';', b'}', b',', b' ', b'\n', b'\t'];
+            let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b));
             match str::from_utf8_unchecked(slice::from_raw_parts(s, dptr(s, self.cursor()))).parse()
             {
                 Ok(num) if compiler::likely(wseof) => self.tokens.push(Token::Lit(Lit::Num(num))),
@@ -344,6 +352,9 @@ impl<'a> Lexer<'a> {
                 return;
             }
         };
+        unsafe {
+            self.incr_cursor();
+        }
         self.tokens.push(b)
     }
 
@@ -353,7 +364,7 @@ impl<'a> Lexer<'a> {
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
                 byte if byte.is_ascii_digit() => self.scan_number(),
                 qs @ (b'\'' | b'"') => self.scan_quoted_string(qs),
-                b' ' => self.trim_ahead(),
+                b' ' | b'\n' | b'\t' => self.trim_ahead(),
                 b => self.scan_byte(b),
             }
         }

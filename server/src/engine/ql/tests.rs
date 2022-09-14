@@ -24,12 +24,9 @@
  *
 */
 
-use super::lexer;
-
 mod lexer_tests {
     use crate::engine::ql::LangError;
-
-    use super::lexer::{Lexer, Lit, Token};
+    use super::super::lexer::{Lexer, Lit, Token};
 
     macro_rules! v(
         ($e:literal) => {{
@@ -144,5 +141,42 @@ mod lexer_tests {
             Lexer::lex(wth).unwrap_err(),
             LangError::InvalidStringLiteral
         );
+    }
+}
+
+mod schema_tests {
+    use super::super::{
+        ast::Compiler,
+        lexer::{Lexer, Lit},
+        schema::{parse_dictionary, Dict, DictEntry},
+    };
+    #[test]
+    fn dict_read() {
+        let d = Lexer::lex(
+            br#"
+            {
+                name: "sayan",
+                verified: true,
+                burgers: 152
+            }
+        "#,
+        )
+        .unwrap();
+        let mut c = Compiler::new(&d);
+        let dict = parse_dictionary(&mut c).unwrap();
+        let expected: Dict = [
+            (
+                "name".to_owned(),
+                DictEntry::Lit(Lit::Str("sayan".into()).into()),
+            ),
+            (
+                "verified".to_owned(),
+                DictEntry::Lit(Lit::Bool(true).into()),
+            ),
+            ("burgers".to_owned(), DictEntry::Lit(Lit::Num(152).into())),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(dict, expected);
     }
 }

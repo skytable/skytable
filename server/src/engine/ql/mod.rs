@@ -48,6 +48,7 @@ pub enum LangError {
     ExpectedStatement,
     UnexpectedEndofStatement,
     UnexpectedToken,
+    InvalidDictionaryExpression,
 }
 
 /*
@@ -55,6 +56,7 @@ pub enum LangError {
 */
 
 /// An unsafe, C-like slice that holds a ptr and length. Construction and usage is at the risk of the user
+#[cfg_attr(not(debug_assertions), derive(Debug))]
 pub struct RawSlice {
     ptr: *const u8,
     len: usize,
