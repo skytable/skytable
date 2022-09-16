@@ -23,6 +23,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+
 /*
     Most grammar tools are pretty much "off the shelf" which makes some things incredible hard to achieve (such
     as custom error injection logic). To make things icier, Rust's integration with these tools (like lex) is not
@@ -45,7 +46,7 @@
 use {
     super::{
         ast::{Compiler, Statement},
-        lexer::{Kw, Lit, Token},
+        lexer::{Kw, Lit, Token, Ty},
         LangResult, RawSlice,
     },
     std::{
@@ -86,13 +87,14 @@ pub type Dict = HashMap<String, DictEntry>;
 */
 
 type DictFoldState = u8;
-const DICT_STATE_FINAL: DictFoldState = 0xFF;
-const DICT_STATE_ACCEPT_OB: DictFoldState = 0x00;
-const DICT_STATE_ACCEPT_IDENT_OR_CB: DictFoldState = 0x01;
-const DICT_STATE_ACCEPT_COLON: DictFoldState = 0x02;
-const DICT_STATE_ACCEPT_LIT_OR_OB: DictFoldState = 0x03;
-const DICT_STATE_ACCEPT_COMMA_OR_CB: DictFoldState = 0x04;
-const DICT_STATE_ACCEPT_IDENT: DictFoldState = 0x05;
+/// Start with this stat when you have already read an OB
+const DICTFOLD_STATE_INIT_IDENT_OR_CB: DictFoldState = 0x00;
+const DICTFOLD_STATE_FINAL: DictFoldState = 0xFF;
+const DICTFOLD_STATE_ACCEPT_OB: DictFoldState = 0x01;
+const DICTFOLD_STATE_ACCEPT_COLON: DictFoldState = 0x02;
+const DICTFOLD_STATE_ACCEPT_LIT_OR_OB: DictFoldState = 0x03;
+const DICTFOLD_STATE_ACCEPT_COMMA_OR_CB: DictFoldState = 0x04;
+const DICTFOLD_STATE_ACCEPT_IDENT: DictFoldState = 0x05;
 
 fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
     /*
@@ -110,27 +112,27 @@ fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
     let mut tmp = MaybeUninit::<&str>::uninit();
     while i < l && okay {
         match (&tok[i], state) {
-            (Token::OpenBrace, DICT_STATE_ACCEPT_OB) => {
+            (Token::OpenBrace, DICTFOLD_STATE_ACCEPT_OB) => {
                 i += 1;
                 // next state is literal
-                state = DICT_STATE_ACCEPT_IDENT_OR_CB;
+                state = DICTFOLD_STATE_INIT_IDENT_OR_CB;
             }
-            (Token::CloseBrace, DICT_STATE_ACCEPT_IDENT_OR_CB | DICT_STATE_ACCEPT_COMMA_OR_CB) => {
+            (Token::CloseBrace, DICTFOLD_STATE_INIT_IDENT_OR_CB) => {
                 i += 1;
                 // since someone closed the brace, we're done processing this type
-                state = DICT_STATE_FINAL;
+                state = DICTFOLD_STATE_FINAL;
                 break;
             }
-            (Token::Ident(key), DICT_STATE_ACCEPT_IDENT_OR_CB | DICT_STATE_ACCEPT_IDENT) => {
+            (Token::Ident(key), DICTFOLD_STATE_INIT_IDENT_OR_CB | DICTFOLD_STATE_ACCEPT_IDENT) => {
                 i += 1;
                 tmp = MaybeUninit::new(unsafe { transmute(key.as_slice()) });
-                state = DICT_STATE_ACCEPT_COLON;
+                state = DICTFOLD_STATE_ACCEPT_COLON;
             }
-            (Token::Colon, DICT_STATE_ACCEPT_COLON) => {
+            (Token::Colon, DICTFOLD_STATE_ACCEPT_COLON) => {
                 i += 1;
-                state = DICT_STATE_ACCEPT_LIT_OR_OB;
+                state = DICTFOLD_STATE_ACCEPT_LIT_OR_OB;
             }
-            (Token::Lit(l), DICT_STATE_ACCEPT_LIT_OR_OB) => {
+            (Token::Lit(l), DICTFOLD_STATE_ACCEPT_LIT_OR_OB) => {
                 i += 1;
                 // insert this key/value pair
                 okay &= dict
@@ -139,21 +141,21 @@ fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
                         l.clone().into(),
                     )
                     .is_none();
-                state = DICT_STATE_ACCEPT_COMMA_OR_CB;
+                state = DICTFOLD_STATE_ACCEPT_COMMA_OR_CB;
             }
-            (Token::Comma, DICT_STATE_ACCEPT_COMMA_OR_CB) => {
+            (Token::Comma, DICTFOLD_STATE_ACCEPT_COMMA_OR_CB) => {
                 i += 1; // since there is a comma, expect an ident
                 if TRAIL_COMMA {
-                    state = DICT_STATE_ACCEPT_IDENT_OR_CB;
+                    state = DICTFOLD_STATE_INIT_IDENT_OR_CB;
                 } else {
-                    state = DICT_STATE_ACCEPT_IDENT;
+                    state = DICTFOLD_STATE_ACCEPT_IDENT;
                 }
             }
-            (Token::OpenBrace, DICT_STATE_ACCEPT_LIT_OR_OB) => {
+            (Token::OpenBrace, DICTFOLD_STATE_ACCEPT_LIT_OR_OB) => {
                 i += 1;
                 // there is another dictionary in here. let's parse it
                 let mut this_dict = Dict::new();
-                let r = rfold_dict(DICT_STATE_ACCEPT_IDENT_OR_CB, &tok[i..], &mut this_dict);
+                let r = rfold_dict(DICTFOLD_STATE_INIT_IDENT_OR_CB, &tok[i..], &mut this_dict);
                 okay &= dict
                     .insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
@@ -163,7 +165,7 @@ fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
                 okay &= r & HIBIT == HIBIT;
                 i += (r & !HIBIT) as usize;
                 // at the end of a dictionary, we expect a comma or brace close
-                state = DICT_STATE_ACCEPT_COMMA_OR_CB;
+                state = DICTFOLD_STATE_ACCEPT_COMMA_OR_CB;
             }
             _ => {
                 okay = false;
@@ -171,13 +173,13 @@ fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
             }
         }
     }
-    okay &= state == DICT_STATE_FINAL;
+    okay &= state == DICTFOLD_STATE_FINAL;
     i as u64 | ((okay as u64) << 63)
 }
 
 pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
     let mut dict = Dict::new();
-    let r = rfold_dict(DICT_STATE_ACCEPT_OB, tok, &mut dict);
+    let r = rfold_dict(DICTFOLD_STATE_ACCEPT_OB, tok, &mut dict);
     if r & HIBIT == HIBIT {
         Some(dict)
     } else {
@@ -333,6 +335,102 @@ pub(super) fn rfold_tymeta(
     }
     r.record(state == TYMETA_STATE_FINAL);
     r
+}
+
+/*
+    Layer
+*/
+
+#[derive(Debug, PartialEq)]
+pub struct Layer {
+    ty: Ty,
+    props: Dict,
+}
+
+type LayerFoldState = u8;
+const LAYERFOLD_STATE_FINAL: LayerFoldState = 0xFF;
+const LAYERFOLD_STATE_ACCEPT_TYPE: LayerFoldState = 0x00;
+const LAYERFOLD_STATE_ACCEPT_OB_OR_END_ANY: LayerFoldState = 0x01;
+
+fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
+    let mut i = 0;
+    let l = tok.len();
+    let mut okay = true;
+    let mut state = LAYERFOLD_STATE_ACCEPT_TYPE;
+    let mut meta = Dict::new();
+    let mut tmp = MaybeUninit::uninit();
+    while i < l && okay {
+        match (&tok[i], state) {
+            (Token::Keyword(Kw::TypeId(t)), LAYERFOLD_STATE_ACCEPT_TYPE) => {
+                i += 1;
+                tmp = MaybeUninit::new(*t);
+                state = LAYERFOLD_STATE_ACCEPT_OB_OR_END_ANY;
+            }
+            (Token::OpenBrace, LAYERFOLD_STATE_ACCEPT_OB_OR_END_ANY) => {
+                i += 1;
+                // get ty meta
+                let r = rfold_tymeta(TYMETA_STATE_ACCEPT_IDENT_OR_CB, &tok[i..], &mut meta);
+                okay &= r.is_okay();
+                i += r.pos();
+                if r.has_more() {
+                    // mmm, more layers
+                    let r = rfold_layers(&tok[i..], layers);
+                    okay &= r & HIBIT == HIBIT;
+                    i += (r & !HIBIT) as usize;
+                    // fold remaining meta (if this has a closebrace great; if not it *has* to have a comma to provide other meta)
+                    let ret = rfold_tymeta(TYMETA_STATE_ACCEPT_CB_OR_COMMA, &tok[i..], &mut meta);
+                    okay &= ret.is_okay();
+                    okay &= !ret.has_more(); // can't have two kinds
+                    i += ret.pos();
+                }
+                // since we ended a dictionary parse, the exact valid token after this could be anything
+                // since this is CFG, we don't care
+                state = LAYERFOLD_STATE_FINAL;
+                // push in this layer
+                layers.push(Layer {
+                    ty: unsafe { tmp.assume_init() },
+                    props: meta,
+                });
+                break;
+            }
+            (_, LAYERFOLD_STATE_ACCEPT_OB_OR_END_ANY) => {
+                // we don't care what token is here. we want this to end. also, DO NOT incr pos since we haven't
+                // seen this token
+                layers.push(Layer {
+                    ty: unsafe { tmp.assume_init() },
+                    props: meta,
+                });
+                state = LAYERFOLD_STATE_FINAL;
+                break;
+            }
+            _ => {
+                // in any other case, that is broken
+                okay = false;
+                break;
+            }
+        }
+    }
+    if state == LAYERFOLD_STATE_ACCEPT_OB_OR_END_ANY {
+        // if we've exited at this state, there was only one possible exit
+        layers.push(Layer {
+            ty: unsafe { tmp.assume_init() },
+            props: dict!(),
+        });
+        // safe exit
+    } else {
+        okay &= state == LAYERFOLD_STATE_FINAL;
+    }
+    (i as u64) | ((okay as u64) << 63)
+}
+
+pub fn fold_layers(tok: &[Token]) -> Option<Vec<Layer>> {
+    let mut l = Vec::new();
+    let r = rfold_layers(tok, &mut l);
+    if r & HIBIT == HIBIT {
+        Some(l)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {

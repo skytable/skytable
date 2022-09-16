@@ -24,6 +24,8 @@
  *
 */
 
+#[macro_use]
+mod macros;
 pub(super) mod ast;
 pub(super) mod lexer;
 pub(super) mod schema;

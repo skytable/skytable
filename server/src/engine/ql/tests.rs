@@ -32,24 +32,6 @@ use {
     crate::util::Life,
 };
 
-#[cfg(test)]
-macro_rules! dict {
-    () => {
-        <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
-    };
-    ($($key:expr => $value:expr),* $(,)?) => {{
-        let mut hm: ::std::collections::HashMap<_, _> = ::core::default::Default::default();
-        $(hm.insert($key.into(), $value.into());)*
-        hm
-    }};
-}
-
-macro_rules! multi_assert_eq {
-    ($($lhs:expr),* => $rhs:expr) => {
-        $(assert_eq!($lhs, $rhs);)*
-    };
-}
-
 fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
     Lexer::lex(src)
 }
@@ -311,7 +293,7 @@ mod schema_tests {
         );
     }
     #[test]
-    fn rfold_tymeta_t() {
+    fn rfold_tymeta_stop_at_type() {
         // list { maxlen: 100, type string }
         //        [0]  [1][2][3][4]
         let tok = lex(b"maxlen: 100, type string }").unwrap();
