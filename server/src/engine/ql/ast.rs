@@ -24,16 +24,17 @@
  *
 */
 
-use core::slice;
-
 use {
     super::{
-        dptr,
         lexer::{Kw, Lexer, Stmt, Token, Ty},
         schema, LangError, LangResult, RawSlice,
     },
     crate::util::{compiler, Life},
-    core::{marker::PhantomData, mem::transmute},
+    core::{
+        marker::PhantomData,
+        mem::{discriminant, transmute},
+        slice,
+    },
 };
 
 /*
@@ -238,13 +239,14 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     pub(super) fn remaining(&self) -> usize {
-        dptr(self.c, self.e)
+        unsafe { self.e.offset_from(self.c) as usize }
     }
     pub(super) unsafe fn deref_cursor(&self) -> &Token {
         &*self.c
     }
     pub(super) fn peek_eq_and_forward(&mut self, t: &Token) -> bool {
-        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor() == t };
+        let did_fw =
+            self.not_exhausted() && unsafe { discriminant(self.deref_cursor()) == discriminant(t) };
         unsafe {
             self.incr_cursor_if(did_fw);
         }

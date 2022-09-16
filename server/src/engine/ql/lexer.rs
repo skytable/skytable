@@ -27,7 +27,7 @@
 use crate::util::Life;
 
 use {
-    super::{dptr, LangError, LangResult, RawSlice},
+    super::{LangError, LangResult, RawSlice},
     crate::util::compiler,
     core::{marker::PhantomData, slice, str},
 };
@@ -109,14 +109,15 @@ pub enum Stmt {
 #[repr(u8)]
 pub enum Kw {
     Stmt(Stmt),
-    Type(Ty),
+    TypeId(Ty),
     Space,
     Model,
+    Type,
 }
 
 impl From<Ty> for Kw {
     fn from(ty: Ty) -> Self {
-        Self::Type(ty)
+        Self::TypeId(ty)
     }
 }
 
@@ -131,10 +132,11 @@ impl Kw {
             b"alter" => Self::Stmt(Stmt::Alter).into(),
             b"space" => Self::Space.into(),
             b"model" => Self::Model.into(),
-            b"string" => Self::Type(Ty::String).into(),
-            b"binary" => Self::Type(Ty::Binary).into(),
-            b"list" => Self::Type(Ty::Ls).into(),
+            b"string" => Self::TypeId(Ty::String).into(),
+            b"binary" => Self::TypeId(Ty::Binary).into(),
+            b"list" => Self::TypeId(Ty::Ls).into(),
             b"true" => Token::Lit(Lit::Bool(true)),
+            b"type" => Kw::Type.into(),
             b"false" => Token::Lit(Lit::Bool(false)),
             _ => return None,
         };
@@ -196,7 +198,7 @@ impl<'a> Lexer<'a> {
     }
     #[inline(always)]
     fn remaining(&self) -> usize {
-        dptr(self.c, self.e)
+        unsafe { self.e.offset_from(self.c) as usize }
     }
     unsafe fn deref_cursor(&self) -> u8 {
         *self.cursor()
@@ -263,7 +265,7 @@ impl<'a> Lexer<'a> {
             while self.peek_is(|b| b.is_ascii_alphanumeric() || b == b'_') {
                 self.incr_cursor();
             }
-            RawSlice::new(s, dptr(s, self.cursor()))
+            RawSlice::new(s, self.cursor().offset_from(s) as usize)
         }
     }
     fn scan_ident_or_keyword(&mut self) {
@@ -288,7 +290,11 @@ impl<'a> Lexer<'a> {
             */
             static TERMINAL_CHAR: [u8; 6] = [b';', b'}', b',', b' ', b'\n', b'\t'];
             let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b));
-            match str::from_utf8_unchecked(slice::from_raw_parts(s, dptr(s, self.cursor()))).parse()
+            match str::from_utf8_unchecked(slice::from_raw_parts(
+                s,
+                self.cursor().offset_from(s) as usize,
+            ))
+            .parse()
             {
                 Ok(num) if compiler::likely(wseof) => self.tokens.push(Token::Lit(Lit::Num(num))),
                 _ => self.last_error = Some(LangError::InvalidNumericLiteral),

@@ -30,7 +30,9 @@ pub(super) mod schema;
 #[cfg(test)]
 mod tests;
 
-use core::{fmt, mem, ops::Deref, slice};
+#[cfg(debug_assertions)]
+use core::{fmt, ops::Deref};
+use core::{mem, slice};
 
 /*
     Lang errors
@@ -49,6 +51,7 @@ pub enum LangError {
     UnexpectedEndofStatement,
     UnexpectedToken,
     InvalidDictionaryExpression,
+    InvalidTypeDefinition,
 }
 
 /*
@@ -116,9 +119,4 @@ impl From<&'static str> for RawSlice {
     fn from(st: &'static str) -> Self {
         unsafe { Self::new(st.as_bytes().as_ptr(), st.as_bytes().len()) }
     }
-}
-
-#[inline(always)]
-fn dptr<T>(s: *const T, e: *const T) -> usize {
-    e as usize - s as usize
 }

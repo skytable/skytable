@@ -1,5 +1,5 @@
 /*
- * Created on Tue Sep 13 2022
+ * Created on Fri Sep 16 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -23,183 +23,168 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-
 /*
     Most grammar tools are pretty much "off the shelf" which makes some things incredible hard to achieve (such
     as custom error injection logic). To make things icier, Rust's integration with these tools (like lex) is not
     very "refined." Hence, it is best for us to implement our own parsers. In the future, I plan to optimize our
     rule checkers but that's not a concern at the moment.
 
-    -- Sayan (Sept. 14, 2022)
+    This module makes use of DFAs with additional flags, accepting a token stream as input to generate appropriate
+    structures, and have provable correctness. Hence, the unsafe code used here is correct, because the states are
+    only transitioned to if the input is accepted. If you do find otherwise, please file a bug report. The
+    transitions are currently very inefficient but can be made much faster.
+
+    TODO: The SMs can be reduced greatly, enocded to fixed-sized structures even, so do that
+    FIXME: For now, try and reduce reliance on additional flags (encoded into state?)
+
+    --
+    Sayan (@ohsayan)
+    Sept. 15, 2022
 */
 
 use {
     super::{
         ast::{Compiler, Statement},
-        lexer::{Lit, Token, Ty},
-        LangError, LangResult, RawSlice,
+        lexer::{Lit, Token},
+        LangResult, RawSlice,
     },
-    std::{collections::HashMap, mem::MaybeUninit, str},
+    std::{
+        collections::HashMap,
+        mem::{transmute, MaybeUninit},
+    },
 };
-
-macro_rules! boxed {
-    ([] $ty:ty) => {
-        ::std::boxed::Box::<[$ty]>
-    };
-}
 
 /*
     Meta
 */
 
-#[derive(Debug)]
-struct FieldMeta {
-    field_name: Option<RawSlice>,
-    unprocessed_layers: boxed![[] TypeConfig],
-}
-
-#[derive(Debug)]
-struct TypeConfig {
-    ty: Ty,
-    dict: Dict,
-}
-
-/*
-    Dictionary
-*/
-
-pub type Dict = HashMap<String, DictEntry>;
+const HIBIT: u64 = 1 << 63;
+const TRAIL_COMMA: bool = true;
 
 #[derive(Debug, PartialEq)]
 pub enum DictEntry {
     Lit(Lit),
-    Map(HashMap<String, Self>),
+    Map(HashMap<String, DictEntry>),
 }
 
-type NxFlag = u8;
-const EXP_COLON: NxFlag = 0x00;
-const EXP_LIT_OR_OBRC: NxFlag = 0x01;
-const EXP_COMMA_OR_CBRC: NxFlag = 0x02;
-const EXP_IDENT_OR_CBRC: NxFlag = 0x03;
-const EXP_EOF: NxFlag = 0x04;
-const EXP_START: NxFlag = 0x05;
-const HIBIT: u64 = 1 << 63;
-
-pub(super) fn parse_dictionary(c: &mut Compiler) -> LangResult<Dict> {
-    let mut dict = Dict::new();
-    let r = self::fold_dict(EXP_START, c.remslice(), &mut dict);
-    unsafe {
-        // IFEVERBROKEN: When the silicon guys decide to build a new chip with > 48 AS, lmk
-        c.incr_cursor_by((r & !HIBIT) as _);
-    }
-    if r & HIBIT == HIBIT {
-        Ok(dict)
-    } else {
-        Err(LangError::InvalidDictionaryExpression)
+impl From<Lit> for DictEntry {
+    fn from(l: Lit) -> Self {
+        Self::Lit(l)
     }
 }
 
-fn fold_dict<'a>(mut next: NxFlag, src: &'a [Token], dict: &mut Dict) -> u64 {
+impl From<Dict> for DictEntry {
+    fn from(m: Dict) -> Self {
+        Self::Map(m)
+    }
+}
+
+pub type Dict = HashMap<String, DictEntry>;
+
+/*
+    Non-contextual dict
+*/
+
+type DictFoldState = u8;
+const DICT_STATE_FINAL: DictFoldState = 0xFF;
+const DICT_STATE_ACCEPT_OB: DictFoldState = 0x00;
+const DICT_STATE_ACCEPT_IDENT_OR_CB: DictFoldState = 0x01;
+const DICT_STATE_ACCEPT_COLON: DictFoldState = 0x02;
+const DICT_STATE_ACCEPT_LIT_OR_OB: DictFoldState = 0x03;
+const DICT_STATE_ACCEPT_COMMA_OR_CB: DictFoldState = 0x04;
+const DICT_STATE_ACCEPT_IDENT: DictFoldState = 0x05;
+
+fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
     /*
-        NOTE: Assume respective <lit> validity and other character set rules
+        NOTE: Assume appropriate rule definitions wherever applicable
 
         <lbrace> ::= "{"
         <rbrace> ::= "}"
         <colon> ::= ":"
-        <ident> ::= (<sym_us> | <alpha>) (<alphanum> | <sym_us>)*
-        <dict> ::= <lbrace> (<ident> <colon> (<lit> | <dict> ) <comma>)* <rbrace>
+        <comma> ::= ","
+        <dict> ::= <lbrace> (<ident> <colon> (<lit> | <dict>) <comma> )* <comma>0*1 <rbace>
     */
     let mut i = 0;
+    let l = tok.len();
     let mut okay = true;
-    let mut tmp = MaybeUninit::uninit();
-    while i < src.len() && okay {
-        match (&src[i], next) {
-            // as a future optimization, note that this is just a single call
-            (Token::OpenBrace, EXP_START) => {
-                next = EXP_IDENT_OR_CBRC;
+    let mut tmp = MaybeUninit::<&str>::uninit();
+    while i < l && okay {
+        match (&tok[i], state) {
+            (Token::OpenBrace, DICT_STATE_ACCEPT_OB) => {
+                i += 1;
+                // next state is literal
+                state = DICT_STATE_ACCEPT_IDENT_OR_CB;
             }
-            (Token::Ident(id), EXP_IDENT_OR_CBRC) => {
-                next = EXP_COLON;
-                tmp = MaybeUninit::new(unsafe {
-                    // UNSAFE(@ohsayan): If the token is an ident, the lexer guarantees that is valid unicode
-                    str::from_utf8_unchecked(id.as_slice())
-                });
+            (Token::CloseBrace, DICT_STATE_ACCEPT_IDENT_OR_CB | DICT_STATE_ACCEPT_COMMA_OR_CB) => {
+                i += 1;
+                // since someone closed the brace, we're done processing this type
+                state = DICT_STATE_FINAL;
+                break;
             }
-            (Token::Colon, EXP_COLON) => next = EXP_LIT_OR_OBRC,
-            (Token::Lit(lit), EXP_LIT_OR_OBRC) => {
+            (Token::Ident(key), DICT_STATE_ACCEPT_IDENT_OR_CB | DICT_STATE_ACCEPT_IDENT) => {
+                i += 1;
+                tmp = MaybeUninit::new(unsafe { transmute(key.as_slice()) });
+                state = DICT_STATE_ACCEPT_COLON;
+            }
+            (Token::Colon, DICT_STATE_ACCEPT_COLON) => {
+                i += 1;
+                state = DICT_STATE_ACCEPT_LIT_OR_OB;
+            }
+            (Token::Lit(l), DICT_STATE_ACCEPT_LIT_OR_OB) => {
+                i += 1;
+                // insert this key/value pair
                 okay &= dict
                     .insert(
-                        unsafe {
-                            // UNSAFE(@ohsayan): This is completely safe because the transition and correctness
-                            // of this function makes it a consequence
-                            tmp.assume_init_ref()
-                        }
-                        .to_string(),
-                        DictEntry::Lit(lit.clone()),
+                        unsafe { tmp.assume_init_ref() }.to_string(),
+                        l.clone().into(),
                     )
                     .is_none();
-                next = EXP_COMMA_OR_CBRC;
+                state = DICT_STATE_ACCEPT_COMMA_OR_CB;
             }
-            (Token::OpenBrace, EXP_LIT_OR_OBRC) => {
-                // fold tokens
+            (Token::Comma, DICT_STATE_ACCEPT_COMMA_OR_CB) => {
+                i += 1; // since there is a comma, expect an ident
+                if TRAIL_COMMA {
+                    state = DICT_STATE_ACCEPT_IDENT_OR_CB;
+                } else {
+                    state = DICT_STATE_ACCEPT_IDENT;
+                }
+            }
+            (Token::OpenBrace, DICT_STATE_ACCEPT_LIT_OR_OB) => {
+                i += 1;
+                // there is another dictionary in here. let's parse it
                 let mut this_dict = Dict::new();
-                let read = self::fold_dict(EXP_IDENT_OR_CBRC, &src[i..], &mut this_dict);
-                i += (read & !HIBIT) as usize;
-                okay &= (read & HIBIT) == HIBIT;
+                let r = rfold_dict(DICT_STATE_ACCEPT_IDENT_OR_CB, &tok[i..], &mut this_dict);
                 okay &= dict
                     .insert(
-                        unsafe {
-                            // UNSAFE(@ohsayan): See above comment for context to know why this is safe
-                            tmp.assume_init_ref()
-                        }
-                        .to_string(),
+                        unsafe { tmp.assume_init_ref() }.to_string(),
                         DictEntry::Map(this_dict),
                     )
                     .is_none();
-                next = EXP_COMMA_OR_CBRC;
-            }
-            (Token::Comma, EXP_COMMA_OR_CBRC) => {
-                next = EXP_IDENT_OR_CBRC;
-            }
-            (Token::CloseBrace, EXP_COMMA_OR_CBRC | EXP_IDENT_OR_CBRC) => {
-                // graceful exit
-                next = EXP_EOF;
-                i += 1;
-                break;
+                okay &= r & HIBIT == HIBIT;
+                i += (r & !HIBIT) as usize;
+                // at the end of a dictionary, we expect a comma or brace close
+                state = DICT_STATE_ACCEPT_COMMA_OR_CB;
             }
             _ => {
                 okay = false;
                 break;
             }
         }
-        i += 1;
     }
-    okay &= next == EXP_EOF;
-    ((okay as u64) << 63) | i as u64
+    okay &= state == DICT_STATE_FINAL;
+    i as u64 | ((okay as u64) << 63)
 }
 
-fn parse_type_definition(_c: &mut Compiler) -> LangResult<boxed![[] TypeConfig]> {
-    /*
-        NOTE: Assume correct rules in context
-
-        <lbrace> ::= "{"
-        <rbrace> ::= "}"
-        <langle> ::= "<"
-        <rangle> ::= ">"
-        <colon> ::= ":"
-        <comma> ::= ","
-        <tydef_simple> ::= <type>
-        <tydef_nest> ::= <type> (<langle> <tydef_nest> <rangle>)*
-        <tydef_dict> ::= <type> <lbrace> ( ((<ident> <colon> <lit>) | <tydef_dict>) <comma>)* <rbrace>
-        <tydef> ::= <tydef_simple> | <tydef_nest> | <tydef_dict>
-    */
-    todo!()
+pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
+    let mut dict = Dict::new();
+    let r = rfold_dict(DICT_STATE_ACCEPT_OB, tok, &mut dict);
+    if r & HIBIT == HIBIT {
+        Some(dict)
+    } else {
+        None
+    }
 }
 
-fn parse_field(_c: &mut Compiler) -> LangResult<FieldMeta> {
-    todo!()
-}
-
-pub(super) fn parse_schema(_c: &mut Compiler, _model: RawSlice) -> LangResult<Statement> {
+pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {
     todo!()
 }
