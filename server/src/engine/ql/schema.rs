@@ -45,7 +45,7 @@
 use {
     super::{
         ast::{Compiler, Statement},
-        lexer::{Lit, Token},
+        lexer::{Kw, Lit, Token},
         LangResult, RawSlice,
     },
     std::{
@@ -183,6 +183,156 @@ pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
     } else {
         None
     }
+}
+
+/*
+    Type metadata
+*/
+
+#[derive(Debug, PartialEq)]
+pub struct TypeMetaFoldResult {
+    c: usize,
+    m: [bool; 2],
+}
+
+impl TypeMetaFoldResult {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            c: 0,
+            m: [true, false],
+        }
+    }
+    #[inline(always)]
+    fn incr(&mut self) {
+        self.incr_by(1);
+    }
+    #[inline(always)]
+    fn set_has_more(&mut self) {
+        self.m[1] = true;
+    }
+    #[inline(always)]
+    fn set_fail(&mut self) {
+        self.m[0] = false;
+    }
+    #[inline(always)]
+    pub fn pos(&self) -> usize {
+        self.c
+    }
+    #[inline(always)]
+    pub fn is_okay(&self) -> bool {
+        self.m[0]
+    }
+    #[inline(always)]
+    pub fn has_more(&self) -> bool {
+        self.m[1]
+    }
+    #[inline(always)]
+    fn record(&mut self, cond: bool) {
+        self.m[0] &= cond;
+    }
+    #[inline(always)]
+    fn incr_by(&mut self, pos: usize) {
+        self.c += pos;
+    }
+}
+
+type TypeMetaFoldState = u8;
+const TYMETA_STATE_FINAL: TypeMetaFoldState = 0xFF;
+const TYMETA_STATE_ACCEPT_IDENT: TypeMetaFoldState = 0x00;
+const TYMETA_STATE_ACCEPT_IDENT_OR_CB: TypeMetaFoldState = 0x01;
+const TYMETA_STATE_ACCEPT_COLON: TypeMetaFoldState = 0x02;
+const TYMETA_STATE_ACCEPT_LIT_OR_OB: TypeMetaFoldState = 0x03;
+const TYMETA_STATE_ACCEPT_COMMA_OR_CB: TypeMetaFoldState = 0x04;
+const TYMETA_STATE_ACCEPT_CB_OR_COMMA: TypeMetaFoldState = 0x05;
+
+pub(super) fn rfold_tymeta(
+    mut state: TypeMetaFoldState,
+    tok: &[Token],
+    dict: &mut Dict,
+) -> TypeMetaFoldResult {
+    let mut r = TypeMetaFoldResult::new();
+    let l = tok.len();
+    let mut tmp = MaybeUninit::<&str>::uninit();
+    while r.pos() < l && r.is_okay() {
+        match (&tok[r.pos()], state) {
+            (Token::Ident(id), TYMETA_STATE_ACCEPT_IDENT | TYMETA_STATE_ACCEPT_IDENT_OR_CB) => {
+                r.incr();
+                state = TYMETA_STATE_ACCEPT_COLON;
+                tmp = MaybeUninit::new(unsafe { transmute(id.as_slice()) });
+            }
+            (Token::Colon, TYMETA_STATE_ACCEPT_COLON) => {
+                r.incr();
+                state = TYMETA_STATE_ACCEPT_LIT_OR_OB;
+            }
+            (Token::Comma, TYMETA_STATE_ACCEPT_CB_OR_COMMA) => {
+                // we got a comma, so this should have more entries
+                r.incr();
+                state = TYMETA_STATE_ACCEPT_IDENT_OR_CB;
+            }
+            (Token::Lit(l), TYMETA_STATE_ACCEPT_LIT_OR_OB | TYMETA_STATE_ACCEPT_IDENT_OR_CB) => {
+                r.incr();
+                r.record(
+                    dict.insert(
+                        unsafe { tmp.assume_init_ref() }.to_string(),
+                        l.clone().into(),
+                    )
+                    .is_none(),
+                );
+                state = TYMETA_STATE_ACCEPT_COMMA_OR_CB;
+            }
+            (Token::OpenBrace, TYMETA_STATE_ACCEPT_LIT_OR_OB) => {
+                // found a nested dict. fold it
+                r.incr();
+                let this_ret = rfold_tymeta(TYMETA_STATE_ACCEPT_IDENT_OR_CB, &tok[r.pos()..], dict);
+                r.incr_by(this_ret.pos());
+                r.record(this_ret.is_okay());
+                if r.has_more() {
+                    // that's broken because L2 can NEVER have a typdef
+                    r.set_fail();
+                    break;
+                }
+                state = TYMETA_STATE_ACCEPT_COMMA_OR_CB;
+            }
+            (
+                Token::Keyword(Kw::Type),
+                TYMETA_STATE_ACCEPT_IDENT | TYMETA_STATE_ACCEPT_IDENT_OR_CB,
+            ) => {
+                // we found the type keyword inplace of a colon! increase depth
+                r.incr();
+                r.set_has_more();
+                state = TYMETA_STATE_FINAL;
+                break;
+            }
+            (
+                Token::CloseBrace,
+                TYMETA_STATE_ACCEPT_COMMA_OR_CB
+                | TYMETA_STATE_ACCEPT_IDENT_OR_CB
+                | TYMETA_STATE_ACCEPT_CB_OR_COMMA,
+            ) => {
+                r.incr();
+                // brace closed, so it's time to exit
+                state = TYMETA_STATE_FINAL;
+                break;
+            }
+            (Token::Comma, TYMETA_STATE_ACCEPT_COMMA_OR_CB | TYMETA_STATE_ACCEPT_IDENT_OR_CB) => {
+                r.incr();
+                if TRAIL_COMMA {
+                    state = TYMETA_STATE_ACCEPT_IDENT_OR_CB;
+                } else {
+                    // comma, so expect something ahead
+                    state = TYMETA_STATE_ACCEPT_IDENT;
+                }
+            }
+            _ => {
+                // in any other case, that is broken
+                r.set_fail();
+                break;
+            }
+        }
+    }
+    r.record(state == TYMETA_STATE_FINAL);
+    r
 }
 
 pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {
