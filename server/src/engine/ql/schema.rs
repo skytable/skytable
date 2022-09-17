@@ -105,6 +105,16 @@ pub struct Layer {
     props: Dict,
 }
 
+impl Layer {
+    pub(super) const fn new(ty: Ty, props: Dict) -> Self {
+        Self { ty, props }
+    }
+}
+
+/*
+    Context-free dict
+*/
+
 states! {
     /// The dict fold state
     pub struct DictFoldState: u8 {
@@ -199,6 +209,10 @@ pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
         None
     }
 }
+
+/*
+    Contextual dict (tymeta)
+*/
 
 states! {
     /// Type metadata fold state
@@ -331,6 +345,10 @@ pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaFoldResult, Dict) {
     (r, d)
 }
 
+/*
+    Layer
+*/
+
 states! {
     /// Layer fold state
     pub struct LayerFoldState: u8 {
@@ -422,6 +440,12 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
     }
     okay &= state == LayerFoldState::FOLD_COMPLETED;
     i as u64 | ((okay as u64) << 63)
+}
+
+pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
+    let mut l = Vec::new();
+    let r = rfold_layers(tok, &mut l);
+    (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
 pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {

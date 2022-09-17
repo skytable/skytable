@@ -384,4 +384,95 @@ mod schema_tests {
             )
         }
     }
+    mod layer {
+        use super::*;
+        use crate::engine::ql::{lexer::Ty, schema::Layer};
+        #[test]
+        fn layer_mini() {
+            let tok = lex(b"string)").unwrap();
+            let (layers, c, okay) = schema::fold_layers(&tok);
+            assert_eq!(c, tok.len() - 1);
+            assert!(okay);
+            assert_eq!(layers, vec![Layer::new(Ty::String, dict! {})]);
+        }
+        #[test]
+        fn layer() {
+            let tok = lex(b"string { maxlen: 100 }").unwrap();
+            let (layers, c, okay) = schema::fold_layers(&tok);
+            assert_eq!(c, tok.len());
+            assert!(okay);
+            assert_eq!(
+                layers,
+                vec![Layer::new(
+                    Ty::String,
+                    dict! {
+                        "maxlen" => Lit::Num(100)
+                    }
+                )]
+            );
+        }
+        #[test]
+        fn layer_plus() {
+            let tok = lex(b"list { type string }").unwrap();
+            let (layers, c, okay) = schema::fold_layers(&tok);
+            assert_eq!(c, tok.len());
+            assert!(okay);
+            assert_eq!(
+                layers,
+                vec![
+                    Layer::new(Ty::String, dict! {}),
+                    Layer::new(Ty::Ls, dict! {})
+                ]
+            );
+        }
+        #[test]
+        fn layer_pro() {
+            let tok = lex(b"list { unique: true, type string, maxlen: 10 }").unwrap();
+            let (layers, c, okay) = schema::fold_layers(&tok);
+            assert_eq!(c, tok.len());
+            assert!(okay);
+            assert_eq!(
+                layers,
+                vec![
+                    Layer::new(Ty::String, dict! {}),
+                    Layer::new(
+                        Ty::Ls,
+                        dict! {
+                            "unique" => Lit::Bool(true),
+                            "maxlen" => Lit::Num(10),
+                        }
+                    )
+                ]
+            );
+        }
+        #[test]
+        fn layer_pro_max() {
+            let tok = lex(
+                b"list { unique: true, type string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
+            )
+            .unwrap();
+            let (layers, c, okay) = schema::fold_layers(&tok);
+            assert_eq!(c, tok.len());
+            assert!(okay);
+            assert_eq!(
+                layers,
+                vec![
+                    Layer::new(
+                        Ty::String,
+                        dict! {
+                            "ascii_only" => Lit::Bool(true),
+                            "maxlen" => Lit::Num(255)
+                        }
+                    ),
+                    Layer::new(
+                        Ty::Ls,
+                        dict! {
+                            "unique" => Lit::Bool(true),
+                            "maxlen" => Lit::Num(10),
+                        }
+                    )
+                ]
+            );
+        }
+    }
 }
