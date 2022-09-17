@@ -63,10 +63,10 @@ use {
 ///
 /// **DO NOT** construct states manually
 macro_rules! states {
-    ($(#[$attr:meta])+$vis:vis struct $stateid:ident: $statebase:ty {$($(#[$tyattr:meta])* $state:ident = $statexp:expr),* $(,)?}) => {
+    ($(#[$attr:meta])+$vis:vis struct $stateid:ident: $statebase:ty {$($(#[$tyattr:meta])*$v:vis$state:ident = $statexp:expr),* $(,)?}) => {
         #[::core::prelude::v1::derive(::core::cmp::PartialEq, ::core::cmp::Eq, ::core::clone::Clone, ::core::marker::Copy)]
         $(#[$attr])+$vis struct $stateid {__base: $statebase}
-        impl $stateid {$($(#[$tyattr])* const $state:Self=$stateid{__base: $statexp,};)*}
+        impl $stateid {$($(#[$tyattr])*$v const $state:Self=$stateid{__base: $statexp,};)*}
         impl ::core::fmt::Debug for $stateid {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let r = match self.__base {$($statexp => ::core::stringify!($state),)* _ => panic!("invalid state"),};
@@ -315,10 +315,7 @@ pub(super) fn rfold_tymeta(
                 );
                 state = TyMetaFoldState::COMMA_OR_CB;
             }
-            (found, exp) => {
-                if cfg!(debug_assertions) {
-                    panic!("found = `{:?}`, expected = `{:?}`", found, exp);
-                }
+            _ => {
                 r.set_fail();
                 break;
             }
@@ -326,6 +323,12 @@ pub(super) fn rfold_tymeta(
     }
     r.record(state == TyMetaFoldState::FINAL);
     r
+}
+
+pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaFoldResult, Dict) {
+    let mut d = Dict::new();
+    let r = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, tok, &mut d);
+    (r, d)
 }
 
 states! {

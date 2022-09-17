@@ -145,52 +145,57 @@ mod lexer_tests {
 }
 
 mod schema_tests {
-    use super::super::{lexer::Lit, schema};
+    use super::{
+        super::{lexer::Lit, schema},
+        lex,
+    };
+    mod dict {
+        use super::*;
 
-    macro_rules! fold_dict {
+        macro_rules! fold_dict {
         ($($input:expr),* $(,)?) => {
             ($({schema::fold_dict(&super::lex($input).unwrap()).unwrap()}),*)
         }
     }
 
-    #[test]
-    fn dict_read_mini() {
-        let (d1, d2) = fold_dict! {
-            br#"{name: "sayan"}"#,
-            br#"{name: "sayan",}"#,
-        };
-        let r = dict!("name" => Lit::Str("sayan".into()));
-        multi_assert_eq!(d1, d2 => r);
-    }
-    #[test]
-    fn dict_read() {
-        let (d1, d2) = fold_dict! {
-            br#"
+        #[test]
+        fn dict_read_mini() {
+            let (d1, d2) = fold_dict! {
+                br#"{name: "sayan"}"#,
+                br#"{name: "sayan",}"#,
+            };
+            let r = dict!("name" => Lit::Str("sayan".into()));
+            multi_assert_eq!(d1, d2 => r);
+        }
+        #[test]
+        fn dict_read() {
+            let (d1, d2) = fold_dict! {
+                br#"
                 {
                     name: "sayan",
                     verified: true,
                     burgers: 152
                 }
             "#,
-            br#"
+                br#"
                 {
                     name: "sayan",
                     verified: true,
                     burgers: 152,
                 }
             "#,
-        };
-        let r = dict! (
-            "name" => Lit::Str("sayan".into()),
-            "verified" => Lit::Bool(true),
-            "burgers" => Lit::Num(152),
-        );
-        multi_assert_eq!(d1, d2 => r);
-    }
-    #[test]
-    fn dict_read_pro() {
-        let (d1, d2, d3) = fold_dict! {
-            br#"
+            };
+            let r = dict! (
+                "name" => Lit::Str("sayan".into()),
+                "verified" => Lit::Bool(true),
+                "burgers" => Lit::Num(152),
+            );
+            multi_assert_eq!(d1, d2 => r);
+        }
+        #[test]
+        fn dict_read_pro() {
+            let (d1, d2, d3) = fold_dict! {
+                br#"
                 {
                     name: "sayan",
                     notes: {
@@ -200,7 +205,7 @@ mod schema_tests {
                     }
                 }
             "#,
-            br#"
+                br#"
                 {
                     name: "sayan",
                     notes: {
@@ -210,7 +215,7 @@ mod schema_tests {
                     }
                 }
             "#,
-            br#"
+                br#"
                 {
                     name: "sayan",
                     notes: {
@@ -219,23 +224,23 @@ mod schema_tests {
                         pretzels: 1,
                 },
             }"#
-        };
-        multi_assert_eq!(
-            d1, d2, d3 => dict! {
-                "name" => Lit::Str("sayan".into()),
-                "notes" => dict! {
-                    "burgers" => Lit::Str("all the time, extra mayo".into()),
-                    "taco" => Lit::Bool(true),
-                    "pretzels" => Lit::Num(1),
+            };
+            multi_assert_eq!(
+                d1, d2, d3 => dict! {
+                    "name" => Lit::Str("sayan".into()),
+                    "notes" => dict! {
+                        "burgers" => Lit::Str("all the time, extra mayo".into()),
+                        "taco" => Lit::Bool(true),
+                        "pretzels" => Lit::Num(1),
+                    }
                 }
-            }
-        );
-    }
+            );
+        }
 
-    #[test]
-    fn dict_read_pro_max() {
-        let (d1, d2, d3) = fold_dict! {
-            br#"
+        #[test]
+        fn dict_read_pro_max() {
+            let (d1, d2, d3) = fold_dict! {
+                br#"
                 {
                     well: {
                         now: {
@@ -248,7 +253,7 @@ mod schema_tests {
                     }
                 }
             "#,
-            br#"
+                br#"
                 {
                     well: {
                         now: {
@@ -261,7 +266,7 @@ mod schema_tests {
                     }
                 }
             "#,
-            br#"
+                br#"
                 {
                     well: {
                         now: {
@@ -274,19 +279,109 @@ mod schema_tests {
                     },
                 }
             }"#
-        };
-        multi_assert_eq!(
-            d1, d2, d3 => dict! {
-                "well" => dict! {
-                    "now" => dict! {
-                        "this" => dict! {
-                            "is" => dict! {
-                                "ridiculous" => Lit::Bool(true),
+            };
+            multi_assert_eq!(
+                d1, d2, d3 => dict! {
+                    "well" => dict! {
+                        "now" => dict! {
+                            "this" => dict! {
+                                "is" => dict! {
+                                    "ridiculous" => Lit::Bool(true),
+                                }
                             }
                         }
                     }
                 }
-            }
-        );
+            );
+        }
+    }
+    mod tymeta {
+        use super::*;
+        #[test]
+        fn tymeta_mini() {
+            let tok = lex(b"}").unwrap();
+            let (res, ret) = schema::fold_tymeta(&tok);
+            assert!(res.is_okay());
+            assert!(!res.has_more());
+            assert_eq!(res.pos(), 1);
+            assert_eq!(ret, dict!());
+        }
+        #[test]
+        fn tymeta_mini_fail() {
+            let tok = lex(b",}").unwrap();
+            let (res, ret) = schema::fold_tymeta(&tok);
+            assert!(!res.is_okay());
+            assert!(!res.has_more());
+            assert_eq!(res.pos(), 0);
+            assert_eq!(ret, dict!());
+        }
+        #[test]
+        fn tymeta() {
+            let tok = lex(br#"hello: "world", loading: true, size: 100 }"#).unwrap();
+            let (res, ret) = schema::fold_tymeta(&tok);
+            assert!(res.is_okay());
+            assert!(!res.has_more());
+            assert_eq!(res.pos(), tok.len());
+            assert_eq!(
+                ret,
+                dict! {
+                    "hello" => Lit::Str("world".into()),
+                    "loading" => Lit::Bool(true),
+                    "size" => Lit::Num(100)
+                }
+            );
+        }
+        #[test]
+        fn tymeta_pro() {
+            // list { maxlen: 100, type string, unique: true }
+            //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
+            let tok = lex(br#"maxlen: 100, type string, unique: true }"#).unwrap();
+            let (res1, ret1) = schema::fold_tymeta(&tok);
+            assert!(res1.is_okay());
+            assert!(res1.has_more());
+            assert_eq!(res1.pos(), 5);
+            let remslice = &tok[res1.pos() + 2..];
+            let (res2, ret2) = schema::fold_tymeta(remslice);
+            assert!(res2.is_okay());
+            assert!(!res2.has_more());
+            assert_eq!(res2.pos() + res1.pos() + 2, tok.len());
+            let mut final_ret = ret1;
+            final_ret.extend(ret2);
+            assert_eq!(
+                final_ret,
+                dict! {
+                    "maxlen" => Lit::Num(100),
+                    "unique" => Lit::Bool(true)
+                }
+            )
+        }
+        #[test]
+        fn tymeta_pro_max() {
+            // list { maxlen: 100, this: { is: "cool" }, type string, unique: true }
+            //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cursor should be at string
+            let tok =
+                lex(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#).unwrap();
+            let (res1, ret1) = schema::fold_tymeta(&tok);
+            assert!(res1.is_okay());
+            assert!(res1.has_more());
+            assert_eq!(res1.pos(), 13);
+            let remslice = &tok[res1.pos() + 2..];
+            let (res2, ret2) = schema::fold_tymeta(remslice);
+            assert!(res2.is_okay());
+            assert!(!res2.has_more());
+            assert_eq!(res2.pos() + res1.pos() + 2, tok.len());
+            let mut final_ret = ret1;
+            final_ret.extend(ret2);
+            assert_eq!(
+                final_ret,
+                dict! {
+                    "maxlen" => Lit::Num(100),
+                    "unique" => Lit::Bool(true),
+                    "this" => dict! {
+                        "is" => Lit::Str("cool".into())
+                    }
+                }
+            )
+        }
     }
 }
