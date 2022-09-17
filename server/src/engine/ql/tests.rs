@@ -507,7 +507,10 @@ mod schema_tests {
                     assert_eq!(ret.pos(), new_src.len());
                     assert_eq!(dict, expected);
                 } else if ret.is_okay() {
-                    panic!("Expected failure but passed for token stream: `{:?}`", tok);
+                    panic!(
+                        "Expected failure but passed for token stream: `{:?}`",
+                        new_src
+                    );
                 }
             });
         }
@@ -635,6 +638,43 @@ mod schema_tests {
                     )
                 ]
             );
+        }
+
+        #[test]
+        fn fuzz_layer() {
+            let tok = lex(b"
+            list {
+                type list {
+                    maxlen: 100,
+                    type string\r
+                },
+                unique: true\r
+            }
+        ")
+            .unwrap();
+            let expected = vec![
+                Layer::new(Ty::String, dict!()),
+                Layer::new(
+                    Ty::Ls,
+                    dict! {
+                        "maxlen" => Lit::Num(100),
+                    },
+                ),
+                Layer::new(Ty::Ls, dict!("unique" => Lit::Bool(true))),
+            ];
+            fuzz_tokens(&tok, |should_pass, new_tok| {
+                let (layers, c, okay) = schema::fold_layers(&new_tok);
+                if should_pass {
+                    assert!(okay);
+                    assert_eq!(c, new_tok.len());
+                    assert_eq!(layers, expected);
+                } else if okay {
+                    panic!(
+                        "expected failure but passed for token stream: `{:?}`",
+                        new_tok
+                    );
+                }
+            });
         }
     }
 }
