@@ -62,10 +62,15 @@ pub enum LangError {
 
 /// An unsafe, C-like slice that holds a ptr and length. Construction and usage is at the risk of the user
 #[cfg_attr(not(debug_assertions), derive(Debug))]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub struct RawSlice {
     ptr: *const u8,
     len: usize,
 }
+
+// again, caller's responsibility
+unsafe impl Send for RawSlice {}
+unsafe impl Sync for RawSlice {}
 
 impl RawSlice {
     const _EALIGN: () = assert!(mem::align_of::<Self>() == mem::align_of::<&[u8]>());

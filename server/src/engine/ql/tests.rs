@@ -145,10 +145,57 @@ mod lexer_tests {
 }
 
 mod schema_tests {
-    use super::{
-        super::{lexer::Lit, schema},
-        lex,
+    use {
+        super::{
+            super::{
+                lexer::{Lit, Token},
+                schema,
+            },
+            lex,
+        },
+        crate::util::test_utils,
+        rand::{self, Rng},
     };
+
+    /// A very "basic" fuzzer that will randomly inject tokens wherever applicable
+    fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
+        static FUZZ_TARGETS: [Token; 2] = [Token::Comma, Token::IgnorableComma];
+        let mut rng = rand::thread_rng();
+        #[inline(always)]
+        fn inject(new_src: &mut Vec<Token>, rng: &mut impl Rng) -> usize {
+            let start = new_src.len();
+            (0..test_utils::random_number(0, 5, rng)).for_each(|_| new_src.push(Token::Comma));
+            new_src.len() - start
+        }
+        let fuzz_amount = src.iter().filter(|tok| FUZZ_TARGETS.contains(tok)).count();
+        for _ in 0..(fuzz_amount.pow(2)) {
+            let mut new_src = Vec::with_capacity(src.len());
+            let mut should_pass = true;
+            src.iter().for_each(|tok| match tok {
+                Token::IgnorableComma => {
+                    let should_add = test_utils::random_bool(&mut rng);
+                    if should_add {
+                        new_src.push(Token::Comma);
+                    }
+                    let added = inject(&mut new_src, &mut rng);
+                    should_pass &= added <= !should_add as usize;
+                }
+                Token::Comma => {
+                    let should_add = test_utils::random_bool(&mut rng);
+                    if should_add {
+                        new_src.push(Token::Comma);
+                    } else {
+                        should_pass = false;
+                    }
+                    let added = inject(&mut new_src, &mut rng);
+                    should_pass &= added == !should_add as usize;
+                }
+                tok => new_src.push(tok.clone()),
+            });
+            fuzzwith(should_pass, &new_src);
+        }
+    }
+
     mod dict {
         use super::*;
 
@@ -293,6 +340,51 @@ mod schema_tests {
                     }
                 }
             );
+        }
+
+        #[test]
+        fn fuzz_dict() {
+            let ret = lex(b"
+                {
+                    the_tradition_is: \"hello, world\",
+                    could_have_been: {
+                        this: true,
+                        or_maybe_this: 100,
+                        even_this: \"hello, universe!\"\r
+                    },
+                    but_oh_well: \"it continues to be the 'annoying' phrase\",
+                    lorem: {
+                        ipsum: {
+                            dolor: \"sit amet\"\r
+                        }\r
+                    }\r
+                }
+            ")
+            .unwrap();
+            let ret_dict = dict! {
+                "the_tradition_is" => Lit::Str("hello, world".into()),
+                "could_have_been" => dict! {
+                    "this" => Lit::Bool(true),
+                    "or_maybe_this" => Lit::Num(100),
+                    "even_this" => Lit::Str("hello, universe!".into()),
+                },
+                "but_oh_well" => Lit::Str("it continues to be the 'annoying' phrase".into()),
+                "lorem" => dict! {
+                    "ipsum" => dict! {
+                        "dolor" => Lit::Str("sit amet".into())
+                    }
+                }
+            };
+            fuzz_tokens(&ret, |should_pass, new_src| {
+                let r = schema::fold_dict(&new_src);
+                if should_pass {
+                    assert_eq!(r.unwrap(), ret_dict)
+                } else {
+                    if !r.is_none() {
+                        panic!("failure: {:?}", new_src);
+                    }
+                }
+            });
         }
     }
     mod tymeta {

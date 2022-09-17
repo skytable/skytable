@@ -37,18 +37,21 @@ use {
 */
 
 #[derive(Debug)]
-#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[cfg_attr(debug_assertions, derive(PartialEq, Clone))]
 #[repr(u8)]
 pub enum Token {
-    OpenParen,       // (
-    CloseParen,      // )
-    OpenAngular,     // <
-    CloseAngular,    // >
-    OpenSqBracket,   // [
-    CloseSqBracket,  // ]
-    OpenBrace,       // {
-    CloseBrace,      // }
-    Comma,           // ,
+    OpenParen,      // (
+    CloseParen,     // )
+    OpenAngular,    // <
+    CloseAngular,   // >
+    OpenSqBracket,  // [
+    CloseSqBracket, // ]
+    OpenBrace,      // {
+    CloseBrace,     // }
+    Comma,          // ,
+    #[cfg(test)]
+    /// A comma that can be ignored (used for fuzzing)
+    IgnorableComma,
     Colon,           // :
     Period,          // .
     Ident(RawSlice), // ident
@@ -353,6 +356,8 @@ impl<'a> Lexer<'a> {
             b'.' => Token::Period,
             b'=' => Token::OperatorEq,
             b'+' => Token::OperatorAdd,
+            #[cfg(test)]
+            b'\r' => Token::IgnorableComma,
             _ => {
                 self.last_error = Some(LangError::UnexpectedChar);
                 return;

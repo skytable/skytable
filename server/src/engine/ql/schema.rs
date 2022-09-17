@@ -25,7 +25,7 @@
 */
 
 /*
-    Most grammar tools are pretty much "off the shelf" which makes some things incredible hard to achieve (such
+    Most grammar tools are pretty much "off the shelf" which makes some things incredibly hard to achieve (such
     as custom error injection logic). To make things icier, Rust's integration with these tools (like lex) is not
     very "refined." Hence, it is best for us to implement our own parsers. In the future, I plan to optimize our
     rule checkers but that's not a concern at the moment.

@@ -28,6 +28,8 @@
 mod macros;
 pub mod compiler;
 pub mod error;
+#[cfg(test)]
+pub mod test_utils;
 pub mod os;
 use {
     crate::{
@@ -164,7 +166,7 @@ pub struct Life<'a, T> {
 impl<'a, T> Life<'a, T> {
     /// Ensure compile-time alignment (this is just a sanity check)
     const _ENSURE_COMPILETIME_ALIGN: () =
-        assert!(std::mem::align_of::<Life<Vec<u8>>>() == std::mem::align_of::<Vec<u8>>());
+        assert!(std::mem::align_of::<Life<T>>() == std::mem::align_of::<T>());
 
     #[inline(always)]
     pub const fn new(v: T) -> Self {
