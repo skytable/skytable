@@ -289,7 +289,7 @@ impl<'a> Lexer<'a> {
                 1234a // invalid
             */
             static TERMINAL_CHAR: [u8; 6] = [b';', b'}', b',', b' ', b'\n', b'\t'];
-            let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b));
+            let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b)) || self.exhausted();
             match str::from_utf8_unchecked(slice::from_raw_parts(
                 s,
                 self.cursor().offset_from(s) as usize,
