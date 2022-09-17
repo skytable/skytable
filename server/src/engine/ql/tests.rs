@@ -145,10 +145,7 @@ mod lexer_tests {
 }
 
 mod schema_tests {
-    use super::{
-        super::{lexer::Lit, schema},
-        lex,
-    };
+    use super::super::{lexer::Lit, schema};
 
     macro_rules! fold_dict {
         ($($input:expr),* $(,)?) => {
@@ -289,22 +286,6 @@ mod schema_tests {
                         }
                     }
                 }
-            }
-        );
-    }
-    #[test]
-    fn rfold_tymeta_stop_at_type() {
-        // list { maxlen: 100, type string }
-        //        [0]  [1][2][3][4]
-        let tok = lex(b"maxlen: 100, type string }").unwrap();
-        let mut d = dict! {};
-        let r = schema::rfold_tymeta(0x00, &tok, &mut d);
-        assert_eq!(r.pos(), 5);
-        assert!(r.is_okay());
-        assert_eq!(
-            d,
-            dict! {
-                "maxlen" => Lit::Num(100),
             }
         );
     }
