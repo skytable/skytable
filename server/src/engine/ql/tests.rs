@@ -173,22 +173,22 @@ mod schema_tests {
             let mut should_pass = true;
             src.iter().for_each(|tok| match tok {
                 Token::IgnorableComma => {
-                    let should_add = test_utils::random_bool(&mut rng);
-                    if should_add {
+                    let did_add = test_utils::random_bool(&mut rng);
+                    if did_add {
                         new_src.push(Token::Comma);
                     }
                     let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added <= !should_add as usize;
+                    should_pass &= added <= !did_add as usize;
                 }
                 Token::Comma => {
-                    let should_add = test_utils::random_bool(&mut rng);
-                    if should_add {
+                    let did_add = test_utils::random_bool(&mut rng);
+                    if did_add {
                         new_src.push(Token::Comma);
                     } else {
                         should_pass = false;
                     }
                     let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added == !should_add as usize;
+                    should_pass &= added == !did_add as usize;
                 }
                 tok => new_src.push(tok.clone()),
             });
@@ -379,16 +379,18 @@ mod schema_tests {
                 let r = schema::fold_dict(&new_src);
                 if should_pass {
                     assert_eq!(r.unwrap(), ret_dict)
-                } else {
-                    if !r.is_none() {
-                        panic!("failure: {:?}", new_src);
-                    }
+                } else if r.is_some() {
+                    panic!(
+                        "expected failure, but passed for token stream: `{:?}`",
+                        new_src
+                    );
                 }
             });
         }
     }
     mod tymeta {
         use super::*;
+        use crate::engine::ql::lexer::{Kw, Ty};
         #[test]
         fn tymeta_mini() {
             let tok = lex(b"}").unwrap();
@@ -474,6 +476,74 @@ mod schema_tests {
                     }
                 }
             )
+        }
+        #[test]
+        fn fuzz_tymeta_normal() {
+            // { maxlen: 10, unique: true, user: "sayan" }
+            //   ^start
+            let tok = lex(b"
+                    maxlen: 10,
+                    unique: true,
+                    auth: {
+                        maybe: true\r
+                    },
+                    user: \"sayan\"\r
+                }
+            ")
+            .unwrap();
+            let expected = dict! {
+                "maxlen" => Lit::Num(10),
+                "unique" => Lit::Bool(true),
+                "auth" => dict! {
+                    "maybe" => Lit::Bool(true),
+                },
+                "user" => Lit::Str("sayan".into())
+            };
+            fuzz_tokens(&tok, |should_pass, new_src| {
+                let (ret, dict) = schema::fold_tymeta(&tok);
+                if should_pass {
+                    assert!(ret.is_okay());
+                    assert!(!ret.has_more());
+                    assert_eq!(ret.pos(), new_src.len());
+                    assert_eq!(dict, expected);
+                } else if ret.is_okay() {
+                    panic!("Expected failure but passed for token stream: `{:?}`", tok);
+                }
+            });
+        }
+        #[test]
+        fn fuzz_tymeta_with_ty() {
+            // list { maxlen: 10, unique: true, type string, user: "sayan" }
+            //   ^start
+            let tok = lex(b"
+                    maxlen: 10,
+                    unique: true,
+                    auth: {
+                        maybe: true\r
+                    },
+                    type string,
+                    user: \"sayan\"\r
+                }
+            ")
+            .unwrap();
+            let expected = dict! {
+                "maxlen" => Lit::Num(10),
+                "unique" => Lit::Bool(true),
+                "auth" => dict! {
+                    "maybe" => Lit::Bool(true),
+                },
+            };
+            fuzz_tokens(&tok, |should_pass, new_src| {
+                let (ret, dict) = schema::fold_tymeta(&tok);
+                if should_pass {
+                    assert!(ret.is_okay());
+                    assert!(ret.has_more());
+                    assert!(new_src[ret.pos()] == Token::Keyword(Kw::TypeId(Ty::String)));
+                    assert_eq!(dict, expected);
+                } else if ret.is_okay() {
+                    panic!("Expected failure but passed for token stream: `{:?}`", tok);
+                }
+            });
         }
     }
     mod layer {
