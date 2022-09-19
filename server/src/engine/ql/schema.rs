@@ -37,6 +37,7 @@
 
     TODO: The SMs can be reduced greatly, enocded to fixed-sized structures even, so do that
     FIXME: For now, try and reduce reliance on additional flags (encoded into state?)
+    FIXME: The returns are awfully large right now. Do something about it
 
     --
     Sayan (@ohsayan)
@@ -47,7 +48,7 @@ use {
     super::{
         ast::{Compiler, Statement},
         lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
-        LangResult, RawSlice,
+        LangError, LangResult, RawSlice,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -115,7 +116,7 @@ impl Layer {
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct FieldProperties {
-    pub(super) propeties: HashSet<StaticStr>,
+    pub(super) properties: HashSet<StaticStr>,
 }
 
 impl FieldProperties {
@@ -123,9 +124,17 @@ impl FieldProperties {
     const PRIMARY: StaticStr = "primary";
     pub fn new() -> Self {
         Self {
-            propeties: HashSet::new(),
+            properties: HashSet::new(),
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+/// A field definition
+pub struct Field {
+    pub(super) field_name: Box<str>,
+    pub(super) layers: Vec<Layer>,
+    pub(super) props: HashSet<StaticStr>,
 }
 
 /*
@@ -220,6 +229,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
     i as u64 | ((okay as u64) << 63)
 }
 
+#[cfg(test)]
 pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
     let mut d = Dict::new();
     let r = rfold_dict(DictFoldState::OB, tok, &mut d);
@@ -365,6 +375,7 @@ pub(super) fn rfold_tymeta(
     r
 }
 
+#[cfg(test)]
 pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaFoldResult, Dict) {
     let mut d = Dict::new();
     let r = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, tok, &mut d);
@@ -468,23 +479,24 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
     i as u64 | ((okay as u64) << 63)
 }
 
+#[cfg(test)]
 pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
     let mut l = Vec::new();
     let r = rfold_layers(tok, &mut l);
     (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
-pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
+pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) {
     let mut props = FieldProperties::default();
     let mut i = 0;
     let mut okay = true;
     while i < tok.len() {
         match &tok[i] {
             Token::Keyword(Keyword::Ddl(DdlKeyword::Primary)) => {
-                okay &= props.propeties.insert(FieldProperties::PRIMARY)
+                okay &= props.properties.insert(FieldProperties::PRIMARY)
             }
             Token::Keyword(Keyword::Misc(MiscKeyword::Null)) => {
-                okay &= props.propeties.insert(FieldProperties::NULL)
+                okay &= props.properties.insert(FieldProperties::NULL)
             }
             Token::Ident(_) => break,
             _ => {
@@ -496,7 +508,55 @@ pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, usize
         }
         i += 1;
     }
-    (props, i, okay)
+    (props, i as u64 | ((okay as u64) << 63))
+}
+
+#[cfg(test)]
+pub(super) fn parse_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
+    let (p, r) = collect_field_properties(tok);
+    (p, (r & !HIBIT) as _, r & HIBIT == HIBIT)
+}
+
+pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
+    let l = tok.len();
+    let mut i = 0;
+    let mut okay = true;
+    // parse field properties
+    let (props, r) = collect_field_properties(tok);
+    okay &= r & HIBIT == HIBIT;
+    i += (r & !HIBIT) as usize;
+    // if exhauted or broken, simply return
+    if i == l || !okay || (l - i) == 1 {
+        return Err(LangError::UnexpectedEndofStatement);
+    }
+
+    // field name
+    let field_name = match (&tok[i], &tok[i + 1]) {
+        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => {
+            unsafe { transmute::<&[u8], &str>(id.as_slice()) }.into()
+        }
+        _ => return Err(LangError::UnexpectedToken),
+    };
+    i += 2;
+
+    // layers
+    let mut layers = Vec::new();
+    let r = rfold_layers(&tok[i..], &mut layers);
+    okay &= r & HIBIT == HIBIT;
+    i += (r & !HIBIT) as usize;
+
+    if okay {
+        Ok((
+            i,
+            Field {
+                field_name,
+                layers,
+                props: props.properties,
+            },
+        ))
+    } else {
+        Err(LangError::UnexpectedToken)
+    }
 }
 
 pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {

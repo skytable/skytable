@@ -35,6 +35,17 @@ macro_rules! dict {
     }};
 }
 
+macro_rules! set {
+    () => {
+        <::std::collections::HashSet<_> as ::core::default::Default>::default()
+    };
+    ($($key:expr),* $(,)?) => {{
+        let mut hs: ::std::collections::HashSet<_> = ::core::default::Default::default();
+        $(hs.insert($key.into());)*
+        hs
+    }};
+}
+
 macro_rules! multi_assert_eq {
     ($($lhs:expr),* => $rhs:expr) => {
         $(assert_eq!($lhs, $rhs);)*

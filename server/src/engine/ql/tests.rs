@@ -684,7 +684,7 @@ mod schema_tests {
         #[test]
         fn field_properties_empty() {
             let tok = lex(b"myfield:").unwrap();
-            let (props, c, okay) = schema::collect_field_properties(&tok);
+            let (props, c, okay) = schema::parse_field_properties(&tok);
             assert!(okay);
             assert_eq!(c, 0);
             assert_eq!(props, FieldProperties::default());
@@ -692,14 +692,122 @@ mod schema_tests {
         #[test]
         fn field_properties_full() {
             let tok = lex(b"primary null myfield:").unwrap();
-            let (props, c, okay) = schema::collect_field_properties(&tok);
+            let (props, c, okay) = schema::parse_field_properties(&tok);
             assert_eq!(c, 2);
             assert_eq!(tok[c], Token::Ident("myfield".into()));
             assert!(okay);
             assert_eq!(
                 props,
                 FieldProperties {
-                    propeties: ["primary", "null"].into_iter().collect()
+                    properties: set!["primary", "null"],
+                }
+            )
+        }
+    }
+    mod fields {
+        use {
+            super::*,
+            crate::engine::ql::{
+                lexer::Type,
+                schema::{Field, Layer},
+            },
+        };
+        #[test]
+        fn field_mini() {
+            let tok = lex(b"
+                username: string,
+            ")
+            .unwrap();
+            let (c, f) = schema::parse_field(&tok).unwrap();
+            assert_eq!(c, tok.len() - 1);
+            assert_eq!(
+                f,
+                Field {
+                    field_name: "username".into(),
+                    layers: [Layer::new(Type::String, dict! {})].into(),
+                    props: set![],
+                }
+            )
+        }
+        #[test]
+        fn field() {
+            let tok = lex(b"
+                primary username: string,    
+            ")
+            .unwrap();
+            let (c, f) = schema::parse_field(&tok).unwrap();
+            assert_eq!(c, tok.len() - 1);
+            assert_eq!(
+                f,
+                Field {
+                    field_name: "username".into(),
+                    layers: [Layer::new(Type::String, dict! {})].into(),
+                    props: set!["primary"],
+                }
+            )
+        }
+        #[test]
+        fn field_pro() {
+            let tok = lex(b"
+                primary username: string {
+                    maxlen: 10,
+                    ascii_only: true,
+                }
+            ")
+            .unwrap();
+            let (c, f) = schema::parse_field(&tok).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                f,
+                Field {
+                    field_name: "username".into(),
+                    layers: [Layer::new(
+                        Type::String,
+                        dict! {
+                            "maxlen" => Lit::Num(10),
+                            "ascii_only" => Lit::Bool(true),
+                        }
+                    )]
+                    .into(),
+                    props: set!["primary"],
+                }
+            )
+        }
+        #[test]
+        fn field_pro_max() {
+            let tok = lex(b"
+                null notes: list {
+                    type string {
+                        maxlen: 255,
+                        ascii_only: true,
+                    },
+                    unique: true,
+                }
+            ")
+            .unwrap();
+            let (c, f) = schema::parse_field(&tok).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                f,
+                Field {
+                    field_name: "notes".into(),
+                    layers: [
+                        Layer::new(
+                            Type::String,
+                            dict! {
+                                "maxlen" => Lit::Num(255),
+                                "ascii_only" => Lit::Bool(true),
+                            }
+                        ),
+                        Layer::new(
+                            Type::List,
+                            dict! {
+                                "unique" => Lit::Bool(true)
+                            }
+                        ),
+                    ]
+                    .into(),
+                    props: set!["null"],
                 }
             )
         }
