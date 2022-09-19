@@ -678,4 +678,30 @@ mod schema_tests {
             });
         }
     }
+    mod field_properties {
+        use {super::*, crate::engine::ql::schema::FieldProperties};
+
+        #[test]
+        fn field_properties_empty() {
+            let tok = lex(b"myfield:").unwrap();
+            let (props, c, okay) = schema::collect_field_properties(&tok);
+            assert!(okay);
+            assert_eq!(c, 0);
+            assert_eq!(props, FieldProperties::default());
+        }
+        #[test]
+        fn field_properties_full() {
+            let tok = lex(b"primary null myfield:").unwrap();
+            let (props, c, okay) = schema::collect_field_properties(&tok);
+            assert_eq!(c, 2);
+            assert_eq!(tok[c], Token::Ident("myfield".into()));
+            assert!(okay);
+            assert_eq!(
+                props,
+                FieldProperties {
+                    propeties: ["primary", "null"].into_iter().collect()
+                }
+            )
+        }
+    }
 }

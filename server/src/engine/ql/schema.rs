@@ -46,11 +46,11 @@
 use {
     super::{
         ast::{Compiler, Statement},
-        lexer::{DdlMiscKeyword, Keyword, Lit, Symbol, Token, Type},
+        lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
         LangResult, RawSlice,
     },
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         mem::{transmute, MaybeUninit},
     },
 };
@@ -75,6 +75,8 @@ macro_rules! states {
         }
     }
 }
+
+type StaticStr = &'static str;
 
 const HIBIT: u64 = 1 << 63;
 const TRAIL_COMMA: bool = true;
@@ -108,6 +110,21 @@ pub struct Layer {
 impl Layer {
     pub(super) const fn new(ty: Type, props: Dict) -> Self {
         Self { ty, props }
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct FieldProperties {
+    pub(super) propeties: HashSet<StaticStr>,
+}
+
+impl FieldProperties {
+    const NULL: StaticStr = "null";
+    const PRIMARY: StaticStr = "primary";
+    pub fn new() -> Self {
+        Self {
+            propeties: HashSet::new(),
+        }
     }
 }
 
@@ -455,6 +472,31 @@ pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
     let mut l = Vec::new();
     let r = rfold_layers(tok, &mut l);
     (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
+}
+
+pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
+    let mut props = FieldProperties::default();
+    let mut i = 0;
+    let mut okay = true;
+    while i < tok.len() {
+        match &tok[i] {
+            Token::Keyword(Keyword::Ddl(DdlKeyword::Primary)) => {
+                okay &= props.propeties.insert(FieldProperties::PRIMARY)
+            }
+            Token::Keyword(Keyword::Misc(MiscKeyword::Null)) => {
+                okay &= props.propeties.insert(FieldProperties::NULL)
+            }
+            Token::Ident(_) => break,
+            _ => {
+                // we could pass this over to the caller, but it's better if we do it since we're doing
+                // a linear scan anyways
+                okay = false;
+                break;
+            }
+        }
+        i += 1;
+    }
+    (props, i, okay)
 }
 
 pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {
