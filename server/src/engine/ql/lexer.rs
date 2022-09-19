@@ -125,6 +125,12 @@ pub enum Keyword {
     Dml(DmlKeyword),
     DmlMisc(DmlMiscKeyword),
     TypeId(Type),
+    Misc(MiscKeyword),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum MiscKeyword {
+    Null,
 }
 
 enum_impls! {
@@ -134,6 +140,7 @@ enum_impls! {
         DmlKeyword as Dml,
         DmlMiscKeyword as DmlMisc,
         Type as TypeId,
+        MiscKeyword as Misc,
     }
 }
 
@@ -183,6 +190,7 @@ pub enum DdlKeyword {
     Inspect,
     Model,
     Space,
+    Primary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -276,12 +284,12 @@ fn symof(sym: u8) -> Option<Symbol> {
     }
 }
 
-static KW_GRAPH: [u8; 38] = [
-    0, 29, 0, 16, 14, 3, 6, 11, 35, 14, 13, 30, 4, 4, 18, 17, 29, 11, 27, 10, 22, 37, 36, 30, 15,
-    27, 10, 3, 10, 13, 16, 30, 16, 15, 29, 9, 10, 25,
+static KW_GRAPH: [u8; 40] = [
+    0, 2, 32, 18, 4, 37, 11, 27, 34, 35, 26, 33, 0, 0, 10, 2, 22, 8, 5, 7, 16, 9, 8, 39, 21, 5, 0,
+    22, 14, 19, 22, 31, 28, 38, 26, 21, 30, 24, 10, 18,
 ];
 
-static KW_DATA: [(&str, Keyword); 36] = [
+static KW_DATA: [(&str, Keyword); 38] = [
     ("use", Keyword::Ddl(DdlKeyword::Use)),
     ("create", Keyword::Ddl(DdlKeyword::Create)),
     ("alter", Keyword::Ddl(DdlKeyword::Alter)),
@@ -289,6 +297,7 @@ static KW_DATA: [(&str, Keyword); 36] = [
     ("inspect", Keyword::Ddl(DdlKeyword::Inspect)),
     ("model", Keyword::Ddl(DdlKeyword::Model)),
     ("space", Keyword::Ddl(DdlKeyword::Space)),
+    ("primary", Keyword::Ddl(DdlKeyword::Primary)),
     ("with", Keyword::DdlMisc(DdlMiscKeyword::With)),
     ("add", Keyword::DdlMisc(DdlMiscKeyword::Add)),
     ("remove", Keyword::DdlMisc(DdlMiscKeyword::Remove)),
@@ -318,10 +327,11 @@ static KW_DATA: [(&str, Keyword); 36] = [
     ("int", Keyword::TypeId(Type::Int)),
     ("double", Keyword::TypeId(Type::Double)),
     ("float", Keyword::TypeId(Type::Float)),
+    ("null", Keyword::Misc(MiscKeyword::Null)),
 ];
 
-const KW_MAGIC_A: &[u8] = b"8DWJbcla";
-const KW_MAGIC_B: &[u8] = b"u7uclIZx";
+const KW_MAGIC_A: &[u8] = b"GSggb8qI";
+const KW_MAGIC_B: &[u8] = b"ZaljIeOx";
 const KW_MODULUS: usize = 8;
 
 #[inline(always)]
