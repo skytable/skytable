@@ -24,12 +24,14 @@
  *
 */
 
-use crate::util::Life;
-
 use {
     super::{LangError, LangResult, RawSlice},
-    crate::util::compiler,
-    core::{marker::PhantomData, slice, str},
+    crate::util::{compiler, Life},
+    core::{
+        marker::PhantomData,
+        mem::{size_of, transmute},
+        slice, str,
+    },
 };
 
 /*
@@ -38,121 +40,315 @@ use {
 
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(PartialEq, Clone))]
-#[repr(u8)]
 pub enum Token {
-    OpenParen,      // (
-    CloseParen,     // )
-    OpenAngular,    // <
-    CloseAngular,   // >
-    OpenSqBracket,  // [
-    CloseSqBracket, // ]
-    OpenBrace,      // {
-    CloseBrace,     // }
-    Comma,          // ,
+    Symbol(Symbol),
+    Keyword(Keyword),
+    Ident(RawSlice),
     #[cfg(test)]
     /// A comma that can be ignored (used for fuzzing)
     IgnorableComma,
-    Colon,           // :
-    Period,          // .
-    Ident(RawSlice), // ident
-    Keyword(Kw),     // kw
-    OperatorEq,      // =
-    OperatorAdd,     // +
-    Lit(Lit),        // literal
+    Lit(Lit), // literal
 }
 
-impl From<Kw> for Token {
-    fn from(kw: Kw) -> Self {
-        Self::Keyword(kw)
+assertions! {
+    size_of::<Token>() == 32, // FIXME(@ohsayan): Damn, what?
+    size_of::<Symbol>() == 1,
+    size_of::<Keyword>() == 2,
+    size_of::<Lit>() == 24, // FIXME(@ohsayan): Ouch
+}
+
+enum_impls! {
+    Token => {
+        Keyword as Keyword,
+        Symbol as Symbol,
+        Lit as Lit,
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[repr(u8)]
 pub enum Lit {
-    Str(String),
+    Str(Box<str>),
     Bool(bool),
     Num(u64),
 }
 
-impl From<Lit> for Token {
-    fn from(l: Lit) -> Self {
-        Self::Lit(l)
+enum_impls! {
+    Lit => {
+        Box<str> as Str,
+        bool as Bool,
+        u64 as Num,
     }
 }
 
-impl From<u64> for Lit {
-    fn from(n: u64) -> Self {
-        Self::Num(n)
-    }
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Symbol {
+    OpArithmeticAdd,  // +
+    OpArithmeticSub,  // -
+    OpArithmeticMul,  // *
+    OpArithmeticDiv,  // /
+    OpLogicalNot,     // !
+    OpLogicalAnd,     // &
+    OpLogicalXor,     // ^
+    OpLogicalOr,      // |
+    OpAssign,         // =
+    TtOpenParen,      // (
+    TtCloseParen,     // )
+    TtOpenSqBracket,  // [
+    TtCloseSqBracket, // ]
+    TtOpenBrace,      // {
+    TtCloseBrace,     // }
+    OpComparatorLt,   // <
+    OpComparatorGt,   // >
+    QuoteS,           // '
+    QuoteD,           // "
+    SymAt,            // @
+    SymHash,          // #
+    SymDollar,        // $
+    SymPercent,       // %
+    SymUnderscore,    // _
+    SymBackslash,     // \
+    SymColon,         // :
+    SymSemicolon,     // ;
+    SymComma,         // ,
+    SymPeriod,        // .
+    SymQuestion,      // ?
+    SymTilde,         // ~
+    SymAccent,        // `
 }
 
-impl From<String> for Lit {
-    fn from(s: String) -> Self {
-        Self::Str(s)
-    }
-}
-
-impl From<bool> for Lit {
-    fn from(b: bool) -> Self {
-        Self::Bool(b)
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub enum Stmt {
-    Use,
-    Create,
-    Drop,
-    Inspect,
-    Alter,
+pub enum Keyword {
+    Ddl(DdlKeyword),
+    DdlMisc(DdlMiscKeyword),
+    Dml(DmlKeyword),
+    DmlMisc(DmlMiscKeyword),
+    TypeId(Type),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+enum_impls! {
+    Keyword => {
+        DdlKeyword as Ddl,
+        DdlMiscKeyword as DdlMisc,
+        DmlKeyword as Dml,
+        DmlMiscKeyword as DmlMisc,
+        Type as TypeId,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Kw {
-    Stmt(Stmt),
-    TypeId(Ty),
-    Space,
-    Model,
+pub enum DmlMiscKeyword {
+    Limit,
+    From,
+    Into,
+    Where,
+    If,
+    And,
+    As,
+    By,
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DmlKeyword {
+    Insert,
+    Select,
+    Update,
+    Delete,
+    Exists,
+    Truncate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DdlMiscKeyword {
+    With,
+    Add,
+    Remove,
+    Sort,
     Type,
 }
 
-impl From<Ty> for Kw {
-    fn from(ty: Ty) -> Self {
-        Self::TypeId(ty)
-    }
-}
-
-impl Kw {
-    // FIXME(@ohsayan): Use our pf hack
-    pub fn try_from_slice(s: &[u8]) -> Option<Token> {
-        let r = match s.to_ascii_lowercase().as_slice() {
-            b"use" => Self::Stmt(Stmt::Use).into(),
-            b"create" => Self::Stmt(Stmt::Create).into(),
-            b"drop" => Self::Stmt(Stmt::Drop).into(),
-            b"inspect" => Self::Stmt(Stmt::Inspect).into(),
-            b"alter" => Self::Stmt(Stmt::Alter).into(),
-            b"space" => Self::Space.into(),
-            b"model" => Self::Model.into(),
-            b"string" => Self::TypeId(Ty::String).into(),
-            b"binary" => Self::TypeId(Ty::Binary).into(),
-            b"list" => Self::TypeId(Ty::Ls).into(),
-            b"true" => Token::Lit(Lit::Bool(true)),
-            b"type" => Kw::Type.into(),
-            b"false" => Token::Lit(Lit::Bool(false)),
-            _ => return None,
-        };
-        return Some(r);
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Ty {
-    String = 0_u8,
-    Binary = 1_u8,
-    Ls = 2_u8,
+pub enum DdlKeyword {
+    Use,
+    Create,
+    Alter,
+    Drop,
+    Inspect,
+    Model,
+    Space,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Type {
+    String,
+    Binary,
+    List,
+    Map,
+    Bool,
+    Int,
+    Double,
+    Float,
+}
+
+/*
+    This section implements DAGs, as described by Czech et al in their paper. I wrote these pretty much by brute-force using
+    a byte-level multiplicative function (inside a script). This unfortunately implies that every time we *do* need to add a
+    new keyword, I will need to recompute and rewrite the vertices. I don't plan to use any codegen, so I think this is good
+    as-is. The real challenge here is to keep the graph small, and I couldn't do that for the symbols table even with multiple
+    trials. Please see if you can improve them.
+
+    Also the functions are unique to every graph, and every input set, so BE WARNED!
+
+    -- Sayan (@ohsayan)
+    Sept. 18, 2022
+*/
+
+const SYM_MAGIC_A: u8 = b'w';
+const SYM_MAGIC_B: u8 = b'E';
+
+static SYM_GRAPH: [u8; 69] = [
+    0, 0, 25, 0, 3, 0, 21, 0, 6, 13, 0, 0, 0, 0, 8, 0, 0, 0, 17, 0, 0, 30, 0, 28, 0, 20, 19, 12, 0,
+    0, 2, 0, 0, 15, 0, 0, 0, 5, 0, 31, 14, 0, 1, 0, 18, 29, 24, 0, 0, 10, 0, 0, 26, 0, 0, 0, 22, 0,
+    23, 7, 0, 27, 0, 4, 16, 11, 0, 0, 9,
+];
+
+static SYM_DATA: [(u8, Symbol); 32] = [
+    (b'+', Symbol::OpArithmeticAdd),
+    (b'-', Symbol::OpArithmeticSub),
+    (b'*', Symbol::OpArithmeticMul),
+    (b'/', Symbol::OpArithmeticDiv),
+    (b'!', Symbol::OpLogicalNot),
+    (b'&', Symbol::OpLogicalAnd),
+    (b'^', Symbol::OpLogicalXor),
+    (b'|', Symbol::OpLogicalOr),
+    (b'=', Symbol::OpAssign),
+    (b'(', Symbol::TtOpenParen),
+    (b')', Symbol::TtCloseParen),
+    (b'[', Symbol::TtOpenSqBracket),
+    (b']', Symbol::TtCloseSqBracket),
+    (b'{', Symbol::TtOpenBrace),
+    (b'}', Symbol::TtCloseBrace),
+    (b'<', Symbol::OpComparatorLt),
+    (b'>', Symbol::OpComparatorGt),
+    (b'\'', Symbol::QuoteS),
+    (b'"', Symbol::QuoteD),
+    (b'@', Symbol::SymAt),
+    (b'#', Symbol::SymHash),
+    (b'$', Symbol::SymDollar),
+    (b'%', Symbol::SymPercent),
+    (b'_', Symbol::SymUnderscore),
+    (b'\\', Symbol::SymBackslash),
+    (b':', Symbol::SymColon),
+    (b';', Symbol::SymSemicolon),
+    (b',', Symbol::SymComma),
+    (b'.', Symbol::SymPeriod),
+    (b'?', Symbol::SymQuestion),
+    (b'~', Symbol::SymTilde),
+    (b'`', Symbol::SymAccent),
+];
+
+#[inline(always)]
+fn symfh(k: u8, magic: u8) -> u16 {
+    (magic as u16 * k as u16) % SYM_GRAPH.len() as u16
+}
+
+#[inline(always)]
+fn symph(k: u8) -> u8 {
+    (SYM_GRAPH[symfh(k, SYM_MAGIC_A) as usize] + SYM_GRAPH[symfh(k, SYM_MAGIC_B) as usize])
+        % SYM_GRAPH.len() as u8
+}
+
+#[inline(always)]
+fn symof(sym: u8) -> Option<Symbol> {
+    let hf = symph(sym);
+    if hf < SYM_DATA.len() as u8 && SYM_DATA[hf as usize].0 == sym {
+        Some(SYM_DATA[hf as usize].1)
+    } else {
+        None
+    }
+}
+
+static KW_GRAPH: [u8; 38] = [
+    0, 29, 0, 16, 14, 3, 6, 11, 35, 14, 13, 30, 4, 4, 18, 17, 29, 11, 27, 10, 22, 37, 36, 30, 15,
+    27, 10, 3, 10, 13, 16, 30, 16, 15, 29, 9, 10, 25,
+];
+
+static KW_DATA: [(&str, Keyword); 36] = [
+    ("use", Keyword::Ddl(DdlKeyword::Use)),
+    ("create", Keyword::Ddl(DdlKeyword::Create)),
+    ("alter", Keyword::Ddl(DdlKeyword::Alter)),
+    ("drop", Keyword::Ddl(DdlKeyword::Drop)),
+    ("inspect", Keyword::Ddl(DdlKeyword::Inspect)),
+    ("model", Keyword::Ddl(DdlKeyword::Model)),
+    ("space", Keyword::Ddl(DdlKeyword::Space)),
+    ("with", Keyword::DdlMisc(DdlMiscKeyword::With)),
+    ("add", Keyword::DdlMisc(DdlMiscKeyword::Add)),
+    ("remove", Keyword::DdlMisc(DdlMiscKeyword::Remove)),
+    ("sort", Keyword::DdlMisc(DdlMiscKeyword::Sort)),
+    ("type", Keyword::DdlMisc(DdlMiscKeyword::Type)),
+    ("insert", Keyword::Dml(DmlKeyword::Insert)),
+    ("select", Keyword::Dml(DmlKeyword::Select)),
+    ("update", Keyword::Dml(DmlKeyword::Update)),
+    ("delete", Keyword::Dml(DmlKeyword::Delete)),
+    ("exists", Keyword::Dml(DmlKeyword::Exists)),
+    ("truncate", Keyword::Dml(DmlKeyword::Truncate)),
+    ("limit", Keyword::DmlMisc(DmlMiscKeyword::Limit)),
+    ("from", Keyword::DmlMisc(DmlMiscKeyword::From)),
+    ("into", Keyword::DmlMisc(DmlMiscKeyword::Into)),
+    ("where", Keyword::DmlMisc(DmlMiscKeyword::Where)),
+    ("if", Keyword::DmlMisc(DmlMiscKeyword::If)),
+    ("and", Keyword::DmlMisc(DmlMiscKeyword::And)),
+    ("as", Keyword::DmlMisc(DmlMiscKeyword::As)),
+    ("by", Keyword::DmlMisc(DmlMiscKeyword::By)),
+    ("asc", Keyword::DmlMisc(DmlMiscKeyword::Asc)),
+    ("desc", Keyword::DmlMisc(DmlMiscKeyword::Desc)),
+    ("string", Keyword::TypeId(Type::String)),
+    ("binary", Keyword::TypeId(Type::Binary)),
+    ("list", Keyword::TypeId(Type::List)),
+    ("map", Keyword::TypeId(Type::Map)),
+    ("bool", Keyword::TypeId(Type::Bool)),
+    ("int", Keyword::TypeId(Type::Int)),
+    ("double", Keyword::TypeId(Type::Double)),
+    ("float", Keyword::TypeId(Type::Float)),
+];
+
+const KW_MAGIC_A: &[u8] = b"8DWJbcla";
+const KW_MAGIC_B: &[u8] = b"u7uclIZx";
+const KW_MODULUS: usize = 8;
+
+#[inline(always)]
+fn kwfh(k: &[u8], magic: &[u8]) -> u32 {
+    let mut i = 0;
+    let mut s = 0;
+    while i < k.len() {
+        s += magic[(i % KW_MODULUS) as usize] as u32 * k[i] as u32;
+        i += 1;
+    }
+    s % KW_GRAPH.len() as u32
+}
+
+#[inline(always)]
+fn kwph(k: &[u8]) -> u8 {
+    (KW_GRAPH[kwfh(k, KW_MAGIC_A) as usize] + KW_GRAPH[kwfh(k, KW_MAGIC_B) as usize])
+        % KW_GRAPH.len() as u8
+}
+
+#[inline(always)]
+fn kwof(key: &str) -> Option<Keyword> {
+    let ph = kwph(key.as_bytes());
+    if ph < KW_DATA.len() as u8 && KW_DATA[ph as usize].0 == key {
+        Some(KW_DATA[ph as usize].1)
+    } else {
+        None
+    }
 }
 
 /*
@@ -220,8 +416,8 @@ impl<'a> Lexer<'a> {
         self.incr_cursor_by(iff as usize)
     }
     #[inline(always)]
-    fn push_token(&mut self, token: Token) {
-        self.tokens.push(token)
+    fn push_token(&mut self, token: impl Into<Token>) {
+        self.tokens.push(token.into())
     }
     #[inline(always)]
     fn peek_is(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
@@ -273,8 +469,11 @@ impl<'a> Lexer<'a> {
     }
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
-        match Kw::try_from_slice(unsafe { s.as_slice() }) {
-            Some(kw) => self.tokens.push(kw),
+        let st = unsafe { transmute(s.as_slice()) };
+        match kwof(st) {
+            Some(kw) => self.tokens.push(kw.into()),
+            // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
+            None if st == "true" || st == "false" => self.push_token(Lit::Bool(st == "true")),
             None => self.tokens.push(Token::Ident(s)),
         }
     }
@@ -336,37 +535,24 @@ impl<'a> Lexer<'a> {
             }
             let terminated = self.peek_eq_and_forward(quote_style);
             match String::from_utf8(buf) {
-                Ok(st) if terminated => self.tokens.push(Token::Lit(st.into())),
+                Ok(st) if terminated => self.tokens.push(Token::Lit(st.into_boxed_str().into())),
                 _ => self.last_error = Some(LangError::InvalidStringLiteral),
             }
         }
     }
     fn scan_byte(&mut self, byte: u8) {
-        let b = match byte {
-            b':' => Token::Colon,
-            b'(' => Token::OpenParen,
-            b')' => Token::CloseParen,
-            b'<' => Token::OpenAngular,
-            b'>' => Token::CloseAngular,
-            b'[' => Token::OpenSqBracket,
-            b']' => Token::CloseSqBracket,
-            b'{' => Token::OpenBrace,
-            b'}' => Token::CloseBrace,
-            b',' => Token::Comma,
-            b'.' => Token::Period,
-            b'=' => Token::OperatorEq,
-            b'+' => Token::OperatorAdd,
+        match symof(byte) {
+            Some(tok) => self.push_token(tok),
             #[cfg(test)]
-            b'\r' => Token::IgnorableComma,
+            None if byte == b'\r' => self.push_token(Token::IgnorableComma),
             _ => {
                 self.last_error = Some(LangError::UnexpectedChar);
                 return;
             }
-        };
+        }
         unsafe {
             self.incr_cursor();
         }
-        self.tokens.push(b)
     }
 
     fn _lex(&mut self) {

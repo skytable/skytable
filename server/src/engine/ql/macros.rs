@@ -40,3 +40,13 @@ macro_rules! multi_assert_eq {
         $(assert_eq!($lhs, $rhs);)*
     };
 }
+
+macro_rules! enum_impls {
+    ($for:ty => {$($other:ty as $me:ident),*$(,)?}) => {
+        $(impl ::core::convert::From<$other> for $for {fn from(v: $other) -> Self {Self::$me(v)}})*
+    }
+}
+
+macro_rules! assertions {
+    ($($assert:expr),*$(,)?) => {$(const _:()=::core::assert!($assert);)*}
+}

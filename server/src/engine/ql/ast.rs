@@ -26,65 +26,16 @@
 
 use {
     super::{
-        lexer::{Kw, Lexer, Stmt, Token, Ty},
+        lexer::{DdlKeyword, Keyword, Lexer, Symbol, Token},
         schema, LangError, LangResult, RawSlice,
     },
-    crate::util::{compiler, Life},
-    core::{
-        marker::PhantomData,
-        mem::{discriminant, transmute},
-        slice,
-    },
+    crate::util::Life,
+    core::{marker::PhantomData, mem::discriminant, slice},
 };
 
 /*
     AST
 */
-
-#[derive(Debug, PartialEq)]
-pub struct TypeExpr(Vec<Ty>);
-
-#[repr(u8)]
-#[derive(Debug)]
-enum FTy {
-    String = 0,
-    Binary = 1,
-}
-
-#[derive(Debug)]
-struct TypeDefintion {
-    d: usize,
-    b: Ty,
-    f: FTy,
-}
-
-impl TypeDefintion {
-    const PRIM: usize = 1;
-    pub fn eval(s: TypeExpr) -> LangResult<Self> {
-        let TypeExpr(ex) = s;
-        let l = ex.len();
-        #[inline(always)]
-        fn ls(t: &Ty) -> bool {
-            *t == Ty::Ls
-        }
-        let d = ex.iter().map(|v| ls(v) as usize).sum::<usize>();
-        let v = (l == 1 && ex[0] != Ty::Ls) || (l > 1 && (d == l - 1) && ex[l - 1] != Ty::Ls);
-        if compiler::likely(v) {
-            unsafe {
-                Ok(Self {
-                    d: d + 1,
-                    b: ex[0],
-                    f: transmute(ex[l - 1]),
-                })
-            }
-        } else {
-            compiler::cold_err(Err(LangError::InvalidTypeExpression))
-        }
-    }
-    pub const fn is_prim(&self) -> bool {
-        self.d == Self::PRIM
-    }
-}
 
 pub enum Entity {
     Current(RawSlice),
@@ -98,7 +49,11 @@ impl Entity {
         let b = cm.nxtok_nofw_opt();
         let c = cm.nxtok_nofw_opt();
         match (a, b, c) {
-            (Some(Token::Ident(ks)), Some(Token::Period), Some(Token::Ident(tbl))) => unsafe {
+            (
+                Some(Token::Ident(ks)),
+                Some(Token::Symbol(Symbol::SymPeriod)),
+                Some(Token::Ident(tbl)),
+            ) => unsafe {
                 let r = Ok(Entity::Full(ks.raw_clone(), tbl.raw_clone()));
                 cm.incr_cursor_by(3);
                 r
@@ -108,7 +63,7 @@ impl Entity {
                 cm.incr_cursor();
                 r
             },
-            (Some(Token::Colon), Some(Token::Ident(tbl)), _) => unsafe {
+            (Some(Token::Symbol(Symbol::SymColon)), Some(Token::Ident(tbl)), _) => unsafe {
                 let r = Ok(Entity::Partial(tbl.raw_clone()));
                 cm.incr_cursor_by(2);
                 r
@@ -152,21 +107,19 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn stage0(&mut self) -> Result<Statement, LangError> {
         match self.nxtok_opt() {
-            Some(Token::Keyword(Kw::Stmt(stmt))) => match stmt {
-                Stmt::Create => self.create0(),
-                Stmt::Drop => self.drop0(),
-                Stmt::Alter => self.alter0(),
-                Stmt::Inspect => self.inspect0(),
-                Stmt::Use => self.use0(),
-            },
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Create))) => self.create0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Drop))) => self.drop0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Alter))) => self.alter0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Inspect))) => self.inspect0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Use))) => self.use0(),
             _ => Err(LangError::ExpectedStatement),
         }
     }
     #[inline(always)]
     fn create0(&mut self) -> Result<Statement, LangError> {
         match self.nxtok_opt() {
-            Some(Token::Keyword(Kw::Model)) => self.c_model0(),
-            Some(Token::Keyword(Kw::Space)) => self.c_space0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => self.c_model0(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => self.c_space0(),
             _ => Err(LangError::UnexpectedEndofStatement),
         }
     }

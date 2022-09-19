@@ -46,7 +46,7 @@
 use {
     super::{
         ast::{Compiler, Statement},
-        lexer::{Kw, Lit, Token, Ty},
+        lexer::{DdlMiscKeyword, Keyword, Lit, Symbol, Token, Type},
         LangResult, RawSlice,
     },
     std::{
@@ -101,12 +101,12 @@ pub type Dict = HashMap<String, DictEntry>;
 
 #[derive(Debug, PartialEq)]
 pub struct Layer {
-    ty: Ty,
+    ty: Type,
     props: Dict,
 }
 
 impl Layer {
-    pub(super) const fn new(ty: Ty, props: Dict) -> Self {
+    pub(super) const fn new(ty: Type, props: Dict) -> Self {
         Self { ty, props }
     }
 }
@@ -135,12 +135,15 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
 
     while i < l {
         match (&tok[i], state) {
-            (Token::OpenBrace, DictFoldState::OB) => {
+            (Token::Symbol(Symbol::TtOpenBrace), DictFoldState::OB) => {
                 i += 1;
                 // we found a brace, expect a close brace or an ident
                 state = DictFoldState::CB_OR_IDENT;
             }
-            (Token::CloseBrace, DictFoldState::CB_OR_IDENT | DictFoldState::COMMA_OR_CB) => {
+            (
+                Token::Symbol(Symbol::TtCloseBrace),
+                DictFoldState::CB_OR_IDENT | DictFoldState::COMMA_OR_CB,
+            ) => {
                 // end of stream
                 i += 1;
                 state = DictFoldState::FINAL;
@@ -152,7 +155,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
                 tmp = MaybeUninit::new(unsafe { transmute(id.as_slice()) });
                 state = DictFoldState::COLON;
             }
-            (Token::Colon, DictFoldState::COLON) => {
+            (Token::Symbol(Symbol::SymColon), DictFoldState::COLON) => {
                 // found colon, expect literal or openbrace
                 i += 1;
                 state = DictFoldState::LIT_OR_OB;
@@ -169,12 +172,12 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
                 state = DictFoldState::COMMA_OR_CB;
             }
             // ONLY COMMA CAPTURE
-            (Token::Comma, DictFoldState::COMMA_OR_CB) => {
+            (Token::Symbol(Symbol::SymComma), DictFoldState::COMMA_OR_CB) => {
                 i += 1;
                 // we found a comma, expect a *strict* brace close or ident
                 state = DictFoldState::CB_OR_IDENT;
             }
-            (Token::OpenBrace, DictFoldState::LIT_OR_OB) => {
+            (Token::Symbol(Symbol::TtOpenBrace), DictFoldState::LIT_OR_OB) => {
                 i += 1;
                 // we found an open brace, so this is a dict
                 let mut new_dict = Dict::new();
@@ -273,14 +276,20 @@ pub(super) fn rfold_tymeta(
     let mut tmp = MaybeUninit::<&str>::uninit();
     while r.pos() < l && r.is_okay() {
         match (&tok[r.pos()], state) {
-            (Token::Keyword(Kw::Type), TyMetaFoldState::IDENT_OR_CB) => {
+            (
+                Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Type)),
+                TyMetaFoldState::IDENT_OR_CB,
+            ) => {
                 // we were expecting an ident but found the type keyword! increase depth
                 r.incr();
                 r.set_has_more();
                 state = TyMetaFoldState::FINAL;
                 break;
             }
-            (Token::CloseBrace, TyMetaFoldState::IDENT_OR_CB | TyMetaFoldState::COMMA_OR_CB) => {
+            (
+                Token::Symbol(Symbol::TtCloseBrace),
+                TyMetaFoldState::IDENT_OR_CB | TyMetaFoldState::COMMA_OR_CB,
+            ) => {
                 r.incr();
                 // found close brace. end of stream
                 state = TyMetaFoldState::FINAL;
@@ -292,7 +301,7 @@ pub(super) fn rfold_tymeta(
                 // we just saw an ident, so we expect to see a colon
                 state = TyMetaFoldState::COLON;
             }
-            (Token::Colon, TyMetaFoldState::COLON) => {
+            (Token::Symbol(Symbol::SymColon), TyMetaFoldState::COLON) => {
                 r.incr();
                 // we just saw a colon. now we want a literal or openbrace
                 state = TyMetaFoldState::LIT_OR_OB;
@@ -309,12 +318,12 @@ pub(super) fn rfold_tymeta(
                 // saw a literal. next is either comma or close brace
                 state = TyMetaFoldState::COMMA_OR_CB;
             }
-            (Token::Comma, TyMetaFoldState::COMMA_OR_CB) => {
+            (Token::Symbol(Symbol::SymComma), TyMetaFoldState::COMMA_OR_CB) => {
                 r.incr();
                 // next is strictly a close brace or ident
                 state = TyMetaFoldState::IDENT_OR_CB;
             }
-            (Token::OpenBrace, TyMetaFoldState::LIT_OR_OB) => {
+            (Token::Symbol(Symbol::TtOpenBrace), TyMetaFoldState::LIT_OR_OB) => {
                 r.incr();
                 // another dict in here
                 let mut d = Dict::new();
@@ -368,13 +377,13 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
     let mut dict = Dict::new();
     while i < l && okay {
         match (&tok[i], state) {
-            (Token::Keyword(Kw::TypeId(ty)), LayerFoldState::TY) => {
+            (Token::Keyword(Keyword::TypeId(ty)), LayerFoldState::TY) => {
                 i += 1;
                 // expecting type, and found type. next is either end or an open brace or some arbitrary token
                 tmp = MaybeUninit::new(ty);
                 state = LayerFoldState::END_OR_OB;
             }
-            (Token::OpenBrace, LayerFoldState::END_OR_OB) => {
+            (Token::Symbol(Symbol::TtOpenBrace), LayerFoldState::END_OR_OB) => {
                 i += 1;
                 // since we found an open brace, this type has some meta
                 let ret = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
@@ -396,7 +405,7 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
                     break;
                 }
             }
-            (Token::Comma, LayerFoldState::FOLD_DICT_INCOMPLETE) => {
+            (Token::Symbol(Symbol::SymComma), LayerFoldState::FOLD_DICT_INCOMPLETE) => {
                 // there is a comma at the end of this
                 i += 1;
                 let ret = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
@@ -413,7 +422,7 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
                     break;
                 }
             }
-            (Token::CloseBrace, LayerFoldState::FOLD_DICT_INCOMPLETE) => {
+            (Token::Symbol(Symbol::TtCloseBrace), LayerFoldState::FOLD_DICT_INCOMPLETE) => {
                 // end of stream
                 i += 1;
                 state = LayerFoldState::FOLD_COMPLETED;

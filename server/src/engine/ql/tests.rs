@@ -126,7 +126,7 @@ mod lexer_tests {
         let lol = v!(r#"'\\\\\\\\\\'"#);
         assert_eq!(
             lex(&lol).unwrap(),
-            vec![Token::Lit(Lit::Str("\\".repeat(5)))],
+            vec![Token::Lit(Lit::Str("\\".repeat(5).into_boxed_str()))],
             "lol"
         )
     }
@@ -148,7 +148,7 @@ mod schema_tests {
     use {
         super::{
             super::{
-                lexer::{Lit, Token},
+                lexer::{Lit, Symbol, Token},
                 schema,
             },
             lex,
@@ -159,12 +159,13 @@ mod schema_tests {
 
     /// A very "basic" fuzzer that will randomly inject tokens wherever applicable
     fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
-        static FUZZ_TARGETS: [Token; 2] = [Token::Comma, Token::IgnorableComma];
+        static FUZZ_TARGETS: [Token; 2] = [Token::Symbol(Symbol::SymComma), Token::IgnorableComma];
         let mut rng = rand::thread_rng();
         #[inline(always)]
         fn inject(new_src: &mut Vec<Token>, rng: &mut impl Rng) -> usize {
             let start = new_src.len();
-            (0..test_utils::random_number(0, 5, rng)).for_each(|_| new_src.push(Token::Comma));
+            (0..test_utils::random_number(0, 5, rng))
+                .for_each(|_| new_src.push(Token::Symbol(Symbol::SymComma)));
             new_src.len() - start
         }
         let fuzz_amount = src.iter().filter(|tok| FUZZ_TARGETS.contains(tok)).count();
@@ -175,15 +176,15 @@ mod schema_tests {
                 Token::IgnorableComma => {
                     let did_add = test_utils::random_bool(&mut rng);
                     if did_add {
-                        new_src.push(Token::Comma);
+                        new_src.push(Token::Symbol(Symbol::SymComma));
                     }
                     let added = inject(&mut new_src, &mut rng);
                     should_pass &= added <= !did_add as usize;
                 }
-                Token::Comma => {
+                Token::Symbol(Symbol::SymComma) => {
                     let did_add = test_utils::random_bool(&mut rng);
                     if did_add {
-                        new_src.push(Token::Comma);
+                        new_src.push(Token::Symbol(Symbol::SymComma));
                     } else {
                         should_pass = false;
                     }
@@ -390,7 +391,7 @@ mod schema_tests {
     }
     mod tymeta {
         use super::*;
-        use crate::engine::ql::lexer::{Kw, Ty};
+        use crate::engine::ql::lexer::{Keyword, Type};
         #[test]
         fn tymeta_mini() {
             let tok = lex(b"}").unwrap();
@@ -541,7 +542,7 @@ mod schema_tests {
                 if should_pass {
                     assert!(ret.is_okay());
                     assert!(ret.has_more());
-                    assert!(new_src[ret.pos()] == Token::Keyword(Kw::TypeId(Ty::String)));
+                    assert!(new_src[ret.pos()] == Token::Keyword(Keyword::TypeId(Type::String)));
                     assert_eq!(dict, expected);
                 } else if ret.is_okay() {
                     panic!("Expected failure but passed for token stream: `{:?}`", tok);
@@ -551,14 +552,14 @@ mod schema_tests {
     }
     mod layer {
         use super::*;
-        use crate::engine::ql::{lexer::Ty, schema::Layer};
+        use crate::engine::ql::{lexer::Type, schema::Layer};
         #[test]
         fn layer_mini() {
             let tok = lex(b"string)").unwrap();
             let (layers, c, okay) = schema::fold_layers(&tok);
             assert_eq!(c, tok.len() - 1);
             assert!(okay);
-            assert_eq!(layers, vec![Layer::new(Ty::String, dict! {})]);
+            assert_eq!(layers, vec![Layer::new(Type::String, dict! {})]);
         }
         #[test]
         fn layer() {
@@ -569,7 +570,7 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![Layer::new(
-                    Ty::String,
+                    Type::String,
                     dict! {
                         "maxlen" => Lit::Num(100)
                     }
@@ -585,8 +586,8 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new(Ty::String, dict! {}),
-                    Layer::new(Ty::Ls, dict! {})
+                    Layer::new(Type::String, dict! {}),
+                    Layer::new(Type::List, dict! {})
                 ]
             );
         }
@@ -599,9 +600,9 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new(Ty::String, dict! {}),
+                    Layer::new(Type::String, dict! {}),
                     Layer::new(
-                        Ty::Ls,
+                        Type::List,
                         dict! {
                             "unique" => Lit::Bool(true),
                             "maxlen" => Lit::Num(10),
@@ -623,14 +624,14 @@ mod schema_tests {
                 layers,
                 vec![
                     Layer::new(
-                        Ty::String,
+                        Type::String,
                         dict! {
                             "ascii_only" => Lit::Bool(true),
                             "maxlen" => Lit::Num(255)
                         }
                     ),
                     Layer::new(
-                        Ty::Ls,
+                        Type::List,
                         dict! {
                             "unique" => Lit::Bool(true),
                             "maxlen" => Lit::Num(10),
@@ -653,14 +654,14 @@ mod schema_tests {
         ")
             .unwrap();
             let expected = vec![
-                Layer::new(Ty::String, dict!()),
+                Layer::new(Type::String, dict!()),
                 Layer::new(
-                    Ty::Ls,
+                    Type::List,
                     dict! {
                         "maxlen" => Lit::Num(100),
                     },
                 ),
-                Layer::new(Ty::Ls, dict!("unique" => Lit::Bool(true))),
+                Layer::new(Type::List, dict!("unique" => Lit::Bool(true))),
             ];
             fuzz_tokens(&tok, |should_pass, new_tok| {
                 let (layers, c, okay) = schema::fold_layers(&new_tok);
