@@ -46,13 +46,13 @@
 
 use {
     super::{
-        ast::{Compiler, Statement},
+        ast::Compiler,
         lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
         LangError, LangResult, RawSlice,
     },
     std::{
         collections::{HashMap, HashSet},
-        mem::{transmute, MaybeUninit},
+        mem::MaybeUninit,
     },
 };
 
@@ -137,6 +137,14 @@ pub struct Field {
     pub(super) props: HashSet<StaticStr>,
 }
 
+#[derive(Debug, PartialEq)]
+/// A model definition
+pub struct Model {
+    pub(super) model_name: Box<str>,
+    pub(super) fields: Vec<Field>,
+    pub(super) props: Dict,
+}
+
 /*
     Context-free dict
 */
@@ -157,7 +165,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
-    let mut tmp = MaybeUninit::<&str>::uninit();
+    let mut tmp = MaybeUninit::uninit();
 
     while i < l {
         match (&tok[i], state) {
@@ -178,7 +186,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
             (Token::Ident(id), DictFoldState::CB_OR_IDENT) => {
                 // found ident, so expect colon
                 i += 1;
-                tmp = MaybeUninit::new(unsafe { transmute(id.as_slice()) });
+                tmp = MaybeUninit::new(unsafe { id.as_str() });
                 state = DictFoldState::COLON;
             }
             (Token::Symbol(Symbol::SymColon), DictFoldState::COLON) => {
@@ -300,7 +308,7 @@ pub(super) fn rfold_tymeta(
 ) -> TyMetaFoldResult {
     let l = tok.len();
     let mut r = TyMetaFoldResult::new();
-    let mut tmp = MaybeUninit::<&str>::uninit();
+    let mut tmp = MaybeUninit::uninit();
     while r.pos() < l && r.is_okay() {
         match (&tok[r.pos()], state) {
             (
@@ -324,7 +332,7 @@ pub(super) fn rfold_tymeta(
             }
             (Token::Ident(ident), TyMetaFoldState::IDENT_OR_CB) => {
                 r.incr();
-                tmp = MaybeUninit::new(unsafe { transmute(ident.as_slice()) });
+                tmp = MaybeUninit::new(unsafe { ident.as_str() });
                 // we just saw an ident, so we expect to see a colon
                 state = TyMetaFoldState::COLON;
             }
@@ -532,9 +540,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
 
     // field name
     let field_name = match (&tok[i], &tok[i + 1]) {
-        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => {
-            unsafe { transmute::<&[u8], &str>(id.as_slice()) }.into()
-        }
+        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => unsafe { id.as_str() }.into(),
         _ => return Err(LangError::UnexpectedToken),
     };
     i += 2;
@@ -559,6 +565,116 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
     }
 }
 
-pub(crate) fn parse_schema(_c: &mut Compiler, _m: RawSlice) -> LangResult<Statement> {
-    todo!()
+/*
+    create model name(..) with { .. }
+                     ^^^^
+*/
+
+states! {
+    ///
+    pub struct SchemaParseState: u8 {
+        OPEN_PAREN = 0x00,
+        FIELD = 0x01,
+        COMMA_OR_END = 0x02,
+        END_OR_FIELD = 0x03,
+    }
+}
+
+pub(super) fn parse_schema_from_tokens(
+    tok: &[Token],
+    model_name: RawSlice,
+) -> LangResult<(Model, usize)> {
+    let model_name = unsafe { model_name.as_str() }.into();
+    // parse fields
+    let l = tok.len();
+    let mut i = 0;
+    let mut state = SchemaParseState::OPEN_PAREN;
+    let mut okay = true;
+    let mut fields = Vec::with_capacity(2);
+
+    while i < l && okay {
+        match (&tok[i], state) {
+            (Token::Symbol(Symbol::TtOpenParen), SchemaParseState::OPEN_PAREN) => {
+                i += 1;
+                state = SchemaParseState::FIELD;
+            }
+            (
+                Token::Keyword(Keyword::Ddl(DdlKeyword::Primary))
+                | Token::Keyword(Keyword::Misc(MiscKeyword::Null))
+                | Token::Ident(_),
+                SchemaParseState::FIELD | SchemaParseState::END_OR_FIELD,
+            ) => {
+                // fine, we found a field. let's see what we've got
+                let (c, f) = self::parse_field(&tok[i..])?;
+                fields.push(f);
+                i += c;
+                state = SchemaParseState::COMMA_OR_END;
+            }
+            (Token::Symbol(Symbol::SymComma), SchemaParseState::COMMA_OR_END) => {
+                i += 1;
+                // expect a field or close paren
+                state = SchemaParseState::END_OR_FIELD;
+            }
+            (
+                Token::Symbol(Symbol::TtCloseParen),
+                SchemaParseState::COMMA_OR_END | SchemaParseState::END_OR_FIELD,
+            ) => {
+                i += 1;
+                // end of stream
+                break;
+            }
+            _ => {
+                okay = false;
+                break;
+            }
+        }
+    }
+
+    // model properties
+    if i == l && okay {
+        // we've reached end of stream, so there's nothing more to parse
+        return Ok((
+            Model {
+                model_name,
+                props: dict! {},
+                fields,
+            },
+            i,
+        ));
+    } else if !okay || tok[i] != Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
+        return Err(LangError::UnexpectedToken);
+    }
+
+    // we have some more input, and it should be a dict of properties
+    i += 1; // +WITH
+
+    // great, parse the dict
+    let mut dict = Dict::new();
+    let r = self::rfold_dict(DictFoldState::OB, &tok[i..], &mut dict);
+    i += (r & !HIBIT) as usize;
+
+    if r & HIBIT == HIBIT {
+        // sweet, so we got our dict
+        Ok((
+            Model {
+                model_name,
+                props: dict,
+                fields,
+            },
+            i,
+        ))
+    } else {
+        Err(LangError::UnexpectedToken)
+    }
+}
+
+pub(super) fn parse_schema(c: &mut Compiler, m: RawSlice) -> LangResult<Model> {
+    self::parse_schema_from_tokens(c.remslice(), m).map(|(m, i)| {
+        unsafe {
+            // UNSAFE(@ohsayan): All our steps return the correct cursor increments, so this is completely fine (else the tests in
+            // tests::schema would have failed)
+            c.incr_cursor_by(i);
+        }
+        m
+    })
 }

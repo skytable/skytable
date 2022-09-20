@@ -73,7 +73,10 @@ impl Entity {
     }
 }
 
-pub enum Statement {}
+#[derive(Debug, PartialEq)]
+pub enum Statement {
+    CreateModel(schema::Model),
+}
 
 pub struct Compiler<'a> {
     c: *const Token,
@@ -145,7 +148,8 @@ impl<'a> Compiler<'a> {
             Some(Token::Ident(model)) => unsafe { model.raw_clone() },
             _ => return Err(LangError::UnexpectedEndofStatement),
         };
-        schema::parse_schema(self, model_name)
+        let model = schema::parse_schema(self, model_name)?;
+        Ok(Statement::CreateModel(model))
     }
     #[inline(always)]
     fn c_space0(&mut self) -> Result<Statement, LangError> {

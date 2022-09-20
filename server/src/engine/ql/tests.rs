@@ -812,4 +812,228 @@ mod schema_tests {
             )
         }
     }
+    mod schemas {
+        use crate::engine::ql::{
+            lexer::Type,
+            schema::{Field, Layer, Model},
+        };
+
+        use super::*;
+        #[test]
+        fn schema_mini() {
+            let tok = lex(b"
+                create model mymodel(
+                    primary username: string,
+                    password: binary,
+                )
+            ")
+            .unwrap();
+            let schema_name = match tok[2] {
+                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                _ => panic!("expected ident"),
+            };
+            let tok = &tok[3..];
+
+            // parse model
+            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                model,
+                Model {
+                    model_name: "mymodel".into(),
+                    fields: vec![
+                        Field {
+                            field_name: "username".into(),
+                            layers: vec![Layer::new(Type::String, dict! {})],
+                            props: set!["primary"]
+                        },
+                        Field {
+                            field_name: "password".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set![]
+                        }
+                    ],
+                    props: dict! {}
+                }
+            )
+        }
+        #[test]
+        fn schema() {
+            let tok = lex(b"
+                create model mymodel(
+                    primary username: string,
+                    password: binary,
+                    null profile_pic: binary,
+                )
+            ")
+            .unwrap();
+            let schema_name = match tok[2] {
+                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                _ => panic!("expected ident"),
+            };
+            let tok = &tok[3..];
+
+            // parse model
+            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                model,
+                Model {
+                    model_name: "mymodel".into(),
+                    fields: vec![
+                        Field {
+                            field_name: "username".into(),
+                            layers: vec![Layer::new(Type::String, dict! {})],
+                            props: set!["primary"]
+                        },
+                        Field {
+                            field_name: "password".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set![]
+                        },
+                        Field {
+                            field_name: "profile_pic".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set!["null"]
+                        }
+                    ],
+                    props: dict! {}
+                }
+            )
+        }
+
+        #[test]
+        fn schema_pro() {
+            let tok = lex(b"
+                create model mymodel(
+                    primary username: string,
+                    password: binary,
+                    null profile_pic: binary,
+                    null notes: list {
+                        type string,
+                        unique: true,
+                    },
+                )
+            ")
+            .unwrap();
+            let schema_name = match tok[2] {
+                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                _ => panic!("expected ident"),
+            };
+            let tok = &tok[3..];
+
+            // parse model
+            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                model,
+                Model {
+                    model_name: "mymodel".into(),
+                    fields: vec![
+                        Field {
+                            field_name: "username".into(),
+                            layers: vec![Layer::new(Type::String, dict! {})],
+                            props: set!["primary"]
+                        },
+                        Field {
+                            field_name: "password".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set![]
+                        },
+                        Field {
+                            field_name: "profile_pic".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set!["null"]
+                        },
+                        Field {
+                            field_name: "notes".into(),
+                            layers: vec![
+                                Layer::new(Type::String, dict! {}),
+                                Layer::new(
+                                    Type::List,
+                                    dict! {
+                                        "unique" => Lit::Bool(true)
+                                    }
+                                )
+                            ],
+                            props: set!["null"]
+                        }
+                    ],
+                    props: dict! {}
+                }
+            )
+        }
+
+        #[test]
+        fn schema_pro_max() {
+            let tok = lex(b"
+                create model mymodel(
+                    primary username: string,
+                    password: binary,
+                    null profile_pic: binary,
+                    null notes: list {
+                        type string,
+                        unique: true,
+                    },
+                ) with {
+                    env: {
+                        free_user_limit: 100,
+                    },
+                    storage_driver: \"skyheap\"
+                }
+            ")
+            .unwrap();
+            let schema_name = match tok[2] {
+                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                _ => panic!("expected ident"),
+            };
+            let tok = &tok[3..];
+
+            // parse model
+            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            assert_eq!(c, tok.len());
+            assert_eq!(
+                model,
+                Model {
+                    model_name: "mymodel".into(),
+                    fields: vec![
+                        Field {
+                            field_name: "username".into(),
+                            layers: vec![Layer::new(Type::String, dict! {})],
+                            props: set!["primary"]
+                        },
+                        Field {
+                            field_name: "password".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set![]
+                        },
+                        Field {
+                            field_name: "profile_pic".into(),
+                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            props: set!["null"]
+                        },
+                        Field {
+                            field_name: "notes".into(),
+                            layers: vec![
+                                Layer::new(Type::String, dict! {}),
+                                Layer::new(
+                                    Type::List,
+                                    dict! {
+                                        "unique" => Lit::Bool(true)
+                                    }
+                                )
+                            ],
+                            props: set!["null"]
+                        }
+                    ],
+                    props: dict! {
+                        "env" => dict! {
+                            "free_user_limit" => Lit::Num(100),
+                        },
+                        "storage_driver" => Lit::Str("skyheap".into()),
+                    }
+                }
+            )
+        }
+    }
 }

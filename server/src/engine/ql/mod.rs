@@ -34,7 +34,7 @@ mod tests;
 
 #[cfg(debug_assertions)]
 use core::{fmt, ops::Deref};
-use core::{mem, slice};
+use core::{mem, slice, str};
 
 /*
     Lang errors
@@ -79,6 +79,9 @@ impl RawSlice {
     }
     unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.ptr, self.len)
+    }
+    unsafe fn as_str(&self) -> &str {
+        str::from_utf8_unchecked(self.as_slice())
     }
     unsafe fn raw_clone(&self) -> Self {
         Self::new(self.ptr, self.len)

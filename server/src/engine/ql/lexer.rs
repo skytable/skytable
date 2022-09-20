@@ -27,11 +27,7 @@
 use {
     super::{LangError, LangResult, RawSlice},
     crate::util::{compiler, Life},
-    core::{
-        marker::PhantomData,
-        mem::{size_of, transmute},
-        slice, str,
-    },
+    core::{marker::PhantomData, mem::size_of, slice, str},
 };
 
 /*
@@ -479,7 +475,7 @@ impl<'a> Lexer<'a> {
     }
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
-        let st = unsafe { transmute(s.as_slice()) };
+        let st = unsafe { s.as_str() };
         match kwof(st) {
             Some(kw) => self.tokens.push(kw.into()),
             // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
