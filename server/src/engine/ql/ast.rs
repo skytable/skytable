@@ -76,6 +76,7 @@ impl Entity {
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     CreateModel(schema::Model),
+    CreateSpace(schema::Space),
 }
 
 pub struct Compiler<'a> {
@@ -146,14 +147,19 @@ impl<'a> Compiler<'a> {
     fn c_model0(&mut self) -> Result<Statement, LangError> {
         let model_name = match self.nxtok_opt() {
             Some(Token::Ident(model)) => unsafe { model.raw_clone() },
-            _ => return Err(LangError::UnexpectedEndofStatement),
+            _ => return Err(LangError::UnexpectedToken),
         };
         let model = schema::parse_schema(self, model_name)?;
         Ok(Statement::CreateModel(model))
     }
     #[inline(always)]
     fn c_space0(&mut self) -> Result<Statement, LangError> {
-        todo!()
+        let space_name = match self.nxtok_opt() {
+            Some(Token::Ident(space_name)) => unsafe { space_name.raw_clone() },
+            _ => return Err(LangError::UnexpectedToken),
+        };
+        let space = schema::parse_space(self, space_name)?;
+        Ok(Statement::CreateSpace(space))
     }
 }
 

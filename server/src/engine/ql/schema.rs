@@ -145,6 +145,12 @@ pub struct Model {
     pub(super) props: Dict,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Space {
+    pub(super) space_name: Box<str>,
+    pub(super) props: Dict,
+}
+
 /*
     Context-free dict
 */
@@ -269,33 +275,42 @@ pub struct TyMetaFoldResult {
 }
 
 impl TyMetaFoldResult {
+    #[inline(always)]
     const fn new() -> Self {
         Self {
             c: 0,
             b: [true, false],
         }
     }
+    #[inline(always)]
     fn incr(&mut self) {
         self.incr_by(1)
     }
+    #[inline(always)]
     fn incr_by(&mut self, by: usize) {
         self.c += by;
     }
+    #[inline(always)]
     fn set_fail(&mut self) {
         self.b[0] = false;
     }
+    #[inline(always)]
     fn set_has_more(&mut self) {
         self.b[1] = true;
     }
+    #[inline(always)]
     pub fn pos(&self) -> usize {
         self.c
     }
+    #[inline(always)]
     pub fn has_more(&self) -> bool {
         self.b[1]
     }
+    #[inline(always)]
     pub fn is_okay(&self) -> bool {
         self.b[0]
     }
+    #[inline(always)]
     fn record(&mut self, c: bool) {
         self.b[0] &= c;
     }
@@ -631,40 +646,42 @@ pub(super) fn parse_schema_from_tokens(
     }
 
     // model properties
-    if i == l && okay {
+    if !okay {
+        return Err(LangError::UnexpectedToken);
+    }
+
+    if l > i && tok[i] == Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
+        // we have some more input, and it should be a dict of properties
+        i += 1; // +WITH
+
+        // great, parse the dict
+        let mut dict = Dict::new();
+        let r = self::rfold_dict(DictFoldState::OB, &tok[i..], &mut dict);
+        i += (r & !HIBIT) as usize;
+
+        if r & HIBIT == HIBIT {
+            // sweet, so we got our dict
+            Ok((
+                Model {
+                    model_name,
+                    props: dict,
+                    fields,
+                },
+                i,
+            ))
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    } else {
         // we've reached end of stream, so there's nothing more to parse
-        return Ok((
+        Ok((
             Model {
                 model_name,
                 props: dict! {},
                 fields,
             },
             i,
-        ));
-    } else if !okay || tok[i] != Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
-        return Err(LangError::UnexpectedToken);
-    }
-
-    // we have some more input, and it should be a dict of properties
-    i += 1; // +WITH
-
-    // great, parse the dict
-    let mut dict = Dict::new();
-    let r = self::rfold_dict(DictFoldState::OB, &tok[i..], &mut dict);
-    i += (r & !HIBIT) as usize;
-
-    if r & HIBIT == HIBIT {
-        // sweet, so we got our dict
-        Ok((
-            Model {
-                model_name,
-                props: dict,
-                fields,
-            },
-            i,
         ))
-    } else {
-        Err(LangError::UnexpectedToken)
     }
 }
 
@@ -673,6 +690,47 @@ pub(super) fn parse_schema(c: &mut Compiler, m: RawSlice) -> LangResult<Model> {
         unsafe {
             // UNSAFE(@ohsayan): All our steps return the correct cursor increments, so this is completely fine (else the tests in
             // tests::schema would have failed)
+            c.incr_cursor_by(i);
+        }
+        m
+    })
+}
+
+pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
+    let space_name = unsafe { s.as_str() }.into();
+
+    // let's see if the cursor is at `with`. ignore other tokens because that's fine
+    if !tok.is_empty() && tok[0] == Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
+        // we have a dict
+        let mut d = Dict::new();
+        let ret = self::rfold_dict(DictFoldState::OB, &tok[1..], &mut d);
+        if ret & HIBIT == HIBIT {
+            Ok((
+                Space {
+                    space_name,
+                    props: d,
+                },
+                (ret & !HIBIT) as _,
+            ))
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    } else {
+        Ok((
+            Space {
+                space_name,
+                props: dict! {},
+            },
+            0,
+        ))
+    }
+}
+
+pub(super) fn parse_space(c: &mut Compiler, s: RawSlice) -> LangResult<Space> {
+    self::parse_space_from_tokens(c.remslice(), s).map(|(m, i)| {
+        unsafe {
+            // UNSAFE(@ohsayan): The rfolds are very well tested to return the correct cursor position,
+            // so this should be completely safe
             c.incr_cursor_by(i);
         }
         m
