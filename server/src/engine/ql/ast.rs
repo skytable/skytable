@@ -30,13 +30,14 @@ use {
         schema, LangError, LangResult, RawSlice,
     },
     crate::util::Life,
-    core::{marker::PhantomData, mem::discriminant, slice},
+    core::{marker::PhantomData, slice},
 };
 
 /*
     AST
 */
 
+#[cfg_attr(debug_assertions, derive(Debug, PartialEq))]
 pub enum Entity {
     Current(RawSlice),
     Partial(RawSlice),
@@ -73,10 +74,12 @@ impl Entity {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Debug, PartialEq))]
 pub enum Statement {
     CreateModel(schema::Model),
     CreateSpace(schema::Space),
+    Use(Entity),
+    Inspect(Entity),
 }
 
 pub struct Compiler<'a> {
@@ -137,11 +140,13 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn inspect0(&mut self) -> Result<Statement, LangError> {
-        todo!()
+        let entity = Entity::parse(self)?;
+        Ok(Statement::Inspect(entity))
     }
     #[inline(always)]
     fn use0(&mut self) -> Result<Statement, LangError> {
-        todo!()
+        let entity = Entity::parse(self)?;
+        Ok(Statement::Use(entity))
     }
     #[inline(always)]
     fn c_model0(&mut self) -> Result<Statement, LangError> {
@@ -208,8 +213,7 @@ impl<'a> Compiler<'a> {
         &*self.c
     }
     pub(super) fn peek_eq_and_forward(&mut self, t: &Token) -> bool {
-        let did_fw =
-            self.not_exhausted() && unsafe { discriminant(self.deref_cursor()) == discriminant(t) };
+        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor().deq(t) };
         unsafe {
             self.incr_cursor_if(did_fw);
         }

@@ -650,7 +650,7 @@ pub(super) fn parse_schema_from_tokens(
         return Err(LangError::UnexpectedToken);
     }
 
-    if l > i && tok[i] == Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
+    if l > i && tok[i].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have some more input, and it should be a dict of properties
         i += 1; // +WITH
 
@@ -700,7 +700,7 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
     let space_name = unsafe { s.as_str() }.into();
 
     // let's see if the cursor is at `with`. ignore other tokens because that's fine
-    if !tok.is_empty() && tok[0] == Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)) {
+    if !tok.is_empty() && tok[0].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have a dict
         let mut d = Dict::new();
         let ret = self::rfold_dict(DictFoldState::OB, &tok[1..], &mut d);

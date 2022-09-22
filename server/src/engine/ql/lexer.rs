@@ -27,7 +27,11 @@
 use {
     super::{LangError, LangResult, RawSlice},
     crate::util::{compiler, Life},
-    core::{marker::PhantomData, mem::size_of, slice, str},
+    core::{
+        marker::PhantomData,
+        mem::{discriminant, size_of},
+        slice, str,
+    },
 };
 
 /*
@@ -580,5 +584,17 @@ impl<'a> Lexer<'a> {
             None => Ok(Life::new(slf.tokens)),
             Some(e) => Err(e),
         }
+    }
+}
+impl Token {
+    #[inline(always)]
+    pub(crate) fn deq(&self, with: impl AsRef<Self>) -> bool {
+        discriminant(self) == discriminant(with.as_ref())
+    }
+}
+
+impl AsRef<Token> for Token {
+    fn as_ref(&self) -> &Token {
+        self
     }
 }
