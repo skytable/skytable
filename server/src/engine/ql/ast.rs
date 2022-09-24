@@ -80,6 +80,7 @@ pub enum Statement {
     CreateSpace(schema::Space),
     Use(Entity),
     Inspect(Entity),
+    AlterSpace(schema::Alter),
 }
 
 pub struct Compiler<'a> {
@@ -136,7 +137,29 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn alter0(&mut self) -> Result<Statement, LangError> {
+        match self.nxtok_opt() {
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => self.alter_model(),
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => self.alter_space(),
+            Some(_) => Err(LangError::ExpectedStatement),
+            None => Err(LangError::UnexpectedEndofStatement),
+        }
+    }
+    #[inline(always)]
+    fn alter_model(&mut self) -> Result<Statement, LangError> {
         todo!()
+    }
+    #[inline(always)]
+    fn alter_space(&mut self) -> Result<Statement, LangError> {
+        let space_name = match self.nxtok_opt() {
+            Some(Token::Ident(id)) => unsafe { id.raw_clone() },
+            Some(_) => return Err(LangError::UnexpectedToken),
+            None => return Err(LangError::UnexpectedEndofStatement),
+        };
+        let (alter, i) = schema::parse_alter_space_from_tokens(self.remslice(), space_name)?;
+        unsafe {
+            self.incr_cursor_by(i);
+        }
+        Ok(Statement::AlterSpace(alter))
     }
     #[inline(always)]
     fn inspect0(&mut self) -> Result<Statement, LangError> {
@@ -154,7 +177,10 @@ impl<'a> Compiler<'a> {
             Some(Token::Ident(model)) => unsafe { model.raw_clone() },
             _ => return Err(LangError::UnexpectedToken),
         };
-        let model = schema::parse_schema(self, model_name)?;
+        let (model, i) = schema::parse_schema_from_tokens(self.remslice(), model_name)?;
+        unsafe {
+            self.incr_cursor_by(i);
+        }
         Ok(Statement::CreateModel(model))
     }
     #[inline(always)]
@@ -163,7 +189,10 @@ impl<'a> Compiler<'a> {
             Some(Token::Ident(space_name)) => unsafe { space_name.raw_clone() },
             _ => return Err(LangError::UnexpectedToken),
         };
-        let space = schema::parse_space(self, space_name)?;
+        let (space, i) = schema::parse_space_from_tokens(self.remslice(), space_name)?;
+        unsafe {
+            self.incr_cursor_by(i);
+        }
         Ok(Statement::CreateSpace(space))
     }
 }

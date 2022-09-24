@@ -46,7 +46,6 @@
 
 use {
     super::{
-        ast::Compiler,
         lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
         LangError, LangResult, RawSlice,
     },
@@ -149,6 +148,12 @@ pub struct Model {
 pub struct Space {
     pub(super) space_name: Box<str>,
     pub(super) props: Dict,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Alter {
+    pub(super) space_name: Box<str>,
+    pub(super) updated_props: Dict,
 }
 
 /*
@@ -503,12 +508,14 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
 }
 
 #[cfg(test)]
+#[inline(always)]
 pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
     let mut l = Vec::new();
     let r = rfold_layers(tok, &mut l);
     (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
+#[inline(always)]
 pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) {
     let mut props = FieldProperties::default();
     let mut i = 0;
@@ -535,11 +542,13 @@ pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) 
 }
 
 #[cfg(test)]
+#[inline(always)]
 pub(super) fn parse_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
     let (p, r) = collect_field_properties(tok);
     (p, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
+#[inline(always)]
 pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
     let l = tok.len();
     let mut i = 0;
@@ -595,6 +604,7 @@ states! {
     }
 }
 
+#[inline(always)]
 pub(super) fn parse_schema_from_tokens(
     tok: &[Token],
     model_name: RawSlice,
@@ -685,17 +695,7 @@ pub(super) fn parse_schema_from_tokens(
     }
 }
 
-pub(super) fn parse_schema(c: &mut Compiler, m: RawSlice) -> LangResult<Model> {
-    self::parse_schema_from_tokens(c.remslice(), m).map(|(m, i)| {
-        unsafe {
-            // UNSAFE(@ohsayan): All our steps return the correct cursor increments, so this is completely fine (else the tests in
-            // tests::schema would have failed)
-            c.incr_cursor_by(i);
-        }
-        m
-    })
-}
-
+#[inline(always)]
 pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
     let space_name = unsafe { s.as_str() }.into();
 
@@ -726,13 +726,36 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
     }
 }
 
-pub(super) fn parse_space(c: &mut Compiler, s: RawSlice) -> LangResult<Space> {
-    self::parse_space_from_tokens(c.remslice(), s).map(|(m, i)| {
-        unsafe {
-            // UNSAFE(@ohsayan): The rfolds are very well tested to return the correct cursor position,
-            // so this should be completely safe
-            c.incr_cursor_by(i);
-        }
-        m
-    })
+pub(super) fn parse_alter_space_from_tokens(
+    tok: &[Token],
+    space_name: RawSlice,
+) -> LangResult<(Alter, usize)> {
+    let mut i = 0;
+    let l = tok.len();
+
+    let invalid = l < 3
+        || !(tok[i].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)))
+            && tok[i + 1].deq(Token::Symbol(Symbol::TtOpenBrace)));
+
+    if invalid {
+        return Err(LangError::UnexpectedToken);
+    }
+
+    i += 2;
+
+    let mut d = Dict::new();
+    let ret = rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], &mut d);
+    i += (ret & !HIBIT) as usize;
+
+    if ret & HIBIT == HIBIT {
+        Ok((
+            Alter {
+                space_name: unsafe { space_name.as_str() }.into(),
+                updated_props: d,
+            },
+            i,
+        ))
+    } else {
+        Err(LangError::UnexpectedToken)
+    }
 }
