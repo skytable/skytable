@@ -12,8 +12,8 @@ skytable = { git = "https://github.com/skytable/client-rust.git", features = [
 ], default-features = false }
 libsky = { path = "../libsky" }
 # external deps
-env_logger = "0.9.0"
+env_logger = "0.9.1"
 log = "0.4.17"
 zip = { version = "0.6.2", features = ["deflate"] }
 powershell_script = "1.0.4"
-openssl = { version = "0.10.41", features = ["vendored"] }
+openssl = { version = "0.10.42", features = ["vendored"] }

@@ -14,7 +14,7 @@ skytable = { git = "https://github.com/skytable/client-rust", branch = "next", f
   "aio-sslv",
 ], default-features = false }
 # external deps
-tokio = { version = "1.21.0", features = ["full"] }
+tokio = { version = "1.21.2", features = ["full"] }
 clap = { version = "2", features = ["yaml"] }
 rustyline = "10.0.0"
 crossterm = "0.25.0"
