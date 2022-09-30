@@ -63,7 +63,7 @@ use {
 ///
 /// **DO NOT** construct states manually
 macro_rules! states {
-    ($(#[$attr:meta])+$vis:vis struct $stateid:ident: $statebase:ty {$($(#[$tyattr:meta])*$v:vis$state:ident = $statexp:expr),* $(,)?}) => {
+    ($(#[$attr:meta])+$vis:vis struct $stateid:ident: $statebase:ty {$($(#[$tyattr:meta])*$v:vis$state:ident = $statexp:expr),+ $(,)?}) => {
         #[::core::prelude::v1::derive(::core::cmp::PartialEq, ::core::cmp::Eq, ::core::clone::Clone, ::core::marker::Copy)]
         $(#[$attr])+$vis struct $stateid {__base: $statebase}
         impl $stateid {$($(#[$tyattr])*$v const $state:Self=$stateid{__base: $statexp,};)*}
@@ -424,11 +424,11 @@ states! {
     }
 }
 
-pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
+pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
-    let mut state = LayerFoldState::TY;
+    let mut state = start;
     let mut tmp = MaybeUninit::uninit();
     let mut dict = Dict::new();
     while i < l && okay {
@@ -447,7 +447,7 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
                 okay &= ret.is_okay();
                 if ret.has_more() {
                     // more layers
-                    let ret = rfold_layers(&tok[i..], layers);
+                    let ret = rfold_layers(LayerFoldState::TY, &tok[i..], layers);
                     okay &= ret & HIBIT == HIBIT;
                     i += (ret & !HIBIT) as usize;
                     state = LayerFoldState::FOLD_DICT_INCOMPLETE;
@@ -511,7 +511,7 @@ pub(super) fn rfold_layers(tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
 #[inline(always)]
 pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
     let mut l = Vec::new();
-    let r = rfold_layers(tok, &mut l);
+    let r = rfold_layers(LayerFoldState::TY, tok, &mut l);
     (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
@@ -571,7 +571,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
 
     // layers
     let mut layers = Vec::new();
-    let r = rfold_layers(&tok[i..], &mut layers);
+    let r = rfold_layers(LayerFoldState::TY, &tok[i..], &mut layers);
     okay &= r & HIBIT == HIBIT;
     i += (r & !HIBIT) as usize;
 
@@ -752,6 +752,92 @@ pub(super) fn parse_alter_space_from_tokens(
             Alter {
                 space_name: unsafe { space_name.as_str() }.into(),
                 updated_props: d,
+            },
+            i,
+        ))
+    } else {
+        Err(LangError::UnexpectedToken)
+    }
+}
+
+states! {
+    /// The field syntax parse state
+    pub struct FieldSyntaxParseState: u8 {
+        IDENT = 0x00,
+        OB = 0x01,
+        FOLD_DICT_INCOMPLETE = 0x02,
+        COMPLETED = 0xFF,
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct ExpandedField {
+    pub(super) field_name: Box<str>,
+    pub(super) props: Dict,
+    pub(super) layers: Vec<Layer>,
+}
+
+pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, usize)> {
+    let l = tok.len();
+    let mut i = 0_usize;
+    let mut state = FieldSyntaxParseState::IDENT;
+    let mut okay = true;
+    let mut tmp = MaybeUninit::uninit();
+    let mut props = Dict::new();
+    let mut layers = vec![];
+    while i < l && okay {
+        match (&tok[i], state) {
+            (Token::Ident(field), FieldSyntaxParseState::IDENT) => {
+                i += 1;
+                tmp = MaybeUninit::new(field);
+                // expect open brace
+                state = FieldSyntaxParseState::OB;
+            }
+            (Token::Symbol(Symbol::TtOpenBrace), FieldSyntaxParseState::OB) => {
+                i += 1;
+                let r = self::rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut props);
+                okay &= r.is_okay();
+                i += r.pos();
+                if r.has_more() && i < l {
+                    // now parse layers
+                    let r = self::rfold_layers(LayerFoldState::TY, &tok[i..], &mut layers);
+                    okay &= r & HIBIT == HIBIT;
+                    i += (r & !HIBIT) as usize;
+                    state = FieldSyntaxParseState::FOLD_DICT_INCOMPLETE;
+                } else {
+                    okay = false;
+                    break;
+                }
+            }
+            (Token::Symbol(Symbol::SymComma), FieldSyntaxParseState::FOLD_DICT_INCOMPLETE) => {
+                i += 1;
+                let r = self::rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], &mut props);
+                okay &= r & HIBIT == HIBIT;
+                i += (r & !HIBIT) as usize;
+                if okay {
+                    state = FieldSyntaxParseState::COMPLETED;
+                    break;
+                }
+            }
+            (Token::Symbol(Symbol::TtCloseBrace), FieldSyntaxParseState::FOLD_DICT_INCOMPLETE) => {
+                i += 1;
+                // great, were done
+                state = FieldSyntaxParseState::COMPLETED;
+                break;
+            }
+            _ => {
+                okay = false;
+                break;
+            }
+        }
+    }
+    okay &= state == FieldSyntaxParseState::COMPLETED;
+    if okay {
+        Ok((
+            ExpandedField {
+                field_name: unsafe { tmp.assume_init().as_str() }.into(),
+                layers,
+                props,
             },
             i,
         ))

@@ -591,6 +591,14 @@ impl Token {
     pub(crate) fn deq(&self, with: impl AsRef<Self>) -> bool {
         discriminant(self) == discriminant(with.as_ref())
     }
+    #[inline(always)]
+    pub(crate) fn is_ident(&self) -> bool {
+        matches!(self, Token::Ident(_))
+    }
+    #[inline(always)]
+    pub(crate) fn is_typeid(&self) -> bool {
+        matches!(self, Token::Keyword(Keyword::TypeId(_)))
+    }
 }
 
 impl AsRef<Token> for Token {

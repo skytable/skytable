@@ -1036,4 +1036,122 @@ mod schema_tests {
             )
         }
     }
+    mod dict_field_syntax {
+        use super::*;
+        use crate::engine::ql::{
+            lexer::Type,
+            schema::{ExpandedField, Layer},
+        };
+        #[test]
+        fn field_syn_mini() {
+            let tok = lex(b"username { type string }").unwrap();
+            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                ef,
+                ExpandedField {
+                    field_name: "username".into(),
+                    layers: vec![Layer::new(Type::String, dict! {})],
+                    props: dict! {}
+                }
+            )
+        }
+        #[test]
+        fn field_syn() {
+            let tok = lex(b"
+                username {
+                    nullable: false,
+                    type string,
+                }
+            ")
+            .unwrap();
+            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                ef,
+                ExpandedField {
+                    field_name: "username".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(false),
+                    },
+                    layers: vec![Layer::new(Type::String, dict! {})]
+                }
+            );
+        }
+        #[test]
+        fn field_syn_pro() {
+            let tok = lex(b"
+                username {
+                    nullable: false,
+                    type string {
+                        minlen: 6,
+                        maxlen: 255,
+                    },
+                    jingle_bells: \"snow\"
+                }
+            ")
+            .unwrap();
+            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                ef,
+                ExpandedField {
+                    field_name: "username".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(false),
+                        "jingle_bells" => Lit::Str("snow".into()),
+                    },
+                    layers: vec![Layer::new(
+                        Type::String,
+                        dict! {
+                            "minlen" => Lit::Num(6),
+                            "maxlen" => Lit::Num(255),
+                        }
+                    )]
+                }
+            );
+        }
+        #[test]
+        fn field_syn_pro_max() {
+            let tok = lex(b"
+                notes {
+                    nullable: true,
+                    type list {
+                        type string {
+                            ascii_only: true,
+                        },
+                        unique: true,
+                    },
+                    jingle_bells: \"snow\"
+                }
+            ")
+            .unwrap();
+            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                ef,
+                ExpandedField {
+                    field_name: "notes".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(true),
+                        "jingle_bells" => Lit::Str("snow".into()),
+                    },
+                    layers: vec![
+                        Layer::new(
+                            Type::String,
+                            dict! {
+                                "ascii_only" => Lit::Bool(true),
+                            }
+                        ),
+                        Layer::new(
+                            Type::List,
+                            dict! {
+                                "unique" => Lit::Bool(true),
+                            }
+                        )
+                    ]
+                }
+            );
+        }
+    }
 }
