@@ -61,8 +61,16 @@ pub enum LangError {
 */
 
 /// An unsafe, C-like slice that holds a ptr and length. Construction and usage is at the risk of the user
+///
+/// Notes:
+/// - [`Clone`] is implemented for [`RawSlice`] because it is a simple bitwise copy of the fat ptr
+/// - [`fmt::Debug`] is implemented in different ways
+///     - With debug assertions enabled, it will output a slice
+///     - In release mode, it will output the fat ptr meta
+/// - [`PartialEq`] is implemented in debug mode with slice comparison, but is **NOT implemented for release mode in the
+///   way you'd expect it to**. In release mode, a comparison will simply panic.
 #[cfg_attr(not(debug_assertions), derive(Debug))]
-#[cfg_attr(debug_assertions, derive(Clone))]
+#[derive(Clone)]
 pub struct RawSlice {
     ptr: *const u8,
     len: usize,
@@ -82,9 +90,6 @@ impl RawSlice {
     }
     unsafe fn as_str(&self) -> &str {
         str::from_utf8_unchecked(self.as_slice())
-    }
-    unsafe fn raw_clone(&self) -> Self {
-        Self::new(self.ptr, self.len)
     }
 }
 
@@ -109,6 +114,13 @@ impl PartialEq for RawSlice {
             // UNSAFE(@ohsayan): Callers must ensure validity during usage
             self.as_slice() == other.as_slice()
         }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl PartialEq for RawSlice {
+    fn eq(&self, _other: &Self) -> bool {
+        panic!("Called partialeq on rawslice in release mode");
     }
 }
 

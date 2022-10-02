@@ -44,6 +44,8 @@
     Sept. 15, 2022
 */
 
+use super::lexer::DmlKeyword;
+
 use {
     super::{
         lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
@@ -151,7 +153,7 @@ pub struct Space {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Alter {
+pub struct AlterSpace {
     pub(super) space_name: Box<str>,
     pub(super) updated_props: Dict,
 }
@@ -173,6 +175,15 @@ states! {
 }
 
 pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
+    /*
+        NOTE: Assume rules wherever applicable
+
+        <openbrace> ::= "{"
+        <closebrace> ::= "}"
+        <comma> ::= ","
+        <colon> ::= ":"
+        <dict> ::= <openbrace> (<ident> <colon> (<lit> | <dict>) <comma>)* <comma>* <closebrace>
+    */
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
@@ -425,6 +436,19 @@ states! {
 }
 
 pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
+    /*
+        NOTE: Assume rules wherever applicable
+
+        <openbrace> ::= "{"
+        <closebrace> ::= "}"
+        <comma> ::= ","
+        <colon> ::= ":"
+        <kw_type> ::= "type"
+        <layer> ::= <openbrace>
+            (<kw_type> <kw_typeid> <layer> <comma>)*1
+            (<ident> <colon> (<lit> | <dict>) <comma>)*
+            <comma>* <closebrace>
+    */
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
@@ -564,7 +588,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
 
     // field name
     let field_name = match (&tok[i], &tok[i + 1]) {
-        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => unsafe { id.as_str() }.into(),
+        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => unsafe { id.as_str() },
         _ => return Err(LangError::UnexpectedToken),
     };
     i += 2;
@@ -579,7 +603,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
         Ok((
             i,
             Field {
-                field_name,
+                field_name: field_name.into(),
                 layers,
                 props: props.properties,
             },
@@ -609,7 +633,7 @@ pub(super) fn parse_schema_from_tokens(
     tok: &[Token],
     model_name: RawSlice,
 ) -> LangResult<(Model, usize)> {
-    let model_name = unsafe { model_name.as_str() }.into();
+    let model_name = unsafe { model_name.as_str() };
     // parse fields
     let l = tok.len();
     let mut i = 0;
@@ -660,7 +684,7 @@ pub(super) fn parse_schema_from_tokens(
         return Err(LangError::UnexpectedToken);
     }
 
-    if l > i && tok[i].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
+    if l > i && tok[i] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have some more input, and it should be a dict of properties
         i += 1; // +WITH
 
@@ -673,7 +697,7 @@ pub(super) fn parse_schema_from_tokens(
             // sweet, so we got our dict
             Ok((
                 Model {
-                    model_name,
+                    model_name: model_name.into(),
                     props: dict,
                     fields,
                 },
@@ -686,7 +710,7 @@ pub(super) fn parse_schema_from_tokens(
         // we've reached end of stream, so there's nothing more to parse
         Ok((
             Model {
-                model_name,
+                model_name: model_name.into(),
                 props: dict! {},
                 fields,
             },
@@ -697,17 +721,17 @@ pub(super) fn parse_schema_from_tokens(
 
 #[inline(always)]
 pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
-    let space_name = unsafe { s.as_str() }.into();
+    let space_name = unsafe { s.as_str() };
 
     // let's see if the cursor is at `with`. ignore other tokens because that's fine
-    if !tok.is_empty() && tok[0].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
+    if !tok.is_empty() && tok[0] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have a dict
         let mut d = Dict::new();
         let ret = self::rfold_dict(DictFoldState::OB, &tok[1..], &mut d);
         if ret & HIBIT == HIBIT {
             Ok((
                 Space {
-                    space_name,
+                    space_name: space_name.into(),
                     props: d,
                 },
                 (ret & !HIBIT) as _,
@@ -718,7 +742,7 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
     } else {
         Ok((
             Space {
-                space_name,
+                space_name: space_name.into(),
                 props: dict! {},
             },
             0,
@@ -729,13 +753,13 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
 pub(super) fn parse_alter_space_from_tokens(
     tok: &[Token],
     space_name: RawSlice,
-) -> LangResult<(Alter, usize)> {
+) -> LangResult<(AlterSpace, usize)> {
     let mut i = 0;
     let l = tok.len();
 
     let invalid = l < 3
-        || !(tok[i].deq(Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)))
-            && tok[i + 1].deq(Token::Symbol(Symbol::TtOpenBrace)));
+        || !(tok[i] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)))
+            && tok[i + 1] == (Token::Symbol(Symbol::TtOpenBrace)));
 
     if invalid {
         return Err(LangError::UnexpectedToken);
@@ -749,7 +773,7 @@ pub(super) fn parse_alter_space_from_tokens(
 
     if ret & HIBIT == HIBIT {
         Ok((
-            Alter {
+            AlterSpace {
                 space_name: unsafe { space_name.as_str() }.into(),
                 updated_props: d,
             },
@@ -844,4 +868,99 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
     } else {
         Err(LangError::UnexpectedToken)
     }
+}
+
+#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(PartialEq))]
+pub(super) enum AlterKind {
+    Add(Field),
+    Remove(Box<[RawSlice]>),
+    Update(ExpandedField),
+}
+
+#[inline(always)]
+pub(super) fn parse_alter_kind_from_tokens(
+    tok: &[Token],
+    current: &mut usize,
+) -> LangResult<AlterKind> {
+    let l = tok.len();
+    let mut i = 0;
+    if l < 2 {
+        return Err(LangError::UnexpectedEndofStatement);
+    }
+    *current += 1;
+    let r = match tok[i] {
+        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Add)) => {
+            AlterKind::Add(alter_add(&tok[1..], &mut i))
+        }
+        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Remove)) => {
+            AlterKind::Remove(alter_remove(&tok[1..], &mut i)?)
+        }
+        Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => {
+            AlterKind::Update(alter_update(&tok[1..], &mut i))
+        }
+        _ => return Err(LangError::ExpectedStatement),
+    };
+    *current += i;
+    Ok(r)
+}
+
+#[inline(always)]
+pub(super) fn alter_add(_tok: &[Token], _current: &mut usize) -> Field {
+    todo!()
+}
+
+#[inline(always)]
+pub(super) fn alter_remove(tok: &[Token], current: &mut usize) -> LangResult<Box<[RawSlice]>> {
+    const DEFAULT_REMOVE_COL_CNT: usize = 4;
+    /*
+        WARNING: No trailing commas allowed
+        <remove> ::= <ident> | <openparen> (<ident> <comma>)*<closeparen>
+    */
+    if tok.is_empty() {
+        return Err(LangError::UnexpectedEndofStatement);
+    }
+
+    let r = match &tok[0] {
+        Token::Ident(id) => {
+            *current += 1;
+            Box::new([id.clone()])
+        }
+        Token::Symbol(Symbol::TtOpenParen) => {
+            let l = tok.len();
+            let mut i = 1_usize;
+            let mut okay = true;
+            let mut stop = false;
+            let mut cols = Vec::with_capacity(DEFAULT_REMOVE_COL_CNT);
+            while i < tok.len() && okay && !stop {
+                match tok[i] {
+                    Token::Ident(ref ident) => {
+                        cols.push(ident.clone());
+                        i += 1;
+                        let nx_comma = i < l && tok[i] == (Token::Symbol(Symbol::SymComma));
+                        let nx_close = i < l && tok[i] == (Token::Symbol(Symbol::TtCloseParen));
+                        okay &= nx_comma | nx_close;
+                        stop = nx_close;
+                        i += (nx_comma | nx_close) as usize;
+                    }
+                    _ => {
+                        okay = false;
+                        break;
+                    }
+                }
+            }
+            if okay && stop {
+                cols.into_boxed_slice()
+            } else {
+                return Err(LangError::UnexpectedToken);
+            }
+        }
+        _ => return Err(LangError::ExpectedStatement),
+    };
+    Ok(r)
+}
+
+#[inline(always)]
+pub(super) fn alter_update(_tok: &[Token], _current: &mut usize) -> ExpandedField {
+    todo!()
 }

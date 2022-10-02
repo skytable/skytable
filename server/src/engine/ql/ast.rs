@@ -37,7 +37,7 @@ use {
     AST
 */
 
-#[cfg_attr(debug_assertions, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 pub enum Entity {
     Current(RawSlice),
     Partial(RawSlice),
@@ -55,17 +55,17 @@ impl Entity {
                 Some(Token::Symbol(Symbol::SymPeriod)),
                 Some(Token::Ident(tbl)),
             ) => unsafe {
-                let r = Ok(Entity::Full(ks.raw_clone(), tbl.raw_clone()));
+                let r = Ok(Entity::Full(ks.clone(), tbl.clone()));
                 cm.incr_cursor_by(3);
                 r
             },
             (Some(Token::Ident(ident)), _, _) => unsafe {
-                let r = Ok(Entity::Current(ident.raw_clone()));
+                let r = Ok(Entity::Current(ident.clone()));
                 cm.incr_cursor();
                 r
             },
             (Some(Token::Symbol(Symbol::SymColon)), Some(Token::Ident(tbl)), _) => unsafe {
-                let r = Ok(Entity::Partial(tbl.raw_clone()));
+                let r = Ok(Entity::Partial(tbl.clone()));
                 cm.incr_cursor_by(2);
                 r
             },
@@ -80,7 +80,7 @@ pub enum Statement {
     CreateSpace(schema::Space),
     Use(Entity),
     Inspect(Entity),
-    AlterSpace(schema::Alter),
+    AlterSpace(schema::AlterSpace),
 }
 
 pub struct Compiler<'a> {
@@ -151,7 +151,7 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn alter_space(&mut self) -> Result<Statement, LangError> {
         let space_name = match self.nxtok_opt() {
-            Some(Token::Ident(id)) => unsafe { id.raw_clone() },
+            Some(Token::Ident(id)) => id.clone(),
             Some(_) => return Err(LangError::UnexpectedToken),
             None => return Err(LangError::UnexpectedEndofStatement),
         };
@@ -174,7 +174,7 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn c_model0(&mut self) -> Result<Statement, LangError> {
         let model_name = match self.nxtok_opt() {
-            Some(Token::Ident(model)) => unsafe { model.raw_clone() },
+            Some(Token::Ident(model)) => model.clone(),
             _ => return Err(LangError::UnexpectedToken),
         };
         let (model, i) = schema::parse_schema_from_tokens(self.remslice(), model_name)?;
@@ -186,7 +186,7 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn c_space0(&mut self) -> Result<Statement, LangError> {
         let space_name = match self.nxtok_opt() {
-            Some(Token::Ident(space_name)) => unsafe { space_name.raw_clone() },
+            Some(Token::Ident(space_name)) => space_name.clone(),
             _ => return Err(LangError::UnexpectedToken),
         };
         let (space, i) = schema::parse_space_from_tokens(self.remslice(), space_name)?;
@@ -241,8 +241,8 @@ impl<'a> Compiler<'a> {
     pub(super) unsafe fn deref_cursor(&self) -> &Token {
         &*self.c
     }
-    pub(super) fn peek_eq_and_forward(&mut self, t: &Token) -> bool {
-        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor().deq(t) };
+    pub(super) fn peek_eq_and_forward(&mut self, t: Token) -> bool {
+        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor() == &t };
         unsafe {
             self.incr_cursor_if(did_fw);
         }

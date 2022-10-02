@@ -27,19 +27,14 @@
 use {
     super::{LangError, LangResult, RawSlice},
     crate::util::{compiler, Life},
-    core::{
-        marker::PhantomData,
-        mem::{discriminant, size_of},
-        slice, str,
-    },
+    core::{marker::PhantomData, mem::size_of, slice, str},
 };
 
 /*
     Lex meta
 */
 
-#[derive(Debug)]
-#[cfg_attr(debug_assertions, derive(PartialEq, Clone))]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Symbol(Symbol),
     Keyword(Keyword),
@@ -587,10 +582,6 @@ impl<'a> Lexer<'a> {
     }
 }
 impl Token {
-    #[inline(always)]
-    pub(crate) fn deq(&self, with: impl AsRef<Self>) -> bool {
-        discriminant(self) == discriminant(with.as_ref())
-    }
     #[inline(always)]
     pub(crate) fn is_ident(&self) -> bool {
         matches!(self, Token::Ident(_))

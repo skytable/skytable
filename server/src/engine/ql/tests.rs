@@ -829,7 +829,7 @@ mod schema_tests {
             ")
             .unwrap();
             let schema_name = match tok[2] {
-                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                Token::Ident(ref id) => id.clone(),
                 _ => panic!("expected ident"),
             };
             let tok = &tok[3..];
@@ -868,7 +868,7 @@ mod schema_tests {
             ")
             .unwrap();
             let schema_name = match tok[2] {
-                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                Token::Ident(ref id) => id.clone(),
                 _ => panic!("expected ident"),
             };
             let tok = &tok[3..];
@@ -917,7 +917,7 @@ mod schema_tests {
             ")
             .unwrap();
             let schema_name = match tok[2] {
-                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                Token::Ident(ref id) => id.clone(),
                 _ => panic!("expected ident"),
             };
             let tok = &tok[3..];
@@ -984,7 +984,7 @@ mod schema_tests {
             ")
             .unwrap();
             let schema_name = match tok[2] {
-                Token::Ident(ref id) => unsafe { id.raw_clone() },
+                Token::Ident(ref id) => id.clone(),
                 _ => panic!("expected ident"),
             };
             let tok = &tok[3..];
@@ -1151,6 +1151,41 @@ mod schema_tests {
                         )
                     ]
                 }
+            );
+        }
+    }
+    mod alter_model {
+        use super::*;
+        use crate::engine::ql::RawSlice;
+        #[test]
+        fn alter_mini() {
+            let tok = lex(b"alter model mymodel remove myfield").unwrap();
+            let mut i = 4;
+            let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(remove, [RawSlice::from("myfield")].into());
+        }
+        #[test]
+        fn alter_mini_2() {
+            let tok = lex(b"alter model mymodel remove (myfield)").unwrap();
+            let mut i = 4;
+            let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(remove, [RawSlice::from("myfield")].into());
+        }
+        #[test]
+        fn alter() {
+            let tok = lex(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
+                .unwrap();
+            let mut i = 4;
+            let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(
+                remove,
+                [
+                    RawSlice::from("myfield1"),
+                    RawSlice::from("myfield2"),
+                    RawSlice::from("myfield3"),
+                    RawSlice::from("myfield4")
+                ]
+                .into()
             );
         }
     }
