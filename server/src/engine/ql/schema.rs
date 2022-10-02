@@ -133,7 +133,7 @@ impl FieldProperties {
 #[derive(Debug, PartialEq)]
 /// A field definition
 pub struct Field {
-    pub(super) field_name: Box<str>,
+    pub(super) field_name: RawSlice,
     pub(super) layers: Vec<Layer>,
     pub(super) props: HashSet<StaticStr>,
 }
@@ -141,20 +141,20 @@ pub struct Field {
 #[derive(Debug, PartialEq)]
 /// A model definition
 pub struct Model {
-    pub(super) model_name: Box<str>,
+    pub(super) model_name: RawSlice,
     pub(super) fields: Vec<Field>,
     pub(super) props: Dict,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Space {
-    pub(super) space_name: Box<str>,
+    pub(super) space_name: RawSlice,
     pub(super) props: Dict,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct AlterSpace {
-    pub(super) space_name: Box<str>,
+    pub(super) space_name: RawSlice,
     pub(super) updated_props: Dict,
 }
 
@@ -588,7 +588,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
 
     // field name
     let field_name = match (&tok[i], &tok[i + 1]) {
-        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => unsafe { id.as_str() },
+        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => id,
         _ => return Err(LangError::UnexpectedToken),
     };
     i += 2;
@@ -603,7 +603,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
         Ok((
             i,
             Field {
-                field_name: field_name.into(),
+                field_name: field_name.clone(),
                 layers,
                 props: props.properties,
             },
@@ -633,7 +633,6 @@ pub(super) fn parse_schema_from_tokens(
     tok: &[Token],
     model_name: RawSlice,
 ) -> LangResult<(Model, usize)> {
-    let model_name = unsafe { model_name.as_str() };
     // parse fields
     let l = tok.len();
     let mut i = 0;
@@ -697,7 +696,7 @@ pub(super) fn parse_schema_from_tokens(
             // sweet, so we got our dict
             Ok((
                 Model {
-                    model_name: model_name.into(),
+                    model_name,
                     props: dict,
                     fields,
                 },
@@ -710,7 +709,7 @@ pub(super) fn parse_schema_from_tokens(
         // we've reached end of stream, so there's nothing more to parse
         Ok((
             Model {
-                model_name: model_name.into(),
+                model_name,
                 props: dict! {},
                 fields,
             },
@@ -721,8 +720,6 @@ pub(super) fn parse_schema_from_tokens(
 
 #[inline(always)]
 pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
-    let space_name = unsafe { s.as_str() };
-
     // let's see if the cursor is at `with`. ignore other tokens because that's fine
     if !tok.is_empty() && tok[0] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have a dict
@@ -731,7 +728,7 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
         if ret & HIBIT == HIBIT {
             Ok((
                 Space {
-                    space_name: space_name.into(),
+                    space_name: s,
                     props: d,
                 },
                 (ret & !HIBIT) as _,
@@ -742,7 +739,7 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
     } else {
         Ok((
             Space {
-                space_name: space_name.into(),
+                space_name: s,
                 props: dict! {},
             },
             0,
@@ -774,7 +771,7 @@ pub(super) fn parse_alter_space_from_tokens(
     if ret & HIBIT == HIBIT {
         Ok((
             AlterSpace {
-                space_name: unsafe { space_name.as_str() }.into(),
+                space_name,
                 updated_props: d,
             },
             i,
@@ -796,7 +793,7 @@ states! {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct ExpandedField {
-    pub(super) field_name: Box<str>,
+    pub(super) field_name: RawSlice,
     pub(super) props: Dict,
     pub(super) layers: Vec<Layer>,
 }
@@ -813,7 +810,7 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
         match (&tok[i], state) {
             (Token::Ident(field), FieldSyntaxParseState::IDENT) => {
                 i += 1;
-                tmp = MaybeUninit::new(field);
+                tmp = MaybeUninit::new(field.clone());
                 // expect open brace
                 state = FieldSyntaxParseState::OB;
             }
@@ -859,7 +856,7 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
     if okay {
         Ok((
             ExpandedField {
-                field_name: unsafe { tmp.assume_init().as_str() }.into(),
+                field_name: unsafe { tmp.assume_init() },
                 layers,
                 props,
             },
