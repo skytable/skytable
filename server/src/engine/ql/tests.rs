@@ -144,6 +144,32 @@ mod lexer_tests {
     }
 }
 
+mod entity {
+    use super::*;
+    use crate::engine::ql::ast::{Compiler, Entity};
+    #[test]
+    fn entity_current() {
+        let t = lex(b"hello").unwrap();
+        let mut c = Compiler::new(&t);
+        let r = Entity::parse(&mut c).unwrap();
+        assert_eq!(r, Entity::Current("hello".into()))
+    }
+    #[test]
+    fn entity_partial() {
+        let t = lex(b":hello").unwrap();
+        let mut c = Compiler::new(&t);
+        let r = Entity::parse(&mut c).unwrap();
+        assert_eq!(r, Entity::Partial("hello".into()))
+    }
+    #[test]
+    fn entity_full() {
+        let t = lex(b"hello.world").unwrap();
+        let mut c = Compiler::new(&t);
+        let r = Entity::parse(&mut c).unwrap();
+        assert_eq!(r, Entity::Full("hello".into(), "world".into()))
+    }
+}
+
 mod schema_tests {
     use {
         super::{

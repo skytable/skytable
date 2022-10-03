@@ -876,7 +876,7 @@ states! {
 
 #[derive(Debug, PartialEq)]
 /// An [`ExpandedField`] is a full field definition with advanced metadata
-pub(super) struct ExpandedField {
+pub struct ExpandedField {
     pub(super) field_name: RawSlice,
     pub(super) props: Dict,
     pub(super) layers: Vec<Layer>,
@@ -974,7 +974,7 @@ pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(PartialEq))]
 /// The alter operation kind
-pub(super) enum AlterKind {
+pub enum AlterKind {
     Add(Box<[ExpandedField]>),
     Remove(Box<[RawSlice]>),
     Update(Box<[ExpandedField]>),

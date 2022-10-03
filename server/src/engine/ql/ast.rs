@@ -45,28 +45,27 @@ pub enum Entity {
 }
 
 impl Entity {
-    fn parse(cm: &mut Compiler) -> LangResult<Self> {
-        let a = cm.nxtok_nofw_opt();
-        let b = cm.nxtok_nofw_opt();
-        let c = cm.nxtok_nofw_opt();
+    pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
+        let a = cm.nxtok_opt();
+        let b = cm.nxtok_opt();
+        let c = cm.nxtok_opt();
         match (a, b, c) {
             (
                 Some(Token::Ident(ks)),
                 Some(Token::Symbol(Symbol::SymPeriod)),
                 Some(Token::Ident(tbl)),
-            ) => unsafe {
+            ) => {
                 let r = Ok(Entity::Full(ks.clone(), tbl.clone()));
-                cm.incr_cursor_by(3);
                 r
-            },
+            }
             (Some(Token::Ident(ident)), _, _) => unsafe {
                 let r = Ok(Entity::Current(ident.clone()));
-                cm.incr_cursor();
+                cm.decr_cursor_by(2);
                 r
             },
             (Some(Token::Symbol(Symbol::SymColon)), Some(Token::Ident(tbl)), _) => unsafe {
                 let r = Ok(Entity::Partial(tbl.clone()));
-                cm.incr_cursor_by(2);
+                cm.decr_cursor_by(1);
                 r
             },
             _ => Err(LangError::UnexpectedToken),
@@ -81,6 +80,7 @@ pub enum Statement {
     Use(Entity),
     Inspect(Entity),
     AlterSpace(schema::AlterSpace),
+    AlterModel(RawSlice, schema::AlterKind),
 }
 
 pub struct Compiler<'a> {
@@ -146,7 +146,13 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn alter_model(&mut self) -> Result<Statement, LangError> {
-        todo!()
+        let model_name = match self.nxtok_opt() {
+            Some(Token::Ident(md)) => md.clone(),
+            _ => return Err(LangError::ExpectedStatement),
+        };
+        let mut c = 0;
+        schema::parse_alter_kind_from_tokens(self.remslice(), &mut c)
+            .map(|ak| Statement::AlterModel(model_name.clone(), ak))
     }
     #[inline(always)]
     fn alter_space(&mut self) -> Result<Statement, LangError> {
@@ -199,7 +205,10 @@ impl<'a> Compiler<'a> {
 
 impl<'a> Compiler<'a> {
     #[inline(always)]
-    pub(super) fn nxtok_opt(&mut self) -> Option<&Token> {
+    pub(super) fn nxtok_opt<'b>(&mut self) -> Option<&'b Token>
+    where
+        'a: 'b,
+    {
         if self.not_exhausted() {
             unsafe {
                 let r = Some(&*self.c);
@@ -213,14 +222,6 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     pub(super) const fn cursor(&self) -> *const Token {
         self.c
-    }
-    #[inline(always)]
-    pub(super) fn nxtok_nofw_opt(&self) -> Option<&Token> {
-        if self.not_exhausted() {
-            unsafe { Some(&*self.c) }
-        } else {
-            None
-        }
     }
     #[inline(always)]
     pub(super) fn remslice(&'a self) -> &'a [Token] {
@@ -262,10 +263,6 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     pub(super) unsafe fn decr_cursor_by(&mut self, by: usize) {
-        debug_assert!(
-            self.remaining().checked_sub(by).is_some(),
-            "cursor crossed e"
-        );
         self.c = self.c.sub(by);
     }
 }
