@@ -870,7 +870,7 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(PartialEq))]
 pub(super) enum AlterKind {
-    Add(Field),
+    Add(Box<[ExpandedField]>),
     Remove(Box<[RawSlice]>),
     Update(ExpandedField),
 }
@@ -881,30 +881,78 @@ pub(super) fn parse_alter_kind_from_tokens(
     current: &mut usize,
 ) -> LangResult<AlterKind> {
     let l = tok.len();
-    let mut i = 0;
     if l < 2 {
         return Err(LangError::UnexpectedEndofStatement);
     }
     *current += 1;
-    let r = match tok[i] {
+    let r = match tok[0] {
         Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Add)) => {
-            AlterKind::Add(alter_add(&tok[1..], &mut i))
+            AlterKind::Add(alter_add(&tok[1..], current)?)
         }
         Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Remove)) => {
-            AlterKind::Remove(alter_remove(&tok[1..], &mut i)?)
+            AlterKind::Remove(alter_remove(&tok[1..], current)?)
         }
         Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => {
-            AlterKind::Update(alter_update(&tok[1..], &mut i))
+            AlterKind::Update(alter_update(&tok[1..], current))
         }
         _ => return Err(LangError::ExpectedStatement),
     };
-    *current += i;
     Ok(r)
 }
 
 #[inline(always)]
-pub(super) fn alter_add(_tok: &[Token], _current: &mut usize) -> Field {
-    todo!()
+pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[ExpandedField]>> {
+    const DEFAULT_ADD_COL_CNT: usize = 4;
+    /*
+        WARNING: No trailing commas allowed
+
+        <add> ::= (<field_syntax> <comma>)*
+
+        Smallest length:
+        alter model add myfield { type string };
+    */
+    let l = tok.len();
+    if l < 5 {
+        return Err(LangError::UnexpectedEndofStatement);
+    }
+    match tok[0] {
+        Token::Ident(_) => {
+            let (r, i) = parse_field_syntax(&tok)?;
+            *current += i;
+            Ok([r].into())
+        }
+        Token::Symbol(Symbol::TtOpenParen) => {
+            let mut i = 1;
+            let mut okay = true;
+            let mut stop = false;
+            let mut cols = Vec::with_capacity(DEFAULT_ADD_COL_CNT);
+            while i < l && okay && !stop {
+                match tok[i] {
+                    Token::Ident(_) => {
+                        let (r, cnt) = parse_field_syntax(&tok[i..])?;
+                        i += cnt;
+                        cols.push(r);
+                        let nx_comma = i < l && tok[i] == Token::Symbol(Symbol::SymComma);
+                        let nx_close = i < l && tok[i] == Token::Symbol(Symbol::TtCloseParen);
+                        stop = nx_close;
+                        okay &= nx_comma | nx_close;
+                        i += (nx_comma | nx_close) as usize;
+                    }
+                    _ => {
+                        okay = false;
+                        break;
+                    }
+                }
+            }
+            *current += i;
+            if okay && stop {
+                Ok(cols.into_boxed_slice())
+            } else {
+                Err(LangError::UnexpectedToken)
+            }
+        }
+        _ => Err(LangError::ExpectedStatement),
+    }
 }
 
 #[inline(always)]
@@ -946,6 +994,7 @@ pub(super) fn alter_remove(tok: &[Token], current: &mut usize) -> LangResult<Box
                     }
                 }
             }
+            *current += i;
             if okay && stop {
                 cols.into_boxed_slice()
             } else {

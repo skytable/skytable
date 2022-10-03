@@ -1154,7 +1154,7 @@ mod schema_tests {
             );
         }
     }
-    mod alter_model {
+    mod alter_model_remove {
         use super::*;
         use crate::engine::ql::RawSlice;
         #[test]
@@ -1162,6 +1162,7 @@ mod schema_tests {
             let tok = lex(b"alter model mymodel remove myfield").unwrap();
             let mut i = 4;
             let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
             assert_eq!(remove, [RawSlice::from("myfield")].into());
         }
         #[test]
@@ -1169,6 +1170,7 @@ mod schema_tests {
             let tok = lex(b"alter model mymodel remove (myfield)").unwrap();
             let mut i = 4;
             let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
             assert_eq!(remove, [RawSlice::from("myfield")].into());
         }
         #[test]
@@ -1177,6 +1179,7 @@ mod schema_tests {
                 .unwrap();
             let mut i = 4;
             let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
             assert_eq!(
                 remove,
                 [
@@ -1186,6 +1189,128 @@ mod schema_tests {
                     RawSlice::from("myfield4")
                 ]
                 .into()
+            );
+        }
+    }
+    mod alter_model_add {
+        use super::*;
+        use crate::engine::ql::{
+            lexer::Type,
+            schema::{ExpandedField, Layer},
+        };
+        #[test]
+        fn add_mini() {
+            let tok = lex(b"
+                alter model mymodel add myfield { type string }
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {},
+                    layers: [Layer::new(Type::String, dict! {})].into()
+                }]
+            );
+        }
+        #[test]
+        fn add() {
+            let tok = lex(b"
+                alter model mymodel add myfield { type string, nullable: true }
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(true)
+                    },
+                    layers: [Layer::new(Type::String, dict! {})].into()
+                }]
+            );
+        }
+        #[test]
+        fn add_pro() {
+            let tok = lex(b"
+                alter model mymodel add (myfield { type string, nullable: true })
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(true)
+                    },
+                    layers: [Layer::new(Type::String, dict! {})].into()
+                }]
+            );
+        }
+        #[test]
+        fn add_pro_max() {
+            let tok = lex(b"
+                alter model mymodel add (
+                    myfield {
+                        type string,
+                        nullable: true
+                    },
+                    another {
+                        type list {
+                            type string {
+                                maxlen: 255
+                            },
+                            unique: true
+                        },
+                        nullable: false
+                    }
+                )
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [
+                    ExpandedField {
+                        field_name: "myfield".into(),
+                        props: dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                        layers: [Layer::new(Type::String, dict! {})].into()
+                    },
+                    ExpandedField {
+                        field_name: "another".into(),
+                        props: dict! {
+                            "nullable" => Lit::Bool(false)
+                        },
+                        layers: [
+                            Layer::new(
+                                Type::String,
+                                dict! {
+                                    "maxlen" => Lit::Num(255)
+                                }
+                            ),
+                            Layer::new(
+                                Type::List,
+                                dict! {
+                                   "unique" => Lit::Bool(true)
+                                }
+                            )
+                        ]
+                        .into()
+                    }
+                ]
             );
         }
     }
