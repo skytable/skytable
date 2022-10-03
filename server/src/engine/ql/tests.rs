@@ -559,7 +559,7 @@ mod schema_tests {
             let (layers, c, okay) = schema::fold_layers(&tok);
             assert_eq!(c, tok.len() - 1);
             assert!(okay);
-            assert_eq!(layers, vec![Layer::new(Type::String, dict! {})]);
+            assert_eq!(layers, vec![Layer::new_noreset(Type::String, dict! {})]);
         }
         #[test]
         fn layer() {
@@ -569,7 +569,7 @@ mod schema_tests {
             assert!(okay);
             assert_eq!(
                 layers,
-                vec![Layer::new(
+                vec![Layer::new_noreset(
                     Type::String,
                     dict! {
                         "maxlen" => Lit::Num(100)
@@ -586,8 +586,8 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new(Type::String, dict! {}),
-                    Layer::new(Type::List, dict! {})
+                    Layer::new_noreset(Type::String, dict! {}),
+                    Layer::new_noreset(Type::List, dict! {})
                 ]
             );
         }
@@ -600,8 +600,8 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new(Type::String, dict! {}),
-                    Layer::new(
+                    Layer::new_noreset(Type::String, dict! {}),
+                    Layer::new_noreset(
                         Type::List,
                         dict! {
                             "unique" => Lit::Bool(true),
@@ -623,14 +623,14 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new(
+                    Layer::new_noreset(
                         Type::String,
                         dict! {
                             "ascii_only" => Lit::Bool(true),
                             "maxlen" => Lit::Num(255)
                         }
                     ),
-                    Layer::new(
+                    Layer::new_noreset(
                         Type::List,
                         dict! {
                             "unique" => Lit::Bool(true),
@@ -654,14 +654,14 @@ mod schema_tests {
         ")
             .unwrap();
             let expected = vec![
-                Layer::new(Type::String, dict!()),
-                Layer::new(
+                Layer::new_noreset(Type::String, dict!()),
+                Layer::new_noreset(
                     Type::List,
                     dict! {
                         "maxlen" => Lit::Num(100),
                     },
                 ),
-                Layer::new(Type::List, dict!("unique" => Lit::Bool(true))),
+                Layer::new_noreset(Type::List, dict!("unique" => Lit::Bool(true))),
             ];
             fuzz_tokens(&tok, |should_pass, new_tok| {
                 let (layers, c, okay) = schema::fold_layers(&new_tok);
@@ -724,7 +724,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
                     props: set![],
                 }
             )
@@ -741,7 +741,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
                     props: set!["primary"],
                 }
             )
@@ -761,7 +761,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new(
+                    layers: [Layer::new_noreset(
                         Type::String,
                         dict! {
                             "maxlen" => Lit::Num(10),
@@ -792,14 +792,14 @@ mod schema_tests {
                 Field {
                     field_name: "notes".into(),
                     layers: [
-                        Layer::new(
+                        Layer::new_noreset(
                             Type::String,
                             dict! {
                                 "maxlen" => Lit::Num(255),
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
-                        Layer::new(
+                        Layer::new_noreset(
                             Type::List,
                             dict! {
                                 "unique" => Lit::Bool(true)
@@ -844,12 +844,12 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set![]
                         }
                     ],
@@ -883,17 +883,17 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set!["null"]
                         }
                     ],
@@ -932,24 +932,24 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new(Type::String, dict! {}),
-                                Layer::new(
+                                Layer::new_noreset(Type::String, dict! {}),
+                                Layer::new_noreset(
                                     Type::List,
                                     dict! {
                                         "unique" => Lit::Bool(true)
@@ -999,24 +999,24 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new(Type::String, dict! {}),
-                                Layer::new(
+                                Layer::new_noreset(Type::String, dict! {}),
+                                Layer::new_noreset(
                                     Type::List,
                                     dict! {
                                         "unique" => Lit::Bool(true)
@@ -1045,14 +1045,15 @@ mod schema_tests {
         #[test]
         fn field_syn_mini() {
             let tok = lex(b"username { type string }").unwrap();
-            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
             assert_eq!(i, tok.len());
             assert_eq!(
                 ef,
                 ExpandedField {
                     field_name: "username".into(),
-                    layers: vec![Layer::new(Type::String, dict! {})],
-                    props: dict! {}
+                    layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                    props: dict! {},
+                    reset: false
                 }
             )
         }
@@ -1065,7 +1066,7 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
             assert_eq!(i, tok.len());
             assert_eq!(
                 ef,
@@ -1074,7 +1075,8 @@ mod schema_tests {
                     props: dict! {
                         "nullable" => Lit::Bool(false),
                     },
-                    layers: vec![Layer::new(Type::String, dict! {})]
+                    layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                    reset: false
                 }
             );
         }
@@ -1091,7 +1093,7 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
             assert_eq!(i, tok.len());
             assert_eq!(
                 ef,
@@ -1101,13 +1103,14 @@ mod schema_tests {
                         "nullable" => Lit::Bool(false),
                         "jingle_bells" => Lit::Str("snow".into()),
                     },
-                    layers: vec![Layer::new(
+                    layers: vec![Layer::new_noreset(
                         Type::String,
                         dict! {
                             "minlen" => Lit::Num(6),
                             "maxlen" => Lit::Num(255),
                         }
-                    )]
+                    )],
+                    reset: false
                 }
             );
         }
@@ -1126,7 +1129,7 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let (ef, i) = schema::parse_field_syntax(&tok).unwrap();
+            let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
             assert_eq!(i, tok.len());
             assert_eq!(
                 ef,
@@ -1137,19 +1140,20 @@ mod schema_tests {
                         "jingle_bells" => Lit::Str("snow".into()),
                     },
                     layers: vec![
-                        Layer::new(
+                        Layer::new_noreset(
                             Type::String,
                             dict! {
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
-                        Layer::new(
+                        Layer::new_noreset(
                             Type::List,
                             dict! {
                                 "unique" => Lit::Bool(true),
                             }
                         )
-                    ]
+                    ],
+                    reset: false
                 }
             );
         }
@@ -1212,7 +1216,8 @@ mod schema_tests {
                 [ExpandedField {
                     field_name: "myfield".into(),
                     props: dict! {},
-                    layers: [Layer::new(Type::String, dict! {})].into()
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: false
                 }]
             );
         }
@@ -1232,7 +1237,8 @@ mod schema_tests {
                     props: dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new(Type::String, dict! {})].into()
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: false
                 }]
             );
         }
@@ -1252,7 +1258,8 @@ mod schema_tests {
                     props: dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new(Type::String, dict! {})].into()
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: false
                 }]
             );
         }
@@ -1271,7 +1278,7 @@ mod schema_tests {
                             },
                             unique: true
                         },
-                        nullable: false
+                        nullable: false,
                     }
                 )
             ")
@@ -1287,7 +1294,8 @@ mod schema_tests {
                         props: dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new(Type::String, dict! {})].into()
+                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        reset: false
                     },
                     ExpandedField {
                         field_name: "another".into(),
@@ -1295,20 +1303,179 @@ mod schema_tests {
                             "nullable" => Lit::Bool(false)
                         },
                         layers: [
-                            Layer::new(
+                            Layer::new_noreset(
                                 Type::String,
                                 dict! {
                                     "maxlen" => Lit::Num(255)
                                 }
                             ),
-                            Layer::new(
+                            Layer::new_noreset(
                                 Type::List,
                                 dict! {
                                    "unique" => Lit::Bool(true)
-                                }
+                                },
                             )
                         ]
-                        .into()
+                        .into(),
+                        reset: false
+                    }
+                ]
+            );
+        }
+    }
+    mod alter_model_update {
+        use crate::engine::ql::{
+            lexer::Type,
+            schema::{ExpandedField, Layer},
+        };
+
+        use super::*;
+        #[test]
+        fn alter_mini() {
+            let tok = lex(b"
+                alter model mymodel update myfield { type string, .. }
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {},
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: true
+                }]
+            );
+        }
+        #[test]
+        fn alter_mini_2() {
+            let tok = lex(b"
+                alter model mymodel update (myfield { type string, .. })
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {},
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: true
+                }]
+            );
+        }
+        #[test]
+        fn alter() {
+            let tok = lex(b"
+                alter model mymodel update (
+                    myfield {
+                        type string,
+                        nullable: true,
+                        ..
+                    }
+                )
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [ExpandedField {
+                    field_name: "myfield".into(),
+                    props: dict! {
+                        "nullable" => Lit::Bool(true)
+                    },
+                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    reset: true
+                }]
+            );
+        }
+        #[test]
+        fn alter_pro() {
+            let tok = lex(b"
+                alter model mymodel update (
+                    myfield {
+                        type string,
+                        nullable: true,
+                        ..
+                    },
+                    myfield2 {
+                        type string,
+                        ..
+                    }
+                )
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [
+                    ExpandedField {
+                        field_name: "myfield".into(),
+                        props: dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        reset: true
+                    },
+                    ExpandedField {
+                        field_name: "myfield2".into(),
+                        props: dict! {},
+                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        reset: true
+                    }
+                ]
+            );
+        }
+        #[test]
+        fn alter_pro_max() {
+            let tok = lex(b"
+                alter model mymodel update (
+                    myfield {
+                        type string {..},
+                        nullable: true,
+                        ..
+                    },
+                    myfield2 {
+                        type string {
+                            maxlen: 255,
+                            ..
+                        },
+                        ..
+                    }
+                )
+            ")
+            .unwrap();
+            let mut i = 4;
+            let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+            assert_eq!(i, tok.len());
+            assert_eq!(
+                r.as_ref(),
+                [
+                    ExpandedField {
+                        field_name: "myfield".into(),
+                        props: dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                        layers: [Layer::new_reset(Type::String, dict! {})].into(),
+                        reset: true
+                    },
+                    ExpandedField {
+                        field_name: "myfield2".into(),
+                        props: dict! {},
+                        layers: [Layer::new_reset(
+                            Type::String,
+                            dict! {"maxlen" => Lit::Num(255)}
+                        )]
+                        .into(),
+                        reset: true
                     }
                 ]
             );

@@ -78,12 +78,17 @@ macro_rules! states {
     }
 }
 
+/// A static string slice
 type StaticStr = &'static str;
 
 const HIBIT: u64 = 1 << 63;
-const TRAIL_COMMA: bool = true;
+/// Flag for disallowing the `..` syntax
+const DISALLOW_RESET_SYNTAX: bool = false;
+/// Flag for allowing the `..` syntax
+const ALLOW_RESET_SYNTAX: bool = true;
 
 #[derive(Debug, PartialEq)]
+/// A dictionary entry type. Either a literal or another dictionary
 pub enum DictEntry {
     Lit(Lit),
     Map(Dict),
@@ -101,21 +106,34 @@ impl From<Dict> for DictEntry {
     }
 }
 
+/// A metadata dictionary
 pub type Dict = HashMap<String, DictEntry>;
 
 #[derive(Debug, PartialEq)]
+/// A layer contains a type and corresponding metadata
 pub struct Layer {
     ty: Type,
     props: Dict,
+    reset: bool,
 }
 
 impl Layer {
-    pub(super) const fn new(ty: Type, props: Dict) -> Self {
-        Self { ty, props }
+    //// Create a new layer
+    pub(super) const fn new(ty: Type, props: Dict, reset: bool) -> Self {
+        Self { ty, props, reset }
+    }
+    /// Create a new layer that doesn't have any reset
+    pub(super) const fn new_noreset(ty: Type, props: Dict) -> Self {
+        Self::new(ty, props, false)
+    }
+    /// Create a new layer that adds a reset
+    pub(super) const fn new_reset(ty: Type, props: Dict) -> Self {
+        Self::new(ty, props, true)
     }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
+/// Field properties
 pub struct FieldProperties {
     pub(super) properties: HashSet<StaticStr>,
 }
@@ -133,26 +151,36 @@ impl FieldProperties {
 #[derive(Debug, PartialEq)]
 /// A field definition
 pub struct Field {
+    /// the field name
     pub(super) field_name: RawSlice,
+    /// layers
     pub(super) layers: Vec<Layer>,
+    /// properties
     pub(super) props: HashSet<StaticStr>,
 }
 
 #[derive(Debug, PartialEq)]
 /// A model definition
 pub struct Model {
+    /// the model name
     pub(super) model_name: RawSlice,
+    /// the fields
     pub(super) fields: Vec<Field>,
+    /// properties
     pub(super) props: Dict,
 }
 
 #[derive(Debug, PartialEq)]
+/// A space
 pub struct Space {
+    /// the space name
     pub(super) space_name: RawSlice,
+    /// properties
     pub(super) props: Dict,
 }
 
 #[derive(Debug, PartialEq)]
+/// An alter space query with corresponding data
 pub struct AlterSpace {
     pub(super) space_name: RawSlice,
     pub(super) updated_props: Dict,
@@ -174,6 +202,7 @@ states! {
     }
 }
 
+/// Fold a dictionary
 pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dict) -> u64 {
     /*
         NOTE: Assume rules wherever applicable
@@ -260,6 +289,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
 }
 
 #[cfg(test)]
+/// Fold a dictionary (**test-only**)
 pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
     let mut d = Dict::new();
     let r = rfold_dict(DictFoldState::OB, tok, &mut d);
@@ -281,58 +311,84 @@ states! {
         COLON = 0x01,
         LIT_OR_OB = 0x02,
         COMMA_OR_CB = 0x03,
+        CB = 0x04,
         FINAL = 0xFF,
     }
 }
 
+#[derive(Debug, PartialEq)]
+/// The result of a type metadata fold
 pub struct TyMetaFoldResult {
     c: usize,
-    b: [bool; 2],
+    b: [bool; 3],
 }
 
 impl TyMetaFoldResult {
     #[inline(always)]
+    /// Create a new [`TyMetaFoldResult`] with the default settings:
+    /// - reset: false
+    /// - more: false
+    /// - okay: true
     const fn new() -> Self {
         Self {
             c: 0,
-            b: [true, false],
+            b: [true, false, false],
         }
     }
     #[inline(always)]
+    /// Increment the position
     fn incr(&mut self) {
         self.incr_by(1)
     }
     #[inline(always)]
+    /// Increment the position by `by`
     fn incr_by(&mut self, by: usize) {
         self.c += by;
     }
     #[inline(always)]
+    /// Set fail
     fn set_fail(&mut self) {
         self.b[0] = false;
     }
     #[inline(always)]
+    /// Set has more
     fn set_has_more(&mut self) {
         self.b[1] = true;
     }
     #[inline(always)]
+    /// Set reset
+    fn set_reset(&mut self) {
+        self.b[2] = true;
+    }
+    #[inline(always)]
+    /// Should the meta be reset?
+    pub fn should_reset(&self) -> bool {
+        self.b[2]
+    }
+    #[inline(always)]
+    /// Returns the cursor
     pub fn pos(&self) -> usize {
         self.c
     }
     #[inline(always)]
+    /// Returns if more layers are expected
     pub fn has_more(&self) -> bool {
         self.b[1]
     }
     #[inline(always)]
+    /// Returns if the internal state is okay
     pub fn is_okay(&self) -> bool {
         self.b[0]
     }
     #[inline(always)]
+    /// Records an expression
     fn record(&mut self, c: bool) {
         self.b[0] &= c;
     }
 }
 
-pub(super) fn rfold_tymeta(
+/// Fold type metadata (flag setup dependent on caller)
+pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
     mut state: TyMetaFoldState,
     tok: &[Token],
     dict: &mut Dict,
@@ -352,9 +408,17 @@ pub(super) fn rfold_tymeta(
                 state = TyMetaFoldState::FINAL;
                 break;
             }
+            (Token::Symbol(Symbol::SymPeriod), TyMetaFoldState::IDENT_OR_CB) if ALLOW_RESET => {
+                r.incr();
+                let reset = r.pos() < l && tok[r.pos()] == Token::Symbol(Symbol::SymPeriod);
+                r.incr_by(reset as _);
+                r.record(reset);
+                r.set_reset();
+                state = TyMetaFoldState::CB;
+            }
             (
                 Token::Symbol(Symbol::TtCloseBrace),
-                TyMetaFoldState::IDENT_OR_CB | TyMetaFoldState::COMMA_OR_CB,
+                TyMetaFoldState::IDENT_OR_CB | TyMetaFoldState::COMMA_OR_CB | TyMetaFoldState::CB,
             ) => {
                 r.incr();
                 // found close brace. end of stream
@@ -393,7 +457,11 @@ pub(super) fn rfold_tymeta(
                 r.incr();
                 // another dict in here
                 let mut d = Dict::new();
-                let ret = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[r.pos()..], &mut d);
+                let ret = rfold_tymeta::<ALLOW_RESET>(
+                    TyMetaFoldState::IDENT_OR_CB,
+                    &tok[r.pos()..],
+                    &mut d,
+                );
                 r.incr_by(ret.pos());
                 r.record(ret.is_okay());
                 r.record(!ret.has_more()); // L2 cannot have type definitions
@@ -415,9 +483,10 @@ pub(super) fn rfold_tymeta(
 }
 
 #[cfg(test)]
+/// (**test-only**) fold type metadata
 pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaFoldResult, Dict) {
     let mut d = Dict::new();
-    let r = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, tok, &mut d);
+    let r = rfold_tymeta::<DISALLOW_RESET_SYNTAX>(TyMetaFoldState::IDENT_OR_CB, tok, &mut d);
     (r, d)
 }
 
@@ -435,7 +504,12 @@ states! {
     }
 }
 
-pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Vec<Layer>) -> u64 {
+/// Fold layers
+pub(super) fn rfold_layers<const ALLOW_RESET: bool>(
+    start: LayerFoldState,
+    tok: &[Token],
+    layers: &mut Vec<Layer>,
+) -> u64 {
     /*
         NOTE: Assume rules wherever applicable
 
@@ -466,12 +540,13 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
             (Token::Symbol(Symbol::TtOpenBrace), LayerFoldState::END_OR_OB) => {
                 i += 1;
                 // since we found an open brace, this type has some meta
-                let ret = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
+                let ret =
+                    rfold_tymeta::<ALLOW_RESET>(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
                 i += ret.pos();
                 okay &= ret.is_okay();
                 if ret.has_more() {
                     // more layers
-                    let ret = rfold_layers(LayerFoldState::TY, &tok[i..], layers);
+                    let ret = rfold_layers::<ALLOW_RESET>(LayerFoldState::TY, &tok[i..], layers);
                     okay &= ret & HIBIT == HIBIT;
                     i += (ret & !HIBIT) as usize;
                     state = LayerFoldState::FOLD_DICT_INCOMPLETE;
@@ -481,6 +556,7 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
                     layers.push(Layer {
                         ty: unsafe { tmp.assume_init() }.clone(),
                         props: dict,
+                        reset: ret.should_reset(),
                     });
                     break;
                 }
@@ -488,7 +564,8 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
             (Token::Symbol(Symbol::SymComma), LayerFoldState::FOLD_DICT_INCOMPLETE) => {
                 // there is a comma at the end of this
                 i += 1;
-                let ret = rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
+                let ret =
+                    rfold_tymeta::<ALLOW_RESET>(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut dict);
                 i += ret.pos();
                 okay &= ret.is_okay();
                 okay &= !ret.has_more(); // not more than one type depth
@@ -498,6 +575,7 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
                     layers.push(Layer {
                         ty: unsafe { tmp.assume_init() }.clone(),
                         props: dict,
+                        reset: ret.should_reset(),
                     });
                     break;
                 }
@@ -509,6 +587,7 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
                 layers.push(Layer {
                     ty: unsafe { tmp.assume_init() }.clone(),
                     props: dict,
+                    reset: false,
                 });
                 break;
             }
@@ -518,6 +597,7 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
                 layers.push(Layer {
                     ty: unsafe { tmp.assume_init() }.clone(),
                     props: dict,
+                    reset: false,
                 });
                 break;
             }
@@ -533,13 +613,15 @@ pub(super) fn rfold_layers(start: LayerFoldState, tok: &[Token], layers: &mut Ve
 
 #[cfg(test)]
 #[inline(always)]
+/// (**test-only**) fold layers
 pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
     let mut l = Vec::new();
-    let r = rfold_layers(LayerFoldState::TY, tok, &mut l);
+    let r = rfold_layers::<DISALLOW_RESET_SYNTAX>(LayerFoldState::TY, tok, &mut l);
     (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
 #[inline(always)]
+/// Collect field properties
 pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) {
     let mut props = FieldProperties::default();
     let mut i = 0;
@@ -567,12 +649,14 @@ pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) 
 
 #[cfg(test)]
 #[inline(always)]
+/// (**test-only**) parse field properties
 pub(super) fn parse_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
     let (p, r) = collect_field_properties(tok);
     (p, (r & !HIBIT) as _, r & HIBIT == HIBIT)
 }
 
 #[inline(always)]
+/// Parse a field using the declaration-syntax (not field syntax)
 pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
     let l = tok.len();
     let mut i = 0;
@@ -595,7 +679,7 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
 
     // layers
     let mut layers = Vec::new();
-    let r = rfold_layers(LayerFoldState::TY, &tok[i..], &mut layers);
+    let r = rfold_layers::<DISALLOW_RESET_SYNTAX>(LayerFoldState::TY, &tok[i..], &mut layers);
     okay &= r & HIBIT == HIBIT;
     i += (r & !HIBIT) as usize;
 
@@ -613,13 +697,8 @@ pub(super) fn parse_field(tok: &[Token]) -> LangResult<(usize, Field)> {
     }
 }
 
-/*
-    create model name(..) with { .. }
-                     ^^^^
-*/
-
 states! {
-    ///
+    /// Accept state for a schema parse
     pub struct SchemaParseState: u8 {
         OPEN_PAREN = 0x00,
         FIELD = 0x01,
@@ -629,6 +708,7 @@ states! {
 }
 
 #[inline(always)]
+/// Parse a fresh schema with declaration-syntax fields
 pub(super) fn parse_schema_from_tokens(
     tok: &[Token],
     model_name: RawSlice,
@@ -719,6 +799,7 @@ pub(super) fn parse_schema_from_tokens(
 }
 
 #[inline(always)]
+/// Parse space data from the given tokens
 pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
     // let's see if the cursor is at `with`. ignore other tokens because that's fine
     if !tok.is_empty() && tok[0] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
@@ -747,6 +828,8 @@ pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<
     }
 }
 
+#[inline(always)]
+/// Parse alter space from tokens
 pub(super) fn parse_alter_space_from_tokens(
     tok: &[Token],
     space_name: RawSlice,
@@ -792,13 +875,19 @@ states! {
 }
 
 #[derive(Debug, PartialEq)]
+/// An [`ExpandedField`] is a full field definition with advanced metadata
 pub(super) struct ExpandedField {
     pub(super) field_name: RawSlice,
     pub(super) props: Dict,
     pub(super) layers: Vec<Layer>,
+    pub(super) reset: bool,
 }
 
-pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, usize)> {
+#[inline(always)]
+/// Parse a field declared using the field syntax
+pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
+    tok: &[Token],
+) -> LangResult<(ExpandedField, usize)> {
     let l = tok.len();
     let mut i = 0_usize;
     let mut state = FieldSyntaxParseState::IDENT;
@@ -806,6 +895,7 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
     let mut tmp = MaybeUninit::uninit();
     let mut props = Dict::new();
     let mut layers = vec![];
+    let mut reset = false;
     while i < l && okay {
         match (&tok[i], state) {
             (Token::Ident(field), FieldSyntaxParseState::IDENT) => {
@@ -816,12 +906,20 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
             }
             (Token::Symbol(Symbol::TtOpenBrace), FieldSyntaxParseState::OB) => {
                 i += 1;
-                let r = self::rfold_tymeta(TyMetaFoldState::IDENT_OR_CB, &tok[i..], &mut props);
+                let r = self::rfold_tymeta::<ALLOW_RESET>(
+                    TyMetaFoldState::IDENT_OR_CB,
+                    &tok[i..],
+                    &mut props,
+                );
                 okay &= r.is_okay();
                 i += r.pos();
                 if r.has_more() && i < l {
                     // now parse layers
-                    let r = self::rfold_layers(LayerFoldState::TY, &tok[i..], &mut layers);
+                    let r = self::rfold_layers::<ALLOW_RESET>(
+                        LayerFoldState::TY,
+                        &tok[i..],
+                        &mut layers,
+                    );
                     okay &= r & HIBIT == HIBIT;
                     i += (r & !HIBIT) as usize;
                     state = FieldSyntaxParseState::FOLD_DICT_INCOMPLETE;
@@ -832,9 +930,14 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
             }
             (Token::Symbol(Symbol::SymComma), FieldSyntaxParseState::FOLD_DICT_INCOMPLETE) => {
                 i += 1;
-                let r = self::rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], &mut props);
-                okay &= r & HIBIT == HIBIT;
-                i += (r & !HIBIT) as usize;
+                let r = self::rfold_tymeta::<ALLOW_RESET>(
+                    TyMetaFoldState::IDENT_OR_CB,
+                    &tok[i..],
+                    &mut props,
+                );
+                okay &= r.is_okay() && !r.has_more();
+                i += r.pos();
+                reset = ALLOW_RESET && r.should_reset();
                 if okay {
                     state = FieldSyntaxParseState::COMPLETED;
                     break;
@@ -859,6 +962,7 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
                 field_name: unsafe { tmp.assume_init() },
                 layers,
                 props,
+                reset,
             },
             i,
         ))
@@ -869,13 +973,15 @@ pub(super) fn parse_field_syntax(tok: &[Token]) -> LangResult<(ExpandedField, us
 
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(PartialEq))]
+/// The alter operation kind
 pub(super) enum AlterKind {
     Add(Box<[ExpandedField]>),
     Remove(Box<[RawSlice]>),
-    Update(ExpandedField),
+    Update(Box<[ExpandedField]>),
 }
 
 #[inline(always)]
+/// Parse an [`AlterKind`] from the given token stream
 pub(super) fn parse_alter_kind_from_tokens(
     tok: &[Token],
     current: &mut usize,
@@ -893,7 +999,7 @@ pub(super) fn parse_alter_kind_from_tokens(
             AlterKind::Remove(alter_remove(&tok[1..], current)?)
         }
         Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => {
-            AlterKind::Update(alter_update(&tok[1..], current))
+            AlterKind::Update(alter_update(&tok[1..], current)?)
         }
         _ => return Err(LangError::ExpectedStatement),
     };
@@ -901,7 +1007,11 @@ pub(super) fn parse_alter_kind_from_tokens(
 }
 
 #[inline(always)]
-pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[ExpandedField]>> {
+/// Parse multiple fields declared using the field syntax. Flag setting allows or disallows reset syntax
+pub(super) fn parse_multiple_field_syntax<const ALLOW_RESET: bool>(
+    tok: &[Token],
+    current: &mut usize,
+) -> LangResult<Box<[ExpandedField]>> {
     const DEFAULT_ADD_COL_CNT: usize = 4;
     /*
         WARNING: No trailing commas allowed
@@ -917,7 +1027,7 @@ pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[E
     }
     match tok[0] {
         Token::Ident(_) => {
-            let (r, i) = parse_field_syntax(&tok)?;
+            let (r, i) = parse_field_syntax::<ALLOW_RESET>(&tok)?;
             *current += i;
             Ok([r].into())
         }
@@ -929,7 +1039,7 @@ pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[E
             while i < l && okay && !stop {
                 match tok[i] {
                     Token::Ident(_) => {
-                        let (r, cnt) = parse_field_syntax(&tok[i..])?;
+                        let (r, cnt) = parse_field_syntax::<ALLOW_RESET>(&tok[i..])?;
                         i += cnt;
                         cols.push(r);
                         let nx_comma = i < l && tok[i] == Token::Symbol(Symbol::SymComma);
@@ -956,6 +1066,13 @@ pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[E
 }
 
 #[inline(always)]
+/// Parse the expression for `alter model <> add (..)`
+pub(super) fn alter_add(tok: &[Token], current: &mut usize) -> LangResult<Box<[ExpandedField]>> {
+    self::parse_multiple_field_syntax::<DISALLOW_RESET_SYNTAX>(tok, current)
+}
+
+#[inline(always)]
+/// Parse the expression for `alter model <> remove (..)`
 pub(super) fn alter_remove(tok: &[Token], current: &mut usize) -> LangResult<Box<[RawSlice]>> {
     const DEFAULT_REMOVE_COL_CNT: usize = 4;
     /*
@@ -1007,6 +1124,7 @@ pub(super) fn alter_remove(tok: &[Token], current: &mut usize) -> LangResult<Box
 }
 
 #[inline(always)]
-pub(super) fn alter_update(_tok: &[Token], _current: &mut usize) -> ExpandedField {
-    todo!()
+/// Parse the expression for `alter model <> update (..)`
+pub(super) fn alter_update(tok: &[Token], current: &mut usize) -> LangResult<Box<[ExpandedField]>> {
+    self::parse_multiple_field_syntax::<ALLOW_RESET_SYNTAX>(tok, current)
 }

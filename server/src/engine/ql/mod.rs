@@ -96,14 +96,10 @@ impl RawSlice {
 #[cfg(debug_assertions)]
 impl fmt::Debug for RawSlice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(unsafe {
-                // UNSAFE(@ohsayan): Note, the caller is responsible for ensuring validity as long the
-                // slice is used. also note, the Debug impl only exists for Debug builds so we never use
-                // this in release builds
-                self.as_slice()
-            })
-            .finish()
+        f.write_str(unsafe {
+            // UNSAFE(@ohsayan): Only implemented in debug
+            self.as_str()
+        })
     }
 }
 
