@@ -590,6 +590,17 @@ impl Token {
     pub(crate) fn is_typeid(&self) -> bool {
         matches!(self, Token::Keyword(Keyword::TypeId(_)))
     }
+    #[inline(always)]
+    pub(crate) fn as_ident_eq_ignore_case(&self, arg: &[u8]) -> bool {
+        self.is_ident()
+            && unsafe {
+                if let Self::Ident(id) = self {
+                    id.as_slice().eq_ignore_ascii_case(arg)
+                } else {
+                    impossible!()
+                }
+            }
+    }
 }
 
 impl AsRef<Token> for Token {

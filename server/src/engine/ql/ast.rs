@@ -78,9 +78,13 @@ pub enum Statement {
     CreateModel(schema::Model),
     CreateSpace(schema::Space),
     Use(Entity),
-    Inspect(Entity),
     AlterSpace(schema::AlterSpace),
     AlterModel(RawSlice, schema::AlterKind),
+    DropModel(RawSlice, bool),
+    DropSpace(RawSlice, bool),
+    InspectSpace(RawSlice),
+    InspectModel(Entity),
+    InspectSpaces,
 }
 
 pub struct Compiler<'a> {
@@ -133,7 +137,31 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn drop0(&mut self) -> Result<Statement, LangError> {
-        todo!()
+        if self.remaining() < 2 {
+            return Err(LangError::ExpectedStatement);
+        }
+        let rs = self.remslice();
+        let ident = match rs[1] {
+            Token::Ident(ref id) => id,
+            _ => return Err(LangError::ExpectedStatement),
+        };
+        let should_force = self.remaining() > 2 && rs[2].as_ident_eq_ignore_case(b"force");
+        let r = match rs[0] {
+            Token::Keyword(Keyword::Ddl(DdlKeyword::Model)) => {
+                // dropping a model
+                Ok(Statement::DropModel(ident.clone(), should_force))
+            }
+            Token::Keyword(Keyword::Ddl(DdlKeyword::Space)) => {
+                // dropping a space
+                Ok(Statement::DropSpace(ident.clone(), should_force))
+            }
+            _ => Err(LangError::UnexpectedToken),
+        };
+        unsafe {
+            self.incr_cursor_by(2);
+            self.incr_cursor_if(should_force);
+        }
+        r
     }
     #[inline(always)]
     fn alter0(&mut self) -> Result<Statement, LangError> {
@@ -169,8 +197,28 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn inspect0(&mut self) -> Result<Statement, LangError> {
-        let entity = Entity::parse(self)?;
-        Ok(Statement::Inspect(entity))
+        if self.remaining() == 0 {
+            return Err(LangError::UnexpectedEndofStatement);
+        }
+        match self.nxtok_opt() {
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => {
+                let space_name = match self.nxtok_opt() {
+                    Some(Token::Ident(id)) => id.clone(),
+                    _ => return Err(LangError::UnexpectedToken),
+                };
+                Ok(Statement::InspectSpace(space_name))
+            }
+            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => {
+                let entity = Entity::parse(self)?;
+                Ok(Statement::InspectModel(entity))
+            }
+            Some(Token::Ident(id))
+                if unsafe { id.as_slice() }.eq_ignore_ascii_case(b"keyspaces") =>
+            {
+                Ok(Statement::InspectSpaces)
+            }
+            _ => Err(LangError::ExpectedStatement),
+        }
     }
     #[inline(always)]
     fn use0(&mut self) -> Result<Statement, LangError> {
@@ -264,5 +312,16 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     pub(super) unsafe fn decr_cursor_by(&mut self, by: usize) {
         self.c = self.c.sub(by);
+    }
+    fn try_read_index<'b>(&'a self, index: usize) -> Option<&'b Token>
+    where
+        'a: 'b,
+    {
+        let sl = self.remslice();
+        if sl.len() > index {
+            Some(&sl[index])
+        } else {
+            None
+        }
     }
 }
