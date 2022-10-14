@@ -1662,4 +1662,100 @@ mod dml_tests {
             );
         }
     }
+    mod map_syntax {
+        use super::*;
+        use crate::engine::ql::dml::parse_data_map_syntax_full;
+
+        #[test]
+        fn map_mini() {
+            let tok = lex(b"{}").unwrap();
+            let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(r, dict! {})
+        }
+
+        #[test]
+        fn map() {
+            let tok = lex(br#"
+                {
+                    name: "John Appletree",
+                    email: "john@example.com",
+                    verified: false,
+                    followers: 12345
+                }
+            "#)
+            .unwrap();
+            let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r,
+                dict! {
+                    "name" => "John Appletree",
+                    "email" => "john@example.com",
+                    "verified" => false,
+                    "followers" => 12345,
+                }
+            )
+        }
+
+        #[test]
+        fn map_pro() {
+            let tok = lex(br#"
+                {
+                    name: "John Appletree",
+                    email: "john@example.com",
+                    verified: false,
+                    followers: 12345,
+                    tweets_by_day: []
+                }
+            "#)
+            .unwrap();
+            let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r,
+                dict! {
+                    "name" => "John Appletree",
+                    "email" => "john@example.com",
+                    "verified" => false,
+                    "followers" => 12345,
+                    "tweets_by_day" => []
+                }
+            )
+        }
+
+        #[test]
+        fn map_pro_max() {
+            let tok = lex(br#"
+                {
+                    name: "John Appletree",
+                    email: "john@example.com",
+                    verified: false,
+                    followers: 12345,
+                    tweets_by_day: [
+                        ["it's a fresh monday", "monday was tiring"],
+                        ["already bored with tuesday", "nope. gotta change stuff, life's getting boring"],
+                        ["sunday, going to bed"]
+                    ]
+                }
+            "#)
+            .unwrap();
+            let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r,
+                dict! {
+                    "name" => "John Appletree",
+                    "email" => "john@example.com",
+                    "verified" => false,
+                    "followers" => 12345,
+                    "tweets_by_day" => into_array![
+                        into_array![
+                            "it's a fresh monday", "monday was tiring"
+                        ],
+                        into_array![
+                            "already bored with tuesday", "nope. gotta change stuff, life's getting boring"
+                        ],
+                        into_array!["sunday, going to bed"]
+                    ]
+                }
+            )
+        }
+    }
 }

@@ -27,7 +27,10 @@
 use {
     super::lexer::{Lit, Symbol, Token},
     crate::engine::memory::DataType,
-    std::mem::{discriminant, Discriminant},
+    std::{
+        collections::HashMap,
+        mem::{discriminant, Discriminant},
+    },
 };
 
 /// Parse a list
@@ -142,6 +145,66 @@ pub(super) fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<DataType
     let (ret, cnt, okay) = parse_data_tuple_syntax(tok);
     if cnt == tok.len() && okay {
         Some(ret)
+    } else {
+        None
+    }
+}
+
+pub(super) fn parse_data_map_syntax(tok: &[Token]) -> (HashMap<Box<str>, DataType>, usize, bool) {
+    let l = tok.len();
+    let mut okay = l != 0;
+    let mut stop = okay && tok[0] == Token::Symbol(Symbol::TtCloseBrace);
+    let mut i = stop as usize;
+    let mut data = HashMap::new();
+    while i + 3 < l && okay && !stop {
+        let (field, colon, expression) = (&tok[i], &tok[i + 1], &tok[i + 2]);
+        okay &= colon == &Symbol::SymColon;
+        match (field, expression) {
+            (Token::Ident(id), Token::Lit(Lit::Str(s))) => {
+                okay &= data
+                    .insert(unsafe { id.as_str() }.into(), s.to_string().into())
+                    .is_none();
+            }
+            (Token::Ident(id), Token::Lit(Lit::Num(n))) => {
+                okay &= data
+                    .insert(unsafe { id.as_str() }.into(), (*n).into())
+                    .is_none();
+            }
+            (Token::Ident(id), Token::Lit(Lit::Bool(b))) => {
+                okay &= data
+                    .insert(unsafe { id.as_str() }.into(), (*b).into())
+                    .is_none();
+            }
+            (Token::Ident(id), Token::Symbol(Symbol::TtOpenSqBracket)) => {
+                // ooh a list
+                let mut l = Vec::new();
+                let (_, lst_i, lst_ok) = parse_list(&tok[i + 3..], &mut l);
+                okay &= lst_ok;
+                i += lst_i;
+                okay &= data
+                    .insert(unsafe { id.as_str() }.into(), l.into())
+                    .is_none();
+            }
+            _ => {
+                okay = false;
+                break;
+            }
+        }
+        i += 3;
+        let nx_comma = i < l && tok[i] == Symbol::SymComma;
+        let nx_csprn = i < l && tok[i] == Symbol::TtCloseBrace;
+        okay &= nx_comma | nx_csprn;
+        i += okay as usize;
+        stop = nx_csprn;
+    }
+    (data, i, okay && stop)
+}
+
+#[cfg(test)]
+pub(super) fn parse_data_map_syntax_full(tok: &[Token]) -> Option<HashMap<Box<str>, DataType>> {
+    let (dat, i, ok) = parse_data_map_syntax(tok);
+    if i == tok.len() && ok {
+        Some(dat)
     } else {
         None
     }
