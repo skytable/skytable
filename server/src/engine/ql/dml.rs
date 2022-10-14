@@ -24,12 +24,15 @@
  *
 */
 
-use std::mem::{discriminant, Discriminant};
+use {
+    super::lexer::{Lit, Symbol, Token},
+    crate::engine::memory::DataType,
+    std::mem::{discriminant, Discriminant},
+};
 
-use super::lexer::{Lit, Symbol};
-
-use {super::lexer::Token, crate::engine::memory::DataType};
-
+/// Parse a list
+///
+/// **NOTE:** This function will error if the `[` token is passed. Make sure this is forwarded by the caller
 pub(super) fn parse_list(
     tok: &[Token],
     list: &mut Vec<DataType>,
@@ -83,8 +86,62 @@ pub(super) fn parse_list(
 #[cfg(test)]
 pub(super) fn parse_list_full(tok: &[Token]) -> Option<Vec<DataType>> {
     let mut l = Vec::new();
-    if let (_, _, true) = parse_list(tok, &mut l) {
+    if matches!(parse_list(tok, &mut l), (_, i, true) if i == tok.len()) {
         Some(l)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+/// Parse the tuple data passed in with an insert query.
+///
+/// **Note:** Make sure you pass the `(` token
+pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<DataType>, usize, bool) {
+    let l = tok.len();
+    let mut okay = l != 0;
+    let mut stop = okay && tok[0] == Token::Symbol(Symbol::TtCloseParen);
+    let mut i = stop as usize;
+    let mut data = Vec::new();
+    while i < l && okay && !stop {
+        match &tok[i] {
+            Token::Lit(Lit::Str(s)) => {
+                data.push(s.to_string().into());
+            }
+            Token::Lit(Lit::Num(n)) => {
+                data.push((*n).into());
+            }
+            Token::Lit(Lit::Bool(b)) => {
+                data.push((*b).into());
+            }
+            Token::Symbol(Symbol::TtOpenSqBracket) => {
+                // ah, a list
+                let mut l = Vec::new();
+                let (_, lst_i, lst_okay) = parse_list(&tok[i + 1..], &mut l);
+                data.push(l.into());
+                i += lst_i;
+                okay &= lst_okay;
+            }
+            _ => {
+                okay = false;
+                break;
+            }
+        }
+        i += 1;
+        let nx_comma = i < l && tok[i] == Symbol::SymComma;
+        let nx_csprn = i < l && tok[i] == Symbol::TtCloseParen;
+        okay &= nx_comma | nx_csprn;
+        i += okay as usize;
+        stop = nx_csprn;
+    }
+    (data, i, okay && stop)
+}
+
+#[cfg(test)]
+pub(super) fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<DataType>> {
+    let (ret, cnt, okay) = parse_data_tuple_syntax(tok);
+    if cnt == tok.len() && okay {
+        Some(ret)
     } else {
         None
     }

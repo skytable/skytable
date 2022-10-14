@@ -1542,7 +1542,7 @@ mod dml_tests {
                     [1, 2],
                     [3, 4],
                     [5, 6],
-                    [7, 8]
+                    []
                 ]
             ")
             .unwrap();
@@ -1553,7 +1553,7 @@ mod dml_tests {
                     into_array![1, 2],
                     into_array![3, 4],
                     into_array![5, 6],
-                    into_array![7, 8]
+                    into_array![]
                 ]
             )
         }
@@ -1563,9 +1563,9 @@ mod dml_tests {
             let tok = lex(b"
                 [
                     [[1, 1], [2, 2]],
-                    [[3, 3], [4, 4]],
+                    [[], [4, 4]],
                     [[5, 5], [6, 6]],
-                    [[7, 7], [8, 8]]
+                    [[7, 7], []]
                 ]
             ")
             .unwrap();
@@ -1574,11 +1574,92 @@ mod dml_tests {
                 r.as_slice(),
                 into_array![
                     into_array![into_array![1, 1], into_array![2, 2]],
-                    into_array![into_array![3, 3], into_array![4, 4]],
+                    into_array![into_array![], into_array![4, 4]],
                     into_array![into_array![5, 5], into_array![6, 6]],
-                    into_array![into_array![7, 7], into_array![8, 8]],
+                    into_array![into_array![7, 7], into_array![]],
                 ]
             )
+        }
+    }
+    mod tuple_syntax {
+        use super::*;
+        use crate::engine::ql::dml::parse_data_tuple_syntax_full;
+
+        #[test]
+        fn tuple_mini() {
+            let tok = lex(b"()").unwrap();
+            let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(r, vec![]);
+        }
+
+        #[test]
+        fn tuple() {
+            let tok = lex(br#"
+                (1234, "email@example.com", true)
+            "#)
+            .unwrap();
+            let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(r.as_slice(), into_array![1234, "email@example.com", true]);
+        }
+
+        #[test]
+        fn tuple_pro() {
+            let tok = lex(br#"
+                (
+                    1234,
+                    "email@example.com",
+                    true,
+                    ["hello", "world", "and", "the", "universe"]
+                )
+            "#)
+            .unwrap();
+            let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r.as_slice(),
+                into_array![
+                    1234,
+                    "email@example.com",
+                    true,
+                    into_array!["hello", "world", "and", "the", "universe"]
+                ]
+            );
+        }
+
+        #[test]
+        fn tuple_pro_max() {
+            let tok = lex(br#"
+                (
+                    1234,
+                    "email@example.com",
+                    true,
+                    [
+                        ["h", "hello"],
+                        ["w", "world"],
+                        ["a", "and"],
+                        ["the"],
+                        ["universe"],
+                        []
+                    ]
+                )
+            "#)
+            .unwrap();
+            let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r.as_slice(),
+                into_array![
+                    1234,
+                    "email@example.com",
+                    true,
+                    into_array![
+                        into_array!["h", "hello"],
+                        into_array!["w", "world"],
+                        into_array!["a", "and"],
+                        into_array!["the"],
+                        into_array!["universe"],
+                        into_array![],
+                    ]
+                ]
+            );
         }
     }
 }
