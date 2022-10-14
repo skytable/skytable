@@ -1508,3 +1508,77 @@ mod schema_tests {
         }
     }
 }
+
+mod dml_tests {
+    use super::*;
+    mod list_parse {
+        use super::*;
+        use crate::engine::ql::dml::parse_list_full;
+
+        #[test]
+        fn list_mini() {
+            let tok = lex(b"
+                []
+            ")
+            .unwrap();
+            let r = parse_list_full(&tok[1..]).unwrap();
+            assert_eq!(r, vec![])
+        }
+
+        #[test]
+        fn list() {
+            let tok = lex(b"
+                [1, 2, 3, 4]
+            ")
+            .unwrap();
+            let r = parse_list_full(&tok[1..]).unwrap();
+            assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
+        }
+
+        #[test]
+        fn list_pro() {
+            let tok = lex(b"
+                [
+                    [1, 2],
+                    [3, 4],
+                    [5, 6],
+                    [7, 8]
+                ]
+            ")
+            .unwrap();
+            let r = parse_list_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r.as_slice(),
+                into_array![
+                    into_array![1, 2],
+                    into_array![3, 4],
+                    into_array![5, 6],
+                    into_array![7, 8]
+                ]
+            )
+        }
+
+        #[test]
+        fn list_pro_max() {
+            let tok = lex(b"
+                [
+                    [[1, 1], [2, 2]],
+                    [[3, 3], [4, 4]],
+                    [[5, 5], [6, 6]],
+                    [[7, 7], [8, 8]]
+                ]
+            ")
+            .unwrap();
+            let r = parse_list_full(&tok[1..]).unwrap();
+            assert_eq!(
+                r.as_slice(),
+                into_array![
+                    into_array![into_array![1, 1], into_array![2, 2]],
+                    into_array![into_array![3, 3], into_array![4, 4]],
+                    into_array![into_array![5, 5], into_array![6, 6]],
+                    into_array![into_array![7, 7], into_array![8, 8]],
+                ]
+            )
+        }
+    }
+}

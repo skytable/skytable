@@ -46,30 +46,37 @@ pub enum Entity {
 
 impl Entity {
     pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
-        let a = cm.nxtok_opt();
-        let b = cm.nxtok_opt();
-        let c = cm.nxtok_opt();
-        match (a, b, c) {
-            (
-                Some(Token::Ident(ks)),
-                Some(Token::Symbol(Symbol::SymPeriod)),
-                Some(Token::Ident(tbl)),
-            ) => {
-                let r = Ok(Entity::Full(ks.clone(), tbl.clone()));
-                r
-            }
-            (Some(Token::Ident(ident)), _, _) => unsafe {
-                let r = Ok(Entity::Current(ident.clone()));
-                cm.decr_cursor_by(2);
-                r
+        let sl = cm.remslice();
+        let is_partial =
+            sl.len() > 1 && sl[0] == Token::Symbol(Symbol::SymColon) && sl[1].is_ident();
+        let is_current = !sl.is_empty() && sl[0].is_ident();
+        let is_full = sl.len() > 2
+            && sl[0].is_ident()
+            && sl[1] == Token::Symbol(Symbol::SymPeriod)
+            && sl[2].is_ident();
+        let c;
+        let r = match () {
+            _ if is_full => unsafe {
+                c = 3;
+                Entity::Full(
+                    extract!(&sl[0], Token::Ident(sl) => sl.clone()),
+                    extract!(&sl[2], Token::Ident(sl) => sl.clone()),
+                )
             },
-            (Some(Token::Symbol(Symbol::SymColon)), Some(Token::Ident(tbl)), _) => unsafe {
-                let r = Ok(Entity::Partial(tbl.clone()));
-                cm.decr_cursor_by(1);
-                r
+            _ if is_current => unsafe {
+                c = 1;
+                Entity::Current(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
             },
-            _ => Err(LangError::UnexpectedToken),
+            _ if is_partial => unsafe {
+                c = 2;
+                Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
+            },
+            _ => return Err(LangError::UnexpectedToken),
+        };
+        unsafe {
+            cm.incr_cursor_by(c);
         }
+        Ok(r)
     }
 }
 
@@ -308,20 +315,5 @@ impl<'a> Compiler<'a> {
     pub(super) unsafe fn incr_cursor_by(&mut self, by: usize) {
         debug_assert!(self.remaining() >= by);
         self.c = self.c.add(by);
-    }
-    #[inline(always)]
-    pub(super) unsafe fn decr_cursor_by(&mut self, by: usize) {
-        self.c = self.c.sub(by);
-    }
-    fn try_read_index<'b>(&'a self, index: usize) -> Option<&'b Token>
-    where
-        'a: 'b,
-    {
-        let sl = self.remslice();
-        if sl.len() > index {
-            Some(&sl[index])
-        } else {
-            None
-        }
     }
 }

@@ -27,6 +27,7 @@
 #[macro_use]
 mod macros;
 pub(super) mod ast;
+pub(super) mod dml;
 pub(super) mod lexer;
 pub(super) mod schema;
 #[cfg(test)]

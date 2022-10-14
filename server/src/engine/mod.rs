@@ -27,4 +27,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
+#[macro_use]
+mod macros;
+mod memory;
 mod ql;

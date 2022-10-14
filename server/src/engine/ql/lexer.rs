@@ -45,6 +45,15 @@ pub enum Token {
     Lit(Lit), // literal
 }
 
+impl PartialEq<Symbol> for Token {
+    fn eq(&self, other: &Symbol) -> bool {
+        match self {
+            Self::Symbol(s) => s == other,
+            _ => false,
+        }
+    }
+}
+
 assertions! {
     size_of::<Token>() == 32, // FIXME(@ohsayan): Damn, what?
     size_of::<Symbol>() == 1,
@@ -495,7 +504,7 @@ impl<'a> Lexer<'a> {
                 1234, // valid
                 1234a // invalid
             */
-            static TERMINAL_CHAR: [u8; 6] = [b';', b'}', b',', b' ', b'\n', b'\t'];
+            static TERMINAL_CHAR: [u8; 8] = [b';', b'}', b',', b' ', b'\n', b'\t', b',', b']'];
             let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b)) || self.exhausted();
             match str::from_utf8_unchecked(slice::from_raw_parts(
                 s,
@@ -549,7 +558,20 @@ impl<'a> Lexer<'a> {
         match symof(byte) {
             Some(tok) => self.push_token(tok),
             #[cfg(test)]
-            None if byte == b'\r' => self.push_token(Token::IgnorableComma),
+            None if byte == b'\r'
+                && self.remaining() > 1
+                && !(unsafe {
+                    // UNSAFE(@ohsayan): The previous condition ensures that this doesn't segfault
+                    *self.cursor().add(1)
+                })
+                .is_ascii_digit() =>
+            {
+                /*
+                    NOTE(@ohsayan): The above guard might look a little messy but is necessary to support raw
+                    literals which will use the carriage return
+                */
+                self.push_token(Token::IgnorableComma)
+            }
             _ => {
                 self.last_error = Some(LangError::UnexpectedChar);
                 return;
@@ -600,6 +622,18 @@ impl Token {
                     impossible!()
                 }
             }
+    }
+    #[inline(always)]
+    pub(super) unsafe fn ident_unchecked(&self) -> RawSlice {
+        if let Self::Ident(id) = self {
+            id.clone()
+        } else {
+            impossible!()
+        }
+    }
+    #[inline(always)]
+    pub(super) fn is_lit(&self) -> bool {
+        matches!(self, Self::Lit(_))
     }
 }
 

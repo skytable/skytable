@@ -1,5 +1,5 @@
 /*
- * Created on Fri Sep 16 2022
+ * Created on Wed Oct 12 2022
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,28 +24,28 @@
  *
 */
 
-macro_rules! dict {
-    () => {
-        <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
+macro_rules! extract {
+    ($src:expr, $what:pat => $ret:expr) => {
+        if let $what = $src {
+            $ret
+        } else {
+            $crate::impossible!()
+        }
     };
-    ($($key:expr => $value:expr),* $(,)?) => {{
-        let mut hm: ::std::collections::HashMap<_, _> = ::core::default::Default::default();
-        $(hm.insert($key.into(), $value.into());)*
-        hm
-    }};
 }
 
-macro_rules! set {
-    () => {
-        <::std::collections::HashSet<_> as ::core::default::Default>::default()
+macro_rules! multi_assert_eq {
+    ($($lhs:expr),* => $rhs:expr) => {
+        $(assert_eq!($lhs, $rhs);)*
     };
-    ($($key:expr),* $(,)?) => {{
-        let mut hs: ::std::collections::HashSet<_> = ::core::default::Default::default();
-        $(hs.insert($key.into());)*
-        hs
-    }};
 }
 
-macro_rules! into_array {
-    ($($e:expr),* $(,)?) => { [$($e.into()),*] };
+macro_rules! enum_impls {
+    ($for:ty => {$($other:ty as $me:ident),*$(,)?}) => {
+        $(impl ::core::convert::From<$other> for $for {fn from(v: $other) -> Self {Self::$me(v.into())}})*
+    }
+}
+
+macro_rules! assertions {
+    ($($assert:expr),*$(,)?) => {$(const _:()=::core::assert!($assert);)*}
 }

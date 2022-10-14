@@ -44,11 +44,11 @@
     Sept. 15, 2022
 */
 
-use super::lexer::DmlKeyword;
-
 use {
     super::{
-        lexer::{DdlKeyword, DdlMiscKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type},
+        lexer::{
+            DdlKeyword, DdlMiscKeyword, DmlKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type,
+        },
         LangError, LangResult, RawSlice,
     },
     std::{
