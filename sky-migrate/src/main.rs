@@ -26,30 +26,27 @@
 
 #![allow(clippy::unit_arg)]
 
+mod cli;
+
 use {
-    clap::{load_yaml, App},
-    core::hint::unreachable_unchecked,
+    crate::cli::Cli,
+    clap::Parser,
     env_logger::Builder,
     log::{error as err, info},
     skytable::{query, sync::Connection, Element, Query, RespCode},
-    std::{collections::HashMap, env, fs, path::PathBuf, process},
+    std::{collections::HashMap, env, fs, process},
 };
 
 type Bytes = Vec<u8>;
 
 fn main() {
     // first evaluate config
-    let cfg_layout = load_yaml!("cli.yml");
-    let matches = App::from_yaml(cfg_layout).get_matches();
+    let cli = Cli::parse();
     Builder::new()
         .parse_filters(&env::var("SKY_LOG").unwrap_or_else(|_| "info".to_owned()))
         .init();
-    let new_host = matches
-        .value_of("new")
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| unsafe { unreachable_unchecked() });
-    let serial = matches.is_present("serial");
-    let hostsplit: Vec<&str> = new_host.split(':').collect();
+    let serial = cli.serial;
+    let hostsplit: Vec<&str> = cli.new.split(':').collect();
     if hostsplit.len() != 2 {
         err(err!("Bad value for --new"));
     }
@@ -58,11 +55,8 @@ fn main() {
         Ok(p) => p,
         Err(e) => err(err!("Bad value for port in --new: {}", e)),
     };
-    let mut old_dir = matches
-        .value_of("prevdir")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| unsafe { unreachable_unchecked() });
-    old_dir.push("data.bin");
+    let mut old_dir = cli.prevdir;
+    old_dir.push_str("data.bin");
     // now connect
     let mut con = match Connection::new(host, port) {
         Ok(con) => con,
