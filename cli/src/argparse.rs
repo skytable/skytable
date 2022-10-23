@@ -24,9 +24,10 @@
  *
 */
 
+use crate::cli::Cli;
 use {
     crate::{runner::Runner, tokenizer},
-    clap::{load_yaml, App},
+    clap::Parser,
     crossterm::{
         cursor, execute,
         terminal::{Clear, ClearType},
@@ -37,7 +38,6 @@ use {
     std::{io::stdout, process},
 };
 
-const ADDR: &str = "127.0.0.1";
 const SKYSH_HISTORY_FILE: &str = ".sky_history";
 
 const HELP_TEXT: &str = r#"
@@ -100,16 +100,7 @@ pub async fn start_repl() {
         };
     }
 
-    let cfg_layout = load_yaml!("./cli.yml");
-    let matches = App::from_yaml(cfg_layout).get_matches();
-    let host = libsky::option_unwrap_or!(matches.value_of("host"), ADDR);
-    let port = match matches.value_of("port") {
-        Some(p) => match p.parse::<u16>() {
-            Ok(p) => p,
-            Err(_) => fatal!("Invalid port"),
-        },
-        None => 2003,
-    };
+    let cli = Cli::parse();
     let mut editor = match Editor::<()>::new() {
         Ok(e) => e,
         Err(e) => fatal!("Editor init error: {}", e),
@@ -123,9 +114,9 @@ pub async fn start_repl() {
         ),
         rustyline::Cmd::Noop,
     );
-    let con = match matches.value_of("cert") {
-        Some(cert) => Runner::new_secure(host, port, cert).await,
-        None => Runner::new_insecure(host, port).await,
+    let con = match cli.ssl_cert {
+        Some(cert) => Runner::new_secure(&cli.host, cli.port, &cert).await,
+        None => Runner::new_insecure(&cli.host, cli.port).await,
     };
     let mut runner = match con {
         Ok(c) => c,
@@ -143,10 +134,10 @@ pub async fn start_repl() {
         };
     }
 
-    if let Some(eval_expr) = matches.values_of("eval") {
-        for eval_expr in eval_expr {
+    if let Some(expressions) = cli.expressions {
+        for eval_expr in expressions {
             if !eval_expr.is_empty() {
-                runner.run_query(eval_expr).await;
+                runner.run_query(&eval_expr).await;
             }
         }
         process::exit(0x00);

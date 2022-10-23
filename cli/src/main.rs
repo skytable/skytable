@@ -30,8 +30,10 @@
 #[macro_use]
 mod macros;
 mod argparse;
+mod cli;
 mod runner;
 mod tokenizer;
+
 // tests
 #[cfg(test)]
 mod tests;
