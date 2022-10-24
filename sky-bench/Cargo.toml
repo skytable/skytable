@@ -3,6 +3,7 @@ authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "sky-bench"
 version = "0.8.0"
+description = "The Skytable benchmark tool can be used to benchmark Skytable installations"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +15,7 @@ skytable = { git = "https://github.com/skytable/client-rust.git", features = [
 ] }
 libstress = { path = "../libstress" }
 # external deps
-clap = { version = "2", features = ["yaml"] }
+clap = { version = "4", features = ["derive"] }
 log = "0.4.17"
 env_logger = "0.9.1"
 devtimer = "4.0.1"

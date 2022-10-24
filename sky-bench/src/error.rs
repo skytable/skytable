@@ -36,8 +36,6 @@ pub type BResult<T> = Result<T, Error>;
 pub enum Error {
     /// An error originating from the Skytable client
     Client(SkyError),
-    /// An error originating from the benchmark/server configuration
-    Config(String),
     /// A runtime error
     Runtime(String),
 }
@@ -52,7 +50,6 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Client(e) => write!(f, "client error: {}", e),
-            Error::Config(e) => write!(f, "config error: {}", e),
             Error::Runtime(e) => write!(f, "runtime error: {}", e),
         }
     }

@@ -23,17 +23,18 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
-
 use {
-    clap::{load_yaml, App},
-    config::ServerConfig,
+    crate::cli::Cli,
+    clap::Parser,
     env_logger::Builder,
     std::{env, process},
 };
+
 #[macro_use]
 extern crate log;
 
 mod bench;
+mod cli;
 mod config;
 mod error;
 mod util;
@@ -49,15 +50,14 @@ fn main() {
 }
 
 fn run() -> error::BResult<()> {
-    // init CLI arg parser
-    let cli_args = load_yaml!("cli.yml");
-    let cli = App::from_yaml(cli_args);
-    let matches = cli.get_matches();
+    // Init CLI arg parser
+    let cli = &Cli::parse();
 
-    // parse args
-    let cfg = ServerConfig::new(&matches)?;
+    // Parse args and initialize configs
+    let server_config = &cli.into();
+    let bench_config = (server_config, cli).into();
 
-    // run our task
-    bench::run_bench(&cfg, matches)?;
-    util::cleanup(&cfg)
+    // Run our task
+    bench::run_bench(server_config, bench_config)?;
+    util::cleanup(&server_config)
 }
