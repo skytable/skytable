@@ -3,6 +3,7 @@ name = "skysh"
 version = "0.8.0"
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
+description = "The Skytable Shell (skysh)"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,7 +16,7 @@ skytable = { git = "https://github.com/skytable/client-rust", branch = "next", f
 ], default-features = false }
 # external deps
 tokio = { version = "1.21.2", features = ["full"] }
-clap = { version = "2", features = ["yaml"] }
+clap = { version = "4.0.15", features = ["derive"] }
 rustyline = "10.0.0"
 crossterm = "0.25.0"
 lazy_static = "1.4.0"
