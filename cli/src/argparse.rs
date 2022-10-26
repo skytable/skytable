@@ -24,9 +24,8 @@
  *
 */
 
-use crate::cli::Cli;
 use {
-    crate::{runner::Runner, tokenizer},
+    crate::{cli::Cli, runner::Runner, tokenizer},
     clap::Parser,
     crossterm::{
         cursor, execute,

@@ -3,8 +3,6 @@
 Firstly, thank you for your interest in contributing to this project! This project is powered by the community
 and relies on hackers across the globe to report bugs, send suggestions and contribute code to move this project forward.
 
-You can see a list of contributors **[here](./CONTRIBUTORS.md)**
-
 ## Ways to contribute
 
 - **#1**: Report bugs
@@ -29,6 +27,21 @@ In other cases, use the C style.
 ### Formatting
 
 - All Rust code should be formatted using `rustfmt`
+- Imports in Rust source files are to be merged into a single `use` block. For example, instead of:
+  ```rust
+  use devtimer::SimpleTimer;
+  use devtimer::ComplexTimer;
+  use serde::{Serialize, Deserialize};
+  use crate::something;
+  ```
+  this mode of styling is preferred:
+  ```rust
+  use {
+      devtimer::{SimpleTimer, ComplexTimer},
+      serde::{Serialize, Deserialize},
+      crate::something,
+  };
+  ```
 
 ### Parts of the project
 
@@ -73,7 +86,7 @@ commit messages to avoid triggering the workflows.
 3. Sign the CLA (if you haven't signed it already)
 4. One of the maintainers will review your patch and suggest changes if required
 5. Once your patch is approved, it will be merged into the respective branch
-6. Done, you're now one of the [contributors](./CONTRIBUTORS.md)!
+6. Done, you're now a contributor 🎉!
 
 ## Development environment setup
 
@@ -103,4 +116,4 @@ Testing is simple: just run this:
 make test
 ```
 
-> **NOTE**: Make sure port 2003 and 2004 are not used by any applications. Also, make sure your _own instance_ isn't running on any of these ports; if that is the case, you might end up losing data due to conflicting entity names! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.
+> **NOTE**: Make sure ports 2003 and 2004 are not used by any applications. Also, make sure your _own instance_ isn't running on any of these ports; if that is the case, you might end up losing data due to conflicting entity names! The test suite creates a `testsuite` keyspace and some tables within it to run all the tests.
