@@ -1341,7 +1341,7 @@ dependencies = [
 name = "sky-bench"
 version = "0.8.0"
 dependencies = [
- "clap 2.34.0",
+ "clap 4.0.18",
  "devtimer",
  "env_logger",
  "libstress",

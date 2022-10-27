@@ -32,7 +32,6 @@ use {
         error::{BResult, Error},
         util,
     },
-    clap::ArgMatches,
     devtimer::SimpleTimer,
     libstress::utils::{generate_random_byte_vector, ran_bytes},
     skytable::{Connection, Element, Query, RespCode},
@@ -180,9 +179,7 @@ fn vec_with_cap<T>(cap: usize) -> BResult<Vec<T>> {
 }
 
 /// Run the actual benchmarks
-pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
-    // init bench config
-    let bench_config = BenchmarkConfig::new(servercfg, matches)?;
+pub fn run_bench(servercfg: &ServerConfig, bench_config: BenchmarkConfig) -> BResult<()> {
     // check if we have enough combinations for the given query count and key size
     if !util::has_enough_ncr(bench_config.kvsize(), bench_config.query_count()) {
         return Err(Error::Runtime(
@@ -251,9 +248,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     binfo!("Finished benchmarks. Cleaning up ...");
     let r: Element = misc_connection.run_query(Query::from("drop model default.tmpbench force"))?;
     if r != Element::RespCode(RespCode::Okay) {
-        return Err(Error::Runtime(
-            "failed to clean up after benchmarks".into(),
-        ));
+        return Err(Error::Runtime("failed to clean up after benchmarks".into()));
     }
 
     if config::should_output_messages() {

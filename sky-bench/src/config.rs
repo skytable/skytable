@@ -24,70 +24,18 @@
  *
 */
 
-use {
-    crate::error::{BResult, Error},
-    crate::util,
-    clap::ArgMatches,
-    std::{fmt::Display, str::FromStr},
-};
+use crate::{util, Cli};
 
 static mut OUTPUT_JSON: bool = false;
 
 #[derive(Clone)]
 pub struct ServerConfig {
     /// host
-    host: Box<str>,
+    host: String,
     /// port
     port: u16,
     /// connection count for network pool
     connections: usize,
-}
-
-#[inline(always)]
-fn try_update<T: FromStr, S: AsRef<str>>(input: Option<S>, target: &mut T) -> BResult<()>
-where
-    <T as FromStr>::Err: Display,
-{
-    if let Some(input) = input {
-        let parsed = input
-            .as_ref()
-            .parse::<T>()
-            .map_err(|e| Error::Config(format!("parse error: `{}`", e)))?;
-        *target = parsed;
-    }
-    Ok(())
-}
-
-impl ServerConfig {
-    const DEFAULT_HOST: &'static str = "127.0.0.1";
-    const DEFAULT_PORT: u16 = 2003;
-    const DEFAULT_CONNECTIONS: usize = 10;
-    /// Init the default server config
-    pub fn new(matches: &ArgMatches) -> BResult<Self> {
-        let mut slf = Self {
-            host: Self::DEFAULT_HOST.into(),
-            port: Self::DEFAULT_PORT,
-            connections: Self::DEFAULT_CONNECTIONS,
-        };
-        slf.try_host(matches.value_of_lossy("host"));
-        slf.try_port(matches.value_of_lossy("port"))?;
-        slf.try_connections(matches.value_of_lossy("connections"))?;
-        Ok(slf)
-    }
-    /// Update the host
-    pub fn try_host<T: AsRef<str>>(&mut self, host: Option<T>) {
-        if let Some(host) = host {
-            self.host = host.as_ref().into();
-        }
-    }
-    /// Attempt to update the port
-    pub fn try_port<T: AsRef<str>>(&mut self, port: Option<T>) -> BResult<()> {
-        try_update(port, &mut self.port)
-    }
-    /// Attempt to update the connections
-    pub fn try_connections<T: AsRef<str>>(&mut self, con: Option<T>) -> BResult<()> {
-        try_update(con, &mut self.connections)
-    }
 }
 
 impl ServerConfig {
@@ -112,25 +60,6 @@ pub struct BenchmarkConfig {
 }
 
 impl BenchmarkConfig {
-    const DEFAULT_QUERIES: usize = 100_000;
-    const DEFAULT_KVSIZE: usize = 3;
-    const DEFAULT_RUNS: usize = 5;
-    pub fn new(server: &ServerConfig, matches: ArgMatches) -> BResult<Self> {
-        let mut slf = Self {
-            server: server.clone(),
-            queries: Self::DEFAULT_QUERIES,
-            kvsize: Self::DEFAULT_KVSIZE,
-            runs: Self::DEFAULT_RUNS,
-        };
-        try_update(matches.value_of_lossy("queries"), &mut slf.queries)?;
-        try_update(matches.value_of_lossy("size"), &mut slf.kvsize)?;
-        try_update(matches.value_of_lossy("runs"), &mut slf.runs)?;
-        util::ensure_main_thread();
-        unsafe {
-            OUTPUT_JSON = matches.is_present("json");
-        }
-        Ok(slf)
-    }
     pub fn kvsize(&self) -> usize {
         self.kvsize
     }
@@ -145,4 +74,29 @@ impl BenchmarkConfig {
 pub fn should_output_messages() -> bool {
     util::ensure_main_thread();
     unsafe { !OUTPUT_JSON }
+}
+
+impl From<(&ServerConfig, &Cli)> for BenchmarkConfig {
+    fn from(tuple: (&ServerConfig, &Cli)) -> Self {
+        let (server_config, cli) = tuple;
+        unsafe {
+            OUTPUT_JSON = cli.json;
+        }
+        BenchmarkConfig {
+            server: server_config.clone(),
+            queries: cli.query_count,
+            kvsize: cli.kvsize,
+            runs: cli.runs,
+        }
+    }
+}
+
+impl From<&Cli> for ServerConfig {
+    fn from(cli: &Cli) -> Self {
+        ServerConfig {
+            connections: cli.connections,
+            host: cli.host.clone(),
+            port: cli.port,
+        }
+    }
 }
