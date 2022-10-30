@@ -76,3 +76,49 @@ pub struct Cli {
     #[arg(long, help="Print help information", action=ArgAction::Help)]
     pub help: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::Cli;
+    use clap::error::ErrorKind;
+    use clap::Parser;
+
+    #[test]
+    fn test_no_user_args_picks_default_values() {
+        let args = vec!["sky-bench"];
+        let cli = Cli::parse_from(args.into_iter());
+        assert_eq!(cli.host, "127.0.0.1");
+        assert_eq!(cli.port, 2003);
+        assert_eq!(cli.connections, 10);
+        assert_eq!(cli.runs, 5);
+        assert_eq!(cli.kvsize, 3);
+        assert_eq!(cli.query_count, 100_000);
+        assert_eq!(cli.json, false);
+    }
+
+    #[test]
+    fn test_invalid_arg_fails_validation() {
+        let args = vec!["sky-bench", "-p", "asd"];
+        let cli_result: Result<Cli, clap::Error> = Cli::try_parse_from(args.into_iter());
+
+        assert!(cli_result.is_err());
+        assert_eq!(cli_result.unwrap_err().kind(), ErrorKind::ValueValidation);
+
+        let args = vec!["sky-bench", "-c", "-1"];
+        let cli_result: Result<Cli, clap::Error> = Cli::try_parse_from(args.into_iter());
+
+        assert!(cli_result.is_err());
+        assert_eq!(cli_result.unwrap_err().kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn test_arg_override_works_as_expected() {
+        let args = vec!["sky-bench", "-p", "666", "-h", "devil", "--json"];
+        let cli: Cli = Cli::parse_from(args.into_iter());
+
+        assert_eq!(cli.host, "devil");
+        assert_eq!(cli.port, 666);
+        assert_eq!(cli.json, true);
+    }
+}
