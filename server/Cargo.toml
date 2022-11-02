@@ -11,7 +11,7 @@ libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
 rcrypt = "0.4.0"
 # external deps
-ahash = "0.8.0"
+ahash = "0.8.1"
 bytes = "1.2.1"
 chrono = "0.4.22"
 clap = { version = "2", features = ["yaml"] }
@@ -21,11 +21,11 @@ log = "0.4.17"
 openssl = { version = "0.10.42", features = ["vendored"] }
 parking_lot = "0.12.1"
 regex = "1.6.0"
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { version = "1.0.147", features = ["derive"] }
 tokio = { version = "1.21.2", features = ["full"] }
 tokio-openssl = "0.6.3"
 toml = "0.5.9"
-base64 = "0.13.0"
+base64 = "0.13.1"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
@@ -36,11 +36,11 @@ winapi = { version = "0.3.9", features = ["fileapi"] }
 
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.134"
+libc = "0.2.137"
 
 [target.'cfg(unix)'.build-dependencies]
 # external deps
-cc = "1.0.73"
+cc = "1.0.74"
 
 [dev-dependencies]
 # internal deps
