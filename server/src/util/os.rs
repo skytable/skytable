@@ -218,7 +218,7 @@ fn rcopy_okay() {
     fs::remove_dir_all("my-backups").unwrap();
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum EntryKind {
     Directory(String),
     File(String),

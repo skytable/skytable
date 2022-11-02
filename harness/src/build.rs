@@ -37,7 +37,7 @@ use {
 pub const BINARIES: [&str; 4] = ["skyd", "sky-bench", "skysh", "sky-migrate"];
 
 /// The build mode
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BuildMode {
     Debug,
     Release,

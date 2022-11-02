@@ -35,7 +35,7 @@ use {
 };
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 #[repr(u8)]
 /// A statement that can be executed
 pub enum Statement {
@@ -64,7 +64,7 @@ pub enum Statement {
 pub type StatementLT<'a> = Life<'a, Statement>;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum Entity {
     Current(RawSlice),
     Full(RawSlice, RawSlice),
@@ -78,7 +78,7 @@ impl Entity {
 }
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 /// The field configuration used when declaring the fields for a model
 pub struct FieldConfig {
     /// the types of the fields

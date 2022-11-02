@@ -49,7 +49,7 @@ pub const LATEST_PROTOCOL_VERSION: f32 = Skyhash2::PROTOCOL_VERSION;
 /// The latest protocol version supported by this version (`Skyhash-x.y`)
 pub const LATEST_PROTOCOL_VERSIONSTRING: &str = Skyhash2::PROTOCOL_VERSIONSTRING;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 /// As its name says, an [`UnsafeSlice`] is a terribly unsafe slice. It's guarantess are
 /// very C-like, your ptr goes dangling -- and everything is unsafe.
 ///
@@ -94,7 +94,7 @@ impl UnsafeSlice {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 /// # Parser Errors
 ///

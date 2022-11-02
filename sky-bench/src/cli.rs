@@ -1,6 +1,6 @@
 use clap::{ArgAction, Parser};
 
-const HELP_TEMPLATE: &'static str = r#"
+const HELP_TEMPLATE: &str = r#"
 {before-help}{name} {version}
 {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(cli.runs, 5);
         assert_eq!(cli.kvsize, 3);
         assert_eq!(cli.query_count, 100_000);
-        assert_eq!(cli.json, false);
+        assert!(!cli.json);
     }
 
     #[test]
@@ -119,6 +119,6 @@ mod tests {
 
         assert_eq!(cli.host, "devil");
         assert_eq!(cli.port, 666);
-        assert_eq!(cli.json, true);
+        assert!(cli.json);
     }
 }

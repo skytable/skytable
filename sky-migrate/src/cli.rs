@@ -1,6 +1,6 @@
 use clap::Parser;
 
-const HELP_TEMPLATE: &'static str = r#"
+const HELP_TEMPLATE: &str = r#"
 {before-help}{name} {version}
 {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
@@ -47,7 +47,7 @@ mod tests {
         let cli = Cli::parse_from(args.into_iter());
         assert_eq!(cli.new, "localhost:1234");
         assert_eq!(cli.prevdir, "/tmp/skyd1");
-        assert_eq!(cli.serial, false);
+        assert!(!cli.serial);
     }
 
     #[test]
@@ -63,7 +63,7 @@ mod tests {
         let cli = Cli::parse_from(args.into_iter());
         assert_eq!(cli.new, "localhost:1234");
         assert_eq!(cli.prevdir, "/tmp/skyd1");
-        assert_eq!(cli.serial, true);
+        assert!(cli.serial);
     }
 
     #[test]

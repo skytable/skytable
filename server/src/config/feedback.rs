@@ -38,7 +38,7 @@ const EMSG_ENV: &str = "Environment";
 const EMSG_PROD: &str = "Production mode";
 const TAB: &str = "    ";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FeedbackStack {
     stack: Vec<String>,
     feedback_type: &'static str,
@@ -93,7 +93,7 @@ impl ops::DerefMut for FeedbackStack {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ErrorStack {
     feedback: FeedbackStack,
 }
@@ -125,7 +125,7 @@ impl ops::DerefMut for ErrorStack {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct WarningStack {
     feedback: FeedbackStack,
 }

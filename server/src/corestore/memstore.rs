@@ -134,7 +134,7 @@ mod cluster {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// Errors arising from trying to modify/access containers
 #[allow(dead_code)]
 pub enum DdlError {

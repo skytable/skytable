@@ -45,7 +45,7 @@ lazy_static::lazy_static! {
     };
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenizerError {
     QuoteMismatch(String),
     BacktickMismatch(String),

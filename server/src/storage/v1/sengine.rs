@@ -92,7 +92,7 @@ pub struct SnapshotEngine {
     remote_queue: QuickLock<HashSet<Box<[u8]>>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SnapshotActionResult {
     Ok,
     Busy,
@@ -267,7 +267,7 @@ mod queue {
     //! This implementation is specifically built for use with the snapshotting utility
     use super::QStore;
     use crate::corestore::iarray;
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Eq)]
     pub struct Queue {
         queue: QStore,
         maxlen: usize,

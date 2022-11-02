@@ -1,6 +1,6 @@
 use clap::{ArgAction, Parser};
 
-const HELP_TEMPLATE: &'static str = r#"
+const HELP_TEMPLATE: &str = r#"
 {before-help}{name} {version}
 {author-with-newline}{about-with-newline}
 {usage-heading} {usage}

@@ -59,5 +59,5 @@ fn run() -> error::BResult<()> {
 
     // Run our task
     bench::run_bench(server_config, bench_config)?;
-    util::cleanup(&server_config)
+    util::cleanup(server_config)
 }

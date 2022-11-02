@@ -62,7 +62,7 @@ const DEFAULT_SSL_PORT: u16 = 2004;
 
 type StaticStr = &'static str;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AuthkeyWrapper(pub Authkey);
 
 impl AuthkeyWrapper {
@@ -186,7 +186,7 @@ impl<'a, T: FromStr + 'a> TryFromConfigSource<T> for Result<String, VarError> {
     }
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Eq, Default)]
 /// Since we have conflicting trait implementations, we define a custom `Option<String>` type
 pub struct OptString {
     base: Option<String>,

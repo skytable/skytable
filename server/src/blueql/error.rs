@@ -29,7 +29,7 @@ use crate::{
     protocol::interface::ProtocolSpec,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 /// BlueQL errors
 pub enum LangError {

@@ -39,7 +39,7 @@ use {
 ///
 /// If BGSAVE is enabled, then the duration (corresponding to `every`) is wrapped in the `Enabled`
 /// variant. Otherwise, the `Disabled` variant is to be used
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum BGSave {
     Enabled(u64),
     Disabled,
@@ -69,7 +69,7 @@ impl BGSave {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ProtocolVersion {
     V1,
     V2,
@@ -119,7 +119,7 @@ impl<'de> Deserialize<'de> for ProtocolVersion {
 /// A `ConfigurationSet` which can be used by main::check_args_or_connect() to bind
 /// to a `TcpListener` and show the corresponding terminal output for the given
 /// configuration
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ConfigurationSet {
     /// If `noart` is set to true, no terminal artwork should be displayed
     pub noart: bool,
@@ -196,7 +196,7 @@ impl ConfigurationSet {
 /// and will not even activate the non-SSL socket
 /// - `InsecureOnly` : This indicates that the server would only accept non-SSL connections
 /// and will not even activate the SSL socket
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PortConfig {
     SecureOnly {
         host: IpAddr,
@@ -273,7 +273,7 @@ impl PortConfig {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct SslOpts {
     pub key: String,
     pub chain: String,
@@ -295,7 +295,7 @@ impl SslOpts {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// The snapshot configuration
 ///
 pub struct SnapshotPref {
@@ -322,7 +322,7 @@ impl SnapshotPref {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// Snapshotting configuration
 ///
 /// The variant `Enabled` directly carries a `ConfigKeySnapshot` object that
@@ -346,7 +346,7 @@ impl SnapshotConfig {
 
 type RestoreFile = Option<String>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// The type of configuration:
 /// - The default configuration
 /// - A custom supplied configuration
@@ -413,7 +413,7 @@ impl ConfigType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Modeset {
     Dev,
     Prod,
@@ -458,7 +458,7 @@ impl<'de> Deserialize<'de> for Modeset {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct AuthSettings {
     pub origin_key: Option<AuthkeyWrapper>,
 }

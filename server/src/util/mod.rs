@@ -136,7 +136,7 @@ impl<T: Clone> Clone for Wrapper<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// This is yet another compiler hack and has no "actual impact" in terms of memory alignment.
 ///
 /// When it's hard to have a _split mutable borrow_, all across the source we use custom

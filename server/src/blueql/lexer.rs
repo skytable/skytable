@@ -33,7 +33,7 @@ use {
     core::{marker::PhantomData, slice, str},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 /// BQL tokens
 pub enum Token {
@@ -75,7 +75,7 @@ impl From<Type> for Token {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 /// BlueQL keywords
 pub enum Keyword {
@@ -90,7 +90,7 @@ pub enum Keyword {
     Type(Type),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 /// BlueQL types
 pub enum Type {
@@ -99,7 +99,7 @@ pub enum Type {
     List,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 /// Type expression (ty<ty<...>>)
 pub struct TypeExpression(pub Vec<Type>);
 

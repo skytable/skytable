@@ -50,7 +50,7 @@ pub fn compile<'a>(src: &'a [u8], extra: usize) -> LangResult<Life<'a, Statement
 }
 
 #[cfg_attr(not(test), derive(Debug))]
-#[cfg_attr(not(test), derive(PartialEq))]
+#[cfg_attr(not(test), derive(PartialEq, Eq))]
 pub struct RawSlice {
     ptr: *const u8,
     len: usize,
@@ -72,6 +72,8 @@ impl PartialEq for RawSlice {
         unsafe { self.as_slice() == other.as_slice() }
     }
 }
+#[cfg(test)]
+impl Eq for RawSlice {}
 
 impl RawSlice {
     const _ENSURE_ALIGN: () = assert!(mem::align_of::<RawSlice>() == mem::align_of::<&[u8]>());

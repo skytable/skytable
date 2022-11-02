@@ -34,7 +34,7 @@ use {
 };
 
 /// This struct is an _object representation_ used for parsing the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Config {
     /// The `server` key
     pub(super) server: ConfigKeyServer,
@@ -49,7 +49,7 @@ pub struct Config {
 }
 
 /// This struct represents the `server` key in the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct ConfigKeyServer {
     /// The host key is any valid IPv4/IPv6 address
     pub(super) host: IpAddr,
@@ -66,7 +66,7 @@ pub struct ConfigKeyServer {
 }
 
 /// The BGSAVE section in the config file
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct ConfigKeyBGSAVE {
     /// Whether BGSAVE is enabled or not
     ///
@@ -80,7 +80,7 @@ pub struct ConfigKeyBGSAVE {
 }
 
 /// The snapshot section in the TOML file
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct ConfigKeySnapshot {
     /// After how many seconds should the snapshot be created
     pub(super) every: u64,
@@ -92,7 +92,7 @@ pub struct ConfigKeySnapshot {
     pub(super) failsafe: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct KeySslOpts {
     pub(super) key: String,
     pub(super) chain: String,
