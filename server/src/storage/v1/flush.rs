@@ -277,7 +277,7 @@ pub mod oneshot {
         let mut f = File::create(cowfile_name)?;
         with_open(&mut f)?;
         f.sync_all()?;
-        fs::rename(&cowfile_name, &cowfile_name[..cowfile_name.len() - 1])
+        fs::rename(cowfile_name, &cowfile_name[..cowfile_name.len() - 1])
     }
 
     /// No `partmap` handling. Just flushes the table to the expected location

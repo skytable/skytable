@@ -556,7 +556,7 @@ mod cli_arg_tests {
     fn cli_args_okay() {
         let cfg_layout = load_yaml!("../cli.yml");
         let cli_args = ["skyd", "--host", "127.0.0.2"];
-        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let matches = App::from_yaml(cfg_layout).get_matches_from(cli_args);
         let ret = cfgcli::parse_cli_args(matches);
         assert_eq!(
             ret.cfg.ports,
@@ -569,7 +569,7 @@ mod cli_arg_tests {
     fn cli_args_okay_no_mut() {
         let cfg_layout = load_yaml!("../cli.yml");
         let cli_args = ["skyd", "--restore", "/some/restore/path"];
-        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let matches = App::from_yaml(cfg_layout).get_matches_from(cli_args);
         let ret = cfgcli::parse_cli_args(matches);
         assert!(!ret.is_mutated());
         assert!(ret.is_okay());
@@ -578,7 +578,7 @@ mod cli_arg_tests {
     fn cli_args_fail() {
         let cfg_layout = load_yaml!("../cli.yml");
         let cli_args = ["skyd", "--port", "port2003"];
-        let matches = App::from_yaml(cfg_layout).get_matches_from(&cli_args);
+        let matches = App::from_yaml(cfg_layout).get_matches_from(cli_args);
         let ret = cfgcli::parse_cli_args(matches);
         assert!(ret.is_mutated());
         assert!(!ret.is_okay());

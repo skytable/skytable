@@ -341,9 +341,7 @@ pub fn generate_test(
     for attr in &input.attrs {
         if attr.path.is_ident("test") {
             let msg = "second test attribute is supplied";
-            return syn::Error::new_spanned(&attr, msg)
-                .to_compile_error()
-                .into();
+            return syn::Error::new_spanned(attr, msg).to_compile_error().into();
         }
     }
 

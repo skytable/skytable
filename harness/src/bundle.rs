@@ -86,7 +86,7 @@ fn package_binaries(target_folder: PathBuf, mode: BuildMode) -> HarnessResult<()
             ))
         })?;
         f.read_to_end(&mut buffer).unwrap();
-        zip.write_all(&*buffer).unwrap();
+        zip.write_all(&buffer).unwrap();
         buffer.clear();
     }
     zip.finish().unwrap();
