@@ -38,7 +38,6 @@ use {
 pub enum Token {
     Symbol(Symbol),
     Keyword(Keyword),
-    UnsafeLit(RawSlice),
     Ident(RawSlice),
     #[cfg(test)]
     /// A comma that can be ignored (used for fuzzing)
@@ -76,6 +75,7 @@ pub enum Lit {
     Str(Box<str>),
     Bool(bool),
     Num(u64),
+    UnsafeLit(RawSlice),
 }
 
 enum_impls! {
@@ -599,7 +599,7 @@ impl<'a> Lexer<'a> {
         okay &= self.remaining() >= size;
         if compiler::likely(okay) {
             unsafe {
-                self.push_token(Token::UnsafeLit(RawSlice::new(self.cursor(), size)));
+                self.push_token(Lit::UnsafeLit(RawSlice::new(self.cursor(), size)));
                 self.incr_cursor_by(size);
             }
         } else {

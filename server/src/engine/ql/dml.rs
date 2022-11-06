@@ -33,6 +33,10 @@ use {
     },
 };
 
+/*
+    Impls for insert
+*/
+
 /// Parse a list
 ///
 /// **NOTE:** This function will error if the `[` token is passed. Make sure this is forwarded by the caller
