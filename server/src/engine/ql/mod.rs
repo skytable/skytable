@@ -55,6 +55,7 @@ pub enum LangError {
     UnexpectedToken,
     InvalidDictionaryExpression,
     InvalidTypeDefinition,
+    InvalidUnsafeLiteral,
 }
 
 /*

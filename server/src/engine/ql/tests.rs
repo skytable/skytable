@@ -142,6 +142,24 @@ mod lexer_tests {
         let wth = br#" 'see, we escaped the end\' "#;
         assert_eq!(lex(wth).unwrap_err(), LangError::InvalidStringLiteral);
     }
+    #[test]
+    fn lex_unsafe_literal_mini() {
+        let usl = lex("\r0\n".as_bytes()).unwrap();
+        assert_eq!(usl.len(), 1);
+        assert_eq!(Token::UnsafeLit("".into()), usl[0]);
+    }
+    #[test]
+    fn lex_unsafe_literal() {
+        let usl = lex("\r9\nabcdefghi".as_bytes()).unwrap();
+        assert_eq!(usl.len(), 1);
+        assert_eq!(Token::UnsafeLit("abcdefghi".into()), usl[0]);
+    }
+    #[test]
+    fn lex_unsafe_literal_pro() {
+        let usl = lex("\r18\nabcdefghi123456789".as_bytes()).unwrap();
+        assert_eq!(usl.len(), 1);
+        assert_eq!(Token::UnsafeLit("abcdefghi123456789".into()), usl[0]);
+    }
 }
 
 mod entity {

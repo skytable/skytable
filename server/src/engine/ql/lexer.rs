@@ -38,6 +38,7 @@ use {
 pub enum Token {
     Symbol(Symbol),
     Keyword(Keyword),
+    UnsafeLit(RawSlice),
     Ident(RawSlice),
     #[cfg(test)]
     /// A comma that can be ignored (used for fuzzing)
@@ -55,7 +56,7 @@ impl PartialEq<Symbol> for Token {
 }
 
 assertions! {
-    size_of::<Token>() == 32, // FIXME(@ohsayan): Damn, what?
+    size_of::<Token>() == 24, // FIXME(@ohsayan): Damn, what?
     size_of::<Symbol>() == 1,
     size_of::<Keyword>() == 2,
     size_of::<Lit>() == 24, // FIXME(@ohsayan): Ouch
@@ -481,6 +482,7 @@ impl<'a> Lexer<'a> {
             RawSlice::new(s, self.cursor().offset_from(s) as usize)
         }
     }
+
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
         let st = unsafe { s.as_str() };
@@ -491,6 +493,7 @@ impl<'a> Lexer<'a> {
             None => self.tokens.push(Token::Ident(s)),
         }
     }
+
     fn scan_number(&mut self) {
         let s = self.cursor();
         unsafe {
@@ -517,6 +520,7 @@ impl<'a> Lexer<'a> {
             }
         }
     }
+
     fn scan_quoted_string(&mut self, quote_style: u8) {
         debug_assert!(
             unsafe { self.deref_cursor() } == quote_style,
@@ -557,22 +561,7 @@ impl<'a> Lexer<'a> {
     fn scan_byte(&mut self, byte: u8) {
         match symof(byte) {
             Some(tok) => self.push_token(tok),
-            #[cfg(test)]
-            None if byte == b'\r'
-                && self.remaining() > 1
-                && !(unsafe {
-                    // UNSAFE(@ohsayan): The previous condition ensures that this doesn't segfault
-                    *self.cursor().add(1)
-                })
-                .is_ascii_digit() =>
-            {
-                /*
-                    NOTE(@ohsayan): The above guard might look a little messy but is necessary to support raw
-                    literals which will use the carriage return
-                */
-                self.push_token(Token::IgnorableComma)
-            }
-            _ => {
+            None => {
                 self.last_error = Some(LangError::UnexpectedChar);
                 return;
             }
@@ -582,10 +571,66 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn scan_unsafe_literal(&mut self) {
+        unsafe {
+            self.incr_cursor();
+        }
+        let mut size = 0usize;
+        let mut okay = true;
+        while self.not_exhausted() && unsafe { self.deref_cursor() != b'\n' } && okay {
+            /*
+                Don't ask me how stupid this is. Like, I was probably in some "mood" when I wrote this
+                and it works duh, but isn't the most elegant of things (could I have just used a parse?
+                nah, I'm just a hardcore numeric normie)
+                -- Sayan
+            */
+            let byte = unsafe { self.deref_cursor() };
+            okay &= byte.is_ascii_digit();
+            let (prod, of_flag) = size.overflowing_mul(10);
+            okay &= !of_flag;
+            let (sum, of_flag) = prod.overflowing_add((byte & 0x0F) as _);
+            size = sum;
+            okay &= !of_flag;
+            unsafe {
+                self.incr_cursor();
+            }
+        }
+        okay &= self.peek_eq_and_forward(b'\n');
+        okay &= self.remaining() >= size;
+        if compiler::likely(okay) {
+            unsafe {
+                self.push_token(Token::UnsafeLit(RawSlice::new(self.cursor(), size)));
+                self.incr_cursor_by(size);
+            }
+        } else {
+            self.last_error = Some(LangError::InvalidUnsafeLiteral);
+        }
+    }
+
     fn _lex(&mut self) {
         while self.not_exhausted() && self.last_error.is_none() {
             match unsafe { self.deref_cursor() } {
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
+                #[cfg(test)]
+                byte if byte == b'\r'
+                    && self.remaining() > 1
+                    && !(unsafe {
+                        // UNSAFE(@ohsayan): The previous condition ensures that this doesn't segfault
+                        *self.cursor().add(1)
+                    })
+                    .is_ascii_digit() =>
+                {
+                    /*
+                        NOTE(@ohsayan): The above guard might look a little messy but is necessary to support raw
+                        literals which will use the carriage return
+                    */
+                    self.push_token(Token::IgnorableComma);
+                    unsafe {
+                        // UNSAFE(@ohsayan): All good here. Already read the token
+                        self.incr_cursor();
+                    }
+                }
+                b'\r' => self.scan_unsafe_literal(),
                 byte if byte.is_ascii_digit() => self.scan_number(),
                 qs @ (b'\'' | b'"') => self.scan_quoted_string(qs),
                 b' ' | b'\n' | b'\t' => self.trim_ahead(),
@@ -603,6 +648,7 @@ impl<'a> Lexer<'a> {
         }
     }
 }
+
 impl Token {
     #[inline(always)]
     pub(crate) fn is_ident(&self) -> bool {
