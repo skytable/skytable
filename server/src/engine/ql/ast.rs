@@ -26,7 +26,7 @@
 
 use {
     super::{
-        lexer::{DdlKeyword, Keyword, Lexer, Symbol, Token},
+        lexer::{Lexer, Token},
         schema, LangError, LangResult, RawSlice,
     },
     crate::util::Life,
@@ -47,13 +47,9 @@ pub enum Entity {
 impl Entity {
     pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
         let sl = cm.remslice();
-        let is_partial =
-            sl.len() > 1 && sl[0] == Token::Symbol(Symbol::SymColon) && sl[1].is_ident();
+        let is_partial = sl.len() > 1 && sl[0] == Token![:] && sl[1].is_ident();
         let is_current = !sl.is_empty() && sl[0].is_ident();
-        let is_full = sl.len() > 2
-            && sl[0].is_ident()
-            && sl[1] == Token::Symbol(Symbol::SymPeriod)
-            && sl[2].is_ident();
+        let is_full = sl.len() > 2 && sl[0].is_ident() && sl[1] == Token![.] && sl[2].is_ident();
         let c;
         let r = match () {
             _ if is_full => unsafe {
@@ -126,19 +122,19 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn stage0(&mut self) -> Result<Statement, LangError> {
         match self.nxtok_opt() {
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Create))) => self.create0(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Drop))) => self.drop0(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Alter))) => self.alter0(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Inspect))) => self.inspect0(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Use))) => self.use0(),
+            Some(Token![create]) => self.create0(),
+            Some(Token![drop]) => self.drop0(),
+            Some(Token![alter]) => self.alter0(),
+            Some(Token![inspect]) => self.inspect0(),
+            Some(Token![use]) => self.use0(),
             _ => Err(LangError::ExpectedStatement),
         }
     }
     #[inline(always)]
     fn create0(&mut self) -> Result<Statement, LangError> {
         match self.nxtok_opt() {
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => self.c_model0(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => self.c_space0(),
+            Some(Token![model]) => self.c_model0(),
+            Some(Token![space]) => self.c_space0(),
             _ => Err(LangError::UnexpectedEndofStatement),
         }
     }
@@ -154,11 +150,11 @@ impl<'a> Compiler<'a> {
         };
         let should_force = self.remaining() > 2 && rs[2].as_ident_eq_ignore_case(b"force");
         let r = match rs[0] {
-            Token::Keyword(Keyword::Ddl(DdlKeyword::Model)) => {
+            Token![model] => {
                 // dropping a model
                 Ok(Statement::DropModel(ident.clone(), should_force))
             }
-            Token::Keyword(Keyword::Ddl(DdlKeyword::Space)) => {
+            Token![space] => {
                 // dropping a space
                 Ok(Statement::DropSpace(ident.clone(), should_force))
             }
@@ -173,8 +169,8 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     fn alter0(&mut self) -> Result<Statement, LangError> {
         match self.nxtok_opt() {
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => self.alter_model(),
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => self.alter_space(),
+            Some(Token![model]) => self.alter_model(),
+            Some(Token![space]) => self.alter_space(),
             Some(_) => Err(LangError::ExpectedStatement),
             None => Err(LangError::UnexpectedEndofStatement),
         }
@@ -208,14 +204,14 @@ impl<'a> Compiler<'a> {
             return Err(LangError::UnexpectedEndofStatement);
         }
         match self.nxtok_opt() {
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Space))) => {
+            Some(Token![space]) => {
                 let space_name = match self.nxtok_opt() {
                     Some(Token::Ident(id)) => id.clone(),
                     _ => return Err(LangError::UnexpectedToken),
                 };
                 Ok(Statement::InspectSpace(space_name))
             }
-            Some(Token::Keyword(Keyword::Ddl(DdlKeyword::Model))) => {
+            Some(Token![model]) => {
                 let entity = Entity::parse(self)?;
                 Ok(Statement::InspectModel(entity))
             }

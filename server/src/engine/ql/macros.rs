@@ -24,6 +24,246 @@
  *
 */
 
+macro_rules! __sym_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Symbol($crate::engine::ql::lexer::Symbol::$ident)
+    };
+}
+
+macro_rules! __ddl_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Ddl(
+            $crate::engine::ql::lexer::DdlKeyword::$ident,
+        ))
+    };
+}
+
+macro_rules! __ddl_misc_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::DdlMisc(
+            $crate::engine::ql::lexer::DdlMiscKeyword::$ident,
+        ))
+    };
+}
+
+macro_rules! __dml_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Dml(
+            $crate::engine::ql::lexer::DmlKeyword::$ident,
+        ))
+    };
+}
+
+macro_rules! __dml_misc_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::DmlMisc(
+            $crate::engine::ql::lexer::DmlMiscKeyword::$ident,
+        ))
+    };
+}
+
+macro_rules! __type_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::TypeId(
+            $crate::engine::ql::lexer::Type::$ident,
+        ))
+    };
+}
+
+/*
+    Frankly, this is just for lazy people like me. Do not judge
+    -- Sayan (@ohsayan)
+*/
+macro_rules! Token {
+    // misc
+    (@) => {
+        __sym_token!(SymAt)
+    };
+    (#) => {
+        __sym_token!(SymHash)
+    };
+    ($) => {
+        __sym_token!(SymDollar)
+    };
+    (%) => {
+        __sym_token!(SymPercent)
+    };
+    (.) => {
+        __sym_token!(SymPeriod)
+    };
+    (,) => {
+        __sym_token!(SymComma)
+    };
+    (_) => {
+        __sym_token!(SymUnderscore)
+    };
+    (?) => {
+        __sym_token!(SymQuestion)
+    };
+    (:) => {
+        __sym_token!(SymColon)
+    };
+    (;) => {
+        __sym_token!(SymSemicolon)
+    };
+    (~) => {
+        __sym_token!(SymTilde)
+    };
+    // logical
+    (!) => {
+        __sym_token!(OpLogicalNot)
+    };
+    (^) => {
+        __sym_token!(OpLogicalXor)
+    };
+    (&) => {
+        __sym_token!(OpLogicalAnd)
+    };
+    (|) => {
+        __sym_token!(OpLogicalOr)
+    };
+    // operator misc.
+    (=) => {
+        __sym_token!(OpAssign)
+    };
+    // arithmetic
+    (+) => {
+        __sym_token!(OpArithmeticAdd)
+    };
+    (-) => {
+        __sym_token!(OpArithmeticSub)
+    };
+    (*) => {
+        __sym_token!(OpArithmeticMul)
+    };
+    (/) => {
+        __sym_token!(OpArithmeticDiv)
+    };
+    // relational
+    (>) => {
+        __sym_token!(OpComparatorGt)
+    };
+    (<) => {
+        __sym_token!(OpComparatorLt)
+    };
+    // ddl keywords
+    (use) => {
+        __ddl_token!(Use)
+    };
+    (create) => {
+        __ddl_token!(Create)
+    };
+    (alter) => {
+        __ddl_token!(Alter)
+    };
+    (drop) => {
+        __ddl_token!(Drop)
+    };
+    (inspect) => {
+        __ddl_token!(Inspect)
+    };
+    (model) => {
+        __ddl_token!(Model)
+    };
+    (space) => {
+        __ddl_token!(Space)
+    };
+    (primary) => {
+        __ddl_token!(Primary)
+    };
+    // ddl misc
+    (with) => {
+        __ddl_misc_token!(With)
+    };
+    (add) => {
+        __ddl_misc_token!(Add)
+    };
+    (remove) => {
+        __ddl_misc_token!(Remove)
+    };
+    (sort) => {
+        __ddl_misc_token!(Sort)
+    };
+    (type) => {
+        __ddl_misc_token!(Type)
+    };
+    // dml
+    (insert) => {
+        __dml_token!(Insert)
+    };
+    (select) => {
+        __dml_token!(Select)
+    };
+    (update) => {
+        __dml_token!(Update)
+    };
+    (delete) => {
+        __dml_token!(Delete)
+    };
+    (exists) => {
+        __dml_token!(Exists)
+    };
+    (truncate) => {
+        __dml_token!(Truncate)
+    };
+    // dml misc
+    (limit) => {
+        __dml_misc_token!(Limit)
+    };
+    (from) => {
+        __dml_misc_token!(From)
+    };
+    (into) => {
+        __dml_misc_token!(Into)
+    };
+    (where) => {
+        __dml_misc_token!(Where)
+    };
+    (if) => {
+        __dml_misc_token!(If)
+    };
+    (and) => {
+        __dml_misc_token!(And)
+    };
+    (as) => {
+        __dml_misc_token!(As)
+    };
+    (by) => {
+        __dml_misc_token!(By)
+    };
+    (asc) => {
+        __dml_misc_token!(Asc)
+    };
+    (desc) => {
+        __dml_misc_token!(Desc)
+    };
+    // types
+    (string) => {
+        __type_token!(String)
+    };
+    (binary) => {
+        __type_token!(Binary)
+    };
+    (list) => {
+        __type_token!(List)
+    };
+    (map) => {
+        __type_token!(Map)
+    };
+    (bool) => {
+        __type_token!(Bool)
+    };
+    (int) => {
+        __type_token!(Int)
+    };
+    (double) => {
+        __type_token!(Double)
+    };
+    (float) => {
+        __type_token!(Float)
+    };
+}
+
 macro_rules! dict {
     () => {
         <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
