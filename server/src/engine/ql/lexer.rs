@@ -613,18 +613,7 @@ impl<'a> Lexer<'a> {
             match unsafe { self.deref_cursor() } {
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
                 #[cfg(test)]
-                byte if byte == b'\r'
-                    && self.remaining() > 1
-                    && !(unsafe {
-                        // UNSAFE(@ohsayan): The previous condition ensures that this doesn't segfault
-                        *self.cursor().add(1)
-                    })
-                    .is_ascii_digit() =>
-                {
-                    /*
-                        NOTE(@ohsayan): The above guard might look a little messy but is necessary to support raw
-                        literals which will use the carriage return
-                    */
+                byte if byte == b'\x01' => {
                     self.push_token(Token::IgnorableComma);
                     unsafe {
                         // UNSAFE(@ohsayan): All good here. Already read the token

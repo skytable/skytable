@@ -51,10 +51,8 @@ use {
         },
         LangError, LangResult, RawSlice,
     },
-    std::{
-        collections::{HashMap, HashSet},
-        mem::MaybeUninit,
-    },
+    crate::util::MaybeInit,
+    std::collections::{HashMap, HashSet},
 };
 
 /*
@@ -216,7 +214,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
-    let mut tmp = MaybeUninit::uninit();
+    let mut tmp = MaybeInit::uninit();
 
     while i < l {
         match (&tok[i], state) {
@@ -237,7 +235,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
             (Token::Ident(id), DictFoldState::CB_OR_IDENT) => {
                 // found ident, so expect colon
                 i += 1;
-                tmp = MaybeUninit::new(unsafe { id.as_str() });
+                tmp = MaybeInit::new(unsafe { id.as_str() });
                 state = DictFoldState::COLON;
             }
             (Token::Symbol(Symbol::SymColon), DictFoldState::COLON) => {
@@ -319,8 +317,10 @@ states! {
 #[derive(Debug, PartialEq)]
 /// The result of a type metadata fold
 pub struct TyMetaFoldResult {
-    c: usize,
-    b: [bool; 3],
+    cnt: usize,
+    reset: bool,
+    more: bool,
+    okay: bool,
 }
 
 impl TyMetaFoldResult {
@@ -331,8 +331,10 @@ impl TyMetaFoldResult {
     /// - okay: true
     const fn new() -> Self {
         Self {
-            c: 0,
-            b: [true, false, false],
+            cnt: 0,
+            reset: false,
+            more: false,
+            okay: true,
         }
     }
     #[inline(always)]
@@ -343,47 +345,47 @@ impl TyMetaFoldResult {
     #[inline(always)]
     /// Increment the position by `by`
     fn incr_by(&mut self, by: usize) {
-        self.c += by;
+        self.cnt += by;
     }
     #[inline(always)]
     /// Set fail
     fn set_fail(&mut self) {
-        self.b[0] = false;
+        self.okay = false;
     }
     #[inline(always)]
     /// Set has more
     fn set_has_more(&mut self) {
-        self.b[1] = true;
+        self.more = true;
     }
     #[inline(always)]
     /// Set reset
     fn set_reset(&mut self) {
-        self.b[2] = true;
+        self.reset = true;
     }
     #[inline(always)]
     /// Should the meta be reset?
     pub fn should_reset(&self) -> bool {
-        self.b[2]
+        self.reset
     }
     #[inline(always)]
     /// Returns the cursor
     pub fn pos(&self) -> usize {
-        self.c
+        self.cnt
     }
     #[inline(always)]
     /// Returns if more layers are expected
     pub fn has_more(&self) -> bool {
-        self.b[1]
+        self.more
     }
     #[inline(always)]
     /// Returns if the internal state is okay
     pub fn is_okay(&self) -> bool {
-        self.b[0]
+        self.okay
     }
     #[inline(always)]
     /// Records an expression
     fn record(&mut self, c: bool) {
-        self.b[0] &= c;
+        self.okay &= c;
     }
 }
 
@@ -395,7 +397,7 @@ pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
 ) -> TyMetaFoldResult {
     let l = tok.len();
     let mut r = TyMetaFoldResult::new();
-    let mut tmp = MaybeUninit::uninit();
+    let mut tmp = MaybeInit::uninit();
     while r.pos() < l && r.is_okay() {
         match (&tok[r.pos()], state) {
             (
@@ -427,7 +429,7 @@ pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
             }
             (Token::Ident(ident), TyMetaFoldState::IDENT_OR_CB) => {
                 r.incr();
-                tmp = MaybeUninit::new(unsafe { ident.as_str() });
+                tmp = MaybeInit::new(unsafe { ident.as_str() });
                 // we just saw an ident, so we expect to see a colon
                 state = TyMetaFoldState::COLON;
             }
@@ -527,14 +529,14 @@ pub(super) fn rfold_layers<const ALLOW_RESET: bool>(
     let mut i = 0;
     let mut okay = true;
     let mut state = start;
-    let mut tmp = MaybeUninit::uninit();
+    let mut tmp = MaybeInit::uninit();
     let mut dict = Dict::new();
     while i < l && okay {
         match (&tok[i], state) {
             (Token::Keyword(Keyword::TypeId(ty)), LayerFoldState::TY) => {
                 i += 1;
                 // expecting type, and found type. next is either end or an open brace or some arbitrary token
-                tmp = MaybeUninit::new(ty);
+                tmp = MaybeInit::new(ty);
                 state = LayerFoldState::END_OR_OB;
             }
             (Token::Symbol(Symbol::TtOpenBrace), LayerFoldState::END_OR_OB) => {
@@ -892,7 +894,7 @@ pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
     let mut i = 0_usize;
     let mut state = FieldSyntaxParseState::IDENT;
     let mut okay = true;
-    let mut tmp = MaybeUninit::uninit();
+    let mut tmp = MaybeInit::uninit();
     let mut props = Dict::new();
     let mut layers = vec![];
     let mut reset = false;
@@ -900,7 +902,7 @@ pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
         match (&tok[i], state) {
             (Token::Ident(field), FieldSyntaxParseState::IDENT) => {
                 i += 1;
-                tmp = MaybeUninit::new(field.clone());
+                tmp = MaybeInit::new(field.clone());
                 // expect open brace
                 state = FieldSyntaxParseState::OB;
             }

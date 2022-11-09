@@ -24,7 +24,7 @@
  *
 */
 
-use std::mem::MaybeUninit;
+use crate::util::MaybeInit;
 
 use {
     super::{
@@ -278,14 +278,14 @@ pub(super) fn parse_insert<'a>(
 
     let mut okay = is_full | is_half;
     let mut i = 0;
-    let mut entity = MaybeUninit::uninit();
+    let mut entity = MaybeInit::uninit();
 
     if is_full {
         i += 3;
-        entity = MaybeUninit::new(unsafe { Entity::full_entity_from_slice(src) });
+        entity = MaybeInit::new(unsafe { Entity::full_entity_from_slice(src) });
     } else if is_half {
         i += 1;
-        entity = MaybeUninit::new(unsafe { Entity::single_entity_from_slice(src) });
+        entity = MaybeInit::new(unsafe { Entity::single_entity_from_slice(src) });
     }
 
     // primary key is a lit; atleast lit + (<oparen><cparen>) | (<obrace><cbrace>)

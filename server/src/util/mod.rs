@@ -28,15 +28,20 @@
 mod macros;
 pub mod compiler;
 pub mod error;
+pub mod os;
 #[cfg(test)]
 pub mod test_utils;
-pub mod os;
 use {
     crate::{
         actions::{ActionError, ActionResult},
         protocol::interface::ProtocolSpec,
     },
-    core::{fmt::Debug, marker::PhantomData, ops::Deref},
+    core::{
+        fmt::{self, Debug},
+        marker::PhantomData,
+        mem::MaybeUninit,
+        ops::Deref,
+    },
     std::process,
 };
 
@@ -213,3 +218,70 @@ impl<'a, T: PartialEq> PartialEq<T> for Life<'a, T> {
 
 unsafe impl<'a, T: Send> Send for Life<'a, T> {}
 unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
+
+pub struct MaybeInit<T> {
+    #[cfg(test)]
+    is_init: bool,
+    base: MaybeUninit<T>,
+}
+
+impl<T> MaybeInit<T> {
+    #[cfg(not(test))]
+    const _SZ_REL: () =
+        assert!(core::mem::size_of::<Self>() == core::mem::size_of::<MaybeUninit<T>>());
+    pub const fn uninit() -> Self {
+        Self {
+            #[cfg(test)]
+            is_init: false,
+            base: MaybeUninit::uninit(),
+        }
+    }
+    pub const fn new(val: T) -> Self {
+        Self {
+            #[cfg(test)]
+            is_init: true,
+            base: MaybeUninit::new(val),
+        }
+    }
+    pub const unsafe fn assume_init(self) -> T {
+        #[cfg(test)]
+        {
+            if !self.is_init {
+                panic!("Tried to `assume_init` on uninitialized data");
+            }
+        }
+        self.base.assume_init()
+    }
+    pub const unsafe fn assume_init_ref(&self) -> &T {
+        #[cfg(test)]
+        {
+            if !self.is_init {
+                panic!("Tried to `assume_init_ref` on uninitialized data");
+            }
+        }
+        self.base.assume_init_ref()
+    }
+}
+
+#[cfg(test)]
+impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let dat_fmt = if self.is_init {
+            unsafe { format!("{:?}", self.base.assume_init_ref()) }
+        } else {
+            format!("MaybeUninit {{...}}")
+        };
+        f.debug_struct("MaybeInit")
+            .field("is_init", &self.is_init)
+            .field("base", &dat_fmt)
+            .finish()
+    }
+}
+#[cfg(not(test))]
+impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MaybeInit")
+            .field("base", &self.base)
+            .finish()
+    }
+}

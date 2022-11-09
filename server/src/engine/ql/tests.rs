@@ -32,7 +32,7 @@ use {
     crate::{engine::memory::DataType, util::Life},
 };
 
-fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
+pub(super) fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
     Lexer::lex(src)
 }
 
@@ -248,25 +248,19 @@ mod schema_tests {
             let mut should_pass = true;
             src.iter().for_each(|tok| match tok {
                 Token::IgnorableComma => {
-                    let did_add = test_utils::random_bool(&mut rng);
-                    if did_add {
-                        new_src.push(Token::Symbol(Symbol::SymComma));
-                    }
                     let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added <= !did_add as usize;
+                    should_pass &= added <= 1;
                 }
                 Token::Symbol(Symbol::SymComma) => {
-                    let did_add = test_utils::random_bool(&mut rng);
-                    if did_add {
-                        new_src.push(Token::Symbol(Symbol::SymComma));
-                    } else {
-                        should_pass = false;
-                    }
                     let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added == !did_add as usize;
+                    should_pass &= added == 1;
                 }
                 tok => new_src.push(tok.clone()),
             });
+            assert!(
+                new_src.iter().all(|tok| tok != &Token::IgnorableComma),
+                "found ignorable comma in rectified source"
+            );
             fuzzwith(should_pass, &new_src);
         }
     }
@@ -425,14 +419,14 @@ mod schema_tests {
                     could_have_been: {
                         this: true,
                         or_maybe_this: 100,
-                        even_this: \"hello, universe!\"\r
+                        even_this: \"hello, universe!\"\x01
                     },
                     but_oh_well: \"it continues to be the 'annoying' phrase\",
                     lorem: {
                         ipsum: {
-                            dolor: \"sit amet\"\r
-                        }\r
-                    }\r
+                            dolor: \"sit amet\"\x01
+                        }\x01
+                    }\x01
                 }
             ")
             .unwrap();
@@ -560,9 +554,9 @@ mod schema_tests {
                     maxlen: 10,
                     unique: true,
                     auth: {
-                        maybe: true\r
+                        maybe: true\x01
                     },
-                    user: \"sayan\"\r
+                    user: \"sayan\"\x01
                 }
             ")
             .unwrap();
@@ -575,9 +569,9 @@ mod schema_tests {
                 "user" => Lit::Str("sayan".into())
             };
             fuzz_tokens(&tok, |should_pass, new_src| {
-                let (ret, dict) = schema::fold_tymeta(&tok);
+                let (ret, dict) = schema::fold_tymeta(&new_src);
                 if should_pass {
-                    assert!(ret.is_okay());
+                    assert!(ret.is_okay(), "{:?}", &new_src);
                     assert!(!ret.has_more());
                     assert_eq!(ret.pos(), new_src.len());
                     assert_eq!(dict, expected);
@@ -597,10 +591,10 @@ mod schema_tests {
                     maxlen: 10,
                     unique: true,
                     auth: {
-                        maybe: true\r
+                        maybe: true\x01
                     },
                     type string,
-                    user: \"sayan\"\r
+                    user: \"sayan\"\x01
                 }
             ")
             .unwrap();
@@ -612,7 +606,7 @@ mod schema_tests {
                 },
             };
             fuzz_tokens(&tok, |should_pass, new_src| {
-                let (ret, dict) = schema::fold_tymeta(&tok);
+                let (ret, dict) = schema::fold_tymeta(&new_src);
                 if should_pass {
                     assert!(ret.is_okay());
                     assert!(ret.has_more());
@@ -721,9 +715,9 @@ mod schema_tests {
             list {
                 type list {
                     maxlen: 100,
-                    type string\r
+                    type string\x01
                 },
-                unique: true\r
+                unique: true\x01
             }
         ")
             .unwrap();
