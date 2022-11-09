@@ -70,12 +70,20 @@ macro_rules! __type_token {
     };
 }
 
+macro_rules! __misc_token {
+    ($ident:ident) => {
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Misc(
+            $crate::engine::ql::lexer::MiscKeyword::$ident,
+        ))
+    };
+}
+
 /*
     Frankly, this is just for lazy people like me. Do not judge
     -- Sayan (@ohsayan)
 */
 macro_rules! Token {
-    // misc
+    // misc symbol
     (@) => {
         __sym_token!(SymAt)
     };
@@ -262,6 +270,29 @@ macro_rules! Token {
     (float) => {
         __type_token!(Float)
     };
+    // tt
+    (open {}) => {
+        __sym_token!(TtOpenBrace)
+    };
+    (close {}) => {
+        __sym_token!(TtCloseBrace)
+    };
+    (() open) => {
+        __sym_token!(TtOpenParen)
+    };
+    (() close) => {
+        __sym_token!(TtCloseParen)
+    };
+    (open []) => {
+        __sym_token!(TtOpenSqBracket)
+    };
+    (close []) => {
+        __sym_token!(TtCloseSqBracket)
+    };
+    // misc
+    (null) => {
+        __misc_token!(Null)
+    };
 }
 
 macro_rules! dict {
@@ -271,6 +302,17 @@ macro_rules! dict {
     ($($key:expr => $value:expr),* $(,)?) => {{
         let mut hm: ::std::collections::HashMap<_, _> = ::core::default::Default::default();
         $(hm.insert($key.into(), $value.into());)*
+        hm
+    }};
+}
+
+macro_rules! dict_nullable {
+    () => {
+        <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
+    };
+    ($($key:expr => $value:expr),* $(,)?) => {{
+        let mut hm: ::std::collections::HashMap<_, _> = ::core::default::Default::default();
+        $(hm.insert($key.into(), $crate::engine::ql::tests::nullable_datatype($value));)*
         hm
     }};
 }
@@ -288,4 +330,8 @@ macro_rules! set {
 
 macro_rules! into_array {
     ($($e:expr),* $(,)?) => { [$($e.into()),*] };
+}
+
+macro_rules! into_array_nullable {
+    ($($e:expr),* $(,)?) => { [$($crate::engine::ql::tests::nullable_datatype($e)),*] };
 }

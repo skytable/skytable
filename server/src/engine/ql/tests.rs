@@ -29,19 +29,46 @@ use {
         lexer::{Lexer, Token},
         LangResult,
     },
-    crate::util::Life,
+    crate::{engine::memory::DataType, util::Life},
 };
 
 fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
     Lexer::lex(src)
 }
 
+pub trait NullableData<T> {
+    fn data(self) -> Option<T>;
+}
+
+impl<T> NullableData<DataType> for T
+where
+    T: Into<DataType>,
+{
+    fn data(self) -> Option<DataType> {
+        Some(self.into())
+    }
+}
+
+struct Null;
+
+impl NullableData<DataType> for Null {
+    fn data(self) -> Option<DataType> {
+        None
+    }
+}
+
+fn nullable_datatype(v: impl NullableData<DataType>) -> Option<DataType> {
+    v.data()
+}
+
 mod lexer_tests {
-    use super::{
-        super::lexer::{Lit, Token},
-        lex,
+    use {
+        super::{
+            super::lexer::{Lit, Token},
+            lex,
+        },
+        crate::engine::ql::LangError,
     };
-    use crate::engine::ql::LangError;
 
     macro_rules! v(
         ($e:literal) => {{
@@ -173,7 +200,7 @@ mod entity {
         let t = lex(b"hello").unwrap();
         let mut c = Compiler::new(&t);
         let r = Entity::parse(&mut c).unwrap();
-        assert_eq!(r, Entity::Current("hello".into()))
+        assert_eq!(r, Entity::Single("hello".into()))
     }
     #[test]
     fn entity_partial() {
@@ -1620,7 +1647,10 @@ mod dml_tests {
             "#)
             .unwrap();
             let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
-            assert_eq!(r.as_slice(), into_array![1234, "email@example.com", true]);
+            assert_eq!(
+                r.as_slice(),
+                into_array_nullable![1234, "email@example.com", true]
+            );
         }
 
         #[test]
@@ -1637,7 +1667,7 @@ mod dml_tests {
             let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
             assert_eq!(
                 r.as_slice(),
-                into_array![
+                into_array_nullable![
                     1234,
                     "email@example.com",
                     true,
@@ -1667,7 +1697,7 @@ mod dml_tests {
             let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
             assert_eq!(
                 r.as_slice(),
-                into_array![
+                into_array_nullable![
                     1234,
                     "email@example.com",
                     true,
@@ -1708,7 +1738,7 @@ mod dml_tests {
             let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
             assert_eq!(
                 r,
-                dict! {
+                dict_nullable! {
                     "name" => "John Appletree",
                     "email" => "john@example.com",
                     "verified" => false,
@@ -1732,7 +1762,7 @@ mod dml_tests {
             let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
             assert_eq!(
                 r,
-                dict! {
+                dict_nullable! {
                     "name" => "John Appletree",
                     "email" => "john@example.com",
                     "verified" => false,
@@ -1761,7 +1791,7 @@ mod dml_tests {
             let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
             assert_eq!(
                 r,
-                dict! {
+                dict_nullable! {
                     "name" => "John Appletree",
                     "email" => "john@example.com",
                     "verified" => false,
@@ -1777,6 +1807,157 @@ mod dml_tests {
                     ]
                 }
             )
+        }
+    }
+    mod stmt_insert {
+        use {
+            super::*,
+            crate::engine::ql::{
+                ast::Entity,
+                dml::{self, InsertStatement},
+            },
+        };
+
+        #[test]
+        fn insert_tuple_mini() {
+            let x = lex(br#"
+                insert twitter.user:"sayan" ()
+            "#)
+            .unwrap();
+            let r = dml::parse_insert_full(&x[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string().into()),
+                entity: Entity::Full("twitter".into(), "user".into()),
+                data: vec![].into(),
+            };
+            assert_eq!(e, r);
+        }
+        #[test]
+        fn insert_tuple() {
+            let x = lex(br#"
+                insert twitter.users:"sayan" (
+                    "Sayan",
+                    "sayan@example.com",
+                    true,
+                    12345,
+                    67890
+                )
+            "#)
+            .unwrap();
+            let r = dml::parse_insert_full(&x[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string().into()),
+                entity: Entity::Full("twitter".into(), "users".into()),
+                data: into_array_nullable!["Sayan", "sayan@example.com", true, 12345, 67890]
+                    .to_vec()
+                    .into(),
+            };
+            assert_eq!(e, r);
+        }
+        #[test]
+        fn insert_tuple_pro() {
+            let x = lex(br#"
+                insert twitter.users:"sayan" (
+                    "Sayan",
+                    "sayan@example.com",
+                    true,
+                    12345,
+                    67890,
+                    null,
+                    12345,
+                    null
+                )
+            "#)
+            .unwrap();
+            let r = dml::parse_insert_full(&x[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string().into()),
+                entity: Entity::Full("twitter".into(), "users".into()),
+                data: into_array_nullable![
+                    "Sayan",
+                    "sayan@example.com",
+                    true,
+                    12345,
+                    67890,
+                    Null,
+                    12345,
+                    Null
+                ]
+                .to_vec()
+                .into(),
+            };
+            assert_eq!(e, r);
+        }
+        #[test]
+        fn insert_map_mini() {
+            let tok = lex(br#"insert jotsy.app:"sayan" {}"#).unwrap();
+            let r = dml::parse_insert_full(&tok[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string().into()),
+                entity: Entity::Full("jotsy".into(), "app".into()),
+                data: dict! {}.into(),
+            };
+            assert_eq!(e, r);
+        }
+        #[test]
+        fn insert_map() {
+            let tok = lex(br#"
+                insert jotsy.app:"sayan" {
+                    name: "Sayan",
+                    email: "sayan@example.com",
+                    verified: true,
+                    following: 12345,
+                    followers: 67890
+                }
+            "#)
+            .unwrap();
+            let r = dml::parse_insert_full(&tok[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string().into()),
+                entity: Entity::Full("jotsy".into(), "app".into()),
+                data: dict_nullable! {
+                    "name".as_bytes() => "Sayan",
+                    "email".as_bytes() => "sayan@example.com",
+                    "verified".as_bytes() => true,
+                    "following".as_bytes() => 12345,
+                    "followers".as_bytes() => 67890
+                }
+                .into(),
+            };
+            assert_eq!(e, r);
+        }
+        #[test]
+        fn insert_map_pro() {
+            let tok = lex(br#"
+                insert jotsy.app:"sayan" {
+                    password: "pass123",
+                    email: "sayan@example.com",
+                    verified: true,
+                    following: 12345,
+                    followers: 67890,
+                    linked_smart_devices: null,
+                    bookmarks: 12345,
+                    other_linked_accounts: null
+                }
+            "#)
+            .unwrap();
+            let r = dml::parse_insert_full(&tok[1..]).unwrap();
+            let e = InsertStatement {
+                primary_key: &("sayan".to_string()).into(),
+                entity: Entity::Full("jotsy".into(), "app".into()),
+                data: dict_nullable! {
+                    "password".as_bytes() => "pass123",
+                    "email".as_bytes() => "sayan@example.com",
+                    "verified".as_bytes() => true,
+                    "following".as_bytes() => 12345,
+                    "followers".as_bytes() => 67890,
+                    "linked_smart_devices".as_bytes() => Null,
+                    "bookmarks".as_bytes() => 12345,
+                    "other_linked_accounts".as_bytes() => Null
+                }
+                .into(),
+            };
+            assert_eq!(r, e);
         }
     }
 }

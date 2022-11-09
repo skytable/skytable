@@ -81,6 +81,7 @@ pub enum Lit {
 enum_impls! {
     Lit => {
         Box<str> as Str,
+        String as Str,
         bool as Bool,
         u64 as Num,
     }

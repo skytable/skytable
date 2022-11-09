@@ -29,6 +29,7 @@
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub enum DataType {
     /// An UTF-8 string
     String(String),

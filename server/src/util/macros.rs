@@ -26,9 +26,13 @@
 
 #[macro_export]
 macro_rules! impossible {
-    () => {
-        core::hint::unreachable_unchecked()
-    };
+    () => {{
+        if cfg!(debug_assertions) {
+            panic!("called unreachable code at: {}:{}", ::core::file!(), ::core::line!());
+        } else {
+            core::hint::unreachable_unchecked()
+        }
+    }};
 }
 
 #[macro_export]

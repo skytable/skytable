@@ -39,33 +39,57 @@ use {
 
 #[derive(Debug, PartialEq)]
 pub enum Entity {
-    Current(RawSlice),
     Partial(RawSlice),
+    Single(RawSlice),
     Full(RawSlice, RawSlice),
 }
 
 impl Entity {
+    #[inline(always)]
+    pub(super) unsafe fn full_entity_from_slice(sl: &[Token]) -> Self {
+        Entity::Full(
+            extract!(&sl[0], Token::Ident(sl) => sl.clone()),
+            extract!(&sl[2], Token::Ident(sl) => sl.clone()),
+        )
+    }
+    #[inline(always)]
+    pub(super) unsafe fn single_entity_from_slice(sl: &[Token]) -> Self {
+        Entity::Single(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
+    }
+    #[inline(always)]
+    pub(super) unsafe fn partial_entity_from_slice(sl: &[Token]) -> Self {
+        Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
+    }
+    #[inline(always)]
+    pub(super) fn tokens_with_partial(sl: &[Token]) -> bool {
+        sl.len() > 1 && sl[0] == Token![:] && sl[1].is_ident()
+    }
+    #[inline(always)]
+    pub(super) fn tokens_with_single(sl: &[Token]) -> bool {
+        !sl.is_empty() && sl[0].is_ident()
+    }
+    #[inline(always)]
+    pub(super) fn tokens_with_full(sl: &[Token]) -> bool {
+        sl.len() > 2 && sl[0].is_ident() && sl[1] == Token![.] && sl[2].is_ident()
+    }
     pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
         let sl = cm.remslice();
-        let is_partial = sl.len() > 1 && sl[0] == Token![:] && sl[1].is_ident();
-        let is_current = !sl.is_empty() && sl[0].is_ident();
-        let is_full = sl.len() > 2 && sl[0].is_ident() && sl[1] == Token![.] && sl[2].is_ident();
+        let is_partial = Self::tokens_with_partial(sl);
+        let is_current = Self::tokens_with_single(sl);
+        let is_full = Self::tokens_with_full(sl);
         let c;
         let r = match () {
             _ if is_full => unsafe {
                 c = 3;
-                Entity::Full(
-                    extract!(&sl[0], Token::Ident(sl) => sl.clone()),
-                    extract!(&sl[2], Token::Ident(sl) => sl.clone()),
-                )
+                Self::full_entity_from_slice(sl)
             },
             _ if is_current => unsafe {
                 c = 1;
-                Entity::Current(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
+                Self::single_entity_from_slice(sl)
             },
             _ if is_partial => unsafe {
                 c = 2;
-                Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
+                Self::partial_entity_from_slice(sl)
             },
             _ => return Err(LangError::UnexpectedToken),
         };
