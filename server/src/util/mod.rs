@@ -219,6 +219,9 @@ impl<'a, T: PartialEq> PartialEq<T> for Life<'a, T> {
 unsafe impl<'a, T: Send> Send for Life<'a, T> {}
 unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
 
+/// [`MaybeInit`] is a structure that is like an [`Option`] in debug mode and like
+/// [`MaybeUninit`] in release mode. This means that provided there are good enough test cases, most
+/// incorrect `assume_init` calls should be detected in the test phase.
 pub struct MaybeInit<T> {
     #[cfg(test)]
     is_init: bool,
@@ -226,9 +229,7 @@ pub struct MaybeInit<T> {
 }
 
 impl<T> MaybeInit<T> {
-    #[cfg(not(test))]
-    const _SZ_REL: () =
-        assert!(core::mem::size_of::<Self>() == core::mem::size_of::<MaybeUninit<T>>());
+    /// Initialize a new uninitialized variant
     pub const fn uninit() -> Self {
         Self {
             #[cfg(test)]
@@ -236,6 +237,7 @@ impl<T> MaybeInit<T> {
             base: MaybeUninit::uninit(),
         }
     }
+    /// Initialize with a value
     pub const fn new(val: T) -> Self {
         Self {
             #[cfg(test)]
@@ -243,6 +245,11 @@ impl<T> MaybeInit<T> {
             base: MaybeUninit::new(val),
         }
     }
+    /// Assume that `self` is initialized and return the inner value
+    ///
+    /// ## Safety
+    ///
+    /// Caller needs to ensure that the data is actually initialized
     pub const unsafe fn assume_init(self) -> T {
         #[cfg(test)]
         {
@@ -252,6 +259,11 @@ impl<T> MaybeInit<T> {
         }
         self.base.assume_init()
     }
+    /// Assume that `self` is initialized and return a reference
+    ///
+    /// ## Safety
+    ///
+    /// Caller needs to ensure that the data is actually initialized
     pub const unsafe fn assume_init_ref(&self) -> &T {
         #[cfg(test)]
         {
@@ -277,6 +289,7 @@ impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
             .finish()
     }
 }
+
 #[cfg(not(test))]
 impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

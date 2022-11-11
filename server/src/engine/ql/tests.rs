@@ -1954,4 +1954,75 @@ mod dml_tests {
             assert_eq!(r, e);
         }
     }
+
+    mod stmt_select {
+        use {
+            super::*,
+            crate::engine::ql::{
+                ast::Entity,
+                dml::{self, SelectStatement},
+                lexer::Lit,
+            },
+        };
+        #[test]
+        fn select_mini() {
+            let tok = lex(br#"
+                select * from user:"sayan"
+            "#)
+            .unwrap();
+            let r = dml::parse_select_full(&tok[1..]).unwrap();
+            let e = SelectStatement {
+                primary_key: &Lit::Str("sayan".into()),
+                entity: Entity::Single("user".into()),
+                fields: [].to_vec(),
+                wildcard: true,
+            };
+            assert_eq!(r, e);
+        }
+        #[test]
+        fn select() {
+            let tok = lex(br#"
+                select field1 from user:"sayan"
+            "#)
+            .unwrap();
+            let r = dml::parse_select_full(&tok[1..]).unwrap();
+            let e = SelectStatement {
+                primary_key: &Lit::Str("sayan".into()),
+                entity: Entity::Single("user".into()),
+                fields: ["field1".into()].to_vec(),
+                wildcard: false,
+            };
+            assert_eq!(r, e);
+        }
+        #[test]
+        fn select_pro() {
+            let tok = lex(br#"
+                select field1 from twitter.user:"sayan"
+            "#)
+            .unwrap();
+            let r = dml::parse_select_full(&tok[1..]).unwrap();
+            let e = SelectStatement {
+                primary_key: &Lit::Str("sayan".into()),
+                entity: Entity::Full("twitter".into(), "user".into()),
+                fields: ["field1".into()].to_vec(),
+                wildcard: false,
+            };
+            assert_eq!(r, e);
+        }
+        #[test]
+        fn select_pro_max() {
+            let tok = lex(br#"
+                select field1, field2 from twitter.user:"sayan"
+            "#)
+            .unwrap();
+            let r = dml::parse_select_full(&tok[1..]).unwrap();
+            let e = SelectStatement {
+                primary_key: &Lit::Str("sayan".into()),
+                entity: Entity::Full("twitter".into(), "user".into()),
+                fields: ["field1".into(), "field2".into()].to_vec(),
+                wildcard: false,
+            };
+            assert_eq!(r, e);
+        }
+    }
 }

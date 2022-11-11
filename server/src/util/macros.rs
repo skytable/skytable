@@ -28,9 +28,13 @@
 macro_rules! impossible {
     () => {{
         if cfg!(debug_assertions) {
-            panic!("called unreachable code at: {}:{}", ::core::file!(), ::core::line!());
+            panic!(
+                "reached unreachable case at: {}:{}",
+                ::core::file!(),
+                ::core::line!()
+            );
         } else {
-            core::hint::unreachable_unchecked()
+            ::core::hint::unreachable_unchecked()
         }
     }};
 }

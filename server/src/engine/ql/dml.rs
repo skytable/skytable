@@ -24,20 +24,41 @@
  *
 */
 
-use crate::util::MaybeInit;
+/*
+    TODO(@ohsayan): For now we've settled for an imprecise error site reporting for simplicity, which we
+    should augment in future revisions of the QL engine
+*/
 
 use {
     super::{
         ast::Entity,
         lexer::{Lit, Symbol, Token},
-        LangError, LangResult,
+        LangError, LangResult, RawSlice,
     },
-    crate::engine::memory::DataType,
+    crate::{engine::memory::DataType, util::MaybeInit},
     std::{
         collections::HashMap,
         mem::{discriminant, Discriminant},
     },
 };
+
+/*
+    Misc
+*/
+
+#[inline(always)]
+fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bool {
+    let is_full = Entity::tokens_with_full(tok);
+    let is_single = Entity::tokens_with_single(tok);
+    if is_full {
+        *i += 3;
+        *d = MaybeInit::new(unsafe { Entity::full_entity_from_slice(tok) })
+    } else if is_single {
+        *i += 1;
+        *d = MaybeInit::new(unsafe { Entity::single_entity_from_slice(tok) });
+    }
+    is_full | is_single
+}
 
 /*
     Impls for insert
@@ -155,7 +176,8 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
 #[cfg(test)]
 pub(super) fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<Option<DataType>>> {
     let (ret, cnt, okay) = parse_data_tuple_syntax(tok);
-    if cnt == tok.len() && okay {
+    assert!(cnt == tok.len(), "didn't use full length");
+    if okay {
         Some(ret)
     } else {
         None
@@ -222,7 +244,8 @@ pub(super) fn parse_data_map_syntax_full(
     tok: &[Token],
 ) -> Option<HashMap<Box<str>, Option<DataType>>> {
     let (dat, i, ok) = parse_data_map_syntax(tok);
-    if i == tok.len() && ok {
+    assert!(i == tok.len(), "didn't use full length");
+    if ok {
         Some(
             dat.into_iter()
                 .map(|(ident, val)| {
@@ -280,13 +303,7 @@ pub(super) fn parse_insert<'a>(
     let mut i = 0;
     let mut entity = MaybeInit::uninit();
 
-    if is_full {
-        i += 3;
-        entity = MaybeInit::new(unsafe { Entity::full_entity_from_slice(src) });
-    } else if is_half {
-        i += 1;
-        entity = MaybeInit::new(unsafe { Entity::single_entity_from_slice(src) });
-    }
+    okay &= process_entity(&src[i..], &mut entity, &mut i);
 
     // primary key is a lit; atleast lit + (<oparen><cparen>) | (<obrace><cbrace>)
     okay &= l >= (i + 4);
@@ -334,9 +351,84 @@ pub(super) fn parse_insert<'a>(
 pub(super) fn parse_insert_full<'a>(tok: &'a [Token]) -> Option<InsertStatement<'a>> {
     let mut z = 0;
     let s = self::parse_insert(tok, &mut z);
-    if z == tok.len() {
-        s.ok()
-    } else {
-        None
+    assert!(z == tok.len(), "didn't use full length");
+    s.ok()
+}
+
+/*
+    Impls for select
+*/
+
+#[derive(Debug, PartialEq)]
+pub(super) struct SelectStatement<'a> {
+    /// the primary key
+    pub(super) primary_key: &'a Lit,
+    /// the entity
+    pub(super) entity: Entity,
+    /// fields in order of querying. will be zero when wildcard is set
+    pub(super) fields: Vec<RawSlice>,
+    /// whether a wildcard was passed
+    pub(super) wildcard: bool,
+}
+
+/// Parse a `select` query. The cursor should have already passed the `select` token when this
+/// function is called.
+pub(super) fn parse_select<'a>(
+    tok: &'a [Token],
+    counter: &mut usize,
+) -> LangResult<SelectStatement<'a>> {
+    let l = tok.len();
+
+    let mut i = 0_usize;
+    let mut okay = l > 4;
+    let mut fields = Vec::new();
+    let is_wildcard = i < l && tok[i] == Token![*];
+    i += is_wildcard as usize;
+
+    while okay && i < l && tok[i].is_ident() && !is_wildcard {
+        unsafe {
+            fields.push(extract!(&tok[i], Token::Ident(id) => id.clone()));
+        }
+        i += 1;
+        // skip comma
+        let nx_comma = i < l && tok[i] == Token![,];
+        let nx_from = i < l && tok[i] == Token![from];
+        okay &= nx_comma | nx_from;
+        i += nx_comma as usize;
     }
+
+    okay &= i < l && tok[i] == Token![from];
+    i += okay as usize;
+
+    // parsed upto select a, b, c from ...; now parse entity and select
+    let mut entity = MaybeInit::uninit();
+    okay &= process_entity(&tok[i..], &mut entity, &mut i);
+
+    // now primary key
+    okay &= i < l && tok[i] == Token![:];
+    i += okay as usize;
+    okay &= i < l && tok[i].is_lit();
+
+    *counter += i + okay as usize;
+
+    if okay {
+        let primary_key = unsafe { extract!(tok[i], Token::Lit(ref l) => l) };
+        Ok(SelectStatement {
+            primary_key,
+            entity: unsafe { entity.assume_init() },
+            fields,
+            wildcard: is_wildcard,
+        })
+    } else {
+        Err(LangError::UnexpectedToken)
+    }
+}
+
+#[cfg(test)]
+/// **test-mode only** parse for a `select` where the full token stream is exhausted
+pub(super) fn parse_select_full<'a>(tok: &'a [Token]) -> Option<SelectStatement<'a>> {
+    let mut i = 0;
+    let r = self::parse_select(tok, &mut i);
+    assert!(i == tok.len(), "didn't use full length");
+    r.ok()
 }

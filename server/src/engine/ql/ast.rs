@@ -61,16 +61,16 @@ impl Entity {
         Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
     }
     #[inline(always)]
-    pub(super) fn tokens_with_partial(sl: &[Token]) -> bool {
-        sl.len() > 1 && sl[0] == Token![:] && sl[1].is_ident()
+    pub(super) fn tokens_with_partial(tok: &[Token]) -> bool {
+        tok.len() > 1 && tok[0] == Token![:] && tok[1].is_ident()
     }
     #[inline(always)]
-    pub(super) fn tokens_with_single(sl: &[Token]) -> bool {
-        !sl.is_empty() && sl[0].is_ident()
+    pub(super) fn tokens_with_single(tok: &[Token]) -> bool {
+        !tok.is_empty() && tok[0].is_ident()
     }
     #[inline(always)]
-    pub(super) fn tokens_with_full(sl: &[Token]) -> bool {
-        sl.len() > 2 && sl[0].is_ident() && sl[1] == Token![.] && sl[2].is_ident()
+    pub(super) fn tokens_with_full(tok: &[Token]) -> bool {
+        tok.len() > 2 && tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident()
     }
     pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
         let sl = cm.remslice();
