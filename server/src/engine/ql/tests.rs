@@ -2146,4 +2146,36 @@ mod dml_tests {
             assert_eq!(r, e);
         }
     }
+    mod delete_stmt {
+        use {
+            super::*,
+            crate::engine::ql::{
+                ast::Entity,
+                dml::{self, DeleteStatement},
+            },
+        };
+
+        #[test]
+        fn delete_mini() {
+            let tok = lex(br#"
+                delete user:"sayan"
+            "#)
+            .unwrap();
+            let primary_key = "sayan".into();
+            let e = DeleteStatement::new(&primary_key, Entity::Single("user".into()));
+            let r = dml::parse_delete_full(&tok[1..]).unwrap();
+            assert_eq!(r, e);
+        }
+        #[test]
+        fn delete() {
+            let tok = lex(br#"
+                delete twitter.user:"sayan"
+            "#)
+            .unwrap();
+            let primary_key = "sayan".into();
+            let e = DeleteStatement::new(&primary_key, ("twitter", "user").into());
+            let r = dml::parse_delete_full(&tok[1..]).unwrap();
+            assert_eq!(r, e);
+        }
+    }
 }

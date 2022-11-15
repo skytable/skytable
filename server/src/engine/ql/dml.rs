@@ -606,3 +606,63 @@ pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatem
     assert_eq!(i, tok.len(), "full token stream not utilized");
     r
 }
+
+/*
+    Impls for delete
+    ---
+    Smallest statement:
+    delete model:primary_key
+*/
+
+#[derive(Debug, PartialEq)]
+pub(super) struct DeleteStatement<'a> {
+    pub(super) primary_key: &'a Lit,
+    pub(super) entity: Entity,
+}
+
+impl<'a> DeleteStatement<'a> {
+    #[inline(always)]
+    pub(super) fn new(primary_key: &'a Lit, entity: Entity) -> Self {
+        Self {
+            primary_key,
+            entity,
+        }
+    }
+    pub(super) fn parse_delete(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+        let l = tok.len();
+        let mut okay = l > 2;
+        let mut i = 0_usize;
+
+        // parse entity
+        let mut entity = MaybeInit::uninit();
+        okay &= process_entity(tok, &mut entity, &mut i);
+
+        // find primary key
+        okay &= i < l && tok[i] == Token![:];
+        i += okay as usize;
+        okay &= i < l && tok[i].is_lit();
+        let primary_key_idx = i;
+        i += okay as usize;
+
+        *counter += i;
+
+        if okay {
+            unsafe {
+                Ok(Self {
+                    primary_key: extract!(tok[primary_key_idx], Token::Lit(ref l) => l),
+                    entity: entity.assume_init(),
+                })
+            }
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_delete_full<'a>(tok: &'a [Token]) -> LangResult<DeleteStatement<'a>> {
+    let mut i = 0_usize;
+    let r = DeleteStatement::parse_delete(tok, &mut i);
+    assert_eq!(i, tok.len());
+    r
+}
