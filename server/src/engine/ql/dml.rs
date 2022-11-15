@@ -555,7 +555,7 @@ impl<'a> UpdateStatement<'a> {
     pub(super) fn parse_update(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
         let l = tok.len();
         // TODO(@ohsayan): This would become 8 when we add `SET`. It isn't exactly needed but is for purely aesthetic purposes
-        let mut okay = l > 7;
+        let mut okay = l > 6;
         let mut i = 0_usize;
 
         // parse entity

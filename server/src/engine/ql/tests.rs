@@ -2102,19 +2102,22 @@ mod dml_tests {
     mod update_statement {
         use {
             super::*,
-            crate::engine::ql::dml::{self, AssignmentExpression, Operator, UpdateStatement},
+            crate::engine::ql::{
+                ast::Entity,
+                dml::{self, AssignmentExpression, Operator, UpdateStatement},
+            },
         };
         #[test]
         fn update_mini() {
             let tok = lex(br#"
-                update jotsy.app:"sayan" notes += "this is my new note"
+                update app:"sayan" notes += "this is my new note"
             "#)
             .unwrap();
             let note = "this is my new note".to_string().into();
             let r = dml::parse_update_full(&tok[1..]).unwrap();
             let e = UpdateStatement {
                 primary_key: &("sayan".to_owned().into()),
-                entity: ("jotsy", "app").into(),
+                entity: Entity::Single("app".into()),
                 expressions: vec![AssignmentExpression {
                     lhs: "notes".into(),
                     rhs: &note,
