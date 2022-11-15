@@ -78,6 +78,12 @@ pub enum Lit {
     UnsafeLit(RawSlice),
 }
 
+impl From<&'static str> for Lit {
+    fn from(s: &'static str) -> Self {
+        Self::Str(s.into())
+    }
+}
+
 enum_impls! {
     Lit => {
         Box<str> as Str,

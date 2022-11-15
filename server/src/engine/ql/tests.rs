@@ -2025,4 +2025,125 @@ mod dml_tests {
             assert_eq!(r, e);
         }
     }
+    mod expression_tests {
+        use {
+            super::*,
+            crate::engine::ql::{
+                dml::{self, AssignmentExpression, Operator},
+                lexer::Lit,
+            },
+        };
+        #[test]
+        fn expr_assign() {
+            let src = lex(b"username = 'sayan'").unwrap();
+            let r = dml::parse_expression_full(&src).unwrap();
+            assert_eq!(
+                r,
+                AssignmentExpression {
+                    lhs: "username".into(),
+                    rhs: &Lit::Str("sayan".into()),
+                    operator_fn: Operator::Assign
+                }
+            );
+        }
+        #[test]
+        fn expr_add_assign() {
+            let src = lex(b"followers += 100").unwrap();
+            let r = dml::parse_expression_full(&src).unwrap();
+            assert_eq!(
+                r,
+                AssignmentExpression {
+                    lhs: "followers".into(),
+                    rhs: &(100.into()),
+                    operator_fn: Operator::AddAssign
+                }
+            );
+        }
+        #[test]
+        fn expr_sub_assign() {
+            let src = lex(b"following -= 150").unwrap();
+            let r = dml::parse_expression_full(&src).unwrap();
+            assert_eq!(
+                r,
+                AssignmentExpression {
+                    lhs: "following".into(),
+                    rhs: &(150.into()),
+                    operator_fn: Operator::SubAssign
+                }
+            );
+        }
+        #[test]
+        fn expr_mul_assign() {
+            let src = lex(b"product_qty *= 2").unwrap();
+            let r = dml::parse_expression_full(&src).unwrap();
+            assert_eq!(
+                r,
+                AssignmentExpression {
+                    lhs: "product_qty".into(),
+                    rhs: &(2.into()),
+                    operator_fn: Operator::MulAssign
+                }
+            );
+        }
+        #[test]
+        fn expr_div_assign() {
+            let src = lex(b"image_crop_factor /= 2").unwrap();
+            let r = dml::parse_expression_full(&src).unwrap();
+            assert_eq!(
+                r,
+                AssignmentExpression {
+                    lhs: "image_crop_factor".into(),
+                    rhs: &(2.into()),
+                    operator_fn: Operator::DivAssign
+                }
+            );
+        }
+    }
+    mod update_statement {
+        use {
+            super::*,
+            crate::engine::ql::dml::{self, AssignmentExpression, Operator, UpdateStatement},
+        };
+        #[test]
+        fn update_mini() {
+            let tok = lex(br#"
+                update jotsy.app:"sayan" notes += "this is my new note"
+            "#)
+            .unwrap();
+            let note = "this is my new note".to_string().into();
+            let r = dml::parse_update_full(&tok[1..]).unwrap();
+            let e = UpdateStatement {
+                primary_key: &("sayan".to_owned().into()),
+                entity: ("jotsy", "app").into(),
+                expressions: vec![AssignmentExpression {
+                    lhs: "notes".into(),
+                    rhs: &note,
+                    operator_fn: Operator::AddAssign,
+                }],
+            };
+            assert_eq!(r, e);
+        }
+        #[test]
+        fn update() {
+            let tok = lex(br#"
+                update jotsy.app:"sayan" notes += "this is my new note", email = "sayan@example.com"
+            "#)
+            .unwrap();
+            let r = dml::parse_update_full(&tok[1..]).unwrap();
+
+            let field_note = "this is my new note".into();
+            let field_email = "sayan@example.com".into();
+            let primary_key = "sayan".into();
+            let e = UpdateStatement {
+                primary_key: &primary_key,
+                entity: ("jotsy", "app").into(),
+                expressions: vec![
+                    AssignmentExpression::new("notes".into(), &field_note, Operator::AddAssign),
+                    AssignmentExpression::new("email".into(), &field_email, Operator::Assign),
+                ],
+            };
+
+            assert_eq!(r, e);
+        }
+    }
 }

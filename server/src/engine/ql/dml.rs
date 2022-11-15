@@ -432,3 +432,177 @@ pub(super) fn parse_select_full<'a>(tok: &'a [Token]) -> Option<SelectStatement<
     assert!(i == tok.len(), "didn't use full length");
     r.ok()
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// TODO(@ohsayan): This only helps with the parser test for now. Replace this with actual operator expressions
+pub(super) enum Operator {
+    Assign,
+    AddAssign,
+    SubAssign,
+    MulAssign,
+    DivAssign,
+}
+
+static OPERATOR: [Operator; 6] = [
+    Operator::Assign,
+    Operator::Assign,
+    Operator::AddAssign,
+    Operator::SubAssign,
+    Operator::MulAssign,
+    Operator::DivAssign,
+];
+
+#[derive(Debug, PartialEq)]
+pub struct AssignmentExpression<'a> {
+    /// the LHS ident
+    pub(super) lhs: RawSlice,
+    /// the RHS lit
+    pub(super) rhs: &'a Lit,
+    /// operator
+    pub(super) operator_fn: Operator,
+}
+
+impl<'a> AssignmentExpression<'a> {
+    pub(super) fn new(lhs: RawSlice, rhs: &'a Lit, operator_fn: Operator) -> Self {
+        Self {
+            lhs,
+            rhs,
+            operator_fn,
+        }
+    }
+    /// Attempt to parse an expression and then append it to the given vector of expressions. This will return `true`
+    /// if the expression was parsed correctly, otherwise `false` is returned
+    #[inline(always)]
+    fn parse_and_append_expression(
+        tok: &'a [Token],
+        expressions: &mut Vec<Self>,
+        counter: &mut usize,
+    ) -> bool {
+        /*
+            smallest expression:
+            <ident> <operator> <lit>
+        */
+        let l = tok.len();
+        let mut i = 0;
+        let mut okay = tok.len() > 2 && tok[0].is_ident();
+        i += okay as usize;
+
+        let op_assign = (i < l && tok[i] == Token![=]) as usize * 1;
+        let op_add = (i < l && tok[i] == Token![+]) as usize * 2;
+        let op_sub = (i < l && tok[i] == Token![-]) as usize * 3;
+        let op_mul = (i < l && tok[i] == Token![*]) as usize * 4;
+        let op_div = (i < l && tok[i] == Token![/]) as usize * 5;
+
+        let operator_code = op_assign + op_add + op_sub + op_mul + op_div;
+        unsafe {
+            // UNSAFE(@ohsayan): Inherently obvious, just a hint
+            if operator_code > 5 {
+                impossible!()
+            }
+        }
+        okay &= operator_code != 0;
+        i += okay as usize;
+
+        let has_double_assign = i < l && tok[i] == Token![=];
+        let double_assign_okay = operator_code != 1 && has_double_assign;
+        let single_assign_okay = operator_code == 1 && !double_assign_okay;
+        okay &= single_assign_okay | double_assign_okay;
+        i += double_assign_okay as usize; // skip on <op>assign
+
+        let has_rhs = i < l && tok[i].is_lit();
+        okay &= has_rhs;
+        *counter += i + has_rhs as usize;
+
+        if okay {
+            let expression = unsafe {
+                AssignmentExpression {
+                    lhs: extract!(tok[0], Token::Ident(ref r) => r.clone()),
+                    rhs: extract!(tok[i], Token::Lit(ref l) => l),
+                    operator_fn: OPERATOR[operator_code as usize],
+                }
+            };
+            expressions.push(expression);
+        }
+
+        okay
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentExpression<'a>> {
+    let mut i = 0;
+    let mut exprs = Vec::new();
+    if AssignmentExpression::parse_and_append_expression(tok, &mut exprs, &mut i) {
+        assert_eq!(i, tok.len(), "full token stream not utilized");
+        Some(exprs.remove(0))
+    } else {
+        None
+    }
+}
+
+/*
+    Impls for update
+*/
+
+#[derive(Debug, PartialEq)]
+pub struct UpdateStatement<'a> {
+    pub(super) primary_key: &'a Lit,
+    pub(super) entity: Entity,
+    pub(super) expressions: Vec<AssignmentExpression<'a>>,
+}
+
+impl<'a> UpdateStatement<'a> {
+    pub(super) fn parse_update(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+        let l = tok.len();
+        // TODO(@ohsayan): This would become 8 when we add `SET`. It isn't exactly needed but is for purely aesthetic purposes
+        let mut okay = l > 7;
+        let mut i = 0_usize;
+
+        // parse entity
+        let mut entity = MaybeInit::uninit();
+        okay &= process_entity(tok, &mut entity, &mut i);
+
+        // check if we have our primary key
+        okay &= i < l && tok[i] == Token![:];
+        i += okay as usize;
+        okay &= i < l && tok[i].is_lit();
+        let primary_key_location = i;
+        i += okay as usize;
+
+        // now parse expressions that we have to update
+        let mut expressions = Vec::new();
+        while i < l && okay {
+            okay &= AssignmentExpression::parse_and_append_expression(
+                &tok[i..],
+                &mut expressions,
+                &mut i,
+            );
+            let nx_comma = i < l && tok[i] == Token![,];
+            // TODO(@ohsayan): Define the need for a semicolon; remember, no SQL unsafety!
+            let nx_over = i == l;
+            okay &= nx_comma | nx_over;
+            i += nx_comma as usize;
+        }
+        *counter += i;
+
+        if okay {
+            let primary_key =
+                unsafe { extract!(tok[primary_key_location], Token::Lit(ref pk) => pk) };
+            Ok(Self {
+                primary_key,
+                entity: unsafe { entity.assume_init() },
+                expressions,
+            })
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatement<'a>> {
+    let mut i = 0;
+    let r = UpdateStatement::parse_update(tok, &mut i);
+    assert_eq!(i, tok.len(), "full token stream not utilized");
+    r
+}

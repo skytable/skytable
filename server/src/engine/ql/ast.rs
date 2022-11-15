@@ -44,6 +44,12 @@ pub enum Entity {
     Full(RawSlice, RawSlice),
 }
 
+impl<T: Into<RawSlice>, U: Into<RawSlice>> From<(T, U)> for Entity {
+    fn from((space, model): (T, U)) -> Self {
+        Self::Full(space.into(), model.into())
+    }
+}
+
 impl Entity {
     #[inline(always)]
     pub(super) unsafe fn full_entity_from_slice(sl: &[Token]) -> Self {
