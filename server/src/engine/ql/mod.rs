@@ -27,13 +27,16 @@
 #[macro_use]
 mod macros;
 pub(super) mod ast;
+#[cfg(feature = "nightly")]
+#[cfg(test)]
+mod benches;
 pub(super) mod dml;
 pub(super) mod lexer;
 pub(super) mod schema;
 #[cfg(test)]
 mod tests;
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 use core::{fmt, ops::Deref};
 use core::{mem, slice, str};
 
@@ -67,11 +70,11 @@ pub enum LangError {
 /// Notes:
 /// - [`Clone`] is implemented for [`RawSlice`] because it is a simple bitwise copy of the fat ptr
 /// - [`fmt::Debug`] is implemented in different ways
-///     - With debug assertions enabled, it will output a slice
+///     - For test builds like test and bench, it will output a slice
 ///     - In release mode, it will output the fat ptr meta
 /// - [`PartialEq`] is implemented in debug mode with slice comparison, but is **NOT implemented for release mode in the
-///   way you'd expect it to**. In release mode, a comparison will simply panic.
-#[cfg_attr(not(debug_assertions), derive(Debug))]
+///   way you'd expect it to**. In release mode (non-test), a comparison will simply panic.
+#[cfg_attr(not(test), derive(Debug))]
 #[derive(Clone)]
 pub struct RawSlice {
     ptr: *const u8,
@@ -95,7 +98,7 @@ impl RawSlice {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 impl fmt::Debug for RawSlice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(unsafe {
@@ -105,7 +108,7 @@ impl fmt::Debug for RawSlice {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 impl PartialEq for RawSlice {
     fn eq(&self, other: &Self) -> bool {
         unsafe {
@@ -115,14 +118,14 @@ impl PartialEq for RawSlice {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(test))]
 impl PartialEq for RawSlice {
     fn eq(&self, _other: &Self) -> bool {
         panic!("Called partialeq on rawslice in release mode");
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(test)]
 impl<U> PartialEq<U> for RawSlice
 where
     U: Deref<Target = [u8]>,

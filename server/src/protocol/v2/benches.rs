@@ -45,7 +45,7 @@ fn simple_query(b: &mut Bencher) {
         let ret: Vec<String> = query
             .as_slice()
             .iter()
-            .map(|s| String::from_utf8_lossy(s.as_slice()).to_string())
+            .map(|s| String::from_utf8_lossy(unsafe { s.as_slice() }).to_string())
             .collect();
         assert_eq!(ret, expected)
     });
@@ -73,7 +73,7 @@ fn pipelined_query(b: &mut Bencher) {
                 query
                     .as_slice()
                     .iter()
-                    .map(|v| String::from_utf8_lossy(v.as_slice()).to_string())
+                    .map(|v| String::from_utf8_lossy(unsafe { v.as_slice() }).to_string())
                     .collect()
             })
             .collect();

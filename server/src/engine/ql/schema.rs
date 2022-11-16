@@ -157,6 +157,17 @@ pub struct Field {
     pub(super) props: HashSet<StaticStr>,
 }
 
+impl Field {
+    #[inline(always)]
+    pub fn new(field_name: RawSlice, layers: Vec<Layer>, props: HashSet<StaticStr>) -> Self {
+        Self {
+            field_name,
+            layers,
+            props,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// A model definition
 pub struct Model {
@@ -166,6 +177,17 @@ pub struct Model {
     pub(super) fields: Vec<Field>,
     /// properties
     pub(super) props: Dict,
+}
+
+impl Model {
+    #[inline(always)]
+    pub fn new(model_name: RawSlice, fields: Vec<Field>, props: Dict) -> Self {
+        Self {
+            model_name,
+            fields,
+            props,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -974,7 +996,7 @@ pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
 }
 
 #[derive(Debug)]
-#[cfg_attr(debug_assertions, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 /// The alter operation kind
 pub enum AlterKind {
     Add(Box<[ExpandedField]>),

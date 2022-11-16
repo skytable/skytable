@@ -78,35 +78,41 @@ impl Entity {
     pub(super) fn tokens_with_full(tok: &[Token]) -> bool {
         tok.len() > 2 && tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident()
     }
-    pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
-        let sl = cm.remslice();
-        let is_partial = Self::tokens_with_partial(sl);
-        let is_current = Self::tokens_with_single(sl);
-        let is_full = Self::tokens_with_full(sl);
-        let c;
+    #[inline(always)]
+    pub(super) fn parse_from_tokens(tok: &[Token], c: &mut usize) -> LangResult<Self> {
+        let is_partial = Self::tokens_with_partial(tok);
+        let is_current = Self::tokens_with_single(tok);
+        let is_full = Self::tokens_with_full(tok);
         let r = match () {
             _ if is_full => unsafe {
-                c = 3;
-                Self::full_entity_from_slice(sl)
+                *c = 3;
+                Self::full_entity_from_slice(tok)
             },
             _ if is_current => unsafe {
-                c = 1;
-                Self::single_entity_from_slice(sl)
+                *c = 1;
+                Self::single_entity_from_slice(tok)
             },
             _ if is_partial => unsafe {
-                c = 2;
-                Self::partial_entity_from_slice(sl)
+                *c = 2;
+                Self::partial_entity_from_slice(tok)
             },
             _ => return Err(LangError::UnexpectedToken),
         };
+        Ok(r)
+    }
+    #[inline(always)]
+    pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
+        let sl = cm.remslice();
+        let mut c = 0;
+        let r = Self::parse_from_tokens(sl, &mut c);
         unsafe {
             cm.incr_cursor_by(c);
         }
-        Ok(r)
+        r
     }
 }
 
-#[cfg_attr(debug_assertions, derive(Debug, PartialEq))]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum Statement {
     CreateModel(schema::Model),
     CreateSpace(schema::Space),
