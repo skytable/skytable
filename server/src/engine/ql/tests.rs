@@ -218,6 +218,48 @@ mod entity {
     }
 }
 
+mod ddl_other_query_tests {
+    use {
+        super::*,
+        crate::engine::ql::{
+            ast::Statement,
+            ddl::{self, DropItem},
+        },
+    };
+    #[test]
+    fn drop_space() {
+        let src = lex(br"drop space myspace").unwrap();
+        assert_eq!(
+            ddl::parse_drop_full(&src[1..]).unwrap(),
+            Statement::DropSpace(DropItem::new("myspace".into(), false))
+        );
+    }
+    #[test]
+    fn drop_space_force() {
+        let src = lex(br"drop space myspace force").unwrap();
+        assert_eq!(
+            ddl::parse_drop_full(&src[1..]).unwrap(),
+            Statement::DropSpace(DropItem::new("myspace".into(), true))
+        );
+    }
+    #[test]
+    fn drop_model() {
+        let src = lex(br"drop model mymodel").unwrap();
+        assert_eq!(
+            ddl::parse_drop_full(&src[1..]).unwrap(),
+            Statement::DropModel(DropItem::new("mymodel".into(), false))
+        );
+    }
+    #[test]
+    fn drop_model_force() {
+        let src = lex(br"drop model mymodel force").unwrap();
+        assert_eq!(
+            ddl::parse_drop_full(&src[1..]).unwrap(),
+            Statement::DropModel(DropItem::new("mymodel".into(), true))
+        );
+    }
+}
+
 mod schema_tests {
     use {
         super::{
@@ -896,14 +938,10 @@ mod schema_tests {
                 )
             ")
             .unwrap();
-            let schema_name = match tok[2] {
-                Token::Ident(ref id) => id.clone(),
-                _ => panic!("expected ident"),
-            };
-            let tok = &tok[3..];
+            let tok = &tok[2..];
 
             // parse model
-            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
             assert_eq!(c, tok.len());
             assert_eq!(
                 model,
@@ -935,14 +973,10 @@ mod schema_tests {
                 )
             ")
             .unwrap();
-            let schema_name = match tok[2] {
-                Token::Ident(ref id) => id.clone(),
-                _ => panic!("expected ident"),
-            };
-            let tok = &tok[3..];
+            let tok = &tok[2..];
 
             // parse model
-            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
             assert_eq!(c, tok.len());
             assert_eq!(
                 model,
@@ -984,14 +1018,10 @@ mod schema_tests {
                 )
             ")
             .unwrap();
-            let schema_name = match tok[2] {
-                Token::Ident(ref id) => id.clone(),
-                _ => panic!("expected ident"),
-            };
-            let tok = &tok[3..];
+            let tok = &tok[2..];
 
             // parse model
-            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
             assert_eq!(c, tok.len());
             assert_eq!(
                 model,
@@ -1051,14 +1081,10 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let schema_name = match tok[2] {
-                Token::Ident(ref id) => id.clone(),
-                _ => panic!("expected ident"),
-            };
-            let tok = &tok[3..];
+            let tok = &tok[2..];
 
             // parse model
-            let (model, c) = schema::parse_schema_from_tokens(tok, schema_name).unwrap();
+            let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
             assert_eq!(c, tok.len());
             assert_eq!(
                 model,

@@ -26,6 +26,7 @@
 
 use {
     super::{
+        ddl,
         lexer::{Lexer, Token},
         schema, LangError, LangResult, RawSlice,
     },
@@ -119,8 +120,8 @@ pub enum Statement {
     Use(Entity),
     AlterSpace(schema::AlterSpace),
     AlterModel(RawSlice, schema::AlterKind),
-    DropModel(RawSlice, bool),
-    DropSpace(RawSlice, bool),
+    DropModel(ddl::DropItem),
+    DropSpace(ddl::DropItem),
     InspectSpace(RawSlice),
     InspectModel(Entity),
     InspectSpaces,
@@ -176,29 +177,13 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn drop0(&mut self) -> Result<Statement, LangError> {
-        if self.remaining() < 2 {
-            return Err(LangError::ExpectedStatement);
-        }
-        let rs = self.remslice();
-        let ident = match rs[1] {
-            Token::Ident(ref id) => id,
-            _ => return Err(LangError::ExpectedStatement),
-        };
-        let should_force = self.remaining() > 2 && rs[2].as_ident_eq_ignore_case(b"force");
-        let r = match rs[0] {
-            Token![model] => {
-                // dropping a model
-                Ok(Statement::DropModel(ident.clone(), should_force))
-            }
-            Token![space] => {
-                // dropping a space
-                Ok(Statement::DropSpace(ident.clone(), should_force))
-            }
-            _ => Err(LangError::UnexpectedToken),
-        };
         unsafe {
-            self.incr_cursor_by(2);
-            self.incr_cursor_if(should_force);
+            self.incr_cursor(); // forward stage token
+        }
+        let mut i = 0;
+        let r = ddl::parse_drop(self.remslice(), &mut i);
+        unsafe {
+            self.incr_cursor_by(i);
         }
         r
     }
@@ -266,11 +251,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn c_model0(&mut self) -> Result<Statement, LangError> {
-        let model_name = match self.nxtok_opt() {
-            Some(Token::Ident(model)) => model.clone(),
-            _ => return Err(LangError::UnexpectedToken),
-        };
-        let (model, i) = schema::parse_schema_from_tokens(self.remslice(), model_name)?;
+        let (model, i) = schema::parse_schema_from_tokens(self.remslice())?;
         unsafe {
             self.incr_cursor_by(i);
         }
@@ -278,11 +259,7 @@ impl<'a> Compiler<'a> {
     }
     #[inline(always)]
     fn c_space0(&mut self) -> Result<Statement, LangError> {
-        let space_name = match self.nxtok_opt() {
-            Some(Token::Ident(space_name)) => space_name.clone(),
-            _ => return Err(LangError::UnexpectedToken),
-        };
-        let (space, i) = schema::parse_space_from_tokens(self.remslice(), space_name)?;
+        let (space, i) = schema::parse_space_from_tokens(self.remslice())?;
         unsafe {
             self.incr_cursor_by(i);
         }

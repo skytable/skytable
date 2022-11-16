@@ -733,16 +733,15 @@ states! {
 
 #[inline(always)]
 /// Parse a fresh schema with declaration-syntax fields
-pub(super) fn parse_schema_from_tokens(
-    tok: &[Token],
-    model_name: RawSlice,
-) -> LangResult<(Model, usize)> {
+pub(super) fn parse_schema_from_tokens(tok: &[Token]) -> LangResult<(Model, usize)> {
     // parse fields
     let l = tok.len();
     let mut i = 0;
-    let mut state = SchemaParseState::OPEN_PAREN;
-    let mut okay = true;
+    // check if we have our model name
+    let mut okay = i < l && tok[i].is_ident();
+    i += okay as usize;
     let mut fields = Vec::with_capacity(2);
+    let mut state = SchemaParseState::OPEN_PAREN;
 
     while i < l && okay {
         match (&tok[i], state) {
@@ -787,6 +786,11 @@ pub(super) fn parse_schema_from_tokens(
         return Err(LangError::UnexpectedToken);
     }
 
+    let model_name = unsafe {
+        // UNSAFE(@ohsayan): Now that we're sure that we have the model name ident, get it
+        extract!(tok[0], Token::Ident(ref model_name) => model_name.clone())
+    };
+
     if l > i && tok[i] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
         // we have some more input, and it should be a dict of properties
         i += 1; // +WITH
@@ -824,31 +828,33 @@ pub(super) fn parse_schema_from_tokens(
 
 #[inline(always)]
 /// Parse space data from the given tokens
-pub(super) fn parse_space_from_tokens(tok: &[Token], s: RawSlice) -> LangResult<(Space, usize)> {
-    // let's see if the cursor is at `with`. ignore other tokens because that's fine
-    if !tok.is_empty() && tok[0] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
-        // we have a dict
-        let mut d = Dict::new();
+pub(super) fn parse_space_from_tokens(tok: &[Token]) -> LangResult<(Space, usize)> {
+    let l = tok.len();
+    let mut okay = !tok.is_empty() && tok[0].is_ident();
+    let mut i = 0;
+    i += okay as usize;
+    // either we have `with` or nothing. don't be stupid
+    let has_more_properties = i < l && tok[i] == Token![with];
+    okay &= has_more_properties | (i == l);
+    // properties
+    let mut d = Dict::new();
+
+    if has_more_properties && okay {
         let ret = self::rfold_dict(DictFoldState::OB, &tok[1..], &mut d);
-        if ret & HIBIT == HIBIT {
-            Ok((
-                Space {
-                    space_name: s,
-                    props: d,
-                },
-                (ret & !HIBIT) as _,
-            ))
-        } else {
-            Err(LangError::UnexpectedToken)
-        }
-    } else {
+        i += (ret & !HIBIT) as usize;
+        okay &= ret & HIBIT == HIBIT;
+    }
+
+    if okay {
         Ok((
             Space {
-                space_name: s,
-                props: dict! {},
+                space_name: unsafe { extract!(tok[0], Token::Ident(ref id) => id.clone()) },
+                props: d,
             },
-            0,
+            i,
         ))
+    } else {
+        Err(LangError::UnexpectedToken)
     }
 }
 

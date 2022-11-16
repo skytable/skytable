@@ -30,6 +30,7 @@ pub(super) mod ast;
 #[cfg(feature = "nightly")]
 #[cfg(test)]
 mod benches;
+pub(super) mod ddl;
 pub(super) mod dml;
 pub(super) mod lexer;
 pub(super) mod schema;
