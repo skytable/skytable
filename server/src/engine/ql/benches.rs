@@ -114,3 +114,52 @@ mod ast {
         });
     }
 }
+
+mod ddl_queries {
+    use {
+        super::*,
+        crate::engine::ql::ast::{Compiler, Entity, Statement},
+    };
+    mod use_stmt {
+        use super::*;
+        #[bench]
+        fn use_space(b: &mut Bencher) {
+            let src = b"use myspace";
+            let expected = Statement::Use(Entity::Single("myspace".into()));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn use_model(b: &mut Bencher) {
+            let src = b"use myspace.mymodel";
+            let expected = Statement::Use(("myspace", "mymodel").into());
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+    }
+    mod inspect_stmt {
+        use super::*;
+        #[bench]
+        fn inspect_space(b: &mut Bencher) {
+            let src = b"inspect space myspace";
+            let expected = Statement::InspectSpace("myspace".into());
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn inspect_model_single_entity(b: &mut Bencher) {
+            let src = b"inspect model mymodel";
+            let expected = Statement::InspectModel(Entity::Single("mymodel".into()));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn inspect_model_full_entity(b: &mut Bencher) {
+            let src = b"inspect model myspace.mymodel";
+            let expected = Statement::InspectModel(("myspace", "mymodel").into());
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn inspect_spaces(b: &mut Bencher) {
+            let src = b"inspect spaces";
+            let expected = Statement::InspectSpaces;
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+    }
+}

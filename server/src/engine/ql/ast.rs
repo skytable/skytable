@@ -167,12 +167,12 @@ impl Entity {
 /// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
 // TODO(@ohsayan): Determine whether we actually need this
 pub enum Statement {
+    /// DDL query to switch between spaces and models
+    Use(Entity),
     /// DDL query to create a model
     CreateModel(schema::Model),
     /// DDL query to create a space
     CreateSpace(schema::Space),
-    /// DDL query to switch between spaces and models
-    Use(Entity),
     /// DDL query to alter a space (properties)
     AlterSpace(schema::AlterSpace),
     /// DDL query to alter a model (properties, field types, etc)
