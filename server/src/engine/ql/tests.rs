@@ -222,8 +222,8 @@ mod ddl_other_query_tests {
     use {
         super::*,
         crate::engine::ql::{
-            ast::Statement,
-            ddl::{self, DropItem},
+            ast::{Entity, Statement},
+            ddl::{self, DropModel, DropSpace},
         },
     };
     #[test]
@@ -231,7 +231,7 @@ mod ddl_other_query_tests {
         let src = lex(br"drop space myspace").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropSpace(DropItem::new("myspace".into(), false))
+            Statement::DropSpace(DropSpace::new("myspace".into(), false))
         );
     }
     #[test]
@@ -239,7 +239,7 @@ mod ddl_other_query_tests {
         let src = lex(br"drop space myspace force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropSpace(DropItem::new("myspace".into(), true))
+            Statement::DropSpace(DropSpace::new("myspace".into(), true))
         );
     }
     #[test]
@@ -247,7 +247,7 @@ mod ddl_other_query_tests {
         let src = lex(br"drop model mymodel").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropModel(DropItem::new("mymodel".into(), false))
+            Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), false))
         );
     }
     #[test]
@@ -255,7 +255,7 @@ mod ddl_other_query_tests {
         let src = lex(br"drop model mymodel force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropModel(DropItem::new("mymodel".into(), true))
+            Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), true))
         );
     }
 }
@@ -304,6 +304,88 @@ mod schema_tests {
                 "found ignorable comma in rectified source"
             );
             fuzzwith(should_pass, &new_src);
+        }
+    }
+
+    mod inspect {
+        use {
+            super::*,
+            crate::engine::ql::{
+                ast::{Entity, Statement},
+                ddl,
+            },
+        };
+        #[test]
+        fn inspect_space() {
+            let tok = lex(b"inspect space myspace").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectSpace("myspace".into())
+            );
+        }
+        #[test]
+        fn inspect_model() {
+            let tok = lex(b"inspect model user").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectModel(Entity::Single("user".into()))
+            );
+            let tok = lex(b"inspect model tweeter.user").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectModel(("tweeter", "user").into())
+            );
+        }
+        #[test]
+        fn inspect_spaces() {
+            let tok = lex(b"inspect spaces").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectSpaces
+            );
+        }
+    }
+
+    mod alter_space {
+        use {
+            super::*,
+            crate::engine::ql::{
+                lexer::Lit,
+                schema::{self, AlterSpace},
+            },
+        };
+        #[test]
+        fn alter_space_mini() {
+            let tok = lex(b"alter model mymodel with {}").unwrap();
+            let r = schema::alter_space_full(&tok[2..]).unwrap();
+            assert_eq!(
+                r,
+                AlterSpace {
+                    space_name: "mymodel".into(),
+                    updated_props: dict! {}
+                }
+            );
+        }
+        #[test]
+        fn alter_space() {
+            let tok = lex(br#"
+                alter model mymodel with {
+                    max_entry: 1000,
+                    driver: "ts-0.8"
+                }
+            "#)
+            .unwrap();
+            let r = schema::alter_space_full(&tok[2..]).unwrap();
+            assert_eq!(
+                r,
+                AlterSpace {
+                    space_name: "mymodel".into(),
+                    updated_props: dict! {
+                        "max_entry" => Lit::Num(1000),
+                        "driver" => Lit::Str("ts-0.8".into())
+                    }
+                }
+            );
         }
     }
 

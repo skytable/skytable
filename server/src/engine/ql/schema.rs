@@ -860,22 +860,21 @@ pub(super) fn parse_space_from_tokens(tok: &[Token]) -> LangResult<(Space, usize
 
 #[inline(always)]
 /// Parse alter space from tokens
-pub(super) fn parse_alter_space_from_tokens(
-    tok: &[Token],
-    space_name: RawSlice,
-) -> LangResult<(AlterSpace, usize)> {
+pub(super) fn parse_alter_space_from_tokens(tok: &[Token]) -> LangResult<(AlterSpace, usize)> {
     let mut i = 0;
     let l = tok.len();
 
-    let invalid = l < 3
-        || !(tok[i] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With)))
-            && tok[i + 1] == (Token::Symbol(Symbol::TtOpenBrace)));
+    let okay = l > 3 && tok[0].is_ident() && tok[1] == Token![with] && tok[2] == Token![open {}];
 
-    if invalid {
+    if !okay {
         return Err(LangError::UnexpectedToken);
     }
 
-    i += 2;
+    let space_name = unsafe {
+        extract!(tok[0], Token::Ident(ref space) => space.clone())
+    };
+
+    i += 3;
 
     let mut d = Dict::new();
     let ret = rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], &mut d);
@@ -892,6 +891,13 @@ pub(super) fn parse_alter_space_from_tokens(
     } else {
         Err(LangError::UnexpectedToken)
     }
+}
+
+#[cfg(test)]
+pub(super) fn alter_space_full(tok: &[Token]) -> LangResult<AlterSpace> {
+    let (r, i) = self::parse_alter_space_from_tokens(tok)?;
+    assert_eq!(i, tok.len(), "full token stream not used");
+    Ok(r)
 }
 
 states! {
@@ -1003,6 +1009,23 @@ pub(super) fn parse_field_syntax<const ALLOW_RESET: bool>(
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
+pub struct Alter {
+    model: RawSlice,
+    kind: AlterKind,
+}
+
+impl Alter {
+    #[inline(always)]
+    pub(super) fn new(model: RawSlice, kind: AlterKind) -> Self {
+        Self {
+            model,
+            kind: kind.into(),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 /// The alter operation kind
 pub enum AlterKind {
     Add(Box<[ExpandedField]>),
@@ -1015,25 +1038,28 @@ pub enum AlterKind {
 pub(super) fn parse_alter_kind_from_tokens(
     tok: &[Token],
     current: &mut usize,
-) -> LangResult<AlterKind> {
+) -> LangResult<Alter> {
     let l = tok.len();
-    if l < 2 {
+    let okay = l > 2 && tok[0].is_ident();
+    if !okay {
         return Err(LangError::UnexpectedEndofStatement);
     }
-    *current += 1;
-    let r = match tok[0] {
-        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Add)) => {
-            AlterKind::Add(alter_add(&tok[1..], current)?)
-        }
+    *current += 2;
+    let model_name = unsafe { extract!(tok[0], Token::Ident(ref l) => l.clone()) };
+    match tok[1] {
+        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Add)) => alter_add(&tok[1..], current)
+            .map(AlterKind::Add)
+            .map(|kind| Alter::new(model_name, kind)),
         Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Remove)) => {
-            AlterKind::Remove(alter_remove(&tok[1..], current)?)
+            alter_remove(&tok[1..], current)
+                .map(AlterKind::Remove)
+                .map(|kind| Alter::new(model_name, kind))
         }
-        Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => {
-            AlterKind::Update(alter_update(&tok[1..], current)?)
-        }
+        Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => alter_update(&tok[1..], current)
+            .map(AlterKind::Update)
+            .map(|kind| Alter::new(model_name, kind)),
         _ => return Err(LangError::ExpectedStatement),
-    };
-    Ok(r)
+    }
 }
 
 #[inline(always)]

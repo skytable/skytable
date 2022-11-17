@@ -24,52 +24,72 @@
  *
 */
 
-use super::{ast::Statement, lexer::Token, LangError, LangResult, RawSlice};
+use super::{
+    ast::{Entity, Statement},
+    lexer::Token,
+    LangError, LangResult, RawSlice,
+};
 
 #[derive(Debug, PartialEq)]
-pub struct DropItem(pub RawSlice, pub bool);
+/// A generic representation of `drop` query
+pub struct DropSpace {
+    pub(super) space: RawSlice,
+    pub(super) force: bool,
+}
 
-impl DropItem {
+impl DropSpace {
     #[inline(always)]
-    pub(super) const fn new(slice: RawSlice, force: bool) -> Self {
-        Self(slice, force)
+    /// Instantiate
+    pub(super) const fn new(space: RawSlice, force: bool) -> Self {
+        Self { space, force }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DropModel {
+    pub(super) entity: Entity,
+    pub(super) force: bool,
+}
+
+impl DropModel {
+    #[inline(always)]
+    pub fn new(entity: Entity, force: bool) -> Self {
+        Self { entity, force }
     }
 }
 
 // drop (<space> | <model>) <ident> [<force>]
 pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<Statement> {
-    let l = tok.len();
-    // drop space/model
-    let mut i = 0;
-    let drop_space = i < l && tok[i] == Token![space];
-    let drop_model = i < l && tok[i] == Token![model];
-    let mut okay = drop_space | drop_model;
-    i += okay as usize;
-    // check if we have the target entity name
-    okay &= i < l && tok[i].is_ident();
-    i += okay as usize;
-    // next token is either `force` or end of stream
-    let force_drop = i < l && tok[i] == Token::Ident("force".into());
-    okay &= force_drop | (i == l);
-    i += force_drop as usize;
-
-    if !okay {
-        return Err(LangError::UnexpectedToken);
+    match tok.get(0) {
+        Some(Token![model]) => {
+            // we have a model. now parse entity and see if we should force deletion
+            let mut i = 1;
+            let e = Entity::parse_from_tokens(&tok[1..], &mut i)?;
+            let force = i < tok.len() && tok[i] == Token::Ident("force".into());
+            i += force as usize;
+            *counter += i;
+            // if we've exhausted the stream, we're good to go (either `force`, or nothing)
+            if tok.len() == i {
+                return Ok(Statement::DropModel(DropModel::new(e, force)));
+            }
+        }
+        Some(Token![space]) if tok.len() > 1 && tok[1].is_ident() => {
+            let mut i = 2; // (`space` and space name)
+            // should we force drop?
+            let force = i < tok.len() && tok[i] == Token::Ident("force".into());
+            i += force as usize;
+            *counter += i;
+            // either `force` or nothing
+            if tok.len() == i {
+                return Ok(Statement::DropSpace(DropSpace::new(
+                    unsafe { extract!(tok[1], Token::Ident(ref space) => space.clone()) },
+                    force,
+                )));
+            }
+        }
+        _ => {}
     }
-
-    let drop_item = DropItem(
-        unsafe { extract!(tok[1], Token::Ident(ref id) => id.clone()) },
-        force_drop,
-    );
-
-    *counter += i;
-
-    let stmt = if drop_space {
-        Statement::DropSpace(drop_item)
-    } else {
-        Statement::DropModel(drop_item)
-    };
-    Ok(stmt)
+    Err(LangError::UnexpectedToken)
 }
 
 #[cfg(test)]
@@ -77,5 +97,39 @@ pub(super) fn parse_drop_full(tok: &[Token]) -> LangResult<Statement> {
     let mut i = 0;
     let r = self::parse_drop(tok, &mut i);
     assert_eq!(i, tok.len(), "full token stream not utilized");
+    r
+}
+
+pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statement> {
+    /*
+        inpsect model <entity>
+        inspect space <entity>
+        inspect spaces
+    */
+
+    let nxt = tok.get(0);
+    *c += nxt.is_some() as usize;
+    match nxt {
+        Some(Token![model]) => Entity::parse_from_tokens(&tok[1..], c).map(Statement::InspectModel),
+        Some(Token![space]) if tok.len() == 2 && tok[1].is_ident() => {
+            *c += 1;
+            Ok(Statement::InspectSpace(unsafe {
+                extract!(tok[1], Token::Ident(ref space) => space.clone())
+            }))
+        }
+        Some(Token::Ident(id))
+            if unsafe { id.as_slice().eq_ignore_ascii_case(b"spaces") } && tok.len() == 1 =>
+        {
+            Ok(Statement::InspectSpaces)
+        }
+        _ => Err(LangError::ExpectedStatement),
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_inspect_full(tok: &[Token]) -> LangResult<Statement> {
+    let mut i = 0;
+    let r = self::parse_inspect(tok, &mut i);
+    assert_eq!(i, tok.len(), "full token stream not used");
     r
 }
