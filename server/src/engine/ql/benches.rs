@@ -162,4 +162,50 @@ mod ddl_queries {
             b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
         }
     }
+    mod drop_stmt {
+        use {
+            super::*,
+            crate::engine::ql::ddl::{DropModel, DropSpace},
+        };
+        #[bench]
+        fn drop_space(b: &mut Bencher) {
+            let src = b"drop space myspace";
+            let expected = Statement::DropSpace(DropSpace::new("myspace".into(), false));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn drop_space_force(b: &mut Bencher) {
+            let src = b"drop space myspace force";
+            let expected = Statement::DropSpace(DropSpace::new("myspace".into(), true));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn drop_model_single(b: &mut Bencher) {
+            let src = b"drop model mymodel";
+            let expected =
+                Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), false));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn drop_model_single_force(b: &mut Bencher) {
+            let src = b"drop model mymodel force";
+            let expected =
+                Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), true));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn drop_model_full(b: &mut Bencher) {
+            let src = b"drop model myspace.mymodel";
+            let expected =
+                Statement::DropModel(DropModel::new(("myspace", "mymodel").into(), false));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+        #[bench]
+        fn drop_model_full_force(b: &mut Bencher) {
+            let src = b"drop model myspace.mymodel force";
+            let expected =
+                Statement::DropModel(DropModel::new(("myspace", "mymodel").into(), true));
+            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+        }
+    }
 }
