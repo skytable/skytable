@@ -74,7 +74,7 @@ enum_impls! {
 pub enum Lit {
     Str(Box<str>),
     Bool(bool),
-    Num(u64),
+    UnsignedInt(u64),
     UnsafeLit(RawSlice),
 }
 
@@ -89,7 +89,7 @@ enum_impls! {
         Box<str> as Str,
         String as Str,
         bool as Bool,
-        u64 as Num,
+        u64 as UnsignedInt,
     }
 }
 
@@ -514,15 +514,16 @@ impl<'a> Lexer<'a> {
                 1234, // valid
                 1234a // invalid
             */
-            static TERMINAL_CHAR: [u8; 8] = [b';', b'}', b',', b' ', b'\n', b'\t', b',', b']'];
-            let wseof = self.peek_is(|b| TERMINAL_CHAR.contains(&b)) || self.exhausted();
+            let wseof = self.peek_is(|char| !char.is_ascii_alphabetic()) || self.exhausted();
             match str::from_utf8_unchecked(slice::from_raw_parts(
                 s,
                 self.cursor().offset_from(s) as usize,
             ))
             .parse()
             {
-                Ok(num) if compiler::likely(wseof) => self.tokens.push(Token::Lit(Lit::Num(num))),
+                Ok(num) if compiler::likely(wseof) => {
+                    self.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
+                }
                 _ => self.last_error = Some(LangError::InvalidNumericLiteral),
             }
         }

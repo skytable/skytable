@@ -61,3 +61,24 @@ impl<const N: usize> From<[DataType; N]> for DataType {
         Self::List(f.into())
     }
 }
+
+#[repr(u8, align(1))]
+pub enum DataKind {
+    // primitive: integer unsigned
+    UInt8 = 0,
+    UInt16 = 1,
+    Uint32 = 2,
+    UInt64 = 3,
+    // primitive: integer unsigned
+    SInt8 = 4,
+    SInt16 = 5,
+    SInt32 = 6,
+    SInt64 = 7,
+    // primitive: misc
+    Bool = 8,
+    // compound: flat
+    String = 9,
+    Binary = 10,
+    // compound: recursive
+    List = 11,
+}

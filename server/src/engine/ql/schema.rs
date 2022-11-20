@@ -105,7 +105,7 @@ impl From<Dict> for DictEntry {
 }
 
 /// A metadata dictionary
-pub type Dict = HashMap<String, DictEntry>;
+pub type Dict = HashMap<String, Option<DictEntry>>;
 
 #[derive(Debug, PartialEq)]
 /// A layer contains a type and corresponding metadata
@@ -271,8 +271,16 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
                 okay &= dict
                     .insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
-                        l.clone().into(),
+                        Some(l.clone().into()),
                     )
+                    .is_none();
+                state = DictFoldState::COMMA_OR_CB;
+            }
+            (Token![null], DictFoldState::LIT_OR_OB) => {
+                // null
+                i += 1;
+                okay &= dict
+                    .insert(unsafe { tmp.assume_init_ref() }.to_string(), None)
                     .is_none();
                 state = DictFoldState::COMMA_OR_CB;
             }
@@ -292,7 +300,7 @@ pub(super) fn rfold_dict(mut state: DictFoldState, tok: &[Token], dict: &mut Dic
                 okay &= dict
                     .insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
-                        new_dict.into(),
+                        Some(new_dict.into()),
                     )
                     .is_none();
                 // at the end of a dict we either expect a comma or close brace
@@ -465,11 +473,20 @@ pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
                 r.record(
                     dict.insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
-                        lit.clone().into(),
+                        Some(lit.clone().into()),
                     )
                     .is_none(),
                 );
                 // saw a literal. next is either comma or close brace
+                state = TyMetaFoldState::COMMA_OR_CB;
+            }
+            (Token![null], TyMetaFoldState::LIT_OR_OB) => {
+                r.incr();
+                r.record(
+                    dict.insert(unsafe { tmp.assume_init_ref() }.to_string(), None)
+                        .is_none(),
+                );
+                // saw null, start parsing another entry
                 state = TyMetaFoldState::COMMA_OR_CB;
             }
             (Token::Symbol(Symbol::SymComma), TyMetaFoldState::COMMA_OR_CB) => {
@@ -488,10 +505,11 @@ pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
                 );
                 r.incr_by(ret.pos());
                 r.record(ret.is_okay());
-                r.record(!ret.has_more()); // L2 cannot have type definitions
-                                           // end of definition or comma followed by something
+                // L2 cannot have type definitions
+                r.record(!ret.has_more());
+                // end of definition or comma followed by something
                 r.record(
-                    dict.insert(unsafe { tmp.assume_init_ref() }.to_string(), d.into())
+                    dict.insert(unsafe { tmp.assume_init_ref() }.to_string(), Some(d.into()))
                         .is_none(),
                 );
                 state = TyMetaFoldState::COMMA_OR_CB;
@@ -870,9 +888,7 @@ pub(super) fn parse_alter_space_from_tokens(tok: &[Token]) -> LangResult<(AlterS
         return Err(LangError::UnexpectedToken);
     }
 
-    let space_name = unsafe {
-        extract!(tok[0], Token::Ident(ref space) => space.clone())
-    };
+    let space_name = unsafe { extract!(tok[0], Token::Ident(ref space) => space.clone()) };
 
     i += 3;
 

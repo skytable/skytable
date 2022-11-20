@@ -61,6 +61,34 @@ fn nullable_datatype(v: impl NullableData<DataType>) -> Option<DataType> {
     v.data()
 }
 
+pub trait NullableMapEntry {
+    fn data(self) -> Option<super::schema::DictEntry>;
+}
+
+impl NullableMapEntry for Null {
+    fn data(self) -> Option<super::schema::DictEntry> {
+        None
+    }
+}
+
+impl NullableMapEntry for super::lexer::Lit {
+    fn data(self) -> Option<super::schema::DictEntry> {
+        Some(super::schema::DictEntry::Lit(self))
+    }
+}
+
+impl NullableMapEntry for super::schema::Dict {
+    fn data(self) -> Option<super::schema::DictEntry> {
+        Some(super::schema::DictEntry::Map(self))
+    }
+}
+
+macro_rules! fold_dict {
+    ($($input:expr),* $(,)?) => {
+        ($({$crate::engine::ql::schema::fold_dict(&super::lex($input).unwrap()).unwrap()}),*)
+    }
+}
+
 mod lexer_tests {
     use {
         super::{
@@ -89,7 +117,10 @@ mod lexer_tests {
     #[test]
     fn lex_number() {
         let number = v!("123456");
-        assert_eq!(lex(&number).unwrap(), vec![Token::Lit(Lit::Num(123456))]);
+        assert_eq!(
+            lex(&number).unwrap(),
+            vec![Token::Lit(Lit::UnsignedInt(123456))]
+        );
     }
     #[test]
     fn lex_bool() {
@@ -362,7 +393,7 @@ mod schema_tests {
                 r,
                 AlterSpace {
                     space_name: "mymodel".into(),
-                    updated_props: dict! {}
+                    updated_props: nullable_dict! {}
                 }
             );
         }
@@ -380,8 +411,8 @@ mod schema_tests {
                 r,
                 AlterSpace {
                     space_name: "mymodel".into(),
-                    updated_props: dict! {
-                        "max_entry" => Lit::Num(1000),
+                    updated_props: nullable_dict! {
+                        "max_entry" => Lit::UnsignedInt(1000),
                         "driver" => Lit::Str("ts-0.8".into())
                     }
                 }
@@ -392,19 +423,13 @@ mod schema_tests {
     mod dict {
         use super::*;
 
-        macro_rules! fold_dict {
-        ($($input:expr),* $(,)?) => {
-            ($({schema::fold_dict(&super::lex($input).unwrap()).unwrap()}),*)
-        }
-    }
-
         #[test]
         fn dict_read_mini() {
             let (d1, d2) = fold_dict! {
                 br#"{name: "sayan"}"#,
                 br#"{name: "sayan",}"#,
             };
-            let r = dict!("name" => Lit::Str("sayan".into()));
+            let r = nullable_dict!("name" => Lit::Str("sayan".into()));
             multi_assert_eq!(d1, d2 => r);
         }
         #[test]
@@ -425,10 +450,10 @@ mod schema_tests {
                 }
             "#,
             };
-            let r = dict! (
+            let r = nullable_dict! (
                 "name" => Lit::Str("sayan".into()),
                 "verified" => Lit::Bool(true),
-                "burgers" => Lit::Num(152),
+                "burgers" => Lit::UnsignedInt(152),
             );
             multi_assert_eq!(d1, d2 => r);
         }
@@ -466,12 +491,12 @@ mod schema_tests {
             }"#
             };
             multi_assert_eq!(
-                d1, d2, d3 => dict! {
+                d1, d2, d3 => nullable_dict! {
                     "name" => Lit::Str("sayan".into()),
-                    "notes" => dict! {
+                    "notes" => nullable_dict! {
                         "burgers" => Lit::Str("all the time, extra mayo".into()),
                         "taco" => Lit::Bool(true),
-                        "pretzels" => Lit::Num(1),
+                        "pretzels" => Lit::UnsignedInt(1),
                     }
                 }
             );
@@ -521,11 +546,11 @@ mod schema_tests {
             }"#
             };
             multi_assert_eq!(
-                d1, d2, d3 => dict! {
-                    "well" => dict! {
-                        "now" => dict! {
-                            "this" => dict! {
-                                "is" => dict! {
+                d1, d2, d3 => nullable_dict! {
+                    "well" => nullable_dict! {
+                        "now" => nullable_dict! {
+                            "this" => nullable_dict! {
+                                "is" => nullable_dict! {
                                     "ridiculous" => Lit::Bool(true),
                                 }
                             }
@@ -554,16 +579,16 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let ret_dict = dict! {
+            let ret_dict = nullable_dict! {
                 "the_tradition_is" => Lit::Str("hello, world".into()),
-                "could_have_been" => dict! {
+                "could_have_been" => nullable_dict! {
                     "this" => Lit::Bool(true),
-                    "or_maybe_this" => Lit::Num(100),
+                    "or_maybe_this" => Lit::UnsignedInt(100),
                     "even_this" => Lit::Str("hello, universe!".into()),
                 },
                 "but_oh_well" => Lit::Str("it continues to be the 'annoying' phrase".into()),
-                "lorem" => dict! {
-                    "ipsum" => dict! {
+                "lorem" => nullable_dict! {
+                    "ipsum" => nullable_dict! {
                         "dolor" => Lit::Str("sit amet".into())
                     }
                 }
@@ -591,7 +616,7 @@ mod schema_tests {
             assert!(res.is_okay());
             assert!(!res.has_more());
             assert_eq!(res.pos(), 1);
-            assert_eq!(ret, dict!());
+            assert_eq!(ret, nullable_dict!());
         }
         #[test]
         fn tymeta_mini_fail() {
@@ -600,7 +625,7 @@ mod schema_tests {
             assert!(!res.is_okay());
             assert!(!res.has_more());
             assert_eq!(res.pos(), 0);
-            assert_eq!(ret, dict!());
+            assert_eq!(ret, nullable_dict!());
         }
         #[test]
         fn tymeta() {
@@ -611,10 +636,10 @@ mod schema_tests {
             assert_eq!(res.pos(), tok.len());
             assert_eq!(
                 ret,
-                dict! {
+                nullable_dict! {
                     "hello" => Lit::Str("world".into()),
                     "loading" => Lit::Bool(true),
-                    "size" => Lit::Num(100)
+                    "size" => Lit::UnsignedInt(100)
                 }
             );
         }
@@ -636,8 +661,8 @@ mod schema_tests {
             final_ret.extend(ret2);
             assert_eq!(
                 final_ret,
-                dict! {
-                    "maxlen" => Lit::Num(100),
+                nullable_dict! {
+                    "maxlen" => Lit::UnsignedInt(100),
                     "unique" => Lit::Bool(true)
                 }
             )
@@ -661,10 +686,10 @@ mod schema_tests {
             final_ret.extend(ret2);
             assert_eq!(
                 final_ret,
-                dict! {
-                    "maxlen" => Lit::Num(100),
+                nullable_dict! {
+                    "maxlen" => Lit::UnsignedInt(100),
                     "unique" => Lit::Bool(true),
-                    "this" => dict! {
+                    "this" => nullable_dict! {
                         "is" => Lit::Str("cool".into())
                     }
                 }
@@ -684,10 +709,10 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let expected = dict! {
-                "maxlen" => Lit::Num(10),
+            let expected = nullable_dict! {
+                "maxlen" => Lit::UnsignedInt(10),
                 "unique" => Lit::Bool(true),
-                "auth" => dict! {
+                "auth" => nullable_dict! {
                     "maybe" => Lit::Bool(true),
                 },
                 "user" => Lit::Str("sayan".into())
@@ -722,10 +747,10 @@ mod schema_tests {
                 }
             ")
             .unwrap();
-            let expected = dict! {
-                "maxlen" => Lit::Num(10),
+            let expected = nullable_dict! {
+                "maxlen" => Lit::UnsignedInt(10),
                 "unique" => Lit::Bool(true),
-                "auth" => dict! {
+                "auth" => nullable_dict! {
                     "maybe" => Lit::Bool(true),
                 },
             };
@@ -751,7 +776,10 @@ mod schema_tests {
             let (layers, c, okay) = schema::fold_layers(&tok);
             assert_eq!(c, tok.len() - 1);
             assert!(okay);
-            assert_eq!(layers, vec![Layer::new_noreset(Type::String, dict! {})]);
+            assert_eq!(
+                layers,
+                vec![Layer::new_noreset(Type::String, nullable_dict! {})]
+            );
         }
         #[test]
         fn layer() {
@@ -763,8 +791,8 @@ mod schema_tests {
                 layers,
                 vec![Layer::new_noreset(
                     Type::String,
-                    dict! {
-                        "maxlen" => Lit::Num(100)
+                    nullable_dict! {
+                        "maxlen" => Lit::UnsignedInt(100)
                     }
                 )]
             );
@@ -778,8 +806,8 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new_noreset(Type::String, dict! {}),
-                    Layer::new_noreset(Type::List, dict! {})
+                    Layer::new_noreset(Type::String, nullable_dict! {}),
+                    Layer::new_noreset(Type::List, nullable_dict! {})
                 ]
             );
         }
@@ -792,12 +820,12 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new_noreset(Type::String, dict! {}),
+                    Layer::new_noreset(Type::String, nullable_dict! {}),
                     Layer::new_noreset(
                         Type::List,
-                        dict! {
+                        nullable_dict! {
                             "unique" => Lit::Bool(true),
-                            "maxlen" => Lit::Num(10),
+                            "maxlen" => Lit::UnsignedInt(10),
                         }
                     )
                 ]
@@ -817,16 +845,16 @@ mod schema_tests {
                 vec![
                     Layer::new_noreset(
                         Type::String,
-                        dict! {
+                        nullable_dict! {
                             "ascii_only" => Lit::Bool(true),
-                            "maxlen" => Lit::Num(255)
+                            "maxlen" => Lit::UnsignedInt(255)
                         }
                     ),
                     Layer::new_noreset(
                         Type::List,
-                        dict! {
+                        nullable_dict! {
                             "unique" => Lit::Bool(true),
-                            "maxlen" => Lit::Num(10),
+                            "maxlen" => Lit::UnsignedInt(10),
                         }
                     )
                 ]
@@ -846,14 +874,14 @@ mod schema_tests {
         ")
             .unwrap();
             let expected = vec![
-                Layer::new_noreset(Type::String, dict!()),
+                Layer::new_noreset(Type::String, nullable_dict!()),
                 Layer::new_noreset(
                     Type::List,
-                    dict! {
-                        "maxlen" => Lit::Num(100),
+                    nullable_dict! {
+                        "maxlen" => Lit::UnsignedInt(100),
                     },
                 ),
-                Layer::new_noreset(Type::List, dict!("unique" => Lit::Bool(true))),
+                Layer::new_noreset(Type::List, nullable_dict!("unique" => Lit::Bool(true))),
             ];
             fuzz_tokens(&tok, |should_pass, new_tok| {
                 let (layers, c, okay) = schema::fold_layers(&new_tok);
@@ -916,7 +944,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     props: set![],
                 }
             )
@@ -933,7 +961,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     props: set!["primary"],
                 }
             )
@@ -955,8 +983,8 @@ mod schema_tests {
                     field_name: "username".into(),
                     layers: [Layer::new_noreset(
                         Type::String,
-                        dict! {
-                            "maxlen" => Lit::Num(10),
+                        nullable_dict! {
+                            "maxlen" => Lit::UnsignedInt(10),
                             "ascii_only" => Lit::Bool(true),
                         }
                     )]
@@ -986,14 +1014,14 @@ mod schema_tests {
                     layers: [
                         Layer::new_noreset(
                             Type::String,
-                            dict! {
-                                "maxlen" => Lit::Num(255),
+                            nullable_dict! {
+                                "maxlen" => Lit::UnsignedInt(255),
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
                         Layer::new_noreset(
                             Type::List,
-                            dict! {
+                            nullable_dict! {
                                 "unique" => Lit::Bool(true)
                             }
                         ),
@@ -1032,16 +1060,16 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set![]
                         }
                     ],
-                    props: dict! {}
+                    props: nullable_dict! {}
                 }
             )
         }
@@ -1067,21 +1095,21 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set!["null"]
                         }
                     ],
-                    props: dict! {}
+                    props: nullable_dict! {}
                 }
             )
         }
@@ -1112,26 +1140,26 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new_noreset(Type::String, dict! {}),
+                                Layer::new_noreset(Type::String, nullable_dict! {}),
                                 Layer::new_noreset(
                                     Type::List,
-                                    dict! {
+                                    nullable_dict! {
                                         "unique" => Lit::Bool(true)
                                     }
                                 )
@@ -1139,7 +1167,7 @@ mod schema_tests {
                             props: set!["null"]
                         }
                     ],
-                    props: dict! {}
+                    props: nullable_dict! {}
                 }
             )
         }
@@ -1175,26 +1203,26 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, dict! {})],
+                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new_noreset(Type::String, dict! {}),
+                                Layer::new_noreset(Type::String, nullable_dict! {}),
                                 Layer::new_noreset(
                                     Type::List,
-                                    dict! {
+                                    nullable_dict! {
                                         "unique" => Lit::Bool(true)
                                     }
                                 )
@@ -1202,9 +1230,9 @@ mod schema_tests {
                             props: set!["null"]
                         }
                     ],
-                    props: dict! {
-                        "env" => dict! {
-                            "free_user_limit" => Lit::Num(100),
+                    props: nullable_dict! {
+                        "env" => nullable_dict! {
+                            "free_user_limit" => Lit::UnsignedInt(100),
                         },
                         "storage_driver" => Lit::Str("skyheap".into()),
                     }
@@ -1227,8 +1255,8 @@ mod schema_tests {
                 ef,
                 ExpandedField {
                     field_name: "username".into(),
-                    layers: vec![Layer::new_noreset(Type::String, dict! {})],
-                    props: dict! {},
+                    layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                    props: nullable_dict! {},
                     reset: false
                 }
             )
@@ -1248,10 +1276,10 @@ mod schema_tests {
                 ef,
                 ExpandedField {
                     field_name: "username".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(false),
                     },
-                    layers: vec![Layer::new_noreset(Type::String, dict! {})],
+                    layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
                     reset: false
                 }
             );
@@ -1275,15 +1303,15 @@ mod schema_tests {
                 ef,
                 ExpandedField {
                     field_name: "username".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(false),
                         "jingle_bells" => Lit::Str("snow".into()),
                     },
                     layers: vec![Layer::new_noreset(
                         Type::String,
-                        dict! {
-                            "minlen" => Lit::Num(6),
-                            "maxlen" => Lit::Num(255),
+                        nullable_dict! {
+                            "minlen" => Lit::UnsignedInt(6),
+                            "maxlen" => Lit::UnsignedInt(255),
                         }
                     )],
                     reset: false
@@ -1311,20 +1339,20 @@ mod schema_tests {
                 ef,
                 ExpandedField {
                     field_name: "notes".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(true),
                         "jingle_bells" => Lit::Str("snow".into()),
                     },
                     layers: vec![
                         Layer::new_noreset(
                             Type::String,
-                            dict! {
+                            nullable_dict! {
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
                         Layer::new_noreset(
                             Type::List,
-                            dict! {
+                            nullable_dict! {
                                 "unique" => Lit::Bool(true),
                             }
                         )
@@ -1391,8 +1419,8 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {},
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    props: nullable_dict! {},
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1410,10 +1438,10 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1431,10 +1459,10 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1467,27 +1495,27 @@ mod schema_tests {
                 [
                     ExpandedField {
                         field_name: "myfield".into(),
-                        props: dict! {
+                        props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                         reset: false
                     },
                     ExpandedField {
                         field_name: "another".into(),
-                        props: dict! {
+                        props: nullable_dict! {
                             "nullable" => Lit::Bool(false)
                         },
                         layers: [
                             Layer::new_noreset(
                                 Type::String,
-                                dict! {
-                                    "maxlen" => Lit::Num(255)
+                                nullable_dict! {
+                                    "maxlen" => Lit::UnsignedInt(255)
                                 }
                             ),
                             Layer::new_noreset(
                                 Type::List,
-                                dict! {
+                                nullable_dict! {
                                    "unique" => Lit::Bool(true)
                                 },
                             )
@@ -1519,8 +1547,8 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {},
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    props: nullable_dict! {},
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1538,8 +1566,8 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {},
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    props: nullable_dict! {},
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1563,10 +1591,10 @@ mod schema_tests {
                 r.as_ref(),
                 [ExpandedField {
                     field_name: "myfield".into(),
-                    props: dict! {
+                    props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1595,16 +1623,16 @@ mod schema_tests {
                 [
                     ExpandedField {
                         field_name: "myfield".into(),
-                        props: dict! {
+                        props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                         reset: true
                     },
                     ExpandedField {
                         field_name: "myfield2".into(),
-                        props: dict! {},
-                        layers: [Layer::new_noreset(Type::String, dict! {})].into(),
+                        props: nullable_dict! {},
+                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
                         reset: true
                     }
                 ]
@@ -1637,18 +1665,18 @@ mod schema_tests {
                 [
                     ExpandedField {
                         field_name: "myfield".into(),
-                        props: dict! {
+                        props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_reset(Type::String, dict! {})].into(),
+                        layers: [Layer::new_reset(Type::String, nullable_dict! {})].into(),
                         reset: true
                     },
                     ExpandedField {
                         field_name: "myfield2".into(),
-                        props: dict! {},
+                        props: nullable_dict! {},
                         layers: [Layer::new_reset(
                             Type::String,
-                            dict! {"maxlen" => Lit::Num(255)}
+                            nullable_dict! {"maxlen" => Lit::UnsignedInt(255)}
                         )]
                         .into(),
                         reset: true
@@ -1823,7 +1851,7 @@ mod dml_tests {
         fn map_mini() {
             let tok = lex(b"{}").unwrap();
             let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
-            assert_eq!(r, dict! {})
+            assert_eq!(r, nullable_dict! {})
         }
 
         #[test]
@@ -1997,7 +2025,7 @@ mod dml_tests {
             let e = InsertStatement {
                 primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("jotsy".into(), "app".into()),
-                data: dict! {}.into(),
+                data: nullable_dict! {}.into(),
             };
             assert_eq!(e, r);
         }
@@ -2289,4 +2317,91 @@ mod dml_tests {
             assert_eq!(r, e);
         }
     }
+}
+
+mod nullable_dict_tests {
+    use super::*;
+    mod dict {
+        use {super::*, crate::engine::ql::lexer::Lit};
+
+        #[test]
+        fn null_mini() {
+            let d = fold_dict!(br"{ x: null }");
+            assert_eq!(
+                d,
+                nullable_dict! {
+                    "x" => Null,
+                }
+            );
+        }
+        #[test]
+        fn null() {
+            let d = fold_dict! {
+                br#"
+                    {
+                        this_is_non_null: "hello",
+                        but_this_is_null: null,
+                    }
+                "#
+            };
+            assert_eq!(
+                d,
+                nullable_dict! {
+                    "this_is_non_null" => Lit::Str("hello".into()),
+                    "but_this_is_null" => Null,
+                }
+            )
+        }
+        #[test]
+        fn null_pro() {
+            let d = fold_dict! {
+                br#"
+                    {
+                        a_string: "this is a string",
+                        num: 1234,
+                        a_dict: {
+                            a_null: null,
+                        }
+                    }
+                "#
+            };
+            assert_eq!(
+                d,
+                nullable_dict! {
+                    "a_string" => Lit::Str("this is a string".into()),
+                    "num" => Lit::UnsignedInt(1234),
+                    "a_dict" => nullable_dict! {
+                        "a_null" => Null,
+                    }
+                }
+            )
+        }
+        #[test]
+        fn null_pro_max() {
+            let d = fold_dict! {
+                br#"
+                    {
+                        a_string: "this is a string",
+                        num: 1234,
+                        a_dict: {
+                            a_null: null,
+                        },
+                        another_null: null,
+                    }
+                "#
+            };
+            assert_eq!(
+                d,
+                nullable_dict! {
+                    "a_string" => Lit::Str("this is a string".into()),
+                    "num" => Lit::UnsignedInt(1234),
+                    "a_dict" => nullable_dict! {
+                        "a_null" => Null,
+                    },
+                    "another_null" => Null,
+                }
+            )
+        }
+    }
+    // TODO(@ohsayan): Add null tests
 }

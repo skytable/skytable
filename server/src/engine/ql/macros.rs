@@ -306,6 +306,19 @@ macro_rules! dict {
     }};
 }
 
+macro_rules! nullable_dict {
+    () => {
+        dict! {}
+    };
+    ($($key:expr => $value:expr),* $(,)?) => {
+        dict! {
+            $(
+                $key => $crate::engine::ql::tests::NullableMapEntry::data($value),
+            )*
+        }
+    };
+}
+
 macro_rules! dict_nullable {
     () => {
         <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
