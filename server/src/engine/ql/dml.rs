@@ -79,9 +79,12 @@ pub(super) fn parse_list(
     let mut prev_nlist_dscr = None;
     while i < l && okay && !stop {
         let d = match &tok[i] {
-            Token::Lit(Lit::Str(s)) => DataType::String(s.to_string()),
-            Token::Lit(Lit::UnsignedInt(n)) => DataType::Number(*n),
-            Token::Lit(Lit::Bool(b)) => DataType::Boolean(*b),
+            Token::Lit(l) => match l {
+                Lit::Str(s) => DataType::String(s.to_string()),
+                Lit::UnsignedInt(n) => DataType::Number(*n),
+                Lit::Bool(b) => DataType::Boolean(*b),
+                Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+            },
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // a nested list
                 let mut nested_list = Vec::new();
@@ -138,15 +141,18 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
     let mut data = Vec::new();
     while i < l && okay && !stop {
         match &tok[i] {
-            Token::Lit(Lit::Str(s)) => {
-                data.push(Some(s.to_string().into()));
-            }
-            Token::Lit(Lit::UnsignedInt(n)) => {
-                data.push(Some((*n).into()));
-            }
-            Token::Lit(Lit::Bool(b)) => {
-                data.push(Some((*b).into()));
-            }
+            Token::Lit(l) => match l {
+                Lit::Str(s) => {
+                    data.push(Some(s.to_string().into()));
+                }
+                Lit::UnsignedInt(n) => {
+                    data.push(Some((*n).into()));
+                }
+                Lit::Bool(b) => {
+                    data.push(Some((*b).into()));
+                }
+                Lit::UnsafeLit(r) => data.push(Some(DataType::AnonymousTypeNeedsEval(r.clone()))),
+            },
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // ah, a list
                 let mut l = Vec::new();
@@ -196,20 +202,14 @@ pub(super) fn parse_data_map_syntax<'a>(
         let (field, colon, expression) = (&tok[i], &tok[i + 1], &tok[i + 2]);
         okay &= colon == &Symbol::SymColon;
         match (field, expression) {
-            (Token::Ident(id), Token::Lit(Lit::Str(s))) => {
-                okay &= data
-                    .insert(unsafe { id.as_slice() }, Some(s.to_string().into()))
-                    .is_none();
-            }
-            (Token::Ident(id), Token::Lit(Lit::UnsignedInt(n))) => {
-                okay &= data
-                    .insert(unsafe { id.as_slice() }, Some((*n).into()))
-                    .is_none();
-            }
-            (Token::Ident(id), Token::Lit(Lit::Bool(b))) => {
-                okay &= data
-                    .insert(unsafe { id.as_slice() }, Some((*b).into()))
-                    .is_none();
+            (Token::Ident(id), Token::Lit(l)) => {
+                let dt = match l {
+                    Lit::Str(s) => s.to_string().into(),
+                    Lit::Bool(b) => (*b).into(),
+                    Lit::UnsignedInt(s) => (*s).into(),
+                    Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+                };
+                okay &= data.insert(unsafe { id.as_slice() }, Some(dt)).is_none();
             }
             (Token::Ident(id), Token::Symbol(Symbol::TtOpenSqBracket)) => {
                 // ooh a list

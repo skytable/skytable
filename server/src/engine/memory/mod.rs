@@ -26,6 +26,8 @@
 
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
 
+use super::ql::RawSlice;
+
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
 #[derive(Debug, PartialEq)]
@@ -43,6 +45,8 @@ pub enum DataType {
     /// elements to ensure correctness in this specific context
     /// FIXME(@ohsayan): Try enforcing this somehow
     List(Vec<Self>),
+    /// Not an actual data type but MUST be translated into an actual data type
+    AnonymousTypeNeedsEval(RawSlice),
 }
 
 enum_impls! {
