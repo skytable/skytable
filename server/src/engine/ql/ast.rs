@@ -27,7 +27,7 @@
 use {
     super::{
         ddl,
-        lexer::{Lexer, Token},
+        lexer::{InsecureLexer, Token},
         schema, LangError, LangResult, RawSlice,
     },
     crate::util::Life,
@@ -208,7 +208,7 @@ pub struct Compiler<'a> {
 impl<'a> Compiler<'a> {
     /// Compile a BlueQL query
     pub fn compile(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
-        let token_stream = Lexer::lex(src)?;
+        let token_stream = InsecureLexer::lex(src)?;
         Self::new(&token_stream).compile_link_lt()
     }
     #[inline(always)]

@@ -378,7 +378,12 @@ fn kwof(key: &str) -> Option<Keyword> {
     Lexer impl
 */
 
-pub struct Lexer<'a> {
+const LEXER_MODE_INSECURE: u8 = 0;
+const LEXER_MODE_SECURE: u8 = 1;
+
+pub type InsecureLexer<'a> = Lexer<'a, LEXER_MODE_INSECURE>;
+
+pub struct Lexer<'a, const OPERATING_MODE: u8> {
     c: *const u8,
     e: *const u8,
     last_error: Option<LangError>,
@@ -386,7 +391,7 @@ pub struct Lexer<'a> {
     _lt: PhantomData<&'a [u8]>,
 }
 
-impl<'a> Lexer<'a> {
+impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     pub const fn new(src: &'a [u8]) -> Self {
         unsafe {
             Self {
@@ -401,7 +406,7 @@ impl<'a> Lexer<'a> {
 }
 
 // meta
-impl<'a> Lexer<'a> {
+impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     #[inline(always)]
     const fn cursor(&self) -> *const u8 {
         self.c
@@ -480,7 +485,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-impl<'a> Lexer<'a> {
+impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     fn scan_ident(&mut self) -> RawSlice {
         let s = self.cursor();
         unsafe {
@@ -653,6 +658,7 @@ impl<'a> Lexer<'a> {
     fn _lex(&mut self) {
         while self.not_exhausted() && self.last_error.is_none() {
             match unsafe { self.deref_cursor() } {
+                // secure features
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
                 #[cfg(test)]
                 byte if byte == b'\x01' => {
@@ -663,9 +669,15 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 b'\r' => self.scan_unsafe_literal(),
-                byte if byte.is_ascii_digit() => self.scan_unsigned_integer(),
-                b'-' => self.scan_signed_integer(),
-                qs @ (b'\'' | b'"') => self.scan_quoted_string(qs),
+                // insecure features
+                byte if byte.is_ascii_digit() && OPERATING_MODE == LEXER_MODE_INSECURE => {
+                    self.scan_unsigned_integer()
+                }
+                b'-' if OPERATING_MODE == LEXER_MODE_INSECURE => self.scan_signed_integer(),
+                qs @ (b'\'' | b'"') if OPERATING_MODE == LEXER_MODE_INSECURE => {
+                    self.scan_quoted_string(qs)
+                }
+                // blank space or an arbitrary byte
                 b' ' | b'\n' | b'\t' => self.trim_ahead(),
                 b => self.scan_byte(b),
             }

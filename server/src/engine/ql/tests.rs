@@ -26,14 +26,14 @@
 
 use {
     super::{
-        lexer::{Lexer, Token},
+        lexer::{InsecureLexer, Token},
         LangResult,
     },
     crate::{engine::memory::DataType, util::Life},
 };
 
 pub(super) fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
-    Lexer::lex(src)
+    InsecureLexer::lex(src)
 }
 
 pub trait NullableData<T> {
