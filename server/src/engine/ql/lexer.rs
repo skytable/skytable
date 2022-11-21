@@ -75,6 +75,7 @@ pub enum Lit {
     Str(Box<str>),
     Bool(bool),
     UnsignedInt(u64),
+    SignedInt(i64),
     UnsafeLit(RawSlice),
 }
 
@@ -219,11 +220,11 @@ pub enum Type {
 }
 
 /*
-    This section implements DAGs, as described by Czech et al in their paper. I wrote these pretty much by brute-force using
-    a byte-level multiplicative function (inside a script). This unfortunately implies that every time we *do* need to add a
-    new keyword, I will need to recompute and rewrite the vertices. I don't plan to use any codegen, so I think this is good
-    as-is. The real challenge here is to keep the graph small, and I couldn't do that for the symbols table even with multiple
-    trials. Please see if you can improve them.
+    This section implements LUTs constructed using DAGs, as described by Czech et al in their paper. I wrote these pretty much by
+    brute-force using a byte-level multiplicative function (inside a script). This unfortunately implies that every time we *do*
+    need to add a new keyword, I will need to recompute and rewrite the vertices. I don't plan to use any codegen, so I think
+    this is good as-is. The real challenge here is to keep the graph small, and I couldn't do that for the symbols table even with
+    multiple trials. Please see if you can improve them.
 
     Also the functions are unique to every graph, and every input set, so BE WARNED!
 
@@ -501,7 +502,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn scan_number(&mut self) {
+    fn scan_unsigned_integer(&mut self) {
         let s = self.cursor();
         unsafe {
             while self.peek_is(|b| b.is_ascii_digit()) {
@@ -615,6 +616,40 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    #[inline(always)]
+    fn scan_signed_integer(&mut self) {
+        unsafe {
+            self.incr_cursor();
+        }
+        if self.peek_is(|b| b.is_ascii_digit()) {
+            // we have some digits
+            let start = unsafe {
+                // UNSAFE(@ohsayan): Take the (-) into the parse
+                // TODO(@ohsayan): we can maybe look at a more efficient way later
+                self.cursor().sub(1)
+            };
+            while self.peek_is_and_forward(|b| b.is_ascii_digit()) {}
+            let wseof = self.peek_is(|char| !char.is_ascii_alphabetic()) || self.exhausted();
+            match unsafe {
+                str::from_utf8_unchecked(slice::from_raw_parts(
+                    start,
+                    self.cursor().offset_from(start) as usize,
+                ))
+            }
+            .parse::<i64>()
+            {
+                Ok(num) if compiler::likely(wseof) => {
+                    self.push_token(Lit::SignedInt(num));
+                }
+                _ => {
+                    compiler::cold_err(self.last_error = Some(LangError::InvalidNumericLiteral));
+                }
+            }
+        } else {
+            self.push_token(Token![-]);
+        }
+    }
+
     fn _lex(&mut self) {
         while self.not_exhausted() && self.last_error.is_none() {
             match unsafe { self.deref_cursor() } {
@@ -628,7 +663,8 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 b'\r' => self.scan_unsafe_literal(),
-                byte if byte.is_ascii_digit() => self.scan_number(),
+                byte if byte.is_ascii_digit() => self.scan_unsigned_integer(),
+                b'-' => self.scan_signed_integer(),
                 qs @ (b'\'' | b'"') => self.scan_quoted_string(qs),
                 b' ' | b'\n' | b'\t' => self.trim_ahead(),
                 b => self.scan_byte(b),

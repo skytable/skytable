@@ -115,11 +115,19 @@ mod lexer_tests {
 
     // literals
     #[test]
-    fn lex_number() {
+    fn lex_unsigned_int() {
         let number = v!("123456");
         assert_eq!(
             lex(&number).unwrap(),
             vec![Token::Lit(Lit::UnsignedInt(123456))]
+        );
+    }
+    #[test]
+    fn lex_signed_int() {
+        let number = v!("-123456");
+        assert_eq!(
+            lex(&number).unwrap(),
+            vec![Token::Lit(Lit::SignedInt(-123456))]
         );
     }
     #[test]

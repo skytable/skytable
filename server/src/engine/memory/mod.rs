@@ -37,15 +37,25 @@ pub enum DataType {
     String(String),
     /// Bytes
     Binary(Vec<u8>),
-    /// An integer
-    Number(u64),
+    /// An unsigned integer
+    ///
+    /// **NOTE:** This is the default evaluated type for unsigned integers by the query processor. It is the
+    /// responsibility of the executor to ensure integrity checks depending on actual type width in the declared
+    /// schema (if any)
+    UnsignedInt(u64),
+    /// A signed integer
+    ///
+    /// **NOTE:** This is the default evaluated type for signed integers by the query processor. It is the
+    /// responsibility of the executor to ensure integrity checks depending on actual type width in the declared
+    /// schema (if any)
+    SignedInt(i64),
     /// A boolean
     Boolean(bool),
     /// A single-type list. Note, you **need** to keep up the invariant that the [`DataType`] disc. remains the same for all
     /// elements to ensure correctness in this specific context
     /// FIXME(@ohsayan): Try enforcing this somehow
     List(Vec<Self>),
-    /// Not an actual data type but MUST be translated into an actual data type
+    /// **☢ WARNING:** Not an actual data type but MUST be translated into an actual data type
     AnonymousTypeNeedsEval(RawSlice),
 }
 
@@ -53,7 +63,7 @@ enum_impls! {
     DataType => {
         String as String,
         Vec<u8> as Binary,
-        u64 as Number,
+        u64 as UnsignedInt,
         bool as Boolean,
         Vec<Self> as List,
         &'static str as String,

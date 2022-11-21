@@ -81,9 +81,10 @@ pub(super) fn parse_list(
         let d = match &tok[i] {
             Token::Lit(l) => match l {
                 Lit::Str(s) => DataType::String(s.to_string()),
-                Lit::UnsignedInt(n) => DataType::Number(*n),
+                Lit::UnsignedInt(n) => DataType::UnsignedInt(*n),
                 Lit::Bool(b) => DataType::Boolean(*b),
                 Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+                Lit::SignedInt(uint) => DataType::SignedInt(*uint),
             },
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // a nested list
@@ -152,6 +153,7 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
                     data.push(Some((*b).into()));
                 }
                 Lit::UnsafeLit(r) => data.push(Some(DataType::AnonymousTypeNeedsEval(r.clone()))),
+                Lit::SignedInt(int) => data.push(Some(DataType::SignedInt(*int))),
             },
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // ah, a list
@@ -208,6 +210,7 @@ pub(super) fn parse_data_map_syntax<'a>(
                     Lit::Bool(b) => (*b).into(),
                     Lit::UnsignedInt(s) => (*s).into(),
                     Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+                    Lit::SignedInt(int) => DataType::SignedInt(*int),
                 };
                 okay &= data.insert(unsafe { id.as_slice() }, Some(dt)).is_none();
             }
