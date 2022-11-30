@@ -35,7 +35,10 @@ use {
         lexer::{Lit, Symbol, Token},
         LangError, LangResult, RawSlice,
     },
-    crate::{engine::memory::DataType, util::MaybeInit},
+    crate::{
+        engine::memory::DataType,
+        util::{compiler, MaybeInit},
+    },
     std::{
         collections::HashMap,
         mem::{discriminant, Discriminant},
@@ -536,7 +539,7 @@ pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentEx
     let mut i = 0;
     let mut exprs = Vec::new();
     if AssignmentExpression::parse_and_append_expression(tok, &mut exprs, &mut i) {
-        assert_eq!(i, tok.len(), "full token stream not utilized");
+        full_tt!(i, tok.len());
         Some(exprs.remove(0))
     } else {
         None
@@ -606,7 +609,7 @@ impl<'a> UpdateStatement<'a> {
 pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatement<'a>> {
     let mut i = 0;
     let r = UpdateStatement::parse_update(tok, &mut i);
-    assert_eq!(i, tok.len(), "full token stream not utilized");
+    full_tt!(i, tok.len());
     r
 }
 
@@ -666,6 +669,82 @@ impl<'a> DeleteStatement<'a> {
 pub(super) fn parse_delete_full<'a>(tok: &'a [Token]) -> LangResult<DeleteStatement<'a>> {
     let mut i = 0_usize;
     let r = DeleteStatement::parse_delete(tok, &mut i);
-    assert_eq!(i, tok.len());
+    full_tt!(i, tok.len());
     r
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct RelationalExpr<'a> {
+    pub(super) lhs: RawSlice,
+    pub(super) rhs: &'a Lit,
+    pub(super) opc: u8,
+}
+
+impl<'a> RelationalExpr<'a> {
+    pub(super) const OP_EQ: u8 = 1;
+    pub(super) const OP_NE: u8 = 2;
+    pub(super) const OP_GT: u8 = 3;
+    pub(super) const OP_GE: u8 = 4;
+    pub(super) const OP_LT: u8 = 5;
+    pub(super) const OP_LE: u8 = 6;
+    #[inline(always)]
+    fn parse_operator(tok: &[Token], i: &mut usize, okay: &mut bool) -> u8 {
+        /*
+            FIXME(@ohsayan): This is relatively messy right now, but does the job. Will
+            re-implement later.
+        */
+        #[inline(always)]
+        fn u(b: bool) -> u8 {
+            b as _
+        }
+        let op_eq = u(tok[0] == Token![=]) * Self::OP_EQ;
+        let op_ne = u(tok[0] == Token![!] && tok[1] == Token![=]) * Self::OP_NE;
+        let op_ge = u(tok[0] == Token![>] && tok[1] == Token![=]) * Self::OP_GE;
+        let op_gt = u(tok[0] == Token![>] && op_ge == 0) * Self::OP_GT;
+        let op_le = u(tok[0] == Token![<] && tok[1] == Token![=]) * Self::OP_LE;
+        let op_lt = u(tok[0] == Token![<] && op_le == 0) * Self::OP_LT;
+        let opc = op_eq + op_ne + op_ge + op_gt + op_le + op_lt;
+        *okay = opc != 0;
+        *i += 1 + (opc & 1 == 0) as usize;
+        opc
+    }
+    #[inline(always)]
+    fn try_parse(tok: &'a [Token], cnt: &mut usize) -> Option<Self> {
+        /*
+            Minimum length of an expression:
+            [lhs] [operator] [rhs]
+        */
+        let mut okay = tok.len() >= 3;
+        let mut i = 0_usize;
+        if compiler::unlikely(!okay) {
+            return None;
+        }
+        okay &= tok[0].is_ident();
+        i += 1;
+        // let's get ourselves the operator
+        let operator = Self::parse_operator(&tok[1..], &mut i, &mut okay);
+        okay &= i < tok.len();
+        okay &= tok[tok.len() - 1].is_lit(); // LOL, I really like saving cycles
+        *cnt += i + okay as usize;
+        if compiler::likely(okay) {
+            Some(unsafe {
+                Self {
+                    lhs: extract!(tok[0], Token::Ident(ref id) => id.clone()),
+                    rhs: extract!(tok[tok.len() - 1], Token::Lit(ref l) => l),
+                    opc: operator,
+                }
+            })
+        } else {
+            compiler::cold_err(None)
+        }
+    }
+}
+
+#[cfg(test)]
+#[inline(always)]
+pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<'a>> {
+    let mut i = 0;
+    let okay = RelationalExpr::try_parse(tok, &mut i);
+    full_tt!(tok.len(), i);
+    okay
 }

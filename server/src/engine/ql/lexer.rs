@@ -696,11 +696,11 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
 
 impl Token {
     #[inline(always)]
-    pub(crate) fn is_ident(&self) -> bool {
+    pub(crate) const fn is_ident(&self) -> bool {
         matches!(self, Token::Ident(_))
     }
     #[inline(always)]
-    pub(crate) fn is_typeid(&self) -> bool {
+    pub(crate) const fn is_typeid(&self) -> bool {
         matches!(self, Token::Keyword(Keyword::TypeId(_)))
     }
     #[inline(always)]
@@ -723,7 +723,7 @@ impl Token {
         }
     }
     #[inline(always)]
-    pub(super) fn is_lit(&self) -> bool {
+    pub(super) const fn is_lit(&self) -> bool {
         matches!(self, Self::Lit(_))
     }
 }

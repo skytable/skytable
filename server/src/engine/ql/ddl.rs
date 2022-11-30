@@ -96,7 +96,7 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
 pub(super) fn parse_drop_full(tok: &[Token]) -> LangResult<Statement> {
     let mut i = 0;
     let r = self::parse_drop(tok, &mut i);
-    assert_eq!(i, tok.len(), "full token stream not utilized");
+    full_tt!(i, tok.len());
     r
 }
 
@@ -130,6 +130,6 @@ pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statemen
 pub(super) fn parse_inspect_full(tok: &[Token]) -> LangResult<Statement> {
     let mut i = 0;
     let r = self::parse_inspect(tok, &mut i);
-    assert_eq!(i, tok.len(), "full token stream not used");
+    full_tt!(i, tok.len());
     r
 }

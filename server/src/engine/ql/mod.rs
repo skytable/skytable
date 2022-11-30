@@ -88,8 +88,12 @@ unsafe impl Sync for RawSlice {}
 
 impl RawSlice {
     const _EALIGN: () = assert!(mem::align_of::<Self>() == mem::align_of::<&[u8]>());
+    const FAKE_SLICE: Self = unsafe { Self::new_from_str("") };
     const unsafe fn new(ptr: *const u8, len: usize) -> Self {
         Self { ptr, len }
+    }
+    const unsafe fn new_from_str(s: &str) -> Self {
+        Self::new(s.as_bytes().as_ptr(), s.as_bytes().len())
     }
     unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.ptr, self.len)

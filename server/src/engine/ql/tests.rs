@@ -2325,6 +2325,91 @@ mod dml_tests {
             assert_eq!(r, e);
         }
     }
+    mod relational_expr {
+        use {
+            super::*,
+            crate::engine::ql::dml::{self, RelationalExpr},
+        };
+
+        #[test]
+        fn expr_eq() {
+            let expr = lex(b"primary_key = 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_EQ
+                }
+            );
+        }
+        #[test]
+        fn expr_ne() {
+            let expr = lex(b"primary_key != 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_NE
+                }
+            );
+        }
+        #[test]
+        fn expr_gt() {
+            let expr = lex(b"primary_key > 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_GT
+                }
+            );
+        }
+        #[test]
+        fn expr_ge() {
+            let expr = lex(b"primary_key >= 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_GE
+                }
+            );
+        }
+        #[test]
+        fn expr_lt() {
+            let expr = lex(b"primary_key < 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_LT
+                }
+            );
+        }
+        #[test]
+        fn expr_le() {
+            let expr = lex(b"primary_key <= 10").unwrap();
+            let r = dml::parse_relexpr_full(&expr).unwrap();
+            assert_eq!(
+                r,
+                RelationalExpr {
+                    rhs: &(10.into()),
+                    lhs: "primary_key".into(),
+                    opc: RelationalExpr::OP_LE
+                }
+            );
+        }
+    }
 }
 
 mod nullable_dict_tests {
