@@ -364,15 +364,15 @@ mod schema_tests {
         }
         #[test]
         fn inspect_model() {
-            let tok = lex(b"inspect model user").unwrap();
+            let tok = lex(b"inspect model users").unwrap();
             assert_eq!(
                 ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectModel(Entity::Single("user".into()))
+                Statement::InspectModel(Entity::Single("users".into()))
             );
-            let tok = lex(b"inspect model tweeter.user").unwrap();
+            let tok = lex(b"inspect model tweeter.users").unwrap();
             assert_eq!(
                 ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectModel(("tweeter", "user").into())
+                Statement::InspectModel(("tweeter", "users").into())
             );
         }
         #[test]
@@ -616,7 +616,6 @@ mod schema_tests {
     }
     mod tymeta {
         use super::*;
-        use crate::engine::ql::lexer::{Keyword, Type};
         #[test]
         fn tymeta_mini() {
             let tok = lex(b"}").unwrap();
@@ -705,7 +704,7 @@ mod schema_tests {
         }
         #[test]
         fn fuzz_tymeta_normal() {
-            // { maxlen: 10, unique: true, user: "sayan" }
+            // { maxlen: 10, unique: true, users: "sayan" }
             //   ^start
             let tok = lex(b"
                     maxlen: 10,
@@ -713,7 +712,7 @@ mod schema_tests {
                     auth: {
                         maybe: true\x01
                     },
-                    user: \"sayan\"\x01
+                    users: \"sayan\"\x01
                 }
             ")
             .unwrap();
@@ -723,7 +722,7 @@ mod schema_tests {
                 "auth" => nullable_dict! {
                     "maybe" => Lit::Bool(true),
                 },
-                "user" => Lit::Str("sayan".into())
+                "users" => Lit::Str("sayan".into())
             };
             fuzz_tokens(&tok, |should_pass, new_src| {
                 let (ret, dict) = schema::fold_tymeta(&new_src);
@@ -742,7 +741,7 @@ mod schema_tests {
         }
         #[test]
         fn fuzz_tymeta_with_ty() {
-            // list { maxlen: 10, unique: true, type string, user: "sayan" }
+            // list { maxlen: 10, unique: true, type string, users: "sayan" }
             //   ^start
             let tok = lex(b"
                     maxlen: 10,
@@ -751,7 +750,7 @@ mod schema_tests {
                         maybe: true\x01
                     },
                     type string,
-                    user: \"sayan\"\x01
+                    users: \"sayan\"\x01
                 }
             ")
             .unwrap();
@@ -767,7 +766,7 @@ mod schema_tests {
                 if should_pass {
                     assert!(ret.is_okay());
                     assert!(ret.has_more());
-                    assert!(new_src[ret.pos()] == Token::Keyword(Keyword::TypeId(Type::String)));
+                    assert!(new_src[ret.pos()] == Token::Ident("string".into()));
                     assert_eq!(dict, expected);
                 } else if ret.is_okay() {
                     panic!("Expected failure but passed for token stream: `{:?}`", tok);
@@ -777,7 +776,7 @@ mod schema_tests {
     }
     mod layer {
         use super::*;
-        use crate::engine::ql::{lexer::Type, schema::Layer};
+        use crate::engine::ql::schema::Layer;
         #[test]
         fn layer_mini() {
             let tok = lex(b"string)").unwrap();
@@ -786,7 +785,7 @@ mod schema_tests {
             assert!(okay);
             assert_eq!(
                 layers,
-                vec![Layer::new_noreset(Type::String, nullable_dict! {})]
+                vec![Layer::new_noreset("string".into(), nullable_dict! {})]
             );
         }
         #[test]
@@ -798,7 +797,7 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![Layer::new_noreset(
-                    Type::String,
+                    "string".into(),
                     nullable_dict! {
                         "maxlen" => Lit::UnsignedInt(100)
                     }
@@ -814,8 +813,8 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new_noreset(Type::String, nullable_dict! {}),
-                    Layer::new_noreset(Type::List, nullable_dict! {})
+                    Layer::new_noreset("string".into(), nullable_dict! {}),
+                    Layer::new_noreset("list".into(), nullable_dict! {})
                 ]
             );
         }
@@ -828,9 +827,9 @@ mod schema_tests {
             assert_eq!(
                 layers,
                 vec![
-                    Layer::new_noreset(Type::String, nullable_dict! {}),
+                    Layer::new_noreset("string".into(), nullable_dict! {}),
                     Layer::new_noreset(
-                        Type::List,
+                        "list".into(),
                         nullable_dict! {
                             "unique" => Lit::Bool(true),
                             "maxlen" => Lit::UnsignedInt(10),
@@ -852,14 +851,14 @@ mod schema_tests {
                 layers,
                 vec![
                     Layer::new_noreset(
-                        Type::String,
+                        "string".into(),
                         nullable_dict! {
                             "ascii_only" => Lit::Bool(true),
                             "maxlen" => Lit::UnsignedInt(255)
                         }
                     ),
                     Layer::new_noreset(
-                        Type::List,
+                        "list".into(),
                         nullable_dict! {
                             "unique" => Lit::Bool(true),
                             "maxlen" => Lit::UnsignedInt(10),
@@ -882,14 +881,14 @@ mod schema_tests {
         ")
             .unwrap();
             let expected = vec![
-                Layer::new_noreset(Type::String, nullable_dict!()),
+                Layer::new_noreset("string".into(), nullable_dict!()),
                 Layer::new_noreset(
-                    Type::List,
+                    "list".into(),
                     nullable_dict! {
                         "maxlen" => Lit::UnsignedInt(100),
                     },
                 ),
-                Layer::new_noreset(Type::List, nullable_dict!("unique" => Lit::Bool(true))),
+                Layer::new_noreset("list".into(), nullable_dict!("unique" => Lit::Bool(true))),
             ];
             fuzz_tokens(&tok, |should_pass, new_tok| {
                 let (layers, c, okay) = schema::fold_layers(&new_tok);
@@ -935,10 +934,7 @@ mod schema_tests {
     mod fields {
         use {
             super::*,
-            crate::engine::ql::{
-                lexer::Type,
-                schema::{Field, Layer},
-            },
+            crate::engine::ql::schema::{Field, Layer},
         };
         #[test]
         fn field_mini() {
@@ -952,7 +948,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     props: set![],
                 }
             )
@@ -969,7 +965,7 @@ mod schema_tests {
                 f,
                 Field {
                     field_name: "username".into(),
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     props: set!["primary"],
                 }
             )
@@ -990,7 +986,7 @@ mod schema_tests {
                 Field {
                     field_name: "username".into(),
                     layers: [Layer::new_noreset(
-                        Type::String,
+                        "string".into(),
                         nullable_dict! {
                             "maxlen" => Lit::UnsignedInt(10),
                             "ascii_only" => Lit::Bool(true),
@@ -1021,14 +1017,14 @@ mod schema_tests {
                     field_name: "notes".into(),
                     layers: [
                         Layer::new_noreset(
-                            Type::String,
+                            "string".into(),
                             nullable_dict! {
                                 "maxlen" => Lit::UnsignedInt(255),
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
                         Layer::new_noreset(
-                            Type::List,
+                            "list".into(),
                             nullable_dict! {
                                 "unique" => Lit::Bool(true)
                             }
@@ -1041,10 +1037,7 @@ mod schema_tests {
         }
     }
     mod schemas {
-        use crate::engine::ql::{
-            lexer::Type,
-            schema::{Field, Layer, Model},
-        };
+        use crate::engine::ql::schema::{Field, Layer, Model};
 
         use super::*;
         #[test]
@@ -1068,12 +1061,12 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set![]
                         }
                     ],
@@ -1103,17 +1096,17 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set!["null"]
                         }
                     ],
@@ -1148,25 +1141,25 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new_noreset(Type::String, nullable_dict! {}),
+                                Layer::new_noreset("string".into(), nullable_dict! {}),
                                 Layer::new_noreset(
-                                    Type::List,
+                                    "list".into(),
                                     nullable_dict! {
                                         "unique" => Lit::Bool(true)
                                     }
@@ -1211,25 +1204,25 @@ mod schema_tests {
                     fields: vec![
                         Field {
                             field_name: "username".into(),
-                            layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                             props: set!["primary"]
                         },
                         Field {
                             field_name: "password".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set![]
                         },
                         Field {
                             field_name: "profile_pic".into(),
-                            layers: vec![Layer::new_noreset(Type::Binary, nullable_dict! {})],
+                            layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
                             props: set!["null"]
                         },
                         Field {
                             field_name: "notes".into(),
                             layers: vec![
-                                Layer::new_noreset(Type::String, nullable_dict! {}),
+                                Layer::new_noreset("string".into(), nullable_dict! {}),
                                 Layer::new_noreset(
-                                    Type::List,
+                                    "list".into(),
                                     nullable_dict! {
                                         "unique" => Lit::Bool(true)
                                     }
@@ -1250,10 +1243,7 @@ mod schema_tests {
     }
     mod dict_field_syntax {
         use super::*;
-        use crate::engine::ql::{
-            lexer::Type,
-            schema::{ExpandedField, Layer},
-        };
+        use crate::engine::ql::schema::{ExpandedField, Layer};
         #[test]
         fn field_syn_mini() {
             let tok = lex(b"username { type string }").unwrap();
@@ -1263,7 +1253,7 @@ mod schema_tests {
                 ef,
                 ExpandedField {
                     field_name: "username".into(),
-                    layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                    layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                     props: nullable_dict! {},
                     reset: false
                 }
@@ -1287,7 +1277,7 @@ mod schema_tests {
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(false),
                     },
-                    layers: vec![Layer::new_noreset(Type::String, nullable_dict! {})],
+                    layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
                     reset: false
                 }
             );
@@ -1316,7 +1306,7 @@ mod schema_tests {
                         "jingle_bells" => Lit::Str("snow".into()),
                     },
                     layers: vec![Layer::new_noreset(
-                        Type::String,
+                        "string".into(),
                         nullable_dict! {
                             "minlen" => Lit::UnsignedInt(6),
                             "maxlen" => Lit::UnsignedInt(255),
@@ -1353,13 +1343,13 @@ mod schema_tests {
                     },
                     layers: vec![
                         Layer::new_noreset(
-                            Type::String,
+                            "string".into(),
                             nullable_dict! {
                                 "ascii_only" => Lit::Bool(true),
                             }
                         ),
                         Layer::new_noreset(
-                            Type::List,
+                            "list".into(),
                             nullable_dict! {
                                 "unique" => Lit::Bool(true),
                             }
@@ -1410,10 +1400,7 @@ mod schema_tests {
     }
     mod alter_model_add {
         use super::*;
-        use crate::engine::ql::{
-            lexer::Type,
-            schema::{ExpandedField, Layer},
-        };
+        use crate::engine::ql::schema::{ExpandedField, Layer};
         #[test]
         fn add_mini() {
             let tok = lex(b"
@@ -1428,7 +1415,7 @@ mod schema_tests {
                 [ExpandedField {
                     field_name: "myfield".into(),
                     props: nullable_dict! {},
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1449,7 +1436,7 @@ mod schema_tests {
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1470,7 +1457,7 @@ mod schema_tests {
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: false
                 }]
             );
@@ -1506,7 +1493,7 @@ mod schema_tests {
                         props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                        layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                         reset: false
                     },
                     ExpandedField {
@@ -1516,13 +1503,13 @@ mod schema_tests {
                         },
                         layers: [
                             Layer::new_noreset(
-                                Type::String,
+                                "string".into(),
                                 nullable_dict! {
                                     "maxlen" => Lit::UnsignedInt(255)
                                 }
                             ),
                             Layer::new_noreset(
-                                Type::List,
+                                "list".into(),
                                 nullable_dict! {
                                    "unique" => Lit::Bool(true)
                                 },
@@ -1536,12 +1523,9 @@ mod schema_tests {
         }
     }
     mod alter_model_update {
-        use crate::engine::ql::{
-            lexer::Type,
-            schema::{ExpandedField, Layer},
-        };
-
         use super::*;
+        use crate::engine::ql::schema::{ExpandedField, Layer};
+
         #[test]
         fn alter_mini() {
             let tok = lex(b"
@@ -1556,7 +1540,7 @@ mod schema_tests {
                 [ExpandedField {
                     field_name: "myfield".into(),
                     props: nullable_dict! {},
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1575,7 +1559,7 @@ mod schema_tests {
                 [ExpandedField {
                     field_name: "myfield".into(),
                     props: nullable_dict! {},
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1602,7 +1586,7 @@ mod schema_tests {
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                     reset: true
                 }]
             );
@@ -1634,13 +1618,13 @@ mod schema_tests {
                         props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                        layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                         reset: true
                     },
                     ExpandedField {
                         field_name: "myfield2".into(),
                         props: nullable_dict! {},
-                        layers: [Layer::new_noreset(Type::String, nullable_dict! {})].into(),
+                        layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
                         reset: true
                     }
                 ]
@@ -1676,14 +1660,14 @@ mod schema_tests {
                         props: nullable_dict! {
                             "nullable" => Lit::Bool(true)
                         },
-                        layers: [Layer::new_reset(Type::String, nullable_dict! {})].into(),
+                        layers: [Layer::new_reset("string".into(), nullable_dict! {})].into(),
                         reset: true
                     },
                     ExpandedField {
                         field_name: "myfield2".into(),
                         props: nullable_dict! {},
                         layers: [Layer::new_reset(
-                            Type::String,
+                            "string".into(),
                             nullable_dict! {"maxlen" => Lit::UnsignedInt(255)}
                         )]
                         .into(),
@@ -1959,13 +1943,13 @@ mod dml_tests {
         #[test]
         fn insert_tuple_mini() {
             let x = lex(br#"
-                insert twitter.user:"sayan" ()
+                insert twitter.users:"sayan" ()
             "#)
             .unwrap();
             let r = dml::parse_insert_full(&x[1..]).unwrap();
             let e = InsertStatement {
                 primary_key: &("sayan".to_string().into()),
-                entity: Entity::Full("twitter".into(), "user".into()),
+                entity: Entity::Full("twitter".into(), "users".into()),
                 data: vec![].into(),
             };
             assert_eq!(e, r);
@@ -2111,13 +2095,13 @@ mod dml_tests {
         #[test]
         fn select_mini() {
             let tok = lex(br#"
-                select * from user:"sayan"
+                select * from users:"sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
             let e = SelectStatement {
                 primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Single("user".into()),
+                entity: Entity::Single("users".into()),
                 fields: [].to_vec(),
                 wildcard: true,
             };
@@ -2126,13 +2110,13 @@ mod dml_tests {
         #[test]
         fn select() {
             let tok = lex(br#"
-                select field1 from user:"sayan"
+                select field1 from users:"sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
             let e = SelectStatement {
                 primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Single("user".into()),
+                entity: Entity::Single("users".into()),
                 fields: ["field1".into()].to_vec(),
                 wildcard: false,
             };
@@ -2141,13 +2125,13 @@ mod dml_tests {
         #[test]
         fn select_pro() {
             let tok = lex(br#"
-                select field1 from twitter.user:"sayan"
+                select field1 from twitter.users:"sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
             let e = SelectStatement {
                 primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Full("twitter".into(), "user".into()),
+                entity: Entity::Full("twitter".into(), "users".into()),
                 fields: ["field1".into()].to_vec(),
                 wildcard: false,
             };
@@ -2156,13 +2140,13 @@ mod dml_tests {
         #[test]
         fn select_pro_max() {
             let tok = lex(br#"
-                select field1, field2 from twitter.user:"sayan"
+                select field1, field2 from twitter.users:"sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
             let e = SelectStatement {
                 primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Full("twitter".into(), "user".into()),
+                entity: Entity::Full("twitter".into(), "users".into()),
                 fields: ["field1".into(), "field2".into()].to_vec(),
                 wildcard: false,
             };
@@ -2305,22 +2289,22 @@ mod dml_tests {
         #[test]
         fn delete_mini() {
             let tok = lex(br#"
-                delete user:"sayan"
+                delete users:"sayan"
             "#)
             .unwrap();
             let primary_key = "sayan".into();
-            let e = DeleteStatement::new(&primary_key, Entity::Single("user".into()));
+            let e = DeleteStatement::new(&primary_key, Entity::Single("users".into()));
             let r = dml::parse_delete_full(&tok[1..]).unwrap();
             assert_eq!(r, e);
         }
         #[test]
         fn delete() {
             let tok = lex(br#"
-                delete twitter.user:"sayan"
+                delete twitter.users:"sayan"
             "#)
             .unwrap();
             let primary_key = "sayan".into();
-            let e = DeleteStatement::new(&primary_key, ("twitter", "user").into());
+            let e = DeleteStatement::new(&primary_key, ("twitter", "users").into());
             let r = dml::parse_delete_full(&tok[1..]).unwrap();
             assert_eq!(r, e);
         }

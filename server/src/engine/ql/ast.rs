@@ -239,7 +239,7 @@ impl<'a> Compiler<'a> {
             Some(Token![create]) => self.create0(),
             Some(Token![drop]) => self.drop0(),
             Some(Token![alter]) => self.alter0(),
-            Some(Token![inspect]) => self.inspect0(),
+            Some(Token![describe]) => self.inspect0(),
             Some(Token![use]) => self.use0(),
             _ => Err(LangError::ExpectedStatement),
         }

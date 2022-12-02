@@ -46,9 +46,7 @@
 
 use {
     super::{
-        lexer::{
-            DdlKeyword, DdlMiscKeyword, DmlKeyword, Keyword, Lit, MiscKeyword, Symbol, Token, Type,
-        },
+        lexer::{Lit, Symbol, Token},
         LangError, LangResult, RawSlice,
     },
     crate::util::MaybeInit,
@@ -110,22 +108,22 @@ pub type Dict = HashMap<String, Option<DictEntry>>;
 #[derive(Debug, PartialEq)]
 /// A layer contains a type and corresponding metadata
 pub struct Layer {
-    ty: Type,
+    ty: RawSlice,
     props: Dict,
     reset: bool,
 }
 
 impl Layer {
     //// Create a new layer
-    pub(super) const fn new(ty: Type, props: Dict, reset: bool) -> Self {
+    pub(super) const fn new(ty: RawSlice, props: Dict, reset: bool) -> Self {
         Self { ty, props, reset }
     }
     /// Create a new layer that doesn't have any reset
-    pub(super) const fn new_noreset(ty: Type, props: Dict) -> Self {
+    pub(super) const fn new_noreset(ty: RawSlice, props: Dict) -> Self {
         Self::new(ty, props, false)
     }
     /// Create a new layer that adds a reset
-    pub(super) const fn new_reset(ty: Type, props: Dict) -> Self {
+    pub(super) const fn new_reset(ty: RawSlice, props: Dict) -> Self {
         Self::new(ty, props, true)
     }
 }
@@ -430,10 +428,7 @@ pub(super) fn rfold_tymeta<const ALLOW_RESET: bool>(
     let mut tmp = MaybeInit::uninit();
     while r.pos() < l && r.is_okay() {
         match (&tok[r.pos()], state) {
-            (
-                Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Type)),
-                TyMetaFoldState::IDENT_OR_CB,
-            ) => {
+            (Token![type], TyMetaFoldState::IDENT_OR_CB) => {
                 // we were expecting an ident but found the type keyword! increase depth
                 r.incr();
                 r.set_has_more();
@@ -573,10 +568,10 @@ pub(super) fn rfold_layers<const ALLOW_RESET: bool>(
     let mut dict = Dict::new();
     while i < l && okay {
         match (&tok[i], state) {
-            (Token::Keyword(Keyword::TypeId(ty)), LayerFoldState::TY) => {
+            (Token::Ident(ty), LayerFoldState::TY) => {
                 i += 1;
                 // expecting type, and found type. next is either end or an open brace or some arbitrary token
-                tmp = MaybeInit::new(ty);
+                tmp = MaybeInit::new(ty.clone());
                 state = LayerFoldState::END_OR_OB;
             }
             (Token::Symbol(Symbol::TtOpenBrace), LayerFoldState::END_OR_OB) => {
@@ -670,12 +665,8 @@ pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) 
     let mut okay = true;
     while i < tok.len() {
         match &tok[i] {
-            Token::Keyword(Keyword::Ddl(DdlKeyword::Primary)) => {
-                okay &= props.properties.insert(FieldProperties::PRIMARY)
-            }
-            Token::Keyword(Keyword::Misc(MiscKeyword::Null)) => {
-                okay &= props.properties.insert(FieldProperties::NULL)
-            }
+            Token![primary] => okay &= props.properties.insert(FieldProperties::PRIMARY),
+            Token![null] => okay &= props.properties.insert(FieldProperties::NULL),
             Token::Ident(_) => break,
             _ => {
                 // we could pass this over to the caller, but it's better if we do it since we're doing
@@ -768,9 +759,7 @@ pub(super) fn parse_schema_from_tokens(tok: &[Token]) -> LangResult<(Model, usiz
                 state = SchemaParseState::FIELD;
             }
             (
-                Token::Keyword(Keyword::Ddl(DdlKeyword::Primary))
-                | Token::Keyword(Keyword::Misc(MiscKeyword::Null))
-                | Token::Ident(_),
+                Token![primary] | Token![null] | Token::Ident(_),
                 SchemaParseState::FIELD | SchemaParseState::END_OR_FIELD,
             ) => {
                 // fine, we found a field. let's see what we've got
@@ -809,7 +798,7 @@ pub(super) fn parse_schema_from_tokens(tok: &[Token]) -> LangResult<(Model, usiz
         extract!(tok[0], Token::Ident(ref model_name) => model_name.clone())
     };
 
-    if l > i && tok[i] == (Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::With))) {
+    if l > i && tok[i] == (Token![with]) {
         // we have some more input, and it should be a dict of properties
         i += 1; // +WITH
 
@@ -1063,15 +1052,13 @@ pub(super) fn parse_alter_kind_from_tokens(
     *current += 2;
     let model_name = unsafe { extract!(tok[0], Token::Ident(ref l) => l.clone()) };
     match tok[1] {
-        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Add)) => alter_add(&tok[1..], current)
+        Token![add] => alter_add(&tok[1..], current)
             .map(AlterKind::Add)
             .map(|kind| Alter::new(model_name, kind)),
-        Token::Keyword(Keyword::DdlMisc(DdlMiscKeyword::Remove)) => {
-            alter_remove(&tok[1..], current)
-                .map(AlterKind::Remove)
-                .map(|kind| Alter::new(model_name, kind))
-        }
-        Token::Keyword(Keyword::Dml(DmlKeyword::Update)) => alter_update(&tok[1..], current)
+        Token![remove] => alter_remove(&tok[1..], current)
+            .map(AlterKind::Remove)
+            .map(|kind| Alter::new(model_name, kind)),
+        Token![update] => alter_update(&tok[1..], current)
             .map(AlterKind::Update)
             .map(|kind| Alter::new(model_name, kind)),
         _ => return Err(LangError::ExpectedStatement),

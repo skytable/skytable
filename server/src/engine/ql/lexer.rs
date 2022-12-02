@@ -57,7 +57,7 @@ impl PartialEq<Symbol> for Token {
 assertions! {
     size_of::<Token>() == 24, // FIXME(@ohsayan): Damn, what?
     size_of::<Symbol>() == 1,
-    size_of::<Keyword>() == 2,
+    size_of::<Keyword>() == 1,
     size_of::<Lit>() == 24, // FIXME(@ohsayan): Ouch
 }
 
@@ -130,93 +130,69 @@ pub enum Symbol {
     SymAccent,        // `
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
 pub enum Keyword {
-    Ddl(DdlKeyword),
-    DdlMisc(DdlMiscKeyword),
-    Dml(DmlKeyword),
-    DmlMisc(DmlMiscKeyword),
-    TypeId(Type),
-    Misc(MiscKeyword),
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum MiscKeyword {
-    Null,
-}
-
-enum_impls! {
-    Keyword => {
-        DdlKeyword as Ddl,
-        DdlMiscKeyword as DdlMisc,
-        DmlKeyword as Dml,
-        DmlMiscKeyword as DmlMisc,
-        Type as TypeId,
-        MiscKeyword as Misc,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum DmlMiscKeyword {
-    Limit,
-    From,
-    Into,
-    Where,
-    If,
-    And,
-    As,
-    By,
-    Asc,
-    Desc,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum DmlKeyword {
-    Insert,
-    Select,
-    Update,
-    Delete,
-    Exists,
-    Truncate,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum DdlMiscKeyword {
-    With,
-    Add,
-    Remove,
-    Sort,
+    Table,
+    Model,
+    Space,
+    Index,
     Type,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum DdlKeyword {
+    Function,
     Use,
     Create,
     Alter,
     Drop,
-    Inspect,
-    Model,
-    Space,
+    Describe,
+    Truncate,
+    Rename,
+    Add,
+    Remove,
+    Transform,
+    Order,
+    By,
     Primary,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Type {
-    String,
-    Binary,
-    List,
-    Map,
-    Bool,
-    Int,
-    Double,
-    Float,
+    Key,
+    Value,
+    With,
+    On,
+    Lock,
+    All,
+    Insert,
+    Select,
+    Exists,
+    Update,
+    Delere,
+    Into,
+    From,
+    As,
+    Return,
+    Sort,
+    Group,
+    Limit,
+    Asc,
+    Desc,
+    To,
+    Set,
+    Auto,
+    Default,
+    In,
+    Of,
+    Transaction,
+    Batch,
+    Read,
+    Write,
+    Begin,
+    End,
+    Where,
+    If,
+    And,
+    Or,
+    Not,
+    User,
+    Revoke,
+    Null,
+    Infinity,
 }
 
 /*
@@ -241,7 +217,7 @@ static SYM_GRAPH: [u8; 69] = [
     23, 7, 0, 27, 0, 4, 16, 11, 0, 0, 9,
 ];
 
-static SYM_DATA: [(u8, Symbol); 32] = [
+static SYM_LUT: [(u8, Symbol); 32] = [
     (b'+', Symbol::OpArithmeticAdd),
     (b'-', Symbol::OpArithmeticSub),
     (b'*', Symbol::OpArithmeticMul),
@@ -290,85 +266,107 @@ fn symph(k: u8) -> u8 {
 #[inline(always)]
 fn symof(sym: u8) -> Option<Symbol> {
     let hf = symph(sym);
-    if hf < SYM_DATA.len() as u8 && SYM_DATA[hf as usize].0 == sym {
-        Some(SYM_DATA[hf as usize].1)
+    if hf < SYM_LUT.len() as u8 && SYM_LUT[hf as usize].0 == sym {
+        Some(SYM_LUT[hf as usize].1)
     } else {
         None
     }
 }
 
-static KW_GRAPH: [u8; 40] = [
-    0, 2, 32, 18, 4, 37, 11, 27, 34, 35, 26, 33, 0, 0, 10, 2, 22, 8, 5, 7, 16, 9, 8, 39, 21, 5, 0,
-    22, 14, 19, 22, 31, 28, 38, 26, 21, 30, 24, 10, 18,
+static KW_LUT: [(&[u8], Keyword); 60] = [
+    (b"table", Keyword::Table),
+    (b"model", Keyword::Model),
+    (b"space", Keyword::Space),
+    (b"index", Keyword::Index),
+    (b"type", Keyword::Type),
+    (b"function", Keyword::Function),
+    (b"use", Keyword::Use),
+    (b"create", Keyword::Create),
+    (b"alter", Keyword::Alter),
+    (b"drop", Keyword::Drop),
+    (b"describe", Keyword::Describe),
+    (b"truncate", Keyword::Truncate),
+    (b"rename", Keyword::Rename),
+    (b"add", Keyword::Add),
+    (b"remove", Keyword::Remove),
+    (b"transform", Keyword::Transform),
+    (b"order", Keyword::Order),
+    (b"by", Keyword::By),
+    (b"primary", Keyword::Primary),
+    (b"key", Keyword::Key),
+    (b"value", Keyword::Value),
+    (b"with", Keyword::With),
+    (b"on", Keyword::On),
+    (b"lock", Keyword::Lock),
+    (b"all", Keyword::All),
+    (b"insert", Keyword::Insert),
+    (b"select", Keyword::Select),
+    (b"exists", Keyword::Exists),
+    (b"update", Keyword::Update),
+    (b"delere", Keyword::Delere),
+    (b"into", Keyword::Into),
+    (b"from", Keyword::From),
+    (b"as", Keyword::As),
+    (b"return", Keyword::Return),
+    (b"sort", Keyword::Sort),
+    (b"group", Keyword::Group),
+    (b"limit", Keyword::Limit),
+    (b"asc", Keyword::Asc),
+    (b"desc", Keyword::Desc),
+    (b"to", Keyword::To),
+    (b"set", Keyword::Set),
+    (b"auto", Keyword::Auto),
+    (b"default", Keyword::Default),
+    (b"in", Keyword::In),
+    (b"of", Keyword::Of),
+    (b"transaction", Keyword::Transaction),
+    (b"batch", Keyword::Batch),
+    (b"read", Keyword::Read),
+    (b"write", Keyword::Write),
+    (b"begin", Keyword::Begin),
+    (b"end", Keyword::End),
+    (b"where", Keyword::Where),
+    (b"if", Keyword::If),
+    (b"and", Keyword::And),
+    (b"or", Keyword::Or),
+    (b"not", Keyword::Not),
+    (b"user", Keyword::User),
+    (b"revoke", Keyword::Revoke),
+    (b"null", Keyword::Null),
+    (b"infinity", Keyword::Infinity),
 ];
 
-static KW_DATA: [(&str, Keyword); 38] = [
-    ("use", Keyword::Ddl(DdlKeyword::Use)),
-    ("create", Keyword::Ddl(DdlKeyword::Create)),
-    ("alter", Keyword::Ddl(DdlKeyword::Alter)),
-    ("drop", Keyword::Ddl(DdlKeyword::Drop)),
-    ("inspect", Keyword::Ddl(DdlKeyword::Inspect)),
-    ("model", Keyword::Ddl(DdlKeyword::Model)),
-    ("space", Keyword::Ddl(DdlKeyword::Space)),
-    ("primary", Keyword::Ddl(DdlKeyword::Primary)),
-    ("with", Keyword::DdlMisc(DdlMiscKeyword::With)),
-    ("add", Keyword::DdlMisc(DdlMiscKeyword::Add)),
-    ("remove", Keyword::DdlMisc(DdlMiscKeyword::Remove)),
-    ("sort", Keyword::DdlMisc(DdlMiscKeyword::Sort)),
-    ("type", Keyword::DdlMisc(DdlMiscKeyword::Type)),
-    ("insert", Keyword::Dml(DmlKeyword::Insert)),
-    ("select", Keyword::Dml(DmlKeyword::Select)),
-    ("update", Keyword::Dml(DmlKeyword::Update)),
-    ("delete", Keyword::Dml(DmlKeyword::Delete)),
-    ("exists", Keyword::Dml(DmlKeyword::Exists)),
-    ("truncate", Keyword::Dml(DmlKeyword::Truncate)),
-    ("limit", Keyword::DmlMisc(DmlMiscKeyword::Limit)),
-    ("from", Keyword::DmlMisc(DmlMiscKeyword::From)),
-    ("into", Keyword::DmlMisc(DmlMiscKeyword::Into)),
-    ("where", Keyword::DmlMisc(DmlMiscKeyword::Where)),
-    ("if", Keyword::DmlMisc(DmlMiscKeyword::If)),
-    ("and", Keyword::DmlMisc(DmlMiscKeyword::And)),
-    ("as", Keyword::DmlMisc(DmlMiscKeyword::As)),
-    ("by", Keyword::DmlMisc(DmlMiscKeyword::By)),
-    ("asc", Keyword::DmlMisc(DmlMiscKeyword::Asc)),
-    ("desc", Keyword::DmlMisc(DmlMiscKeyword::Desc)),
-    ("string", Keyword::TypeId(Type::String)),
-    ("binary", Keyword::TypeId(Type::Binary)),
-    ("list", Keyword::TypeId(Type::List)),
-    ("map", Keyword::TypeId(Type::Map)),
-    ("bool", Keyword::TypeId(Type::Bool)),
-    ("int", Keyword::TypeId(Type::Int)),
-    ("double", Keyword::TypeId(Type::Double)),
-    ("float", Keyword::TypeId(Type::Float)),
-    ("null", Keyword::Misc(MiscKeyword::Null)),
+static KWG: [u8; 64] = [
+    0, 55, 32, 25, 4, 21, 51, 43, 28, 59, 34, 1, 9, 39, 5, 49, 0, 16, 29, 0, 48, 0, 17, 60, 19, 21,
+    26, 18, 0, 41, 55, 10, 48, 62, 55, 35, 56, 18, 29, 41, 5, 46, 25, 52, 32, 26, 27, 17, 61, 60,
+    61, 59, 24, 12, 17, 30, 53, 4, 17, 0, 6, 2, 45, 56,
 ];
 
-const KW_MAGIC_A: &[u8] = b"GSggb8qI";
-const KW_MAGIC_B: &[u8] = b"ZaljIeOx";
-const KW_MODULUS: usize = 8;
+const KWMG_1: [u8; 11] = *b"nJEcjrLflKX";
+const KWMG_2: [u8; 11] = *b"KWHPUPK3Fh3";
+const KWMG_S: usize = KWMG_1.len();
 
-#[inline(always)]
-fn kwfh(k: &[u8], magic: &[u8]) -> u32 {
+fn kwhf(k: &[u8], mg: &[u8]) -> u32 {
     let mut i = 0;
     let mut s = 0;
     while i < k.len() {
-        s += magic[(i % KW_MODULUS) as usize] as u32 * k[i] as u32;
+        s += mg[(i % KWMG_S) as usize] as u32 * k[i] as u32;
         i += 1;
     }
-    s % KW_GRAPH.len() as u32
+    s % KWG.len() as u32
 }
 
 #[inline(always)]
 fn kwph(k: &[u8]) -> u8 {
-    (KW_GRAPH[kwfh(k, KW_MAGIC_A) as usize] + KW_GRAPH[kwfh(k, KW_MAGIC_B) as usize])
-        % KW_GRAPH.len() as u8
+    (KWG[kwhf(k, &KWMG_1) as usize] + KWG[kwhf(k, &KWMG_2) as usize]) % KWG.len() as u8
 }
 
 #[inline(always)]
 fn kwof(key: &str) -> Option<Keyword> {
-    let ph = kwph(key.as_bytes());
-    if ph < KW_DATA.len() as u8 && KW_DATA[ph as usize].0 == key {
-        Some(KW_DATA[ph as usize].1)
+    let key = key.as_bytes();
+    let ph = kwph(key);
+    if ph < KW_LUT.len() as u8 && KW_LUT[ph as usize].0 == key {
+        Some(KW_LUT[ph as usize].1)
     } else {
         None
     }
@@ -698,10 +696,6 @@ impl Token {
     #[inline(always)]
     pub(crate) const fn is_ident(&self) -> bool {
         matches!(self, Token::Ident(_))
-    }
-    #[inline(always)]
-    pub(crate) const fn is_typeid(&self) -> bool {
-        matches!(self, Token::Keyword(Keyword::TypeId(_)))
     }
     #[inline(always)]
     pub(crate) fn as_ident_eq_ignore_case(&self, arg: &[u8]) -> bool {

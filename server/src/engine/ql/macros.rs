@@ -37,51 +37,9 @@ macro_rules! __sym_token {
     };
 }
 
-macro_rules! __ddl_token {
+macro_rules! __kw {
     ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Ddl(
-            $crate::engine::ql::lexer::DdlKeyword::$ident,
-        ))
-    };
-}
-
-macro_rules! __ddl_misc_token {
-    ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::DdlMisc(
-            $crate::engine::ql::lexer::DdlMiscKeyword::$ident,
-        ))
-    };
-}
-
-macro_rules! __dml_token {
-    ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Dml(
-            $crate::engine::ql::lexer::DmlKeyword::$ident,
-        ))
-    };
-}
-
-macro_rules! __dml_misc_token {
-    ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::DmlMisc(
-            $crate::engine::ql::lexer::DmlMiscKeyword::$ident,
-        ))
-    };
-}
-
-macro_rules! __type_token {
-    ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::TypeId(
-            $crate::engine::ql::lexer::Type::$ident,
-        ))
-    };
-}
-
-macro_rules! __misc_token {
-    ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::Misc(
-            $crate::engine::ql::lexer::MiscKeyword::$ident,
-        ))
+        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::$ident)
     };
 }
 
@@ -163,119 +121,119 @@ macro_rules! Token {
     };
     // ddl keywords
     (use) => {
-        __ddl_token!(Use)
+        __kw!(Use)
     };
     (create) => {
-        __ddl_token!(Create)
+        __kw!(Create)
     };
     (alter) => {
-        __ddl_token!(Alter)
+        __kw!(Alter)
     };
     (drop) => {
-        __ddl_token!(Drop)
+        __kw!(Drop)
     };
-    (inspect) => {
-        __ddl_token!(Inspect)
+    (describe) => {
+        __kw!(Describe)
     };
     (model) => {
-        __ddl_token!(Model)
+        __kw!(Model)
     };
     (space) => {
-        __ddl_token!(Space)
+        __kw!(Space)
     };
     (primary) => {
-        __ddl_token!(Primary)
+        __kw!(Primary)
     };
     // ddl misc
     (with) => {
-        __ddl_misc_token!(With)
+        __kw!(With)
     };
     (add) => {
-        __ddl_misc_token!(Add)
+        __kw!(Add)
     };
     (remove) => {
-        __ddl_misc_token!(Remove)
+        __kw!(Remove)
     };
     (sort) => {
-        __ddl_misc_token!(Sort)
+        __kw!(Sort)
     };
     (type) => {
-        __ddl_misc_token!(Type)
+        __kw!(Type)
     };
     // dml
     (insert) => {
-        __dml_token!(Insert)
+        __kw!(Insert)
     };
     (select) => {
-        __dml_token!(Select)
+        __kw!(Select)
     };
     (update) => {
-        __dml_token!(Update)
+        __kw!(Update)
     };
     (delete) => {
-        __dml_token!(Delete)
+        __kw!(Delete)
     };
     (exists) => {
-        __dml_token!(Exists)
+        __kw!(Exists)
     };
     (truncate) => {
-        __dml_token!(Truncate)
+        __kw!(Truncate)
     };
     // dml misc
     (limit) => {
-        __dml_misc_token!(Limit)
+        __kw!(Limit)
     };
     (from) => {
-        __dml_misc_token!(From)
+        __kw!(From)
     };
     (into) => {
-        __dml_misc_token!(Into)
+        __kw!(Into)
     };
     (where) => {
-        __dml_misc_token!(Where)
+        __kw!(Where)
     };
     (if) => {
-        __dml_misc_token!(If)
+        __kw!(If)
     };
     (and) => {
-        __dml_misc_token!(And)
+        __kw!(And)
     };
     (as) => {
-        __dml_misc_token!(As)
+        __kw!(As)
     };
     (by) => {
-        __dml_misc_token!(By)
+        __kw!(By)
     };
     (asc) => {
-        __dml_misc_token!(Asc)
+        __kw!(Asc)
     };
     (desc) => {
-        __dml_misc_token!(Desc)
+        __kw!(Desc)
     };
     // types
     (string) => {
-        __type_token!(String)
+        __kw!(String)
     };
     (binary) => {
-        __type_token!(Binary)
+        __kw!(Binary)
     };
     (list) => {
-        __type_token!(List)
+        __kw!(List)
     };
     (map) => {
-        __type_token!(Map)
+        __kw!(Map)
     };
     (bool) => {
-        __type_token!(Bool)
+        __kw!(Bool)
     };
     (int) => {
-        __type_token!(Int)
+        __kw!(Int)
     };
     (double) => {
-        __type_token!(Double)
+        __kw!(Double)
     };
     (float) => {
-        __type_token!(Float)
+        __kw!(Float)
     };
     // tt
     (open {}) => {
@@ -298,7 +256,7 @@ macro_rules! Token {
     };
     // misc
     (null) => {
-        __misc_token!(Null)
+        __kw!(Null)
     };
 }
 
