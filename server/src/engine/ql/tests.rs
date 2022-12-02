@@ -26,10 +26,14 @@
 
 use {
     super::{
-        lexer::{InsecureLexer, Token},
+        lexer::{InsecureLexer, Symbol, Token},
         LangResult,
     },
-    crate::{engine::memory::DataType, util::Life},
+    crate::{
+        engine::memory::DataType,
+        util::{test_utils, Life},
+    },
+    rand::{self, Rng},
 };
 
 pub(super) fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
@@ -86,6 +90,40 @@ impl NullableMapEntry for super::schema::Dict {
 macro_rules! fold_dict {
     ($($input:expr),* $(,)?) => {
         ($({$crate::engine::ql::schema::fold_dict(&super::lex($input).unwrap()).unwrap()}),*)
+    }
+}
+
+/// A very "basic" fuzzer that will randomly inject tokens wherever applicable
+fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
+    static FUZZ_TARGETS: [Token; 2] = [Token::Symbol(Symbol::SymComma), Token::IgnorableComma];
+    let mut rng = rand::thread_rng();
+    #[inline(always)]
+    fn inject(new_src: &mut Vec<Token>, rng: &mut impl Rng) -> usize {
+        let start = new_src.len();
+        (0..test_utils::random_number(0, 5, rng))
+            .for_each(|_| new_src.push(Token::Symbol(Symbol::SymComma)));
+        new_src.len() - start
+    }
+    let fuzz_amount = src.iter().filter(|tok| FUZZ_TARGETS.contains(tok)).count();
+    for _ in 0..(fuzz_amount.pow(2)) {
+        let mut new_src = Vec::with_capacity(src.len());
+        let mut should_pass = true;
+        src.iter().for_each(|tok| match tok {
+            Token::IgnorableComma => {
+                let added = inject(&mut new_src, &mut rng);
+                should_pass &= added <= 1;
+            }
+            Token::Symbol(Symbol::SymComma) => {
+                let added = inject(&mut new_src, &mut rng);
+                should_pass &= added == 1;
+            }
+            tok => new_src.push(tok.clone()),
+        });
+        assert!(
+            new_src.iter().all(|tok| tok != &Token::IgnorableComma),
+            "found ignorable comma in rectified source"
+        );
+        fuzzwith(should_pass, &new_src);
     }
 }
 
@@ -299,135 +337,11 @@ mod ddl_other_query_tests {
     }
 }
 
-mod schema_tests {
+mod dict_tests {
     use {
-        super::{
-            super::{
-                lexer::{Lit, Symbol, Token},
-                schema,
-            },
-            lex,
-        },
-        crate::util::test_utils,
-        rand::{self, Rng},
+        super::*,
+        crate::engine::ql::{lexer::Lit, schema},
     };
-
-    /// A very "basic" fuzzer that will randomly inject tokens wherever applicable
-    fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
-        static FUZZ_TARGETS: [Token; 2] = [Token::Symbol(Symbol::SymComma), Token::IgnorableComma];
-        let mut rng = rand::thread_rng();
-        #[inline(always)]
-        fn inject(new_src: &mut Vec<Token>, rng: &mut impl Rng) -> usize {
-            let start = new_src.len();
-            (0..test_utils::random_number(0, 5, rng))
-                .for_each(|_| new_src.push(Token::Symbol(Symbol::SymComma)));
-            new_src.len() - start
-        }
-        let fuzz_amount = src.iter().filter(|tok| FUZZ_TARGETS.contains(tok)).count();
-        for _ in 0..(fuzz_amount.pow(2)) {
-            let mut new_src = Vec::with_capacity(src.len());
-            let mut should_pass = true;
-            src.iter().for_each(|tok| match tok {
-                Token::IgnorableComma => {
-                    let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added <= 1;
-                }
-                Token::Symbol(Symbol::SymComma) => {
-                    let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added == 1;
-                }
-                tok => new_src.push(tok.clone()),
-            });
-            assert!(
-                new_src.iter().all(|tok| tok != &Token::IgnorableComma),
-                "found ignorable comma in rectified source"
-            );
-            fuzzwith(should_pass, &new_src);
-        }
-    }
-
-    mod inspect {
-        use {
-            super::*,
-            crate::engine::ql::{
-                ast::{Entity, Statement},
-                ddl,
-            },
-        };
-        #[test]
-        fn inspect_space() {
-            let tok = lex(b"inspect space myspace").unwrap();
-            assert_eq!(
-                ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectSpace("myspace".into())
-            );
-        }
-        #[test]
-        fn inspect_model() {
-            let tok = lex(b"inspect model users").unwrap();
-            assert_eq!(
-                ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectModel(Entity::Single("users".into()))
-            );
-            let tok = lex(b"inspect model tweeter.users").unwrap();
-            assert_eq!(
-                ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectModel(("tweeter", "users").into())
-            );
-        }
-        #[test]
-        fn inspect_spaces() {
-            let tok = lex(b"inspect spaces").unwrap();
-            assert_eq!(
-                ddl::parse_inspect_full(&tok[1..]).unwrap(),
-                Statement::InspectSpaces
-            );
-        }
-    }
-
-    mod alter_space {
-        use {
-            super::*,
-            crate::engine::ql::{
-                lexer::Lit,
-                schema::{self, AlterSpace},
-            },
-        };
-        #[test]
-        fn alter_space_mini() {
-            let tok = lex(b"alter model mymodel with {}").unwrap();
-            let r = schema::alter_space_full(&tok[2..]).unwrap();
-            assert_eq!(
-                r,
-                AlterSpace {
-                    space_name: "mymodel".into(),
-                    updated_props: nullable_dict! {}
-                }
-            );
-        }
-        #[test]
-        fn alter_space() {
-            let tok = lex(br#"
-                alter model mymodel with {
-                    max_entry: 1000,
-                    driver: "ts-0.8"
-                }
-            "#)
-            .unwrap();
-            let r = schema::alter_space_full(&tok[2..]).unwrap();
-            assert_eq!(
-                r,
-                AlterSpace {
-                    space_name: "mymodel".into(),
-                    updated_props: nullable_dict! {
-                        "max_entry" => Lit::UnsignedInt(1000),
-                        "driver" => Lit::Str("ts-0.8".into())
-                    }
-                }
-            );
-        }
-    }
-
     mod dict {
         use super::*;
 
@@ -612,6 +526,183 @@ mod schema_tests {
                     );
                 }
             });
+        }
+    }
+    mod nullable_dict_tests {
+        use super::*;
+        mod dict {
+            use {super::*, crate::engine::ql::lexer::Lit};
+
+            #[test]
+            fn null_mini() {
+                let d = fold_dict!(br"{ x: null }");
+                assert_eq!(
+                    d,
+                    nullable_dict! {
+                        "x" => Null,
+                    }
+                );
+            }
+            #[test]
+            fn null() {
+                let d = fold_dict! {
+                    br#"
+                        {
+                            this_is_non_null: "hello",
+                            but_this_is_null: null,
+                        }
+                    "#
+                };
+                assert_eq!(
+                    d,
+                    nullable_dict! {
+                        "this_is_non_null" => Lit::Str("hello".into()),
+                        "but_this_is_null" => Null,
+                    }
+                )
+            }
+            #[test]
+            fn null_pro() {
+                let d = fold_dict! {
+                    br#"
+                        {
+                            a_string: "this is a string",
+                            num: 1234,
+                            a_dict: {
+                                a_null: null,
+                            }
+                        }
+                    "#
+                };
+                assert_eq!(
+                    d,
+                    nullable_dict! {
+                        "a_string" => Lit::Str("this is a string".into()),
+                        "num" => Lit::UnsignedInt(1234),
+                        "a_dict" => nullable_dict! {
+                            "a_null" => Null,
+                        }
+                    }
+                )
+            }
+            #[test]
+            fn null_pro_max() {
+                let d = fold_dict! {
+                    br#"
+                        {
+                            a_string: "this is a string",
+                            num: 1234,
+                            a_dict: {
+                                a_null: null,
+                            },
+                            another_null: null,
+                        }
+                    "#
+                };
+                assert_eq!(
+                    d,
+                    nullable_dict! {
+                        "a_string" => Lit::Str("this is a string".into()),
+                        "num" => Lit::UnsignedInt(1234),
+                        "a_dict" => nullable_dict! {
+                            "a_null" => Null,
+                        },
+                        "another_null" => Null,
+                    }
+                )
+            }
+        }
+        // TODO(@ohsayan): Add null tests
+    }
+}
+
+mod schema_tests {
+    use super::{
+        super::{
+            lexer::{Lit, Token},
+            schema,
+        },
+        lex, *,
+    };
+    mod inspect {
+        use {
+            super::*,
+            crate::engine::ql::{
+                ast::{Entity, Statement},
+                ddl,
+            },
+        };
+        #[test]
+        fn inspect_space() {
+            let tok = lex(b"inspect space myspace").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectSpace("myspace".into())
+            );
+        }
+        #[test]
+        fn inspect_model() {
+            let tok = lex(b"inspect model users").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectModel(Entity::Single("users".into()))
+            );
+            let tok = lex(b"inspect model tweeter.users").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectModel(("tweeter", "users").into())
+            );
+        }
+        #[test]
+        fn inspect_spaces() {
+            let tok = lex(b"inspect spaces").unwrap();
+            assert_eq!(
+                ddl::parse_inspect_full(&tok[1..]).unwrap(),
+                Statement::InspectSpaces
+            );
+        }
+    }
+
+    mod alter_space {
+        use {
+            super::*,
+            crate::engine::ql::{
+                lexer::Lit,
+                schema::{self, AlterSpace},
+            },
+        };
+        #[test]
+        fn alter_space_mini() {
+            let tok = lex(b"alter model mymodel with {}").unwrap();
+            let r = schema::alter_space_full(&tok[2..]).unwrap();
+            assert_eq!(
+                r,
+                AlterSpace {
+                    space_name: "mymodel".into(),
+                    updated_props: nullable_dict! {}
+                }
+            );
+        }
+        #[test]
+        fn alter_space() {
+            let tok = lex(br#"
+                alter model mymodel with {
+                    max_entry: 1000,
+                    driver: "ts-0.8"
+                }
+            "#)
+            .unwrap();
+            let r = schema::alter_space_full(&tok[2..]).unwrap();
+            assert_eq!(
+                r,
+                AlterSpace {
+                    space_name: "mymodel".into(),
+                    updated_props: nullable_dict! {
+                        "max_entry" => Lit::UnsignedInt(1000),
+                        "driver" => Lit::Str("ts-0.8".into())
+                    }
+                }
+            );
         }
     }
     mod tymeta {
@@ -2323,7 +2414,7 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_EQ
                 }
             );
@@ -2336,7 +2427,7 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_NE
                 }
             );
@@ -2349,7 +2440,7 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_GT
                 }
             );
@@ -2362,7 +2453,7 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_GE
                 }
             );
@@ -2375,7 +2466,7 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_LT
                 }
             );
@@ -2388,97 +2479,54 @@ mod dml_tests {
                 r,
                 RelationalExpr {
                     rhs: &(10.into()),
-                    lhs: "primary_key".into(),
+                    lhs: "primary_key".as_bytes(),
                     opc: RelationalExpr::OP_LE
                 }
             );
         }
     }
-}
-
-mod nullable_dict_tests {
-    use super::*;
-    mod dict {
-        use {super::*, crate::engine::ql::lexer::Lit};
-
+    mod where_clause {
+        use {
+            super::*,
+            crate::engine::ql::dml::{self, RelationalExpr, WhereClause},
+        };
         #[test]
-        fn null_mini() {
-            let d = fold_dict!(br"{ x: null }");
-            assert_eq!(
-                d,
-                nullable_dict! {
-                    "x" => Null,
+        fn where_single() {
+            let tok = lex(br#"
+                x = 100
+            "#)
+            .unwrap();
+            let rhs_hundred = 100.into();
+            let expected = WhereClause::new(dict! {
+                "x".as_bytes() => RelationalExpr {
+                    rhs: &rhs_hundred,
+                    lhs: "x".as_bytes(),
+                    opc: RelationalExpr::OP_EQ
                 }
-            );
+            });
+            assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
         }
         #[test]
-        fn null() {
-            let d = fold_dict! {
-                br#"
-                    {
-                        this_is_non_null: "hello",
-                        but_this_is_null: null,
-                    }
-                "#
-            };
-            assert_eq!(
-                d,
-                nullable_dict! {
-                    "this_is_non_null" => Lit::Str("hello".into()),
-                    "but_this_is_null" => Null,
+        fn where_double() {
+            let tok = lex(br#"
+                userid = 100 and pass = "password"
+            "#)
+            .unwrap();
+            let rhs_hundred = 100.into();
+            let rhs_password = "password".into();
+            let expected = WhereClause::new(dict! {
+                "userid".as_bytes() => RelationalExpr {
+                    rhs: &rhs_hundred,
+                    lhs: "userid".as_bytes(),
+                    opc: RelationalExpr::OP_EQ
+                },
+                "pass".as_bytes() => RelationalExpr {
+                    rhs: &rhs_password,
+                    lhs: "pass".as_bytes(),
+                    opc: RelationalExpr::OP_EQ
                 }
-            )
-        }
-        #[test]
-        fn null_pro() {
-            let d = fold_dict! {
-                br#"
-                    {
-                        a_string: "this is a string",
-                        num: 1234,
-                        a_dict: {
-                            a_null: null,
-                        }
-                    }
-                "#
-            };
-            assert_eq!(
-                d,
-                nullable_dict! {
-                    "a_string" => Lit::Str("this is a string".into()),
-                    "num" => Lit::UnsignedInt(1234),
-                    "a_dict" => nullable_dict! {
-                        "a_null" => Null,
-                    }
-                }
-            )
-        }
-        #[test]
-        fn null_pro_max() {
-            let d = fold_dict! {
-                br#"
-                    {
-                        a_string: "this is a string",
-                        num: 1234,
-                        a_dict: {
-                            a_null: null,
-                        },
-                        another_null: null,
-                    }
-                "#
-            };
-            assert_eq!(
-                d,
-                nullable_dict! {
-                    "a_string" => Lit::Str("this is a string".into()),
-                    "num" => Lit::UnsignedInt(1234),
-                    "a_dict" => nullable_dict! {
-                        "a_null" => Null,
-                    },
-                    "another_null" => Null,
-                }
-            )
+            });
+            assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
         }
     }
-    // TODO(@ohsayan): Add null tests
 }

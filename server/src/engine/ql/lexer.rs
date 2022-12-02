@@ -346,6 +346,7 @@ const KWMG_1: [u8; 11] = *b"nJEcjrLflKX";
 const KWMG_2: [u8; 11] = *b"KWHPUPK3Fh3";
 const KWMG_S: usize = KWMG_1.len();
 
+#[inline(always)]
 fn kwhf(k: &[u8], mg: &[u8]) -> u32 {
     let mut i = 0;
     let mut s = 0;
@@ -380,6 +381,7 @@ const LEXER_MODE_INSECURE: u8 = 0;
 const LEXER_MODE_SECURE: u8 = 1;
 
 pub type InsecureLexer<'a> = Lexer<'a, LEXER_MODE_INSECURE>;
+pub type SecureLexer<'a> = Lexer<'a, LEXER_MODE_SECURE>;
 
 pub struct Lexer<'a, const OPERATING_MODE: u8> {
     c: *const u8,

@@ -40,6 +40,7 @@ use {
         util::{compiler, MaybeInit},
     },
     std::{
+        cmp,
         collections::HashMap,
         mem::{discriminant, Discriminant},
     },
@@ -69,7 +70,7 @@ fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bo
 
 #[derive(Debug, PartialEq)]
 pub(super) struct RelationalExpr<'a> {
-    pub(super) lhs: RawSlice,
+    pub(super) lhs: &'a [u8],
     pub(super) rhs: &'a Lit,
     pub(super) opc: u8,
 }
@@ -81,6 +82,9 @@ impl<'a> RelationalExpr<'a> {
     pub(super) const OP_GE: u8 = 4;
     pub(super) const OP_LT: u8 = 5;
     pub(super) const OP_LE: u8 = 6;
+    fn filter_hint_none(&self) -> bool {
+        self.opc == Self::OP_EQ
+    }
     #[inline(always)]
     fn parse_operator(tok: &[Token], i: &mut usize, okay: &mut bool) -> u8 {
         /*
@@ -116,15 +120,16 @@ impl<'a> RelationalExpr<'a> {
         okay &= tok[0].is_ident();
         i += 1;
         // let's get ourselves the operator
-        let operator = Self::parse_operator(&tok[1..], &mut i, &mut okay);
+        let operator = Self::parse_operator(&tok[i..], &mut i, &mut okay);
         okay &= i < tok.len();
-        okay &= tok[tok.len() - 1].is_lit(); // LOL, I really like saving cycles
+        let lit_idx = cmp::min(i, tok.len() - 1);
+        okay &= tok[lit_idx].is_lit(); // LOL, I really like saving cycles
         *cnt += i + okay as usize;
         if compiler::likely(okay) {
             Some(unsafe {
                 Self {
-                    lhs: extract!(tok[0], Token::Ident(ref id) => id.clone()),
-                    rhs: extract!(tok[tok.len() - 1], Token::Lit(ref l) => l),
+                    lhs: extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
+                    rhs: extract!(tok[lit_idx], Token::Lit(ref l) => l),
                     opc: operator,
                 }
             })
@@ -132,6 +137,45 @@ impl<'a> RelationalExpr<'a> {
             compiler::cold_err(None)
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub(super) struct WhereClause<'a> {
+    c: HashMap<&'a [u8], RelationalExpr<'a>>,
+}
+
+impl<'a> WhereClause<'a> {
+    #[inline(always)]
+    pub(super) fn new(c: HashMap<&'a [u8], RelationalExpr<'a>>) -> Self {
+        Self { c }
+    }
+    #[inline(always)]
+    pub(super) fn parse_where(tok: &'a [Token], flag: &mut bool, cnt: &mut usize) -> Self {
+        let l = tok.len();
+        let mut okay = true;
+        let mut i = 0;
+        let mut c = HashMap::with_capacity(2);
+        let mut has_more = true;
+        while okay && i < l && has_more {
+            okay &= RelationalExpr::try_parse(&tok[i..], &mut i)
+                .map(|clause| c.insert(clause.lhs, clause).is_none())
+                .unwrap_or(false);
+            has_more = tok[cmp::min(i, l - 1)] == Token![and] && i < l;
+            i += has_more as usize;
+        }
+        *flag &= okay;
+        *cnt += i;
+        Self { c }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClause<'a>> {
+    let mut flag = true;
+    let mut i = 0;
+    let ret = WhereClause::parse_where(tok, &mut flag, &mut i);
+    full_tt!(tok.len(), i);
+    flag.then_some(ret)
 }
 
 #[cfg(test)]
