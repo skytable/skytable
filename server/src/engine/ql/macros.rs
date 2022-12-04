@@ -25,7 +25,7 @@
 */
 
 #[cfg(test)]
-macro_rules! full_tt {
+macro_rules! assert_full_tt {
     ($a:expr, $b:expr) => {
         assert_eq!($a, $b, "full token stream not utilized")
     };
@@ -180,6 +180,9 @@ macro_rules! Token {
         __kw!(Truncate)
     };
     // dml misc
+    (set) => {
+        __kw!(Set)
+    };
     (limit) => {
         __kw!(Limit)
     };

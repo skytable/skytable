@@ -75,14 +75,17 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
         }
         Some(Token![space]) if tok.len() > 1 && tok[1].is_ident() => {
             let mut i = 2; // (`space` and space name)
-            // should we force drop?
+                           // should we force drop?
             let force = i < tok.len() && tok[i] == Token::Ident("force".into());
             i += force as usize;
             *counter += i;
             // either `force` or nothing
             if tok.len() == i {
                 return Ok(Statement::DropSpace(DropSpace::new(
-                    unsafe { extract!(tok[1], Token::Ident(ref space) => space.clone()) },
+                    unsafe {
+                        // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
+                        extract!(tok[1], Token::Ident(ref space) => space.clone())
+                    },
                     force,
                 )));
             }
@@ -96,7 +99,7 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
 pub(super) fn parse_drop_full(tok: &[Token]) -> LangResult<Statement> {
     let mut i = 0;
     let r = self::parse_drop(tok, &mut i);
-    full_tt!(i, tok.len());
+    assert_full_tt!(i, tok.len());
     r
 }
 
@@ -114,11 +117,15 @@ pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statemen
         Some(Token![space]) if tok.len() == 2 && tok[1].is_ident() => {
             *c += 1;
             Ok(Statement::InspectSpace(unsafe {
+                // UNSAFE(@ohsayan): Safe because of the match predicate
                 extract!(tok[1], Token::Ident(ref space) => space.clone())
             }))
         }
         Some(Token::Ident(id))
-            if unsafe { id.as_slice().eq_ignore_ascii_case(b"spaces") } && tok.len() == 1 =>
+            if unsafe {
+                // UNSAFE(@ohsayan): Token lifetime ensures validity of slice
+                id.as_slice().eq_ignore_ascii_case(b"spaces")
+            } && tok.len() == 1 =>
         {
             Ok(Statement::InspectSpaces)
         }
@@ -130,6 +137,6 @@ pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statemen
 pub(super) fn parse_inspect_full(tok: &[Token]) -> LangResult<Statement> {
     let mut i = 0;
     let r = self::parse_inspect(tok, &mut i);
-    full_tt!(i, tok.len());
+    assert_full_tt!(i, tok.len());
     r
 }

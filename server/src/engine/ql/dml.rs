@@ -56,10 +56,16 @@ fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bo
     let is_single = Entity::tokens_with_single(tok);
     if is_full {
         *i += 3;
-        *d = MaybeInit::new(unsafe { Entity::full_entity_from_slice(tok) })
+        *d = MaybeInit::new(unsafe {
+            // UNSAFE(@ohsayan): Predicate ensures validity
+            Entity::full_entity_from_slice(tok)
+        })
     } else if is_single {
         *i += 1;
-        *d = MaybeInit::new(unsafe { Entity::single_entity_from_slice(tok) });
+        *d = MaybeInit::new(unsafe {
+            // UNSAFE(@ohsayan): Predicate ensures validity
+            Entity::single_entity_from_slice(tok)
+        });
     }
     is_full | is_single
 }
@@ -69,13 +75,17 @@ fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bo
 */
 
 #[derive(Debug, PartialEq)]
-pub(super) struct RelationalExpr<'a> {
+pub struct RelationalExpr<'a> {
     pub(super) lhs: &'a [u8],
     pub(super) rhs: &'a Lit,
     pub(super) opc: u8,
 }
 
 impl<'a> RelationalExpr<'a> {
+    #[inline(always)]
+    pub(super) fn new(lhs: &'a [u8], rhs: &'a Lit, opc: u8) -> Self {
+        Self { lhs, rhs, opc }
+    }
     pub(super) const OP_EQ: u8 = 1;
     pub(super) const OP_NE: u8 = 2;
     pub(super) const OP_GT: u8 = 3;
@@ -102,7 +112,7 @@ impl<'a> RelationalExpr<'a> {
         let op_le = u(tok[0] == Token![<] && tok[1] == Token![=]) * Self::OP_LE;
         let op_lt = u(tok[0] == Token![<] && op_le == 0) * Self::OP_LT;
         let opc = op_eq + op_ne + op_ge + op_gt + op_le + op_lt;
-        *okay = opc != 0;
+        *okay &= opc != 0;
         *i += 1 + (opc & 1 == 0) as usize;
         opc
     }
@@ -127,6 +137,7 @@ impl<'a> RelationalExpr<'a> {
         *cnt += i + okay as usize;
         if compiler::likely(okay) {
             Some(unsafe {
+                // UNSAFE(@ohsayan): tok[0] is checked for being an ident, tok[lit_idx] also checked to be a lit
                 Self {
                     lhs: extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
                     rhs: extract!(tok[lit_idx], Token::Lit(ref l) => l),
@@ -140,7 +151,7 @@ impl<'a> RelationalExpr<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct WhereClause<'a> {
+pub struct WhereClause<'a> {
     c: HashMap<&'a [u8], RelationalExpr<'a>>,
 }
 
@@ -150,11 +161,19 @@ impl<'a> WhereClause<'a> {
         Self { c }
     }
     #[inline(always)]
-    pub(super) fn parse_where(tok: &'a [Token], flag: &mut bool, cnt: &mut usize) -> Self {
+    /// Parse the expressions in a `where` context, appending it to the given map
+    ///
+    /// Notes:
+    /// - Deny duplicate clauses
+    /// - No enforcement on minimum number of clauses
+    fn parse_where_and_append_to(
+        tok: &'a [Token],
+        cnt: &mut usize,
+        c: &mut HashMap<&'a [u8], RelationalExpr<'a>>,
+    ) -> bool {
         let l = tok.len();
         let mut okay = true;
         let mut i = 0;
-        let mut c = HashMap::with_capacity(2);
         let mut has_more = true;
         while okay && i < l && has_more {
             okay &= RelationalExpr::try_parse(&tok[i..], &mut i)
@@ -163,8 +182,18 @@ impl<'a> WhereClause<'a> {
             has_more = tok[cmp::min(i, l - 1)] == Token![and] && i < l;
             i += has_more as usize;
         }
-        *flag &= okay;
         *cnt += i;
+        okay
+    }
+    #[inline(always)]
+    /// Parse a where context
+    ///
+    /// Notes:
+    /// - Enforce a minimum of 1 clause
+    pub(super) fn parse_where(tok: &'a [Token], flag: &mut bool, cnt: &mut usize) -> Self {
+        let mut c = HashMap::with_capacity(2);
+        *flag &= Self::parse_where_and_append_to(tok, cnt, &mut c);
+        *flag &= !c.is_empty();
         Self { c }
     }
 }
@@ -174,7 +203,7 @@ pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClaus
     let mut flag = true;
     let mut i = 0;
     let ret = WhereClause::parse_where(tok, &mut flag, &mut i);
-    full_tt!(tok.len(), i);
+    assert_full_tt!(tok.len(), i);
     flag.then_some(ret)
 }
 
@@ -183,7 +212,7 @@ pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClaus
 pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<'a>> {
     let mut i = 0;
     let okay = RelationalExpr::try_parse(tok, &mut i);
-    full_tt!(tok.len(), i);
+    assert_full_tt!(tok.len(), i);
     okay
 }
 
@@ -339,7 +368,15 @@ pub(super) fn parse_data_map_syntax<'a>(
                     Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
                     Lit::SignedInt(int) => DataType::SignedInt(*int),
                 };
-                okay &= data.insert(unsafe { id.as_slice() }, Some(dt)).is_none();
+                okay &= data
+                    .insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): Token lifetime ensures slice validity
+                            id.as_slice()
+                        },
+                        Some(dt),
+                    )
+                    .is_none();
             }
             (Token::Ident(id), Token::Symbol(Symbol::TtOpenSqBracket)) => {
                 // ooh a list
@@ -348,11 +385,25 @@ pub(super) fn parse_data_map_syntax<'a>(
                 okay &= lst_ok;
                 i += lst_i;
                 okay &= data
-                    .insert(unsafe { id.as_slice() }, Some(l.into()))
+                    .insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): Token lifetime ensures validity
+                            id.as_slice()
+                        },
+                        Some(l.into()),
+                    )
                     .is_none();
             }
             (Token::Ident(id), Token![null]) => {
-                okay &= data.insert(unsafe { id.as_slice() }, None).is_none();
+                okay &= data
+                    .insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): Token lifetime ensures validity
+                            id.as_slice()
+                        },
+                        None,
+                    )
+                    .is_none();
             }
             _ => {
                 okay = false;
@@ -411,65 +462,77 @@ impl<'a> From<HashMap<&'static [u8], Option<DataType>>> for InsertData<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct InsertStatement<'a> {
-    pub(super) primary_key: &'a Lit,
     pub(super) entity: Entity,
     pub(super) data: InsertData<'a>,
 }
 
+#[inline(always)]
+fn parse_entity(tok: &[Token], entity: &mut MaybeInit<Entity>, i: &mut usize) -> bool {
+    let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
+    let is_half = tok[0].is_ident();
+    unsafe {
+        // UNSAFE(@ohsayan): The branch predicates assert their correctness
+        if is_full {
+            *i += 3;
+            *entity = MaybeInit::new(Entity::full_entity_from_slice(&tok));
+        } else if is_half {
+            *i += 1;
+            *entity = MaybeInit::new(Entity::single_entity_from_slice(&tok));
+        }
+    }
+    is_full | is_half
+}
+
 pub(super) fn parse_insert<'a>(
-    src: &'a [Token],
+    tok: &'a [Token],
     counter: &mut usize,
 ) -> LangResult<InsertStatement<'a>> {
     /*
         smallest:
-        insert space:primary_key ()
-        ^1     ^2   ^3^4         ^^5,6
+        insert into model (primarykey)
+               ^1    ^2   ^3      ^4 ^5
     */
-    let l = src.len();
-    let is_full = Entity::tokens_with_full(src);
-    let is_half = Entity::tokens_with_single(src);
-
-    let mut okay = is_full | is_half;
-    let mut i = 0;
+    let l = tok.len();
+    if compiler::unlikely(l < 5) {
+        return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+    }
+    let mut okay = tok[0] == Token![into];
+    let mut i = okay as usize;
     let mut entity = MaybeInit::uninit();
-
-    okay &= process_entity(&src[i..], &mut entity, &mut i);
-
-    // primary key is a lit; atleast lit + (<oparen><cparen>) | (<obrace><cbrace>)
-    okay &= l >= (i + 4);
-    // colon, lit
-    okay &= src[i] == Token![:] && src[i + 1].is_lit();
-    // check data
-    let is_map = okay && src[i + 2] == Token![open {}];
-    let is_tuple = okay && src[i + 2] == Token![() open];
-    okay &= is_map | is_tuple;
-
-    if !okay {
-        return Err(LangError::UnexpectedToken);
+    okay &= parse_entity(&tok[i..], &mut entity, &mut i);
+    let mut data = None;
+    if !(i < l) {
+        unsafe {
+            // UNSAFE(@ohsayan): ALWAYS true because 1 + 3 for entity; early exit if smaller
+            impossible!();
+        }
     }
-
-    let primary_key = unsafe { extract!(&src[i+1], Token::Lit(l) => l) };
-    i += 3; // skip col, lit + op/ob
-
-    let data;
-    if is_tuple {
-        let (ord, cnt, ok) = parse_data_tuple_syntax(&src[i..]);
-        okay &= ok;
-        i += cnt;
-        data = InsertData::Ordered(ord);
-    } else {
-        let (map, cnt, ok) = parse_data_map_syntax(&src[i..]);
-        okay &= ok;
-        i += cnt;
-        data = InsertData::Map(map);
+    match tok[i] {
+        Token![() open] => {
+            let (this_data, incr, ok) = parse_data_tuple_syntax(&tok[i + 1..]);
+            okay &= ok;
+            i += incr + 1;
+            data = Some(InsertData::Ordered(this_data));
+        }
+        Token![open {}] => {
+            let (this_data, incr, ok) = parse_data_map_syntax(&tok[i + 1..]);
+            okay &= ok;
+            i += incr + 1;
+            data = Some(InsertData::Map(this_data));
+        }
+        _ => okay = false,
     }
-
     *counter += i;
-
     if okay {
+        let data = unsafe {
+            // UNSAFE(@ohsayan): Will be safe because of `okay` since it ensures that entity has been initialized
+            data.unwrap_unchecked()
+        };
         Ok(InsertStatement {
-            primary_key,
-            entity: unsafe { entity.assume_init() },
+            entity: unsafe {
+                // UNSAFE(@ohsayan): Will be safe because of `okay` since it ensures that entity has been initialized
+                entity.assume_init()
+            },
             data,
         })
     } else {
@@ -491,14 +554,39 @@ pub(super) fn parse_insert_full<'a>(tok: &'a [Token]) -> Option<InsertStatement<
 
 #[derive(Debug, PartialEq)]
 pub(super) struct SelectStatement<'a> {
-    /// the primary key
-    pub(super) primary_key: &'a Lit,
     /// the entity
     pub(super) entity: Entity,
     /// fields in order of querying. will be zero when wildcard is set
     pub(super) fields: Vec<RawSlice>,
     /// whether a wildcard was passed
     pub(super) wildcard: bool,
+    /// where clause
+    pub(super) clause: WhereClause<'a>,
+}
+impl<'a> SelectStatement<'a> {
+    #[inline(always)]
+    pub(crate) fn new_test(
+        entity: Entity,
+        fields: Vec<RawSlice>,
+        wildcard: bool,
+        clauses: HashMap<&'a [u8], RelationalExpr<'a>>,
+    ) -> SelectStatement<'a> {
+        Self::new(entity, fields, wildcard, clauses)
+    }
+    #[inline(always)]
+    fn new(
+        entity: Entity,
+        fields: Vec<RawSlice>,
+        wildcard: bool,
+        clauses: HashMap<&'a [u8], RelationalExpr<'a>>,
+    ) -> SelectStatement<'a> {
+        Self {
+            entity,
+            fields,
+            wildcard,
+            clause: WhereClause::new(clauses),
+        }
+    }
 }
 
 /// Parse a `select` query. The cursor should have already passed the `select` token when this
@@ -507,47 +595,62 @@ pub(super) fn parse_select<'a>(
     tok: &'a [Token],
     counter: &mut usize,
 ) -> LangResult<SelectStatement<'a>> {
+    /*
+        Smallest query:
+        select * from model
+               ^ ^    ^
+               1 2    3
+    */
     let l = tok.len();
-
-    let mut i = 0_usize;
-    let mut okay = l > 4;
-    let mut fields = Vec::new();
-    let is_wildcard = i < l && tok[i] == Token![*];
+    if compiler::unlikely(l < 3) {
+        return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+    }
+    let mut i = 0;
+    let mut okay = true;
+    let mut select_fields = Vec::new();
+    let is_wildcard = tok[0] == Token![*];
     i += is_wildcard as usize;
-
-    while okay && i < l && tok[i].is_ident() && !is_wildcard {
-        unsafe {
-            fields.push(extract!(&tok[i], Token::Ident(id) => id.clone()));
+    while i < l && okay && !is_wildcard {
+        match tok[i] {
+            Token::Ident(ref id) => select_fields.push(id.clone()),
+            _ => {
+                break;
+            }
         }
         i += 1;
-        // skip comma
-        let nx_comma = i < l && tok[i] == Token![,];
-        let nx_from = i < l && tok[i] == Token![from];
+        let nx_idx = cmp::min(i, l);
+        let nx_comma = tok[nx_idx] == Token![,] && i < l;
+        let nx_from = tok[nx_idx] == Token![from];
         okay &= nx_comma | nx_from;
         i += nx_comma as usize;
     }
-
-    okay &= i < l && tok[i] == Token![from];
+    okay &= is_wildcard | !select_fields.is_empty();
+    okay &= (i + 2) <= l;
+    if compiler::unlikely(!okay) {
+        return compiler::cold_err(Err(LangError::UnexpectedToken));
+    }
+    okay &= tok[i] == Token![from];
     i += okay as usize;
-
-    // parsed upto select a, b, c from ...; now parse entity and select
+    // now process entity
     let mut entity = MaybeInit::uninit();
     okay &= process_entity(&tok[i..], &mut entity, &mut i);
-
-    // now primary key
-    okay &= i < l && tok[i] == Token![:];
-    i += okay as usize;
-    okay &= i < l && tok[i].is_lit();
-
-    *counter += i + okay as usize;
-
+    let has_where = tok[cmp::min(i, l)] == Token![where];
+    i += has_where as usize;
+    let mut clauses = <_ as Default>::default();
+    if has_where {
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= !clauses.is_empty(); // append doesn't enforce clause arity
+    }
+    *counter += i;
     if okay {
-        let primary_key = unsafe { extract!(tok[i], Token::Lit(ref l) => l) };
         Ok(SelectStatement {
-            primary_key,
-            entity: unsafe { entity.assume_init() },
-            fields,
+            entity: unsafe {
+                // UNSAFE(@ohsayan): `process_entity` and `okay` assert correctness
+                entity.assume_init()
+            },
+            fields: select_fields,
             wildcard: is_wildcard,
+            clause: WhereClause::new(clauses),
         })
     } else {
         Err(LangError::UnexpectedToken)
@@ -559,7 +662,7 @@ pub(super) fn parse_select<'a>(
 pub(super) fn parse_select_full<'a>(tok: &'a [Token]) -> Option<SelectStatement<'a>> {
     let mut i = 0;
     let r = self::parse_select(tok, &mut i);
-    assert!(i == tok.len(), "didn't use full length");
+    assert_full_tt!(i, tok.len());
     r.ok()
 }
 
@@ -645,6 +748,10 @@ impl<'a> AssignmentExpression<'a> {
 
         if okay {
             let expression = unsafe {
+                /*
+                   UNSAFE(@ohsayan): tok[0] is checked for being an ident early on; second, tok[i]
+                   is also checked for being a lit and then `okay` ensures correctness
+                */
                 AssignmentExpression {
                     lhs: extract!(tok[0], Token::Ident(ref r) => r.clone()),
                     rhs: extract!(tok[i], Token::Lit(ref l) => l),
@@ -663,7 +770,7 @@ pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentEx
     let mut i = 0;
     let mut exprs = Vec::new();
     if AssignmentExpression::parse_and_append_expression(tok, &mut exprs, &mut i) {
-        full_tt!(i, tok.len());
+        assert_full_tt!(i, tok.len());
         Some(exprs.remove(0))
     } else {
         None
@@ -676,52 +783,86 @@ pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentEx
 
 #[derive(Debug, PartialEq)]
 pub struct UpdateStatement<'a> {
-    pub(super) primary_key: &'a Lit,
     pub(super) entity: Entity,
     pub(super) expressions: Vec<AssignmentExpression<'a>>,
+    pub(super) wc: WhereClause<'a>,
 }
 
 impl<'a> UpdateStatement<'a> {
+    #[inline(always)]
+    #[cfg(test)]
+    pub fn new_test(
+        entity: Entity,
+        expressions: Vec<AssignmentExpression<'a>>,
+        wc: HashMap<&'a [u8], RelationalExpr<'a>>,
+    ) -> Self {
+        Self::new(entity, expressions, WhereClause::new(wc))
+    }
+    #[inline(always)]
+    pub fn new(
+        entity: Entity,
+        expressions: Vec<AssignmentExpression<'a>>,
+        wc: WhereClause<'a>,
+    ) -> Self {
+        Self {
+            entity,
+            expressions,
+            wc,
+        }
+    }
+    #[inline(always)]
     pub(super) fn parse_update(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+        /*
+            TODO(@ohsayan): Allow volcanoes
+            smallest tt:
+            update model SET x  =  1 where x = 1
+                   ^1    ^2  ^3 ^4 ^5^6    ^7^8^9
+        */
         let l = tok.len();
-        // TODO(@ohsayan): This would become 8 when we add `SET`. It isn't exactly needed but is for purely aesthetic purposes
-        let mut okay = l > 6;
-        let mut i = 0_usize;
-
-        // parse entity
+        if compiler::unlikely(l < 9) {
+            return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+        }
+        let mut i = 0;
         let mut entity = MaybeInit::uninit();
-        okay &= process_entity(tok, &mut entity, &mut i);
-
-        // check if we have our primary key
-        okay &= i < l && tok[i] == Token![:];
-        i += okay as usize;
-        okay &= i < l && tok[i].is_lit();
-        let primary_key_location = i;
-        i += okay as usize;
-
-        // now parse expressions that we have to update
+        let mut okay = parse_entity(&tok[i..], &mut entity, &mut i);
+        if !((i + 6) <= l) {
+            unsafe {
+                // UNSAFE(@ohsayan): Obvious, just a hint; entity can fw by 3 max
+                impossible!();
+            }
+        }
+        okay &= tok[i] == Token![set];
+        i += 1; // ignore whatever we have here, even if it's broken
+        let mut nx_where = false;
         let mut expressions = Vec::new();
-        while i < l && okay {
+        while i < l && okay && !nx_where {
             okay &= AssignmentExpression::parse_and_append_expression(
                 &tok[i..],
                 &mut expressions,
                 &mut i,
             );
-            let nx_comma = i < l && tok[i] == Token![,];
-            // TODO(@ohsayan): Define the need for a semicolon; remember, no SQL unsafety!
-            let nx_over = i == l;
-            okay &= nx_comma | nx_over;
+            let nx_idx = cmp::min(i, l);
+            let nx_comma = tok[nx_idx] == Token![,] && i < l;
+            // NOTE: volcano
+            nx_where = tok[nx_idx] == Token![where] && i < l;
+            okay &= nx_comma | nx_where; // NOTE: volcano
             i += nx_comma as usize;
         }
+        okay &= nx_where;
+        i += okay as usize;
+        // now process expressions
+        let mut clauses = <_ as Default>::default();
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= !clauses.is_empty(); // NOTE: volcano
         *counter += i;
-
         if okay {
-            let primary_key =
-                unsafe { extract!(tok[primary_key_location], Token::Lit(ref pk) => pk) };
             Ok(Self {
-                primary_key,
-                entity: unsafe { entity.assume_init() },
+                entity: unsafe {
+                    // UNSAFE(@ohsayan): This is safe because of `parse_entity` and `okay`
+                    entity.assume_init()
+                },
                 expressions,
+                wc: WhereClause::new(clauses),
             })
         } else {
             Err(LangError::UnexpectedToken)
@@ -733,7 +874,7 @@ impl<'a> UpdateStatement<'a> {
 pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatement<'a>> {
     let mut i = 0;
     let r = UpdateStatement::parse_update(tok, &mut i);
-    full_tt!(i, tok.len());
+    assert_full_tt!(i, tok.len());
     r
 }
 
@@ -746,43 +887,56 @@ pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatem
 
 #[derive(Debug, PartialEq)]
 pub(super) struct DeleteStatement<'a> {
-    pub(super) primary_key: &'a Lit,
     pub(super) entity: Entity,
+    pub(super) wc: WhereClause<'a>,
 }
 
 impl<'a> DeleteStatement<'a> {
     #[inline(always)]
-    pub(super) fn new(primary_key: &'a Lit, entity: Entity) -> Self {
-        Self {
-            primary_key,
-            entity,
-        }
+    pub(super) fn new(entity: Entity, wc: WhereClause<'a>) -> Self {
+        Self { entity, wc }
+    }
+    #[inline(always)]
+    #[cfg(test)]
+    pub(super) fn new_test(entity: Entity, wc: HashMap<&'a [u8], RelationalExpr<'a>>) -> Self {
+        Self::new(entity, WhereClause::new(wc))
     }
     pub(super) fn parse_delete(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+        /*
+            TODO(@ohsayan): Volcano
+            smallest tt:
+            delete from model where x = 1
+                   ^1   ^2    ^3    ^4  ^5
+        */
         let l = tok.len();
-        let mut okay = l > 2;
-        let mut i = 0_usize;
-
-        // parse entity
+        if compiler::unlikely(l < 5) {
+            return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+        }
+        let mut i = 0;
+        let mut okay = tok[i] == Token![from];
+        i += 1; // skip even if incorrect
         let mut entity = MaybeInit::uninit();
-        okay &= process_entity(tok, &mut entity, &mut i);
-
-        // find primary key
-        okay &= i < l && tok[i] == Token![:];
-        i += okay as usize;
-        okay &= i < l && tok[i].is_lit();
-        let primary_key_idx = i;
-        i += okay as usize;
-
-        *counter += i;
-
-        if okay {
+        okay &= parse_entity(&tok[i..], &mut entity, &mut i);
+        if !(i < l) {
             unsafe {
-                Ok(Self {
-                    primary_key: extract!(tok[primary_key_idx], Token::Lit(ref l) => l),
-                    entity: entity.assume_init(),
-                })
+                // UNSAFE(@ohsayan): Obvious, we have atleast 5, used max 4
+                impossible!();
             }
+        }
+        okay &= tok[i] == Token![where]; // NOTE: volcano
+        i += 1; // skip even if incorrect
+        let mut clauses = <_ as Default>::default();
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= !clauses.is_empty();
+        *counter += i;
+        if okay {
+            Ok(Self {
+                entity: unsafe {
+                    // UNSAFE(@ohsayan): obvious due to `okay` and `parse_entity`
+                    entity.assume_init()
+                },
+                wc: WhereClause::new(clauses),
+            })
         } else {
             Err(LangError::UnexpectedToken)
         }
@@ -793,6 +947,6 @@ impl<'a> DeleteStatement<'a> {
 pub(super) fn parse_delete_full<'a>(tok: &'a [Token]) -> LangResult<DeleteStatement<'a>> {
     let mut i = 0_usize;
     let r = DeleteStatement::parse_delete(tok, &mut i);
-    full_tt!(i, tok.len());
+    assert_full_tt!(i, tok.len());
     r
 }

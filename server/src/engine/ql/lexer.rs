@@ -363,8 +363,7 @@ fn kwph(k: &[u8]) -> u8 {
 }
 
 #[inline(always)]
-fn kwof(key: &str) -> Option<Keyword> {
-    let key = key.as_bytes();
+fn kwof(key: &[u8]) -> Option<Keyword> {
     let ph = kwph(key);
     if ph < KW_LUT.len() as u8 && KW_LUT[ph as usize].0 == key {
         Some(KW_LUT[ph as usize].1)
@@ -498,11 +497,11 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
 
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
-        let st = unsafe { s.as_str() };
-        match kwof(st) {
+        let st = unsafe { s.as_slice() }.to_ascii_lowercase();
+        match kwof(&st) {
             Some(kw) => self.tokens.push(kw.into()),
             // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
-            None if st == "true" || st == "false" => self.push_token(Lit::Bool(st == "true")),
+            None if st == b"true" || st == b"false" => self.push_token(Lit::Bool(st == b"true")),
             None => self.tokens.push(Token::Ident(s)),
         }
     }

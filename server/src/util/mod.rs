@@ -230,6 +230,7 @@ pub struct MaybeInit<T> {
 
 impl<T> MaybeInit<T> {
     /// Initialize a new uninitialized variant
+    #[inline(always)]
     pub const fn uninit() -> Self {
         Self {
             #[cfg(test)]
@@ -238,6 +239,7 @@ impl<T> MaybeInit<T> {
         }
     }
     /// Initialize with a value
+    #[inline(always)]
     pub const fn new(val: T) -> Self {
         Self {
             #[cfg(test)]
@@ -250,6 +252,7 @@ impl<T> MaybeInit<T> {
     /// ## Safety
     ///
     /// Caller needs to ensure that the data is actually initialized
+    #[inline(always)]
     pub const unsafe fn assume_init(self) -> T {
         #[cfg(test)]
         {
@@ -264,6 +267,7 @@ impl<T> MaybeInit<T> {
     /// ## Safety
     ///
     /// Caller needs to ensure that the data is actually initialized
+    #[inline(always)]
     pub const unsafe fn assume_init_ref(&self) -> &T {
         #[cfg(test)]
         {

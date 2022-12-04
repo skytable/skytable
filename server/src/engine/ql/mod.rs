@@ -39,7 +39,7 @@ mod tests;
 
 #[cfg(test)]
 use core::{fmt, ops::Deref};
-use core::{mem, slice, str};
+use core::{mem, ptr::NonNull, slice, str};
 
 /*
     Lang errors
@@ -78,7 +78,7 @@ pub enum LangError {
 #[cfg_attr(not(test), derive(Debug))]
 #[derive(Clone)]
 pub struct RawSlice {
-    ptr: *const u8,
+    ptr: NonNull<u8>,
     len: usize,
 }
 
@@ -90,13 +90,16 @@ impl RawSlice {
     const _EALIGN: () = assert!(mem::align_of::<Self>() == mem::align_of::<&[u8]>());
     const FAKE_SLICE: Self = unsafe { Self::new_from_str("") };
     const unsafe fn new(ptr: *const u8, len: usize) -> Self {
-        Self { ptr, len }
+        Self {
+            ptr: NonNull::new_unchecked(ptr.cast_mut()),
+            len,
+        }
     }
     const unsafe fn new_from_str(s: &str) -> Self {
         Self::new(s.as_bytes().as_ptr(), s.as_bytes().len())
     }
     unsafe fn as_slice(&self) -> &[u8] {
-        slice::from_raw_parts(self.ptr, self.len)
+        slice::from_raw_parts(self.ptr.as_ptr(), self.len)
     }
     unsafe fn as_str(&self) -> &str {
         str::from_utf8_unchecked(self.as_slice())

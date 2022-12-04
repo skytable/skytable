@@ -2034,21 +2034,21 @@ mod dml_tests {
         #[test]
         fn insert_tuple_mini() {
             let x = lex(br#"
-                insert twitter.users:"sayan" ()
+                insert into twitter.users ("sayan")
             "#)
             .unwrap();
             let r = dml::parse_insert_full(&x[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("twitter".into(), "users".into()),
-                data: vec![].into(),
+                data: into_array_nullable!["sayan"].to_vec().into(),
             };
             assert_eq!(e, r);
         }
         #[test]
         fn insert_tuple() {
             let x = lex(br#"
-                insert twitter.users:"sayan" (
+                insert into twitter.users (
+                    "sayan",
                     "Sayan",
                     "sayan@example.com",
                     true,
@@ -2059,18 +2059,25 @@ mod dml_tests {
             .unwrap();
             let r = dml::parse_insert_full(&x[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("twitter".into(), "users".into()),
-                data: into_array_nullable!["Sayan", "sayan@example.com", true, 12345, 67890]
-                    .to_vec()
-                    .into(),
+                data: into_array_nullable![
+                    "sayan",
+                    "Sayan",
+                    "sayan@example.com",
+                    true,
+                    12345,
+                    67890
+                ]
+                .to_vec()
+                .into(),
             };
             assert_eq!(e, r);
         }
         #[test]
         fn insert_tuple_pro() {
             let x = lex(br#"
-                insert twitter.users:"sayan" (
+                insert into twitter.users (
+                    "sayan",
                     "Sayan",
                     "sayan@example.com",
                     true,
@@ -2084,9 +2091,9 @@ mod dml_tests {
             .unwrap();
             let r = dml::parse_insert_full(&x[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("twitter".into(), "users".into()),
                 data: into_array_nullable![
+                    "sayan",
                     "Sayan",
                     "sayan@example.com",
                     true,
@@ -2103,19 +2110,25 @@ mod dml_tests {
         }
         #[test]
         fn insert_map_mini() {
-            let tok = lex(br#"insert jotsy.app:"sayan" {}"#).unwrap();
+            let tok = lex(br#"
+                insert into jotsy.app { username: "sayan" }
+            "#)
+            .unwrap();
             let r = dml::parse_insert_full(&tok[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("jotsy".into(), "app".into()),
-                data: nullable_dict! {}.into(),
+                data: dict_nullable! {
+                    "username".as_bytes() => "sayan"
+                }
+                .into(),
             };
             assert_eq!(e, r);
         }
         #[test]
         fn insert_map() {
             let tok = lex(br#"
-                insert jotsy.app:"sayan" {
+                insert into jotsy.app {
+                    username: "sayan",
                     name: "Sayan",
                     email: "sayan@example.com",
                     verified: true,
@@ -2126,9 +2139,9 @@ mod dml_tests {
             .unwrap();
             let r = dml::parse_insert_full(&tok[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string().into()),
                 entity: Entity::Full("jotsy".into(), "app".into()),
                 data: dict_nullable! {
+                    "username".as_bytes() => "sayan",
                     "name".as_bytes() => "Sayan",
                     "email".as_bytes() => "sayan@example.com",
                     "verified".as_bytes() => true,
@@ -2142,7 +2155,8 @@ mod dml_tests {
         #[test]
         fn insert_map_pro() {
             let tok = lex(br#"
-                insert jotsy.app:"sayan" {
+                insert into jotsy.app {
+                    username: "sayan",
                     password: "pass123",
                     email: "sayan@example.com",
                     verified: true,
@@ -2156,9 +2170,9 @@ mod dml_tests {
             .unwrap();
             let r = dml::parse_insert_full(&tok[1..]).unwrap();
             let e = InsertStatement {
-                primary_key: &("sayan".to_string()).into(),
                 entity: Entity::Full("jotsy".into(), "app".into()),
                 data: dict_nullable! {
+                    "username".as_bytes() => "sayan",
                     "password".as_bytes() => "pass123",
                     "email".as_bytes() => "sayan@example.com",
                     "verified".as_bytes() => true,
@@ -2175,72 +2189,93 @@ mod dml_tests {
     }
 
     mod stmt_select {
+        use crate::engine::ql::dml::RelationalExpr;
+
         use {
             super::*,
             crate::engine::ql::{
                 ast::Entity,
                 dml::{self, SelectStatement},
-                lexer::Lit,
             },
         };
         #[test]
         fn select_mini() {
             let tok = lex(br#"
-                select * from users:"sayan"
+                select * from users where username = "sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
-            let e = SelectStatement {
-                primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Single("users".into()),
-                fields: [].to_vec(),
-                wildcard: true,
-            };
+            let username_where = "sayan".into();
+            let e = SelectStatement::new_test(
+                Entity::Single("users".into()),
+                [].to_vec(),
+                true,
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    ),
+                },
+            );
             assert_eq!(r, e);
         }
         #[test]
         fn select() {
             let tok = lex(br#"
-                select field1 from users:"sayan"
+                select field1 from users where username = "sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
-            let e = SelectStatement {
-                primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Single("users".into()),
-                fields: ["field1".into()].to_vec(),
-                wildcard: false,
-            };
+            let username_where = "sayan".into();
+            let e = SelectStatement::new_test(
+                Entity::Single("users".into()),
+                ["field1".into()].to_vec(),
+                false,
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    ),
+                },
+            );
             assert_eq!(r, e);
         }
         #[test]
         fn select_pro() {
             let tok = lex(br#"
-                select field1 from twitter.users:"sayan"
+                select field1 from twitter.users where username = "sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
-            let e = SelectStatement {
-                primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Full("twitter".into(), "users".into()),
-                fields: ["field1".into()].to_vec(),
-                wildcard: false,
-            };
+            let username_where = "sayan".into();
+            let e = SelectStatement::new_test(
+                Entity::Full("twitter".into(), "users".into()),
+                ["field1".into()].to_vec(),
+                false,
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    ),
+                },
+            );
             assert_eq!(r, e);
         }
         #[test]
         fn select_pro_max() {
             let tok = lex(br#"
-                select field1, field2 from twitter.users:"sayan"
+                select field1, field2 from twitter.users where username = "sayan"
             "#)
             .unwrap();
             let r = dml::parse_select_full(&tok[1..]).unwrap();
-            let e = SelectStatement {
-                primary_key: &Lit::Str("sayan".into()),
-                entity: Entity::Full("twitter".into(), "users".into()),
-                fields: ["field1".into(), "field2".into()].to_vec(),
-                wildcard: false,
-            };
+            let username_where = "sayan".into();
+            let e = SelectStatement::new_test(
+                Entity::Full("twitter".into(), "users".into()),
+                ["field1".into(), "field2".into()].to_vec(),
+                false,
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    ),
+                },
+            );
             assert_eq!(r, e);
         }
     }
@@ -2323,46 +2358,67 @@ mod dml_tests {
             super::*,
             crate::engine::ql::{
                 ast::Entity,
-                dml::{self, AssignmentExpression, Operator, UpdateStatement},
+                dml::{
+                    self, AssignmentExpression, Operator, RelationalExpr, UpdateStatement,
+                    WhereClause,
+                },
             },
         };
         #[test]
         fn update_mini() {
             let tok = lex(br#"
-                update app:"sayan" notes += "this is my new note"
+                update app SET notes += "this is my new note" where username = "sayan"
             "#)
             .unwrap();
+            let where_username = "sayan".into();
             let note = "this is my new note".to_string().into();
             let r = dml::parse_update_full(&tok[1..]).unwrap();
             let e = UpdateStatement {
-                primary_key: &("sayan".to_owned().into()),
                 entity: Entity::Single("app".into()),
                 expressions: vec![AssignmentExpression {
                     lhs: "notes".into(),
                     rhs: &note,
                     operator_fn: Operator::AddAssign,
                 }],
+                wc: WhereClause::new(dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(),
+                        &where_username,
+                        RelationalExpr::OP_EQ
+                    )
+                }),
             };
             assert_eq!(r, e);
         }
         #[test]
         fn update() {
             let tok = lex(br#"
-                update jotsy.app:"sayan" notes += "this is my new note", email = "sayan@example.com"
+                update
+                    jotsy.app
+                SET
+                    notes += "this is my new note",
+                    email = "sayan@example.com"
+                WHERE
+                    username = "sayan"
             "#)
             .unwrap();
             let r = dml::parse_update_full(&tok[1..]).unwrap();
-
+            let where_username = "sayan".into();
             let field_note = "this is my new note".into();
             let field_email = "sayan@example.com".into();
-            let primary_key = "sayan".into();
             let e = UpdateStatement {
-                primary_key: &primary_key,
                 entity: ("jotsy", "app").into(),
                 expressions: vec![
                     AssignmentExpression::new("notes".into(), &field_note, Operator::AddAssign),
                     AssignmentExpression::new("email".into(), &field_email, Operator::Assign),
                 ],
+                wc: WhereClause::new(dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(),
+                        &where_username,
+                        RelationalExpr::OP_EQ
+                    )
+                }),
             };
 
             assert_eq!(r, e);
@@ -2373,29 +2429,47 @@ mod dml_tests {
             super::*,
             crate::engine::ql::{
                 ast::Entity,
-                dml::{self, DeleteStatement},
+                dml::{self, DeleteStatement, RelationalExpr},
             },
         };
 
         #[test]
         fn delete_mini() {
             let tok = lex(br#"
-                delete users:"sayan"
+                delete from users where username = "sayan"
             "#)
             .unwrap();
             let primary_key = "sayan".into();
-            let e = DeleteStatement::new(&primary_key, Entity::Single("users".into()));
+            let e = DeleteStatement::new_test(
+                Entity::Single("users".into()),
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(),
+                        &primary_key,
+                        RelationalExpr::OP_EQ
+                    )
+                },
+            );
             let r = dml::parse_delete_full(&tok[1..]).unwrap();
             assert_eq!(r, e);
         }
         #[test]
         fn delete() {
             let tok = lex(br#"
-                delete twitter.users:"sayan"
+                delete from twitter.users where username = "sayan"
             "#)
             .unwrap();
             let primary_key = "sayan".into();
-            let e = DeleteStatement::new(&primary_key, ("twitter", "users").into());
+            let e = DeleteStatement::new_test(
+                ("twitter", "users").into(),
+                dict! {
+                    "username".as_bytes() => RelationalExpr::new(
+                        "username".as_bytes(),
+                        &primary_key,
+                        RelationalExpr::OP_EQ
+                    )
+                },
+            );
             let r = dml::parse_delete_full(&tok[1..]).unwrap();
             assert_eq!(r, e);
         }
@@ -2527,6 +2601,14 @@ mod dml_tests {
                 }
             });
             assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
+        }
+        #[test]
+        fn where_duplicate_condition() {
+            let tok = lex(br#"
+                userid = 100 and userid > 200
+            "#)
+            .unwrap();
+            assert!(dml::parse_where_clause_full(&tok).is_none());
         }
     }
 }
