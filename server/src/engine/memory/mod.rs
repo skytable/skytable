@@ -26,15 +26,14 @@
 
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
 
-use super::ql::RawSlice;
+use super::ql::{lexer::Lit, RawSlice};
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
-#[derive(Debug, PartialEq)]
-#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, PartialEq, Clone)]
 pub enum DataType {
     /// An UTF-8 string
-    String(String),
+    String(Box<str>),
     /// Bytes
     Binary(Vec<u8>),
     /// An unsigned integer
@@ -67,6 +66,19 @@ enum_impls! {
         bool as Boolean,
         Vec<Self> as List,
         &'static str as String,
+    }
+}
+
+impl DataType {
+    #[inline(always)]
+    pub(super) fn clone_from_lit(lit: &Lit) -> Self {
+        match lit {
+            Lit::Str(s) => DataType::String(s.clone()),
+            Lit::Bool(b) => DataType::Boolean(*b),
+            Lit::UnsignedInt(u) => DataType::UnsignedInt(*u),
+            Lit::SignedInt(i) => DataType::SignedInt(*i),
+            Lit::SafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+        }
     }
 }
 

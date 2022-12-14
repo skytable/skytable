@@ -250,20 +250,20 @@ mod lexer_tests {
     fn lex_unsafe_literal_mini() {
         let usl = lex("\r0\n".as_bytes()).unwrap();
         assert_eq!(usl.len(), 1);
-        assert_eq!(Token::Lit(Lit::UnsafeLit("".into())), usl[0]);
+        assert_eq!(Token::Lit(Lit::SafeLit("".into())), usl[0]);
     }
     #[test]
     fn lex_unsafe_literal() {
         let usl = lex("\r9\nabcdefghi".as_bytes()).unwrap();
         assert_eq!(usl.len(), 1);
-        assert_eq!(Token::Lit(Lit::UnsafeLit("abcdefghi".into())), usl[0]);
+        assert_eq!(Token::Lit(Lit::SafeLit("abcdefghi".into())), usl[0]);
     }
     #[test]
     fn lex_unsafe_literal_pro() {
         let usl = lex("\r18\nabcdefghi123456789".as_bytes()).unwrap();
         assert_eq!(usl.len(), 1);
         assert_eq!(
-            Token::Lit(Lit::UnsafeLit("abcdefghi123456789".into())),
+            Token::Lit(Lit::SafeLit("abcdefghi123456789".into())),
             usl[0]
         );
     }

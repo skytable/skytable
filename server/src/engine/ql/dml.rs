@@ -145,19 +145,21 @@ impl<'a> RelationalExpr<'a> {
                 }
             })
         } else {
-            compiler::cold_err(None)
+            compiler::cold_val(None)
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct WhereClause<'a> {
-    c: HashMap<&'a [u8], RelationalExpr<'a>>,
+    c: WhereClauseCollection<'a>,
 }
+
+type WhereClauseCollection<'a> = HashMap<&'a [u8], RelationalExpr<'a>>;
 
 impl<'a> WhereClause<'a> {
     #[inline(always)]
-    pub(super) fn new(c: HashMap<&'a [u8], RelationalExpr<'a>>) -> Self {
+    pub(super) fn new(c: WhereClauseCollection<'a>) -> Self {
         Self { c }
     }
     #[inline(always)]
@@ -169,7 +171,7 @@ impl<'a> WhereClause<'a> {
     fn parse_where_and_append_to(
         tok: &'a [Token],
         cnt: &mut usize,
-        c: &mut HashMap<&'a [u8], RelationalExpr<'a>>,
+        c: &mut WhereClauseCollection<'a>,
     ) -> bool {
         let l = tok.len();
         let mut okay = true;
@@ -235,13 +237,7 @@ pub(super) fn parse_list(
     let mut prev_nlist_dscr = None;
     while i < l && okay && !stop {
         let d = match &tok[i] {
-            Token::Lit(l) => match l {
-                Lit::Str(s) => DataType::String(s.to_string()),
-                Lit::UnsignedInt(n) => DataType::UnsignedInt(*n),
-                Lit::Bool(b) => DataType::Boolean(*b),
-                Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
-                Lit::SignedInt(uint) => DataType::SignedInt(*uint),
-            },
+            Token::Lit(l) => DataType::clone_from_lit(l),
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // a nested list
                 let mut nested_list = Vec::new();
@@ -298,19 +294,7 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
     let mut data = Vec::new();
     while i < l && okay && !stop {
         match &tok[i] {
-            Token::Lit(l) => match l {
-                Lit::Str(s) => {
-                    data.push(Some(s.to_string().into()));
-                }
-                Lit::UnsignedInt(n) => {
-                    data.push(Some((*n).into()));
-                }
-                Lit::Bool(b) => {
-                    data.push(Some((*b).into()));
-                }
-                Lit::UnsafeLit(r) => data.push(Some(DataType::AnonymousTypeNeedsEval(r.clone()))),
-                Lit::SignedInt(int) => data.push(Some(DataType::SignedInt(*int))),
-            },
+            Token::Lit(l) => data.push(Some(DataType::clone_from_lit(l))),
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // ah, a list
                 let mut l = Vec::new();
@@ -361,20 +345,13 @@ pub(super) fn parse_data_map_syntax<'a>(
         okay &= colon == &Symbol::SymColon;
         match (field, expression) {
             (Token::Ident(id), Token::Lit(l)) => {
-                let dt = match l {
-                    Lit::Str(s) => s.to_string().into(),
-                    Lit::Bool(b) => (*b).into(),
-                    Lit::UnsignedInt(s) => (*s).into(),
-                    Lit::UnsafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
-                    Lit::SignedInt(int) => DataType::SignedInt(*int),
-                };
                 okay &= data
                     .insert(
                         unsafe {
                             // UNSAFE(@ohsayan): Token lifetime ensures slice validity
                             id.as_slice()
                         },
-                        Some(dt),
+                        Some(DataType::clone_from_lit(l)),
                     )
                     .is_none();
             }
@@ -494,7 +471,7 @@ pub(super) fn parse_insert<'a>(
     */
     let l = tok.len();
     if compiler::unlikely(l < 5) {
-        return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+        return compiler::cold_val(Err(LangError::UnexpectedEndofStatement));
     }
     let mut okay = tok[0] == Token![into];
     let mut i = okay as usize;
@@ -569,7 +546,7 @@ impl<'a> SelectStatement<'a> {
         entity: Entity,
         fields: Vec<RawSlice>,
         wildcard: bool,
-        clauses: HashMap<&'a [u8], RelationalExpr<'a>>,
+        clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {
         Self::new(entity, fields, wildcard, clauses)
     }
@@ -578,7 +555,7 @@ impl<'a> SelectStatement<'a> {
         entity: Entity,
         fields: Vec<RawSlice>,
         wildcard: bool,
-        clauses: HashMap<&'a [u8], RelationalExpr<'a>>,
+        clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {
         Self {
             entity,
@@ -603,7 +580,7 @@ pub(super) fn parse_select<'a>(
     */
     let l = tok.len();
     if compiler::unlikely(l < 3) {
-        return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+        return compiler::cold_val(Err(LangError::UnexpectedEndofStatement));
     }
     let mut i = 0;
     let mut okay = true;
@@ -627,7 +604,7 @@ pub(super) fn parse_select<'a>(
     okay &= is_wildcard | !select_fields.is_empty();
     okay &= (i + 2) <= l;
     if compiler::unlikely(!okay) {
-        return compiler::cold_err(Err(LangError::UnexpectedToken));
+        return compiler::cold_val(Err(LangError::UnexpectedToken));
     }
     okay &= tok[i] == Token![from];
     i += okay as usize;
@@ -794,7 +771,7 @@ impl<'a> UpdateStatement<'a> {
     pub fn new_test(
         entity: Entity,
         expressions: Vec<AssignmentExpression<'a>>,
-        wc: HashMap<&'a [u8], RelationalExpr<'a>>,
+        wc: WhereClauseCollection<'a>,
     ) -> Self {
         Self::new(entity, expressions, WhereClause::new(wc))
     }
@@ -820,7 +797,7 @@ impl<'a> UpdateStatement<'a> {
         */
         let l = tok.len();
         if compiler::unlikely(l < 9) {
-            return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+            return compiler::cold_val(Err(LangError::UnexpectedEndofStatement));
         }
         let mut i = 0;
         let mut entity = MaybeInit::uninit();
@@ -898,7 +875,7 @@ impl<'a> DeleteStatement<'a> {
     }
     #[inline(always)]
     #[cfg(test)]
-    pub(super) fn new_test(entity: Entity, wc: HashMap<&'a [u8], RelationalExpr<'a>>) -> Self {
+    pub(super) fn new_test(entity: Entity, wc: WhereClauseCollection<'a>) -> Self {
         Self::new(entity, WhereClause::new(wc))
     }
     pub(super) fn parse_delete(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
@@ -910,7 +887,7 @@ impl<'a> DeleteStatement<'a> {
         */
         let l = tok.len();
         if compiler::unlikely(l < 5) {
-            return compiler::cold_err(Err(LangError::UnexpectedEndofStatement));
+            return compiler::cold_val(Err(LangError::UnexpectedEndofStatement));
         }
         let mut i = 0;
         let mut okay = tok[i] == Token![from];

@@ -74,7 +74,7 @@ mod lexer {
     #[bench]
     fn lex_raw_literal(b: &mut Bencher) {
         let src = b"\r44\ne69b10ffcc250ae5091dec6f299072e23b0b41d6a739";
-        let expected = vec![Token::Lit(Lit::UnsafeLit(RawSlice::from(
+        let expected = vec![Token::Lit(Lit::SafeLit(RawSlice::from(
             "e69b10ffcc250ae5091dec6f299072e23b0b41d6a739",
         )))];
         b.iter(|| assert_eq!(lex(src).unwrap(), expected));

@@ -108,7 +108,7 @@ pub(super) fn snapshot_and_update<'a, T: 'a + DerefUnsafeSlice>(
         do_sleep!(10 s);
     });
     if compiler::unlikely(enc_err) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
+        return compiler::cold_val(StrongActionResult::EncodingError);
     }
     if registry::state_okay() {
         // uphold consistency

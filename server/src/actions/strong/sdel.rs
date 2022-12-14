@@ -109,7 +109,7 @@ pub(super) fn snapshot_and_del<'a, T: 'a + DerefUnsafeSlice>(
         do_sleep!(10 s);
     });
     if compiler::unlikely(err_enc) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
+        return compiler::cold_val(StrongActionResult::EncodingError);
     }
     if registry::state_okay() {
         // guarantee upholded: consistency

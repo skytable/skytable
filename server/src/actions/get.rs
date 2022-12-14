@@ -44,7 +44,7 @@ action!(
                     con.write_mono_length_prefixed_with_tsymbol(&val, kve.get_value_tsymbol())
                         .await?
                 }
-                Err(_) => compiler::cold_err(con._write_raw(P::RCODE_ENCODING_ERROR)).await?,
+                Err(_) => compiler::cold_val(con._write_raw(P::RCODE_ENCODING_ERROR)).await?,
                 Ok(_) => con._write_raw(P::RCODE_NIL).await?,
             }
         }

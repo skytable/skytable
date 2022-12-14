@@ -99,7 +99,7 @@ pub(super) fn snapshot_and_insert<'a, T: 'a + DerefUnsafeSlice>(
         do_sleep!(10 s);
     });
     if compiler::unlikely(enc_err) {
-        return compiler::cold_err(StrongActionResult::EncodingError);
+        return compiler::cold_val(StrongActionResult::EncodingError);
     }
     if registry::state_okay() {
         if key_iter_stat_ok {

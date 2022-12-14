@@ -49,7 +49,7 @@ pub const fn unlikely(b: bool) -> bool {
 
 #[cold]
 #[inline(never)]
-pub const fn cold_err<T>(v: T) -> T {
+pub const fn cold_val<T>(v: T) -> T {
     v
 }
 #[inline(always)]
@@ -71,4 +71,10 @@ pub const unsafe fn extend_lifetime<'a, 'b, T>(inp: &'a T) -> &'b T {
 /// The caller is responsible for ensuring lifetime validity
 pub unsafe fn extend_lifetime_mut<'a, 'b, T>(inp: &'a mut T) -> &'b mut T {
     mem::transmute(inp)
+}
+
+#[cold]
+#[inline(never)]
+pub fn cold_rerr<T, E>(e: E) -> Result<T, E> {
+    Err(e)
 }

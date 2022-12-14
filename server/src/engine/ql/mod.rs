@@ -59,7 +59,7 @@ pub enum LangError {
     UnexpectedToken,
     InvalidDictionaryExpression,
     InvalidTypeDefinition,
-    InvalidUnsafeLiteral,
+    InvalidSafeLiteral,
 }
 
 /*
@@ -103,6 +103,12 @@ impl RawSlice {
     }
     unsafe fn as_str(&self) -> &str {
         str::from_utf8_unchecked(self.as_slice())
+    }
+    pub fn ptr(&self) -> NonNull<u8> {
+        self.ptr
+    }
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 

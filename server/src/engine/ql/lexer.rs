@@ -76,7 +76,7 @@ pub enum Lit {
     Bool(bool),
     UnsignedInt(u64),
     SignedInt(i64),
-    UnsafeLit(RawSlice),
+    SafeLit(RawSlice),
 }
 
 impl From<&'static str> for Lit {
@@ -376,11 +376,12 @@ fn kwof(key: &[u8]) -> Option<Keyword> {
     Lexer impl
 */
 
-const LEXER_MODE_INSECURE: u8 = 0;
-const LEXER_MODE_SECURE: u8 = 1;
+pub(super) const LANG_MODE_INSECURE: u8 = 0;
+pub(super) const LANG_MODE_SECURE: u8 = 1;
 
-pub type InsecureLexer<'a> = Lexer<'a, LEXER_MODE_INSECURE>;
-pub type SecureLexer<'a> = Lexer<'a, LEXER_MODE_SECURE>;
+pub type OperatingMode = u8;
+pub type InsecureLexer<'a> = Lexer<'a, LANG_MODE_INSECURE>;
+pub type SecureLexer<'a> = Lexer<'a, LANG_MODE_SECURE>;
 
 pub struct Lexer<'a, const OPERATING_MODE: u8> {
     c: *const u8,
@@ -391,6 +392,7 @@ pub struct Lexer<'a, const OPERATING_MODE: u8> {
 }
 
 impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
+    #[inline(always)]
     pub const fn new(src: &'a [u8]) -> Self {
         unsafe {
             Self {
@@ -426,6 +428,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     fn remaining(&self) -> usize {
         unsafe { self.e.offset_from(self.c) as usize }
     }
+    #[inline(always)]
     unsafe fn deref_cursor(&self) -> u8 {
         *self.cursor()
     }
@@ -482,9 +485,18 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     fn trim_ahead(&mut self) {
         while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
     }
+    #[inline(always)]
+    fn set_error(&mut self, e: LangError) {
+        self.last_error = Some(e);
+    }
+    #[inline(always)]
+    fn no_error(&self) -> bool {
+        self.last_error.is_none()
+    }
 }
 
 impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
+    #[inline(always)]
     fn scan_ident(&mut self) -> RawSlice {
         let s = self.cursor();
         unsafe {
@@ -494,7 +506,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
             RawSlice::new(s, self.cursor().offset_from(s) as usize)
         }
     }
-
+    #[inline(always)]
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
         let st = unsafe { s.as_slice() }.to_ascii_lowercase();
@@ -505,7 +517,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
             None => self.tokens.push(Token::Ident(s)),
         }
     }
-
+    #[inline(always)]
     fn scan_unsigned_integer(&mut self) {
         let s = self.cursor();
         unsafe {
@@ -529,11 +541,11 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
                 Ok(num) if compiler::likely(wseof) => {
                     self.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
                 }
-                _ => self.last_error = Some(LangError::InvalidNumericLiteral),
+                _ => self.set_error(LangError::InvalidNumericLiteral),
             }
         }
     }
-
+    #[inline(always)]
     fn scan_quoted_string(&mut self, quote_style: u8) {
         debug_assert!(
             unsafe { self.deref_cursor() } == quote_style,
@@ -567,23 +579,21 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
             let terminated = self.peek_eq_and_forward(quote_style);
             match String::from_utf8(buf) {
                 Ok(st) if terminated => self.tokens.push(Token::Lit(st.into_boxed_str().into())),
-                _ => self.last_error = Some(LangError::InvalidStringLiteral),
+                _ => self.set_error(LangError::InvalidStringLiteral),
             }
         }
     }
+    #[inline(always)]
     fn scan_byte(&mut self, byte: u8) {
         match symof(byte) {
             Some(tok) => self.push_token(tok),
-            None => {
-                self.last_error = Some(LangError::UnexpectedChar);
-                return;
-            }
+            None => return self.set_error(LangError::UnexpectedChar),
         }
         unsafe {
             self.incr_cursor();
         }
     }
-
+    #[inline(always)]
     fn scan_unsafe_literal(&mut self) {
         unsafe {
             self.incr_cursor();
@@ -612,14 +622,13 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
         okay &= self.remaining() >= size;
         if compiler::likely(okay) {
             unsafe {
-                self.push_token(Lit::UnsafeLit(RawSlice::new(self.cursor(), size)));
+                self.push_token(Lit::SafeLit(RawSlice::new(self.cursor(), size)));
                 self.incr_cursor_by(size);
             }
         } else {
-            self.last_error = Some(LangError::InvalidUnsafeLiteral);
+            self.set_error(LangError::InvalidSafeLiteral);
         }
     }
-
     #[inline(always)]
     fn scan_signed_integer(&mut self) {
         unsafe {
@@ -646,16 +655,16 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
                     self.push_token(Lit::SignedInt(num));
                 }
                 _ => {
-                    compiler::cold_err(self.last_error = Some(LangError::InvalidNumericLiteral));
+                    compiler::cold_val(self.set_error(LangError::InvalidNumericLiteral));
                 }
             }
         } else {
             self.push_token(Token![-]);
         }
     }
-
+    #[inline(always)]
     fn _lex(&mut self) {
-        while self.not_exhausted() && self.last_error.is_none() {
+        while self.not_exhausted() && self.no_error() {
             match unsafe { self.deref_cursor() } {
                 // secure features
                 byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
@@ -669,11 +678,11 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
                 }
                 b'\r' => self.scan_unsafe_literal(),
                 // insecure features
-                byte if byte.is_ascii_digit() && OPERATING_MODE == LEXER_MODE_INSECURE => {
+                byte if byte.is_ascii_digit() && OPERATING_MODE == LANG_MODE_INSECURE => {
                     self.scan_unsigned_integer()
                 }
-                b'-' if OPERATING_MODE == LEXER_MODE_INSECURE => self.scan_signed_integer(),
-                qs @ (b'\'' | b'"') if OPERATING_MODE == LEXER_MODE_INSECURE => {
+                b'-' if OPERATING_MODE == LANG_MODE_INSECURE => self.scan_signed_integer(),
+                qs @ (b'\'' | b'"') if OPERATING_MODE == LANG_MODE_INSECURE => {
                     self.scan_quoted_string(qs)
                 }
                 // blank space or an arbitrary byte
@@ -682,7 +691,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
             }
         }
     }
-
+    #[inline(always)]
     pub fn lex(src: &'a [u8]) -> LangResult<Life<'a, Vec<Token>>> {
         let mut slf = Self::new(src);
         slf._lex();
@@ -699,31 +708,20 @@ impl Token {
         matches!(self, Token::Ident(_))
     }
     #[inline(always)]
-    pub(crate) fn as_ident_eq_ignore_case(&self, arg: &[u8]) -> bool {
-        self.is_ident()
-            && unsafe {
-                if let Self::Ident(id) = self {
-                    id.as_slice().eq_ignore_ascii_case(arg)
-                } else {
-                    impossible!()
-                }
-            }
-    }
-    #[inline(always)]
-    pub(super) unsafe fn ident_unchecked(&self) -> RawSlice {
-        if let Self::Ident(id) = self {
-            id.clone()
-        } else {
-            impossible!()
-        }
-    }
-    #[inline(always)]
     pub(super) const fn is_lit(&self) -> bool {
         matches!(self, Self::Lit(_))
+    }
+    #[inline(always)]
+    /// Returns true if the token *could* be a positive number. since safe literals do not
+    /// provide any type information at this moment, we lookahead to see if it's a litnum or
+    /// an unsafe lit
+    pub(super) const fn is_like_positive_num(&self) -> bool {
+        matches!(self, Self::Lit(Lit::UnsignedInt(_) | Lit::SafeLit(_)))
     }
 }
 
 impl AsRef<Token> for Token {
+    #[inline(always)]
     fn as_ref(&self) -> &Token {
         self
     }
