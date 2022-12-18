@@ -27,7 +27,7 @@
 use {
     super::{
         super::lexer::{Lit, Token},
-        lex,
+        lex_insecure,
     },
     crate::engine::ql::LangError,
 };
@@ -44,7 +44,7 @@ macro_rules! v(
 #[test]
 fn lex_ident() {
     let src = v!("hello");
-    assert_eq!(lex(&src).unwrap(), vec![Token::Ident("hello".into())]);
+    assert_eq!(lex_insecure(&src).unwrap(), vec![Token::Ident("hello".into())]);
 }
 
 // literals
@@ -52,7 +52,7 @@ fn lex_ident() {
 fn lex_unsigned_int() {
     let number = v!("123456");
     assert_eq!(
-        lex(&number).unwrap(),
+        lex_insecure(&number).unwrap(),
         vec![Token::Lit(Lit::UnsignedInt(123456))]
     );
 }
@@ -60,26 +60,26 @@ fn lex_unsigned_int() {
 fn lex_signed_int() {
     let number = v!("-123456");
     assert_eq!(
-        lex(&number).unwrap(),
+        lex_insecure(&number).unwrap(),
         vec![Token::Lit(Lit::SignedInt(-123456))]
     );
 }
 #[test]
 fn lex_bool() {
     let (t, f) = v!("true", "false");
-    assert_eq!(lex(&t).unwrap(), vec![Token::Lit(Lit::Bool(true))]);
-    assert_eq!(lex(&f).unwrap(), vec![Token::Lit(Lit::Bool(false))]);
+    assert_eq!(lex_insecure(&t).unwrap(), vec![Token::Lit(Lit::Bool(true))]);
+    assert_eq!(lex_insecure(&f).unwrap(), vec![Token::Lit(Lit::Bool(false))]);
 }
 #[test]
 fn lex_string() {
     let s = br#" "hello, world" "#;
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str("hello, world".into()))]
     );
     let s = br#" 'hello, world' "#;
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str("hello, world".into()))]
     );
 }
@@ -87,12 +87,12 @@ fn lex_string() {
 fn lex_string_test_escape_quote() {
     let s = br#" "\"hello world\"" "#; // == "hello world"
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str("\"hello world\"".into()))]
     );
     let s = br#" '\'hello world\'' "#; // == 'hello world'
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str("'hello world'".into()))]
     );
 }
@@ -100,12 +100,12 @@ fn lex_string_test_escape_quote() {
 fn lex_string_use_different_quote_style() {
     let s = br#" "he's on it" "#;
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str("he's on it".into()))]
     );
     let s = br#" 'he thinks that "that girl" fixed it' "#;
     assert_eq!(
-        lex(s).unwrap(),
+        lex_insecure(s).unwrap(),
         vec![Token::Lit(Lit::Str(
             "he thinks that \"that girl\" fixed it".into()
         ))]
@@ -115,17 +115,17 @@ fn lex_string_use_different_quote_style() {
 fn lex_string_escape_bs() {
     let s = v!(r#" "windows has c:\\" "#);
     assert_eq!(
-        lex(&s).unwrap(),
+        lex_insecure(&s).unwrap(),
         vec![Token::Lit(Lit::Str("windows has c:\\".into()))]
     );
     let s = v!(r#" 'windows has c:\\' "#);
     assert_eq!(
-        lex(&s).unwrap(),
+        lex_insecure(&s).unwrap(),
         vec![Token::Lit(Lit::Str("windows has c:\\".into()))]
     );
     let lol = v!(r#"'\\\\\\\\\\'"#);
     assert_eq!(
-        lex(&lol).unwrap(),
+        lex_insecure(&lol).unwrap(),
         vec![Token::Lit(Lit::Str("\\".repeat(5).into_boxed_str()))],
         "lol"
     )
@@ -133,30 +133,30 @@ fn lex_string_escape_bs() {
 #[test]
 fn lex_string_bad_escape() {
     let wth = br#" '\a should be an alert on windows apparently' "#;
-    assert_eq!(lex(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
 }
 #[test]
 fn lex_string_unclosed() {
     let wth = br#" 'omg where did the end go "#;
-    assert_eq!(lex(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
     let wth = br#" 'see, we escaped the end\' "#;
-    assert_eq!(lex(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
 }
 #[test]
 fn lex_unsafe_literal_mini() {
-    let usl = lex("\r0\n".as_bytes()).unwrap();
+    let usl = lex_insecure("\r0\n".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::Bin("".into())), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal() {
-    let usl = lex("\r9\nabcdefghi".as_bytes()).unwrap();
+    let usl = lex_insecure("\r9\nabcdefghi".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::Bin("abcdefghi".into())), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal_pro() {
-    let usl = lex("\r18\nabcdefghi123456789".as_bytes()).unwrap();
+    let usl = lex_insecure("\r18\nabcdefghi123456789".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::Bin("abcdefghi123456789".into())), usl[0]);
 }
@@ -332,11 +332,11 @@ mod safequery_full_param {
     fn p() {
         let query = b"select * from myapp where username = ? and pass = ?";
         let params = b"\x055\nsayan\x048\npass1234";
-        let sq = SafeQueryData::parse(query, params, 1).unwrap();
+        let sq = SafeQueryData::parse(query, params, 2).unwrap();
         assert_eq!(
             sq,
             SafeQueryData::new_test(
-                vec![LitIR::Str("sayan"), LitIR::Str("pass1234")].into_boxed_slice(),
+                vec![LitIR::Str("sayan"), LitIR::Bin(b"pass1234")].into_boxed_slice(),
                 vec![
                     Token![select],
                     Token![*],

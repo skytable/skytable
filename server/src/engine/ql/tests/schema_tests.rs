@@ -29,7 +29,7 @@ use super::{
         lexer::{Lit, Token},
         schema,
     },
-    lex, *,
+    lex_insecure, *,
 };
 mod inspect {
     use {
@@ -41,7 +41,7 @@ mod inspect {
     };
     #[test]
     fn inspect_space() {
-        let tok = lex(b"inspect space myspace").unwrap();
+        let tok = lex_insecure(b"inspect space myspace").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectSpace("myspace".into())
@@ -49,12 +49,12 @@ mod inspect {
     }
     #[test]
     fn inspect_model() {
-        let tok = lex(b"inspect model users").unwrap();
+        let tok = lex_insecure(b"inspect model users").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectModel(Entity::Single("users".into()))
         );
-        let tok = lex(b"inspect model tweeter.users").unwrap();
+        let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectModel(("tweeter", "users").into())
@@ -62,7 +62,7 @@ mod inspect {
     }
     #[test]
     fn inspect_spaces() {
-        let tok = lex(b"inspect spaces").unwrap();
+        let tok = lex_insecure(b"inspect spaces").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectSpaces
@@ -80,7 +80,7 @@ mod alter_space {
     };
     #[test]
     fn alter_space_mini() {
-        let tok = lex(b"alter model mymodel with {}").unwrap();
+        let tok = lex_insecure(b"alter model mymodel with {}").unwrap();
         let r = schema::alter_space_full(&tok[2..]).unwrap();
         assert_eq!(
             r,
@@ -92,7 +92,7 @@ mod alter_space {
     }
     #[test]
     fn alter_space() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 alter model mymodel with {
                     max_entry: 1000,
                     driver: "ts-0.8"
@@ -116,7 +116,7 @@ mod tymeta {
     use super::*;
     #[test]
     fn tymeta_mini() {
-        let tok = lex(b"}").unwrap();
+        let tok = lex_insecure(b"}").unwrap();
         let (res, ret) = schema::fold_tymeta(&tok);
         assert!(res.is_okay());
         assert!(!res.has_more());
@@ -125,7 +125,7 @@ mod tymeta {
     }
     #[test]
     fn tymeta_mini_fail() {
-        let tok = lex(b",}").unwrap();
+        let tok = lex_insecure(b",}").unwrap();
         let (res, ret) = schema::fold_tymeta(&tok);
         assert!(!res.is_okay());
         assert!(!res.has_more());
@@ -134,7 +134,7 @@ mod tymeta {
     }
     #[test]
     fn tymeta() {
-        let tok = lex(br#"hello: "world", loading: true, size: 100 }"#).unwrap();
+        let tok = lex_insecure(br#"hello: "world", loading: true, size: 100 }"#).unwrap();
         let (res, ret) = schema::fold_tymeta(&tok);
         assert!(res.is_okay());
         assert!(!res.has_more());
@@ -152,7 +152,7 @@ mod tymeta {
     fn tymeta_pro() {
         // list { maxlen: 100, type string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
-        let tok = lex(br#"maxlen: 100, type string, unique: true }"#).unwrap();
+        let tok = lex_insecure(br#"maxlen: 100, type string, unique: true }"#).unwrap();
         let (res1, ret1) = schema::fold_tymeta(&tok);
         assert!(res1.is_okay());
         assert!(res1.has_more());
@@ -177,7 +177,7 @@ mod tymeta {
         // list { maxlen: 100, this: { is: "cool" }, type string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cursor should be at string
         let tok =
-            lex(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#).unwrap();
+            lex_insecure(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#).unwrap();
         let (res1, ret1) = schema::fold_tymeta(&tok);
         assert!(res1.is_okay());
         assert!(res1.has_more());
@@ -204,7 +204,7 @@ mod tymeta {
     fn fuzz_tymeta_normal() {
         // { maxlen: 10, unique: true, users: "sayan" }
         //   ^start
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                     maxlen: 10,
                     unique: true,
                     auth: {
@@ -241,7 +241,7 @@ mod tymeta {
     fn fuzz_tymeta_with_ty() {
         // list { maxlen: 10, unique: true, type string, users: "sayan" }
         //   ^start
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                     maxlen: 10,
                     unique: true,
                     auth: {
@@ -277,7 +277,7 @@ mod layer {
     use crate::engine::ql::schema::Layer;
     #[test]
     fn layer_mini() {
-        let tok = lex(b"string)").unwrap();
+        let tok = lex_insecure(b"string)").unwrap();
         let (layers, c, okay) = schema::fold_layers(&tok);
         assert_eq!(c, tok.len() - 1);
         assert!(okay);
@@ -288,7 +288,7 @@ mod layer {
     }
     #[test]
     fn layer() {
-        let tok = lex(b"string { maxlen: 100 }").unwrap();
+        let tok = lex_insecure(b"string { maxlen: 100 }").unwrap();
         let (layers, c, okay) = schema::fold_layers(&tok);
         assert_eq!(c, tok.len());
         assert!(okay);
@@ -304,7 +304,7 @@ mod layer {
     }
     #[test]
     fn layer_plus() {
-        let tok = lex(b"list { type string }").unwrap();
+        let tok = lex_insecure(b"list { type string }").unwrap();
         let (layers, c, okay) = schema::fold_layers(&tok);
         assert_eq!(c, tok.len());
         assert!(okay);
@@ -318,7 +318,7 @@ mod layer {
     }
     #[test]
     fn layer_pro() {
-        let tok = lex(b"list { unique: true, type string, maxlen: 10 }").unwrap();
+        let tok = lex_insecure(b"list { unique: true, type string, maxlen: 10 }").unwrap();
         let (layers, c, okay) = schema::fold_layers(&tok);
         assert_eq!(c, tok.len());
         assert!(okay);
@@ -338,7 +338,7 @@ mod layer {
     }
     #[test]
     fn layer_pro_max() {
-        let tok = lex(
+        let tok = lex_insecure(
             b"list { unique: true, type string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
         )
         .unwrap();
@@ -368,7 +368,7 @@ mod layer {
 
     #[test]
     fn fuzz_layer() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
             list {
                 type list {
                     maxlen: 100,
@@ -408,7 +408,7 @@ mod field_properties {
 
     #[test]
     fn field_properties_empty() {
-        let tok = lex(b"myfield:").unwrap();
+        let tok = lex_insecure(b"myfield:").unwrap();
         let (props, c, okay) = schema::parse_field_properties(&tok);
         assert!(okay);
         assert_eq!(c, 0);
@@ -416,7 +416,7 @@ mod field_properties {
     }
     #[test]
     fn field_properties_full() {
-        let tok = lex(b"primary null myfield:").unwrap();
+        let tok = lex_insecure(b"primary null myfield:").unwrap();
         let (props, c, okay) = schema::parse_field_properties(&tok);
         assert_eq!(c, 2);
         assert_eq!(tok[c], Token::Ident("myfield".into()));
@@ -436,7 +436,7 @@ mod fields {
     };
     #[test]
     fn field_mini() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 username: string,
             ")
         .unwrap();
@@ -453,7 +453,7 @@ mod fields {
     }
     #[test]
     fn field() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 primary username: string,    
             ")
         .unwrap();
@@ -470,7 +470,7 @@ mod fields {
     }
     #[test]
     fn field_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 primary username: string {
                     maxlen: 10,
                     ascii_only: true,
@@ -497,7 +497,7 @@ mod fields {
     }
     #[test]
     fn field_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 null notes: list {
                     type string {
                         maxlen: 255,
@@ -540,7 +540,7 @@ mod schemas {
     use super::*;
     #[test]
     fn schema_mini() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -574,7 +574,7 @@ mod schemas {
     }
     #[test]
     fn schema() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -615,7 +615,7 @@ mod schemas {
 
     #[test]
     fn schema_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -673,7 +673,7 @@ mod schemas {
 
     #[test]
     fn schema_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -744,7 +744,7 @@ mod dict_field_syntax {
     use crate::engine::ql::schema::{ExpandedField, Layer};
     #[test]
     fn field_syn_mini() {
-        let tok = lex(b"username { type string }").unwrap();
+        let tok = lex_insecure(b"username { type string }").unwrap();
         let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
@@ -759,7 +759,7 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 username {
                     nullable: false,
                     type string,
@@ -782,7 +782,7 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 username {
                     nullable: false,
                     type string {
@@ -816,7 +816,7 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 notes {
                     nullable: true,
                     type list {
@@ -863,7 +863,7 @@ mod alter_model_remove {
     use crate::engine::ql::RawSlice;
     #[test]
     fn alter_mini() {
-        let tok = lex(b"alter model mymodel remove myfield").unwrap();
+        let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
@@ -871,7 +871,7 @@ mod alter_model_remove {
     }
     #[test]
     fn alter_mini_2() {
-        let tok = lex(b"alter model mymodel remove (myfield)").unwrap();
+        let tok = lex_insecure(b"alter model mymodel remove (myfield)").unwrap();
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
@@ -880,7 +880,7 @@ mod alter_model_remove {
     #[test]
     fn alter() {
         let tok =
-            lex(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)").unwrap();
+            lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)").unwrap();
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
@@ -901,7 +901,7 @@ mod alter_model_add {
     use crate::engine::ql::schema::{ExpandedField, Layer};
     #[test]
     fn add_mini() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel add myfield { type string }
             ")
         .unwrap();
@@ -920,7 +920,7 @@ mod alter_model_add {
     }
     #[test]
     fn add() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel add myfield { type string, nullable: true }
             ")
         .unwrap();
@@ -941,7 +941,7 @@ mod alter_model_add {
     }
     #[test]
     fn add_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel add (myfield { type string, nullable: true })
             ")
         .unwrap();
@@ -962,7 +962,7 @@ mod alter_model_add {
     }
     #[test]
     fn add_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel add (
                     myfield {
                         type string,
@@ -1026,7 +1026,7 @@ mod alter_model_update {
 
     #[test]
     fn alter_mini() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel update myfield { type string, .. }
             ")
         .unwrap();
@@ -1045,7 +1045,7 @@ mod alter_model_update {
     }
     #[test]
     fn alter_mini_2() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel update (myfield { type string, .. })
             ")
         .unwrap();
@@ -1064,7 +1064,7 @@ mod alter_model_update {
     }
     #[test]
     fn alter() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel update (
                     myfield {
                         type string,
@@ -1091,7 +1091,7 @@ mod alter_model_update {
     }
     #[test]
     fn alter_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel update (
                     myfield {
                         type string,
@@ -1130,7 +1130,7 @@ mod alter_model_update {
     }
     #[test]
     fn alter_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 alter model mymodel update (
                     myfield {
                         type string {..},
@@ -1186,7 +1186,7 @@ mod ddl_other_query_tests {
     };
     #[test]
     fn drop_space() {
-        let src = lex(br"drop space myspace").unwrap();
+        let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new("myspace".into(), false))
@@ -1194,7 +1194,7 @@ mod ddl_other_query_tests {
     }
     #[test]
     fn drop_space_force() {
-        let src = lex(br"drop space myspace force").unwrap();
+        let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new("myspace".into(), true))
@@ -1202,7 +1202,7 @@ mod ddl_other_query_tests {
     }
     #[test]
     fn drop_model() {
-        let src = lex(br"drop model mymodel").unwrap();
+        let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), false))
@@ -1210,7 +1210,7 @@ mod ddl_other_query_tests {
     }
     #[test]
     fn drop_model_force() {
-        let src = lex(br"drop model mymodel force").unwrap();
+        let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), true))

@@ -170,7 +170,7 @@ mod dict {
 
     #[test]
     fn fuzz_dict() {
-        let ret = lex(b"
+        let ret = lex_insecure(b"
                 {
                     the_tradition_is: \"hello, world\",
                     could_have_been: {

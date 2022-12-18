@@ -37,7 +37,7 @@
 
 extern crate test;
 
-use {crate::engine::ql::tests::lex, test::Bencher};
+use {crate::engine::ql::tests::lex_insecure, test::Bencher};
 
 mod lexer {
     use {
@@ -51,25 +51,25 @@ mod lexer {
     fn lex_number(b: &mut Bencher) {
         let src = b"1234567890";
         let expected = vec![Token::Lit(1234567890.into())];
-        b.iter(|| assert_eq!(lex(src).unwrap(), expected));
+        b.iter(|| assert_eq!(lex_insecure(src).unwrap(), expected));
     }
     #[bench]
     fn lex_bool(b: &mut Bencher) {
         let s = b"true";
         let e = vec![Token::Lit(true.into())];
-        b.iter(|| assert_eq!(lex(s).unwrap(), e));
+        b.iter(|| assert_eq!(lex_insecure(s).unwrap(), e));
     }
     #[bench]
     fn lex_string_noescapes(b: &mut Bencher) {
         let s = br#"'hello, world!'"#;
         let e = vec![Token::Lit("hello, world!".into())];
-        b.iter(|| assert_eq!(lex(s).unwrap(), e));
+        b.iter(|| assert_eq!(lex_insecure(s).unwrap(), e));
     }
     #[bench]
     fn lex_string_with_escapes(b: &mut Bencher) {
         let s = br#"'hello, world! this is within a \'quote\''"#;
         let e = vec![Token::Lit("hello, world! this is within a 'quote'".into())];
-        b.iter(|| assert_eq!(lex(s).unwrap(), e));
+        b.iter(|| assert_eq!(lex_insecure(s).unwrap(), e));
     }
     #[bench]
     fn lex_raw_literal(b: &mut Bencher) {
@@ -77,7 +77,7 @@ mod lexer {
         let expected = vec![Token::Lit(Lit::Bin(RawSlice::from(
             "e69b10ffcc250ae5091dec6f299072e23b0b41d6a739",
         )))];
-        b.iter(|| assert_eq!(lex(src).unwrap(), expected));
+        b.iter(|| assert_eq!(lex_insecure(src).unwrap(), expected));
     }
 }
 
@@ -87,7 +87,7 @@ mod ast {
     fn parse_entity_single(b: &mut Bencher) {
         let e = Entity::Single("tweeter".into());
         b.iter(|| {
-            let src = lex(b"tweeter").unwrap();
+            let src = lex_insecure(b"tweeter").unwrap();
             let mut i = 0;
             assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
             assert_eq!(i, src.len());
@@ -97,7 +97,7 @@ mod ast {
     fn parse_entity_double(b: &mut Bencher) {
         let e = ("tweeter", "user").into();
         b.iter(|| {
-            let src = lex(b"tweeter.user").unwrap();
+            let src = lex_insecure(b"tweeter.user").unwrap();
             let mut i = 0;
             assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
             assert_eq!(i, src.len());
@@ -107,7 +107,7 @@ mod ast {
     fn parse_entity_partial(b: &mut Bencher) {
         let e = Entity::Partial("user".into());
         b.iter(|| {
-            let src = lex(b":user").unwrap();
+            let src = lex_insecure(b":user").unwrap();
             let mut i = 0;
             assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
             assert_eq!(i, src.len());

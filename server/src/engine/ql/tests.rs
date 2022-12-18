@@ -29,16 +29,13 @@ use {
         lexer::{InsecureLexer, Symbol, Token},
         LangResult,
     },
-    crate::{
-        engine::memory::DataType,
-        util::{test_utils, Life},
-    },
+    crate::{engine::memory::DataType, util::test_utils},
     rand::{self, Rng},
 };
 
 macro_rules! fold_dict {
     ($($input:expr),* $(,)?) => {
-        ($({$crate::engine::ql::schema::fold_dict(&super::lex($input).unwrap()).unwrap()}),*)
+        ($({$crate::engine::ql::schema::fold_dict(&super::lex_insecure($input).unwrap()).unwrap()}),*)
     }
 }
 
@@ -48,7 +45,7 @@ mod lexer_tests;
 mod schema_tests;
 mod structure_syn;
 
-pub(super) fn lex(src: &[u8]) -> LangResult<Life<Vec<Token>>> {
+pub(super) fn lex_insecure(src: &[u8]) -> LangResult<Vec<Token>> {
     InsecureLexer::lex(src)
 }
 

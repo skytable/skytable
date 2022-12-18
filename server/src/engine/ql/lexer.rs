@@ -28,7 +28,7 @@ use std::ops::BitOr;
 
 use {
     super::{LangError, LangResult, RawSlice},
-    crate::util::{compiler, Life},
+    crate::util::compiler,
     core::{cmp, fmt, marker::PhantomData, mem::size_of, slice, str},
 };
 
@@ -375,336 +375,6 @@ fn kwof(key: &[u8]) -> Option<Keyword> {
     }
 }
 
-/*
-    Lexer impl
-*/
-
-pub(super) const LANG_MODE_INSECURE: u8 = 0;
-pub(super) const LANG_MODE_SECURE: u8 = 1;
-
-pub type OperatingMode = u8;
-pub type InsecureLexer<'a> = Lexer<'a, LANG_MODE_INSECURE>;
-pub type SecureLexer<'a> = Lexer<'a, LANG_MODE_SECURE>;
-
-pub struct Lexer<'a, const OPERATING_MODE: u8> {
-    c: *const u8,
-    e: *const u8,
-    last_error: Option<LangError>,
-    tokens: Vec<Token>,
-    _lt: PhantomData<&'a [u8]>,
-}
-
-impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
-    #[inline(always)]
-    pub const fn new(src: &'a [u8]) -> Self {
-        Self {
-            c: src.as_ptr(),
-            e: unsafe {
-                // UNSAFE(@ohsayan): Always safe (<= EOA)
-                src.as_ptr().add(src.len())
-            },
-            last_error: None,
-            tokens: Vec::new(),
-            _lt: PhantomData,
-        }
-    }
-}
-
-// meta
-impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
-    #[inline(always)]
-    const fn cursor(&self) -> *const u8 {
-        self.c
-    }
-    #[inline(always)]
-    const fn data_end_ptr(&self) -> *const u8 {
-        self.e
-    }
-    #[inline(always)]
-    fn not_exhausted(&self) -> bool {
-        self.data_end_ptr() > self.cursor()
-    }
-    #[inline(always)]
-    fn exhausted(&self) -> bool {
-        self.cursor() == self.data_end_ptr()
-    }
-    #[inline(always)]
-    fn remaining(&self) -> usize {
-        unsafe { self.e.offset_from(self.c) as usize }
-    }
-    #[inline(always)]
-    unsafe fn deref_cursor(&self) -> u8 {
-        *self.cursor()
-    }
-    #[inline(always)]
-    unsafe fn incr_cursor_by(&mut self, by: usize) {
-        debug_assert!(self.remaining() >= by);
-        self.c = self.cursor().add(by)
-    }
-    #[inline(always)]
-    unsafe fn incr_cursor(&mut self) {
-        self.incr_cursor_by(1)
-    }
-    #[inline(always)]
-    unsafe fn incr_cursor_if(&mut self, iff: bool) {
-        self.incr_cursor_by(iff as usize)
-    }
-    #[inline(always)]
-    fn push_token(&mut self, token: impl Into<Token>) {
-        self.tokens.push(token.into())
-    }
-    #[inline(always)]
-    fn peek_is(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
-        self.not_exhausted() && unsafe { f(self.deref_cursor()) }
-    }
-    #[inline(always)]
-    fn peek_is_and_forward(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
-        let did_fw = self.not_exhausted() && unsafe { f(self.deref_cursor()) };
-        unsafe {
-            self.incr_cursor_if(did_fw);
-        }
-        did_fw
-    }
-    #[inline(always)]
-    fn peek_eq_and_forward_or_eof(&mut self, eq: u8) -> bool {
-        unsafe {
-            let eq = self.not_exhausted() && self.deref_cursor() == eq;
-            self.incr_cursor_if(eq);
-            eq | self.exhausted()
-        }
-    }
-    #[inline(always)]
-    fn peek_neq(&self, b: u8) -> bool {
-        self.not_exhausted() && unsafe { self.deref_cursor() != b }
-    }
-    #[inline(always)]
-    fn peek_eq_and_forward(&mut self, b: u8) -> bool {
-        unsafe {
-            let r = self.not_exhausted() && self.deref_cursor() == b;
-            self.incr_cursor_if(r);
-            r
-        }
-    }
-    #[inline(always)]
-    fn trim_ahead(&mut self) {
-        while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
-    }
-    #[inline(always)]
-    fn set_error(&mut self, e: LangError) {
-        self.last_error = Some(e);
-    }
-    #[inline(always)]
-    fn no_error(&self) -> bool {
-        self.last_error.is_none()
-    }
-}
-
-impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
-    #[inline(always)]
-    fn scan_ident(&mut self) -> RawSlice {
-        let s = self.cursor();
-        unsafe {
-            while self.peek_is(|b| b.is_ascii_alphanumeric() || b == b'_') {
-                self.incr_cursor();
-            }
-            RawSlice::new(s, self.cursor().offset_from(s) as usize)
-        }
-    }
-    #[inline(always)]
-    fn scan_ident_or_keyword(&mut self) {
-        let s = self.scan_ident();
-        let st = unsafe { s.as_slice() }.to_ascii_lowercase();
-        match kwof(&st) {
-            Some(kw) => self.tokens.push(kw.into()),
-            // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
-            None if st == b"true" || st == b"false" => self.push_token(Lit::Bool(st == b"true")),
-            None => self.tokens.push(Token::Ident(s)),
-        }
-    }
-    #[inline(always)]
-    fn scan_unsigned_integer(&mut self) {
-        let s = self.cursor();
-        unsafe {
-            while self.peek_is(|b| b.is_ascii_digit()) {
-                self.incr_cursor();
-            }
-            /*
-                1234; // valid
-                1234} // valid
-                1234{ // invalid
-                1234, // valid
-                1234a // invalid
-            */
-            let wseof = self.peek_is(|char| !char.is_ascii_alphabetic()) || self.exhausted();
-            match str::from_utf8_unchecked(slice::from_raw_parts(
-                s,
-                self.cursor().offset_from(s) as usize,
-            ))
-            .parse()
-            {
-                Ok(num) if compiler::likely(wseof) => {
-                    self.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
-                }
-                _ => self.set_error(LangError::InvalidNumericLiteral),
-            }
-        }
-    }
-    #[inline(always)]
-    fn scan_quoted_string(&mut self, quote_style: u8) {
-        debug_assert!(
-            unsafe { self.deref_cursor() } == quote_style,
-            "illegal call to scan_quoted_string"
-        );
-        unsafe { self.incr_cursor() }
-        let mut buf = Vec::new();
-        unsafe {
-            while self.peek_neq(quote_style) {
-                match self.deref_cursor() {
-                    b if b != b'\\' => {
-                        buf.push(b);
-                    }
-                    _ => {
-                        self.incr_cursor();
-                        if self.exhausted() {
-                            break;
-                        }
-                        let b = self.deref_cursor();
-                        let quote = b == quote_style;
-                        let bs = b == b'\\';
-                        if quote | bs {
-                            buf.push(b);
-                        } else {
-                            break; // what on good earth is that escape?
-                        }
-                    }
-                }
-                self.incr_cursor();
-            }
-            let terminated = self.peek_eq_and_forward(quote_style);
-            match String::from_utf8(buf) {
-                Ok(st) if terminated => self.tokens.push(Token::Lit(st.into_boxed_str().into())),
-                _ => self.set_error(LangError::InvalidStringLiteral),
-            }
-        }
-    }
-    #[inline(always)]
-    fn scan_byte(&mut self, byte: u8) {
-        match symof(byte) {
-            Some(tok) => self.push_token(tok),
-            None => return self.set_error(LangError::UnexpectedChar),
-        }
-        unsafe {
-            self.incr_cursor();
-        }
-    }
-    #[inline(always)]
-    fn scan_binary_literal(&mut self) {
-        unsafe {
-            self.incr_cursor();
-        }
-        let mut size = 0usize;
-        let mut okay = true;
-        while self.not_exhausted() && unsafe { self.deref_cursor() != b'\n' } && okay {
-            /*
-                Don't ask me how stupid this is. Like, I was probably in some "mood" when I wrote this
-                and it works duh, but isn't the most elegant of things (could I have just used a parse?
-                nah, I'm just a hardcore numeric normie)
-                -- Sayan
-            */
-            let byte = unsafe { self.deref_cursor() };
-            okay &= byte.is_ascii_digit();
-            let (prod, of_flag) = size.overflowing_mul(10);
-            okay &= !of_flag;
-            let (sum, of_flag) = prod.overflowing_add((byte & 0x0F) as _);
-            size = sum;
-            okay &= !of_flag;
-            unsafe {
-                self.incr_cursor();
-            }
-        }
-        okay &= self.peek_eq_and_forward(b'\n');
-        okay &= self.remaining() >= size;
-        if compiler::likely(okay) {
-            unsafe {
-                self.push_token(Lit::Bin(RawSlice::new(self.cursor(), size)));
-                self.incr_cursor_by(size);
-            }
-        } else {
-            self.set_error(LangError::InvalidSafeLiteral);
-        }
-    }
-    #[inline(always)]
-    fn scan_signed_integer(&mut self) {
-        unsafe {
-            self.incr_cursor();
-        }
-        if self.peek_is(|b| b.is_ascii_digit()) {
-            // we have some digits
-            let start = unsafe {
-                // UNSAFE(@ohsayan): Take the (-) into the parse
-                // TODO(@ohsayan): we can maybe look at a more efficient way later
-                self.cursor().sub(1)
-            };
-            while self.peek_is_and_forward(|b| b.is_ascii_digit()) {}
-            let wseof = self.peek_is(|char| !char.is_ascii_alphabetic()) || self.exhausted();
-            match unsafe {
-                str::from_utf8_unchecked(slice::from_raw_parts(
-                    start,
-                    self.cursor().offset_from(start) as usize,
-                ))
-            }
-            .parse::<i64>()
-            {
-                Ok(num) if compiler::likely(wseof) => {
-                    self.push_token(Lit::SignedInt(num));
-                }
-                _ => {
-                    compiler::cold_val(self.set_error(LangError::InvalidNumericLiteral));
-                }
-            }
-        } else {
-            self.push_token(Token![-]);
-        }
-    }
-    #[inline(always)]
-    fn _lex(&mut self) {
-        while self.not_exhausted() && self.no_error() {
-            match unsafe { self.deref_cursor() } {
-                // secure features
-                byte if byte.is_ascii_alphabetic() => self.scan_ident_or_keyword(),
-                #[cfg(test)]
-                byte if byte == b'\x01' => {
-                    self.push_token(Token::IgnorableComma);
-                    unsafe {
-                        // UNSAFE(@ohsayan): All good here. Already read the token
-                        self.incr_cursor();
-                    }
-                }
-                // insecure features
-                byte if byte.is_ascii_digit() && OPERATING_MODE == LANG_MODE_INSECURE => {
-                    self.scan_unsigned_integer()
-                }
-                b'-' if OPERATING_MODE == LANG_MODE_INSECURE => self.scan_signed_integer(),
-                qs @ (b'\'' | b'"') if OPERATING_MODE == LANG_MODE_INSECURE => {
-                    self.scan_quoted_string(qs)
-                }
-                // blank space or an arbitrary byte
-                b' ' | b'\n' | b'\t' => self.trim_ahead(),
-                b => self.scan_byte(b),
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn lex(src: &'a [u8]) -> LangResult<Life<'a, Vec<Token>>> {
-        let mut slf = Self::new(src);
-        slf._lex();
-        match slf.last_error {
-            None => Ok(Life::new(slf.tokens)),
-            Some(e) => Err(e),
-        }
-    }
-}
-
 impl Token {
     #[inline(always)]
     pub(crate) const fn is_ident(&self) -> bool {
@@ -722,6 +392,10 @@ impl AsRef<Token> for Token {
         self
     }
 }
+
+/*
+    Lexer impl
+*/
 
 #[derive(Debug)]
 pub struct RawLexer<'a> {
@@ -869,6 +543,197 @@ impl<'a> RawLexer<'a> {
         }
         unsafe {
             self.incr_cursor();
+        }
+    }
+}
+
+#[derive(Debug)]
+/// This implements the `opmode-dev` for BlueQL
+pub struct InsecureLexer<'a> {
+    base: RawLexer<'a>,
+}
+
+impl<'a> InsecureLexer<'a> {
+    #[inline(always)]
+    pub const fn new(src: &'a [u8]) -> Self {
+        Self {
+            base: RawLexer::new(src),
+        }
+    }
+    #[inline(always)]
+    pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
+        let mut slf = Self::new(src);
+        slf._lex();
+        let RawLexer {
+            tokens, last_error, ..
+        } = slf.base;
+        match last_error {
+            None => Ok(tokens),
+            Some(e) => Err(e),
+        }
+    }
+    #[inline(always)]
+    fn _lex(&mut self) {
+        let ref mut slf = self.base;
+        while slf.not_exhausted() && slf.no_error() {
+            match unsafe { slf.deref_cursor() } {
+                byte if byte.is_ascii_alphabetic() => slf.scan_ident_or_keyword(),
+                #[cfg(test)]
+                byte if byte == b'\x01' => {
+                    slf.push_token(Token::IgnorableComma);
+                    unsafe {
+                        // UNSAFE(@ohsayan): All good here. Already read the token
+                        slf.incr_cursor();
+                    }
+                }
+                byte if byte.is_ascii_digit() => Self::scan_unsigned_integer(slf),
+                b'\r' => Self::scan_binary_literal(slf),
+                b'-' => Self::scan_signed_integer(slf),
+                qs @ (b'\'' | b'"') => Self::scan_quoted_string(slf, qs),
+                // blank space or an arbitrary byte
+                b' ' | b'\n' | b'\t' => slf.trim_ahead(),
+                b => slf.scan_byte(b),
+            }
+        }
+    }
+}
+
+// high-level methods
+impl<'a> InsecureLexer<'a> {
+    #[inline(always)]
+    fn scan_signed_integer(slf: &mut RawLexer<'a>) {
+        unsafe {
+            slf.incr_cursor();
+        }
+        if slf.peek_is(|b| b.is_ascii_digit()) {
+            // we have some digits
+            let start = unsafe {
+                // UNSAFE(@ohsayan): Take the (-) into the parse
+                // TODO(@ohsayan): we can maybe look at a more efficient way later
+                slf.cursor().sub(1)
+            };
+            while slf.peek_is_and_forward(|b| b.is_ascii_digit()) {}
+            let wseof = slf.peek_is(|char| !char.is_ascii_alphabetic()) || slf.exhausted();
+            match unsafe {
+                str::from_utf8_unchecked(slice::from_raw_parts(
+                    start,
+                    slf.cursor().offset_from(start) as usize,
+                ))
+            }
+            .parse::<i64>()
+            {
+                Ok(num) if compiler::likely(wseof) => {
+                    slf.push_token(Lit::SignedInt(num));
+                }
+                _ => {
+                    compiler::cold_val(slf.set_error(LangError::InvalidNumericLiteral));
+                }
+            }
+        } else {
+            slf.push_token(Token![-]);
+        }
+    }
+    #[inline(always)]
+    fn scan_unsigned_integer(slf: &mut RawLexer<'a>) {
+        let s = slf.cursor();
+        unsafe {
+            while slf.peek_is(|b| b.is_ascii_digit()) {
+                slf.incr_cursor();
+            }
+            /*
+                1234; // valid
+                1234} // valid
+                1234{ // invalid
+                1234, // valid
+                1234a // invalid
+            */
+            let wseof = slf.peek_is(|char| !char.is_ascii_alphabetic()) || slf.exhausted();
+            match str::from_utf8_unchecked(slice::from_raw_parts(
+                s,
+                slf.cursor().offset_from(s) as usize,
+            ))
+            .parse()
+            {
+                Ok(num) if compiler::likely(wseof) => {
+                    slf.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
+                }
+                _ => slf.set_error(LangError::InvalidNumericLiteral),
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn scan_binary_literal(slf: &mut RawLexer<'a>) {
+        unsafe {
+            slf.incr_cursor();
+        }
+        let mut size = 0usize;
+        let mut okay = true;
+        while slf.not_exhausted() && unsafe { slf.deref_cursor() != b'\n' } && okay {
+            /*
+                Don't ask me how stupid this is. Like, I was probably in some "mood" when I wrote this
+                and it works duh, but isn't the most elegant of things (could I have just used a parse?
+                nah, I'm just a hardcore numeric normie)
+                -- Sayan
+            */
+            let byte = unsafe { slf.deref_cursor() };
+            okay &= byte.is_ascii_digit();
+            let (prod, of_flag) = size.overflowing_mul(10);
+            okay &= !of_flag;
+            let (sum, of_flag) = prod.overflowing_add((byte & 0x0F) as _);
+            size = sum;
+            okay &= !of_flag;
+            unsafe {
+                slf.incr_cursor();
+            }
+        }
+        okay &= slf.peek_eq_and_forward(b'\n');
+        okay &= slf.remaining() >= size;
+        if compiler::likely(okay) {
+            unsafe {
+                slf.push_token(Lit::Bin(RawSlice::new(slf.cursor(), size)));
+                slf.incr_cursor_by(size);
+            }
+        } else {
+            slf.set_error(LangError::InvalidSafeLiteral);
+        }
+    }
+    #[inline(always)]
+    fn scan_quoted_string(slf: &mut RawLexer<'a>, quote_style: u8) {
+        debug_assert!(
+            unsafe { slf.deref_cursor() } == quote_style,
+            "illegal call to scan_quoted_string"
+        );
+        unsafe { slf.incr_cursor() }
+        let mut buf = Vec::new();
+        unsafe {
+            while slf.peek_neq(quote_style) {
+                match slf.deref_cursor() {
+                    b if b != b'\\' => {
+                        buf.push(b);
+                    }
+                    _ => {
+                        slf.incr_cursor();
+                        if slf.exhausted() {
+                            break;
+                        }
+                        let b = slf.deref_cursor();
+                        let quote = b == quote_style;
+                        let bs = b == b'\\';
+                        if quote | bs {
+                            buf.push(b);
+                        } else {
+                            break; // what on good earth is that escape?
+                        }
+                    }
+                }
+                slf.incr_cursor();
+            }
+            let terminated = slf.peek_eq_and_forward(quote_style);
+            match String::from_utf8(buf) {
+                Ok(st) if terminated => slf.tokens.push(Token::Lit(st.into_boxed_str().into())),
+                _ => slf.set_error(LangError::InvalidStringLiteral),
+            }
         }
     }
 }
@@ -1023,39 +888,6 @@ where
     if N::ALLOW_SIGNED && is_signed {
         number.negate()
     }
-    number
-}
-
-#[inline(always)]
-fn decode_num_from_bounded_payload<N>(src: &[u8], flag: &mut bool) -> N
-where
-    N: NumberDefinition,
-{
-    let l = src.len();
-
-    let mut i = 0;
-    let mut number = N::zero();
-    let mut okay = l <= N::qualified_max_length();
-
-    if N::ALLOW_SIGNED {
-        let is_signed = i < l && src[i] == b'-';
-        if is_signed {
-            number.negate();
-        }
-        i += is_signed as usize;
-    }
-
-    while i < l && okay {
-        okay &= src[i].is_ascii_digit();
-        let (product, p_of) = number.overflowing_mul(10);
-        okay &= !p_of;
-        let (sum, s_of) = product.overflowing_add(src[i] & 0x0F);
-        okay &= !s_of;
-        number = sum;
-        i += 1;
-    }
-
-    *flag &= okay;
     number
 }
 

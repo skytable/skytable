@@ -31,7 +31,7 @@ mod list_parse {
 
     #[test]
     fn list_mini() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 []
             ")
         .unwrap();
@@ -41,7 +41,7 @@ mod list_parse {
 
     #[test]
     fn list() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 [1, 2, 3, 4]
             ")
         .unwrap();
@@ -51,7 +51,7 @@ mod list_parse {
 
     #[test]
     fn list_pro() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 [
                     [1, 2],
                     [3, 4],
@@ -74,7 +74,7 @@ mod list_parse {
 
     #[test]
     fn list_pro_max() {
-        let tok = lex(b"
+        let tok = lex_insecure(b"
                 [
                     [[1, 1], [2, 2]],
                     [[], [4, 4]],
@@ -101,14 +101,14 @@ mod tuple_syntax {
 
     #[test]
     fn tuple_mini() {
-        let tok = lex(b"()").unwrap();
+        let tok = lex_insecure(b"()").unwrap();
         let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
         assert_eq!(r, vec![]);
     }
 
     #[test]
     fn tuple() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 (1234, "email@example.com", true)
             "#)
         .unwrap();
@@ -121,7 +121,7 @@ mod tuple_syntax {
 
     #[test]
     fn tuple_pro() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 (
                     1234,
                     "email@example.com",
@@ -144,7 +144,7 @@ mod tuple_syntax {
 
     #[test]
     fn tuple_pro_max() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 (
                     1234,
                     "email@example.com",
@@ -185,14 +185,14 @@ mod map_syntax {
 
     #[test]
     fn map_mini() {
-        let tok = lex(b"{}").unwrap();
+        let tok = lex_insecure(b"{}").unwrap();
         let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
         assert_eq!(r, nullable_dict! {})
     }
 
     #[test]
     fn map() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 {
                     name: "John Appletree",
                     email: "john@example.com",
@@ -215,7 +215,7 @@ mod map_syntax {
 
     #[test]
     fn map_pro() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 {
                     name: "John Appletree",
                     email: "john@example.com",
@@ -240,7 +240,7 @@ mod map_syntax {
 
     #[test]
     fn map_pro_max() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 {
                     name: "John Appletree",
                     email: "john@example.com",
@@ -286,7 +286,7 @@ mod stmt_insert {
 
     #[test]
     fn insert_tuple_mini() {
-        let x = lex(br#"
+        let x = lex_insecure(br#"
                 insert into twitter.users ("sayan")
             "#)
         .unwrap();
@@ -299,7 +299,7 @@ mod stmt_insert {
     }
     #[test]
     fn insert_tuple() {
-        let x = lex(br#"
+        let x = lex_insecure(br#"
                 insert into twitter.users (
                     "sayan",
                     "Sayan",
@@ -328,7 +328,7 @@ mod stmt_insert {
     }
     #[test]
     fn insert_tuple_pro() {
-        let x = lex(br#"
+        let x = lex_insecure(br#"
                 insert into twitter.users (
                     "sayan",
                     "Sayan",
@@ -363,7 +363,7 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map_mini() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 insert into jotsy.app { username: "sayan" }
             "#)
         .unwrap();
@@ -379,7 +379,7 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 insert into jotsy.app {
                     username: "sayan",
                     name: "Sayan",
@@ -407,7 +407,7 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map_pro() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 insert into jotsy.app {
                     username: "sayan",
                     password: "pass123",
@@ -453,7 +453,7 @@ mod stmt_select {
     };
     #[test]
     fn select_mini() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 select * from users where username = "sayan"
             "#)
         .unwrap();
@@ -473,7 +473,7 @@ mod stmt_select {
     }
     #[test]
     fn select() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 select field1 from users where username = "sayan"
             "#)
         .unwrap();
@@ -493,7 +493,7 @@ mod stmt_select {
     }
     #[test]
     fn select_pro() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 select field1 from twitter.users where username = "sayan"
             "#)
         .unwrap();
@@ -513,7 +513,7 @@ mod stmt_select {
     }
     #[test]
     fn select_pro_max() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 select field1, field2 from twitter.users where username = "sayan"
             "#)
         .unwrap();
@@ -542,7 +542,7 @@ mod expression_tests {
     };
     #[test]
     fn expr_assign() {
-        let src = lex(b"username = 'sayan'").unwrap();
+        let src = lex_insecure(b"username = 'sayan'").unwrap();
         let r = dml::parse_expression_full(&src).unwrap();
         assert_eq!(
             r,
@@ -555,7 +555,7 @@ mod expression_tests {
     }
     #[test]
     fn expr_add_assign() {
-        let src = lex(b"followers += 100").unwrap();
+        let src = lex_insecure(b"followers += 100").unwrap();
         let r = dml::parse_expression_full(&src).unwrap();
         assert_eq!(
             r,
@@ -568,7 +568,7 @@ mod expression_tests {
     }
     #[test]
     fn expr_sub_assign() {
-        let src = lex(b"following -= 150").unwrap();
+        let src = lex_insecure(b"following -= 150").unwrap();
         let r = dml::parse_expression_full(&src).unwrap();
         assert_eq!(
             r,
@@ -581,7 +581,7 @@ mod expression_tests {
     }
     #[test]
     fn expr_mul_assign() {
-        let src = lex(b"product_qty *= 2").unwrap();
+        let src = lex_insecure(b"product_qty *= 2").unwrap();
         let r = dml::parse_expression_full(&src).unwrap();
         assert_eq!(
             r,
@@ -594,7 +594,7 @@ mod expression_tests {
     }
     #[test]
     fn expr_div_assign() {
-        let src = lex(b"image_crop_factor /= 2").unwrap();
+        let src = lex_insecure(b"image_crop_factor /= 2").unwrap();
         let r = dml::parse_expression_full(&src).unwrap();
         assert_eq!(
             r,
@@ -619,7 +619,7 @@ mod update_statement {
     };
     #[test]
     fn update_mini() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 update app SET notes += "this is my new note" where username = "sayan"
             "#)
         .unwrap();
@@ -645,7 +645,7 @@ mod update_statement {
     }
     #[test]
     fn update() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 update
                     jotsy.app
                 SET
@@ -688,7 +688,7 @@ mod delete_stmt {
 
     #[test]
     fn delete_mini() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 delete from users where username = "sayan"
             "#)
         .unwrap();
@@ -708,7 +708,7 @@ mod delete_stmt {
     }
     #[test]
     fn delete() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 delete from twitter.users where username = "sayan"
             "#)
         .unwrap();
@@ -735,7 +735,7 @@ mod relational_expr {
 
     #[test]
     fn expr_eq() {
-        let expr = lex(b"primary_key = 10").unwrap();
+        let expr = lex_insecure(b"primary_key = 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -748,7 +748,7 @@ mod relational_expr {
     }
     #[test]
     fn expr_ne() {
-        let expr = lex(b"primary_key != 10").unwrap();
+        let expr = lex_insecure(b"primary_key != 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -761,7 +761,7 @@ mod relational_expr {
     }
     #[test]
     fn expr_gt() {
-        let expr = lex(b"primary_key > 10").unwrap();
+        let expr = lex_insecure(b"primary_key > 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -774,7 +774,7 @@ mod relational_expr {
     }
     #[test]
     fn expr_ge() {
-        let expr = lex(b"primary_key >= 10").unwrap();
+        let expr = lex_insecure(b"primary_key >= 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -787,7 +787,7 @@ mod relational_expr {
     }
     #[test]
     fn expr_lt() {
-        let expr = lex(b"primary_key < 10").unwrap();
+        let expr = lex_insecure(b"primary_key < 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -800,7 +800,7 @@ mod relational_expr {
     }
     #[test]
     fn expr_le() {
-        let expr = lex(b"primary_key <= 10").unwrap();
+        let expr = lex_insecure(b"primary_key <= 10").unwrap();
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
@@ -819,7 +819,7 @@ mod where_clause {
     };
     #[test]
     fn where_single() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 x = 100
             "#)
         .unwrap();
@@ -835,7 +835,7 @@ mod where_clause {
     }
     #[test]
     fn where_double() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 userid = 100 and pass = "password"
             "#)
         .unwrap();
@@ -857,7 +857,7 @@ mod where_clause {
     }
     #[test]
     fn where_duplicate_condition() {
-        let tok = lex(br#"
+        let tok = lex_insecure(br#"
                 userid = 100 and userid > 200
             "#)
         .unwrap();
