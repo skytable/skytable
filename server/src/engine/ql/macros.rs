@@ -318,7 +318,7 @@ macro_rules! into_array_nullable {
 }
 
 macro_rules! statictbl {
-    ($name:ident: $kind:ty => [$($expr:expr),+]) => {{
+    ($name:ident: $kind:ty => [$($expr:expr),*]) => {{
         const LEN: usize = {let mut i = 0;$(let _ = $expr; i += 1;)*i};
         static $name: [$kind; LEN] = [$($expr),*];
         $name

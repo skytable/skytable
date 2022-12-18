@@ -24,10 +24,12 @@
  *
 */
 
+use std::ops::BitOr;
+
 use {
     super::{LangError, LangResult, RawSlice},
     crate::util::{compiler, Life},
-    core::{marker::PhantomData, mem::size_of, slice, str},
+    core::{cmp, fmt, marker::PhantomData, mem::size_of, slice, str},
 };
 
 /*
@@ -76,7 +78,7 @@ pub enum Lit {
     Bool(bool),
     UnsignedInt(u64),
     SignedInt(i64),
-    SafeLit(RawSlice),
+    Bin(RawSlice),
 }
 
 impl From<&'static str> for Lit {
@@ -95,6 +97,7 @@ enum_impls! {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Symbol {
     OpArithmeticAdd,  // +
     OpArithmeticSub,  // -
@@ -394,14 +397,15 @@ pub struct Lexer<'a, const OPERATING_MODE: u8> {
 impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
     #[inline(always)]
     pub const fn new(src: &'a [u8]) -> Self {
-        unsafe {
-            Self {
-                c: src.as_ptr(),
-                e: src.as_ptr().add(src.len()),
-                last_error: None,
-                tokens: Vec::new(),
-                _lt: PhantomData,
-            }
+        Self {
+            c: src.as_ptr(),
+            e: unsafe {
+                // UNSAFE(@ohsayan): Always safe (<= EOA)
+                src.as_ptr().add(src.len())
+            },
+            last_error: None,
+            tokens: Vec::new(),
+            _lt: PhantomData,
         }
     }
 }
@@ -594,7 +598,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
         }
     }
     #[inline(always)]
-    fn scan_unsafe_literal(&mut self) {
+    fn scan_binary_literal(&mut self) {
         unsafe {
             self.incr_cursor();
         }
@@ -622,7 +626,7 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
         okay &= self.remaining() >= size;
         if compiler::likely(okay) {
             unsafe {
-                self.push_token(Lit::SafeLit(RawSlice::new(self.cursor(), size)));
+                self.push_token(Lit::Bin(RawSlice::new(self.cursor(), size)));
                 self.incr_cursor_by(size);
             }
         } else {
@@ -676,7 +680,6 @@ impl<'a, const OPERATING_MODE: u8> Lexer<'a, OPERATING_MODE> {
                         self.incr_cursor();
                     }
                 }
-                b'\r' => self.scan_unsafe_literal(),
                 // insecure features
                 byte if byte.is_ascii_digit() && OPERATING_MODE == LANG_MODE_INSECURE => {
                     self.scan_unsigned_integer()
@@ -711,18 +714,486 @@ impl Token {
     pub(super) const fn is_lit(&self) -> bool {
         matches!(self, Self::Lit(_))
     }
-    #[inline(always)]
-    /// Returns true if the token *could* be a positive number. since safe literals do not
-    /// provide any type information at this moment, we lookahead to see if it's a litnum or
-    /// an unsafe lit
-    pub(super) const fn is_like_positive_num(&self) -> bool {
-        matches!(self, Self::Lit(Lit::UnsignedInt(_) | Lit::SafeLit(_)))
-    }
 }
 
 impl AsRef<Token> for Token {
     #[inline(always)]
     fn as_ref(&self) -> &Token {
         self
+    }
+}
+
+#[derive(Debug)]
+pub struct RawLexer<'a> {
+    c: *const u8,
+    e: *const u8,
+    tokens: Vec<Token>,
+    last_error: Option<LangError>,
+    _lt: PhantomData<&'a [u8]>,
+}
+
+// ctor
+impl<'a> RawLexer<'a> {
+    #[inline(always)]
+    pub const fn new(src: &'a [u8]) -> Self {
+        Self {
+            c: src.as_ptr(),
+            e: unsafe {
+                // UNSAFE(@ohsayan): Always safe (<= EOA)
+                src.as_ptr().add(src.len())
+            },
+            last_error: None,
+            tokens: Vec::new(),
+            _lt: PhantomData,
+        }
+    }
+}
+
+// meta
+impl<'a> RawLexer<'a> {
+    #[inline(always)]
+    const fn cursor(&self) -> *const u8 {
+        self.c
+    }
+    #[inline(always)]
+    const fn data_end_ptr(&self) -> *const u8 {
+        self.e
+    }
+    #[inline(always)]
+    fn not_exhausted(&self) -> bool {
+        self.data_end_ptr() > self.cursor()
+    }
+    #[inline(always)]
+    fn exhausted(&self) -> bool {
+        self.cursor() == self.data_end_ptr()
+    }
+    #[inline(always)]
+    fn remaining(&self) -> usize {
+        unsafe { self.e.offset_from(self.c) as usize }
+    }
+    #[inline(always)]
+    unsafe fn deref_cursor(&self) -> u8 {
+        *self.cursor()
+    }
+    #[inline(always)]
+    unsafe fn incr_cursor_by(&mut self, by: usize) {
+        debug_assert!(self.remaining() >= by);
+        self.c = self.cursor().add(by)
+    }
+    #[inline(always)]
+    unsafe fn incr_cursor(&mut self) {
+        self.incr_cursor_by(1)
+    }
+    #[inline(always)]
+    unsafe fn incr_cursor_if(&mut self, iff: bool) {
+        self.incr_cursor_by(iff as usize)
+    }
+    #[inline(always)]
+    fn push_token(&mut self, token: impl Into<Token>) {
+        self.tokens.push(token.into())
+    }
+    #[inline(always)]
+    fn peek_is(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
+        self.not_exhausted() && unsafe { f(self.deref_cursor()) }
+    }
+    #[inline(always)]
+    fn peek_is_and_forward(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
+        let did_fw = self.not_exhausted() && unsafe { f(self.deref_cursor()) };
+        unsafe {
+            self.incr_cursor_if(did_fw);
+        }
+        did_fw
+    }
+    #[inline(always)]
+    fn peek_eq_and_forward_or_eof(&mut self, eq: u8) -> bool {
+        unsafe {
+            let eq = self.not_exhausted() && self.deref_cursor() == eq;
+            self.incr_cursor_if(eq);
+            eq | self.exhausted()
+        }
+    }
+    #[inline(always)]
+    fn peek_neq(&self, b: u8) -> bool {
+        self.not_exhausted() && unsafe { self.deref_cursor() != b }
+    }
+    #[inline(always)]
+    fn peek_eq_and_forward(&mut self, b: u8) -> bool {
+        unsafe {
+            let r = self.not_exhausted() && self.deref_cursor() == b;
+            self.incr_cursor_if(r);
+            r
+        }
+    }
+    #[inline(always)]
+    fn trim_ahead(&mut self) {
+        while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
+    }
+    #[inline(always)]
+    fn set_error(&mut self, e: LangError) {
+        self.last_error = Some(e);
+    }
+    #[inline(always)]
+    fn no_error(&self) -> bool {
+        self.last_error.is_none()
+    }
+}
+
+// high level methods
+impl<'a> RawLexer<'a> {
+    #[inline(always)]
+    fn scan_ident(&mut self) -> RawSlice {
+        let s = self.cursor();
+        unsafe {
+            while self.peek_is(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                self.incr_cursor();
+            }
+            RawSlice::new(s, self.cursor().offset_from(s) as usize)
+        }
+    }
+    #[inline(always)]
+    fn scan_ident_or_keyword(&mut self) {
+        let s = self.scan_ident();
+        let st = unsafe { s.as_slice() }.to_ascii_lowercase();
+        match kwof(&st) {
+            Some(kw) => self.tokens.push(kw.into()),
+            // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
+            None if st == b"true" || st == b"false" => self.push_token(Lit::Bool(st == b"true")),
+            None => self.tokens.push(Token::Ident(s)),
+        }
+    }
+    #[inline(always)]
+    fn scan_byte(&mut self, byte: u8) {
+        match symof(byte) {
+            Some(tok) => self.push_token(tok),
+            None => return self.set_error(LangError::UnexpectedChar),
+        }
+        unsafe {
+            self.incr_cursor();
+        }
+    }
+}
+
+#[derive(Debug)]
+/// This lexer implements the `opmod-safe` for BlueQL
+pub struct SafeLexer<'a> {
+    base: RawLexer<'a>,
+}
+
+impl<'a> SafeLexer<'a> {
+    #[inline(always)]
+    pub const fn new(src: &'a [u8]) -> Self {
+        Self {
+            base: RawLexer::new(src),
+        }
+    }
+    #[inline(always)]
+    pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
+        Self::new(src)._lex()
+    }
+    #[inline(always)]
+    fn _lex(self) -> LangResult<Vec<Token>> {
+        let Self { base: mut l } = self;
+        while l.not_exhausted() && l.no_error() {
+            let b = unsafe { l.deref_cursor() };
+            match b {
+                // ident or kw
+                b if b.is_ascii_alphabetic() => l.scan_ident_or_keyword(),
+                // extra terminal chars
+                b'\n' | b'\t' | b' ' => l.trim_ahead(),
+                // arbitrary byte
+                b => l.scan_byte(b),
+            }
+        }
+        let RawLexer {
+            last_error, tokens, ..
+        } = l;
+        match last_error {
+            None => Ok(tokens),
+            Some(e) => Err(e),
+        }
+    }
+}
+
+const ALLOW_UNSIGNED: bool = false;
+const ALLOW_SIGNED: bool = true;
+
+pub trait NumberDefinition: Sized + fmt::Debug + Copy + Clone + BitOr<Self, Output = Self> {
+    const ALLOW_SIGNED: bool;
+    fn overflowing_mul(&self, v: u8) -> (Self, bool);
+    fn overflowing_add(&self, v: u8) -> (Self, bool);
+    fn negate(&mut self);
+    fn qualified_max_length() -> usize;
+    fn zero() -> Self;
+    fn b(self, b: bool) -> Self;
+}
+
+macro_rules! impl_number_def {
+	($(
+        $ty:ty {$supports_signed:ident, $qualified_max_length:expr}),* $(,)?
+    ) => {
+		$(impl NumberDefinition for $ty {
+			const ALLOW_SIGNED: bool = $supports_signed;
+            #[inline(always)] fn zero() -> Self { 0 }
+            #[inline(always)] fn b(self, b: bool) -> Self { b as Self * self }
+			#[inline(always)]
+			fn overflowing_mul(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_mul(*self, v as $ty) }
+			#[inline(always)]
+			fn overflowing_add(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_add(*self, v as $ty) }
+			#[inline(always)]
+			fn negate(&mut self) {
+				assert!(Self::ALLOW_SIGNED, "tried to negate an unsigned integer");
+                *self = !(*self - 1);
+			}
+            #[inline(always)] fn qualified_max_length() -> usize { $qualified_max_length }
+		})*
+	}
+}
+
+#[cfg(target_pointer_width = "64")]
+const SZ_USIZE: usize = 20;
+#[cfg(target_pointer_width = "32")]
+const SZ_USIZE: usize = 10;
+#[cfg(target_pointer_width = "64")]
+const SZ_ISIZE: usize = 20;
+#[cfg(target_pointer_width = "32")]
+const SZ_ISIZE: usize = 11;
+
+impl_number_def! {
+    usize {ALLOW_SIGNED, SZ_USIZE},
+    // 255
+    u8 {ALLOW_UNSIGNED, 3},
+    // 65536
+    u16 {ALLOW_UNSIGNED, 5},
+    // 4294967296
+    u32 {ALLOW_UNSIGNED, 10},
+    // 18446744073709551616
+    u64 {ALLOW_UNSIGNED, 20},
+    // signed
+    isize {ALLOW_SIGNED, SZ_ISIZE},
+    // -128
+    i8 {ALLOW_SIGNED, 4},
+    // -32768
+    i16 {ALLOW_SIGNED, 6},
+    // -2147483648
+    i32 {ALLOW_SIGNED, 11},
+    // -9223372036854775808
+    i64 {ALLOW_SIGNED, 20},
+}
+
+#[inline(always)]
+fn decode_num_from_unbounded_payload<N>(src: &[u8], flag: &mut bool, cnt: &mut usize) -> N
+where
+    N: NumberDefinition,
+{
+    let l = src.len();
+    let mut okay = !src.is_empty();
+    let mut i = 0;
+    let mut number = N::zero();
+    let mut nx_stop = false;
+
+    let is_signed = if N::ALLOW_SIGNED {
+        let is_signed = i < l && src[i] == b'-';
+        i += is_signed as usize;
+        okay &= (i + 2) <= l; // [-][digit][LF]
+        is_signed
+    } else {
+        false
+    };
+
+    while i < l && okay && !nx_stop {
+        // potential exit
+        nx_stop = src[i] == b'\n';
+        // potential entry
+        let mut local_ok = src[i].is_ascii_digit();
+        let (p, p_of) = number.overflowing_mul(10);
+        local_ok &= !p_of;
+        let (s, s_of) = p.overflowing_add(src[i] & 0x0f);
+        local_ok &= !s_of;
+        // reassign or assign
+        let reassign = number.b(nx_stop);
+        let assign = s.b(!nx_stop);
+        number = reassign | assign;
+        okay &= local_ok | nx_stop;
+        i += okay as usize;
+    }
+    okay &= nx_stop;
+    *cnt += i;
+    *flag &= okay;
+
+    if N::ALLOW_SIGNED && is_signed {
+        number.negate()
+    }
+    number
+}
+
+#[inline(always)]
+fn decode_num_from_bounded_payload<N>(src: &[u8], flag: &mut bool) -> N
+where
+    N: NumberDefinition,
+{
+    let l = src.len();
+
+    let mut i = 0;
+    let mut number = N::zero();
+    let mut okay = l <= N::qualified_max_length();
+
+    if N::ALLOW_SIGNED {
+        let is_signed = i < l && src[i] == b'-';
+        if is_signed {
+            number.negate();
+        }
+        i += is_signed as usize;
+    }
+
+    while i < l && okay {
+        okay &= src[i].is_ascii_digit();
+        let (product, p_of) = number.overflowing_mul(10);
+        okay &= !p_of;
+        let (sum, s_of) = product.overflowing_add(src[i] & 0x0F);
+        okay &= !s_of;
+        number = sum;
+        i += 1;
+    }
+
+    *flag &= okay;
+    number
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+/// Intermediate literal repr
+pub enum LitIR<'a> {
+    Str(&'a str),
+    Bin(&'a [u8]),
+    UInt(u64),
+    SInt(i64),
+    Bool(bool),
+    Float(f64),
+}
+
+#[derive(Debug, PartialEq)]
+/// Data constructed from `opmode-safe`
+pub struct SafeQueryData<'a> {
+    p: Box<[LitIR<'a>]>,
+    t: Vec<Token>,
+}
+
+impl<'a> SafeQueryData<'a> {
+    #[cfg(test)]
+    pub fn new_test(p: Box<[LitIR<'a>]>, t: Vec<Token>) -> Self {
+        Self { p, t }
+    }
+    #[inline(always)]
+    pub fn parse(qf: &'a [u8], pf: &'a [u8], pf_sz: usize) -> LangResult<Self> {
+        let q = SafeLexer::lex(qf);
+        let p = Self::p_revloop(pf, pf_sz);
+        let (Ok(t), Ok(p)) = (q, p) else {
+            return Err(LangError::UnexpectedChar)
+        };
+        Ok(Self { p, t })
+    }
+    #[inline]
+    pub(super) fn p_revloop(mut src: &'a [u8], size: usize) -> LangResult<Box<[LitIR<'a>]>> {
+        static LITIR_TF: [for<'a> fn(&'a [u8], &mut usize, &mut Vec<LitIR<'a>>) -> bool; 7] = [
+            SafeQueryData::uint,  // tc: 0
+            SafeQueryData::sint,  // tc: 1
+            SafeQueryData::bool,  // tc: 2
+            SafeQueryData::float, // tc: 3
+            SafeQueryData::bin,   // tc: 4
+            SafeQueryData::str,   // tc: 5
+            |_, _, _| false,      // ecc: 6
+        ];
+        let nonpadded_offset = (LITIR_TF.len() - 2) as u8;
+        let ecc_offset = LITIR_TF.len() - 1;
+        let mut okay = true;
+        let mut data = Vec::with_capacity(size);
+        while src.len() >= 3 && okay {
+            let tc = src[0];
+            okay &= tc <= nonpadded_offset;
+            let mx = cmp::min(ecc_offset, tc as usize);
+            let mut i_ = 1;
+            okay &= LITIR_TF[mx](&src[1..], &mut i_, &mut data);
+            src = &src[i_..];
+        }
+        okay &= src.is_empty() && data.len() == size;
+        if compiler::likely(okay) {
+            Ok(data.into_boxed_slice())
+        } else {
+            Err(LangError::BadPframe)
+        }
+    }
+}
+
+// low level methods
+impl<'b> SafeQueryData<'b> {
+    #[inline(always)]
+    fn mxple<'a>(src: &'a [u8], cnt: &mut usize, flag: &mut bool) -> &'a [u8] {
+        // find payload length
+        let mut i = 0;
+        let payload_len = decode_num_from_unbounded_payload::<usize>(src, flag, &mut i);
+        let src = &src[i..];
+        // find payload
+        *flag &= src.len() >= payload_len;
+        let mx_extract = cmp::min(payload_len, src.len());
+        // incr cursor
+        i += mx_extract;
+        *cnt += i;
+        unsafe { slice::from_raw_parts(src.as_ptr(), mx_extract) }
+    }
+    #[inline(always)]
+    pub(super) fn uint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        let mut b = true;
+        let r = decode_num_from_unbounded_payload(src, &mut b, cnt);
+        data.push(LitIR::UInt(r));
+        b
+    }
+    #[inline(always)]
+    pub(super) fn sint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        let mut b = true;
+        let r = decode_num_from_unbounded_payload(src, &mut b, cnt);
+        data.push(LitIR::SInt(r));
+        b
+    }
+    #[inline(always)]
+    pub(super) fn bool<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        // `true\n` or `false\n`
+        let mx = cmp::min(6, src.len());
+        let slice = &src[..mx];
+        let v_true = slice.starts_with(b"true\n");
+        let v_false = slice.starts_with(b"false\n");
+        let incr = v_true as usize * 5 + v_false as usize * 6;
+        data.push(LitIR::Bool(v_true));
+        *cnt += incr;
+        v_true | v_false
+    }
+    #[inline(always)]
+    pub(super) fn float<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        let mut okay = true;
+        let payload = Self::mxple(src, cnt, &mut okay);
+        match String::from_utf8_lossy(payload).parse() {
+            Ok(p) if okay => {
+                data.push(LitIR::Float(p));
+            }
+            _ => {}
+        }
+        okay
+    }
+    #[inline(always)]
+    pub(super) fn bin<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        let mut okay = true;
+        let payload = Self::mxple(src, cnt, &mut okay);
+        data.push(LitIR::Bin(payload));
+        okay
+    }
+    #[inline(always)]
+    pub(super) fn str<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+        let mut okay = true;
+        let payload = Self::mxple(src, cnt, &mut okay);
+        match str::from_utf8(payload) {
+            Ok(s) if okay => {
+                data.push(LitIR::Str(s));
+                true
+            }
+            _ => false,
+        }
     }
 }

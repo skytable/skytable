@@ -77,7 +77,7 @@ impl DataType {
             Lit::Bool(b) => DataType::Boolean(*b),
             Lit::UnsignedInt(u) => DataType::UnsignedInt(*u),
             Lit::SignedInt(i) => DataType::SignedInt(*i),
-            Lit::SafeLit(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+            Lit::Bin(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
         }
     }
 }

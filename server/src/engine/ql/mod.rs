@@ -60,6 +60,7 @@ pub enum LangError {
     InvalidDictionaryExpression,
     InvalidTypeDefinition,
     InvalidSafeLiteral,
+    BadPframe,
 }
 
 /*
