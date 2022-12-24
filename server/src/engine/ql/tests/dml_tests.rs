@@ -31,9 +31,11 @@ mod list_parse {
 
     #[test]
     fn list_mini() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 []
-            ")
+            ",
+        )
         .unwrap();
         let r = parse_list_full(&tok[1..]).unwrap();
         assert_eq!(r, vec![])
@@ -41,9 +43,11 @@ mod list_parse {
 
     #[test]
     fn list() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 [1, 2, 3, 4]
-            ")
+            ",
+        )
         .unwrap();
         let r = parse_list_full(&tok[1..]).unwrap();
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
@@ -51,14 +55,16 @@ mod list_parse {
 
     #[test]
     fn list_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 [
                     [1, 2],
                     [3, 4],
                     [5, 6],
                     []
                 ]
-            ")
+            ",
+        )
         .unwrap();
         let r = parse_list_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -74,14 +80,16 @@ mod list_parse {
 
     #[test]
     fn list_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 [
                     [[1, 1], [2, 2]],
                     [[], [4, 4]],
                     [[5, 5], [6, 6]],
                     [[7, 7], []]
                 ]
-            ")
+            ",
+        )
         .unwrap();
         let r = parse_list_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -108,9 +116,11 @@ mod tuple_syntax {
 
     #[test]
     fn tuple() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 (1234, "email@example.com", true)
-            "#)
+            "#,
+        )
         .unwrap();
         let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -121,14 +131,16 @@ mod tuple_syntax {
 
     #[test]
     fn tuple_pro() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 (
                     1234,
                     "email@example.com",
                     true,
                     ["hello", "world", "and", "the", "universe"]
                 )
-            "#)
+            "#,
+        )
         .unwrap();
         let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -144,7 +156,8 @@ mod tuple_syntax {
 
     #[test]
     fn tuple_pro_max() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 (
                     1234,
                     "email@example.com",
@@ -158,7 +171,8 @@ mod tuple_syntax {
                         []
                     ]
                 )
-            "#)
+            "#,
+        )
         .unwrap();
         let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -192,14 +206,16 @@ mod map_syntax {
 
     #[test]
     fn map() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 {
                     name: "John Appletree",
                     email: "john@example.com",
                     verified: false,
                     followers: 12345
                 }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -215,7 +231,8 @@ mod map_syntax {
 
     #[test]
     fn map_pro() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 {
                     name: "John Appletree",
                     email: "john@example.com",
@@ -223,7 +240,8 @@ mod map_syntax {
                     followers: 12345,
                     tweets_by_day: []
                 }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
         assert_eq!(
@@ -286,9 +304,11 @@ mod stmt_insert {
 
     #[test]
     fn insert_tuple_mini() {
-        let x = lex_insecure(br#"
+        let x = lex_insecure(
+            br#"
                 insert into twitter.users ("sayan")
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
@@ -299,7 +319,8 @@ mod stmt_insert {
     }
     #[test]
     fn insert_tuple() {
-        let x = lex_insecure(br#"
+        let x = lex_insecure(
+            br#"
                 insert into twitter.users (
                     "sayan",
                     "Sayan",
@@ -308,27 +329,22 @@ mod stmt_insert {
                     12345,
                     67890
                 )
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
             entity: Entity::Full("twitter".into(), "users".into()),
-            data: into_array_nullable![
-                "sayan",
-                "Sayan",
-                "sayan@example.com",
-                true,
-                12345,
-                67890
-            ]
-            .to_vec()
-            .into(),
+            data: into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
+                .to_vec()
+                .into(),
         };
         assert_eq!(e, r);
     }
     #[test]
     fn insert_tuple_pro() {
-        let x = lex_insecure(br#"
+        let x = lex_insecure(
+            br#"
                 insert into twitter.users (
                     "sayan",
                     "Sayan",
@@ -340,7 +356,8 @@ mod stmt_insert {
                     12345,
                     null
                 )
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
@@ -363,9 +380,11 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map_mini() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 insert into jotsy.app { username: "sayan" }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
@@ -379,7 +398,8 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 insert into jotsy.app {
                     username: "sayan",
                     name: "Sayan",
@@ -388,7 +408,8 @@ mod stmt_insert {
                     following: 12345,
                     followers: 67890
                 }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
@@ -407,7 +428,8 @@ mod stmt_insert {
     }
     #[test]
     fn insert_map_pro() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 insert into jotsy.app {
                     username: "sayan",
                     password: "pass123",
@@ -419,7 +441,8 @@ mod stmt_insert {
                     bookmarks: 12345,
                     other_linked_accounts: null
                 }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
@@ -453,9 +476,11 @@ mod stmt_select {
     };
     #[test]
     fn select_mini() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 select * from users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let username_where = "sayan".into();
@@ -473,9 +498,11 @@ mod stmt_select {
     }
     #[test]
     fn select() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 select field1 from users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let username_where = "sayan".into();
@@ -493,9 +520,11 @@ mod stmt_select {
     }
     #[test]
     fn select_pro() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 select field1 from twitter.users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let username_where = "sayan".into();
@@ -513,9 +542,11 @@ mod stmt_select {
     }
     #[test]
     fn select_pro_max() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 select field1, field2 from twitter.users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let username_where = "sayan".into();
@@ -612,16 +643,17 @@ mod update_statement {
         crate::engine::ql::{
             ast::Entity,
             dml::{
-                self, AssignmentExpression, Operator, RelationalExpr, UpdateStatement,
-                WhereClause,
+                self, AssignmentExpression, Operator, RelationalExpr, UpdateStatement, WhereClause,
             },
         },
     };
     #[test]
     fn update_mini() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 update app SET notes += "this is my new note" where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let where_username = "sayan".into();
         let note = "this is my new note".to_string().into();
@@ -645,7 +677,8 @@ mod update_statement {
     }
     #[test]
     fn update() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 update
                     jotsy.app
                 SET
@@ -653,7 +686,8 @@ mod update_statement {
                     email = "sayan@example.com"
                 WHERE
                     username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
         let where_username = "sayan".into();
@@ -688,9 +722,11 @@ mod delete_stmt {
 
     #[test]
     fn delete_mini() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 delete from users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let primary_key = "sayan".into();
         let e = DeleteStatement::new_test(
@@ -708,9 +744,11 @@ mod delete_stmt {
     }
     #[test]
     fn delete() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 delete from twitter.users where username = "sayan"
-            "#)
+            "#,
+        )
         .unwrap();
         let primary_key = "sayan".into();
         let e = DeleteStatement::new_test(
@@ -819,9 +857,11 @@ mod where_clause {
     };
     #[test]
     fn where_single() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 x = 100
-            "#)
+            "#,
+        )
         .unwrap();
         let rhs_hundred = 100.into();
         let expected = WhereClause::new(dict! {
@@ -835,9 +875,11 @@ mod where_clause {
     }
     #[test]
     fn where_double() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 userid = 100 and pass = "password"
-            "#)
+            "#,
+        )
         .unwrap();
         let rhs_hundred = 100.into();
         let rhs_password = "password".into();
@@ -857,9 +899,11 @@ mod where_clause {
     }
     #[test]
     fn where_duplicate_condition() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 userid = 100 and userid > 200
-            "#)
+            "#,
+        )
         .unwrap();
         assert!(dml::parse_where_clause_full(&tok).is_none());
     }

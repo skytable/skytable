@@ -45,6 +45,7 @@ mod lexer_tests;
 mod schema_tests;
 mod structure_syn;
 
+/// Uses the [`InsecureLexer`] to lex the given input
 pub(super) fn lex_insecure(src: &[u8]) -> LangResult<Vec<Token>> {
     InsecureLexer::lex(src)
 }

@@ -44,7 +44,10 @@ macro_rules! v(
 #[test]
 fn lex_ident() {
     let src = v!("hello");
-    assert_eq!(lex_insecure(&src).unwrap(), vec![Token::Ident("hello".into())]);
+    assert_eq!(
+        lex_insecure(&src).unwrap(),
+        vec![Token::Ident("hello".into())]
+    );
 }
 
 // literals
@@ -68,7 +71,10 @@ fn lex_signed_int() {
 fn lex_bool() {
     let (t, f) = v!("true", "false");
     assert_eq!(lex_insecure(&t).unwrap(), vec![Token::Lit(Lit::Bool(true))]);
-    assert_eq!(lex_insecure(&f).unwrap(), vec![Token::Lit(Lit::Bool(false))]);
+    assert_eq!(
+        lex_insecure(&f).unwrap(),
+        vec![Token::Lit(Lit::Bool(false))]
+    );
 }
 #[test]
 fn lex_string() {
@@ -133,14 +139,23 @@ fn lex_string_escape_bs() {
 #[test]
 fn lex_string_bad_escape() {
     let wth = br#" '\a should be an alert on windows apparently' "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        LangError::InvalidStringLiteral
+    );
 }
 #[test]
 fn lex_string_unclosed() {
     let wth = br#" 'omg where did the end go "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        LangError::InvalidStringLiteral
+    );
     let wth = br#" 'see, we escaped the end\' "#;
-    assert_eq!(lex_insecure(wth).unwrap_err(), LangError::InvalidStringLiteral);
+    assert_eq!(
+        lex_insecure(wth).unwrap_err(),
+        LangError::InvalidStringLiteral
+    );
 }
 #[test]
 fn lex_unsafe_literal_mini() {
@@ -159,6 +174,107 @@ fn lex_unsafe_literal_pro() {
     let usl = lex_insecure("\r18\nabcdefghi123456789".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
     assert_eq!(Token::Lit(Lit::Bin("abcdefghi123456789".into())), usl[0]);
+}
+
+mod num_tests {
+    use crate::engine::ql::lexer::decode_num_ub as ubdc;
+    mod uint8 {
+        use super::*;
+        #[test]
+        fn ndecub_u8_ok() {
+            const SRC: &[u8] = b"123\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<u8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, 123);
+        }
+        #[test]
+        fn ndecub_u8_lb() {
+            const SRC: &[u8] = b"0\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<u8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, 0);
+        }
+        #[test]
+        fn ndecub_u8_ub() {
+            const SRC: &[u8] = b"255\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<u8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, 255);
+        }
+        #[test]
+        fn ndecub_u8_ub_of() {
+            const SRC: &[u8] = b"256\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<u8>(SRC, &mut b, &mut i);
+            assert!(!b);
+            assert_eq!(i, 2);
+            assert_eq!(x, 0);
+        }
+    }
+    mod sint8 {
+        use super::*;
+        #[test]
+        pub(crate) fn ndecub_i8_ok() {
+            const SRC: &[u8] = b"-123\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<i8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, -123);
+        }
+        #[test]
+        pub(crate) fn ndecub_i8_lb() {
+            const SRC: &[u8] = b"-128\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<i8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, -128);
+        }
+
+        #[test]
+        pub(crate) fn ndecub_i8_lb_of() {
+            const SRC: &[u8] = b"-129\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<i8>(SRC, &mut b, &mut i);
+            assert!(!b);
+            assert_eq!(i, 3);
+            assert_eq!(x, 0);
+        }
+        #[test]
+        pub(crate) fn ndecub_i8_ub() {
+            const SRC: &[u8] = b"127\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<i8>(SRC, &mut b, &mut i);
+            assert!(b);
+            assert_eq!(i, SRC.len());
+            assert_eq!(x, 127);
+        }
+        #[test]
+        pub(crate) fn ndecub_i8_ub_of() {
+            const SRC: &[u8] = b"128\n";
+            let mut i = 0;
+            let mut b = true;
+            let x = ubdc::<i8>(SRC, &mut b, &mut i);
+            assert!(!b);
+            assert_eq!(i, 2);
+            assert_eq!(x, 0);
+        }
+    }
 }
 
 mod safequery_params {
@@ -273,7 +389,7 @@ mod safequery_params {
     #[test]
     fn params_mix() {
         let mut rng = rand::thread_rng();
-        const DATA: [&'static [u8]; 6] = [
+        const DATA: [&[u8]; 6] = [
             b"\x0012345\n",
             b"\x01-12345\n",
             b"\x02true\n",
@@ -292,12 +408,11 @@ mod safequery_params {
         for _ in 0..DATA.len().pow(2) {
             let mut local_data = DATA;
             local_data.shuffle(&mut rng);
-            let ret: Vec<LitIR> = local_data.iter().map(|v| RETMAP[v[0] as usize]).collect();
-            let src: Vec<u8> = local_data
-                .into_iter()
-                .map(|v| v.to_owned())
-                .flatten()
+            let ret: Vec<LitIR> = local_data
+                .iter()
+                .map(|v| RETMAP[v[0] as usize].clone())
                 .collect();
+            let src: Vec<u8> = local_data.into_iter().flat_map(|v| v.to_owned()).collect();
             let r = SafeQueryData::p_revloop(&src, 6).unwrap();
             assert_eq!(r.as_ref(), ret);
         }

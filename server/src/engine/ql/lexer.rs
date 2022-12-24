@@ -61,6 +61,7 @@ assertions! {
     size_of::<Symbol>() == 1,
     size_of::<Keyword>() == 1,
     size_of::<Lit>() == 24, // FIXME(@ohsayan): Ouch
+    size_of::<LitIR>() == 24,
 }
 
 enum_impls! {
@@ -784,9 +785,9 @@ const ALLOW_SIGNED: bool = true;
 
 pub trait NumberDefinition: Sized + fmt::Debug + Copy + Clone + BitOr<Self, Output = Self> {
     const ALLOW_SIGNED: bool;
-    fn overflowing_mul(&self, v: u8) -> (Self, bool);
-    fn overflowing_add(&self, v: u8) -> (Self, bool);
-    fn negate(&mut self);
+    fn mul_of(&self, v: u8) -> (Self, bool);
+    fn add_of(&self, v: u8) -> (Self, bool);
+    fn sub_of(&self, v: u8) -> (Self, bool);
     fn qualified_max_length() -> usize;
     fn zero() -> Self;
     fn b(self, b: bool) -> Self;
@@ -801,14 +802,11 @@ macro_rules! impl_number_def {
             #[inline(always)] fn zero() -> Self { 0 }
             #[inline(always)] fn b(self, b: bool) -> Self { b as Self * self }
 			#[inline(always)]
-			fn overflowing_mul(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_mul(*self, v as $ty) }
+			fn mul_of(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_mul(*self, v as $ty) }
 			#[inline(always)]
-			fn overflowing_add(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_add(*self, v as $ty) }
+			fn add_of(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_add(*self, v as $ty) }
 			#[inline(always)]
-			fn negate(&mut self) {
-				assert!(Self::ALLOW_SIGNED, "tried to negate an unsigned integer");
-                *self = !(*self - 1);
-			}
+			fn sub_of(&self, v: u8) -> ($ty, bool) { <$ty>::overflowing_sub(*self, v as $ty) }
             #[inline(always)] fn qualified_max_length() -> usize { $qualified_max_length }
 		})*
 	}
@@ -846,7 +844,7 @@ impl_number_def! {
 }
 
 #[inline(always)]
-fn decode_num_from_unbounded_payload<N>(src: &[u8], flag: &mut bool, cnt: &mut usize) -> N
+pub(super) fn decode_num_ub<N>(src: &[u8], flag: &mut bool, cnt: &mut usize) -> N
 where
     N: NumberDefinition,
 {
@@ -856,42 +854,50 @@ where
     let mut number = N::zero();
     let mut nx_stop = false;
 
-    let is_signed = if N::ALLOW_SIGNED {
-        let is_signed = i < l && src[i] == b'-';
-        i += is_signed as usize;
+    let is_signed;
+    if N::ALLOW_SIGNED {
+        let loc_s = i < l && src[i] == b'-';
+        i += loc_s as usize;
         okay &= (i + 2) <= l; // [-][digit][LF]
-        is_signed
+        is_signed = loc_s;
     } else {
-        false
-    };
+        is_signed = false;
+    }
 
     while i < l && okay && !nx_stop {
         // potential exit
         nx_stop = src[i] == b'\n';
         // potential entry
         let mut local_ok = src[i].is_ascii_digit();
-        let (p, p_of) = number.overflowing_mul(10);
+        let (p, p_of) = number.mul_of(10);
         local_ok &= !p_of;
-        let (s, s_of) = p.overflowing_add(src[i] & 0x0f);
-        local_ok &= !s_of;
+        let lfret;
+        if N::ALLOW_SIGNED && is_signed {
+            let (d, d_of) = p.sub_of(src[i] & 0x0f);
+            local_ok &= !d_of;
+            lfret = d;
+        } else {
+            let (s, s_of) = p.add_of(src[i] & 0x0f);
+            local_ok &= !s_of;
+            lfret = s;
+        }
         // reassign or assign
         let reassign = number.b(nx_stop);
-        let assign = s.b(!nx_stop);
+        let assign = lfret.b(!nx_stop);
         number = reassign | assign;
         okay &= local_ok | nx_stop;
         i += okay as usize;
     }
+    if N::ALLOW_SIGNED {
+        number = number.b(okay);
+    }
     okay &= nx_stop;
     *cnt += i;
     *flag &= okay;
-
-    if N::ALLOW_SIGNED && is_signed {
-        number.negate()
-    }
     number
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone)]
 /// Intermediate literal repr
 pub enum LitIR<'a> {
     Str(&'a str),
@@ -961,7 +967,7 @@ impl<'b> SafeQueryData<'b> {
     fn mxple<'a>(src: &'a [u8], cnt: &mut usize, flag: &mut bool) -> &'a [u8] {
         // find payload length
         let mut i = 0;
-        let payload_len = decode_num_from_unbounded_payload::<usize>(src, flag, &mut i);
+        let payload_len = decode_num_ub::<usize>(src, flag, &mut i);
         let src = &src[i..];
         // find payload
         *flag &= src.len() >= payload_len;
@@ -974,14 +980,14 @@ impl<'b> SafeQueryData<'b> {
     #[inline(always)]
     pub(super) fn uint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
-        let r = decode_num_from_unbounded_payload(src, &mut b, cnt);
+        let r = decode_num_ub(src, &mut b, cnt);
         data.push(LitIR::UInt(r));
         b
     }
     #[inline(always)]
     pub(super) fn sint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
-        let r = decode_num_from_unbounded_payload(src, &mut b, cnt);
+        let r = decode_num_ub(src, &mut b, cnt);
         data.push(LitIR::SInt(r));
         b
     }
