@@ -243,7 +243,6 @@ mod num_tests {
             assert_eq!(i, SRC.len());
             assert_eq!(x, -128);
         }
-
         #[test]
         pub(crate) fn ndecub_i8_lb_of() {
             const SRC: &[u8] = b"-129\n";

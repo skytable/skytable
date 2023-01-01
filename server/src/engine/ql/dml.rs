@@ -237,7 +237,10 @@ pub(super) fn parse_list(
     let mut prev_nlist_dscr = None;
     while i < l && okay && !stop {
         let d = match &tok[i] {
-            Token::Lit(l) => DataType::clone_from_lit(l),
+            Token::Lit(l) => unsafe {
+                // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
+                DataType::clone_from_lit(l)
+            },
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // a nested list
                 let mut nested_list = Vec::new();
@@ -294,7 +297,10 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
     let mut data = Vec::new();
     while i < l && okay && !stop {
         match &tok[i] {
-            Token::Lit(l) => data.push(Some(DataType::clone_from_lit(l))),
+            Token::Lit(l) => data.push(Some(unsafe {
+                // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
+                DataType::clone_from_lit(l)
+            })),
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // ah, a list
                 let mut l = Vec::new();
@@ -351,7 +357,10 @@ pub(super) fn parse_data_map_syntax<'a>(
                             // UNSAFE(@ohsayan): Token lifetime ensures slice validity
                             id.as_slice()
                         },
-                        Some(DataType::clone_from_lit(l)),
+                        Some(unsafe {
+                            // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
+                            DataType::clone_from_lit(l)
+                        }),
                     )
                     .is_none();
             }

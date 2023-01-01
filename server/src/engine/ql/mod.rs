@@ -99,7 +99,7 @@ impl RawSlice {
     const unsafe fn new_from_str(s: &str) -> Self {
         Self::new(s.as_bytes().as_ptr(), s.as_bytes().len())
     }
-    unsafe fn as_slice(&self) -> &[u8] {
+    pub unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.ptr.as_ptr(), self.len)
     }
     unsafe fn as_str(&self) -> &str {

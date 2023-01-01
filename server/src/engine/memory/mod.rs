@@ -26,7 +26,7 @@
 
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
 
-use super::ql::{lexer::Lit, RawSlice};
+use super::ql::lexer::Lit;
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
@@ -54,8 +54,6 @@ pub enum DataType {
     /// elements to ensure correctness in this specific context
     /// FIXME(@ohsayan): Try enforcing this somehow
     List(Vec<Self>),
-    /// **☢ WARNING:** Not an actual data type but MUST be translated into an actual data type
-    AnonymousTypeNeedsEval(RawSlice),
 }
 
 enum_impls! {
@@ -71,13 +69,16 @@ enum_impls! {
 
 impl DataType {
     #[inline(always)]
-    pub(super) fn clone_from_lit(lit: &Lit) -> Self {
+    /// ## Safety
+    ///
+    /// Ensure validity of Lit::Bin
+    pub(super) unsafe fn clone_from_lit(lit: &Lit) -> Self {
         match lit {
             Lit::Str(s) => DataType::String(s.clone()),
             Lit::Bool(b) => DataType::Boolean(*b),
             Lit::UnsignedInt(u) => DataType::UnsignedInt(*u),
             Lit::SignedInt(i) => DataType::SignedInt(*i),
-            Lit::Bin(l) => DataType::AnonymousTypeNeedsEval(l.clone()),
+            Lit::Bin(l) => DataType::Binary(l.as_slice().to_owned()),
         }
     }
 }
@@ -88,23 +89,30 @@ impl<const N: usize> From<[DataType; N]> for DataType {
     }
 }
 
-#[repr(u8, align(1))]
-pub enum DataKind {
-    // primitive: integer unsigned
-    UInt8 = 0,
-    UInt16 = 1,
-    Uint32 = 2,
-    UInt64 = 3,
-    // primitive: integer unsigned
-    SInt8 = 4,
-    SInt16 = 5,
-    SInt32 = 6,
-    SInt64 = 7,
-    // primitive: misc
-    Bool = 8,
-    // compound: flat
-    String = 9,
-    Binary = 10,
-    // compound: recursive
-    List = 11,
+constgrp! {
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub struct DataKind: u8 {
+        // primitive: integer unsigned
+        UINT8 = 0,
+        UINT16 = 1,
+        UINT32 = 2,
+        UINT64 = 3,
+        // primitive: integer unsigned
+        SINT8 = 4,
+        SINT16 = 5,
+        SINT32 = 6,
+        SINT64 = 7,
+        // primitive: misc
+        BOOL = 8,
+        // primitive: floating point
+        FLOAT32 = 9,
+        FLOAT64 = 10,
+        // compound: flat
+        STR = 11,
+        STR_BX = Self::_BASE_HB | Self::STR.d(),
+        BIN = 12,
+        BIN_BX = Self::_BASE_HB | Self::BIN.d(),
+        // compound: recursive
+        LIST = 13,
+    }
 }
