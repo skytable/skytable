@@ -32,7 +32,7 @@
 use {
     super::{
         ast::Entity,
-        lexer::{Lit, Symbol, Token},
+        lexer::{Lit, LitIR, Symbol, Token},
         LangError, LangResult, RawSlice,
     },
     crate::{
@@ -77,13 +77,13 @@ fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bo
 #[derive(Debug, PartialEq)]
 pub struct RelationalExpr<'a> {
     pub(super) lhs: &'a [u8],
-    pub(super) rhs: &'a Lit,
+    pub(super) rhs: LitIR<'a>,
     pub(super) opc: u8,
 }
 
 impl<'a> RelationalExpr<'a> {
     #[inline(always)]
-    pub(super) fn new(lhs: &'a [u8], rhs: &'a Lit, opc: u8) -> Self {
+    pub(super) fn new(lhs: &'a [u8], rhs: LitIR<'a>, opc: u8) -> RelationalExpr<'a> {
         Self { lhs, rhs, opc }
     }
     pub(super) const OP_EQ: u8 = 1;
@@ -138,11 +138,11 @@ impl<'a> RelationalExpr<'a> {
         if compiler::likely(okay) {
             Some(unsafe {
                 // UNSAFE(@ohsayan): tok[0] is checked for being an ident, tok[lit_idx] also checked to be a lit
-                Self {
-                    lhs: extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
-                    rhs: extract!(tok[lit_idx], Token::Lit(ref l) => l),
-                    opc: operator,
-                }
+                Self::new(
+                    extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
+                    extract!(tok[lit_idx], Token::Lit(ref l) => l.as_ir()),
+                    operator,
+                )
             })
         } else {
             compiler::cold_val(None)

@@ -472,6 +472,7 @@ mod stmt_select {
         crate::engine::ql::{
             ast::Entity,
             dml::{self, SelectStatement},
+            lexer::LitIR,
         },
     };
     #[test]
@@ -483,14 +484,13 @@ mod stmt_select {
         )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
-        let username_where = "sayan".into();
         let e = SelectStatement::new_test(
             Entity::Single("users".into()),
             [].to_vec(),
             true,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -505,14 +505,13 @@ mod stmt_select {
         )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
-        let username_where = "sayan".into();
         let e = SelectStatement::new_test(
             Entity::Single("users".into()),
             ["field1".into()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -527,14 +526,13 @@ mod stmt_select {
         )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
-        let username_where = "sayan".into();
         let e = SelectStatement::new_test(
             Entity::Full("twitter".into(), "users".into()),
             ["field1".into()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -549,14 +547,13 @@ mod stmt_select {
         )
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
-        let username_where = "sayan".into();
         let e = SelectStatement::new_test(
             Entity::Full("twitter".into(), "users".into()),
             ["field1".into(), "field2".into()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), &username_where, RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -645,6 +642,7 @@ mod update_statement {
             dml::{
                 self, AssignmentExpression, Operator, RelationalExpr, UpdateStatement, WhereClause,
             },
+            lexer::LitIR,
         },
     };
     #[test]
@@ -655,7 +653,6 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let where_username = "sayan".into();
         let note = "this is my new note".to_string().into();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement {
@@ -668,7 +665,7 @@ mod update_statement {
             wc: WhereClause::new(dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
-                    &where_username,
+                    LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             }),
@@ -690,7 +687,6 @@ mod update_statement {
         )
         .unwrap();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
-        let where_username = "sayan".into();
         let field_note = "this is my new note".into();
         let field_email = "sayan@example.com".into();
         let e = UpdateStatement {
@@ -702,7 +698,7 @@ mod update_statement {
             wc: WhereClause::new(dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
-                    &where_username,
+                    LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             }),
@@ -717,6 +713,7 @@ mod delete_stmt {
         crate::engine::ql::{
             ast::Entity,
             dml::{self, DeleteStatement, RelationalExpr},
+            lexer::LitIR,
         },
     };
 
@@ -728,13 +725,12 @@ mod delete_stmt {
             "#,
         )
         .unwrap();
-        let primary_key = "sayan".into();
         let e = DeleteStatement::new_test(
             Entity::Single("users".into()),
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
-                    &primary_key,
+                    LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             },
@@ -750,13 +746,12 @@ mod delete_stmt {
             "#,
         )
         .unwrap();
-        let primary_key = "sayan".into();
         let e = DeleteStatement::new_test(
             ("twitter", "users").into(),
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
-                    &primary_key,
+                    LitIR::Str("user"),
                     RelationalExpr::OP_EQ
                 )
             },
@@ -768,7 +763,10 @@ mod delete_stmt {
 mod relational_expr {
     use {
         super::*,
-        crate::engine::ql::dml::{self, RelationalExpr},
+        crate::engine::ql::{
+            dml::{self, RelationalExpr},
+            lexer::LitIR,
+        },
     };
 
     #[test]
@@ -778,7 +776,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: &(10.into()),
+                rhs: LitIR::UInt(10),
                 lhs: "primary_key".as_bytes(),
                 opc: RelationalExpr::OP_EQ
             }
@@ -791,7 +789,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: &(10.into()),
+                rhs: LitIR::UInt(10),
                 lhs: "primary_key".as_bytes(),
                 opc: RelationalExpr::OP_NE
             }
@@ -804,7 +802,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: &(10.into()),
+                rhs: LitIR::UInt(10),
                 lhs: "primary_key".as_bytes(),
                 opc: RelationalExpr::OP_GT
             }
@@ -817,7 +815,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: &(10.into()),
+                rhs: LitIR::UInt(10),
                 lhs: "primary_key".as_bytes(),
                 opc: RelationalExpr::OP_GE
             }
@@ -830,7 +828,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: &(10.into()),
+                rhs: LitIR::UInt(10),
                 lhs: "primary_key".as_bytes(),
                 opc: RelationalExpr::OP_LT
             }
@@ -842,18 +840,21 @@ mod relational_expr {
         let r = dml::parse_relexpr_full(&expr).unwrap();
         assert_eq!(
             r,
-            RelationalExpr {
-                rhs: &(10.into()),
-                lhs: "primary_key".as_bytes(),
-                opc: RelationalExpr::OP_LE
-            }
+            RelationalExpr::new(
+                "primary_key".as_bytes(),
+                LitIR::UInt(10),
+                RelationalExpr::OP_LE
+            )
         );
     }
 }
 mod where_clause {
     use {
         super::*,
-        crate::engine::ql::dml::{self, RelationalExpr, WhereClause},
+        crate::engine::ql::{
+            dml::{self, RelationalExpr, WhereClause},
+            lexer::LitIR,
+        },
     };
     #[test]
     fn where_single() {
@@ -863,13 +864,12 @@ mod where_clause {
             "#,
         )
         .unwrap();
-        let rhs_hundred = 100.into();
         let expected = WhereClause::new(dict! {
-            "x".as_bytes() => RelationalExpr {
-                rhs: &rhs_hundred,
-                lhs: "x".as_bytes(),
-                opc: RelationalExpr::OP_EQ
-            }
+            "x".as_bytes() => RelationalExpr::new(
+                "x".as_bytes(),
+                LitIR::UInt(100),
+                RelationalExpr::OP_EQ
+            )
         });
         assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
     }
@@ -881,19 +881,17 @@ mod where_clause {
             "#,
         )
         .unwrap();
-        let rhs_hundred = 100.into();
-        let rhs_password = "password".into();
         let expected = WhereClause::new(dict! {
-            "userid".as_bytes() => RelationalExpr {
-                rhs: &rhs_hundred,
-                lhs: "userid".as_bytes(),
-                opc: RelationalExpr::OP_EQ
-            },
-            "pass".as_bytes() => RelationalExpr {
-                rhs: &rhs_password,
-                lhs: "pass".as_bytes(),
-                opc: RelationalExpr::OP_EQ
-            }
+            "userid".as_bytes() => RelationalExpr::new(
+                "userid".as_bytes(),
+                LitIR::UInt(100),
+                RelationalExpr::OP_EQ
+            ),
+            "pass".as_bytes() => RelationalExpr::new(
+                "pass".as_bytes(),
+                LitIR::Str("password"),
+                RelationalExpr::OP_EQ
+            )
         });
         assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
     }

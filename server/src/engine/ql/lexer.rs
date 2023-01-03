@@ -82,6 +82,18 @@ pub enum Lit {
     Bin(RawSlice),
 }
 
+impl Lit {
+    pub(super) unsafe fn as_ir<'a>(&'a self) -> LitIR<'a> {
+        match self {
+            Self::Str(s) => LitIR::Str(s.as_ref()),
+            Self::Bool(b) => LitIR::Bool(*b),
+            Self::UnsignedInt(u) => LitIR::UInt(*u),
+            Self::SignedInt(s) => LitIR::SInt(*s),
+            Self::Bin(b) => LitIR::Bin(b.as_slice()),
+        }
+    }
+}
+
 impl From<&'static str> for Lit {
     fn from(s: &'static str) -> Self {
         Self::Str(s.into())
