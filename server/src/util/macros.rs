@@ -269,3 +269,10 @@ macro_rules! bench {
         $vis mod $modname;
     };
 }
+
+#[macro_export]
+macro_rules! is_64b {
+    () => {
+        cfg!(target_pointer_width = "64")
+    };
+}

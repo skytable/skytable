@@ -490,7 +490,7 @@ mod stmt_select {
             true,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -511,7 +511,7 @@ mod stmt_select {
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -532,7 +532,7 @@ mod stmt_select {
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("username"), RelationalExpr::OP_EQ
+                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -751,7 +751,7 @@ mod delete_stmt {
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
-                    LitIR::Str("user"),
+                    LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             },

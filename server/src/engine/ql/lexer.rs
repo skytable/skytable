@@ -56,12 +56,19 @@ impl PartialEq<Symbol> for Token {
     }
 }
 
+const SIZEOF_USIZE: usize = size_of::<usize>();
+const LT_SZ: usize = if is_64b!() {
+    size_of::<usize>() * 3
+} else {
+    size_of::<usize>() * 2
+};
+
 assertions! {
-    size_of::<Token>() == 24, // FIXME(@ohsayan): Damn, what?
+    size_of::<Token>() == LT_SZ,
     size_of::<Symbol>() == 1,
     size_of::<Keyword>() == 1,
-    size_of::<Lit>() == 24, // FIXME(@ohsayan): Ouch
-    size_of::<LitIR>() == 24,
+    size_of::<Lit>() == LT_SZ,
+    size_of::<LitIR>() == LT_SZ,
 }
 
 enum_impls! {
