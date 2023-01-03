@@ -916,7 +916,7 @@ where
     number
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 /// Intermediate literal repr
 pub enum LitIR<'a> {
     Str(&'a str),

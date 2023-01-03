@@ -27,12 +27,66 @@
 use {
     super::{
         ddl,
-        lexer::{InsecureLexer, Token},
+        lexer::{InsecureLexer, LitIR, Token},
         schema, LangError, LangResult, RawSlice,
     },
     crate::util::Life,
     core::{marker::PhantomData, slice},
 };
+
+/// A [`QueryInterface`] defines how a query is to be processed and how it is laid out
+pub trait QueryInterface {
+    /// Escaped data to be supplemented
+    type EscData<'a>;
+    /// Check if atleast one element of supplementary data is available
+    fn has_esc_data<'a>(d: Self::EscData<'a>) -> bool;
+    /// Attempt to read a lit instance from an appropriate source and return the available
+    /// lit using default substitution, i.e `0x3F`
+    fn read_append_lit_def_sub<'a>(
+        tok: &'a [Token],
+        esdt: Self::EscData<'a>,
+        v: &mut Vec<LitIR<'a>>,
+    ) -> bool;
+}
+
+pub struct InplaceQueryInterface;
+
+impl QueryInterface for InplaceQueryInterface {
+    type EscData<'a> = ();
+    #[inline(always)]
+    fn has_esc_data<'a>(_: ()) -> bool {
+        true
+    }
+    #[inline(always)]
+    fn read_append_lit_def_sub<'a>(tok: &'a [Token], _: (), v: &mut Vec<LitIR<'a>>) -> bool {
+        match tok[0] {
+            Token::Lit(ref l) => {
+                v.push(unsafe { l.as_ir() });
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+pub struct EscQueryInterface;
+
+impl QueryInterface for EscQueryInterface {
+    type EscData<'a> = &'a [LitIR<'a>];
+    #[inline(always)]
+    fn has_esc_data<'a>(d: Self::EscData<'a>) -> bool {
+        d.len() != 0
+    }
+    #[inline(always)]
+    fn read_append_lit_def_sub<'a>(
+        tok: &'a [Token],
+        d: Self::EscData<'a>,
+        v: &mut Vec<LitIR<'a>>,
+    ) -> bool {
+        v.push(d[0]);
+        tok[0] == Token![?]
+    }
+}
 
 /*
     AST
