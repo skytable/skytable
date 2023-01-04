@@ -32,7 +32,7 @@
 use {
     super::{
         ast::Entity,
-        lexer::{Lit, LitIR, Symbol, Token},
+        lexer::{LitIR, Symbol, Token},
         LangError, LangResult, RawSlice,
     },
     crate::{
@@ -676,13 +676,13 @@ pub struct AssignmentExpression<'a> {
     /// the LHS ident
     pub(super) lhs: RawSlice,
     /// the RHS lit
-    pub(super) rhs: &'a Lit,
+    pub(super) rhs: LitIR<'a>,
     /// operator
     pub(super) operator_fn: Operator,
 }
 
 impl<'a> AssignmentExpression<'a> {
-    pub(super) fn new(lhs: RawSlice, rhs: &'a Lit, operator_fn: Operator) -> Self {
+    pub(super) fn new(lhs: RawSlice, rhs: LitIR<'a>, operator_fn: Operator) -> Self {
         Self {
             lhs,
             rhs,
@@ -740,7 +740,7 @@ impl<'a> AssignmentExpression<'a> {
                 */
                 AssignmentExpression {
                     lhs: extract!(tok[0], Token::Ident(ref r) => r.clone()),
-                    rhs: extract!(tok[i], Token::Lit(ref l) => l),
+                    rhs: extract!(tok[i], Token::Lit(ref l) => l.as_ir()),
                     operator_fn: OPERATOR[operator_code as usize],
                 }
             };

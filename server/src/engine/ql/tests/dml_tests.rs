@@ -565,7 +565,7 @@ mod expression_tests {
         super::*,
         crate::engine::ql::{
             dml::{self, AssignmentExpression, Operator},
-            lexer::Lit,
+            lexer::LitIR,
         },
     };
     #[test]
@@ -576,7 +576,7 @@ mod expression_tests {
             r,
             AssignmentExpression {
                 lhs: "username".into(),
-                rhs: &Lit::Str("sayan".into()),
+                rhs: LitIR::Str("sayan"),
                 operator_fn: Operator::Assign
             }
         );
@@ -589,7 +589,7 @@ mod expression_tests {
             r,
             AssignmentExpression {
                 lhs: "followers".into(),
-                rhs: &(100.into()),
+                rhs: LitIR::UInt(100),
                 operator_fn: Operator::AddAssign
             }
         );
@@ -602,7 +602,7 @@ mod expression_tests {
             r,
             AssignmentExpression {
                 lhs: "following".into(),
-                rhs: &(150.into()),
+                rhs: LitIR::UInt(150),
                 operator_fn: Operator::SubAssign
             }
         );
@@ -615,7 +615,7 @@ mod expression_tests {
             r,
             AssignmentExpression {
                 lhs: "product_qty".into(),
-                rhs: &(2.into()),
+                rhs: LitIR::UInt(2),
                 operator_fn: Operator::MulAssign
             }
         );
@@ -628,7 +628,7 @@ mod expression_tests {
             r,
             AssignmentExpression {
                 lhs: "image_crop_factor".into(),
-                rhs: &(2.into()),
+                rhs: LitIR::UInt(2),
                 operator_fn: Operator::DivAssign
             }
         );
@@ -653,13 +653,12 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let note = "this is my new note".to_string().into();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement {
             entity: Entity::Single("app".into()),
             expressions: vec![AssignmentExpression {
                 lhs: "notes".into(),
-                rhs: &note,
+                rhs: LitIR::Str("this is my new note"),
                 operator_fn: Operator::AddAssign,
             }],
             wc: WhereClause::new(dict! {
@@ -687,13 +686,19 @@ mod update_statement {
         )
         .unwrap();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
-        let field_note = "this is my new note".into();
-        let field_email = "sayan@example.com".into();
         let e = UpdateStatement {
             entity: ("jotsy", "app").into(),
             expressions: vec![
-                AssignmentExpression::new("notes".into(), &field_note, Operator::AddAssign),
-                AssignmentExpression::new("email".into(), &field_email, Operator::Assign),
+                AssignmentExpression::new(
+                    "notes".into(),
+                    LitIR::Str("this is my new note"),
+                    Operator::AddAssign,
+                ),
+                AssignmentExpression::new(
+                    "email".into(),
+                    LitIR::Str("sayan@example.com"),
+                    Operator::Assign,
+                ),
             ],
             wc: WhereClause::new(dict! {
                 "username".as_bytes() => RelationalExpr::new(
