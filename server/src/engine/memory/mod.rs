@@ -26,7 +26,7 @@
 
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
 
-use super::ql::lexer::Lit;
+use super::ql::lexer::{Lit, LitIR};
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
@@ -50,6 +50,8 @@ pub enum DataType {
     SignedInt(i64),
     /// A boolean
     Boolean(bool),
+    /// A float (64-bit)
+    Float(f64),
     /// A single-type list. Note, you **need** to keep up the invariant that the [`DataType`] disc. remains the same for all
     /// elements to ensure correctness in this specific context
     /// FIXME(@ohsayan): Try enforcing this somehow
@@ -79,6 +81,16 @@ impl DataType {
             Lit::UnsignedInt(u) => DataType::UnsignedInt(*u),
             Lit::SignedInt(i) => DataType::SignedInt(*i),
             Lit::Bin(l) => DataType::Binary(l.as_slice().to_owned()),
+        }
+    }
+    pub(super) fn clone_from_litir<'a>(lit: LitIR<'a>) -> Self {
+        match lit {
+            LitIR::Str(s) => Self::String(s.to_owned().into_boxed_str()),
+            LitIR::Bin(b) => Self::Binary(b.to_owned()),
+            LitIR::Float(f) => Self::Float(f),
+            LitIR::SInt(s) => Self::SignedInt(s),
+            LitIR::UInt(u) => Self::UnsignedInt(u),
+            LitIR::Bool(b) => Self::Boolean(b),
         }
     }
 }

@@ -34,57 +34,50 @@ use {
     core::{marker::PhantomData, slice},
 };
 
-/// A [`QueryInterface`] defines how a query is to be processed and how it is laid out
-pub trait QueryInterface {
-    /// Escaped data to be supplemented
-    type EscData<'a>;
-    /// Check if atleast one element of supplementary data is available
-    fn has_esc_data<'a>(d: Self::EscData<'a>) -> bool;
-    /// Attempt to read a lit instance from an appropriate source and return the available
-    /// lit using default substitution, i.e `0x3F`
-    fn read_append_lit_def_sub<'a>(
-        tok: &'a [Token],
-        esdt: Self::EscData<'a>,
-        v: &mut Vec<LitIR<'a>>,
-    ) -> bool;
+pub trait QueryData<'a> {
+    /// Check if the given token is a lit, while also checking `self`'s data if necessary
+    fn can_read_lit_from(&self, tok: &Token) -> bool;
+    /// Read a lit using the given token, using `self`'s data as necessary
+    ///
+    /// ## Safety
+    /// The current token **must match** the signature of a lit
+    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a>;
 }
 
-pub struct InplaceQueryInterface;
-
-impl QueryInterface for InplaceQueryInterface {
-    type EscData<'a> = ();
-    #[inline(always)]
-    fn has_esc_data<'a>(_: ()) -> bool {
-        true
-    }
-    #[inline(always)]
-    fn read_append_lit_def_sub<'a>(tok: &'a [Token], _: (), v: &mut Vec<LitIR<'a>>) -> bool {
-        match tok[0] {
-            Token::Lit(ref l) => {
-                v.push(unsafe { l.as_ir() });
-                true
-            }
-            _ => false,
-        }
+pub struct InplaceData;
+impl InplaceData {
+    pub const fn new() -> Self {
+        Self
     }
 }
 
-pub struct EscQueryInterface;
-
-impl QueryInterface for EscQueryInterface {
-    type EscData<'a> = &'a [LitIR<'a>];
-    #[inline(always)]
-    fn has_esc_data<'a>(d: Self::EscData<'a>) -> bool {
-        d.len() != 0
+impl<'a> QueryData<'a> for InplaceData {
+    fn can_read_lit_from(&self, tok: &Token) -> bool {
+        tok.is_lit()
     }
-    #[inline(always)]
-    fn read_append_lit_def_sub<'a>(
-        tok: &'a [Token],
-        d: Self::EscData<'a>,
-        v: &mut Vec<LitIR<'a>>,
-    ) -> bool {
-        v.push(d[0]);
-        tok[0] == Token![?]
+    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
+        extract!(tok, Token::Lit(l) => l.as_ir())
+    }
+}
+
+pub struct SubstitutedData<'a> {
+    data: &'a [LitIR<'a>],
+}
+impl<'a> SubstitutedData<'a> {
+    pub const fn new(src: &'a [LitIR<'a>]) -> Self {
+        Self { data: src }
+    }
+}
+
+impl<'a> QueryData<'a> for SubstitutedData<'a> {
+    fn can_read_lit_from(&self, tok: &Token) -> bool {
+        Token![?].eq(tok) && !self.data.is_empty()
+    }
+    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
+        debug_assert!(Token![?].eq(tok));
+        let ret = self.data[0];
+        self.data = &self.data[1..];
+        ret
     }
 }
 

@@ -29,9 +29,11 @@
     should augment in future revisions of the QL engine
 */
 
+#[cfg(test)]
+use super::ast::InplaceData;
 use {
     super::{
-        ast::Entity,
+        ast::{Entity, QueryData},
         lexer::{LitIR, Symbol, Token},
         LangError, LangResult, RawSlice,
     },
@@ -45,6 +47,11 @@ use {
         mem::{discriminant, Discriminant},
     },
 };
+
+#[inline(always)]
+fn minidx<T>(src: &[T], index: usize) -> usize {
+    cmp::min(src.len() - 1, index)
+}
 
 /*
     Misc
@@ -117,7 +124,7 @@ impl<'a> RelationalExpr<'a> {
         opc
     }
     #[inline(always)]
-    fn try_parse(tok: &'a [Token], cnt: &mut usize) -> Option<Self> {
+    fn try_parse<Qd: QueryData<'a>>(tok: &'a [Token], d: &mut Qd, cnt: &mut usize) -> Option<Self> {
         /*
             Minimum length of an expression:
             [lhs] [operator] [rhs]
@@ -132,18 +139,19 @@ impl<'a> RelationalExpr<'a> {
         // let's get ourselves the operator
         let operator = Self::parse_operator(&tok[i..], &mut i, &mut okay);
         okay &= i < tok.len();
-        let lit_idx = cmp::min(i, tok.len() - 1);
-        okay &= tok[lit_idx].is_lit(); // LOL, I really like saving cycles
+        let lit_idx = minidx(tok, i);
+        okay &= Qd::can_read_lit_from(d, &tok[lit_idx]); // LOL, I really like saving cycles
         *cnt += i + okay as usize;
         if compiler::likely(okay) {
-            Some(unsafe {
+            unsafe {
                 // UNSAFE(@ohsayan): tok[0] is checked for being an ident, tok[lit_idx] also checked to be a lit
-                Self::new(
+                let lit = Qd::read_lit(d, &tok[lit_idx]);
+                Some(Self::new(
                     extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
-                    extract!(tok[lit_idx], Token::Lit(ref l) => l.as_ir()),
+                    lit,
                     operator,
-                )
-            })
+                ))
+            }
         } else {
             compiler::cold_val(None)
         }
@@ -168,8 +176,9 @@ impl<'a> WhereClause<'a> {
     /// Notes:
     /// - Deny duplicate clauses
     /// - No enforcement on minimum number of clauses
-    fn parse_where_and_append_to(
+    fn parse_where_and_append_to<Qd: QueryData<'a>>(
         tok: &'a [Token],
+        d: &mut Qd,
         cnt: &mut usize,
         c: &mut WhereClauseCollection<'a>,
     ) -> bool {
@@ -178,10 +187,10 @@ impl<'a> WhereClause<'a> {
         let mut i = 0;
         let mut has_more = true;
         while okay && i < l && has_more {
-            okay &= RelationalExpr::try_parse(&tok[i..], &mut i)
+            okay &= RelationalExpr::try_parse(&tok[i..], d, &mut i)
                 .map(|clause| c.insert(clause.lhs, clause).is_none())
                 .unwrap_or(false);
-            has_more = tok[cmp::min(i, l - 1)] == Token![and] && i < l;
+            has_more = tok[minidx(tok, i)] == Token![and] && i < l;
             i += has_more as usize;
         }
         *cnt += i;
@@ -192,9 +201,14 @@ impl<'a> WhereClause<'a> {
     ///
     /// Notes:
     /// - Enforce a minimum of 1 clause
-    pub(super) fn parse_where(tok: &'a [Token], flag: &mut bool, cnt: &mut usize) -> Self {
+    pub(super) fn parse_where<Qd: QueryData<'a>>(
+        tok: &'a [Token],
+        d: &mut Qd,
+        flag: &mut bool,
+        cnt: &mut usize,
+    ) -> Self {
         let mut c = HashMap::with_capacity(2);
-        *flag &= Self::parse_where_and_append_to(tok, cnt, &mut c);
+        *flag &= Self::parse_where_and_append_to(tok, d, cnt, &mut c);
         *flag &= !c.is_empty();
         Self { c }
     }
@@ -204,7 +218,7 @@ impl<'a> WhereClause<'a> {
 pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClause<'a>> {
     let mut flag = true;
     let mut i = 0;
-    let ret = WhereClause::parse_where(tok, &mut flag, &mut i);
+    let ret = WhereClause::parse_where(tok, &mut InplaceData::new(), &mut flag, &mut i);
     assert_full_tt!(tok.len(), i);
     flag.then_some(ret)
 }
@@ -213,7 +227,7 @@ pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClaus
 #[inline(always)]
 pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<'a>> {
     let mut i = 0;
-    let okay = RelationalExpr::try_parse(tok, &mut i);
+    let okay = RelationalExpr::try_parse(tok, &mut InplaceData::new(), &mut i);
     assert_full_tt!(tok.len(), i);
     okay
 }
@@ -225,8 +239,9 @@ pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<
 /// Parse a list
 ///
 /// **NOTE:** This function will error if the `[` token is passed. Make sure this is forwarded by the caller
-pub(super) fn parse_list(
-    tok: &[Token],
+pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
+    tok: &'a [Token],
+    d: &mut Qd,
     list: &mut Vec<DataType>,
 ) -> (Option<Discriminant<DataType>>, usize, bool) {
     let l = tok.len();
@@ -237,22 +252,23 @@ pub(super) fn parse_list(
     let mut prev_nlist_dscr = None;
     while i < l && okay && !stop {
         let d = match &tok[i] {
-            Token::Lit(l) => unsafe {
-                // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
-                DataType::clone_from_lit(l)
-            },
+            tok if Qd::can_read_lit_from(d, tok) => {
+                unsafe {
+                    // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
+                    DataType::clone_from_litir(Qd::read_lit(d, tok))
+                }
+            }
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // a nested list
                 let mut nested_list = Vec::new();
-                let (nlist_dscr, nlist_i, nlist_okay) = parse_list(&tok[i + 1..], &mut nested_list);
+                let (nlist_dscr, nlist_i, nlist_okay) =
+                    parse_list(&tok[i + 1..], d, &mut nested_list);
                 okay &= nlist_okay;
                 i += nlist_i;
                 // check type return
-                okay &= {
-                    prev_nlist_dscr.is_none()
-                        || nlist_dscr.is_none()
-                        || prev_nlist_dscr == nlist_dscr
-                };
+                okay &= prev_nlist_dscr.is_none()
+                    || nlist_dscr.is_none()
+                    || prev_nlist_dscr == nlist_dscr;
                 if prev_nlist_dscr.is_none() && nlist_dscr.is_some() {
                     prev_nlist_dscr = nlist_dscr;
                 }
@@ -279,7 +295,7 @@ pub(super) fn parse_list(
 #[cfg(test)]
 pub(super) fn parse_list_full(tok: &[Token]) -> Option<Vec<DataType>> {
     let mut l = Vec::new();
-    if matches!(parse_list(tok, &mut l), (_, i, true) if i == tok.len()) {
+    if matches!(parse_list(tok, &mut InplaceData::new(), &mut l), (_, i, true) if i == tok.len()) {
         Some(l)
     } else {
         None
@@ -289,7 +305,10 @@ pub(super) fn parse_list_full(tok: &[Token]) -> Option<Vec<DataType>> {
 /// Parse the tuple data passed in with an insert query.
 ///
 /// **Note:** Make sure you pass the `(` token
-pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, usize, bool) {
+pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
+    tok: &'a [Token],
+    d: &mut Qd,
+) -> (Vec<Option<DataType>>, usize, bool) {
     let l = tok.len();
     let mut okay = l != 0;
     let mut stop = okay && tok[0] == Token::Symbol(Symbol::TtCloseParen);
@@ -297,14 +316,16 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
     let mut data = Vec::new();
     while i < l && okay && !stop {
         match &tok[i] {
-            Token::Lit(l) => data.push(Some(unsafe {
-                // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
-                DataType::clone_from_lit(l)
-            })),
+            tok if Qd::can_read_lit_from(d, tok) => {
+                unsafe {
+                    // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
+                    data.push(Some(DataType::clone_from_litir(Qd::read_lit(d, tok))));
+                }
+            }
             Token::Symbol(Symbol::TtOpenSqBracket) => {
                 // ah, a list
                 let mut l = Vec::new();
-                let (_, lst_i, lst_okay) = parse_list(&tok[i + 1..], &mut l);
+                let (_, lst_i, lst_okay) = parse_list(&tok[i + 1..], d, &mut l);
                 data.push(Some(l.into()));
                 i += lst_i;
                 okay &= lst_okay;
@@ -329,7 +350,7 @@ pub(super) fn parse_data_tuple_syntax(tok: &[Token]) -> (Vec<Option<DataType>>, 
 
 #[cfg(test)]
 pub(super) fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<Option<DataType>>> {
-    let (ret, cnt, okay) = parse_data_tuple_syntax(tok);
+    let (ret, cnt, okay) = parse_data_tuple_syntax(tok, &mut InplaceData::new());
     assert!(cnt == tok.len(), "didn't use full length");
     if okay {
         Some(ret)
@@ -338,8 +359,9 @@ pub(super) fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<Option<D
     }
 }
 
-pub(super) fn parse_data_map_syntax<'a>(
+pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
+    d: &mut Qd,
 ) -> (HashMap<&'a [u8], Option<DataType>>, usize, bool) {
     let l = tok.len();
     let mut okay = l != 0;
@@ -350,7 +372,7 @@ pub(super) fn parse_data_map_syntax<'a>(
         let (field, colon, expression) = (&tok[i], &tok[i + 1], &tok[i + 2]);
         okay &= colon == &Symbol::SymColon;
         match (field, expression) {
-            (Token::Ident(id), Token::Lit(l)) => {
+            (Token::Ident(id), tok) if Qd::can_read_lit_from(d, tok) => {
                 okay &= data
                     .insert(
                         unsafe {
@@ -359,7 +381,7 @@ pub(super) fn parse_data_map_syntax<'a>(
                         },
                         Some(unsafe {
                             // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
-                            DataType::clone_from_lit(l)
+                            DataType::clone_from_litir(Qd::read_lit(d, tok))
                         }),
                     )
                     .is_none();
@@ -367,7 +389,7 @@ pub(super) fn parse_data_map_syntax<'a>(
             (Token::Ident(id), Token::Symbol(Symbol::TtOpenSqBracket)) => {
                 // ooh a list
                 let mut l = Vec::new();
-                let (_, lst_i, lst_ok) = parse_list(&tok[i + 3..], &mut l);
+                let (_, lst_i, lst_ok) = parse_list(&tok[i + 3..], d, &mut l);
                 okay &= lst_ok;
                 i += lst_i;
                 okay &= data
@@ -410,7 +432,7 @@ pub(super) fn parse_data_map_syntax<'a>(
 pub(super) fn parse_data_map_syntax_full(
     tok: &[Token],
 ) -> Option<HashMap<Box<str>, Option<DataType>>> {
-    let (dat, i, ok) = parse_data_map_syntax(tok);
+    let (dat, i, ok) = parse_data_map_syntax(tok, &mut InplaceData::new());
     assert!(i == tok.len(), "didn't use full length");
     if ok {
         Some(
@@ -469,8 +491,9 @@ fn parse_entity(tok: &[Token], entity: &mut MaybeInit<Entity>, i: &mut usize) ->
     is_full | is_half
 }
 
-pub(super) fn parse_insert<'a>(
+pub(super) fn parse_insert<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
+    d: &mut Qd,
     counter: &mut usize,
 ) -> LangResult<InsertStatement<'a>> {
     /*
@@ -495,13 +518,13 @@ pub(super) fn parse_insert<'a>(
     }
     match tok[i] {
         Token![() open] => {
-            let (this_data, incr, ok) = parse_data_tuple_syntax(&tok[i + 1..]);
+            let (this_data, incr, ok) = parse_data_tuple_syntax(&tok[i + 1..], d);
             okay &= ok;
             i += incr + 1;
             data = Some(InsertData::Ordered(this_data));
         }
         Token![open {}] => {
-            let (this_data, incr, ok) = parse_data_map_syntax(&tok[i + 1..]);
+            let (this_data, incr, ok) = parse_data_map_syntax(&tok[i + 1..], d);
             okay &= ok;
             i += incr + 1;
             data = Some(InsertData::Map(this_data));
@@ -529,7 +552,7 @@ pub(super) fn parse_insert<'a>(
 #[cfg(test)]
 pub(super) fn parse_insert_full<'a>(tok: &'a [Token]) -> Option<InsertStatement<'a>> {
     let mut z = 0;
-    let s = self::parse_insert(tok, &mut z);
+    let s = self::parse_insert(tok, &mut InplaceData::new(), &mut z);
     assert!(z == tok.len(), "didn't use full length");
     s.ok()
 }
@@ -577,8 +600,9 @@ impl<'a> SelectStatement<'a> {
 
 /// Parse a `select` query. The cursor should have already passed the `select` token when this
 /// function is called.
-pub(super) fn parse_select<'a>(
+pub(super) fn parse_select<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
+    d: &mut Qd,
     counter: &mut usize,
 ) -> LangResult<SelectStatement<'a>> {
     /*
@@ -604,7 +628,7 @@ pub(super) fn parse_select<'a>(
             }
         }
         i += 1;
-        let nx_idx = cmp::min(i, l);
+        let nx_idx = minidx(tok, i);
         let nx_comma = tok[nx_idx] == Token![,] && i < l;
         let nx_from = tok[nx_idx] == Token![from];
         okay &= nx_comma | nx_from;
@@ -620,11 +644,11 @@ pub(super) fn parse_select<'a>(
     // now process entity
     let mut entity = MaybeInit::uninit();
     okay &= process_entity(&tok[i..], &mut entity, &mut i);
-    let has_where = tok[cmp::min(i, l)] == Token![where];
+    let has_where = tok[minidx(tok, i)] == Token![where];
     i += has_where as usize;
     let mut clauses = <_ as Default>::default();
     if has_where {
-        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], d, &mut i, &mut clauses);
         okay &= !clauses.is_empty(); // append doesn't enforce clause arity
     }
     *counter += i;
@@ -647,7 +671,7 @@ pub(super) fn parse_select<'a>(
 /// **test-mode only** parse for a `select` where the full token stream is exhausted
 pub(super) fn parse_select_full<'a>(tok: &'a [Token]) -> Option<SelectStatement<'a>> {
     let mut i = 0;
-    let r = self::parse_select(tok, &mut i);
+    let r = self::parse_select(tok, &mut InplaceData::new(), &mut i);
     assert_full_tt!(i, tok.len());
     r.ok()
 }
@@ -692,8 +716,9 @@ impl<'a> AssignmentExpression<'a> {
     /// Attempt to parse an expression and then append it to the given vector of expressions. This will return `true`
     /// if the expression was parsed correctly, otherwise `false` is returned
     #[inline(always)]
-    fn parse_and_append_expression(
+    fn parse_and_append_expression<Qd: QueryData<'a>>(
         tok: &'a [Token],
+        d: &mut Qd,
         expressions: &mut Vec<Self>,
         counter: &mut usize,
     ) -> bool {
@@ -728,7 +753,7 @@ impl<'a> AssignmentExpression<'a> {
         okay &= single_assign_okay | double_assign_okay;
         i += double_assign_okay as usize; // skip on <op>assign
 
-        let has_rhs = i < l && tok[i].is_lit();
+        let has_rhs = Qd::can_read_lit_from(d, &tok[minidx(tok, i)]);
         okay &= has_rhs;
         *counter += i + has_rhs as usize;
 
@@ -738,9 +763,10 @@ impl<'a> AssignmentExpression<'a> {
                    UNSAFE(@ohsayan): tok[0] is checked for being an ident early on; second, tok[i]
                    is also checked for being a lit and then `okay` ensures correctness
                 */
+                let rhs = Qd::read_lit(d, &tok[i]);
                 AssignmentExpression {
                     lhs: extract!(tok[0], Token::Ident(ref r) => r.clone()),
-                    rhs: extract!(tok[i], Token::Lit(ref l) => l.as_ir()),
+                    rhs,
                     operator_fn: OPERATOR[operator_code as usize],
                 }
             };
@@ -755,7 +781,12 @@ impl<'a> AssignmentExpression<'a> {
 pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentExpression<'a>> {
     let mut i = 0;
     let mut exprs = Vec::new();
-    if AssignmentExpression::parse_and_append_expression(tok, &mut exprs, &mut i) {
+    if AssignmentExpression::parse_and_append_expression(
+        tok,
+        &mut InplaceData::new(),
+        &mut exprs,
+        &mut i,
+    ) {
         assert_full_tt!(i, tok.len());
         Some(exprs.remove(0))
     } else {
@@ -797,7 +828,11 @@ impl<'a> UpdateStatement<'a> {
         }
     }
     #[inline(always)]
-    pub(super) fn parse_update(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+    pub(super) fn parse_update<Qd: QueryData<'a>>(
+        tok: &'a [Token],
+        d: &mut Qd,
+        counter: &mut usize,
+    ) -> LangResult<Self> {
         /*
             TODO(@ohsayan): Allow volcanoes
             smallest tt:
@@ -824,10 +859,11 @@ impl<'a> UpdateStatement<'a> {
         while i < l && okay && !nx_where {
             okay &= AssignmentExpression::parse_and_append_expression(
                 &tok[i..],
+                d,
                 &mut expressions,
                 &mut i,
             );
-            let nx_idx = cmp::min(i, l);
+            let nx_idx = minidx(tok, i);
             let nx_comma = tok[nx_idx] == Token![,] && i < l;
             // NOTE: volcano
             nx_where = tok[nx_idx] == Token![where] && i < l;
@@ -838,7 +874,7 @@ impl<'a> UpdateStatement<'a> {
         i += okay as usize;
         // now process expressions
         let mut clauses = <_ as Default>::default();
-        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], d, &mut i, &mut clauses);
         okay &= !clauses.is_empty(); // NOTE: volcano
         *counter += i;
         if okay {
@@ -859,7 +895,7 @@ impl<'a> UpdateStatement<'a> {
 #[cfg(test)]
 pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatement<'a>> {
     let mut i = 0;
-    let r = UpdateStatement::parse_update(tok, &mut i);
+    let r = UpdateStatement::parse_update(tok, &mut InplaceData::new(), &mut i);
     assert_full_tt!(i, tok.len());
     r
 }
@@ -887,7 +923,11 @@ impl<'a> DeleteStatement<'a> {
     pub(super) fn new_test(entity: Entity, wc: WhereClauseCollection<'a>) -> Self {
         Self::new(entity, WhereClause::new(wc))
     }
-    pub(super) fn parse_delete(tok: &'a [Token], counter: &mut usize) -> LangResult<Self> {
+    pub(super) fn parse_delete<Qd: QueryData<'a>>(
+        tok: &'a [Token],
+        d: &mut Qd,
+        counter: &mut usize,
+    ) -> LangResult<Self> {
         /*
             TODO(@ohsayan): Volcano
             smallest tt:
@@ -912,7 +952,7 @@ impl<'a> DeleteStatement<'a> {
         okay &= tok[i] == Token![where]; // NOTE: volcano
         i += 1; // skip even if incorrect
         let mut clauses = <_ as Default>::default();
-        okay &= WhereClause::parse_where_and_append_to(&tok[i..], &mut i, &mut clauses);
+        okay &= WhereClause::parse_where_and_append_to(&tok[i..], d, &mut i, &mut clauses);
         okay &= !clauses.is_empty();
         *counter += i;
         if okay {
@@ -932,7 +972,7 @@ impl<'a> DeleteStatement<'a> {
 #[cfg(test)]
 pub(super) fn parse_delete_full<'a>(tok: &'a [Token]) -> LangResult<DeleteStatement<'a>> {
     let mut i = 0_usize;
-    let r = DeleteStatement::parse_delete(tok, &mut i);
+    let r = DeleteStatement::parse_delete(tok, &mut InplaceData::new(), &mut i);
     assert_full_tt!(i, tok.len());
     r
 }
