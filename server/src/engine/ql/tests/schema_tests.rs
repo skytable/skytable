@@ -92,12 +92,14 @@ mod alter_space {
     }
     #[test]
     fn alter_space() {
-        let tok = lex_insecure(br#"
+        let tok = lex_insecure(
+            br#"
                 alter model mymodel with {
                     max_entry: 1000,
                     driver: "ts-0.8"
                 }
-            "#)
+            "#,
+        )
         .unwrap();
         let r = schema::alter_space_full(&tok[2..]).unwrap();
         assert_eq!(
@@ -177,7 +179,8 @@ mod tymeta {
         // list { maxlen: 100, this: { is: "cool" }, type string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cursor should be at string
         let tok =
-            lex_insecure(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#).unwrap();
+            lex_insecure(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#)
+                .unwrap();
         let (res1, ret1) = schema::fold_tymeta(&tok);
         assert!(res1.is_okay());
         assert!(res1.has_more());
@@ -204,7 +207,8 @@ mod tymeta {
     fn fuzz_tymeta_normal() {
         // { maxlen: 10, unique: true, users: "sayan" }
         //   ^start
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                     maxlen: 10,
                     unique: true,
                     auth: {
@@ -212,7 +216,8 @@ mod tymeta {
                     },
                     users: \"sayan\"\x01
                 }
-            ")
+            ",
+        )
         .unwrap();
         let expected = nullable_dict! {
             "maxlen" => Lit::UnsignedInt(10),
@@ -241,7 +246,8 @@ mod tymeta {
     fn fuzz_tymeta_with_ty() {
         // list { maxlen: 10, unique: true, type string, users: "sayan" }
         //   ^start
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                     maxlen: 10,
                     unique: true,
                     auth: {
@@ -250,7 +256,8 @@ mod tymeta {
                     type string,
                     users: \"sayan\"\x01
                 }
-            ")
+            ",
+        )
         .unwrap();
         let expected = nullable_dict! {
             "maxlen" => Lit::UnsignedInt(10),
@@ -368,7 +375,8 @@ mod layer {
 
     #[test]
     fn fuzz_layer() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
             list {
                 type list {
                     maxlen: 100,
@@ -376,7 +384,8 @@ mod layer {
                 },
                 unique: true\x01
             }
-        ")
+        ",
+        )
         .unwrap();
         let expected = vec![
             Layer::new_noreset("string".into(), nullable_dict!()),
@@ -436,11 +445,13 @@ mod fields {
     };
     #[test]
     fn field_mini() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 username: string,
-            ")
+            ",
+        )
         .unwrap();
-        let (c, f) = schema::parse_field(&tok).unwrap();
+        let (c, f) = schema::parse_field_full(&tok).unwrap();
         assert_eq!(c, tok.len() - 1);
         assert_eq!(
             f,
@@ -453,11 +464,13 @@ mod fields {
     }
     #[test]
     fn field() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 primary username: string,    
-            ")
+            ",
+        )
         .unwrap();
-        let (c, f) = schema::parse_field(&tok).unwrap();
+        let (c, f) = schema::parse_field_full(&tok).unwrap();
         assert_eq!(c, tok.len() - 1);
         assert_eq!(
             f,
@@ -470,14 +483,16 @@ mod fields {
     }
     #[test]
     fn field_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 primary username: string {
                     maxlen: 10,
                     ascii_only: true,
                 }
-            ")
+            ",
+        )
         .unwrap();
-        let (c, f) = schema::parse_field(&tok).unwrap();
+        let (c, f) = schema::parse_field_full(&tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             f,
@@ -497,7 +512,8 @@ mod fields {
     }
     #[test]
     fn field_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 null notes: list {
                     type string {
                         maxlen: 255,
@@ -505,9 +521,10 @@ mod fields {
                     },
                     unique: true,
                 }
-            ")
+            ",
+        )
         .unwrap();
-        let (c, f) = schema::parse_field(&tok).unwrap();
+        let (c, f) = schema::parse_field_full(&tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             f,
@@ -540,17 +557,19 @@ mod schemas {
     use super::*;
     #[test]
     fn schema_mini() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
                 )
-            ")
+            ",
+        )
         .unwrap();
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
+        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             model,
@@ -574,18 +593,20 @@ mod schemas {
     }
     #[test]
     fn schema() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
                     null profile_pic: binary,
                 )
-            ")
+            ",
+        )
         .unwrap();
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
+        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             model,
@@ -615,7 +636,8 @@ mod schemas {
 
     #[test]
     fn schema_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -625,12 +647,13 @@ mod schemas {
                         unique: true,
                     },
                 )
-            ")
+            ",
+        )
         .unwrap();
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
+        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             model,
@@ -673,7 +696,8 @@ mod schemas {
 
     #[test]
     fn schema_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 create model mymodel(
                     primary username: string,
                     password: binary,
@@ -688,12 +712,13 @@ mod schemas {
                     },
                     storage_driver: \"skyheap\"
                 }
-            ")
+            ",
+        )
         .unwrap();
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens(tok).unwrap();
+        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
         assert_eq!(c, tok.len());
         assert_eq!(
             model,
@@ -745,7 +770,7 @@ mod dict_field_syntax {
     #[test]
     fn field_syn_mini() {
         let tok = lex_insecure(b"username { type string }").unwrap();
-        let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
+        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             ef,
@@ -759,14 +784,16 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 username {
                     nullable: false,
                     type string,
                 }
-            ")
+            ",
+        )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
+        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             ef,
@@ -782,7 +809,8 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 username {
                     nullable: false,
                     type string {
@@ -791,9 +819,10 @@ mod dict_field_syntax {
                     },
                     jingle_bells: \"snow\"
                 }
-            ")
+            ",
+        )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
+        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             ef,
@@ -816,7 +845,8 @@ mod dict_field_syntax {
     }
     #[test]
     fn field_syn_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 notes {
                     nullable: true,
                     type list {
@@ -827,9 +857,10 @@ mod dict_field_syntax {
                     },
                     jingle_bells: \"snow\"
                 }
-            ")
+            ",
+        )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax::<true>(&tok).unwrap();
+        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             ef,
@@ -880,7 +911,8 @@ mod alter_model_remove {
     #[test]
     fn alter() {
         let tok =
-            lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)").unwrap();
+            lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
+                .unwrap();
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
@@ -901,12 +933,14 @@ mod alter_model_add {
     use crate::engine::ql::schema::{ExpandedField, Layer};
     #[test]
     fn add_mini() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel add myfield { type string }
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -920,12 +954,14 @@ mod alter_model_add {
     }
     #[test]
     fn add() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel add myfield { type string, nullable: true }
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -941,12 +977,14 @@ mod alter_model_add {
     }
     #[test]
     fn add_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel add (myfield { type string, nullable: true })
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -962,7 +1000,8 @@ mod alter_model_add {
     }
     #[test]
     fn add_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel add (
                     myfield {
                         type string,
@@ -978,10 +1017,11 @@ mod alter_model_add {
                         nullable: false,
                     }
                 )
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_add(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -1026,12 +1066,14 @@ mod alter_model_update {
 
     #[test]
     fn alter_mini() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel update myfield { type string, .. }
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -1045,12 +1087,14 @@ mod alter_model_update {
     }
     #[test]
     fn alter_mini_2() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel update (myfield { type string, .. })
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -1064,7 +1108,8 @@ mod alter_model_update {
     }
     #[test]
     fn alter() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel update (
                     myfield {
                         type string,
@@ -1072,10 +1117,11 @@ mod alter_model_update {
                         ..
                     }
                 )
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -1091,7 +1137,8 @@ mod alter_model_update {
     }
     #[test]
     fn alter_pro() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel update (
                     myfield {
                         type string,
@@ -1103,10 +1150,11 @@ mod alter_model_update {
                         ..
                     }
                 )
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),
@@ -1130,7 +1178,8 @@ mod alter_model_update {
     }
     #[test]
     fn alter_pro_max() {
-        let tok = lex_insecure(b"
+        let tok = lex_insecure(
+            b"
                 alter model mymodel update (
                     myfield {
                         type string {..},
@@ -1145,10 +1194,11 @@ mod alter_model_update {
                         ..
                     }
                 )
-            ")
+            ",
+        )
         .unwrap();
         let mut i = 4;
-        let r = schema::alter_update(&tok[i..], &mut i).unwrap();
+        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             r.as_ref(),

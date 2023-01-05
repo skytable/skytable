@@ -24,12 +24,10 @@
  *
 */
 
-use std::ops::BitOr;
-
 use {
     super::{LangError, LangResult, RawSlice},
     crate::util::compiler,
-    core::{cmp, fmt, marker::PhantomData, mem::size_of, slice, str},
+    core::{cmp, fmt, marker::PhantomData, mem::size_of, ops::BitOr, slice, str},
 };
 
 /*
@@ -921,6 +919,29 @@ where
 pub enum LitIR<'a> {
     Str(&'a str),
     Bin(&'a [u8]),
+    UInt(u64),
+    SInt(i64),
+    Bool(bool),
+    Float(f64),
+}
+
+impl<'a> LitIR<'a> {
+    pub fn to_litir_owned(&self) -> LitIROwned {
+        match self {
+            Self::Str(s) => LitIROwned::Str(s.to_string().into_boxed_str()),
+            Self::Bin(b) => LitIROwned::Bin(b.to_vec().into_boxed_slice()),
+            Self::UInt(u) => LitIROwned::UInt(*u),
+            Self::SInt(s) => LitIROwned::SInt(*s),
+            Self::Bool(b) => LitIROwned::Bool(*b),
+            Self::Float(f) => LitIROwned::Float(*f),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum LitIROwned {
+    Str(Box<str>),
+    Bin(Box<[u8]>),
     UInt(u64),
     SInt(i64),
     Bool(bool),

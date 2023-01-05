@@ -170,7 +170,8 @@ mod dict {
 
     #[test]
     fn fuzz_dict() {
-        let ret = lex_insecure(b"
+        let ret = lex_insecure(
+            b"
                 {
                     the_tradition_is: \"hello, world\",
                     could_have_been: {
@@ -185,7 +186,8 @@ mod dict {
                         }\x01
                     }\x01
                 }
-            ")
+            ",
+        )
         .unwrap();
         let ret_dict = nullable_dict! {
             "the_tradition_is" => Lit::Str("hello, world".into()),

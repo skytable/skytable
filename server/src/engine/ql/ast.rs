@@ -324,7 +324,8 @@ impl<'a> Compiler<'a> {
     /// Alter model
     fn alter_model(&mut self) -> Result<Statement, LangError> {
         let mut c = 0;
-        let r = schema::parse_alter_kind_from_tokens(self.remslice(), &mut c);
+        let r =
+            schema::parse_alter_kind_from_tokens(self.remslice(), &mut InplaceData::new(), &mut c);
         unsafe {
             self.incr_cursor_by(c);
         }
@@ -333,7 +334,8 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Alter space
     fn alter_space(&mut self) -> Result<Statement, LangError> {
-        let (alter, i) = schema::parse_alter_space_from_tokens(self.remslice())?;
+        let (alter, i) =
+            schema::parse_alter_space_from_tokens(self.remslice(), &mut InplaceData::new())?;
         unsafe {
             self.incr_cursor_by(i);
         }
@@ -358,7 +360,8 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Create model
     fn c_model0(&mut self) -> Result<Statement, LangError> {
-        let (model, i) = schema::parse_schema_from_tokens(self.remslice())?;
+        let (model, i) =
+            schema::parse_schema_from_tokens(self.remslice(), &mut InplaceData::new())?;
         unsafe {
             self.incr_cursor_by(i);
         }
@@ -367,7 +370,7 @@ impl<'a> Compiler<'a> {
     #[inline(always)]
     /// Create space
     fn c_space0(&mut self) -> Result<Statement, LangError> {
-        let (space, i) = schema::parse_space_from_tokens(self.remslice())?;
+        let (space, i) = schema::parse_space_from_tokens(self.remslice(), &mut InplaceData::new())?;
         unsafe {
             self.incr_cursor_by(i);
         }
