@@ -293,9 +293,12 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub(super) fn parse_list_full(tok: &[Token]) -> Option<Vec<DataType>> {
+pub(super) fn parse_list_full<'a>(
+    tok: &'a [Token],
+    qd: &mut impl QueryData<'a>,
+) -> Option<Vec<DataType>> {
     let mut l = Vec::new();
-    if matches!(parse_list(tok, &mut InplaceData::new(), &mut l), (_, i, true) if i == tok.len()) {
+    if matches!(parse_list(tok, qd, &mut l), (_, i, true) if i == tok.len()) {
         Some(l)
     } else {
         None

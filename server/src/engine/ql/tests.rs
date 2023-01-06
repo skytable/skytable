@@ -26,7 +26,7 @@
 
 use {
     super::{
-        lexer::{InsecureLexer, Symbol, Token},
+        lexer::{InsecureLexer, SafeLexer, Symbol, Token},
         LangResult,
     },
     crate::{engine::memory::DataType, util::test_utils},
@@ -45,10 +45,15 @@ mod lexer_tests;
 mod schema_tests;
 mod structure_syn;
 
-/// Uses the [`InsecureLexer`] to lex the given input
 #[inline(always)]
+/// Uses the [`InsecureLexer`] to lex the given input
 pub(super) fn lex_insecure(src: &[u8]) -> LangResult<Vec<Token>> {
     InsecureLexer::lex(src)
+}
+#[inline(always)]
+/// Uses the [`SafeLexer`] to lex the given input
+pub(super) fn lex_secure(src: &[u8]) -> LangResult<Vec<Token>> {
+    SafeLexer::lex(src)
 }
 
 pub trait NullableData<T> {

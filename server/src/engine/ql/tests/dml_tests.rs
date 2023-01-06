@@ -27,7 +27,11 @@
 use super::*;
 mod list_parse {
     use super::*;
-    use crate::engine::ql::dml::parse_list_full;
+    use crate::engine::ql::{
+        ast::{InplaceData, SubstitutedData},
+        dml::parse_list_full,
+        lexer::LitIR,
+    };
 
     #[test]
     fn list_mini() {
@@ -37,10 +41,9 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..]).unwrap();
+        let r = parse_list_full(&tok[1..], &mut InplaceData::new()).unwrap();
         assert_eq!(r, vec![])
     }
-
     #[test]
     fn list() {
         let tok = lex_insecure(
@@ -49,10 +52,27 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..]).unwrap();
+        let r = parse_list_full(&tok[1..], &mut InplaceData::new()).unwrap();
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
     }
-
+    #[test]
+    fn list_param() {
+        let tok = lex_secure(
+            b"
+                [?, ?, ?, ?]
+            ",
+        )
+        .unwrap();
+        let data = [
+            LitIR::UInt(1),
+            LitIR::UInt(2),
+            LitIR::UInt(3),
+            LitIR::UInt(4),
+        ];
+        let mut param = SubstitutedData::new(&data);
+        let r = parse_list_full(&tok[1..], &mut param).unwrap();
+        assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
+    }
     #[test]
     fn list_pro() {
         let tok = lex_insecure(
@@ -66,7 +86,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..]).unwrap();
+        let r = parse_list_full(&tok[1..], &mut InplaceData::new()).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -77,7 +97,39 @@ mod list_parse {
             ]
         )
     }
-
+    #[test]
+    fn list_pro_param() {
+        let tok = lex_secure(
+            b"
+                [
+                    [?, ?],
+                    [?, ?],
+                    [?, ?],
+                    []
+                ]
+            ",
+        )
+        .unwrap();
+        let data = [
+            LitIR::UInt(1),
+            LitIR::UInt(2),
+            LitIR::UInt(3),
+            LitIR::UInt(4),
+            LitIR::UInt(5),
+            LitIR::UInt(6),
+        ];
+        let mut param = SubstitutedData::new(&data);
+        let r = parse_list_full(&tok[1..], &mut param).unwrap();
+        assert_eq!(
+            r.as_slice(),
+            into_array![
+                into_array![1, 2],
+                into_array![3, 4],
+                into_array![5, 6],
+                into_array![]
+            ]
+        )
+    }
     #[test]
     fn list_pro_max() {
         let tok = lex_insecure(
@@ -91,7 +143,46 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..]).unwrap();
+        let r = parse_list_full(&tok[1..], &mut InplaceData::new()).unwrap();
+        assert_eq!(
+            r.as_slice(),
+            into_array![
+                into_array![into_array![1, 1], into_array![2, 2]],
+                into_array![into_array![], into_array![4, 4]],
+                into_array![into_array![5, 5], into_array![6, 6]],
+                into_array![into_array![7, 7], into_array![]],
+            ]
+        )
+    }
+    #[test]
+    fn list_pro_max_param() {
+        let tok = lex_secure(
+            b"
+                [
+                    [[?, ?], [?, ?]],
+                    [[], [?, ?]],
+                    [[?, ?], [?, ?]],
+                    [[?, ?], []]
+                ]
+            ",
+        )
+        .unwrap();
+        let data = [
+            LitIR::UInt(1),
+            LitIR::UInt(1),
+            LitIR::UInt(2),
+            LitIR::UInt(2),
+            LitIR::UInt(4),
+            LitIR::UInt(4),
+            LitIR::UInt(5),
+            LitIR::UInt(5),
+            LitIR::UInt(6),
+            LitIR::UInt(6),
+            LitIR::UInt(7),
+            LitIR::UInt(7),
+        ];
+        let mut param = SubstitutedData::new(&data);
+        let r = parse_list_full(&tok[1..], &mut param).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -103,6 +194,7 @@ mod list_parse {
         )
     }
 }
+
 mod tuple_syntax {
     use super::*;
     use crate::engine::ql::dml::parse_data_tuple_syntax_full;
