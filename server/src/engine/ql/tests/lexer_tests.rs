@@ -44,10 +44,7 @@ macro_rules! v(
 #[test]
 fn lex_ident() {
     let src = v!("hello");
-    assert_eq!(
-        lex_insecure(&src).unwrap(),
-        vec![Token::Ident("hello".into())]
-    );
+    assert_eq!(lex_insecure(&src).unwrap(), vec![Token::Ident(b"hello")]);
 }
 
 // literals
@@ -161,19 +158,19 @@ fn lex_string_unclosed() {
 fn lex_unsafe_literal_mini() {
     let usl = lex_insecure("\r0\n".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin("".into())), usl[0]);
+    assert_eq!(Token::Lit(Lit::Bin(b"")), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal() {
     let usl = lex_insecure("\r9\nabcdefghi".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin("abcdefghi".into())), usl[0]);
+    assert_eq!(Token::Lit(Lit::Bin(b"abcdefghi")), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal_pro() {
     let usl = lex_insecure("\r18\nabcdefghi123456789".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin("abcdefghi123456789".into())), usl[0]);
+    assert_eq!(Token::Lit(Lit::Bin(b"abcdefghi123456789")), usl[0]);
 }
 
 mod num_tests {
@@ -433,9 +430,9 @@ mod safequery_full_param {
                     Token![select],
                     Token![*],
                     Token![from],
-                    Token::Ident("myapp".into()),
+                    Token::Ident(b"myapp"),
                     Token![where],
-                    Token::Ident("username".into()),
+                    Token::Ident(b"username"),
                     Token![=],
                     Token![?]
                 ]
@@ -455,13 +452,13 @@ mod safequery_full_param {
                     Token![select],
                     Token![*],
                     Token![from],
-                    Token::Ident("myapp".into()),
+                    Token::Ident(b"myapp"),
                     Token![where],
-                    Token::Ident("username".into()),
+                    Token::Ident(b"username"),
                     Token![=],
                     Token![?],
                     Token![and],
-                    Token::Ident("pass".into()),
+                    Token::Ident(b"pass"),
                     Token![=],
                     Token![?]
                 ]
@@ -485,19 +482,19 @@ mod safequery_full_param {
                 vec![
                     Token![select],
                     Token![$],
-                    Token::Ident("notes".into()),
+                    Token::Ident(b"notes"),
                     Token![open []],
                     Token![~],
                     Token![?],
                     Token![close []],
                     Token![from],
-                    Token::Ident("myapp".into()),
+                    Token::Ident(b"myapp"),
                     Token![where],
-                    Token::Ident("username".into()),
+                    Token::Ident(b"username"),
                     Token![=],
                     Token![?],
                     Token![and],
-                    Token::Ident("pass".into()),
+                    Token::Ident(b"pass"),
                     Token![=],
                     Token![?]
                 ]

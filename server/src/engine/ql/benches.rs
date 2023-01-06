@@ -42,10 +42,7 @@ use {crate::engine::ql::tests::lex_insecure, test::Bencher};
 mod lexer {
     use {
         super::*,
-        crate::engine::ql::{
-            lexer::{Lit, Token},
-            RawSlice,
-        },
+        crate::engine::ql::lexer::{Lit, Token},
     };
     #[bench]
     fn lex_number(b: &mut Bencher) {
@@ -74,9 +71,9 @@ mod lexer {
     #[bench]
     fn lex_raw_literal(b: &mut Bencher) {
         let src = b"\r44\ne69b10ffcc250ae5091dec6f299072e23b0b41d6a739";
-        let expected = vec![Token::Lit(Lit::Bin(RawSlice::from(
-            "e69b10ffcc250ae5091dec6f299072e23b0b41d6a739",
-        )))];
+        let expected = vec![Token::Lit(Lit::Bin(
+            b"e69b10ffcc250ae5091dec6f299072e23b0b41d6a739",
+        ))];
         b.iter(|| assert_eq!(lex_insecure(src).unwrap(), expected));
     }
 }
@@ -85,7 +82,7 @@ mod ast {
     use {super::*, crate::engine::ql::ast::Entity};
     #[bench]
     fn parse_entity_single(b: &mut Bencher) {
-        let e = Entity::Single("tweeter".into());
+        let e = Entity::Single(b"tweeter");
         b.iter(|| {
             let src = lex_insecure(b"tweeter").unwrap();
             let mut i = 0;
@@ -95,7 +92,7 @@ mod ast {
     }
     #[bench]
     fn parse_entity_double(b: &mut Bencher) {
-        let e = ("tweeter", "user").into();
+        let e = Entity::Full(b"tweeter", b"user");
         b.iter(|| {
             let src = lex_insecure(b"tweeter.user").unwrap();
             let mut i = 0;
@@ -105,7 +102,7 @@ mod ast {
     }
     #[bench]
     fn parse_entity_partial(b: &mut Bencher) {
-        let e = Entity::Partial("user".into());
+        let e = Entity::Partial(b"user");
         b.iter(|| {
             let src = lex_insecure(b":user").unwrap();
             let mut i = 0;
@@ -118,21 +115,30 @@ mod ast {
 mod ddl_queries {
     use {
         super::*,
-        crate::engine::ql::ast::{Compiler, Entity, Statement},
+        crate::engine::ql::{
+            ast::{compile, Entity, InplaceData, Statement},
+            lexer::InsecureLexer,
+        },
     };
     mod use_stmt {
         use super::*;
         #[bench]
         fn use_space(b: &mut Bencher) {
             let src = b"use myspace";
-            let expected = Statement::Use(Entity::Single("myspace".into()));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::Use(Entity::Single(b"myspace"));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn use_model(b: &mut Bencher) {
             let src = b"use myspace.mymodel";
-            let expected = Statement::Use(("myspace", "mymodel").into());
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::Use(Entity::Full(b"myspace", b"mymodel"));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
     }
     mod inspect_stmt {
@@ -140,26 +146,38 @@ mod ddl_queries {
         #[bench]
         fn inspect_space(b: &mut Bencher) {
             let src = b"inspect space myspace";
-            let expected = Statement::InspectSpace("myspace".into());
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::InspectSpace(b"myspace");
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn inspect_model_single_entity(b: &mut Bencher) {
             let src = b"inspect model mymodel";
-            let expected = Statement::InspectModel(Entity::Single("mymodel".into()));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::InspectModel(Entity::Single(b"mymodel"));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn inspect_model_full_entity(b: &mut Bencher) {
             let src = b"inspect model myspace.mymodel";
-            let expected = Statement::InspectModel(("myspace", "mymodel").into());
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::InspectModel(Entity::Full(b"myspace", b"mymodel"));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn inspect_spaces(b: &mut Bencher) {
             let src = b"inspect spaces";
             let expected = Statement::InspectSpaces;
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
     }
     mod drop_stmt {
@@ -170,42 +188,58 @@ mod ddl_queries {
         #[bench]
         fn drop_space(b: &mut Bencher) {
             let src = b"drop space myspace";
-            let expected = Statement::DropSpace(DropSpace::new("myspace".into(), false));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::DropSpace(DropSpace::new(b"myspace", false));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn drop_space_force(b: &mut Bencher) {
             let src = b"drop space myspace force";
-            let expected = Statement::DropSpace(DropSpace::new("myspace".into(), true));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::DropSpace(DropSpace::new(b"myspace", true));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn drop_model_single(b: &mut Bencher) {
             let src = b"drop model mymodel";
-            let expected =
-                Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), false));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), false));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn drop_model_single_force(b: &mut Bencher) {
             let src = b"drop model mymodel force";
-            let expected =
-                Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), true));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+            let expected = Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), true));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn drop_model_full(b: &mut Bencher) {
             let src = b"drop model myspace.mymodel";
             let expected =
-                Statement::DropModel(DropModel::new(("myspace", "mymodel").into(), false));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+                Statement::DropModel(DropModel::new(Entity::Full(b"myspace", b"mymodel"), false));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
         #[bench]
         fn drop_model_full_force(b: &mut Bencher) {
             let src = b"drop model myspace.mymodel force";
             let expected =
-                Statement::DropModel(DropModel::new(("myspace", "mymodel").into(), true));
-            b.iter(|| assert_eq!(Compiler::compile(src).unwrap(), expected));
+                Statement::DropModel(DropModel::new(Entity::Full(b"myspace", b"mymodel"), true));
+            b.iter(|| {
+                let lexed = InsecureLexer::lex(src).unwrap();
+                assert_eq!(compile(&lexed, InplaceData::new()).unwrap(), expected);
+            });
         }
     }
 }

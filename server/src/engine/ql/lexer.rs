@@ -25,27 +25,29 @@
 */
 
 use {
-    super::{LangError, LangResult, RawSlice},
+    super::{LangError, LangResult},
     crate::util::compiler,
-    core::{cmp, fmt, marker::PhantomData, mem::size_of, ops::BitOr, slice, str},
+    core::{cmp, fmt, mem::size_of, ops::BitOr, slice, str},
 };
+
+pub type Slice<'a> = &'a [u8];
 
 /*
     Lex meta
 */
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum Token<'a> {
     Symbol(Symbol),
     Keyword(Keyword),
-    Ident(RawSlice),
+    Ident(Slice<'a>),
     #[cfg(test)]
     /// A comma that can be ignored (used for fuzzing)
     IgnorableComma,
-    Lit(Lit), // literal
+    Lit(Lit<'a>), // literal
 }
 
-impl PartialEq<Symbol> for Token {
+impl<'a> PartialEq<Symbol> for Token<'a> {
     fn eq(&self, other: &Symbol) -> bool {
         match self {
             Self::Symbol(s) => s == other,
@@ -70,43 +72,43 @@ assertions! {
 }
 
 enum_impls! {
-    Token => {
+    Token<'a> => {
         Keyword as Keyword,
         Symbol as Symbol,
-        Lit as Lit,
+        Lit<'a> as Lit,
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 #[repr(u8)]
-pub enum Lit {
+pub enum Lit<'a> {
     Str(Box<str>),
     Bool(bool),
     UnsignedInt(u64),
     SignedInt(i64),
-    Bin(RawSlice),
+    Bin(Slice<'a>),
 }
 
-impl Lit {
-    pub(super) unsafe fn as_ir<'a>(&'a self) -> LitIR<'a> {
+impl<'a> Lit<'a> {
+    pub(super) fn as_ir(&'a self) -> LitIR<'a> {
         match self {
             Self::Str(s) => LitIR::Str(s.as_ref()),
             Self::Bool(b) => LitIR::Bool(*b),
             Self::UnsignedInt(u) => LitIR::UInt(*u),
             Self::SignedInt(s) => LitIR::SInt(*s),
-            Self::Bin(b) => LitIR::Bin(b.as_slice()),
+            Self::Bin(b) => LitIR::Bin(b),
         }
     }
 }
 
-impl From<&'static str> for Lit {
+impl<'a> From<&'static str> for Lit<'a> {
     fn from(s: &'static str) -> Self {
         Self::Str(s.into())
     }
 }
 
 enum_impls! {
-    Lit => {
+    Lit<'a> => {
         Box<str> as Str,
         String as Str,
         bool as Bool,
@@ -183,7 +185,7 @@ pub enum Keyword {
     Select,
     Exists,
     Update,
-    Delere,
+    Delete,
     Into,
     From,
     As,
@@ -210,10 +212,7 @@ pub enum Keyword {
     And,
     Or,
     Not,
-    User,
-    Revoke,
     Null,
-    Infinity,
 }
 
 /*
@@ -294,7 +293,7 @@ fn symof(sym: u8) -> Option<Symbol> {
     }
 }
 
-static KW_LUT: [(&[u8], Keyword); 60] = [
+static KW_LUT: [(&[u8], Keyword); 57] = [
     (b"table", Keyword::Table),
     (b"model", Keyword::Model),
     (b"space", Keyword::Space),
@@ -324,7 +323,7 @@ static KW_LUT: [(&[u8], Keyword); 60] = [
     (b"select", Keyword::Select),
     (b"exists", Keyword::Exists),
     (b"update", Keyword::Update),
-    (b"delere", Keyword::Delere),
+    (b"delete", Keyword::Delete),
     (b"into", Keyword::Into),
     (b"from", Keyword::From),
     (b"as", Keyword::As),
@@ -351,20 +350,17 @@ static KW_LUT: [(&[u8], Keyword); 60] = [
     (b"and", Keyword::And),
     (b"or", Keyword::Or),
     (b"not", Keyword::Not),
-    (b"user", Keyword::User),
-    (b"revoke", Keyword::Revoke),
     (b"null", Keyword::Null),
-    (b"infinity", Keyword::Infinity),
 ];
 
-static KWG: [u8; 64] = [
-    0, 55, 32, 25, 4, 21, 51, 43, 28, 59, 34, 1, 9, 39, 5, 49, 0, 16, 29, 0, 48, 0, 17, 60, 19, 21,
-    26, 18, 0, 41, 55, 10, 48, 62, 55, 35, 56, 18, 29, 41, 5, 46, 25, 52, 32, 26, 27, 17, 61, 60,
-    61, 59, 24, 12, 17, 30, 53, 4, 17, 0, 6, 2, 45, 56,
+static KWG: [u8; 63] = [
+    0, 24, 15, 29, 51, 53, 44, 38, 43, 4, 27, 1, 37, 57, 32, 0, 46, 24, 59, 45, 32, 52, 8, 0, 23,
+    19, 33, 48, 56, 60, 33, 53, 18, 47, 49, 53, 2, 19, 1, 34, 19, 58, 11, 5, 0, 41, 27, 24, 20, 2,
+    0, 0, 48, 2, 42, 46, 43, 0, 18, 33, 21, 12, 41,
 ];
 
-const KWMG_1: [u8; 11] = *b"nJEcjrLflKX";
-const KWMG_2: [u8; 11] = *b"KWHPUPK3Fh3";
+const KWMG_1: [u8; 11] = *b"MpVBwC1vsCy";
+const KWMG_2: [u8; 11] = *b"m7sNd9mtGzC";
 const KWMG_S: usize = KWMG_1.len();
 
 #[inline(always)]
@@ -393,7 +389,7 @@ fn kwof(key: &[u8]) -> Option<Keyword> {
     }
 }
 
-impl Token {
+impl<'a> Token<'a> {
     #[inline(always)]
     pub(crate) const fn is_ident(&self) -> bool {
         matches!(self, Token::Ident(_))
@@ -404,9 +400,9 @@ impl Token {
     }
 }
 
-impl AsRef<Token> for Token {
+impl<'a> AsRef<Token<'a>> for Token<'a> {
     #[inline(always)]
-    fn as_ref(&self) -> &Token {
+    fn as_ref(&self) -> &Token<'a> {
         self
     }
 }
@@ -419,15 +415,14 @@ impl AsRef<Token> for Token {
 pub struct RawLexer<'a> {
     c: *const u8,
     e: *const u8,
-    tokens: Vec<Token>,
+    tokens: Vec<Token<'a>>,
     last_error: Option<LangError>,
-    _lt: PhantomData<&'a [u8]>,
 }
 
 // ctor
 impl<'a> RawLexer<'a> {
     #[inline(always)]
-    pub const fn new(src: &'a [u8]) -> Self {
+    pub const fn new(src: Slice<'a>) -> Self {
         Self {
             c: src.as_ptr(),
             e: unsafe {
@@ -436,7 +431,6 @@ impl<'a> RawLexer<'a> {
             },
             last_error: None,
             tokens: Vec::new(),
-            _lt: PhantomData,
         }
     }
 }
@@ -481,7 +475,7 @@ impl<'a> RawLexer<'a> {
         self.incr_cursor_by(iff as usize)
     }
     #[inline(always)]
-    fn push_token(&mut self, token: impl Into<Token>) {
+    fn push_token(&mut self, token: impl Into<Token<'a>>) {
         self.tokens.push(token.into())
     }
     #[inline(always)]
@@ -533,19 +527,19 @@ impl<'a> RawLexer<'a> {
 // high level methods
 impl<'a> RawLexer<'a> {
     #[inline(always)]
-    fn scan_ident(&mut self) -> RawSlice {
+    fn scan_ident(&mut self) -> Slice<'a> {
         let s = self.cursor();
         unsafe {
             while self.peek_is(|b| b.is_ascii_alphanumeric() || b == b'_') {
                 self.incr_cursor();
             }
-            RawSlice::new(s, self.cursor().offset_from(s) as usize)
+            slice::from_raw_parts(s, self.cursor().offset_from(s) as usize)
         }
     }
     #[inline(always)]
     fn scan_ident_or_keyword(&mut self) {
         let s = self.scan_ident();
-        let st = unsafe { s.as_slice() }.to_ascii_lowercase();
+        let st = s.to_ascii_lowercase();
         match kwof(&st) {
             Some(kw) => self.tokens.push(kw.into()),
             // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
@@ -573,13 +567,13 @@ pub struct InsecureLexer<'a> {
 
 impl<'a> InsecureLexer<'a> {
     #[inline(always)]
-    pub const fn new(src: &'a [u8]) -> Self {
+    pub const fn new(src: Slice<'a>) -> Self {
         Self {
             base: RawLexer::new(src),
         }
     }
     #[inline(always)]
-    pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
+    pub fn lex(src: Slice<'a>) -> LangResult<Vec<Token<'a>>> {
         let mut slf = Self::new(src);
         slf._lex();
         let RawLexer {
@@ -709,7 +703,7 @@ impl<'a> InsecureLexer<'a> {
         okay &= slf.remaining() >= size;
         if compiler::likely(okay) {
             unsafe {
-                slf.push_token(Lit::Bin(RawSlice::new(slf.cursor(), size)));
+                slf.push_token(Lit::Bin(slice::from_raw_parts(slf.cursor(), size)));
                 slf.incr_cursor_by(size);
             }
         } else {
@@ -764,17 +758,17 @@ pub struct SafeLexer<'a> {
 
 impl<'a> SafeLexer<'a> {
     #[inline(always)]
-    pub const fn new(src: &'a [u8]) -> Self {
+    pub const fn new(src: Slice<'a>) -> Self {
         Self {
             base: RawLexer::new(src),
         }
     }
     #[inline(always)]
-    pub fn lex(src: &'a [u8]) -> LangResult<Vec<Token>> {
+    pub fn lex(src: Slice<'a>) -> LangResult<Vec<Token>> {
         Self::new(src)._lex()
     }
     #[inline(always)]
-    fn _lex(self) -> LangResult<Vec<Token>> {
+    fn _lex(self) -> LangResult<Vec<Token<'a>>> {
         let Self { base: mut l } = self;
         while l.not_exhausted() && l.no_error() {
             let b = unsafe { l.deref_cursor() };
@@ -918,7 +912,7 @@ where
 /// Intermediate literal repr
 pub enum LitIR<'a> {
     Str(&'a str),
-    Bin(&'a [u8]),
+    Bin(Slice<'a>),
     UInt(u64),
     SInt(i64),
     Bool(bool),
@@ -952,16 +946,16 @@ pub enum LitIROwned {
 /// Data constructed from `opmode-safe`
 pub struct SafeQueryData<'a> {
     p: Box<[LitIR<'a>]>,
-    t: Vec<Token>,
+    t: Vec<Token<'a>>,
 }
 
 impl<'a> SafeQueryData<'a> {
     #[cfg(test)]
-    pub fn new_test(p: Box<[LitIR<'a>]>, t: Vec<Token>) -> Self {
+    pub fn new_test(p: Box<[LitIR<'a>]>, t: Vec<Token<'a>>) -> Self {
         Self { p, t }
     }
     #[inline(always)]
-    pub fn parse(qf: &'a [u8], pf: &'a [u8], pf_sz: usize) -> LangResult<Self> {
+    pub fn parse(qf: Slice<'a>, pf: Slice<'a>, pf_sz: usize) -> LangResult<Self> {
         let q = SafeLexer::lex(qf);
         let p = Self::p_revloop(pf, pf_sz);
         let (Ok(t), Ok(p)) = (q, p) else {
@@ -970,8 +964,8 @@ impl<'a> SafeQueryData<'a> {
         Ok(Self { p, t })
     }
     #[inline]
-    pub(super) fn p_revloop(mut src: &'a [u8], size: usize) -> LangResult<Box<[LitIR<'a>]>> {
-        static LITIR_TF: [for<'a> fn(&'a [u8], &mut usize, &mut Vec<LitIR<'a>>) -> bool; 7] = [
+    pub(super) fn p_revloop(mut src: Slice<'a>, size: usize) -> LangResult<Box<[LitIR<'a>]>> {
+        static LITIR_TF: [for<'a> fn(Slice<'a>, &mut usize, &mut Vec<LitIR<'a>>) -> bool; 7] = [
             SafeQueryData::uint,  // tc: 0
             SafeQueryData::sint,  // tc: 1
             SafeQueryData::bool,  // tc: 2
@@ -1004,7 +998,7 @@ impl<'a> SafeQueryData<'a> {
 // low level methods
 impl<'b> SafeQueryData<'b> {
     #[inline(always)]
-    fn mxple<'a>(src: &'a [u8], cnt: &mut usize, flag: &mut bool) -> &'a [u8] {
+    fn mxple<'a>(src: Slice<'a>, cnt: &mut usize, flag: &mut bool) -> Slice<'a> {
         // find payload length
         let mut i = 0;
         let payload_len = decode_num_ub::<usize>(src, flag, &mut i);
@@ -1018,21 +1012,21 @@ impl<'b> SafeQueryData<'b> {
         unsafe { slice::from_raw_parts(src.as_ptr(), mx_extract) }
     }
     #[inline(always)]
-    pub(super) fn uint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn uint<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
         let r = decode_num_ub(src, &mut b, cnt);
         data.push(LitIR::UInt(r));
         b
     }
     #[inline(always)]
-    pub(super) fn sint<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn sint<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
         let r = decode_num_ub(src, &mut b, cnt);
         data.push(LitIR::SInt(r));
         b
     }
     #[inline(always)]
-    pub(super) fn bool<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn bool<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         // `true\n` or `false\n`
         let mx = cmp::min(6, src.len());
         let slice = &src[..mx];
@@ -1044,7 +1038,7 @@ impl<'b> SafeQueryData<'b> {
         v_true | v_false
     }
     #[inline(always)]
-    pub(super) fn float<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn float<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut okay = true;
         let payload = Self::mxple(src, cnt, &mut okay);
         match String::from_utf8_lossy(payload).parse() {
@@ -1056,14 +1050,14 @@ impl<'b> SafeQueryData<'b> {
         okay
     }
     #[inline(always)]
-    pub(super) fn bin<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn bin<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut okay = true;
         let payload = Self::mxple(src, cnt, &mut okay);
         data.push(LitIR::Bin(payload));
         okay
     }
     #[inline(always)]
-    pub(super) fn str<'a>(src: &'a [u8], cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
+    pub(super) fn str<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut okay = true;
         let payload = Self::mxple(src, cnt, &mut okay);
         match str::from_utf8(payload) {

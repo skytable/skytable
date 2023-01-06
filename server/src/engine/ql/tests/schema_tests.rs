@@ -44,7 +44,7 @@ mod inspect {
         let tok = lex_insecure(b"inspect space myspace").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
-            Statement::InspectSpace("myspace".into())
+            Statement::InspectSpace(b"myspace")
         );
     }
     #[test]
@@ -52,12 +52,12 @@ mod inspect {
         let tok = lex_insecure(b"inspect model users").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
-            Statement::InspectModel(Entity::Single("users".into()))
+            Statement::InspectModel(Entity::Single(b"users"))
         );
         let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
         assert_eq!(
             ddl::parse_inspect_full(&tok[1..]).unwrap(),
-            Statement::InspectModel(("tweeter", "users").into())
+            Statement::InspectModel(Entity::Full(b"tweeter", b"users"))
         );
     }
     #[test]
@@ -85,7 +85,7 @@ mod alter_space {
         assert_eq!(
             r,
             AlterSpace {
-                space_name: "mymodel".into(),
+                space_name: b"mymodel",
                 updated_props: nullable_dict! {}
             }
         );
@@ -105,7 +105,7 @@ mod alter_space {
         assert_eq!(
             r,
             AlterSpace {
-                space_name: "mymodel".into(),
+                space_name: b"mymodel",
                 updated_props: nullable_dict! {
                     "max_entry" => Lit::UnsignedInt(1000),
                     "driver" => Lit::Str("ts-0.8".into())
@@ -271,7 +271,7 @@ mod tymeta {
             if should_pass {
                 assert!(ret.is_okay());
                 assert!(ret.has_more());
-                assert!(new_src[ret.pos()] == Token::Ident("string".into()));
+                assert!(new_src[ret.pos()] == Token::Ident(b"string"));
                 assert_eq!(dict, expected);
             } else if ret.is_okay() {
                 panic!("Expected failure but passed for token stream: `{:?}`", tok);
@@ -290,7 +290,7 @@ mod layer {
         assert!(okay);
         assert_eq!(
             layers,
-            vec![Layer::new_noreset("string".into(), nullable_dict! {})]
+            vec![Layer::new_noreset(b"string", nullable_dict! {})]
         );
     }
     #[test]
@@ -302,7 +302,7 @@ mod layer {
         assert_eq!(
             layers,
             vec![Layer::new_noreset(
-                "string".into(),
+                b"string",
                 nullable_dict! {
                     "maxlen" => Lit::UnsignedInt(100)
                 }
@@ -318,8 +318,8 @@ mod layer {
         assert_eq!(
             layers,
             vec![
-                Layer::new_noreset("string".into(), nullable_dict! {}),
-                Layer::new_noreset("list".into(), nullable_dict! {})
+                Layer::new_noreset(b"string", nullable_dict! {}),
+                Layer::new_noreset(b"list", nullable_dict! {})
             ]
         );
     }
@@ -332,9 +332,9 @@ mod layer {
         assert_eq!(
             layers,
             vec![
-                Layer::new_noreset("string".into(), nullable_dict! {}),
+                Layer::new_noreset(b"string", nullable_dict! {}),
                 Layer::new_noreset(
-                    "list".into(),
+                    b"list",
                     nullable_dict! {
                         "unique" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(10),
@@ -356,14 +356,14 @@ mod layer {
             layers,
             vec![
                 Layer::new_noreset(
-                    "string".into(),
+                    b"string",
                     nullable_dict! {
                         "ascii_only" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(255)
                     }
                 ),
                 Layer::new_noreset(
-                    "list".into(),
+                    b"list",
                     nullable_dict! {
                         "unique" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(10),
@@ -388,14 +388,14 @@ mod layer {
         )
         .unwrap();
         let expected = vec![
-            Layer::new_noreset("string".into(), nullable_dict!()),
+            Layer::new_noreset(b"string", nullable_dict!()),
             Layer::new_noreset(
-                "list".into(),
+                b"list",
                 nullable_dict! {
                     "maxlen" => Lit::UnsignedInt(100),
                 },
             ),
-            Layer::new_noreset("list".into(), nullable_dict!("unique" => Lit::Bool(true))),
+            Layer::new_noreset(b"list", nullable_dict!("unique" => Lit::Bool(true))),
         ];
         fuzz_tokens(&tok, |should_pass, new_tok| {
             let (layers, c, okay) = schema::fold_layers(&new_tok);
@@ -428,7 +428,7 @@ mod field_properties {
         let tok = lex_insecure(b"primary null myfield:").unwrap();
         let (props, c, okay) = schema::parse_field_properties(&tok);
         assert_eq!(c, 2);
-        assert_eq!(tok[c], Token::Ident("myfield".into()));
+        assert_eq!(tok[c], Token::Ident(b"myfield"));
         assert!(okay);
         assert_eq!(
             props,
@@ -456,8 +456,8 @@ mod fields {
         assert_eq!(
             f,
             Field {
-                field_name: "username".into(),
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                field_name: b"username",
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 props: set![],
             }
         )
@@ -475,8 +475,8 @@ mod fields {
         assert_eq!(
             f,
             Field {
-                field_name: "username".into(),
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                field_name: b"username",
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 props: set!["primary"],
             }
         )
@@ -497,9 +497,9 @@ mod fields {
         assert_eq!(
             f,
             Field {
-                field_name: "username".into(),
+                field_name: b"username",
                 layers: [Layer::new_noreset(
-                    "string".into(),
+                    b"string",
                     nullable_dict! {
                         "maxlen" => Lit::UnsignedInt(10),
                         "ascii_only" => Lit::Bool(true),
@@ -529,17 +529,17 @@ mod fields {
         assert_eq!(
             f,
             Field {
-                field_name: "notes".into(),
+                field_name: b"notes",
                 layers: [
                     Layer::new_noreset(
-                        "string".into(),
+                        b"string",
                         nullable_dict! {
                             "maxlen" => Lit::UnsignedInt(255),
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
                     Layer::new_noreset(
-                        "list".into(),
+                        b"list",
                         nullable_dict! {
                             "unique" => Lit::Bool(true)
                         }
@@ -574,16 +574,16 @@ mod schemas {
         assert_eq!(
             model,
             Model {
-                model_name: "mymodel".into(),
+                model_name: b"mymodel",
                 fields: vec![
                     Field {
-                        field_name: "username".into(),
-                        layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                        field_name: b"username",
+                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                         props: set!["primary"]
                     },
                     Field {
-                        field_name: "password".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"password",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set![]
                     }
                 ],
@@ -611,21 +611,21 @@ mod schemas {
         assert_eq!(
             model,
             Model {
-                model_name: "mymodel".into(),
+                model_name: b"mymodel",
                 fields: vec![
                     Field {
-                        field_name: "username".into(),
-                        layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                        field_name: b"username",
+                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                         props: set!["primary"]
                     },
                     Field {
-                        field_name: "password".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"password",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set![]
                     },
                     Field {
-                        field_name: "profile_pic".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"profile_pic",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set!["null"]
                     }
                 ],
@@ -658,29 +658,29 @@ mod schemas {
         assert_eq!(
             model,
             Model {
-                model_name: "mymodel".into(),
+                model_name: b"mymodel",
                 fields: vec![
                     Field {
-                        field_name: "username".into(),
-                        layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                        field_name: b"username",
+                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                         props: set!["primary"]
                     },
                     Field {
-                        field_name: "password".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"password",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set![]
                     },
                     Field {
-                        field_name: "profile_pic".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"profile_pic",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set!["null"]
                     },
                     Field {
-                        field_name: "notes".into(),
+                        field_name: b"notes",
                         layers: vec![
-                            Layer::new_noreset("string".into(), nullable_dict! {}),
+                            Layer::new_noreset(b"string", nullable_dict! {}),
                             Layer::new_noreset(
-                                "list".into(),
+                                b"list",
                                 nullable_dict! {
                                     "unique" => Lit::Bool(true)
                                 }
@@ -723,29 +723,29 @@ mod schemas {
         assert_eq!(
             model,
             Model {
-                model_name: "mymodel".into(),
+                model_name: b"mymodel",
                 fields: vec![
                     Field {
-                        field_name: "username".into(),
-                        layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                        field_name: b"username",
+                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                         props: set!["primary"]
                     },
                     Field {
-                        field_name: "password".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"password",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set![]
                     },
                     Field {
-                        field_name: "profile_pic".into(),
-                        layers: vec![Layer::new_noreset("binary".into(), nullable_dict! {})],
+                        field_name: b"profile_pic",
+                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
                         props: set!["null"]
                     },
                     Field {
-                        field_name: "notes".into(),
+                        field_name: b"notes",
                         layers: vec![
-                            Layer::new_noreset("string".into(), nullable_dict! {}),
+                            Layer::new_noreset(b"string", nullable_dict! {}),
                             Layer::new_noreset(
-                                "list".into(),
+                                b"list",
                                 nullable_dict! {
                                     "unique" => Lit::Bool(true)
                                 }
@@ -775,8 +775,8 @@ mod dict_field_syntax {
         assert_eq!(
             ef,
             ExpandedField {
-                field_name: "username".into(),
-                layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                field_name: b"username",
+                layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                 props: nullable_dict! {},
                 reset: false
             }
@@ -798,11 +798,11 @@ mod dict_field_syntax {
         assert_eq!(
             ef,
             ExpandedField {
-                field_name: "username".into(),
+                field_name: b"username",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(false),
                 },
-                layers: vec![Layer::new_noreset("string".into(), nullable_dict! {})],
+                layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
                 reset: false
             }
         );
@@ -827,13 +827,13 @@ mod dict_field_syntax {
         assert_eq!(
             ef,
             ExpandedField {
-                field_name: "username".into(),
+                field_name: b"username",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(false),
                     "jingle_bells" => Lit::Str("snow".into()),
                 },
                 layers: vec![Layer::new_noreset(
-                    "string".into(),
+                    b"string",
                     nullable_dict! {
                         "minlen" => Lit::UnsignedInt(6),
                         "maxlen" => Lit::UnsignedInt(255),
@@ -865,20 +865,20 @@ mod dict_field_syntax {
         assert_eq!(
             ef,
             ExpandedField {
-                field_name: "notes".into(),
+                field_name: b"notes",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(true),
                     "jingle_bells" => Lit::Str("snow".into()),
                 },
                 layers: vec![
                     Layer::new_noreset(
-                        "string".into(),
+                        b"string",
                         nullable_dict! {
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
                     Layer::new_noreset(
-                        "list".into(),
+                        b"list",
                         nullable_dict! {
                             "unique" => Lit::Bool(true),
                         }
@@ -891,14 +891,13 @@ mod dict_field_syntax {
 }
 mod alter_model_remove {
     use super::*;
-    use crate::engine::ql::RawSlice;
     #[test]
     fn alter_mini() {
         let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
-        assert_eq!(remove, [RawSlice::from("myfield")].into());
+        assert_eq!(remove, [b"myfield".as_slice()].into());
     }
     #[test]
     fn alter_mini_2() {
@@ -906,7 +905,7 @@ mod alter_model_remove {
         let mut i = 4;
         let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
-        assert_eq!(remove, [RawSlice::from("myfield")].into());
+        assert_eq!(remove, [b"myfield".as_slice()].into());
     }
     #[test]
     fn alter() {
@@ -919,10 +918,10 @@ mod alter_model_remove {
         assert_eq!(
             remove,
             [
-                RawSlice::from("myfield1"),
-                RawSlice::from("myfield2"),
-                RawSlice::from("myfield3"),
-                RawSlice::from("myfield4")
+                b"myfield1".as_slice(),
+                b"myfield2".as_slice(),
+                b"myfield3".as_slice(),
+                b"myfield4".as_slice(),
             ]
             .into()
         );
@@ -945,9 +944,9 @@ mod alter_model_add {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {},
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: false
             }]
         );
@@ -966,11 +965,11 @@ mod alter_model_add {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(true)
                 },
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: false
             }]
         );
@@ -989,11 +988,11 @@ mod alter_model_add {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(true)
                 },
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: false
             }]
         );
@@ -1027,27 +1026,27 @@ mod alter_model_add {
             r.as_ref(),
             [
                 ExpandedField {
-                    field_name: "myfield".into(),
+                    field_name: b"myfield",
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                     reset: false
                 },
                 ExpandedField {
-                    field_name: "another".into(),
+                    field_name: b"another",
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(false)
                     },
                     layers: [
                         Layer::new_noreset(
-                            "string".into(),
+                            b"string",
                             nullable_dict! {
                                 "maxlen" => Lit::UnsignedInt(255)
                             }
                         ),
                         Layer::new_noreset(
-                            "list".into(),
+                            b"list",
                             nullable_dict! {
                                "unique" => Lit::Bool(true)
                             },
@@ -1078,9 +1077,9 @@ mod alter_model_update {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {},
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: true
             }]
         );
@@ -1099,9 +1098,9 @@ mod alter_model_update {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {},
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: true
             }]
         );
@@ -1126,11 +1125,11 @@ mod alter_model_update {
         assert_eq!(
             r.as_ref(),
             [ExpandedField {
-                field_name: "myfield".into(),
+                field_name: b"myfield",
                 props: nullable_dict! {
                     "nullable" => Lit::Bool(true)
                 },
-                layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                 reset: true
             }]
         );
@@ -1160,17 +1159,17 @@ mod alter_model_update {
             r.as_ref(),
             [
                 ExpandedField {
-                    field_name: "myfield".into(),
+                    field_name: b"myfield",
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                     reset: true
                 },
                 ExpandedField {
-                    field_name: "myfield2".into(),
+                    field_name: b"myfield2",
                     props: nullable_dict! {},
-                    layers: [Layer::new_noreset("string".into(), nullable_dict! {})].into(),
+                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
                     reset: true
                 }
             ]
@@ -1204,18 +1203,18 @@ mod alter_model_update {
             r.as_ref(),
             [
                 ExpandedField {
-                    field_name: "myfield".into(),
+                    field_name: b"myfield",
                     props: nullable_dict! {
                         "nullable" => Lit::Bool(true)
                     },
-                    layers: [Layer::new_reset("string".into(), nullable_dict! {})].into(),
+                    layers: [Layer::new_reset(b"string", nullable_dict! {})].into(),
                     reset: true
                 },
                 ExpandedField {
-                    field_name: "myfield2".into(),
+                    field_name: b"myfield2",
                     props: nullable_dict! {},
                     layers: [Layer::new_reset(
-                        "string".into(),
+                        b"string",
                         nullable_dict! {"maxlen" => Lit::UnsignedInt(255)}
                     )]
                     .into(),
@@ -1239,7 +1238,7 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropSpace(DropSpace::new("myspace".into(), false))
+            Statement::DropSpace(DropSpace::new(b"myspace", false))
         );
     }
     #[test]
@@ -1247,7 +1246,7 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropSpace(DropSpace::new("myspace".into(), true))
+            Statement::DropSpace(DropSpace::new(b"myspace", true))
         );
     }
     #[test]
@@ -1255,7 +1254,7 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), false))
+            Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), false))
         );
     }
     #[test]
@@ -1263,7 +1262,7 @@ mod ddl_other_query_tests {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
             ddl::parse_drop_full(&src[1..]).unwrap(),
-            Statement::DropModel(DropModel::new(Entity::Single("mymodel".into()), true))
+            Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), true))
         );
     }
 }

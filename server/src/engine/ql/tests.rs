@@ -91,11 +91,9 @@ impl NullableMapEntry for Null {
     }
 }
 
-impl NullableMapEntry for super::lexer::Lit {
+impl<'a> NullableMapEntry for super::lexer::Lit<'a> {
     fn data(self) -> Option<super::schema::DictEntry> {
-        Some(super::schema::DictEntry::Lit(
-            unsafe { self.as_ir() }.to_litir_owned(),
-        ))
+        Some(super::schema::DictEntry::Lit(self.as_ir().to_litir_owned()))
     }
 }
 

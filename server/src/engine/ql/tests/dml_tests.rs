@@ -404,7 +404,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("twitter".into(), "users".into()),
+            entity: Entity::Full(b"twitter", b"users"),
             data: into_array_nullable!["sayan"].to_vec().into(),
         };
         assert_eq!(e, r);
@@ -426,7 +426,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("twitter".into(), "users".into()),
+            entity: Entity::Full(b"twitter", b"users"),
             data: into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
                 .to_vec()
                 .into(),
@@ -453,7 +453,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("twitter".into(), "users".into()),
+            entity: Entity::Full(b"twitter", b"users"),
             data: into_array_nullable![
                 "sayan",
                 "Sayan",
@@ -480,7 +480,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("jotsy".into(), "app".into()),
+            entity: Entity::Full(b"jotsy", b"app"),
             data: dict_nullable! {
                 "username".as_bytes() => "sayan"
             }
@@ -505,7 +505,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("jotsy".into(), "app".into()),
+            entity: Entity::Full(b"jotsy", b"app"),
             data: dict_nullable! {
                 "username".as_bytes() => "sayan",
                 "name".as_bytes() => "Sayan",
@@ -538,7 +538,7 @@ mod stmt_insert {
         .unwrap();
         let r = dml::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement {
-            entity: Entity::Full("jotsy".into(), "app".into()),
+            entity: Entity::Full(b"jotsy", b"app"),
             data: dict_nullable! {
                 "username".as_bytes() => "sayan",
                 "password".as_bytes() => "pass123",
@@ -577,7 +577,7 @@ mod stmt_select {
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single("users".into()),
+            Entity::Single(b"users"),
             [].to_vec(),
             true,
             dict! {
@@ -598,8 +598,8 @@ mod stmt_select {
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single("users".into()),
-            ["field1".into()].to_vec(),
+            Entity::Single(b"users"),
+            [b"field1".as_slice()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
@@ -619,8 +619,8 @@ mod stmt_select {
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full("twitter".into(), "users".into()),
-            ["field1".into()].to_vec(),
+            Entity::Full(b"twitter", b"users"),
+            [b"field1".as_slice()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
@@ -640,8 +640,8 @@ mod stmt_select {
         .unwrap();
         let r = dml::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full("twitter".into(), "users".into()),
-            ["field1".into(), "field2".into()].to_vec(),
+            Entity::Full(b"twitter", b"users"),
+            [b"field1".as_slice(), b"field2".as_slice()].to_vec(),
             false,
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
@@ -667,7 +667,7 @@ mod expression_tests {
         assert_eq!(
             r,
             AssignmentExpression {
-                lhs: "username".into(),
+                lhs: b"username",
                 rhs: LitIR::Str("sayan"),
                 operator_fn: Operator::Assign
             }
@@ -680,7 +680,7 @@ mod expression_tests {
         assert_eq!(
             r,
             AssignmentExpression {
-                lhs: "followers".into(),
+                lhs: b"followers",
                 rhs: LitIR::UInt(100),
                 operator_fn: Operator::AddAssign
             }
@@ -693,7 +693,7 @@ mod expression_tests {
         assert_eq!(
             r,
             AssignmentExpression {
-                lhs: "following".into(),
+                lhs: b"following",
                 rhs: LitIR::UInt(150),
                 operator_fn: Operator::SubAssign
             }
@@ -706,7 +706,7 @@ mod expression_tests {
         assert_eq!(
             r,
             AssignmentExpression {
-                lhs: "product_qty".into(),
+                lhs: b"product_qty",
                 rhs: LitIR::UInt(2),
                 operator_fn: Operator::MulAssign
             }
@@ -719,7 +719,7 @@ mod expression_tests {
         assert_eq!(
             r,
             AssignmentExpression {
-                lhs: "image_crop_factor".into(),
+                lhs: b"image_crop_factor",
                 rhs: LitIR::UInt(2),
                 operator_fn: Operator::DivAssign
             }
@@ -747,9 +747,9 @@ mod update_statement {
         .unwrap();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement {
-            entity: Entity::Single("app".into()),
+            entity: Entity::Single(b"app"),
             expressions: vec![AssignmentExpression {
-                lhs: "notes".into(),
+                lhs: b"notes",
                 rhs: LitIR::Str("this is my new note"),
                 operator_fn: Operator::AddAssign,
             }],
@@ -779,15 +779,15 @@ mod update_statement {
         .unwrap();
         let r = dml::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement {
-            entity: ("jotsy", "app").into(),
+            entity: Entity::Full(b"jotsy", b"app"),
             expressions: vec![
                 AssignmentExpression::new(
-                    "notes".into(),
+                    b"notes",
                     LitIR::Str("this is my new note"),
                     Operator::AddAssign,
                 ),
                 AssignmentExpression::new(
-                    "email".into(),
+                    b"email",
                     LitIR::Str("sayan@example.com"),
                     Operator::Assign,
                 ),
@@ -823,7 +823,7 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            Entity::Single("users".into()),
+            Entity::Single(b"users"),
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),
@@ -844,7 +844,7 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            ("twitter", "users").into(),
+            Entity::Full(b"twitter", b"users"),
             dict! {
                 "username".as_bytes() => RelationalExpr::new(
                     "username".as_bytes(),

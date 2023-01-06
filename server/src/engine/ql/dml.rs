@@ -35,7 +35,7 @@ use {
     super::{
         ast::{Entity, QueryData},
         lexer::{LitIR, Symbol, Token},
-        LangError, LangResult, RawSlice,
+        LangError, LangResult,
     },
     crate::{
         engine::memory::DataType,
@@ -58,7 +58,7 @@ fn minidx<T>(src: &[T], index: usize) -> usize {
 */
 
 #[inline(always)]
-fn process_entity(tok: &[Token], d: &mut MaybeInit<Entity>, i: &mut usize) -> bool {
+fn process_entity<'a>(tok: &'a [Token<'a>], d: &mut MaybeInit<Entity<'a>>, i: &mut usize) -> bool {
     let is_full = Entity::tokens_with_full(tok);
     let is_single = Entity::tokens_with_single(tok);
     if is_full {
@@ -147,7 +147,7 @@ impl<'a> RelationalExpr<'a> {
                 // UNSAFE(@ohsayan): tok[0] is checked for being an ident, tok[lit_idx] also checked to be a lit
                 let lit = Qd::read_lit(d, &tok[lit_idx]);
                 Some(Self::new(
-                    extract!(tok[0], Token::Ident(ref id) => id.as_slice()),
+                    extract!(tok[0], Token::Ident(ref id) => id),
                     lit,
                     operator,
                 ))
@@ -378,10 +378,7 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
             (Token::Ident(id), tok) if Qd::can_read_lit_from(d, tok) => {
                 okay &= data
                     .insert(
-                        unsafe {
-                            // UNSAFE(@ohsayan): Token lifetime ensures slice validity
-                            id.as_slice()
-                        },
+                        *id,
                         Some(unsafe {
                             // UNSAFE(@ohsayan): Token LT0 guarantees LT0 > LT1 for lit
                             DataType::clone_from_litir(Qd::read_lit(d, tok))
@@ -395,26 +392,10 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
                 let (_, lst_i, lst_ok) = parse_list(&tok[i + 3..], d, &mut l);
                 okay &= lst_ok;
                 i += lst_i;
-                okay &= data
-                    .insert(
-                        unsafe {
-                            // UNSAFE(@ohsayan): Token lifetime ensures validity
-                            id.as_slice()
-                        },
-                        Some(l.into()),
-                    )
-                    .is_none();
+                okay &= data.insert(id, Some(l.into())).is_none();
             }
             (Token::Ident(id), Token![null]) => {
-                okay &= data
-                    .insert(
-                        unsafe {
-                            // UNSAFE(@ohsayan): Token lifetime ensures validity
-                            id.as_slice()
-                        },
-                        None,
-                    )
-                    .is_none();
+                okay &= data.insert(id, None).is_none();
             }
             _ => {
                 okay = false;
@@ -473,12 +454,12 @@ impl<'a> From<HashMap<&'static [u8], Option<DataType>>> for InsertData<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct InsertStatement<'a> {
-    pub(super) entity: Entity,
+    pub(super) entity: Entity<'a>,
     pub(super) data: InsertData<'a>,
 }
 
 #[inline(always)]
-fn parse_entity(tok: &[Token], entity: &mut MaybeInit<Entity>, i: &mut usize) -> bool {
+fn parse_entity<'a>(tok: &'a [Token], entity: &mut MaybeInit<Entity<'a>>, i: &mut usize) -> bool {
     let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
     let is_half = tok[0].is_ident();
     unsafe {
@@ -565,11 +546,11 @@ pub(super) fn parse_insert_full<'a>(tok: &'a [Token]) -> Option<InsertStatement<
 */
 
 #[derive(Debug, PartialEq)]
-pub(super) struct SelectStatement<'a> {
+pub struct SelectStatement<'a> {
     /// the entity
-    pub(super) entity: Entity,
+    pub(super) entity: Entity<'a>,
     /// fields in order of querying. will be zero when wildcard is set
-    pub(super) fields: Vec<RawSlice>,
+    pub(super) fields: Vec<&'a [u8]>,
     /// whether a wildcard was passed
     pub(super) wildcard: bool,
     /// where clause
@@ -578,8 +559,8 @@ pub(super) struct SelectStatement<'a> {
 impl<'a> SelectStatement<'a> {
     #[inline(always)]
     pub(crate) fn new_test(
-        entity: Entity,
-        fields: Vec<RawSlice>,
+        entity: Entity<'a>,
+        fields: Vec<&'a [u8]>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {
@@ -587,8 +568,8 @@ impl<'a> SelectStatement<'a> {
     }
     #[inline(always)]
     fn new(
-        entity: Entity,
-        fields: Vec<RawSlice>,
+        entity: Entity<'a>,
+        fields: Vec<&'a [u8]>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {
@@ -701,7 +682,7 @@ static OPERATOR: [Operator; 6] = [
 #[derive(Debug, PartialEq)]
 pub struct AssignmentExpression<'a> {
     /// the LHS ident
-    pub(super) lhs: RawSlice,
+    pub(super) lhs: &'a [u8],
     /// the RHS lit
     pub(super) rhs: LitIR<'a>,
     /// operator
@@ -709,7 +690,7 @@ pub struct AssignmentExpression<'a> {
 }
 
 impl<'a> AssignmentExpression<'a> {
-    pub(super) fn new(lhs: RawSlice, rhs: LitIR<'a>, operator_fn: Operator) -> Self {
+    pub(super) fn new(lhs: &'a [u8], rhs: LitIR<'a>, operator_fn: Operator) -> Self {
         Self {
             lhs,
             rhs,
@@ -768,7 +749,7 @@ impl<'a> AssignmentExpression<'a> {
                 */
                 let rhs = Qd::read_lit(d, &tok[i]);
                 AssignmentExpression {
-                    lhs: extract!(tok[0], Token::Ident(ref r) => r.clone()),
+                    lhs: extract!(tok[0], Token::Ident(ref r) => r),
                     rhs,
                     operator_fn: OPERATOR[operator_code as usize],
                 }
@@ -803,7 +784,7 @@ pub(super) fn parse_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentEx
 
 #[derive(Debug, PartialEq)]
 pub struct UpdateStatement<'a> {
-    pub(super) entity: Entity,
+    pub(super) entity: Entity<'a>,
     pub(super) expressions: Vec<AssignmentExpression<'a>>,
     pub(super) wc: WhereClause<'a>,
 }
@@ -812,7 +793,7 @@ impl<'a> UpdateStatement<'a> {
     #[inline(always)]
     #[cfg(test)]
     pub fn new_test(
-        entity: Entity,
+        entity: Entity<'a>,
         expressions: Vec<AssignmentExpression<'a>>,
         wc: WhereClauseCollection<'a>,
     ) -> Self {
@@ -820,7 +801,7 @@ impl<'a> UpdateStatement<'a> {
     }
     #[inline(always)]
     pub fn new(
-        entity: Entity,
+        entity: Entity<'a>,
         expressions: Vec<AssignmentExpression<'a>>,
         wc: WhereClause<'a>,
     ) -> Self {
@@ -911,19 +892,19 @@ pub(super) fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatem
 */
 
 #[derive(Debug, PartialEq)]
-pub(super) struct DeleteStatement<'a> {
-    pub(super) entity: Entity,
+pub struct DeleteStatement<'a> {
+    pub(super) entity: Entity<'a>,
     pub(super) wc: WhereClause<'a>,
 }
 
 impl<'a> DeleteStatement<'a> {
     #[inline(always)]
-    pub(super) fn new(entity: Entity, wc: WhereClause<'a>) -> Self {
+    pub(super) fn new(entity: Entity<'a>, wc: WhereClause<'a>) -> Self {
         Self { entity, wc }
     }
     #[inline(always)]
     #[cfg(test)]
-    pub(super) fn new_test(entity: Entity, wc: WhereClauseCollection<'a>) -> Self {
+    pub(super) fn new_test(entity: Entity<'a>, wc: WhereClauseCollection<'a>) -> Self {
         Self::new(entity, WhereClause::new(wc))
     }
     pub(super) fn parse_delete<Qd: QueryData<'a>>(

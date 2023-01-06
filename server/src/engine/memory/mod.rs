@@ -35,7 +35,7 @@ pub enum DataType {
     /// An UTF-8 string
     String(Box<str>),
     /// Bytes
-    Binary(Vec<u8>),
+    Binary(Box<[u8]>),
     /// An unsigned integer
     ///
     /// **NOTE:** This is the default evaluated type for unsigned integers by the query processor. It is the
@@ -71,22 +71,20 @@ enum_impls! {
 
 impl DataType {
     #[inline(always)]
-    /// ## Safety
-    ///
-    /// Ensure validity of Lit::Bin
-    pub(super) unsafe fn clone_from_lit(lit: &Lit) -> Self {
+    pub(super) fn clone_from_lit(lit: &Lit) -> Self {
         match lit {
             Lit::Str(s) => DataType::String(s.clone()),
             Lit::Bool(b) => DataType::Boolean(*b),
             Lit::UnsignedInt(u) => DataType::UnsignedInt(*u),
             Lit::SignedInt(i) => DataType::SignedInt(*i),
-            Lit::Bin(l) => DataType::Binary(l.as_slice().to_owned()),
+            Lit::Bin(l) => DataType::Binary(l.to_vec().into_boxed_slice()),
         }
     }
+    #[inline(always)]
     pub(super) fn clone_from_litir<'a>(lit: LitIR<'a>) -> Self {
         match lit {
             LitIR::Str(s) => Self::String(s.to_owned().into_boxed_str()),
-            LitIR::Bin(b) => Self::Binary(b.to_owned()),
+            LitIR::Bin(b) => Self::Binary(b.to_owned().into_boxed_slice()),
             LitIR::Float(f) => Self::Float(f),
             LitIR::SInt(s) => Self::SignedInt(s),
             LitIR::UInt(u) => Self::UnsignedInt(u),

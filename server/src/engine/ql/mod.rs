@@ -37,10 +37,6 @@ pub(super) mod schema;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-use core::{fmt, ops::Deref};
-use core::{mem, ptr::NonNull, slice, str};
-
 /*
     Lang errors
 */
@@ -61,100 +57,6 @@ pub enum LangError {
     InvalidTypeDefinition,
     InvalidSafeLiteral,
     BadPframe,
-}
-
-/*
-    Utils
-*/
-
-/// An unsafe, C-like slice that holds a ptr and length. Construction and usage is at the risk of the user
-///
-/// Notes:
-/// - [`Clone`] is implemented for [`RawSlice`] because it is a simple bitwise copy of the fat ptr
-/// - [`fmt::Debug`] is implemented in different ways
-///     - For test builds like test and bench, it will output a slice
-///     - In release mode, it will output the fat ptr meta
-/// - [`PartialEq`] is implemented in debug mode with slice comparison, but is **NOT implemented for release mode in the
-///   way you'd expect it to**. In release mode (non-test), a comparison will simply panic.
-#[cfg_attr(not(test), derive(Debug))]
-#[derive(Clone)]
-pub struct RawSlice {
-    ptr: NonNull<u8>,
-    len: usize,
-}
-
-// again, caller's responsibility
-unsafe impl Send for RawSlice {}
-unsafe impl Sync for RawSlice {}
-
-impl RawSlice {
-    const _EALIGN: () = assert!(mem::align_of::<Self>() == mem::align_of::<&[u8]>());
-    const FAKE_SLICE: Self = unsafe { Self::new_from_str("") };
-    const unsafe fn new(ptr: *const u8, len: usize) -> Self {
-        Self {
-            ptr: NonNull::new_unchecked(ptr.cast_mut()),
-            len,
-        }
-    }
-    const unsafe fn new_from_str(s: &str) -> Self {
-        Self::new(s.as_bytes().as_ptr(), s.as_bytes().len())
-    }
-    pub unsafe fn as_slice(&self) -> &[u8] {
-        slice::from_raw_parts(self.ptr.as_ptr(), self.len)
-    }
-    unsafe fn as_str(&self) -> &str {
-        str::from_utf8_unchecked(self.as_slice())
-    }
-    pub fn ptr(&self) -> NonNull<u8> {
-        self.ptr
-    }
-    pub fn len(&self) -> usize {
-        self.len
-    }
-}
-
-#[cfg(test)]
-impl fmt::Debug for RawSlice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(unsafe {
-            // UNSAFE(@ohsayan): Only implemented in debug
-            self.as_str()
-        })
-    }
-}
-
-#[cfg(test)]
-impl PartialEq for RawSlice {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            // UNSAFE(@ohsayan): Callers must ensure validity during usage
-            self.as_slice() == other.as_slice()
-        }
-    }
-}
-
-#[cfg(not(test))]
-impl PartialEq for RawSlice {
-    fn eq(&self, _other: &Self) -> bool {
-        panic!("Called partialeq on rawslice in release mode");
-    }
-}
-
-#[cfg(test)]
-impl<U> PartialEq<U> for RawSlice
-where
-    U: Deref<Target = [u8]>,
-{
-    fn eq(&self, other: &U) -> bool {
-        unsafe {
-            // UNSAFE(@ohsayan): Callers must ensure validity during usage
-            self.as_slice() == other.deref()
-        }
-    }
-}
-
-impl From<&'static str> for RawSlice {
-    fn from(st: &'static str) -> Self {
-        unsafe { Self::new(st.as_bytes().as_ptr(), st.as_bytes().len()) }
-    }
+    UnknownCreateStatement,
+    UnknownAlterStatement,
 }

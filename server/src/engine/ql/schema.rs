@@ -47,10 +47,11 @@
 use {
     super::{
         ast::QueryData,
-        lexer::{LitIR, LitIROwned, Symbol, Token},
-        LangError, LangResult, RawSlice,
+        lexer::{LitIR, LitIROwned, Slice, Symbol, Token},
+        LangError, LangResult,
     },
     crate::util::MaybeInit,
+    core::str,
     std::collections::{HashMap, HashSet},
 };
 
@@ -111,23 +112,23 @@ pub type Dict = HashMap<String, Option<DictEntry>>;
 
 #[derive(Debug, PartialEq)]
 /// A layer contains a type and corresponding metadata
-pub struct Layer {
-    ty: RawSlice,
+pub struct Layer<'a> {
+    ty: Slice<'a>,
     props: Dict,
     reset: bool,
 }
 
-impl Layer {
+impl<'a> Layer<'a> {
     //// Create a new layer
-    pub(super) const fn new(ty: RawSlice, props: Dict, reset: bool) -> Self {
+    pub(super) const fn new(ty: Slice<'a>, props: Dict, reset: bool) -> Self {
         Self { ty, props, reset }
     }
     /// Create a new layer that doesn't have any reset
-    pub(super) const fn new_noreset(ty: RawSlice, props: Dict) -> Self {
+    pub(super) const fn new_noreset(ty: Slice<'a>, props: Dict) -> Self {
         Self::new(ty, props, false)
     }
     /// Create a new layer that adds a reset
-    pub(super) const fn new_reset(ty: RawSlice, props: Dict) -> Self {
+    pub(super) const fn new_reset(ty: Slice<'a>, props: Dict) -> Self {
         Self::new(ty, props, true)
     }
 }
@@ -150,18 +151,18 @@ impl FieldProperties {
 
 #[derive(Debug, PartialEq)]
 /// A field definition
-pub struct Field {
+pub struct Field<'a> {
     /// the field name
-    pub(super) field_name: RawSlice,
+    pub(super) field_name: Slice<'a>,
     /// layers
-    pub(super) layers: Vec<Layer>,
+    pub(super) layers: Vec<Layer<'a>>,
     /// properties
     pub(super) props: HashSet<StaticStr>,
 }
 
-impl Field {
+impl<'a> Field<'a> {
     #[inline(always)]
-    pub fn new(field_name: RawSlice, layers: Vec<Layer>, props: HashSet<StaticStr>) -> Self {
+    pub fn new(field_name: Slice<'a>, layers: Vec<Layer<'a>>, props: HashSet<StaticStr>) -> Self {
         Self {
             field_name,
             layers,
@@ -172,18 +173,18 @@ impl Field {
 
 #[derive(Debug, PartialEq)]
 /// A model definition
-pub struct Model {
+pub struct Model<'a> {
     /// the model name
-    pub(super) model_name: RawSlice,
+    pub(super) model_name: Slice<'a>,
     /// the fields
-    pub(super) fields: Vec<Field>,
+    pub(super) fields: Vec<Field<'a>>,
     /// properties
     pub(super) props: Dict,
 }
 
-impl Model {
+impl<'a> Model<'a> {
     #[inline(always)]
-    pub fn new(model_name: RawSlice, fields: Vec<Field>, props: Dict) -> Self {
+    pub fn new(model_name: Slice<'a>, fields: Vec<Field<'a>>, props: Dict) -> Self {
         Self {
             model_name,
             fields,
@@ -194,17 +195,17 @@ impl Model {
 
 #[derive(Debug, PartialEq)]
 /// A space
-pub struct Space {
+pub struct Space<'a> {
     /// the space name
-    pub(super) space_name: RawSlice,
+    pub(super) space_name: Slice<'a>,
     /// properties
     pub(super) props: Dict,
 }
 
 #[derive(Debug, PartialEq)]
 /// An alter space query with corresponding data
-pub struct AlterSpace {
-    pub(super) space_name: RawSlice,
+pub struct AlterSpace<'a> {
+    pub(super) space_name: Slice<'a>,
     pub(super) updated_props: Dict,
 }
 
@@ -264,7 +265,7 @@ pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
             (Token::Ident(id), DictFoldState::CB_OR_IDENT) => {
                 // found ident, so expect colon
                 i += 1;
-                tmp = MaybeInit::new(unsafe { id.as_str() });
+                tmp = MaybeInit::new(unsafe { str::from_utf8_unchecked(id) });
                 state = DictFoldState::COLON;
             }
             (Token::Symbol(Symbol::SymColon), DictFoldState::COLON) => {
@@ -466,7 +467,7 @@ pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
             }
             (Token::Ident(ident), TyMetaFoldState::IDENT_OR_CB) => {
                 r.incr();
-                tmp = MaybeInit::new(unsafe { ident.as_str() });
+                tmp = MaybeInit::new(unsafe { str::from_utf8_unchecked(ident) });
                 // we just saw an ident, so we expect to see a colon
                 state = TyMetaFoldState::COLON;
             }
@@ -569,7 +570,7 @@ pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
     start: LayerFoldState,
     tok: &'a [Token],
     qd: &mut Qd,
-    layers: &mut Vec<Layer>,
+    layers: &mut Vec<Layer<'a>>,
 ) -> u64 {
     /*
         NOTE: Assume rules wherever applicable
@@ -684,7 +685,7 @@ pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
 #[cfg(test)]
 #[inline(always)]
 /// (**test-only**) fold layers
-pub(super) fn fold_layers(tok: &[Token]) -> (Vec<Layer>, usize, bool) {
+pub(super) fn fold_layers<'a>(tok: &'a [Token]) -> (Vec<Layer<'a>>, usize, bool) {
     let mut l = Vec::new();
     let r = rfold_layers::<InplaceData, DISALLOW_RESET_SYNTAX>(
         LayerFoldState::TY,
@@ -727,7 +728,7 @@ pub(super) fn parse_field_properties(tok: &[Token]) -> (FieldProperties, usize, 
 }
 
 #[cfg(test)]
-pub(super) fn parse_field_full(tok: &[Token]) -> LangResult<(usize, Field)> {
+pub(super) fn parse_field_full<'a>(tok: &'a [Token]) -> LangResult<(usize, Field<'a>)> {
     self::parse_field(tok, &mut InplaceData::new())
 }
 
@@ -736,7 +737,7 @@ pub(super) fn parse_field_full(tok: &[Token]) -> LangResult<(usize, Field)> {
 pub(super) fn parse_field<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
-) -> LangResult<(usize, Field)> {
+) -> LangResult<(usize, Field<'a>)> {
     let l = tok.len();
     let mut i = 0;
     let mut okay = true;
@@ -788,7 +789,9 @@ states! {
 }
 
 #[cfg(test)]
-pub(super) fn parse_schema_from_tokens_full(tok: &[Token]) -> LangResult<(Model, usize)> {
+pub(super) fn parse_schema_from_tokens_full<'a>(
+    tok: &'a [Token],
+) -> LangResult<(Model<'a>, usize)> {
     self::parse_schema_from_tokens::<InplaceData>(tok, &mut InplaceData::new())
 }
 
@@ -797,7 +800,7 @@ pub(super) fn parse_schema_from_tokens_full(tok: &[Token]) -> LangResult<(Model,
 pub(super) fn parse_schema_from_tokens<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
-) -> LangResult<(Model, usize)> {
+) -> LangResult<(Model<'a>, usize)> {
     // parse fields
     let l = tok.len();
     let mut i = 0;
@@ -893,7 +896,7 @@ pub(super) fn parse_schema_from_tokens<'a, Qd: QueryData<'a>>(
 pub(super) fn parse_space_from_tokens<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
-) -> LangResult<(Space, usize)> {
+) -> LangResult<(Space<'a>, usize)> {
     let l = tok.len();
     let mut okay = !tok.is_empty() && tok[0].is_ident();
     let mut i = 0;
@@ -928,7 +931,7 @@ pub(super) fn parse_space_from_tokens<'a, Qd: QueryData<'a>>(
 pub(super) fn parse_alter_space_from_tokens<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
-) -> LangResult<(AlterSpace, usize)> {
+) -> LangResult<(AlterSpace<'a>, usize)> {
     let mut i = 0;
     let l = tok.len();
 
@@ -960,7 +963,7 @@ pub(super) fn parse_alter_space_from_tokens<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub(super) fn alter_space_full(tok: &[Token]) -> LangResult<AlterSpace> {
+pub(super) fn alter_space_full<'a>(tok: &'a [Token]) -> LangResult<AlterSpace<'a>> {
     let (r, i) = self::parse_alter_space_from_tokens(tok, &mut InplaceData::new())?;
     assert_full_tt!(i, tok.len());
     Ok(r)
@@ -978,17 +981,17 @@ states! {
 
 #[derive(Debug, PartialEq)]
 /// An [`ExpandedField`] is a full field definition with advanced metadata
-pub struct ExpandedField {
-    pub(super) field_name: RawSlice,
+pub struct ExpandedField<'a> {
+    pub(super) field_name: Slice<'a>,
     pub(super) props: Dict,
-    pub(super) layers: Vec<Layer>,
+    pub(super) layers: Vec<Layer<'a>>,
     pub(super) reset: bool,
 }
 
 #[cfg(test)]
-pub fn parse_field_syntax_full<const ALLOW_RESET: bool>(
-    tok: &[Token],
-) -> LangResult<(ExpandedField, usize)> {
+pub fn parse_field_syntax_full<'a, const ALLOW_RESET: bool>(
+    tok: &'a [Token],
+) -> LangResult<(ExpandedField<'a>, usize)> {
     self::parse_field_syntax::<InplaceData, ALLOW_RESET>(tok, &mut InplaceData::new())
 }
 
@@ -997,7 +1000,7 @@ pub fn parse_field_syntax_full<const ALLOW_RESET: bool>(
 pub(super) fn parse_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
     tok: &'a [Token],
     qd: &mut Qd,
-) -> LangResult<(ExpandedField, usize)> {
+) -> LangResult<(ExpandedField<'a>, usize)> {
     let l = tok.len();
     let mut i = 0_usize;
     let mut state = FieldSyntaxParseState::IDENT;
@@ -1086,28 +1089,25 @@ pub(super) fn parse_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct Alter {
-    model: RawSlice,
-    kind: AlterKind,
+pub struct Alter<'a> {
+    model: Slice<'a>,
+    kind: AlterKind<'a>,
 }
 
-impl Alter {
+impl<'a> Alter<'a> {
     #[inline(always)]
-    pub(super) fn new(model: RawSlice, kind: AlterKind) -> Self {
-        Self {
-            model,
-            kind: kind.into(),
-        }
+    pub(super) fn new(model: Slice<'a>, kind: AlterKind<'a>) -> Self {
+        Self { model, kind }
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 /// The alter operation kind
-pub enum AlterKind {
-    Add(Box<[ExpandedField]>),
-    Remove(Box<[RawSlice]>),
-    Update(Box<[ExpandedField]>),
+pub enum AlterKind<'a> {
+    Add(Box<[ExpandedField<'a>]>),
+    Remove(Box<[Slice<'a>]>),
+    Update(Box<[ExpandedField<'a>]>),
 }
 
 #[inline(always)]
@@ -1116,7 +1116,7 @@ pub(super) fn parse_alter_kind_from_tokens<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
     current: &mut usize,
-) -> LangResult<Alter> {
+) -> LangResult<Alter<'a>> {
     let l = tok.len();
     let okay = l > 2 && tok[0].is_ident();
     if !okay {
@@ -1144,7 +1144,7 @@ pub(super) fn parse_multiple_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RES
     tok: &'a [Token],
     qd: &mut Qd,
     current: &mut usize,
-) -> LangResult<Box<[ExpandedField]>> {
+) -> LangResult<Box<[ExpandedField<'a>]>> {
     const DEFAULT_ADD_COL_CNT: usize = 4;
     /*
         WARNING: No trailing commas allowed
@@ -1204,21 +1204,24 @@ pub(super) fn alter_add<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
     current: &mut usize,
-) -> LangResult<Box<[ExpandedField]>> {
+) -> LangResult<Box<[ExpandedField<'a>]>> {
     self::parse_multiple_field_syntax::<Qd, DISALLOW_RESET_SYNTAX>(tok, qd, current)
 }
 
 #[cfg(test)]
-pub(super) fn alter_add_full(
-    tok: &[Token],
+pub(super) fn alter_add_full<'a>(
+    tok: &'a [Token],
     current: &mut usize,
-) -> LangResult<Box<[ExpandedField]>> {
+) -> LangResult<Box<[ExpandedField<'a>]>> {
     self::alter_add(tok, &mut InplaceData::new(), current)
 }
 
 #[inline(always)]
 /// Parse the expression for `alter model <> remove (..)`
-pub(super) fn alter_remove(tok: &[Token], current: &mut usize) -> LangResult<Box<[RawSlice]>> {
+pub(super) fn alter_remove<'a>(
+    tok: &'a [Token],
+    current: &mut usize,
+) -> LangResult<Box<[Slice<'a>]>> {
     const DEFAULT_REMOVE_COL_CNT: usize = 4;
     /*
         WARNING: No trailing commas allowed
@@ -1274,11 +1277,14 @@ pub(super) fn alter_update<'a, Qd: QueryData<'a>>(
     tok: &'a [Token],
     qd: &mut Qd,
     current: &mut usize,
-) -> LangResult<Box<[ExpandedField]>> {
+) -> LangResult<Box<[ExpandedField<'a>]>> {
     self::parse_multiple_field_syntax::<Qd, ALLOW_RESET_SYNTAX>(tok, qd, current)
 }
 
 #[cfg(test)]
-pub(super) fn alter_update_full(tok: &[Token], i: &mut usize) -> LangResult<Box<[ExpandedField]>> {
+pub(super) fn alter_update_full<'a>(
+    tok: &'a [Token],
+    i: &mut usize,
+) -> LangResult<Box<[ExpandedField<'a>]>> {
     self::alter_update(tok, &mut InplaceData::new(), i)
 }

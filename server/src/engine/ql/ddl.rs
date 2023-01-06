@@ -26,46 +26,49 @@
 
 use super::{
     ast::{Entity, Statement},
-    lexer::Token,
-    LangError, LangResult, RawSlice,
+    lexer::{Slice, Token},
+    LangError, LangResult,
 };
 
 #[derive(Debug, PartialEq)]
 /// A generic representation of `drop` query
-pub struct DropSpace {
-    pub(super) space: RawSlice,
+pub struct DropSpace<'a> {
+    pub(super) space: Slice<'a>,
     pub(super) force: bool,
 }
 
-impl DropSpace {
+impl<'a> DropSpace<'a> {
     #[inline(always)]
     /// Instantiate
-    pub(super) const fn new(space: RawSlice, force: bool) -> Self {
+    pub(super) const fn new(space: Slice<'a>, force: bool) -> Self {
         Self { space, force }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct DropModel {
-    pub(super) entity: Entity,
+pub struct DropModel<'a> {
+    pub(super) entity: Entity<'a>,
     pub(super) force: bool,
 }
 
-impl DropModel {
+impl<'a> DropModel<'a> {
     #[inline(always)]
-    pub fn new(entity: Entity, force: bool) -> Self {
+    pub fn new(entity: Entity<'a>, force: bool) -> Self {
         Self { entity, force }
     }
 }
 
 // drop (<space> | <model>) <ident> [<force>]
-pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<Statement> {
-    match tok.get(0) {
-        Some(Token![model]) => {
+/// ## Panic
+///
+/// If token stream length is < 2
+pub(super) fn parse_drop<'a>(tok: &'a [Token], counter: &mut usize) -> LangResult<Statement<'a>> {
+    match tok[0] {
+        Token![model] => {
             // we have a model. now parse entity and see if we should force deletion
             let mut i = 1;
             let e = Entity::parse_from_tokens(&tok[1..], &mut i)?;
-            let force = i < tok.len() && tok[i] == Token::Ident("force".into());
+            let force = i < tok.len() && tok[i] == Token::Ident(b"force");
             i += force as usize;
             *counter += i;
             // if we've exhausted the stream, we're good to go (either `force`, or nothing)
@@ -73,10 +76,10 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
                 return Ok(Statement::DropModel(DropModel::new(e, force)));
             }
         }
-        Some(Token![space]) if tok.len() > 1 && tok[1].is_ident() => {
+        Token![space] if tok[1].is_ident() => {
             let mut i = 2; // (`space` and space name)
                            // should we force drop?
-            let force = i < tok.len() && tok[i] == Token::Ident("force".into());
+            let force = i < tok.len() && tok[i] == Token::Ident(b"force");
             i += force as usize;
             *counter += i;
             // either `force` or nothing
@@ -84,7 +87,7 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
                 return Ok(Statement::DropSpace(DropSpace::new(
                     unsafe {
                         // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
-                        extract!(tok[1], Token::Ident(ref space) => space.clone())
+                        extract!(tok[1], Token::Ident(ref space) => *space)
                     },
                     force,
                 )));
@@ -96,14 +99,14 @@ pub(super) fn parse_drop(tok: &[Token], counter: &mut usize) -> LangResult<State
 }
 
 #[cfg(test)]
-pub(super) fn parse_drop_full(tok: &[Token]) -> LangResult<Statement> {
+pub(super) fn parse_drop_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
     let mut i = 0;
     let r = self::parse_drop(tok, &mut i);
     assert_full_tt!(i, tok.len());
     r
 }
 
-pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statement> {
+pub(super) fn parse_inspect<'a>(tok: &'a [Token], c: &mut usize) -> LangResult<Statement<'a>> {
     /*
         inpsect model <entity>
         inspect space <entity>
@@ -118,15 +121,10 @@ pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statemen
             *c += 1;
             Ok(Statement::InspectSpace(unsafe {
                 // UNSAFE(@ohsayan): Safe because of the match predicate
-                extract!(tok[1], Token::Ident(ref space) => space.clone())
+                extract!(tok[1], Token::Ident(ref space) => space)
             }))
         }
-        Some(Token::Ident(id))
-            if unsafe {
-                // UNSAFE(@ohsayan): Token lifetime ensures validity of slice
-                id.as_slice().eq_ignore_ascii_case(b"spaces")
-            } && tok.len() == 1 =>
-        {
+        Some(Token::Ident(id)) if id.eq_ignore_ascii_case(b"spaces") && tok.len() == 1 => {
             Ok(Statement::InspectSpaces)
         }
         _ => Err(LangError::ExpectedStatement),
@@ -134,7 +132,7 @@ pub(super) fn parse_inspect(tok: &[Token], c: &mut usize) -> LangResult<Statemen
 }
 
 #[cfg(test)]
-pub(super) fn parse_inspect_full(tok: &[Token]) -> LangResult<Statement> {
+pub(super) fn parse_inspect_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
     let mut i = 0;
     let r = self::parse_inspect(tok, &mut i);
     assert_full_tt!(i, tok.len());

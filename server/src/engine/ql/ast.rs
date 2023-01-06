@@ -26,12 +26,11 @@
 
 use {
     super::{
-        ddl,
-        lexer::{InsecureLexer, LitIR, Token},
-        schema, LangError, LangResult, RawSlice,
+        ddl, dml,
+        lexer::{LitIR, Slice, Token},
+        schema, LangError, LangResult,
     },
-    crate::util::Life,
-    core::{marker::PhantomData, slice},
+    crate::util::compiler,
 };
 
 pub trait QueryData<'a> {
@@ -46,15 +45,18 @@ pub trait QueryData<'a> {
 
 pub struct InplaceData;
 impl InplaceData {
+    #[inline(always)]
     pub const fn new() -> Self {
         Self
     }
 }
 
 impl<'a> QueryData<'a> for InplaceData {
+    #[inline(always)]
     fn can_read_lit_from(&self, tok: &Token) -> bool {
         tok.is_lit()
     }
+    #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
         extract!(tok, Token::Lit(l) => l.as_ir())
     }
@@ -64,15 +66,18 @@ pub struct SubstitutedData<'a> {
     data: &'a [LitIR<'a>],
 }
 impl<'a> SubstitutedData<'a> {
+    #[inline(always)]
     pub const fn new(src: &'a [LitIR<'a>]) -> Self {
         Self { data: src }
     }
 }
 
 impl<'a> QueryData<'a> for SubstitutedData<'a> {
+    #[inline(always)]
     fn can_read_lit_from(&self, tok: &Token) -> bool {
         Token![?].eq(tok) && !self.data.is_empty()
     }
+    #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
         debug_assert!(Token![?].eq(tok));
         let ret = self.data[0];
@@ -87,7 +92,7 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
 
 #[derive(Debug, PartialEq)]
 /// An [`Entity`] represents the location for a specific structure, such as a model
-pub enum Entity {
+pub enum Entity<'a> {
     /// A partial entity is used when switching to a model wrt the currently set space (commonly used
     /// when running `use` queries)
     ///
@@ -95,7 +100,7 @@ pub enum Entity {
     /// ```sql
     /// :model
     /// ```
-    Partial(RawSlice),
+    Partial(Slice<'a>),
     /// A single entity is used when switching to a model wrt the currently set space (commonly used
     /// when running DML queries)
     ///
@@ -103,7 +108,7 @@ pub enum Entity {
     /// ```sql
     /// model
     /// ```
-    Single(RawSlice),
+    Single(Slice<'a>),
     /// A full entity is a complete definition to a model wrt to the given space (commonly used with
     /// DML queries)
     ///
@@ -111,16 +116,17 @@ pub enum Entity {
     /// ```sql
     /// space.model
     /// ```
-    Full(RawSlice, RawSlice),
+    Full(Slice<'a>, Slice<'a>),
 }
 
-impl<T: Into<RawSlice>, U: Into<RawSlice>> From<(T, U)> for Entity {
-    fn from((space, model): (T, U)) -> Self {
-        Self::Full(space.into(), model.into())
+impl<'a> From<(Slice<'a>, Slice<'a>)> for Entity<'a> {
+    #[inline(always)]
+    fn from((space, model): (Slice<'a>, Slice<'a>)) -> Self {
+        Self::Full(space, model)
     }
 }
 
-impl Entity {
+impl<'a> Entity<'a> {
     #[inline(always)]
     /// Parse a full entity from the given slice
     ///
@@ -128,7 +134,7 @@ impl Entity {
     ///
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a full entity
-    pub(super) unsafe fn full_entity_from_slice(sl: &[Token]) -> Self {
+    pub(super) unsafe fn full_entity_from_slice(sl: &'a [Token]) -> Self {
         Entity::Full(
             extract!(&sl[0], Token::Ident(sl) => sl.clone()),
             extract!(&sl[2], Token::Ident(sl) => sl.clone()),
@@ -141,7 +147,7 @@ impl Entity {
     ///
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a single entity
-    pub(super) unsafe fn single_entity_from_slice(sl: &[Token]) -> Self {
+    pub(super) unsafe fn single_entity_from_slice(sl: &'a [Token]) -> Self {
         Entity::Single(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
     }
     #[inline(always)]
@@ -151,7 +157,7 @@ impl Entity {
     ///
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a partial entity
-    pub(super) unsafe fn partial_entity_from_slice(sl: &[Token]) -> Self {
+    pub(super) unsafe fn partial_entity_from_slice(sl: &'a [Token]) -> Self {
         Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
     }
     #[inline(always)]
@@ -174,7 +180,7 @@ impl Entity {
     #[inline(always)]
     /// Attempt to parse an entity using the given token stream. It also accepts a counter
     /// argument to forward the cursor
-    pub(super) fn parse_from_tokens(tok: &[Token], c: &mut usize) -> LangResult<Self> {
+    pub fn parse_from_tokens(tok: &'a [Token], c: &mut usize) -> LangResult<Self> {
         let is_partial = Self::tokens_with_partial(tok);
         let is_current = Self::tokens_with_single(tok);
         let is_full = Self::tokens_with_full(tok);
@@ -195,272 +201,94 @@ impl Entity {
         };
         Ok(r)
     }
-    #[inline(always)]
-    /// Parse an entity using the given [`Compiler`] instance. Internally this just evalutes it
-    /// using a token stream, finally forwarding the [`Compiler`]'s internal cursor depending on the
-    /// number of bytes consumed
-    pub(super) fn parse(cm: &mut Compiler) -> LangResult<Self> {
-        let sl = cm.remslice();
-        let mut c = 0;
-        let r = Self::parse_from_tokens(sl, &mut c);
-        unsafe {
-            cm.incr_cursor_by(c);
-        }
-        r
-    }
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
 /// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
 // TODO(@ohsayan): Determine whether we actually need this
-pub enum Statement {
+pub enum Statement<'a> {
     /// DDL query to switch between spaces and models
-    Use(Entity),
+    Use(Entity<'a>),
     /// DDL query to create a model
-    CreateModel(schema::Model),
+    CreateModel(schema::Model<'a>),
     /// DDL query to create a space
-    CreateSpace(schema::Space),
+    CreateSpace(schema::Space<'a>),
     /// DDL query to alter a space (properties)
-    AlterSpace(schema::AlterSpace),
+    AlterSpace(schema::AlterSpace<'a>),
     /// DDL query to alter a model (properties, field types, etc)
-    AlterModel(schema::Alter),
+    AlterModel(schema::Alter<'a>),
     /// DDL query to drop a model
     ///
     /// Conditions:
     /// - Model view is empty
     /// - Model is not in active use
-    DropModel(ddl::DropModel),
+    DropModel(ddl::DropModel<'a>),
     /// DDL query to drop a space
     ///
     /// Conditions:
     /// - Space doesn't have any other structures
     /// - Space is not in active use
-    DropSpace(ddl::DropSpace),
+    DropSpace(ddl::DropSpace<'a>),
     /// DDL query to inspect a space (returns a list of models in the space)
-    InspectSpace(RawSlice),
+    InspectSpace(Slice<'a>),
     /// DDL query to inspect a model (returns the model definition)
-    InspectModel(Entity),
+    InspectModel(Entity<'a>),
     /// DDL query to inspect all spaces (returns a list of spaces in the database)
     InspectSpaces,
+    /// DML insert
+    Insert(dml::InsertStatement<'a>),
+    /// DML select
+    Select(dml::SelectStatement<'a>),
+    /// DML update
+    Update(dml::UpdateStatement<'a>),
+    /// DML delete
+    Delete(dml::DeleteStatement<'a>),
 }
 
-/// A [`Compiler`] for BlueQL queries
-// TODO(@ohsayan): Decide whether we need this
-pub struct Compiler<'a> {
-    c: *const Token,
-    e: *const Token,
-    _lt: PhantomData<&'a [u8]>,
-}
-
-impl<'a> Compiler<'a> {
-    /// Compile a BlueQL query
-    pub fn compile(src: &'a [u8]) -> LangResult<Life<'a, Statement>> {
-        let token_stream = InsecureLexer::lex(src)?;
-        Self::new(&token_stream).compile_link_lt()
+pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], mut qd: Qd) -> LangResult<Statement<'a>> {
+    let mut i = 0;
+    let ref mut qd = qd;
+    if compiler::unlikely(tok.len() < 2) {
+        return Err(LangError::UnexpectedEndofStatement);
     }
-    #[inline(always)]
-    /// Create a new [`Compiler`] instance
-    pub(super) const fn new(token_stream: &[Token]) -> Self {
-        unsafe {
-            Self {
-                c: token_stream.as_ptr(),
-                e: token_stream.as_ptr().add(token_stream.len()),
-                _lt: PhantomData,
+    match tok[0] {
+        // DDL
+        Token![use] => Entity::parse_from_tokens(&tok[1..], &mut i).map(Statement::Use),
+        Token![create] => match tok[1] {
+            Token![model] => schema::parse_schema_from_tokens(&tok[2..], qd).map(|(q, c)| {
+                i += c;
+                Statement::CreateModel(q)
+            }),
+            Token![space] => schema::parse_space_from_tokens(&tok[2..], qd).map(|(q, c)| {
+                i += c;
+                Statement::CreateSpace(q)
+            }),
+            _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
+        },
+        Token![drop] if tok.len() >= 3 => ddl::parse_drop(&tok[1..], &mut i),
+        Token![alter] => match tok[1] {
+            Token![model] => schema::parse_alter_kind_from_tokens(&tok[2..], qd, &mut i)
+                .map(Statement::AlterModel),
+            Token![space] => {
+                schema::parse_alter_space_from_tokens(&tok[2..], qd).map(|(q, incr)| {
+                    i += incr;
+                    Statement::AlterSpace(q)
+                })
             }
+            _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
+        },
+        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => {
+            ddl::parse_inspect(&tok[1..], &mut i)
         }
-    }
-    #[inline(always)]
-    /// Utility method to link a lifetime to the statement since the statement makes use of some
-    /// unsafe lifetime-free code that would otherwise cause the program to crash and burn
-    fn compile_link_lt(mut self) -> LangResult<Life<'a, Statement>> {
-        match self.stage0() {
-            Ok(t) if self.exhausted() => Ok(Life::new(t)),
-            Err(e) => Err(e),
-            _ => Err(LangError::UnexpectedToken),
+        // DML
+        Token![insert] => dml::parse_insert(&tok[1..], qd, &mut i).map(Statement::Insert),
+        Token![select] => dml::parse_select(&tok[1..], qd, &mut i).map(Statement::Select),
+        Token![update] => {
+            dml::UpdateStatement::parse_update(&tok[1..], qd, &mut i).map(Statement::Update)
         }
-    }
-    #[inline(always)]
-    /// Stage 0: what statement
-    fn stage0(&mut self) -> Result<Statement, LangError> {
-        match self.nxtok_opt_forward() {
-            Some(Token![create]) => self.create0(),
-            Some(Token![drop]) => self.drop0(),
-            Some(Token![alter]) => self.alter0(),
-            Some(Token![describe]) => self.inspect0(),
-            Some(Token![use]) => self.use0(),
-            _ => Err(LangError::ExpectedStatement),
+        Token![delete] => {
+            dml::DeleteStatement::parse_delete(&tok[1..], qd, &mut i).map(Statement::Delete)
         }
-    }
-    #[inline(always)]
-    /// Create 0: Create what (model/space)
-    fn create0(&mut self) -> Result<Statement, LangError> {
-        match self.nxtok_opt_forward() {
-            Some(Token![model]) => self.c_model0(),
-            Some(Token![space]) => self.c_space0(),
-            _ => Err(LangError::UnexpectedEndofStatement),
-        }
-    }
-    #[inline(always)]
-    /// Drop 0: Drop what (model/space)
-    fn drop0(&mut self) -> Result<Statement, LangError> {
-        let mut i = 0;
-        let r = ddl::parse_drop(self.remslice(), &mut i);
-        unsafe {
-            self.incr_cursor_by(i);
-        }
-        r
-    }
-    #[inline(always)]
-    /// Alter 0: Alter what (model/space)
-    fn alter0(&mut self) -> Result<Statement, LangError> {
-        match self.nxtok_opt_forward() {
-            Some(Token![model]) => self.alter_model(),
-            Some(Token![space]) => self.alter_space(),
-            Some(_) => Err(LangError::ExpectedStatement),
-            None => Err(LangError::UnexpectedEndofStatement),
-        }
-    }
-    #[inline(always)]
-    /// Alter model
-    fn alter_model(&mut self) -> Result<Statement, LangError> {
-        let mut c = 0;
-        let r =
-            schema::parse_alter_kind_from_tokens(self.remslice(), &mut InplaceData::new(), &mut c);
-        unsafe {
-            self.incr_cursor_by(c);
-        }
-        r.map(Statement::AlterModel)
-    }
-    #[inline(always)]
-    /// Alter space
-    fn alter_space(&mut self) -> Result<Statement, LangError> {
-        let (alter, i) =
-            schema::parse_alter_space_from_tokens(self.remslice(), &mut InplaceData::new())?;
-        unsafe {
-            self.incr_cursor_by(i);
-        }
-        Ok(Statement::AlterSpace(alter))
-    }
-    #[inline(always)]
-    /// Inspect 0: Inpsect what (model/space/spaces)
-    fn inspect0(&mut self) -> Result<Statement, LangError> {
-        let mut i = 0;
-        let r = ddl::parse_inspect(self.remslice(), &mut i);
-        unsafe {
-            self.incr_cursor_by(i);
-        }
-        r
-    }
-    #[inline(always)]
-    /// Parse an `use` query
-    fn use0(&mut self) -> Result<Statement, LangError> {
-        let entity = Entity::parse(self)?;
-        Ok(Statement::Use(entity))
-    }
-    #[inline(always)]
-    /// Create model
-    fn c_model0(&mut self) -> Result<Statement, LangError> {
-        let (model, i) =
-            schema::parse_schema_from_tokens(self.remslice(), &mut InplaceData::new())?;
-        unsafe {
-            self.incr_cursor_by(i);
-        }
-        Ok(Statement::CreateModel(model))
-    }
-    #[inline(always)]
-    /// Create space
-    fn c_space0(&mut self) -> Result<Statement, LangError> {
-        let (space, i) = schema::parse_space_from_tokens(self.remslice(), &mut InplaceData::new())?;
-        unsafe {
-            self.incr_cursor_by(i);
-        }
-        Ok(Statement::CreateSpace(space))
-    }
-}
-
-impl<'a> Compiler<'a> {
-    #[inline(always)]
-    /// Attempt to read the next token and forward the interal cursor if there is a cursor ahead
-    pub(super) fn nxtok_opt_forward<'b>(&mut self) -> Option<&'b Token>
-    where
-        'a: 'b,
-    {
-        if self.not_exhausted() {
-            unsafe {
-                let r = Some(&*self.c);
-                self.incr_cursor();
-                r
-            }
-        } else {
-            None
-        }
-    }
-    #[inline(always)]
-    /// Returns the cursor
-    pub(super) const fn cursor(&self) -> *const Token {
-        self.c
-    }
-    #[inline(always)]
-    /// Returns the remaining buffer as a slice
-    pub(super) fn remslice(&'a self) -> &'a [Token] {
-        unsafe { slice::from_raw_parts(self.c, self.remaining()) }
-    }
-    #[inline(always)]
-    /// Check if the buffer is not exhausted
-    pub(super) fn not_exhausted(&self) -> bool {
-        self.c != self.e
-    }
-    #[inline(always)]
-    /// Check if the buffer is exhausted
-    pub(super) fn exhausted(&self) -> bool {
-        self.c == self.e
-    }
-    #[inline(always)]
-    /// Check the remaining bytes in the buffer
-    pub(super) fn remaining(&self) -> usize {
-        unsafe { self.e.offset_from(self.c) as usize }
-    }
-    /// Deref the cursor
-    ///
-    /// ## Safety
-    ///
-    /// Have to ensure it isn't pointing to garbage i.e beyond EOA
-    pub(super) unsafe fn deref_cursor(&self) -> &Token {
-        &*self.c
-    }
-    /// Increment the cursor if the next token matches the given token
-    pub(super) fn peek_eq_and_forward(&mut self, t: Token) -> bool {
-        let did_fw = self.not_exhausted() && unsafe { self.deref_cursor() == &t };
-        unsafe {
-            self.incr_cursor_if(did_fw);
-        }
-        did_fw
-    }
-    #[inline(always)]
-    /// Increment the cursor
-    ///
-    /// ## Safety
-    ///
-    /// Should be >= EOA
-    pub(super) unsafe fn incr_cursor(&mut self) {
-        self.incr_cursor_by(1)
-    }
-    /// Increment the cursor if the given boolean expr is satisified
-    ///
-    /// ## Safety
-    ///
-    /// Should be >= EOA (if true)
-    pub(super) unsafe fn incr_cursor_if(&mut self, did_fw: bool) {
-        self.incr_cursor_by(did_fw as _)
-    }
-    #[inline(always)]
-    /// Increment the cursor by the given count
-    ///
-    /// ## Safety
-    ///
-    /// >= EOA (if nonzero)
-    pub(super) unsafe fn incr_cursor_by(&mut self, by: usize) {
-        debug_assert!(self.remaining() >= by);
-        self.c = self.c.add(by);
+        _ => compiler::cold_rerr(LangError::ExpectedStatement),
     }
 }

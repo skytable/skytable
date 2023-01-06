@@ -25,25 +25,22 @@
 */
 
 use super::*;
-use crate::engine::ql::ast::{Compiler, Entity};
+use crate::engine::ql::ast::Entity;
 #[test]
 fn entity_current() {
     let t = lex_insecure(b"hello").unwrap();
-    let mut c = Compiler::new(&t);
-    let r = Entity::parse(&mut c).unwrap();
-    assert_eq!(r, Entity::Single("hello".into()))
+    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
+    assert_eq!(r, Entity::Single(b"hello"))
 }
 #[test]
 fn entity_partial() {
     let t = lex_insecure(b":hello").unwrap();
-    let mut c = Compiler::new(&t);
-    let r = Entity::parse(&mut c).unwrap();
-    assert_eq!(r, Entity::Partial("hello".into()))
+    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
+    assert_eq!(r, Entity::Partial(b"hello"))
 }
 #[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();
-    let mut c = Compiler::new(&t);
-    let r = Entity::parse(&mut c).unwrap();
-    assert_eq!(r, Entity::Full("hello".into(), "world".into()))
+    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
+    assert_eq!(r, Entity::Full(b"hello", b"world"))
 }
