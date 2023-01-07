@@ -1,0 +1,213 @@
+/*
+ * Created on Fri Oct 14 2022
+ *
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
+ * NoSQL database written by Sayan Nandan ("the Author") with the
+ * vision to provide flexibility in data modelling without compromising
+ * on performance, queryability or scalability.
+ *
+ * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+*/
+
+/*
+    TODO(@ohsayan): For now we've settled for an imprecise error site reporting for simplicity, which we
+    should augment in future revisions of the QL engine
+*/
+
+pub mod delete;
+pub mod insert;
+pub mod select;
+pub mod update;
+
+#[cfg(test)]
+use super::ast::InplaceData;
+use {
+    super::{
+        ast::{Entity, QueryData, State},
+        lexer::{LitIR, Token},
+    },
+    crate::util::{compiler, MaybeInit},
+    std::collections::HashMap,
+};
+
+#[inline(always)]
+unsafe fn read_ident<'a>(tok: &'a Token<'a>) -> &'a [u8] {
+    extract!(tok, Token::Ident(ref tok) => tok)
+}
+
+#[inline(always)]
+fn u(b: bool) -> u8 {
+    b as _
+}
+
+/*
+    Misc
+*/
+
+#[inline(always)]
+fn attempt_process_entity<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+    d: &mut MaybeInit<Entity<'a>>,
+) {
+    let tok = state.current();
+    let is_full = Entity::tokens_with_full(tok);
+    let is_single = Entity::tokens_with_single(tok);
+    unsafe {
+        if is_full {
+            state.cursor_ahead_by(3);
+            *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+        } else if is_single {
+            state.cursor_ahead();
+            *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+        }
+    }
+    state.poison_if_not(is_full | is_single);
+}
+
+fn parse_entity<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>, d: &mut MaybeInit<Entity<'a>>) {
+    let tok = state.current();
+    let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
+    let is_single = tok[0].is_ident();
+    unsafe {
+        if is_full {
+            state.cursor_ahead_by(3);
+            *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+        } else if is_single {
+            state.cursor_ahead();
+            *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+        }
+    }
+    state.poison_if_not(is_full | is_single);
+}
+
+/*
+    Contexts
+*/
+
+#[derive(Debug, PartialEq)]
+pub struct RelationalExpr<'a> {
+    pub(super) lhs: &'a [u8],
+    pub(super) rhs: LitIR<'a>,
+    pub(super) opc: u8,
+}
+
+impl<'a> RelationalExpr<'a> {
+    #[inline(always)]
+    pub(super) fn new(lhs: &'a [u8], rhs: LitIR<'a>, opc: u8) -> RelationalExpr<'a> {
+        Self { lhs, rhs, opc }
+    }
+    pub(super) const OP_EQ: u8 = 1;
+    pub(super) const OP_NE: u8 = 2;
+    pub(super) const OP_GT: u8 = 3;
+    pub(super) const OP_GE: u8 = 4;
+    pub(super) const OP_LT: u8 = 5;
+    pub(super) const OP_LE: u8 = 6;
+    fn filter_hint_none(&self) -> bool {
+        self.opc == Self::OP_EQ
+    }
+    #[inline(always)]
+    fn parse_operator<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> u8 {
+        let tok = state.current();
+        let op_eq = u(tok[0] == Token![=]) * Self::OP_EQ;
+        let op_ne = u(tok[0] == Token![!] && tok[1] == Token![=]) * Self::OP_NE;
+        let op_ge = u(tok[0] == Token![>] && tok[1] == Token![=]) * Self::OP_GE;
+        let op_gt = u(tok[0] == Token![>] && op_ge == 0) * Self::OP_GT;
+        let op_le = u(tok[0] == Token![<] && tok[1] == Token![=]) * Self::OP_LE;
+        let op_lt = u(tok[0] == Token![<] && op_le == 0) * Self::OP_LT;
+        let opc = op_eq + op_ne + op_ge + op_gt + op_le + op_lt;
+        state.poison_if_not(opc != 0);
+        state.cursor_ahead_by(1 + (opc & 1 == 0) as usize);
+        opc
+    }
+    #[inline(always)]
+    fn try_parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<Self> {
+        if compiler::likely(state.remaining() < 3) {
+            return compiler::cold_val(None);
+        }
+        let ident = state.read();
+        state.poison_if_not(ident.is_ident());
+        state.cursor_ahead(); // ignore any errors
+        let operator = Self::parse_operator(state);
+        state.poison_if_not(state.can_read_lit_rounded());
+        if compiler::likely(state.okay()) {
+            unsafe {
+                let lit = state.read_cursor_lit_unchecked();
+                state.cursor_ahead();
+                Some(Self::new(read_ident(ident), lit, operator))
+            }
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WhereClause<'a> {
+    c: WhereClauseCollection<'a>,
+}
+
+type WhereClauseCollection<'a> = HashMap<&'a [u8], RelationalExpr<'a>>;
+
+impl<'a> WhereClause<'a> {
+    #[inline(always)]
+    pub(super) fn new(c: WhereClauseCollection<'a>) -> Self {
+        Self { c }
+    }
+    #[inline(always)]
+    fn parse_where_and_append_to<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+        c: &mut WhereClauseCollection<'a>,
+    ) {
+        let mut has_more = true;
+        while has_more && state.not_exhausted() && state.okay() {
+            if let Some(expr) = RelationalExpr::try_parse(state) {
+                state.poison_if_not(c.insert(expr.lhs, expr).is_none());
+            }
+            has_more = state.cursor_rounded_eq(Token![and]);
+            state.cursor_ahead_if(has_more);
+        }
+    }
+    #[inline(always)]
+    /// Parse a where context
+    ///
+    /// Notes:
+    /// - Enforce a minimum of 1 clause
+    pub(super) fn parse_where<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Self {
+        let mut c = HashMap::with_capacity(2);
+        Self::parse_where_and_append_to(state, &mut c);
+        state.poison_if(c.is_empty());
+        Self { c }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClause<'a>> {
+    let mut state = State::new(tok, InplaceData::new());
+    let ret = WhereClause::parse_where(&mut state);
+    assert_full_tt!(state);
+    state.okay().then_some(ret)
+}
+
+#[cfg(test)]
+#[inline(always)]
+pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<'a>> {
+    let mut state = State::new(tok, InplaceData::new());
+    let ret = RelationalExpr::try_parse(&mut state);
+    assert_full_tt!(state);
+    ret
+}

@@ -31,7 +31,142 @@ use {
         schema, LangError, LangResult,
     },
     crate::util::compiler,
+    core::cmp,
 };
+
+#[inline(always)]
+pub fn minidx<T>(src: &[T], index: usize) -> usize {
+    cmp::min(src.len() - 1, index)
+}
+
+#[derive(Debug, PartialEq)]
+/// Query parse state
+pub struct State<'a, Qd> {
+    t: &'a [Token<'a>],
+    d: Qd,
+    i: usize,
+    f: bool,
+}
+
+impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
+    #[inline(always)]
+    /// Create a new [`State`] instance using the given tokens and data
+    pub const fn new(t: &'a [Token<'a>], d: Qd) -> Self {
+        Self {
+            i: 0,
+            f: true,
+            t,
+            d,
+        }
+    }
+    #[inline(always)]
+    /// Returns `true` if the state is okay
+    pub const fn okay(&self) -> bool {
+        self.f
+    }
+    #[inline(always)]
+    /// Poison the state flag
+    pub fn poison(&mut self) {
+        self.f = false;
+    }
+    #[inline(always)]
+    /// Poison the state flag if the expression is satisfied
+    pub fn poison_if(&mut self, fuse: bool) {
+        self.f &= !fuse;
+    }
+    #[inline(always)]
+    /// Poison the state flag if the expression is not satisfied
+    pub fn poison_if_not(&mut self, fuse: bool) {
+        self.poison_if(!fuse);
+    }
+    #[inline(always)]
+    /// Move the cursor ahead by 1
+    pub fn cursor_ahead(&mut self) {
+        self.cursor_ahead_by(1)
+    }
+    #[inline(always)]
+    /// Move the cursor ahead by the given count
+    pub fn cursor_ahead_by(&mut self, by: usize) {
+        self.i += by;
+    }
+    #[inline(always)]
+    /// Move the cursor ahead by 1 if the expression is satisfied
+    pub fn cursor_ahead_if(&mut self, iff: bool) {
+        self.cursor_ahead_by(iff as _);
+    }
+    #[inline(always)]
+    /// Read the cursor
+    pub fn read(&self) -> &'a Token<'a> {
+        &self.t[self.i]
+    }
+    #[inline(always)]
+    /// Return a subslice of the tokens using the current state
+    pub fn current(&self) -> &'a [Token<'a>] {
+        &self.t[self.i..]
+    }
+    #[inline(always)]
+    /// Returns a count of the number of consumable tokens remaining
+    pub fn remaining(&self) -> usize {
+        self.t.len() - self.i
+    }
+    #[inline(always)]
+    /// Read and forward the cursor
+    pub fn fw_read(&mut self) -> &'a Token<'a> {
+        let r = self.read();
+        self.cursor_ahead();
+        r
+    }
+    #[inline(always)]
+    /// Check if the token stream has alteast `many` count of tokens
+    pub fn has_remaining(&mut self, many: usize) -> bool {
+        self.remaining() >= many
+    }
+    #[inline(always)]
+    /// Returns true if the token stream has been exhausted
+    pub fn exhausted(&self) -> bool {
+        self.remaining() == 0
+    }
+    #[inline(always)]
+    /// Returns true if the token stream has **not** been exhausted
+    pub fn not_exhausted(&self) -> bool {
+        self.remaining() != 0
+    }
+    #[inline(always)]
+    /// Check if the current cursor can read a lit (with context from the data source); rounded
+    pub fn can_read_lit_rounded(&self) -> bool {
+        let mx = minidx(self.t, self.i);
+        Qd::can_read_lit_from(&self.d, &self.t[mx]) && mx == self.i
+    }
+    /// Check if a lit can be read using the given token with context from the data source
+    pub fn can_read_lit_from(&self, tok: &'a Token<'a>) -> bool {
+        Qd::can_read_lit_from(&self.d, tok)
+    }
+    #[inline(always)]
+    /// Read a lit from the cursor and data source
+    ///
+    /// ## Safety
+    /// - Must ensure that `Self::can_read_lit_rounded` is true
+    pub unsafe fn read_cursor_lit_unchecked(&mut self) -> LitIR<'a> {
+        let tok = self.read();
+        Qd::read_lit(&mut self.d, tok)
+    }
+    #[inline(always)]
+    /// Check if the cursor equals the given token; rounded
+    pub fn cursor_rounded_eq(&self, tok: Token<'a>) -> bool {
+        let mx = minidx(self.t, self.i);
+        self.t[mx] == tok && mx == self.i
+    }
+    #[inline(always)]
+    /// Check if the cursor equals the given token
+    pub(crate) fn cursor_eq(&self, token: Token) -> bool {
+        self.t[self.i] == token
+    }
+    #[inline(always)]
+    /// Read ahead from the cursor by the given positions
+    pub(crate) fn read_ahead(&self, ahead: usize) -> &'a Token<'a> {
+        &self.t[self.i + ahead]
+    }
+}
 
 pub trait QueryData<'a> {
     /// Check if the given token is a lit, while also checking `self`'s data if necessary
@@ -43,6 +178,7 @@ pub trait QueryData<'a> {
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a>;
 }
 
+#[derive(Debug)]
 pub struct InplaceData;
 impl InplaceData {
     #[inline(always)]
@@ -62,6 +198,7 @@ impl<'a> QueryData<'a> for InplaceData {
     }
 }
 
+#[derive(Debug)]
 pub struct SubstitutedData<'a> {
     data: &'a [LitIR<'a>],
 }
@@ -236,18 +373,18 @@ pub enum Statement<'a> {
     /// DDL query to inspect all spaces (returns a list of spaces in the database)
     InspectSpaces,
     /// DML insert
-    Insert(dml::InsertStatement<'a>),
+    Insert(dml::insert::InsertStatement<'a>),
     /// DML select
-    Select(dml::SelectStatement<'a>),
+    Select(dml::select::SelectStatement<'a>),
     /// DML update
-    Update(dml::UpdateStatement<'a>),
+    Update(dml::update::UpdateStatement<'a>),
     /// DML delete
-    Delete(dml::DeleteStatement<'a>),
+    Delete(dml::delete::DeleteStatement<'a>),
 }
 
-pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], mut qd: Qd) -> LangResult<Statement<'a>> {
+pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], mut d: Qd) -> LangResult<Statement<'a>> {
     let mut i = 0;
-    let ref mut qd = qd;
+    let ref mut qd = d;
     if compiler::unlikely(tok.len() < 2) {
         return Err(LangError::UnexpectedEndofStatement);
     }
@@ -281,14 +418,23 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], mut qd: Qd) -> LangResul
             ddl::parse_inspect(&tok[1..], &mut i)
         }
         // DML
-        Token![insert] => dml::parse_insert(&tok[1..], qd, &mut i).map(Statement::Insert),
-        Token![select] => dml::parse_select(&tok[1..], qd, &mut i).map(Statement::Select),
-        Token![update] => {
-            dml::UpdateStatement::parse_update(&tok[1..], qd, &mut i).map(Statement::Update)
+        ref stmt => {
+            let mut state = State::new(&tok[1..], d);
+            match stmt {
+                Token![insert] => {
+                    dml::insert::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
+                }
+                Token![select] => {
+                    dml::select::SelectStatement::parse_select(&mut state).map(Statement::Select)
+                }
+                Token![update] => {
+                    dml::update::UpdateStatement::parse_update(&mut state).map(Statement::Update)
+                }
+                Token![delete] => {
+                    dml::delete::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
+                }
+                _ => compiler::cold_rerr(LangError::ExpectedStatement),
+            }
         }
-        Token![delete] => {
-            dml::DeleteStatement::parse_delete(&tok[1..], qd, &mut i).map(Statement::Delete)
-        }
-        _ => compiler::cold_rerr(LangError::ExpectedStatement),
     }
 }
