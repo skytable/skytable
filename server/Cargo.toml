@@ -26,6 +26,7 @@ tokio = { version = "1.21.0", features = ["full"] }
 tokio-openssl = "0.6.3"
 toml = "0.5.9"
 base64 = "0.13.0"
+uuid = { version = "1.2.2", features = ["v4", "fast-rng", "macro-diagnostics"] }
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps

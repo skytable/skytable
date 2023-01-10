@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::ql::ast::InplaceData;
 use {
-    super::parse_entity,
+    super::{parse_entity, read_ident},
     crate::{
         engine::{
             memory::DataType,
@@ -39,13 +39,104 @@ use {
         },
         util::{compiler, MaybeInit},
     },
-    core::mem::{discriminant, Discriminant},
-    std::collections::HashMap,
+    core::{
+        cmp,
+        mem::{discriminant, Discriminant},
+    },
+    std::{
+        collections::HashMap,
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    },
+    uuid::Uuid,
 };
 
 /*
     Impls for insert
 */
+
+pub const T_UUIDSTR: &str = "4593264b-0231-43e9-b0aa-50784f14e204";
+pub const T_UUIDBIN: &[u8] = T_UUIDSTR.as_bytes();
+pub const T_TIMESEC: u64 = 1673187839_u64;
+
+type ProducerFn = fn() -> DataType;
+
+// base
+#[inline(always)]
+fn pfnbase_time() -> Duration {
+    if cfg!(debug_assertions) {
+        Duration::from_secs(T_TIMESEC)
+    } else {
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+    }
+}
+#[inline(always)]
+fn pfnbase_uuid() -> Uuid {
+    if cfg!(debug_assertions) {
+        Uuid::parse_str(T_UUIDSTR).unwrap()
+    } else {
+        Uuid::new_v4()
+    }
+}
+// impl
+#[inline(always)]
+fn pfn_timesec() -> DataType {
+    DataType::UnsignedInt(pfnbase_time().as_secs())
+}
+#[inline(always)]
+fn pfn_uuidstr() -> DataType {
+    DataType::String(pfnbase_uuid().to_string().into_boxed_str())
+}
+#[inline(always)]
+fn pfn_uuidbin() -> DataType {
+    DataType::Binary(pfnbase_uuid().as_bytes().to_vec().into_boxed_slice())
+}
+
+static PRODUCER_G: [u8; 4] = [0, 2, 3, 0];
+static PRODUCER_F: [(&[u8], ProducerFn); 3] = [
+    (b"uuidstr", pfn_uuidstr),
+    (b"uuidbin", pfn_uuidbin),
+    (b"timesec", pfn_timesec),
+];
+const MAGIC_1: [u8; 7] = *b"cp21rLd";
+const MAGIC_2: [u8; 7] = *b"zS8zgaK";
+const MAGIC_L: usize = MAGIC_1.len();
+
+#[inline(always)]
+fn hashf(key: &[u8], m: &[u8]) -> u32 {
+    let mut i = 0;
+    let mut s = 0;
+    while i < key.len() {
+        s += m[(i % MAGIC_L) as usize] as u32 * key[i] as u32;
+        i += 1;
+    }
+    s % PRODUCER_G.len() as u32
+}
+#[inline(always)]
+fn hashp(key: &[u8]) -> u32 {
+    (PRODUCER_G[hashf(key, &MAGIC_1) as usize] + PRODUCER_G[hashf(key, &MAGIC_2) as usize]) as u32
+        % PRODUCER_G.len() as u32
+}
+#[inline(always)]
+fn ldfunc(func: &[u8]) -> Option<ProducerFn> {
+    let ph = hashp(func) as usize;
+    let min = cmp::min(ph, PRODUCER_F.len() - 1);
+    let data = PRODUCER_F[min as usize];
+    if data.0 == func {
+        Some(data.1)
+    } else {
+        None
+    }
+}
+#[inline(always)]
+fn ldfunc_exists(func: &[u8]) -> bool {
+    ldfunc(func).is_some()
+}
+#[inline(always)]
+unsafe fn ldfunc_unchecked(func: &[u8]) -> ProducerFn {
+    let ph = hashp(func) as usize;
+    debug_assert_eq!(PRODUCER_F[ph as usize].0, func);
+    PRODUCER_F[ph as usize].1
+}
 
 /// ## Panics
 /// - If tt length is less than 1
@@ -58,17 +149,15 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
     let mut overall_dscr = None;
     let mut prev_nlist_dscr = None;
     while state.not_exhausted() && state.okay() && !stop {
-        let d = match state.read() {
+        let d = match state.fw_read() {
             tok if state.can_read_lit_from(tok) => {
                 let r = unsafe {
                     // UNSAFE(@ohsayan): the if guard guarantees correctness
-                    DataType::clone_from_litir(state.read_cursor_lit_unchecked())
+                    DataType::clone_from_litir(state.read_lit_unchecked_from(tok))
                 };
-                state.cursor_ahead();
                 r
             }
             Token![open []] => {
-                state.cursor_ahead();
                 // a nested list
                 let mut nested_list = Vec::new();
                 let nlist_dscr = parse_list(state, &mut nested_list);
@@ -83,7 +172,18 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
                 }
                 DataType::List(nested_list)
             }
+            Token![@] if state.cursor_signature_match_fn_arity0_rounded() => match unsafe {
+                // UNSAFE(@ohsayan): Just verified at guard
+                handle_func_sub(state)
+            } {
+                Some(value) => value,
+                None => {
+                    state.poison();
+                    break;
+                }
+            },
             _ => {
+                state.cursor_back();
                 state.poison();
                 break;
             }
@@ -98,6 +198,15 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
         stop = nx_csqrb;
     }
     overall_dscr
+}
+
+#[inline(always)]
+/// ## Safety
+/// - Cursor must match arity(0) function signature
+unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<DataType> {
+    let func = read_ident(state.fw_read());
+    state.cursor_ahead_by(2); // skip tt:paren
+    ldfunc(func).map(move |f| f())
 }
 
 #[cfg(test)]
@@ -118,27 +227,33 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
     state.cursor_ahead_if(stop);
     let mut data = Vec::new();
     while state.not_exhausted() && state.okay() && !stop {
-        match state.read() {
-            tok if state.can_read_lit_from(tok) => {
-                unsafe {
-                    // UNSAFE(@ohsayan): if guard guarantees correctness
-                    data.push(Some(DataType::clone_from_litir(
-                        state.read_cursor_lit_unchecked(),
-                    )))
-                }
-                state.cursor_ahead();
-            }
-            Token![open []] if state.remaining() >= 2 => {
-                state.cursor_ahead();
+        match state.fw_read() {
+            tok if state.can_read_lit_from(tok) => unsafe {
+                // UNSAFE(@ohsayan): if guard guarantees correctness
+                data.push(Some(DataType::clone_from_litir(
+                    state.read_lit_unchecked_from(tok),
+                )))
+            },
+            Token![open []] if state.not_exhausted() => {
                 let mut l = Vec::new();
                 let _ = parse_list(state, &mut l);
                 data.push(Some(l.into()));
             }
             Token![null] => {
-                state.cursor_ahead();
                 data.push(None);
             }
+            Token![@] if state.cursor_signature_match_fn_arity0_rounded() => match unsafe {
+                // UNSAFE(@ohsayan): Just verified at guard
+                handle_func_sub(state)
+            } {
+                Some(value) => data.push(Some(value)),
+                None => {
+                    state.poison();
+                    break;
+                }
+            },
             _ => {
+                state.cursor_back();
                 state.poison();
                 break;
             }
@@ -169,31 +284,40 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     state.cursor_ahead_if(stop);
     let mut data = HashMap::with_capacity(2);
     while state.has_remaining(3) && state.okay() && !stop {
-        let field = state.read();
-        let colon = state.read_ahead(1);
-        let expr = state.read_ahead(2);
+        let field = state.fw_read();
+        let colon = state.fw_read();
+        let expr = state.fw_read();
         state.poison_if_not(Token![:].eq(colon));
         match (field, expr) {
             (Token::Ident(id), tok) if state.can_read_lit_from(tok) => {
-                state.cursor_ahead_by(2); // ident + colon
                 let ldata = Some(DataType::clone_from_litir(unsafe {
                     // UNSAFE(@ohsayan): The if guard guarantees correctness
-                    state.read_cursor_lit_unchecked()
+                    state.read_lit_unchecked_from(tok)
                 }));
-                state.cursor_ahead();
                 state.poison_if_not(data.insert(*id, ldata).is_none());
             }
             (Token::Ident(id), Token![null]) => {
-                state.cursor_ahead_by(3);
                 state.poison_if_not(data.insert(*id, None).is_none());
             }
-            (Token::Ident(id), Token![open []]) if state.remaining() >= 4 => {
-                state.cursor_ahead_by(3);
+            (Token::Ident(id), Token![open []]) if state.not_exhausted() => {
                 let mut l = Vec::new();
                 let _ = parse_list(state, &mut l);
                 state.poison_if_not(data.insert(*id, Some(l.into())).is_none());
             }
+            (Token::Ident(id), Token![@]) if state.cursor_signature_match_fn_arity0_rounded() => {
+                match unsafe {
+                    // UNSAFE(@ohsayan): Just verified at guard
+                    handle_func_sub(state)
+                } {
+                    Some(value) => state.poison_if_not(data.insert(*id, Some(value)).is_none()),
+                    None => {
+                        state.poison();
+                        break;
+                    }
+                }
+            }
             _ => {
+                state.cursor_back_by(3);
                 state.poison();
                 break;
             }
@@ -271,10 +395,8 @@ impl<'a> InsertStatement<'a> {
         // entity
         let mut entity = MaybeInit::uninit();
         parse_entity(state, &mut entity);
-        let what_data = state.read();
-        state.cursor_ahead(); // ignore errors for now
         let mut data = None;
-        match what_data {
+        match state.fw_read() {
             Token![() open] if state.not_exhausted() => {
                 let this_data = parse_data_tuple_syntax(state);
                 data = Some(InsertData::Ordered(this_data));

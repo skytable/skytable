@@ -551,6 +551,36 @@ mod stmt_insert {
         );
         assert_eq!(r, e);
     }
+    #[test]
+    fn insert_tuple_fnsub() {
+        let tok =
+            lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
+        let ret = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let expected = InsertStatement::new(
+            Entity::Full(b"jotsy", b"app"),
+            into_array_nullable![dml::insert::T_UUIDSTR, "sayan", dml::insert::T_TIMESEC]
+                .to_vec()
+                .into(),
+        );
+        assert_eq!(ret, expected);
+    }
+    #[test]
+    fn insert_map_fnsub() {
+        let tok = lex_insecure(
+            br#"insert into jotsy.app { uuid: @uuidstr(), username: "sayan", signup_time: @timesec() }"#
+        ).unwrap();
+        let ret = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let expected = InsertStatement::new(
+            Entity::Full(b"jotsy", b"app"),
+            dict_nullable! {
+                "uuid".as_bytes() => dml::insert::T_UUIDSTR,
+                "username".as_bytes() => "sayan",
+                "signup_time".as_bytes() => dml::insert::T_TIMESEC,
+            }
+            .into(),
+        );
+        assert_eq!(ret, expected);
+    }
 }
 
 mod stmt_select {

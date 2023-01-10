@@ -118,7 +118,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     }
     #[inline(always)]
     /// Check if the token stream has alteast `many` count of tokens
-    pub fn has_remaining(&mut self, many: usize) -> bool {
+    pub fn has_remaining(&self, many: usize) -> bool {
         self.remaining() >= many
     }
     #[inline(always)]
@@ -151,6 +151,14 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         Qd::read_lit(&mut self.d, tok)
     }
     #[inline(always)]
+    /// Read a lit from the given token
+    ///
+    /// ## Safety
+    /// - Must ensure that `Self::can_read_lit_from` is true for the token
+    pub unsafe fn read_lit_unchecked_from(&mut self, tok: &'a Token<'a>) -> LitIR<'a> {
+        Qd::read_lit(&mut self.d, tok)
+    }
+    #[inline(always)]
     /// Check if the cursor equals the given token; rounded
     pub fn cursor_rounded_eq(&self, tok: Token<'a>) -> bool {
         let mx = minidx(self.t, self.i);
@@ -165,6 +173,34 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     /// Read ahead from the cursor by the given positions
     pub(crate) fn read_ahead(&self, ahead: usize) -> &'a Token<'a> {
         &self.t[self.i + ahead]
+    }
+    #[inline(always)]
+    /// Move the cursor back by 1
+    pub(crate) fn cursor_back(&mut self) {
+        self.cursor_back_by(1);
+    }
+    #[inline(always)]
+    /// Move the cursor back by the given count
+    pub(crate) fn cursor_back_by(&mut self, by: usize) {
+        self.i -= by;
+    }
+    #[inline(always)]
+    pub(crate) fn cursor_has_ident_rounded(&self) -> bool {
+        self.t[minidx(self.t, self.i)].is_ident() && self.not_exhausted()
+    }
+    #[inline(always)]
+    /// Check if the current token stream matches the signature of an arity(0) fn; rounded
+    ///
+    /// NOTE: Consider using a direct comparison without rounding
+    pub(crate) fn cursor_signature_match_fn_arity0_rounded(&self) -> bool {
+        let rem = self.has_remaining(3);
+        let idx_a = self.i * rem as usize;
+        let idx_b = (self.i + 1) * rem as usize;
+        let idx_c = (self.i + 2) * rem as usize;
+        (self.t[idx_a].is_ident())
+            & (self.t[idx_b] == Token![() open])
+            & (self.t[idx_c] == Token![() close])
+            & rem
     }
 }
 
