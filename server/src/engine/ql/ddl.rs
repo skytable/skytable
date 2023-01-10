@@ -24,10 +24,15 @@
  *
 */
 
-use super::{
-    ast::{Entity, Statement},
-    lexer::{Slice, Token},
-    LangError, LangResult,
+#[cfg(test)]
+use super::ast::InplaceData;
+use {
+    super::{
+        ast::{Entity, QueryData, State, Statement},
+        lexer::{Slice, Token},
+        LangError, LangResult,
+    },
+    crate::util::compiler,
 };
 
 #[derive(Debug, PartialEq)]
@@ -62,32 +67,31 @@ impl<'a> DropModel<'a> {
 /// ## Panic
 ///
 /// If token stream length is < 2
-pub(super) fn parse_drop<'a>(tok: &'a [Token], counter: &mut usize) -> LangResult<Statement<'a>> {
-    match tok[0] {
+pub(super) fn parse_drop<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+) -> LangResult<Statement<'a>> {
+    match state.fw_read() {
         Token![model] => {
             // we have a model. now parse entity and see if we should force deletion
-            let mut i = 1;
-            let e = Entity::parse_from_tokens(&tok[1..], &mut i)?;
-            let force = i < tok.len() && tok[i] == Token::Ident(b"force");
-            i += force as usize;
-            *counter += i;
+            let e = Entity::attempt_process_entity_result(state)?;
+            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+            state.cursor_ahead_if(force);
             // if we've exhausted the stream, we're good to go (either `force`, or nothing)
-            if tok.len() == i {
+            if state.exhausted() {
                 return Ok(Statement::DropModel(DropModel::new(e, force)));
             }
         }
-        Token![space] if tok[1].is_ident() => {
-            let mut i = 2; // (`space` and space name)
-                           // should we force drop?
-            let force = i < tok.len() && tok[i] == Token::Ident(b"force");
-            i += force as usize;
-            *counter += i;
+        Token![space] if state.cursor_is_ident() => {
+            let ident = state.fw_read();
+            // should we force drop?
+            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+            state.cursor_ahead_if(force);
             // either `force` or nothing
-            if tok.len() == i {
+            if state.exhausted() {
                 return Ok(Statement::DropSpace(DropSpace::new(
                     unsafe {
                         // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
-                        extract!(tok[1], Token::Ident(ref space) => *space)
+                        extract!(ident, Token::Ident(ref space) => *space)
                     },
                     force,
                 )));
@@ -100,41 +104,49 @@ pub(super) fn parse_drop<'a>(tok: &'a [Token], counter: &mut usize) -> LangResul
 
 #[cfg(test)]
 pub(super) fn parse_drop_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
-    let mut i = 0;
-    let r = self::parse_drop(tok, &mut i);
-    assert_full_tt!(i, tok.len());
+    let mut state = State::new(tok, InplaceData::new());
+    let r = self::parse_drop(&mut state);
+    assert_full_tt!(state);
     r
 }
 
-pub(super) fn parse_inspect<'a>(tok: &'a [Token], c: &mut usize) -> LangResult<Statement<'a>> {
+pub(super) fn parse_inspect<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+) -> LangResult<Statement<'a>> {
     /*
         inpsect model <entity>
         inspect space <entity>
         inspect spaces
+
+        min length -> (<model> | <space>) <model> = 2
     */
 
-    let nxt = tok.get(0);
-    *c += nxt.is_some() as usize;
-    match nxt {
-        Some(Token![model]) => Entity::parse_from_tokens(&tok[1..], c).map(Statement::InspectModel),
-        Some(Token![space]) if tok.len() == 2 && tok[1].is_ident() => {
-            *c += 1;
+    if compiler::unlikely(state.remaining() < 1) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+    }
+
+    match state.fw_read() {
+        Token![model] => Entity::attempt_process_entity_result(state).map(Statement::InspectModel),
+        Token![space] if state.cursor_has_ident_rounded() => {
             Ok(Statement::InspectSpace(unsafe {
                 // UNSAFE(@ohsayan): Safe because of the match predicate
-                extract!(tok[1], Token::Ident(ref space) => space)
+                extract!(state.fw_read(), Token::Ident(ref space) => space)
             }))
         }
-        Some(Token::Ident(id)) if id.eq_ignore_ascii_case(b"spaces") && tok.len() == 1 => {
+        Token::Ident(id) if id.eq_ignore_ascii_case(b"spaces") && state.exhausted() => {
             Ok(Statement::InspectSpaces)
         }
-        _ => Err(LangError::ExpectedStatement),
+        _ => {
+            state.cursor_back();
+            Err(LangError::ExpectedStatement)
+        }
     }
 }
 
 #[cfg(test)]
 pub(super) fn parse_inspect_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
-    let mut i = 0;
-    let r = self::parse_inspect(tok, &mut i);
-    assert_full_tt!(i, tok.len());
+    let mut state = State::new(tok, InplaceData::new());
+    let r = self::parse_inspect(&mut state);
+    assert_full_tt!(state);
     r
 }

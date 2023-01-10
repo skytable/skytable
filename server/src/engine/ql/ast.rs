@@ -30,7 +30,10 @@ use {
         lexer::{LitIR, Slice, Token},
         schema, LangError, LangResult,
     },
-    crate::{engine::memory::DataType, util::compiler},
+    crate::{
+        engine::memory::DataType,
+        util::{compiler, MaybeInit},
+    },
     core::cmp,
 };
 
@@ -230,6 +233,10 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     pub(crate) fn cursor(&self) -> usize {
         self.i
     }
+    #[inline(always)]
+    pub(crate) fn cursor_is_ident(&self) -> bool {
+        self.read().is_ident()
+    }
 }
 
 pub trait QueryData<'a> {
@@ -428,6 +435,58 @@ impl<'a> Entity<'a> {
         };
         Ok(r)
     }
+    #[inline(always)]
+    pub fn attempt_process_entity_result<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> LangResult<Self> {
+        let mut e = MaybeInit::uninit();
+        Self::attempt_process_entity(state, &mut e);
+        if state.okay() {
+            unsafe {
+                // UNSAFE(@ohsayan): just checked if okay
+                Ok(e.assume_init())
+            }
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
+    #[inline(always)]
+    pub fn attempt_process_entity<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+        d: &mut MaybeInit<Entity<'a>>,
+    ) {
+        let tok = state.current();
+        let is_full = Entity::tokens_with_full(tok);
+        let is_single = Entity::tokens_with_single(tok);
+        unsafe {
+            if is_full {
+                state.cursor_ahead_by(3);
+                *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+            } else if is_single {
+                state.cursor_ahead();
+                *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+            }
+        }
+        state.poison_if_not(is_full | is_single);
+    }
+    pub fn parse_entity<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+        d: &mut MaybeInit<Entity<'a>>,
+    ) {
+        let tok = state.current();
+        let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
+        let is_single = tok[0].is_ident();
+        unsafe {
+            if is_full {
+                state.cursor_ahead_by(3);
+                *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+            } else if is_single {
+                state.cursor_ahead();
+                *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+            }
+        }
+        state.poison_if_not(is_full | is_single);
+    }
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
@@ -473,54 +532,46 @@ pub enum Statement<'a> {
 }
 
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Statement<'a>> {
-    let mut i = 0;
     if compiler::unlikely(tok.len() < 2) {
         return Err(LangError::UnexpectedEndofStatement);
     }
-    match tok[0] {
+    let mut state = State::new(tok, d);
+    match state.fw_read() {
         // DDL
-        Token![use] => Entity::parse_from_tokens(&tok[1..], &mut i).map(Statement::Use),
-        Token![drop] if tok.len() >= 3 => ddl::parse_drop(&tok[1..], &mut i),
-        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => {
-            ddl::parse_inspect(&tok[1..], &mut i)
-        }
-        ref stmt => {
-            let mut state = State::new(&tok[1..], d);
-            match stmt {
-                // DDL
-                Token![create] => {
-                    match tok[1] {
-                        Token![model] => schema::parse_model_from_tokens(&mut state)
-                            .map(Statement::CreateModel),
-                        Token![space] => schema::parse_space_from_tokens(&mut state)
-                            .map(Statement::CreateSpace),
-                        _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
-                    }
-                }
-                Token![alter] => match tok[1] {
-                    Token![model] => {
-                        schema::parse_alter_kind_from_tokens(&mut state).map(Statement::AlterModel)
-                    }
-                    Token![space] => {
-                        schema::parse_alter_space_from_tokens(&mut state).map(Statement::AlterSpace)
-                    }
-                    _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
-                },
-                // DML
-                Token![insert] => {
-                    dml::insert::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
-                }
-                Token![select] => {
-                    dml::select::SelectStatement::parse_select(&mut state).map(Statement::Select)
-                }
-                Token![update] => {
-                    dml::update::UpdateStatement::parse_update(&mut state).map(Statement::Update)
-                }
-                Token![delete] => {
-                    dml::delete::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
-                }
-                _ => compiler::cold_rerr(LangError::ExpectedStatement),
+        Token![use] => Entity::attempt_process_entity_result(&mut state).map(Statement::Use),
+        Token![create] => match state.fw_read() {
+            Token![model] => {
+                schema::parse_model_from_tokens(&mut state).map(Statement::CreateModel)
             }
+            Token![space] => {
+                schema::parse_space_from_tokens(&mut state).map(Statement::CreateSpace)
+            }
+            _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
+        },
+        Token![alter] => match state.fw_read() {
+            Token![model] => {
+                schema::parse_alter_kind_from_tokens(&mut state).map(Statement::AlterModel)
+            }
+            Token![space] => {
+                schema::parse_alter_space_from_tokens(&mut state).map(Statement::AlterSpace)
+            }
+            _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
+        },
+        Token![drop] if state.remaining() >= 2 => ddl::parse_drop(&mut state),
+        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => ddl::parse_inspect(&mut state),
+        // DML
+        Token![insert] => {
+            dml::insert::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
         }
+        Token![select] => {
+            dml::select::SelectStatement::parse_select(&mut state).map(Statement::Select)
+        }
+        Token![update] => {
+            dml::update::UpdateStatement::parse_update(&mut state).map(Statement::Update)
+        }
+        Token![delete] => {
+            dml::delete::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
+        }
+        _ => compiler::cold_rerr(LangError::ExpectedStatement),
     }
 }

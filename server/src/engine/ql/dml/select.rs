@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::ql::ast::InplaceData;
 use {
-    super::{attempt_process_entity, WhereClause, WhereClauseCollection},
+    super::{WhereClause, WhereClauseCollection},
     crate::{
         engine::ql::{
             ast::{Entity, QueryData, State},
@@ -122,7 +122,7 @@ impl<'a> SelectStatement<'a> {
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
         let mut entity = MaybeInit::uninit();
-        attempt_process_entity(state, &mut entity);
+        Entity::attempt_process_entity(state, &mut entity);
         let mut clauses = <_ as Default>::default();
         if state.cursor_rounded_eq(Token![where]) {
             state.cursor_ahead();

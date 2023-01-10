@@ -30,7 +30,7 @@ use {
     crate::engine::ql::{ast::InplaceData, lexer::Token},
 };
 use {
-    super::{parse_entity, read_ident, u, WhereClause},
+    super::{read_ident, u, WhereClause},
     crate::{
         engine::ql::{
             ast::{Entity, QueryData, State},
@@ -188,7 +188,7 @@ impl<'a> UpdateStatement<'a> {
         }
         // parse entity
         let mut entity = MaybeInit::uninit();
-        parse_entity(state, &mut entity);
+        Entity::parse_entity(state, &mut entity);
         if !(state.has_remaining(6)) {
             unsafe {
                 // UNSAFE(@ohsayan): Obvious from above, max 3 fw

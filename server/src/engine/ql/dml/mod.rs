@@ -38,10 +38,10 @@ pub mod update;
 use super::ast::InplaceData;
 use {
     super::{
-        ast::{Entity, QueryData, State},
+        ast::{QueryData, State},
         lexer::{LitIR, Token},
     },
-    crate::util::{compiler, MaybeInit},
+    crate::util::compiler,
     std::collections::HashMap,
 };
 
@@ -58,42 +58,6 @@ fn u(b: bool) -> u8 {
 /*
     Misc
 */
-
-#[inline(always)]
-fn attempt_process_entity<'a, Qd: QueryData<'a>>(
-    state: &mut State<'a, Qd>,
-    d: &mut MaybeInit<Entity<'a>>,
-) {
-    let tok = state.current();
-    let is_full = Entity::tokens_with_full(tok);
-    let is_single = Entity::tokens_with_single(tok);
-    unsafe {
-        if is_full {
-            state.cursor_ahead_by(3);
-            *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
-        } else if is_single {
-            state.cursor_ahead();
-            *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
-        }
-    }
-    state.poison_if_not(is_full | is_single);
-}
-
-fn parse_entity<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>, d: &mut MaybeInit<Entity<'a>>) {
-    let tok = state.current();
-    let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
-    let is_single = tok[0].is_ident();
-    unsafe {
-        if is_full {
-            state.cursor_ahead_by(3);
-            *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
-        } else if is_single {
-            state.cursor_ahead();
-            *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
-        }
-    }
-    state.poison_if_not(is_full | is_single);
-}
 
 /*
     Contexts

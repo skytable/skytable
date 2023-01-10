@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::ql::ast::InplaceData;
 use {
-    super::{parse_entity, read_ident},
+    super::read_ident,
     crate::{
         engine::{
             memory::DataType,
@@ -392,7 +392,7 @@ impl<'a> InsertStatement<'a> {
 
         // entity
         let mut entity = MaybeInit::uninit();
-        parse_entity(state, &mut entity);
+        Entity::parse_entity(state, &mut entity);
         let mut data = None;
         match state.fw_read() {
             Token![() open] if state.not_exhausted() => {

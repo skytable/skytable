@@ -24,13 +24,8 @@
  *
 */
 
-#[cfg(test)]
 use {
-    super::WhereClauseCollection,
-    crate::engine::ql::{ast::InplaceData, lexer::Token},
-};
-use {
-    super::{parse_entity, WhereClause},
+    super::WhereClause,
     crate::{
         engine::ql::{
             ast::{Entity, QueryData, State},
@@ -38,6 +33,11 @@ use {
         },
         util::{compiler, MaybeInit},
     },
+};
+#[cfg(test)]
+use {
+    super::WhereClauseCollection,
+    crate::engine::ql::{ast::InplaceData, lexer::Token},
 };
 
 /*
@@ -78,7 +78,7 @@ impl<'a> DeleteStatement<'a> {
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors (if any)
         let mut entity = MaybeInit::uninit();
-        parse_entity(state, &mut entity);
+        Entity::parse_entity(state, &mut entity);
         // where + clauses
         state.poison_if_not(state.cursor_eq(Token![where]));
         state.cursor_ahead(); // ignore errors
