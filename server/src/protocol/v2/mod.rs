@@ -35,6 +35,7 @@ use {
 };
 
 #[cfg(feature = "nightly")]
+#[cfg(test)]
 mod benches;
 #[cfg(test)]
 mod tests;
