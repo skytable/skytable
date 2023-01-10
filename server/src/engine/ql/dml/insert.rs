@@ -153,7 +153,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
             tok if state.can_read_lit_from(tok) => {
                 let r = unsafe {
                     // UNSAFE(@ohsayan): the if guard guarantees correctness
-                    DataType::clone_from_litir(state.read_lit_unchecked_from(tok))
+                    state.read_lit_into_data_type_unchecked_from(tok)
                 };
                 r
             }
@@ -230,9 +230,7 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
         match state.fw_read() {
             tok if state.can_read_lit_from(tok) => unsafe {
                 // UNSAFE(@ohsayan): if guard guarantees correctness
-                data.push(Some(DataType::clone_from_litir(
-                    state.read_lit_unchecked_from(tok),
-                )))
+                data.push(Some(state.read_lit_into_data_type_unchecked_from(tok)));
             },
             Token![open []] if state.not_exhausted() => {
                 let mut l = Vec::new();
@@ -290,10 +288,10 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
         state.poison_if_not(Token![:].eq(colon));
         match (field, expr) {
             (Token::Ident(id), tok) if state.can_read_lit_from(tok) => {
-                let ldata = Some(DataType::clone_from_litir(unsafe {
+                let ldata = Some(unsafe {
                     // UNSAFE(@ohsayan): The if guard guarantees correctness
-                    state.read_lit_unchecked_from(tok)
-                }));
+                    state.read_lit_into_data_type_unchecked_from(tok)
+                });
                 state.poison_if_not(data.insert(*id, ldata).is_none());
             }
             (Token::Ident(id), Token![null]) => {

@@ -30,7 +30,7 @@ use {
         lexer::{LitIR, Slice, Token},
         schema, LangError, LangResult,
     },
-    crate::util::compiler,
+    crate::{engine::memory::DataType, util::compiler},
     core::cmp,
 };
 
@@ -202,6 +202,15 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
             & (self.t[idx_c] == Token![() close])
             & rem
     }
+    /// Reads a lit using the given token and the internal data source and return a data type
+    ///
+    /// ## Safety
+    ///
+    /// Caller should have checked that the token matches a lit signature and that enough data is available
+    /// in the data source. (ideally should run `can_read_lit_from` or `can_read_lit_rounded`)
+    pub unsafe fn read_lit_into_data_type_unchecked_from(&mut self, tok: &'a Token) -> DataType {
+        self.d.read_data_type(tok)
+    }
 }
 
 pub trait QueryData<'a> {
@@ -212,6 +221,11 @@ pub trait QueryData<'a> {
     /// ## Safety
     /// The current token **must match** the signature of a lit
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a>;
+    /// Read a lit using the given token and then copy it into a [`DataType`]
+    ///
+    /// ## Safety
+    /// The current token must match the signature of a lit
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType;
 }
 
 #[derive(Debug)]
@@ -231,6 +245,10 @@ impl<'a> QueryData<'a> for InplaceData {
     #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
         extract!(tok, Token::Lit(l) => l.as_ir())
+    }
+    #[inline(always)]
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType {
+        DataType::clone_from_lit(extract!(tok, Token::Lit(ref l) => l))
     }
 }
 
@@ -256,6 +274,13 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
         let ret = self.data[0];
         self.data = &self.data[1..];
         ret
+    }
+    #[inline(always)]
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType {
+        debug_assert!(Token![?].eq(tok));
+        let ret = self.data[0];
+        self.data = &self.data[1..];
+        DataType::clone_from_litir(ret)
     }
 }
 
