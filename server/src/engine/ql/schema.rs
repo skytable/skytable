@@ -44,19 +44,18 @@
     Sept. 15, 2022
 */
 
+#[cfg(test)]
+use crate::engine::ql::ast::InplaceData;
 use {
     super::{
-        ast::QueryData,
+        ast::{QueryData, State},
         lexer::{LitIR, LitIROwned, Slice, Symbol, Token},
         LangError, LangResult,
     },
-    crate::util::MaybeInit,
+    crate::util::{compiler, MaybeInit},
     core::str,
     std::collections::{HashMap, HashSet},
 };
-
-#[cfg(test)]
-use crate::engine::ql::ast::InplaceData;
 
 /*
     Meta
@@ -227,11 +226,10 @@ states! {
 
 /// Fold a dictionary
 pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
-    mut state: DictFoldState,
-    tok: &'a [Token],
-    d: &mut Qd,
+    mut mstate: DictFoldState,
+    state: &mut State<'a, Qd>,
     dict: &mut Dict,
-) -> u64 {
+) {
     /*
         NOTE: Assume rules wherever applicable
 
@@ -241,101 +239,84 @@ pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
         <colon> ::= ":"
         <dict> ::= <openbrace> (<ident> <colon> (<lit> | <dict>) <comma>)* <comma>* <closebrace>
     */
-    let l = tok.len();
-    let mut i = 0;
-    let mut okay = true;
     let mut tmp = MaybeInit::uninit();
 
-    while i < l {
-        match (&tok[i], state) {
+    while state.loop_tt() {
+        match (state.fw_read(), mstate) {
             (Token::Symbol(Symbol::TtOpenBrace), DictFoldState::OB) => {
-                i += 1;
                 // we found a brace, expect a close brace or an ident
-                state = DictFoldState::CB_OR_IDENT;
+                mstate = DictFoldState::CB_OR_IDENT;
             }
             (
                 Token::Symbol(Symbol::TtCloseBrace),
                 DictFoldState::CB_OR_IDENT | DictFoldState::COMMA_OR_CB,
             ) => {
                 // end of stream
-                i += 1;
-                state = DictFoldState::FINAL;
+                mstate = DictFoldState::FINAL;
                 break;
             }
             (Token::Ident(id), DictFoldState::CB_OR_IDENT) => {
                 // found ident, so expect colon
-                i += 1;
                 tmp = MaybeInit::new(unsafe { str::from_utf8_unchecked(id) });
-                state = DictFoldState::COLON;
+                mstate = DictFoldState::COLON;
             }
             (Token::Symbol(Symbol::SymColon), DictFoldState::COLON) => {
                 // found colon, expect literal or openbrace
-                i += 1;
-                state = DictFoldState::LIT_OR_OB;
+                mstate = DictFoldState::LIT_OR_OB;
             }
-            (tok, DictFoldState::LIT_OR_OB) if Qd::can_read_lit_from(d, tok) => {
-                i += 1;
+            (tok, DictFoldState::LIT_OR_OB) if state.can_read_lit_from(tok) => {
                 // found literal; so push in k/v pair and then expect a comma or close brace
                 unsafe {
-                    okay &= dict
-                        .insert(
-                            tmp.assume_init_ref().to_string(),
-                            Some(Qd::read_lit(d, tok).into()),
-                        )
-                        .is_none();
+                    let v = Some(state.read_lit_unchecked_from(tok).into());
+                    state
+                        .poison_if_not(dict.insert(tmp.assume_init_ref().to_string(), v).is_none());
                 }
-                state = DictFoldState::COMMA_OR_CB;
+                mstate = DictFoldState::COMMA_OR_CB;
             }
             (Token![null], DictFoldState::LIT_OR_OB) => {
                 // null
-                i += 1;
-                okay &= dict
-                    .insert(unsafe { tmp.assume_init_ref() }.to_string(), None)
-                    .is_none();
-                state = DictFoldState::COMMA_OR_CB;
+                state.poison_if_not(
+                    dict.insert(unsafe { tmp.assume_init_ref() }.to_string(), None)
+                        .is_none(),
+                );
+                mstate = DictFoldState::COMMA_OR_CB;
             }
             // ONLY COMMA CAPTURE
             (Token::Symbol(Symbol::SymComma), DictFoldState::COMMA_OR_CB) => {
-                i += 1;
                 // we found a comma, expect a *strict* brace close or ident
-                state = DictFoldState::CB_OR_IDENT;
+                mstate = DictFoldState::CB_OR_IDENT;
             }
             (Token::Symbol(Symbol::TtOpenBrace), DictFoldState::LIT_OR_OB) => {
-                i += 1;
                 // we found an open brace, so this is a dict
                 let mut new_dict = Dict::new();
-                let ret = rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], d, &mut new_dict);
-                okay &= ret & HIBIT == HIBIT;
-                i += (ret & !HIBIT) as usize;
-                okay &= dict
-                    .insert(
+                rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut new_dict);
+                state.poison_if_not(
+                    dict.insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
                         Some(new_dict.into()),
                     )
-                    .is_none();
+                    .is_none(),
+                );
                 // at the end of a dict we either expect a comma or close brace
-                state = DictFoldState::COMMA_OR_CB;
+                mstate = DictFoldState::COMMA_OR_CB;
             }
             _ => {
-                okay = false;
+                state.poison();
+                state.cursor_back();
                 break;
             }
         }
     }
-    okay &= state == DictFoldState::FINAL;
-    i as u64 | ((okay as u64) << 63)
+    state.poison_if_not(mstate == DictFoldState::FINAL);
 }
 
 #[cfg(test)]
 /// Fold a dictionary (**test-only**)
 pub fn fold_dict(tok: &[Token]) -> Option<Dict> {
     let mut d = Dict::new();
-    let r = rfold_dict(DictFoldState::OB, tok, &mut InplaceData::new(), &mut d);
-    if r & HIBIT == HIBIT {
-        Some(d)
-    } else {
-        None
-    }
+    let mut state = State::new(tok, InplaceData::new());
+    rfold_dict(DictFoldState::OB, &mut state, &mut d);
+    state.okay().then_some(d)
 }
 
 /*
@@ -355,200 +336,137 @@ states! {
 }
 
 #[derive(Debug, PartialEq)]
-/// The result of a type metadata fold
-pub struct TyMetaFoldResult {
-    cnt: usize,
-    reset: bool,
+pub struct TyMetaReturn {
     more: bool,
-    okay: bool,
+    reset: bool,
 }
 
-impl TyMetaFoldResult {
+impl TyMetaReturn {
     #[inline(always)]
-    /// Create a new [`TyMetaFoldResult`] with the default settings:
-    /// - reset: false
-    /// - more: false
-    /// - okay: true
-    const fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            cnt: 0,
-            reset: false,
             more: false,
-            okay: true,
+            reset: false,
         }
     }
     #[inline(always)]
-    /// Increment the position
-    fn incr(&mut self) {
-        self.incr_by(1)
-    }
-    #[inline(always)]
-    /// Increment the position by `by`
-    fn incr_by(&mut self, by: usize) {
-        self.cnt += by;
-    }
-    #[inline(always)]
-    /// Set fail
-    fn set_fail(&mut self) {
-        self.okay = false;
-    }
-    #[inline(always)]
-    /// Set has more
-    fn set_has_more(&mut self) {
-        self.more = true;
-    }
-    #[inline(always)]
-    /// Set reset
-    fn set_reset(&mut self) {
-        self.reset = true;
-    }
-    #[inline(always)]
-    /// Should the meta be reset?
-    pub fn should_reset(&self) -> bool {
-        self.reset
-    }
-    #[inline(always)]
-    /// Returns the cursor
-    pub fn pos(&self) -> usize {
-        self.cnt
-    }
-    #[inline(always)]
-    /// Returns if more layers are expected
-    pub fn has_more(&self) -> bool {
+    pub const fn has_more(&self) -> bool {
         self.more
     }
     #[inline(always)]
-    /// Returns if the internal state is okay
-    pub fn is_okay(&self) -> bool {
-        self.okay
+    pub const fn has_reset(&self) -> bool {
+        self.reset
     }
     #[inline(always)]
-    /// Records an expression
-    fn record(&mut self, c: bool) {
-        self.okay &= c;
+    pub fn set_has_more(&mut self) {
+        self.more = true;
+    }
+    #[inline(always)]
+    pub fn set_has_reset(&mut self) {
+        self.reset = true;
     }
 }
 
 /// Fold type metadata (flag setup dependent on caller)
 pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
-    mut state: TyMetaFoldState,
-    tok: &'a [Token],
-    d: &mut Qd,
+    mut mstate: TyMetaFoldState,
+    state: &mut State<'a, Qd>,
     dict: &mut Dict,
-) -> TyMetaFoldResult {
-    let l = tok.len();
-    let mut r = TyMetaFoldResult::new();
+) -> TyMetaReturn {
     let mut tmp = MaybeInit::uninit();
-    while r.pos() < l && r.is_okay() {
-        match (&tok[r.pos()], state) {
+    let mut tymr = TyMetaReturn::new();
+    while state.loop_tt() {
+        match (state.fw_read(), mstate) {
             (Token![type], TyMetaFoldState::IDENT_OR_CB) => {
                 // we were expecting an ident but found the type keyword! increase depth
-                r.incr();
-                r.set_has_more();
-                state = TyMetaFoldState::FINAL;
+                tymr.set_has_more();
+                mstate = TyMetaFoldState::FINAL;
                 break;
             }
-            (Token::Symbol(Symbol::SymPeriod), TyMetaFoldState::IDENT_OR_CB) if ALLOW_RESET => {
-                r.incr();
-                let reset = r.pos() < l && tok[r.pos()] == Token::Symbol(Symbol::SymPeriod);
-                r.incr_by(reset as _);
-                r.record(reset);
-                r.set_reset();
-                state = TyMetaFoldState::CB;
+            (Token![.], TyMetaFoldState::IDENT_OR_CB) if ALLOW_RESET => {
+                let reset = state.cursor_rounded_eq(Token![.]);
+                state.cursor_ahead_if(reset);
+                tymr.set_has_reset();
+                state.poison_if_not(reset);
+                mstate = TyMetaFoldState::CB;
             }
             (
                 Token::Symbol(Symbol::TtCloseBrace),
                 TyMetaFoldState::IDENT_OR_CB | TyMetaFoldState::COMMA_OR_CB | TyMetaFoldState::CB,
             ) => {
-                r.incr();
                 // found close brace. end of stream
-                state = TyMetaFoldState::FINAL;
+                mstate = TyMetaFoldState::FINAL;
                 break;
             }
             (Token::Ident(ident), TyMetaFoldState::IDENT_OR_CB) => {
-                r.incr();
                 tmp = MaybeInit::new(unsafe { str::from_utf8_unchecked(ident) });
                 // we just saw an ident, so we expect to see a colon
-                state = TyMetaFoldState::COLON;
+                mstate = TyMetaFoldState::COLON;
             }
             (Token::Symbol(Symbol::SymColon), TyMetaFoldState::COLON) => {
-                r.incr();
                 // we just saw a colon. now we want a literal or openbrace
-                state = TyMetaFoldState::LIT_OR_OB;
+                mstate = TyMetaFoldState::LIT_OR_OB;
             }
-            (tok, TyMetaFoldState::LIT_OR_OB) if Qd::can_read_lit_from(d, tok) => {
-                r.incr();
+            (tok, TyMetaFoldState::LIT_OR_OB) if state.can_read_lit_from(tok) => {
                 unsafe {
-                    r.record(
-                        dict.insert(
-                            tmp.assume_init_ref().to_string(),
-                            Some(Qd::read_lit(d, tok).into()),
-                        )
-                        .is_none(),
-                    );
+                    let v = Some(state.read_lit_unchecked_from(tok).into());
+                    state
+                        .poison_if_not(dict.insert(tmp.assume_init_ref().to_string(), v).is_none());
                 }
                 // saw a literal. next is either comma or close brace
-                state = TyMetaFoldState::COMMA_OR_CB;
+                mstate = TyMetaFoldState::COMMA_OR_CB;
             }
             (Token![null], TyMetaFoldState::LIT_OR_OB) => {
-                r.incr();
-                r.record(
+                state.poison_if_not(
                     dict.insert(unsafe { tmp.assume_init_ref() }.to_string(), None)
                         .is_none(),
                 );
                 // saw null, start parsing another entry
-                state = TyMetaFoldState::COMMA_OR_CB;
+                mstate = TyMetaFoldState::COMMA_OR_CB;
             }
             (Token::Symbol(Symbol::SymComma), TyMetaFoldState::COMMA_OR_CB) => {
-                r.incr();
                 // next is strictly a close brace or ident
-                state = TyMetaFoldState::IDENT_OR_CB;
+                mstate = TyMetaFoldState::IDENT_OR_CB;
             }
             (Token::Symbol(Symbol::TtOpenBrace), TyMetaFoldState::LIT_OR_OB) => {
-                r.incr();
                 // another dict in here
                 let mut nd = Dict::new();
-                let ret = rfold_tymeta::<Qd, ALLOW_RESET>(
-                    TyMetaFoldState::IDENT_OR_CB,
-                    &tok[r.pos()..],
-                    d,
-                    &mut nd,
-                );
-                r.incr_by(ret.pos());
-                r.record(ret.is_okay());
+                let ret =
+                    rfold_tymeta::<Qd, ALLOW_RESET>(TyMetaFoldState::IDENT_OR_CB, state, &mut nd);
                 // L2 cannot have type definitions
-                r.record(!ret.has_more());
+                state.poison_if(ret.has_more());
                 // end of definition or comma followed by something
-                r.record(
+                state.poison_if_not(
                     dict.insert(
                         unsafe { tmp.assume_init_ref() }.to_string(),
                         Some(nd.into()),
                     )
                     .is_none(),
                 );
-                state = TyMetaFoldState::COMMA_OR_CB;
+                mstate = TyMetaFoldState::COMMA_OR_CB;
             }
             _ => {
-                r.set_fail();
+                state.cursor_back();
+                state.poison();
                 break;
             }
         }
     }
-    r.record(state == TyMetaFoldState::FINAL);
-    r
+    state.poison_if_not(mstate == TyMetaFoldState::FINAL);
+    tymr
 }
 
 #[cfg(test)]
 /// (**test-only**) fold type metadata
-pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaFoldResult, Dict) {
+pub(super) fn fold_tymeta(tok: &[Token]) -> (TyMetaReturn, bool, usize, Dict) {
+    let mut state = State::new(tok, InplaceData::new());
     let mut d = Dict::new();
-    let r = rfold_tymeta::<InplaceData, DISALLOW_RESET_SYNTAX>(
+    let ret = rfold_tymeta::<InplaceData, DISALLOW_RESET_SYNTAX>(
         TyMetaFoldState::IDENT_OR_CB,
-        tok,
-        &mut InplaceData::new(),
+        &mut state,
         &mut d,
     );
-    (r, d)
+    (ret, state.okay(), state.cursor(), d)
 }
 
 /*
@@ -568,10 +486,9 @@ states! {
 /// Fold layers
 pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
     start: LayerFoldState,
-    tok: &'a [Token],
-    qd: &mut Qd,
+    state: &mut State<'a, Qd>,
     layers: &mut Vec<Layer<'a>>,
-) -> u64 {
+) {
     /*
         NOTE: Assume rules wherever applicable
 
@@ -585,76 +502,54 @@ pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
             (<ident> <colon> (<lit> | <dict>) <comma>)*
             <comma>* <closebrace>
     */
-    let l = tok.len();
-    let mut i = 0;
-    let mut okay = true;
-    let mut state = start;
+    let mut mstate = start;
     let mut tmp = MaybeInit::uninit();
     let mut dict = Dict::new();
-    while i < l && okay {
-        match (&tok[i], state) {
+    while state.loop_tt() {
+        match (state.fw_read(), mstate) {
             (Token::Ident(ty), LayerFoldState::TY) => {
-                i += 1;
                 // expecting type, and found type. next is either end or an open brace or some arbitrary token
                 tmp = MaybeInit::new(ty.clone());
-                state = LayerFoldState::END_OR_OB;
+                mstate = LayerFoldState::END_OR_OB;
             }
             (Token::Symbol(Symbol::TtOpenBrace), LayerFoldState::END_OR_OB) => {
-                i += 1;
                 // since we found an open brace, this type has some meta
-                let ret = rfold_tymeta::<Qd, ALLOW_RESET>(
-                    TyMetaFoldState::IDENT_OR_CB,
-                    &tok[i..],
-                    qd,
-                    &mut dict,
-                );
-                i += ret.pos();
-                okay &= ret.is_okay();
+                let ret =
+                    rfold_tymeta::<Qd, ALLOW_RESET>(TyMetaFoldState::IDENT_OR_CB, state, &mut dict);
                 if ret.has_more() {
                     // more layers
-                    let ret =
-                        rfold_layers::<Qd, ALLOW_RESET>(LayerFoldState::TY, &tok[i..], qd, layers);
-                    okay &= ret & HIBIT == HIBIT;
-                    i += (ret & !HIBIT) as usize;
-                    state = LayerFoldState::FOLD_DICT_INCOMPLETE;
-                } else if okay {
+                    rfold_layers::<Qd, ALLOW_RESET>(LayerFoldState::TY, state, layers);
+                    mstate = LayerFoldState::FOLD_DICT_INCOMPLETE;
+                } else if state.okay() {
                     // done folding dictionary. nothing more expected. break
-                    state = LayerFoldState::FOLD_COMPLETED;
+                    mstate = LayerFoldState::FOLD_COMPLETED;
                     layers.push(Layer {
                         ty: unsafe { tmp.assume_init() }.clone(),
                         props: dict,
-                        reset: ret.should_reset(),
+                        reset: ret.has_reset(),
                     });
                     break;
                 }
             }
             (Token::Symbol(Symbol::SymComma), LayerFoldState::FOLD_DICT_INCOMPLETE) => {
                 // there is a comma at the end of this
-                i += 1;
-                let ret = rfold_tymeta::<Qd, ALLOW_RESET>(
-                    TyMetaFoldState::IDENT_OR_CB,
-                    &tok[i..],
-                    qd,
-                    &mut dict,
-                );
-                i += ret.pos();
-                okay &= ret.is_okay();
-                okay &= !ret.has_more(); // not more than one type depth
-                if okay {
+                let ret =
+                    rfold_tymeta::<Qd, ALLOW_RESET>(TyMetaFoldState::IDENT_OR_CB, state, &mut dict);
+                state.poison_if(ret.has_more()); // not more than one type depth
+                if state.okay() {
                     // done folding dict successfully. nothing more expected. break.
-                    state = LayerFoldState::FOLD_COMPLETED;
+                    mstate = LayerFoldState::FOLD_COMPLETED;
                     layers.push(Layer {
                         ty: unsafe { tmp.assume_init() }.clone(),
                         props: dict,
-                        reset: ret.should_reset(),
+                        reset: ret.has_reset(),
                     });
                     break;
                 }
             }
             (Token::Symbol(Symbol::TtCloseBrace), LayerFoldState::FOLD_DICT_INCOMPLETE) => {
                 // end of stream
-                i += 1;
-                state = LayerFoldState::FOLD_COMPLETED;
+                mstate = LayerFoldState::FOLD_COMPLETED;
                 layers.push(Layer {
                     ty: unsafe { tmp.assume_init() }.clone(),
                     props: dict,
@@ -663,8 +558,9 @@ pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
                 break;
             }
             (_, LayerFoldState::END_OR_OB) => {
+                state.cursor_back();
                 // random arbitrary byte. finish append
-                state = LayerFoldState::FOLD_COMPLETED;
+                mstate = LayerFoldState::FOLD_COMPLETED;
                 layers.push(Layer {
                     ty: unsafe { tmp.assume_init() }.clone(),
                     props: dict,
@@ -673,106 +569,96 @@ pub(super) fn rfold_layers<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
                 break;
             }
             _ => {
-                okay = false;
+                state.cursor_back();
+                state.poison();
                 break;
             }
         }
     }
-    okay &= state == LayerFoldState::FOLD_COMPLETED;
-    i as u64 | ((okay as u64) << 63)
+    state.poison_if_not(mstate == LayerFoldState::FOLD_COMPLETED);
 }
 
 #[cfg(test)]
 #[inline(always)]
 /// (**test-only**) fold layers
 pub(super) fn fold_layers<'a>(tok: &'a [Token]) -> (Vec<Layer<'a>>, usize, bool) {
+    let mut state = State::new(tok, InplaceData::new());
     let mut l = Vec::new();
-    let r = rfold_layers::<InplaceData, DISALLOW_RESET_SYNTAX>(
-        LayerFoldState::TY,
-        tok,
-        &mut InplaceData::new(),
-        &mut l,
-    );
-    (l, (r & !HIBIT) as _, r & HIBIT == HIBIT)
+    rfold_layers::<InplaceData, DISALLOW_RESET_SYNTAX>(LayerFoldState::TY, &mut state, &mut l);
+    (l, state.consumed(), state.okay())
 }
 
 #[inline(always)]
 /// Collect field properties
-pub(super) fn collect_field_properties(tok: &[Token]) -> (FieldProperties, u64) {
+pub(super) fn collect_field_properties<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+) -> FieldProperties {
     let mut props = FieldProperties::default();
-    let mut i = 0;
-    let mut okay = true;
-    while i < tok.len() {
-        match &tok[i] {
-            Token![primary] => okay &= props.properties.insert(FieldProperties::PRIMARY),
-            Token![null] => okay &= props.properties.insert(FieldProperties::NULL),
-            Token::Ident(_) => break,
+    while state.loop_tt() {
+        match state.fw_read() {
+            Token![primary] => {
+                state.poison_if_not(props.properties.insert(FieldProperties::PRIMARY))
+            }
+            Token![null] => state.poison_if_not(props.properties.insert(FieldProperties::NULL)),
+            Token::Ident(_) => {
+                state.cursor_back();
+                break;
+            }
             _ => {
                 // we could pass this over to the caller, but it's better if we do it since we're doing
                 // a linear scan anyways
-                okay = false;
+                state.cursor_back();
+                state.poison();
                 break;
             }
         }
-        i += 1;
     }
-    (props, i as u64 | ((okay as u64) << 63))
+    props
 }
 
 #[cfg(test)]
 #[inline(always)]
 /// (**test-only**) parse field properties
 pub(super) fn parse_field_properties(tok: &[Token]) -> (FieldProperties, usize, bool) {
-    let (p, r) = collect_field_properties(tok);
-    (p, (r & !HIBIT) as _, r & HIBIT == HIBIT)
+    let mut state = State::new(tok, InplaceData::new());
+    let p = collect_field_properties(&mut state);
+    (p, state.cursor(), state.okay())
 }
 
 #[cfg(test)]
 pub(super) fn parse_field_full<'a>(tok: &'a [Token]) -> LangResult<(usize, Field<'a>)> {
-    self::parse_field(tok, &mut InplaceData::new())
+    let mut state = State::new(tok, InplaceData::new());
+    self::parse_field(&mut state).map(|field| (state.cursor(), field))
 }
 
 #[inline(always)]
 /// Parse a field using the declaration-syntax (not field syntax)
+///
+/// Expected start token: field name (ident)
 pub(super) fn parse_field<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-) -> LangResult<(usize, Field<'a>)> {
-    let l = tok.len();
-    let mut i = 0;
-    let mut okay = true;
+    state: &mut State<'a, Qd>,
+) -> LangResult<Field<'a>> {
     // parse field properties
-    let (props, r) = collect_field_properties(tok);
-    okay &= r & HIBIT == HIBIT;
-    i += (r & !HIBIT) as usize;
+    let props = collect_field_properties(state);
     // if exhauted or broken, simply return
-    if i == l || !okay || (l - i) == 1 {
+    if compiler::unlikely(state.exhausted() | !state.okay() || state.remaining() == 1) {
         return Err(LangError::UnexpectedEndofStatement);
     }
-
     // field name
-    let field_name = match (&tok[i], &tok[i + 1]) {
-        (Token::Ident(id), Token::Symbol(Symbol::SymColon)) => id,
+    let field_name = match (state.fw_read(), state.fw_read()) {
+        (Token::Ident(id), Token![:]) => id,
         _ => return Err(LangError::UnexpectedToken),
     };
-    i += 2;
 
     // layers
     let mut layers = Vec::new();
-    let r =
-        rfold_layers::<Qd, DISALLOW_RESET_SYNTAX>(LayerFoldState::TY, &tok[i..], qd, &mut layers);
-    okay &= r & HIBIT == HIBIT;
-    i += (r & !HIBIT) as usize;
-
-    if okay {
-        Ok((
-            i,
-            Field {
-                field_name: field_name.clone(),
-                layers,
-                props: props.properties,
-            },
-        ))
+    rfold_layers::<Qd, DISALLOW_RESET_SYNTAX>(LayerFoldState::TY, state, &mut layers);
+    if state.okay() {
+        Ok(Field {
+            field_name: field_name.clone(),
+            layers,
+            props: props.properties,
+        })
     } else {
         Err(LangError::UnexpectedToken)
     }
@@ -792,135 +678,123 @@ states! {
 pub(super) fn parse_schema_from_tokens_full<'a>(
     tok: &'a [Token],
 ) -> LangResult<(Model<'a>, usize)> {
-    self::parse_schema_from_tokens::<InplaceData>(tok, &mut InplaceData::new())
+    let mut state = State::new(tok, InplaceData::new());
+    self::parse_model_from_tokens::<InplaceData>(&mut state).map(|model| (model, state.cursor()))
 }
 
 #[inline(always)]
 /// Parse a fresh schema with declaration-syntax fields
-pub(super) fn parse_schema_from_tokens<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-) -> LangResult<(Model<'a>, usize)> {
+pub(super) fn parse_model_from_tokens<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
+) -> LangResult<Model<'a>> {
     // parse fields
-    let l = tok.len();
-    let mut i = 0;
     // check if we have our model name
-    let mut okay = i < l && tok[i].is_ident();
-    i += okay as usize;
+    // smallest model declaration: create model mymodel(username: string, password: binary) -> 10 tokens
+    if compiler::unlikely(state.remaining() < 10) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+    }
+    let model_name = state.fw_read();
+    state.poison_if_not(model_name.is_ident());
     let mut fields = Vec::with_capacity(2);
-    let mut state = SchemaParseState::OPEN_PAREN;
+    let mut mstate = SchemaParseState::OPEN_PAREN;
 
-    while i < l && okay {
-        match (&tok[i], state) {
+    while state.loop_tt() {
+        match (state.fw_read(), mstate) {
             (Token::Symbol(Symbol::TtOpenParen), SchemaParseState::OPEN_PAREN) => {
-                i += 1;
-                state = SchemaParseState::FIELD;
+                mstate = SchemaParseState::FIELD;
             }
             (
                 Token![primary] | Token![null] | Token::Ident(_),
                 SchemaParseState::FIELD | SchemaParseState::END_OR_FIELD,
             ) => {
+                state.cursor_back();
                 // fine, we found a field. let's see what we've got
-                let (c, f) = self::parse_field(&tok[i..], qd)?;
+                let f = self::parse_field(state)?;
                 fields.push(f);
-                i += c;
-                state = SchemaParseState::COMMA_OR_END;
+                mstate = SchemaParseState::COMMA_OR_END;
             }
             (Token::Symbol(Symbol::SymComma), SchemaParseState::COMMA_OR_END) => {
-                i += 1;
                 // expect a field or close paren
-                state = SchemaParseState::END_OR_FIELD;
+                mstate = SchemaParseState::END_OR_FIELD;
             }
             (
                 Token::Symbol(Symbol::TtCloseParen),
                 SchemaParseState::COMMA_OR_END | SchemaParseState::END_OR_FIELD,
             ) => {
-                i += 1;
                 // end of stream
                 break;
             }
             _ => {
-                okay = false;
+                state.cursor_back();
+                state.poison();
                 break;
             }
         }
     }
 
     // model properties
-    if !okay {
+    if !state.okay() {
         return Err(LangError::UnexpectedToken);
     }
 
     let model_name = unsafe {
         // UNSAFE(@ohsayan): Now that we're sure that we have the model name ident, get it
-        extract!(tok[0], Token::Ident(ref model_name) => model_name.clone())
+        extract!(model_name, Token::Ident(ref model_name) => model_name.clone())
     };
 
-    if l > i && tok[i] == (Token![with]) {
+    if state.cursor_rounded_eq(Token![with]) {
         // we have some more input, and it should be a dict of properties
-        i += 1; // +WITH
+        state.cursor_ahead(); // +WITH
 
         // great, parse the dict
         let mut dict = Dict::new();
-        let r = self::rfold_dict(DictFoldState::OB, &tok[i..], qd, &mut dict);
-        i += (r & !HIBIT) as usize;
+        self::rfold_dict(DictFoldState::OB, state, &mut dict);
 
-        if r & HIBIT == HIBIT {
+        if state.okay() {
             // sweet, so we got our dict
-            Ok((
-                Model {
-                    model_name,
-                    props: dict,
-                    fields,
-                },
-                i,
-            ))
+            Ok(Model {
+                model_name,
+                props: dict,
+                fields,
+            })
         } else {
             Err(LangError::UnexpectedToken)
         }
     } else {
         // we've reached end of stream, so there's nothing more to parse
-        Ok((
-            Model {
-                model_name,
-                props: dict! {},
-                fields,
-            },
-            i,
-        ))
+        Ok(Model {
+            model_name,
+            props: dict! {},
+            fields,
+        })
     }
 }
 
 #[inline(always)]
 /// Parse space data from the given tokens
 pub(super) fn parse_space_from_tokens<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-) -> LangResult<(Space<'a>, usize)> {
-    let l = tok.len();
-    let mut okay = !tok.is_empty() && tok[0].is_ident();
-    let mut i = 0;
-    i += okay as usize;
-    // either we have `with` or nothing. don't be stupid
-    let has_more_properties = i < l && tok[i] == Token![with];
-    okay &= has_more_properties | (i == l);
-    // properties
-    let mut d = Dict::new();
-
-    if has_more_properties && okay {
-        let ret = self::rfold_dict(DictFoldState::OB, &tok[1..], qd, &mut d);
-        i += (ret & !HIBIT) as usize;
-        okay &= ret & HIBIT == HIBIT;
+    state: &mut State<'a, Qd>,
+) -> LangResult<Space<'a>> {
+    // smallest declaration: `create space myspace` -> >= 1 token
+    if compiler::unlikely(state.remaining() < 1) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
     }
-
-    if okay {
-        Ok((
-            Space {
-                space_name: unsafe { extract!(tok[0], Token::Ident(ref id) => id.clone()) },
-                props: d,
-            },
-            i,
-        ))
+    let space_name = state.fw_read();
+    state.poison_if_not(space_name.is_ident());
+    // either we have `with` or nothing. don't be stupid
+    let has_more_properties = state.cursor_rounded_eq(Token![with]);
+    state.poison_if_not(has_more_properties | state.exhausted());
+    state.cursor_ahead_if(has_more_properties); // +WITH
+    let mut d = Dict::new();
+    // properties
+    if has_more_properties && state.okay() {
+        self::rfold_dict(DictFoldState::OB, state, &mut d);
+    }
+    if state.okay() {
+        Ok(Space {
+            space_name: unsafe { extract!(space_name, Token::Ident(ref id) => id.clone()) },
+            props: d,
+        })
     } else {
         Err(LangError::UnexpectedToken)
     }
@@ -929,34 +803,29 @@ pub(super) fn parse_space_from_tokens<'a, Qd: QueryData<'a>>(
 #[inline(always)]
 /// Parse alter space from tokens
 pub(super) fn parse_alter_space_from_tokens<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-) -> LangResult<(AlterSpace<'a>, usize)> {
-    let mut i = 0;
-    let l = tok.len();
+    state: &mut State<'a, Qd>,
+) -> LangResult<AlterSpace<'a>> {
+    if compiler::unlikely(state.remaining() <= 3) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+    }
+    let space_name = state.fw_read();
+    state.poison_if_not(state.cursor_eq(Token![with]));
+    state.cursor_ahead(); // ignore errors
+    state.poison_if_not(state.cursor_eq(Token![open {}]));
+    state.cursor_ahead(); // ignore errors
 
-    let okay = l > 3 && tok[0].is_ident() && tok[1] == Token![with] && tok[2] == Token![open {}];
-
-    if !okay {
+    if compiler::unlikely(!state.okay()) {
         return Err(LangError::UnexpectedToken);
     }
 
-    let space_name = unsafe { extract!(tok[0], Token::Ident(ref space) => space.clone()) };
-
-    i += 3;
-
+    let space_name = unsafe { extract!(space_name, Token::Ident(ref space) => space.clone()) };
     let mut d = Dict::new();
-    let ret = rfold_dict(DictFoldState::CB_OR_IDENT, &tok[i..], qd, &mut d);
-    i += (ret & !HIBIT) as usize;
-
-    if ret & HIBIT == HIBIT {
-        Ok((
-            AlterSpace {
-                space_name,
-                updated_props: d,
-            },
-            i,
-        ))
+    rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut d);
+    if state.okay() {
+        Ok(AlterSpace {
+            space_name,
+            updated_props: d,
+        })
     } else {
         Err(LangError::UnexpectedToken)
     }
@@ -964,9 +833,10 @@ pub(super) fn parse_alter_space_from_tokens<'a, Qd: QueryData<'a>>(
 
 #[cfg(test)]
 pub(super) fn alter_space_full<'a>(tok: &'a [Token]) -> LangResult<AlterSpace<'a>> {
-    let (r, i) = self::parse_alter_space_from_tokens(tok, &mut InplaceData::new())?;
-    assert_full_tt!(i, tok.len());
-    Ok(r)
+    let mut state = State::new(tok, InplaceData::new());
+    let a = self::parse_alter_space_from_tokens(&mut state)?;
+    assert_full_tt!(state);
+    Ok(a)
 }
 
 states! {
@@ -992,96 +862,75 @@ pub struct ExpandedField<'a> {
 pub fn parse_field_syntax_full<'a, const ALLOW_RESET: bool>(
     tok: &'a [Token],
 ) -> LangResult<(ExpandedField<'a>, usize)> {
-    self::parse_field_syntax::<InplaceData, ALLOW_RESET>(tok, &mut InplaceData::new())
+    let mut state = State::new(tok, InplaceData::new());
+    self::parse_field_syntax::<InplaceData, ALLOW_RESET>(&mut state)
+        .map(|efield| (efield, state.cursor()))
 }
 
 #[inline(always)]
 /// Parse a field declared using the field syntax
 pub(super) fn parse_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-) -> LangResult<(ExpandedField<'a>, usize)> {
-    let l = tok.len();
-    let mut i = 0_usize;
-    let mut state = FieldSyntaxParseState::IDENT;
-    let mut okay = true;
+    state: &mut State<'a, Qd>,
+) -> LangResult<ExpandedField<'a>> {
+    let mut mstate = FieldSyntaxParseState::IDENT;
     let mut tmp = MaybeInit::uninit();
     let mut props = Dict::new();
     let mut layers = vec![];
     let mut reset = false;
-    while i < l && okay {
-        match (&tok[i], state) {
+    while state.loop_tt() {
+        match (state.fw_read(), mstate) {
             (Token::Ident(field), FieldSyntaxParseState::IDENT) => {
-                i += 1;
                 tmp = MaybeInit::new(field.clone());
                 // expect open brace
-                state = FieldSyntaxParseState::OB;
+                mstate = FieldSyntaxParseState::OB;
             }
             (Token::Symbol(Symbol::TtOpenBrace), FieldSyntaxParseState::OB) => {
-                i += 1;
                 let r = self::rfold_tymeta::<Qd, ALLOW_RESET>(
                     TyMetaFoldState::IDENT_OR_CB,
-                    &tok[i..],
-                    qd,
+                    state,
                     &mut props,
                 );
-                okay &= r.is_okay();
-                i += r.pos();
-                if r.has_more() && i < l {
+                if r.has_more() && state.not_exhausted() {
                     // now parse layers
-                    let r = self::rfold_layers::<Qd, ALLOW_RESET>(
-                        LayerFoldState::TY,
-                        &tok[i..],
-                        qd,
-                        &mut layers,
-                    );
-                    okay &= r & HIBIT == HIBIT;
-                    i += (r & !HIBIT) as usize;
-                    state = FieldSyntaxParseState::FOLD_DICT_INCOMPLETE;
+                    self::rfold_layers::<Qd, ALLOW_RESET>(LayerFoldState::TY, state, &mut layers);
+                    mstate = FieldSyntaxParseState::FOLD_DICT_INCOMPLETE;
                 } else {
-                    okay = false;
+                    state.poison();
                     break;
                 }
             }
             (Token::Symbol(Symbol::SymComma), FieldSyntaxParseState::FOLD_DICT_INCOMPLETE) => {
-                i += 1;
                 let r = self::rfold_tymeta::<Qd, ALLOW_RESET>(
                     TyMetaFoldState::IDENT_OR_CB,
-                    &tok[i..],
-                    qd,
+                    state,
                     &mut props,
                 );
-                okay &= r.is_okay() && !r.has_more();
-                i += r.pos();
-                reset = ALLOW_RESET && r.should_reset();
-                if okay {
-                    state = FieldSyntaxParseState::COMPLETED;
+                reset = ALLOW_RESET && r.has_reset();
+                if state.okay() {
+                    mstate = FieldSyntaxParseState::COMPLETED;
                     break;
                 }
             }
             (Token::Symbol(Symbol::TtCloseBrace), FieldSyntaxParseState::FOLD_DICT_INCOMPLETE) => {
-                i += 1;
                 // great, were done
-                state = FieldSyntaxParseState::COMPLETED;
+                mstate = FieldSyntaxParseState::COMPLETED;
                 break;
             }
             _ => {
-                okay = false;
+                state.cursor_back();
+                state.poison();
                 break;
             }
         }
     }
-    okay &= state == FieldSyntaxParseState::COMPLETED;
-    if okay {
-        Ok((
-            ExpandedField {
-                field_name: unsafe { tmp.assume_init() },
-                layers,
-                props,
-                reset,
-            },
-            i,
-        ))
+    state.poison_if_not(mstate == FieldSyntaxParseState::COMPLETED);
+    if state.okay() {
+        Ok(ExpandedField {
+            field_name: unsafe { tmp.assume_init() },
+            layers,
+            props,
+            reset,
+        })
     } else {
         Err(LangError::UnexpectedToken)
     }
@@ -1113,25 +962,21 @@ pub enum AlterKind<'a> {
 #[inline(always)]
 /// Parse an [`AlterKind`] from the given token stream
 pub(super) fn parse_alter_kind_from_tokens<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-    current: &mut usize,
+    state: &mut State<'a, Qd>,
 ) -> LangResult<Alter<'a>> {
-    let l = tok.len();
-    let okay = l > 2 && tok[0].is_ident();
-    if !okay {
-        return Err(LangError::UnexpectedEndofStatement);
+    // alter model mymodel remove x
+    if state.remaining() <= 2 || !state.cursor_has_ident_rounded() {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
     }
-    *current += 2;
-    let model_name = unsafe { extract!(tok[0], Token::Ident(ref l) => l.clone()) };
-    match tok[1] {
-        Token![add] => alter_add(&tok[1..], qd, current)
+    let model_name = unsafe { extract!(state.fw_read(), Token::Ident(ref l) => l.clone()) };
+    match state.fw_read() {
+        Token![add] => alter_add(state)
             .map(AlterKind::Add)
             .map(|kind| Alter::new(model_name, kind)),
-        Token![remove] => alter_remove(&tok[1..], current)
+        Token![remove] => alter_remove(state)
             .map(AlterKind::Remove)
             .map(|kind| Alter::new(model_name, kind)),
-        Token![update] => alter_update(&tok[1..], qd, current)
+        Token![update] => alter_update(state)
             .map(AlterKind::Update)
             .map(|kind| Alter::new(model_name, kind)),
         _ => return Err(LangError::ExpectedStatement),
@@ -1141,9 +986,7 @@ pub(super) fn parse_alter_kind_from_tokens<'a, Qd: QueryData<'a>>(
 #[inline(always)]
 /// Parse multiple fields declared using the field syntax. Flag setting allows or disallows reset syntax
 pub(super) fn parse_multiple_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RESET: bool>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-    current: &mut usize,
+    state: &mut State<'a, Qd>,
 ) -> LangResult<Box<[ExpandedField<'a>]>> {
     const DEFAULT_ADD_COL_CNT: usize = 4;
     /*
@@ -1152,43 +995,39 @@ pub(super) fn parse_multiple_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RES
         <add> ::= (<field_syntax> <comma>)*
 
         Smallest length:
-        alter model add myfield { type string };
+        alter model add myfield { type string }
     */
-    let l = tok.len();
-    if l < 5 {
-        return Err(LangError::UnexpectedEndofStatement);
+    if compiler::unlikely(state.remaining() < 5) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
     }
-    match tok[0] {
+    match state.read() {
         Token::Ident(_) => {
-            let (r, i) = parse_field_syntax::<Qd, ALLOW_RESET>(&tok, qd)?;
-            *current += i;
-            Ok([r].into())
+            let ef = parse_field_syntax::<Qd, ALLOW_RESET>(state)?;
+            Ok([ef].into())
         }
         Token::Symbol(Symbol::TtOpenParen) => {
-            let mut i = 1;
-            let mut okay = true;
+            state.cursor_ahead();
             let mut stop = false;
             let mut cols = Vec::with_capacity(DEFAULT_ADD_COL_CNT);
-            while i < l && okay && !stop {
-                match tok[i] {
+            while state.loop_tt() && !stop {
+                match state.read() {
                     Token::Ident(_) => {
-                        let (r, cnt) = parse_field_syntax::<Qd, ALLOW_RESET>(&tok[i..], qd)?;
-                        i += cnt;
-                        cols.push(r);
-                        let nx_comma = i < l && tok[i] == Token::Symbol(Symbol::SymComma);
-                        let nx_close = i < l && tok[i] == Token::Symbol(Symbol::TtCloseParen);
+                        let ef = parse_field_syntax::<Qd, ALLOW_RESET>(state)?;
+                        cols.push(ef);
+                        let nx_comma = state.cursor_rounded_eq(Token![,]);
+                        let nx_close = state.cursor_rounded_eq(Token![() close]);
                         stop = nx_close;
-                        okay &= nx_comma | nx_close;
-                        i += (nx_comma | nx_close) as usize;
+                        state.poison_if_not(nx_comma | nx_close);
+                        state.cursor_ahead_if(state.okay());
                     }
                     _ => {
-                        okay = false;
+                        state.poison();
                         break;
                     }
                 }
             }
-            *current += i;
-            if okay && stop {
+            state.poison_if_not(stop);
+            if state.okay() {
                 Ok(cols.into_boxed_slice())
             } else {
                 Err(LangError::UnexpectedToken)
@@ -1201,11 +1040,9 @@ pub(super) fn parse_multiple_field_syntax<'a, Qd: QueryData<'a>, const ALLOW_RES
 #[inline(always)]
 /// Parse the expression for `alter model <> add (..)`
 pub(super) fn alter_add<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-    current: &mut usize,
+    state: &mut State<'a, Qd>,
 ) -> LangResult<Box<[ExpandedField<'a>]>> {
-    self::parse_multiple_field_syntax::<Qd, DISALLOW_RESET_SYNTAX>(tok, qd, current)
+    self::parse_multiple_field_syntax::<Qd, DISALLOW_RESET_SYNTAX>(state)
 }
 
 #[cfg(test)]
@@ -1213,54 +1050,50 @@ pub(super) fn alter_add_full<'a>(
     tok: &'a [Token],
     current: &mut usize,
 ) -> LangResult<Box<[ExpandedField<'a>]>> {
-    self::alter_add(tok, &mut InplaceData::new(), current)
+    let mut state = State::new(tok, InplaceData::new());
+    let r = self::alter_add(&mut state);
+    *current += state.consumed();
+    r
 }
 
 #[inline(always)]
 /// Parse the expression for `alter model <> remove (..)`
-pub(super) fn alter_remove<'a>(
-    tok: &'a [Token],
-    current: &mut usize,
+pub(super) fn alter_remove<'a, Qd: QueryData<'a>>(
+    state: &mut State<'a, Qd>,
 ) -> LangResult<Box<[Slice<'a>]>> {
     const DEFAULT_REMOVE_COL_CNT: usize = 4;
     /*
         WARNING: No trailing commas allowed
         <remove> ::= <ident> | <openparen> (<ident> <comma>)*<closeparen>
     */
-    if tok.is_empty() {
-        return Err(LangError::UnexpectedEndofStatement);
+    if compiler::unlikely(state.exhausted()) {
+        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
     }
 
-    let r = match &tok[0] {
-        Token::Ident(id) => {
-            *current += 1;
-            Box::new([id.clone()])
-        }
+    let r = match state.fw_read() {
+        Token::Ident(id) => Box::new([id.clone()]),
         Token::Symbol(Symbol::TtOpenParen) => {
-            let l = tok.len();
-            let mut i = 1_usize;
-            let mut okay = true;
             let mut stop = false;
             let mut cols = Vec::with_capacity(DEFAULT_REMOVE_COL_CNT);
-            while i < tok.len() && okay && !stop {
-                match tok[i] {
+            while state.loop_tt() && !stop {
+                match state.fw_read() {
                     Token::Ident(ref ident) => {
                         cols.push(ident.clone());
-                        i += 1;
-                        let nx_comma = i < l && tok[i] == (Token::Symbol(Symbol::SymComma));
-                        let nx_close = i < l && tok[i] == (Token::Symbol(Symbol::TtCloseParen));
-                        okay &= nx_comma | nx_close;
+                        let nx_comma = state.cursor_rounded_eq(Token![,]);
+                        let nx_close = state.cursor_rounded_eq(Token![() close]);
+                        state.poison_if_not(nx_comma | nx_close);
                         stop = nx_close;
-                        i += (nx_comma | nx_close) as usize;
+                        state.cursor_ahead_if(state.okay());
                     }
                     _ => {
-                        okay = false;
+                        state.cursor_back();
+                        state.poison();
                         break;
                     }
                 }
             }
-            *current += i;
-            if okay && stop {
+            state.poison_if_not(stop);
+            if state.okay() {
                 cols.into_boxed_slice()
             } else {
                 return Err(LangError::UnexpectedToken);
@@ -1271,14 +1104,23 @@ pub(super) fn alter_remove<'a>(
     Ok(r)
 }
 
+#[cfg(test)]
+pub(super) fn alter_remove_full<'a>(
+    tok: &'a [Token<'a>],
+    i: &mut usize,
+) -> LangResult<Box<[Slice<'a>]>> {
+    let mut state = State::new(tok, InplaceData::new());
+    let r = self::alter_remove(&mut state);
+    *i += state.consumed();
+    r
+}
+
 #[inline(always)]
 /// Parse the expression for `alter model <> update (..)`
 pub(super) fn alter_update<'a, Qd: QueryData<'a>>(
-    tok: &'a [Token],
-    qd: &mut Qd,
-    current: &mut usize,
+    state: &mut State<'a, Qd>,
 ) -> LangResult<Box<[ExpandedField<'a>]>> {
-    self::parse_multiple_field_syntax::<Qd, ALLOW_RESET_SYNTAX>(tok, qd, current)
+    self::parse_multiple_field_syntax::<Qd, ALLOW_RESET_SYNTAX>(state)
 }
 
 #[cfg(test)]
@@ -1286,5 +1128,8 @@ pub(super) fn alter_update_full<'a>(
     tok: &'a [Token],
     i: &mut usize,
 ) -> LangResult<Box<[ExpandedField<'a>]>> {
-    self::alter_update(tok, &mut InplaceData::new(), i)
+    let mut state = State::new(tok, InplaceData::new());
+    let r = self::alter_update(&mut state);
+    *i += state.consumed();
+    r
 }

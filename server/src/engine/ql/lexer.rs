@@ -81,6 +81,7 @@ enum_impls! {
 
 #[derive(Debug, PartialEq, Clone)]
 #[repr(u8)]
+/// A [`Lit`] as represented by an insecure token stream
 pub enum Lit<'a> {
     Str(Box<str>),
     Bool(bool),

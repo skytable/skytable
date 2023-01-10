@@ -202,6 +202,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
             & (self.t[idx_c] == Token![() close])
             & rem
     }
+    #[inline(always)]
     /// Reads a lit using the given token and the internal data source and return a data type
     ///
     /// ## Safety
@@ -210,6 +211,24 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     /// in the data source. (ideally should run `can_read_lit_from` or `can_read_lit_rounded`)
     pub unsafe fn read_lit_into_data_type_unchecked_from(&mut self, tok: &'a Token) -> DataType {
         self.d.read_data_type(tok)
+    }
+    #[inline(always)]
+    /// Loop condition for tt and non-poisoned state only
+    pub fn loop_tt(&self) -> bool {
+        self.not_exhausted() && self.okay()
+    }
+    #[inline(always)]
+    /// Loop condition for tt and non-poisoned state only
+    pub fn loop_data_tt(&self) -> bool {
+        self.not_exhausted() && self.okay() && self.d.nonzero()
+    }
+    #[inline(always)]
+    pub(crate) fn consumed(&self) -> usize {
+        self.t.len() - self.remaining()
+    }
+    #[inline(always)]
+    pub(crate) fn cursor(&self) -> usize {
+        self.i
     }
 }
 
@@ -226,6 +245,8 @@ pub trait QueryData<'a> {
     /// ## Safety
     /// The current token must match the signature of a lit
     unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType;
+    /// Returns true if the data source has enough data
+    fn nonzero(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -250,6 +271,10 @@ impl<'a> QueryData<'a> for InplaceData {
     unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType {
         DataType::clone_from_lit(extract!(tok, Token::Lit(ref l) => l))
     }
+    #[inline(always)]
+    fn nonzero(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -266,7 +291,7 @@ impl<'a> SubstitutedData<'a> {
 impl<'a> QueryData<'a> for SubstitutedData<'a> {
     #[inline(always)]
     fn can_read_lit_from(&self, tok: &Token) -> bool {
-        Token![?].eq(tok) && !self.data.is_empty()
+        Token![?].eq(tok) && self.nonzero()
     }
     #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
@@ -281,6 +306,10 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
         let ret = self.data[0];
         self.data = &self.data[1..];
         DataType::clone_from_litir(ret)
+    }
+    #[inline(always)]
+    fn nonzero(&self) -> bool {
+        !self.data.is_empty()
     }
 }
 
@@ -443,45 +472,41 @@ pub enum Statement<'a> {
     Delete(dml::delete::DeleteStatement<'a>),
 }
 
-pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], mut d: Qd) -> LangResult<Statement<'a>> {
+pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Statement<'a>> {
     let mut i = 0;
-    let ref mut qd = d;
     if compiler::unlikely(tok.len() < 2) {
         return Err(LangError::UnexpectedEndofStatement);
     }
     match tok[0] {
         // DDL
         Token![use] => Entity::parse_from_tokens(&tok[1..], &mut i).map(Statement::Use),
-        Token![create] => match tok[1] {
-            Token![model] => schema::parse_schema_from_tokens(&tok[2..], qd).map(|(q, c)| {
-                i += c;
-                Statement::CreateModel(q)
-            }),
-            Token![space] => schema::parse_space_from_tokens(&tok[2..], qd).map(|(q, c)| {
-                i += c;
-                Statement::CreateSpace(q)
-            }),
-            _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
-        },
         Token![drop] if tok.len() >= 3 => ddl::parse_drop(&tok[1..], &mut i),
-        Token![alter] => match tok[1] {
-            Token![model] => schema::parse_alter_kind_from_tokens(&tok[2..], qd, &mut i)
-                .map(Statement::AlterModel),
-            Token![space] => {
-                schema::parse_alter_space_from_tokens(&tok[2..], qd).map(|(q, incr)| {
-                    i += incr;
-                    Statement::AlterSpace(q)
-                })
-            }
-            _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
-        },
         Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => {
             ddl::parse_inspect(&tok[1..], &mut i)
         }
-        // DML
         ref stmt => {
             let mut state = State::new(&tok[1..], d);
             match stmt {
+                // DDL
+                Token![create] => {
+                    match tok[1] {
+                        Token![model] => schema::parse_model_from_tokens(&mut state)
+                            .map(Statement::CreateModel),
+                        Token![space] => schema::parse_space_from_tokens(&mut state)
+                            .map(Statement::CreateSpace),
+                        _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
+                    }
+                }
+                Token![alter] => match tok[1] {
+                    Token![model] => {
+                        schema::parse_alter_kind_from_tokens(&mut state).map(Statement::AlterModel)
+                    }
+                    Token![space] => {
+                        schema::parse_alter_space_from_tokens(&mut state).map(Statement::AlterSpace)
+                    }
+                    _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
+                },
+                // DML
                 Token![insert] => {
                     dml::insert::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
                 }

@@ -119,30 +119,30 @@ mod tymeta {
     #[test]
     fn tymeta_mini() {
         let tok = lex_insecure(b"}").unwrap();
-        let (res, ret) = schema::fold_tymeta(&tok);
-        assert!(res.is_okay());
-        assert!(!res.has_more());
-        assert_eq!(res.pos(), 1);
-        assert_eq!(ret, nullable_dict!());
+        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
+        assert!(okay);
+        assert!(!tymeta.has_more());
+        assert_eq!(cursor, 1);
+        assert_eq!(data, nullable_dict!());
     }
     #[test]
     fn tymeta_mini_fail() {
         let tok = lex_insecure(b",}").unwrap();
-        let (res, ret) = schema::fold_tymeta(&tok);
-        assert!(!res.is_okay());
-        assert!(!res.has_more());
-        assert_eq!(res.pos(), 0);
-        assert_eq!(ret, nullable_dict!());
+        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
+        assert!(!okay);
+        assert!(!tymeta.has_more());
+        assert_eq!(cursor, 0);
+        assert_eq!(data, nullable_dict!());
     }
     #[test]
     fn tymeta() {
         let tok = lex_insecure(br#"hello: "world", loading: true, size: 100 }"#).unwrap();
-        let (res, ret) = schema::fold_tymeta(&tok);
-        assert!(res.is_okay());
-        assert!(!res.has_more());
-        assert_eq!(res.pos(), tok.len());
+        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
+        assert!(okay);
+        assert!(!tymeta.has_more());
+        assert_eq!(cursor, tok.len());
         assert_eq!(
-            ret,
+            data,
             nullable_dict! {
                 "hello" => Lit::Str("world".into()),
                 "loading" => Lit::Bool(true),
@@ -155,17 +155,17 @@ mod tymeta {
         // list { maxlen: 100, type string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
         let tok = lex_insecure(br#"maxlen: 100, type string, unique: true }"#).unwrap();
-        let (res1, ret1) = schema::fold_tymeta(&tok);
-        assert!(res1.is_okay());
-        assert!(res1.has_more());
-        assert_eq!(res1.pos(), 5);
-        let remslice = &tok[res1.pos() + 2..];
-        let (res2, ret2) = schema::fold_tymeta(remslice);
-        assert!(res2.is_okay());
-        assert!(!res2.has_more());
-        assert_eq!(res2.pos() + res1.pos() + 2, tok.len());
-        let mut final_ret = ret1;
-        final_ret.extend(ret2);
+        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
+        assert!(okay);
+        assert!(tymeta.has_more());
+        assert_eq!(cursor, 5);
+        let remslice = &tok[cursor + 2..];
+        let (tymeta2, okay2, cursor2, data2) = schema::fold_tymeta(remslice);
+        assert!(okay2);
+        assert!(!tymeta2.has_more());
+        assert_eq!(cursor2 + cursor + 2, tok.len());
+        let mut final_ret = data;
+        final_ret.extend(data2);
         assert_eq!(
             final_ret,
             nullable_dict! {
@@ -181,17 +181,17 @@ mod tymeta {
         let tok =
             lex_insecure(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#)
                 .unwrap();
-        let (res1, ret1) = schema::fold_tymeta(&tok);
-        assert!(res1.is_okay());
-        assert!(res1.has_more());
-        assert_eq!(res1.pos(), 13);
-        let remslice = &tok[res1.pos() + 2..];
-        let (res2, ret2) = schema::fold_tymeta(remslice);
-        assert!(res2.is_okay());
-        assert!(!res2.has_more());
-        assert_eq!(res2.pos() + res1.pos() + 2, tok.len());
-        let mut final_ret = ret1;
-        final_ret.extend(ret2);
+        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
+        assert!(okay);
+        assert!(tymeta.has_more());
+        assert_eq!(cursor, 13);
+        let remslice = &tok[cursor + 2..];
+        let (tymeta2, okay2, cursor2, data2) = schema::fold_tymeta(remslice);
+        assert!(okay2);
+        assert!(!tymeta2.has_more());
+        assert_eq!(cursor2 + cursor + 2, tok.len());
+        let mut final_ret = data;
+        final_ret.extend(data2);
         assert_eq!(
             final_ret,
             nullable_dict! {
@@ -228,13 +228,13 @@ mod tymeta {
             "users" => Lit::Str("sayan".into())
         };
         fuzz_tokens(&tok, |should_pass, new_src| {
-            let (ret, dict) = schema::fold_tymeta(&new_src);
+            let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
             if should_pass {
-                assert!(ret.is_okay(), "{:?}", &new_src);
-                assert!(!ret.has_more());
-                assert_eq!(ret.pos(), new_src.len());
-                assert_eq!(dict, expected);
-            } else if ret.is_okay() {
+                assert!(okay, "{:?}", &new_src);
+                assert!(!tymeta.has_more());
+                assert_eq!(cursor, new_src.len());
+                assert_eq!(data, expected);
+            } else if okay {
                 panic!(
                     "Expected failure but passed for token stream: `{:?}`",
                     new_src
@@ -267,13 +267,13 @@ mod tymeta {
             },
         };
         fuzz_tokens(&tok, |should_pass, new_src| {
-            let (ret, dict) = schema::fold_tymeta(&new_src);
+            let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
             if should_pass {
-                assert!(ret.is_okay());
-                assert!(ret.has_more());
-                assert!(new_src[ret.pos()] == Token::Ident(b"string"));
-                assert_eq!(dict, expected);
-            } else if ret.is_okay() {
+                assert!(okay);
+                assert!(tymeta.has_more());
+                assert!(new_src[cursor] == Token::Ident(b"string"));
+                assert_eq!(data, expected);
+            } else if okay {
                 panic!("Expected failure but passed for token stream: `{:?}`", tok);
             }
         });
@@ -895,7 +895,7 @@ mod alter_model_remove {
     fn alter_mini() {
         let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
         let mut i = 4;
-        let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(remove, [b"myfield".as_slice()].into());
     }
@@ -903,7 +903,7 @@ mod alter_model_remove {
     fn alter_mini_2() {
         let tok = lex_insecure(b"alter model mymodel remove (myfield)").unwrap();
         let mut i = 4;
-        let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(remove, [b"myfield".as_slice()].into());
     }
@@ -913,7 +913,7 @@ mod alter_model_remove {
             lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
                 .unwrap();
         let mut i = 4;
-        let remove = schema::alter_remove(&tok[i..], &mut i).unwrap();
+        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
         assert_eq!(i, tok.len());
         assert_eq!(
             remove,
