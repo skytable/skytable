@@ -79,26 +79,31 @@ mod lexer {
 }
 
 mod ast {
-    use {super::*, crate::engine::ql::ast::Entity};
+    use {
+        super::*,
+        crate::engine::ql::ast::{Entity, InplaceData, State},
+    };
     #[bench]
     fn parse_entity_single(b: &mut Bencher) {
-        let e = Entity::Single(b"tweeter");
+        let e = Entity::Single(b"user");
         b.iter(|| {
-            let src = lex_insecure(b"tweeter").unwrap();
-            let mut i = 0;
-            assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
-            assert_eq!(i, src.len());
-        });
+            let src = lex_insecure(b"user").unwrap();
+            let mut state = State::new(&src, InplaceData::new());
+            let re = Entity::attempt_process_entity_result(&mut state).unwrap();
+            assert_eq!(e, re);
+            assert!(state.exhausted());
+        })
     }
     #[bench]
     fn parse_entity_double(b: &mut Bencher) {
         let e = Entity::Full(b"tweeter", b"user");
         b.iter(|| {
             let src = lex_insecure(b"tweeter.user").unwrap();
-            let mut i = 0;
-            assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
-            assert_eq!(i, src.len());
-        });
+            let mut state = State::new(&src, InplaceData::new());
+            let re = Entity::attempt_process_entity_result(&mut state).unwrap();
+            assert_eq!(e, re);
+            assert!(state.exhausted());
+        })
     }
     #[bench]
     fn parse_entity_partial(b: &mut Bencher) {

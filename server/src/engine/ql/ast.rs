@@ -140,6 +140,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         let mx = minidx(self.t, self.i);
         Qd::can_read_lit_from(&self.d, &self.t[mx]) && mx == self.i
     }
+    #[inline(always)]
     /// Check if a lit can be read using the given token with context from the data source
     pub fn can_read_lit_from(&self, tok: &'a Token<'a>) -> bool {
         Qd::can_read_lit_from(&self.d, tok)
@@ -206,6 +207,18 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
             & rem
     }
     #[inline(always)]
+    /// Check if the current token stream matches the signature of a full entity; rounded
+    ///
+    /// NOTE: Consider using a direct comparison without rounding; rounding is always slower
+    pub(crate) fn cursor_signature_match_entity_full_rounded(&self) -> bool {
+        let rem = self.has_remaining(3);
+        let rem_u = rem as usize;
+        let idx_a = self.i * rem_u;
+        let idx_b = (self.i + 1) * rem_u;
+        let idx_c = (self.i + 2) * rem_u;
+        (self.t[idx_a].is_ident()) & (self.t[idx_b] == Token![.]) & (self.t[idx_c].is_ident()) & rem
+    }
+    #[inline(always)]
     /// Reads a lit using the given token and the internal data source and return a data type
     ///
     /// ## Safety
@@ -226,14 +239,17 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
         self.not_exhausted() && self.okay() && self.d.nonzero()
     }
     #[inline(always)]
+    /// Returns the number of consumed tokens
     pub(crate) fn consumed(&self) -> usize {
         self.t.len() - self.remaining()
     }
     #[inline(always)]
+    /// Returns the position of the cursor
     pub(crate) fn cursor(&self) -> usize {
         self.i
     }
     #[inline(always)]
+    /// Returns true if the cursor is an ident
     pub(crate) fn cursor_is_ident(&self) -> bool {
         self.read().is_ident()
     }
@@ -441,7 +457,7 @@ impl<'a> Entity<'a> {
     ) -> LangResult<Self> {
         let mut e = MaybeInit::uninit();
         Self::attempt_process_entity(state, &mut e);
-        if state.okay() {
+        if compiler::likely(state.okay()) {
             unsafe {
                 // UNSAFE(@ohsayan): just checked if okay
                 Ok(e.assume_init())
@@ -456,8 +472,8 @@ impl<'a> Entity<'a> {
         d: &mut MaybeInit<Entity<'a>>,
     ) {
         let tok = state.current();
-        let is_full = Entity::tokens_with_full(tok);
-        let is_single = Entity::tokens_with_single(tok);
+        let is_full = state.cursor_signature_match_entity_full_rounded();
+        let is_single = state.cursor_has_ident_rounded();
         unsafe {
             if is_full {
                 state.cursor_ahead_by(3);
@@ -531,6 +547,7 @@ pub enum Statement<'a> {
     Delete(dml::delete::DeleteStatement<'a>),
 }
 
+#[inline(always)]
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
         return Err(LangError::UnexpectedEndofStatement);

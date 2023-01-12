@@ -956,6 +956,10 @@ impl<'a> SafeQueryData<'a> {
         Self { p, t }
     }
     #[inline(always)]
+    pub fn parse_data(pf: Slice<'a>, pf_sz: usize) -> LangResult<Box<[LitIR<'a>]>> {
+        Self::p_revloop(pf, pf_sz)
+    }
+    #[inline(always)]
     pub fn parse(qf: Slice<'a>, pf: Slice<'a>, pf_sz: usize) -> LangResult<Self> {
         let q = SafeLexer::lex(qf);
         let p = Self::p_revloop(pf, pf_sz);
@@ -1043,7 +1047,7 @@ impl<'b> SafeQueryData<'b> {
         let mut okay = true;
         let payload = Self::mxple(src, cnt, &mut okay);
         match String::from_utf8_lossy(payload).parse() {
-            Ok(p) if okay => {
+            Ok(p) if compiler::likely(okay) => {
                 data.push(LitIR::Float(p));
             }
             _ => {}
@@ -1062,7 +1066,7 @@ impl<'b> SafeQueryData<'b> {
         let mut okay = true;
         let payload = Self::mxple(src, cnt, &mut okay);
         match str::from_utf8(payload) {
-            Ok(s) if okay => {
+            Ok(s) if compiler::likely(okay) => {
                 data.push(LitIR::Str(s));
                 true
             }
