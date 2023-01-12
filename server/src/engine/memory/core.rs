@@ -69,16 +69,24 @@ where
     K: AsKey,
     V: AsValue,
 {
+    /// State whether the underlying structure provides any ordering on the iterators
     const HAS_ORDER: bool;
+    /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where
         Self: 'a,
         K: 'a,
         V: 'a;
+    /// An iterator over the keys
     type IterKey<'a>: Iterator<Item = &'a K>
     where
         Self: 'a,
         K: 'a;
+    /// An iterator over the values
+    type IterValue<'a>: Iterator<Item = &'a V>
+    where
+        Self: 'a,
+        V: 'a;
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
@@ -113,4 +121,12 @@ where
     fn delete_return<Q>(&self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>;
+
+    // iter
+    /// Returns an iterator over a tuple of keys and values
+    fn iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    /// Returns an iterator over the keys
+    fn iter_k<'a>(&'a self) -> Self::IterKey<'a>;
+    /// Returns an iterator over the values
+    fn iter_v<'a>(&'a self) -> Self::IterValue<'a>;
 }
