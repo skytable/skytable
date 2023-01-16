@@ -29,7 +29,7 @@ use {
         lexer::{InsecureLexer, SafeLexer, Symbol, Token},
         LangResult,
     },
-    crate::{engine::memory::DataType, util::test_utils},
+    crate::{engine::core::DataType, util::test_utils},
     rand::{self, Rng},
 };
 

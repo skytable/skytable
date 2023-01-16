@@ -29,5 +29,5 @@
 
 #[macro_use]
 mod macros;
-mod memory;
+mod core;
 mod ql;

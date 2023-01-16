@@ -30,7 +30,7 @@ use {
     super::read_ident,
     crate::{
         engine::{
-            memory::DataType,
+            core::DataType,
             ql::{
                 ast::{Entity, QueryData, State},
                 lexer::Token,

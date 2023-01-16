@@ -144,6 +144,7 @@ impl<T: Clone> Clone for Wrapper<T> {
 }
 
 #[derive(Debug, PartialEq)]
+#[repr(transparent)]
 /// This is yet another compiler hack and has no "actual impact" in terms of memory alignment.
 ///
 /// When it's hard to have a _split mutable borrow_, all across the source we use custom
@@ -163,18 +164,19 @@ impl<T: Clone> Clone for Wrapper<T> {
 /// to explicitly annotate bounds
 /// - this type derefs to the base type
 #[derive(Copy, Clone)]
-pub struct Life<'a, T> {
+pub struct Life<'a, T: 'a> {
     _lt: PhantomData<&'a T>,
     v: T,
 }
 
-impl<'a, T> Life<'a, T> {
+impl<'a, T: 'a> Life<'a, T> {
     /// Ensure compile-time alignment (this is just a sanity check)
     const _ENSURE_COMPILETIME_ALIGN: () =
         assert!(std::mem::align_of::<Life<T>>() == std::mem::align_of::<T>());
 
     #[inline(always)]
     pub const fn new(v: T) -> Self {
+        let _ = Self::_ENSURE_COMPILETIME_ALIGN;
         Life {
             v,
             _lt: PhantomData,
@@ -222,6 +224,7 @@ unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
 /// [`MaybeInit`] is a structure that is like an [`Option`] in debug mode and like
 /// [`MaybeUninit`] in release mode. This means that provided there are good enough test cases, most
 /// incorrect `assume_init` calls should be detected in the test phase.
+#[cfg_attr(not(test), repr(transparent))]
 pub struct MaybeInit<T> {
     #[cfg(test)]
     is_init: bool,

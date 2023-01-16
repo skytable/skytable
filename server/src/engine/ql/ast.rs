@@ -31,7 +31,7 @@ use {
         schema, LangError, LangResult,
     },
     crate::{
-        engine::memory::DataType,
+        engine::core::DataType,
         util::{compiler, MaybeInit},
     },
     core::cmp,

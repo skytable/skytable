@@ -64,7 +64,7 @@ impl<T: Clone> AsValue for T {
     }
 }
 
-pub trait MemoryEngine<K, V>
+pub trait MTIndex<K, V>
 where
     K: AsKey,
     V: AsValue,
@@ -90,43 +90,110 @@ where
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn insert(&self, key: K, val: V) -> bool;
-    /// Returns a reference to the value corresponding to the key, if it exists
+    fn me_insert(&self, key: K, val: V) -> bool;
+    /// Updates or inserts the given value
+    fn me_upsert(&self, key: K, val: V);
 
     // read
-    fn get<Q>(&self, key: &Q) -> Option<&K>
+    /// Returns a reference to the value corresponding to the key, if it exists
+    fn me_get<Q>(&self, key: &Q) -> Option<&K>
     where
         K: Borrow<Q>;
     /// Returns a clone of the value corresponding to the key, if it exists
-    fn get_cloned<Q>(&self, key: &Q) -> Option<K>
+    fn me_get_cloned<Q>(&self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>;
 
     // update
     /// Returns true if the entry is updated
-    fn update<Q>(&self, key: &Q, val: V) -> bool
+    fn me_update<Q>(&self, key: &Q, val: V) -> bool
     where
         K: Borrow<Q>;
     /// Updates the entry and returns the old value, if it exists
-    fn update_return<Q>(&self, key: &Q, val: V) -> Option<K>
+    fn me_update_return<Q>(&self, key: &Q, val: V) -> Option<K>
     where
         K: Borrow<Q>;
 
     // delete
     /// Returns true if the entry was deleted
-    fn delete<Q>(&self, key: &Q) -> bool
+    fn me_delete<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>;
     /// Removes the entry and returns it, if it exists
-    fn delete_return<Q>(&self, key: &Q) -> Option<K>
+    fn me_delete_return<Q>(&self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>;
 
     // iter
     /// Returns an iterator over a tuple of keys and values
-    fn iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    fn me_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
     /// Returns an iterator over the keys
-    fn iter_k<'a>(&'a self) -> Self::IterKey<'a>;
+    fn me_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
     /// Returns an iterator over the values
-    fn iter_v<'a>(&'a self) -> Self::IterValue<'a>;
+    fn me_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
+}
+
+pub trait STIndex<K, V> {
+    /// State whether the underlying structure provides any ordering on the iterators
+    const HAS_ORDER: bool;
+    /// An iterator over the keys and values
+    type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
+    /// An iterator over the keys
+    type IterKey<'a>: Iterator<Item = &'a K>
+    where
+        Self: 'a,
+        K: 'a;
+    /// An iterator over the values
+    type IterValue<'a>: Iterator<Item = &'a V>
+    where
+        Self: 'a,
+        V: 'a;
+    // write
+    /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
+    /// violated
+    fn st_insert(&mut self, key: K, val: V) -> bool;
+    /// Updates or inserts the given value
+    fn st_upsert(&mut self, key: K, val: V);
+
+    // read
+    /// Returns a reference to the value corresponding to the key, if it exists
+    fn st_get<Q>(&self, key: &Q) -> Option<&K>
+    where
+        K: Borrow<Q>;
+    /// Returns a clone of the value corresponding to the key, if it exists
+    fn st_get_cloned<Q>(&self, key: &Q) -> Option<K>
+    where
+        K: Borrow<Q>;
+
+    // update
+    /// Returns true if the entry is updated
+    fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
+    where
+        K: Borrow<Q>;
+    /// Updates the entry and returns the old value, if it exists
+    fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<K>
+    where
+        K: Borrow<Q>;
+
+    // delete
+    /// Returns true if the entry was deleted
+    fn st_delete<Q>(&mut self, key: &Q) -> bool
+    where
+        K: Borrow<Q>;
+    /// Removes the entry and returns it, if it exists
+    fn st_delete_return<Q>(&mut self, key: &Q) -> Option<K>
+    where
+        K: Borrow<Q>;
+
+    // iter
+    /// Returns an iterator over a tuple of keys and values
+    fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    /// Returns an iterator over the keys
+    fn st_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
+    /// Returns an iterator over the values
+    fn st_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
 }
