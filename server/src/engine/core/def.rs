@@ -71,6 +71,8 @@ where
 {
     /// State whether the underlying structure provides any ordering on the iterators
     const HAS_ORDER: bool;
+    /// Base support prealloc?
+    const PREALLOC: bool;
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where
@@ -87,55 +89,61 @@ where
     where
         Self: 'a,
         V: 'a;
+    /// Initialize an empty instance of the MTIndex
+    fn mt_init() -> Self;
+    /// Initialize a pre-loaded instance of the MTIndex
+    fn mt_init_with(s: Self) -> Self;
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn me_insert(&self, key: K, val: V) -> bool;
+    fn mt_insert(&self, key: K, val: V) -> bool;
     /// Updates or inserts the given value
-    fn me_upsert(&self, key: K, val: V);
+    fn mt_upsert(&self, key: K, val: V);
 
     // read
     /// Returns a reference to the value corresponding to the key, if it exists
-    fn me_get<Q>(&self, key: &Q) -> Option<&K>
+    fn mt_get<Q>(&self, key: &Q) -> Option<&K>
     where
         K: Borrow<Q>;
     /// Returns a clone of the value corresponding to the key, if it exists
-    fn me_get_cloned<Q>(&self, key: &Q) -> Option<K>
+    fn mt_get_cloned<Q>(&self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>;
 
     // update
     /// Returns true if the entry is updated
-    fn me_update<Q>(&self, key: &Q, val: V) -> bool
+    fn mt_update<Q>(&self, key: &Q, val: V) -> bool
     where
         K: Borrow<Q>;
     /// Updates the entry and returns the old value, if it exists
-    fn me_update_return<Q>(&self, key: &Q, val: V) -> Option<K>
+    fn mt_update_return<Q>(&self, key: &Q, val: V) -> Option<K>
     where
         K: Borrow<Q>;
 
     // delete
     /// Returns true if the entry was deleted
-    fn me_delete<Q>(&self, key: &Q) -> bool
+    fn mt_delete<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>;
     /// Removes the entry and returns it, if it exists
-    fn me_delete_return<Q>(&self, key: &Q) -> Option<K>
+    fn mt_delete_return<Q>(&self, key: &Q) -> Option<K>
     where
         K: Borrow<Q>;
 
     // iter
     /// Returns an iterator over a tuple of keys and values
-    fn me_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    fn mt_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
     /// Returns an iterator over the keys
-    fn me_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
+    fn mt_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
     /// Returns an iterator over the values
-    fn me_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
+    fn mt_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
 }
 
 pub trait STIndex<K, V> {
     /// State whether the underlying structure provides any ordering on the iterators
     const HAS_ORDER: bool;
+    /// Base support prealloc?
+    const PREALLOC: bool;
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where
@@ -152,6 +160,10 @@ pub trait STIndex<K, V> {
     where
         Self: 'a,
         V: 'a;
+    /// Initialize an empty instance of the MTIndex
+    fn st_init() -> Self;
+    /// Initialize a pre-loaded instance of the MTIndex
+    fn st_init_with(s: Self) -> Self;
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated

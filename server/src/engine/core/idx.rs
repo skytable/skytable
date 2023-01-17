@@ -24,14 +24,18 @@
  *
 */
 
+use super::def::{AsKey, AsValue};
 use std::{
     alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
     borrow::Borrow,
-    collections::HashMap as StdMap,
-    hash::{Hash, Hasher},
+    collections::{hash_map::RandomState, HashMap as StdMap},
+    hash::{BuildHasher, Hash, Hasher},
     mem,
     ptr::{self, NonNull},
 };
+
+// re-exports for convenience
+pub type IndexSTSeq<K, V, S = RandomState> = IndexSTSeqDll<K, V, S>;
 
 /*
     For the ordered index impl, we resort to some crazy unsafe code, especially because there's no other way to
@@ -50,11 +54,11 @@ use std::{
 /// Yeah, this type is going to segfault if you decide to use it in random places. Literally, don't use it if
 /// you're unsure about it's validity. For example, if you simply `==` this or attempt to use it an a hashmap,
 /// you can segfault. IFF, the ptr is valid will it not segfault
-struct Keyptr<K> {
+struct IndexSTSeqDllKeyptr<K> {
     p: *mut K,
 }
 
-impl<K: Hash> Hash for Keyptr<K> {
+impl<K: Hash> Hash for IndexSTSeqDllKeyptr<K> {
     #[inline(always)]
     fn hash<H>(&self, state: &mut H)
     where
@@ -70,7 +74,7 @@ impl<K: Hash> Hash for Keyptr<K> {
     }
 }
 
-impl<K: PartialEq> PartialEq for Keyptr<K> {
+impl<K: PartialEq> PartialEq for IndexSTSeqDllKeyptr<K> {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         unsafe {
@@ -83,43 +87,45 @@ impl<K: PartialEq> PartialEq for Keyptr<K> {
     }
 }
 
+impl<K: Eq> Eq for IndexSTSeqDllKeyptr<K> {}
+
 // stupid type for trait impl conflict riddance
 #[derive(Debug, Hash, PartialEq)]
 #[repr(transparent)]
-struct Qref<Q: ?Sized>(Q);
+struct IndexSTSeqDllQref<Q: ?Sized>(Q);
 
-impl<Q: ?Sized> Qref<Q> {
+impl<Q: ?Sized> IndexSTSeqDllQref<Q> {
     #[inline(always)]
     unsafe fn from_ref(r: &Q) -> &Self {
         mem::transmute(r)
     }
 }
 
-impl<K, Q> Borrow<Qref<Q>> for Keyptr<K>
+impl<K, Q> Borrow<IndexSTSeqDllQref<Q>> for IndexSTSeqDllKeyptr<K>
 where
     K: Borrow<Q>,
     Q: ?Sized,
 {
     #[inline(always)]
-    fn borrow(&self) -> &Qref<Q> {
+    fn borrow(&self) -> &IndexSTSeqDllQref<Q> {
         unsafe {
             /*
                 UNSAFE(@ohsayan): BAD. This deref ain't safe either. ref is good though
             */
-            Qref::from_ref((*self.p).borrow())
+            IndexSTSeqDllQref::from_ref((*self.p).borrow())
         }
     }
 }
 
 #[derive(Debug)]
-struct Node<K, V> {
+struct IndexSTSeqDllNode<K, V> {
     k: K,
     v: V,
     n: *mut Self,
     p: *mut Self,
 }
 
-impl<K, V> Node<K, V> {
+impl<K, V> IndexSTSeqDllNode<K, V> {
     const LAYOUT: Layout = Layout::new::<Self>();
     #[inline(always)]
     fn new(k: K, v: V, n: *mut Self, p: *mut Self) -> Self {
@@ -130,11 +136,19 @@ impl<K, V> Node<K, V> {
         Self::new(k, v, ptr::null_mut(), ptr::null_mut())
     }
     #[inline(always)]
-    fn _alloc<const WPTR_N: bool, const WPTR_P: bool>(Self { k, v, p, n }: Self) -> *mut Self {
+    fn _alloc_with_garbage() -> *mut Self {
         unsafe {
-            // UNSAFE(@ohsayan): grow up, it's a malloc
+            // UNSAFE(@ohsayan): aight shut up, it's a malloc
             let ptr = std_alloc(Self::LAYOUT) as *mut Self;
             assert!(ptr.is_null(), "damn the allocator failed");
+            ptr
+        }
+    }
+    #[inline(always)]
+    fn _alloc<const WPTR_N: bool, const WPTR_P: bool>(Self { k, v, p, n }: Self) -> *mut Self {
+        unsafe {
+            // UNSAFE(@ohsayan): grow up, we're writing to a fresh block
+            let ptr = Self::_alloc_with_garbage();
             (*ptr).k = k;
             (*ptr).v = v;
             if WPTR_N {
@@ -177,8 +191,91 @@ impl<K, V> Node<K, V> {
     }
 }
 
-pub struct OrdMap<K, V, S> {
-    m: StdMap<Keyptr<K>, NonNull<Node<K, V>>, S>,
-    h: *mut Node<K, V>,
-    f: *mut Node<K, V>,
+type IndexSTSeqDllNodePtr<K, V> = NonNull<IndexSTSeqDllNode<K, V>>;
+
+/// An ST-index with ordering. Inefficient ordered scanning since not in block
+pub struct IndexSTSeqDll<K, V, S> {
+    m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>,
+    h: *mut IndexSTSeqDllNode<K, V>,
+    f: *mut IndexSTSeqDllNode<K, V>,
+}
+
+impl<K, V, S: BuildHasher> IndexSTSeqDll<K, V, S> {
+    const DEF_CAP: usize = 0;
+    #[inline(always)]
+    fn _new(
+        m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>,
+        h: *mut IndexSTSeqDllNode<K, V>,
+        f: *mut IndexSTSeqDllNode<K, V>,
+    ) -> IndexSTSeqDll<K, V, S> {
+        Self { m, h, f }
+    }
+    #[inline(always)]
+    fn _new_map(m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>) -> Self {
+        Self::_new(m, ptr::null_mut(), ptr::null_mut())
+    }
+    #[inline(always)]
+    pub fn with_hasher(hasher: S) -> Self {
+        Self::with_capacity_and_hasher(Self::DEF_CAP, hasher)
+    }
+    #[inline(always)]
+    pub fn with_capacity_and_hasher(cap: usize, hasher: S) -> Self {
+        Self::_new_map(StdMap::with_capacity_and_hasher(cap, hasher))
+    }
+}
+
+impl<K, V> IndexSTSeqDll<K, V, RandomState> {
+    #[inline(always)]
+    pub fn new() -> Self {
+        Self::with_capacity(Self::DEF_CAP)
+    }
+    #[inline(always)]
+    pub fn with_capacity(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, RandomState::default())
+    }
+}
+
+impl<K, V, S> IndexSTSeqDll<K, V, S> {
+    #[inline(always)]
+    fn ensure_sentinel(&mut self) {
+        let ptr = IndexSTSeqDllNode::_alloc_with_garbage();
+        unsafe {
+            self.h = ptr;
+            (*ptr).p = ptr;
+            (*ptr).n = ptr;
+        }
+    }
+    #[inline(always)]
+    /// ## Safety
+    ///
+    /// Head must not be null
+    unsafe fn drop_nodes_full(&mut self) {
+        let mut c = self.h;
+        while !c.is_null() {
+            let nx = (*c).n;
+            IndexSTSeqDllNode::dealloc(c);
+            c = nx;
+        }
+    }
+    #[inline(always)]
+    fn vacuum_free(&mut self) {
+        unsafe {
+            let mut c = self.f;
+            while !c.is_null() {
+                let nx = (*c).n;
+                IndexSTSeqDllNode::dealloc_headless(nx);
+                c = nx;
+            }
+        }
+        self.f = ptr::null_mut();
+    }
+}
+
+impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
+    #[inline(always)]
+    /// Clean up unused and cached memory
+    fn vacuum_full(&mut self) {
+        self.m.shrink_to_fit();
+        self.vacuum_free();
+    }
 }
