@@ -45,6 +45,9 @@ impl<T: Hash + Eq + Clone> AsKey for T {
     }
 }
 
+pub trait AsKeyRef: Hash + Eq {}
+impl<T: Hash + Eq + ?Sized> AsKeyRef for T {}
+
 /// Any type implementing this trait can be used as a value inside memory engine structures
 pub trait AsValue: Clone {
     /// Read the value
@@ -93,6 +96,8 @@ where
     fn mt_init() -> Self;
     /// Initialize a pre-loaded instance of the MTIndex
     fn mt_init_with(s: Self) -> Self;
+    /// Clears all the entries in the MTIndex
+    fn mt_clear(&self);
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
@@ -164,6 +169,8 @@ pub trait STIndex<K, V> {
     fn st_init() -> Self;
     /// Initialize a pre-loaded instance of the MTIndex
     fn st_init_with(s: Self) -> Self;
+    /// Clears all the entries in the STIndex
+    fn st_clear(&mut self);
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
