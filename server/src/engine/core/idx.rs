@@ -35,6 +35,7 @@ use std::{
     fmt::{self, Debug},
     hash::{BuildHasher, Hash, Hasher},
     iter::FusedIterator,
+    marker::PhantomData,
     mem,
     ptr::{self, NonNull},
 };
@@ -313,6 +314,9 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
     unsafe fn link(&mut self, node: IndexSTSeqDllNodePtr<K, V>) {
         IndexSTSeqDllNode::link(self.h, node.as_ptr())
     }
+    pub fn len(&self) -> usize {
+        self.m.len()
+    }
 }
 
 impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
@@ -465,6 +469,24 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     fn _iter_unord_v<'a>(&'a self) -> IndexSTSeqDllIterUnordV<'a, K, V> {
         IndexSTSeqDllIterUnordV::new(&self.m)
     }
+    #[inline(always)]
+    fn _iter_ord_kv<'a>(&'a self) -> IndexSTSeqDllIterOrdKV<'a, K, V> {
+        IndexSTSeqDllIterOrdKV {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
+    #[inline(always)]
+    fn _iter_ord_k<'a>(&'a self) -> IndexSTSeqDllIterOrdK<'a, K, V> {
+        IndexSTSeqDllIterOrdK {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
+    #[inline(always)]
+    fn _iter_ord_v<'a>(&'a self) -> IndexSTSeqDllIterOrdV<'a, K, V> {
+        IndexSTSeqDllIterOrdV {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
 }
 
 impl<K, V, S> Drop for IndexSTSeqDll<K, V, S> {
@@ -485,7 +507,7 @@ unsafe impl<K: Send, V: Send, S: Send> Send for IndexSTSeqDll<K, V, S> {}
 unsafe impl<K: Sync, V: Sync, S: Sync> Sync for IndexSTSeqDll<K, V, S> {}
 
 macro_rules! unsafe_marker_impl {
-    ($ty:ty) => {
+    (unsafe impl for $ty:ty) => {
         unsafe impl<'a, K: Send, V: Send> Send for $ty {}
         unsafe impl<'a, K: Sync, V: Sync> Sync for $ty {}
     };
@@ -496,7 +518,7 @@ pub struct IndexSTSeqDllIterUnordKV<'a, K: 'a, V: 'a> {
 }
 
 // UNSAFE(@ohsayan): aliasing guarantees correctness
-unsafe_marker_impl!(IndexSTSeqDllIterUnordKV<'a, K, V>);
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterUnordKV<'a, K, V>);
 
 impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordKV<'a, K, V> {
     #[inline(always)]
@@ -505,7 +527,7 @@ impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordKV<'a, K, V> {
     }
 }
 
-impl<K, V> Clone for IndexSTSeqDllIterUnordKV<'_, K, V> {
+impl<'a, K, V> Clone for IndexSTSeqDllIterUnordKV<'a, K, V> {
     fn clone(&self) -> Self {
         Self { i: self.i.clone() }
     }
@@ -523,6 +545,9 @@ impl<'a, K, V> Iterator for IndexSTSeqDllIterUnordKV<'a, K, V> {
             }
         })
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        <_ as Iterator>::size_hint(&self.i)
+    }
 }
 
 impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterUnordKV<'a, K, V> {
@@ -533,7 +558,7 @@ impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterUnordKV<'a, K, V> {
 
 impl<'a, K, V> FusedIterator for IndexSTSeqDllIterUnordKV<'a, K, V> {}
 
-impl<K: Debug, V: Debug> Debug for IndexSTSeqDllIterUnordKV<'_, K, V> {
+impl<'a, K: 'a + Debug, V: 'a + Debug> Debug for IndexSTSeqDllIterUnordKV<'a, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
@@ -544,7 +569,7 @@ pub struct IndexSTSeqDllIterUnordK<'a, K: 'a, V: 'a> {
 }
 
 // UNSAFE(@ohsayan): aliasing guarantees correctness
-unsafe_marker_impl!(IndexSTSeqDllIterUnordK<'a, K, V>);
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterUnordK<'a, K, V>);
 
 impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordK<'a, K, V> {
     #[inline(always)]
@@ -553,7 +578,7 @@ impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordK<'a, K, V> {
     }
 }
 
-impl<K, V> Clone for IndexSTSeqDllIterUnordK<'_, K, V> {
+impl<'a, K, V> Clone for IndexSTSeqDllIterUnordK<'a, K, V> {
     fn clone(&self) -> Self {
         Self { k: self.k.clone() }
     }
@@ -569,6 +594,9 @@ impl<'a, K, V> Iterator for IndexSTSeqDllIterUnordK<'a, K, V> {
             }
         })
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        <_ as Iterator>::size_hint(&self.k)
+    }
 }
 
 impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterUnordK<'a, K, V> {
@@ -579,7 +607,7 @@ impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterUnordK<'a, K, V> {
 
 impl<'a, K, V> FusedIterator for IndexSTSeqDllIterUnordK<'a, K, V> {}
 
-impl<'a, K: Debug, V> Debug for IndexSTSeqDllIterUnordK<'_, K, V> {
+impl<'a, K: Debug, V> Debug for IndexSTSeqDllIterUnordK<'a, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
@@ -590,7 +618,7 @@ pub struct IndexSTSeqDllIterUnordV<'a, K: 'a, V: 'a> {
 }
 
 // UNSAFE(@ohsayan): aliasing guarantees correctness
-unsafe_marker_impl!(IndexSTSeqDllIterUnordV<'a, K, V>);
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterUnordV<'a, K, V>);
 
 impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordV<'a, K, V> {
     #[inline(always)]
@@ -599,7 +627,7 @@ impl<'a, K: 'a, V: 'a> IndexSTSeqDllIterUnordV<'a, K, V> {
     }
 }
 
-impl<K, V> Clone for IndexSTSeqDllIterUnordV<'_, K, V> {
+impl<'a, K, V> Clone for IndexSTSeqDllIterUnordV<'a, K, V> {
     fn clone(&self) -> Self {
         Self { v: self.v.clone() }
     }
@@ -608,12 +636,15 @@ impl<K, V> Clone for IndexSTSeqDllIterUnordV<'_, K, V> {
 impl<'a, K, V> Iterator for IndexSTSeqDllIterUnordV<'a, K, V> {
     type Item = &'a V;
     fn next(&mut self) -> Option<Self::Item> {
-        self.v.next().map(|k| {
+        self.v.next().map(|n| {
             unsafe {
                 // UNSAFE(@ohsayan): nullck
-                &(*k.as_ptr()).v
+                &(*n.as_ptr()).v
             }
         })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        <_ as Iterator>::size_hint(&self.v)
     }
 }
 
@@ -625,8 +656,256 @@ impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterUnordV<'a, K, V> {
 
 impl<'a, K, V> FusedIterator for IndexSTSeqDllIterUnordV<'a, K, V> {}
 
-impl<'a, K, V: Debug> Debug for IndexSTSeqDllIterUnordV<'_, K, V> {
+impl<'a, K, V: Debug> Debug for IndexSTSeqDllIterUnordV<'a, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
+    }
+}
+
+trait IndexSTSeqDllIterOrdConfig<K, V> {
+    type Ret<'a>
+    where
+        K: 'a,
+        V: 'a;
+    unsafe fn read_ret<'a>(ptr: *const IndexSTSeqDllNode<K, V>) -> Option<Self::Ret<'a>>
+    where
+        K: 'a,
+        V: 'a;
+    fn def_ret<'a>() -> Option<Self::Ret<'a>>;
+}
+
+struct IndexSTSeqDllIterOrdConfigFull;
+
+impl<K, V> IndexSTSeqDllIterOrdConfig<K, V> for IndexSTSeqDllIterOrdConfigFull {
+    type Ret<'a> = (&'a K, &'a V) where K: 'a, V: 'a;
+    #[inline(always)]
+    unsafe fn read_ret<'a>(ptr: *const IndexSTSeqDllNode<K, V>) -> Option<Self::Ret<'a>>
+    where
+        K: 'a,
+        V: 'a,
+    {
+        Some((&(*ptr).k, &(*ptr).v))
+    }
+    #[inline(always)]
+    fn def_ret<'a>() -> Option<Self::Ret<'a>> {
+        None
+    }
+}
+
+struct IndexSTSeqDllIterOrdConfigKey;
+
+impl<K, V> IndexSTSeqDllIterOrdConfig<K, V> for IndexSTSeqDllIterOrdConfigKey {
+    type Ret<'a> = &'a K
+    where
+        K: 'a,
+        V: 'a;
+    #[inline(always)]
+    unsafe fn read_ret<'a>(ptr: *const IndexSTSeqDllNode<K, V>) -> Option<&'a K>
+    where
+        K: 'a,
+        V: 'a,
+    {
+        Some(&(*ptr).k)
+    }
+    #[inline(always)]
+    fn def_ret<'a>() -> Option<&'a K>
+    where
+        K: 'a,
+        V: 'a,
+    {
+        None
+    }
+}
+
+struct IndexSTSeqDllIterOrdConfigValue;
+
+impl<K, V> IndexSTSeqDllIterOrdConfig<K, V> for IndexSTSeqDllIterOrdConfigValue {
+    type Ret<'a> = &'a V
+    where
+        K: 'a,
+        V: 'a;
+    #[inline(always)]
+    unsafe fn read_ret<'a>(ptr: *const IndexSTSeqDllNode<K, V>) -> Option<&'a V>
+    where
+        K: 'a,
+        V: 'a,
+    {
+        Some(&(*ptr).v)
+    }
+    #[inline(always)]
+    fn def_ret<'a>() -> Option<&'a V>
+    where
+        K: 'a,
+        V: 'a,
+    {
+        None
+    }
+}
+
+struct IndexSTSeqDllIterOrdBase<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<K, V>> {
+    h: *const IndexSTSeqDllNode<K, V>,
+    t: *const IndexSTSeqDllNode<K, V>,
+    r: usize,
+    _l: PhantomData<(&'a K, &'a V, C)>,
+}
+
+impl<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<K, V>> IndexSTSeqDllIterOrdBase<'a, K, V, C> {
+    #[inline(always)]
+    fn new<S>(idx: &'a IndexSTSeqDll<K, V, S>) -> Self {
+        Self {
+            h: if idx.h.is_null() {
+                ptr::null_mut()
+            } else {
+                unsafe {
+                    // UNSAFE(@ohsayan): nullck
+                    (*idx.h).p
+                }
+            },
+            t: idx.h,
+            r: idx.len(),
+            _l: PhantomData,
+        }
+    }
+    #[inline(always)]
+    fn _next(&mut self) -> Option<C::Ret<'a>> {
+        if self.h == self.t {
+            C::def_ret()
+        } else {
+            self.r -= 1;
+            unsafe {
+                // UNSAFE(@ohsayan): Assuming we had a legal init, this should be fine
+                let this = C::read_ret(self.h);
+                self.h = (*self.h).p;
+                this
+            }
+        }
+    }
+}
+
+impl<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<K, V>> Debug
+    for IndexSTSeqDllIterOrdBase<'a, K, V, C>
+where
+    C::Ret<'a>: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.clone()).finish()
+    }
+}
+
+impl<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<K, V>> Iterator
+    for IndexSTSeqDllIterOrdBase<'a, K, V, C>
+{
+    type Item = C::Ret<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self._next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.r, Some(self.r))
+    }
+}
+
+impl<'a, K, V, C: IndexSTSeqDllIterOrdConfig<K, V>> ExactSizeIterator
+    for IndexSTSeqDllIterOrdBase<'a, K, V, C>
+{
+    fn len(&self) -> usize {
+        self.r
+    }
+}
+
+impl<'a, K, V, C: IndexSTSeqDllIterOrdConfig<K, V>> Clone
+    for IndexSTSeqDllIterOrdBase<'a, K, V, C>
+{
+    fn clone(&self) -> Self {
+        Self { ..*self }
+    }
+}
+
+#[derive(Debug)]
+pub struct IndexSTSeqDllIterOrdKV<'a, K: 'a, V: 'a> {
+    i: IndexSTSeqDllIterOrdBase<'a, K, V, IndexSTSeqDllIterOrdConfigFull>,
+}
+
+// UNSAFE(@ohsayan): aliasing guarantees correctness
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterOrdKV<'a, K, V>);
+
+impl<'a, K: 'a, V: 'a> Iterator for IndexSTSeqDllIterOrdKV<'a, K, V> {
+    type Item = (&'a K, &'a V);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.i.size_hint()
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterOrdKV<'a, K, V> {
+    fn len(&self) -> usize {
+        self.i.len()
+    }
+}
+
+impl<'a, K, V> Clone for IndexSTSeqDllIterOrdKV<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self { i: self.i.clone() }
+    }
+}
+
+#[derive(Debug)]
+pub struct IndexSTSeqDllIterOrdK<'a, K: 'a, V: 'a> {
+    i: IndexSTSeqDllIterOrdBase<'a, K, V, IndexSTSeqDllIterOrdConfigKey>,
+}
+
+// UNSAFE(@ohsayan): aliasing guarantees correctness
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterOrdK<'a, K, V>);
+
+impl<'a, K: 'a, V: 'a> Iterator for IndexSTSeqDllIterOrdK<'a, K, V> {
+    type Item = &'a K;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.i.size_hint()
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterOrdK<'a, K, V> {
+    fn len(&self) -> usize {
+        self.i.len()
+    }
+}
+
+impl<'a, K, V> Clone for IndexSTSeqDllIterOrdK<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self { i: self.i.clone() }
+    }
+}
+
+#[derive(Debug)]
+pub struct IndexSTSeqDllIterOrdV<'a, K: 'a, V: 'a> {
+    i: IndexSTSeqDllIterOrdBase<'a, K, V, IndexSTSeqDllIterOrdConfigValue>,
+}
+
+// UNSAFE(@ohsayan): aliasing guarantees correctness
+unsafe_marker_impl!(unsafe impl for IndexSTSeqDllIterOrdV<'a, K, V>);
+
+impl<'a, K: 'a, V: 'a> Iterator for IndexSTSeqDllIterOrdV<'a, K, V> {
+    type Item = &'a V;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.i.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.i.size_hint()
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for IndexSTSeqDllIterOrdV<'a, K, V> {
+    fn len(&self) -> usize {
+        self.i.len()
+    }
+}
+
+impl<'a, K, V> Clone for IndexSTSeqDllIterOrdV<'a, K, V> {
+    fn clone(&self) -> Self {
+        Self { i: self.i.clone() }
     }
 }
