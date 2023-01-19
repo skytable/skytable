@@ -28,6 +28,8 @@
 
 mod def;
 mod idx;
+#[cfg(test)]
+mod tests;
 use super::ql::lexer::{Lit, LitIR};
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always

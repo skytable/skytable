@@ -41,7 +41,9 @@ use std::{
 };
 
 // re-exports for convenience
-pub type IndexSTSeq<K, V, S = RandomState> = IndexSTSeqDll<K, V, S>;
+pub type IndexSTSeq<K, V, S> = IndexSTSeqDll<K, V, S>;
+pub type IndexSTSeqDef<K, V> = IndexSTSeq<K, V, IndexSTSeqHasher>;
+pub type IndexSTSeqHasher = RandomState;
 
 /*
     For the ordered index impl, we resort to some crazy unsafe code, especially because there's no other way to
@@ -212,11 +214,27 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
 
 type IndexSTSeqDllNodePtr<K, V> = NonNull<IndexSTSeqDllNode<K, V>>;
 
+#[cfg(debug_assertions)]
+pub struct IndexSTSeqDllMetrics {
+    stat_f: usize,
+}
+
+impl IndexSTSeqDllMetrics {
+    pub fn report_f(&self) -> usize {
+        self.stat_f
+    }
+    fn new() -> IndexSTSeqDllMetrics {
+        Self { stat_f: 0 }
+    }
+}
+
 /// An ST-index with ordering. Inefficient ordered scanning since not in block
 pub struct IndexSTSeqDll<K, V, S> {
     m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>,
     h: *mut IndexSTSeqDllNode<K, V>,
     f: *mut IndexSTSeqDllNode<K, V>,
+    #[cfg(debug_assertions)]
+    metrics: IndexSTSeqDllMetrics,
 }
 
 impl<K, V, S: BuildHasher> IndexSTSeqDll<K, V, S> {
@@ -227,7 +245,12 @@ impl<K, V, S: BuildHasher> IndexSTSeqDll<K, V, S> {
         h: *mut IndexSTSeqDllNode<K, V>,
         f: *mut IndexSTSeqDllNode<K, V>,
     ) -> IndexSTSeqDll<K, V, S> {
-        Self { m, h, f }
+        Self {
+            m,
+            h,
+            f,
+            metrics: IndexSTSeqDllMetrics::new(),
+        }
     }
     #[inline(always)]
     fn _new_map(m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>) -> Self {
@@ -255,6 +278,20 @@ impl<K, V> IndexSTSeqDll<K, V, RandomState> {
 }
 
 impl<K, V, S> IndexSTSeqDll<K, V, S> {
+    #[inline(always)]
+    fn metrics_update_f_decr(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.metrics.stat_f -= 1;
+        }
+    }
+    #[inline(always)]
+    fn metrics_update_f_incr(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.metrics.stat_f += 1;
+        }
+    }
     #[inline(always)]
     fn ensure_sentinel(&mut self) {
         if self.h.is_null() {
@@ -289,6 +326,7 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
                 let nx = (*c).n;
                 IndexSTSeqDllNode::dealloc_headless(c);
                 c = nx;
+                self.metrics_update_f_decr();
             }
         }
         self.f = ptr::null_mut();
@@ -298,6 +336,7 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
         if self.f.is_null() {
             IndexSTSeqDllNode::alloc_box(node)
         } else {
+            self.metrics_update_f_decr();
             unsafe {
                 // UNSAFE(@ohsayan): Safe because we already did a nullptr check
                 let f = self.f;
@@ -404,6 +443,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
                 IndexSTSeqDllNode::unlink(n);
                 (*n).n = self.f;
                 self.f = n;
+                self.metrics_update_f_incr();
                 v
             })
     }
@@ -521,6 +561,8 @@ where
 {
     const PREALLOC: bool = true;
 
+    type Metrics = IndexSTSeqDllMetrics;
+
     type IterKV<'a> = IndexSTSeqDllIterUnordKV<'a, K, V>
     where
         Self: 'a,
@@ -555,6 +597,11 @@ where
 
     fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
         self._iter_unord_v()
+    }
+
+    #[cfg(debug_assertions)]
+    fn idx_metrics(&self) -> &Self::Metrics {
+        &self.metrics
     }
 }
 
@@ -596,7 +643,7 @@ where
         K: Borrow<Q>,
         Q: ?Sized + AsKeyRef,
     {
-        self._update(key, val).is_none()
+        self._update(key, val).is_some()
     }
 
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
@@ -656,6 +703,18 @@ where
 
     fn stseq_ord_value<'a>(&'a self) -> Self::IterOrdValue<'a> {
         self._iter_ord_v()
+    }
+}
+
+impl<K: AsKey, V: AsValue, S: BuildHasher + Default> Clone for IndexSTSeqDll<K, V, S> {
+    fn clone(&self) -> Self {
+        let mut slf = Self::with_capacity_and_hasher(self.len(), S::default());
+        self._iter_ord_kv()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .for_each(|(k, v)| {
+                slf._insert(k, v);
+            });
+        slf
     }
 }
 

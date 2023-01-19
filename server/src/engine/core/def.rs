@@ -67,6 +67,10 @@ impl<T: Clone> AsValue for T {
     }
 }
 
+#[cfg(debug_assertions)]
+/// A dummy metrics object
+pub struct DummyMetrics;
+
 /// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
 /// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
 pub trait IndexBaseSpec<K, V>
@@ -76,6 +80,9 @@ where
 {
     /// Index supports prealloc?
     const PREALLOC: bool;
+    #[cfg(debug_assertions)]
+    /// A type representing debug metrics
+    type Metrics;
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where
@@ -104,6 +111,9 @@ where
     fn idx_iter_key<'a>(&'a self) -> Self::IterKey<'a>;
     /// Returns an iterator over the values
     fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
+    #[cfg(debug_assertions)]
+    /// Returns a reference to the index metrics
+    fn idx_metrics(&self) -> &Self::Metrics;
 }
 
 /// An unordered MTIndex
