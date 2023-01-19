@@ -29,17 +29,17 @@
     should augment in future revisions of the QL engine
 */
 
-pub mod delete;
-pub mod insert;
-pub mod select;
-pub mod update;
+pub mod del;
+pub mod ins;
+pub mod sel;
+pub mod upd;
 
 #[cfg(test)]
 use super::ast::InplaceData;
 use {
     super::{
         ast::{QueryData, State},
-        lexer::{LitIR, Token},
+        lex::{LitIR, Token},
     },
     crate::util::compiler,
     std::collections::HashMap,

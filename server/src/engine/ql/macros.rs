@@ -41,13 +41,13 @@ macro_rules! assert_full_tt {
 
 macro_rules! __sym_token {
     ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Symbol($crate::engine::ql::lexer::Symbol::$ident)
+        $crate::engine::ql::lex::Token::Symbol($crate::engine::ql::lex::Symbol::$ident)
     };
 }
 
 macro_rules! __kw {
     ($ident:ident) => {
-        $crate::engine::ql::lexer::Token::Keyword($crate::engine::ql::lexer::Keyword::$ident)
+        $crate::engine::ql::lex::Token::Keyword($crate::engine::ql::lex::Keyword::$ident)
     };
 }
 

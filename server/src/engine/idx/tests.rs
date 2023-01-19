@@ -27,10 +27,7 @@
 use super::*;
 
 mod idx_st_seq_dll {
-    use super::{
-        def::{IndexBaseSpec, STIndex, STIndexSeq},
-        idx::IndexSTSeqDef,
-    };
+    use super::{IndexBaseSpec, IndexSTSeqDef, STIndex, STIndexSeq};
     use rand::{distributions::Alphanumeric, Rng};
 
     const SPAM_CNT: usize = 131_072;

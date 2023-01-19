@@ -26,7 +26,7 @@
 
 use {
     super::{
-        super::lexer::{Lit, Token},
+        super::lex::{Lit, Token},
         lex_insecure,
     },
     crate::engine::ql::LangError,
@@ -174,7 +174,7 @@ fn lex_unsafe_literal_pro() {
 }
 
 mod num_tests {
-    use crate::engine::ql::lexer::decode_num_ub as ubdc;
+    use crate::engine::ql::lex::decode_num_ub as ubdc;
     mod uint8 {
         use super::*;
         #[test]
@@ -276,7 +276,7 @@ mod num_tests {
 mod safequery_params {
     use rand::seq::SliceRandom;
 
-    use crate::engine::ql::lexer::{LitIR, SafeQueryData};
+    use crate::engine::ql::lex::{LitIR, SafeQueryData};
     #[test]
     fn param_uint() {
         let src = b"12345\n";
@@ -416,7 +416,7 @@ mod safequery_params {
 }
 
 mod safequery_full_param {
-    use crate::engine::ql::lexer::{LitIR, SafeQueryData, Token};
+    use crate::engine::ql::lex::{LitIR, SafeQueryData, Token};
     #[test]
     fn p_mini() {
         let query = b"select * from myapp where username = ?";

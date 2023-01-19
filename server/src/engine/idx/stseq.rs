@@ -24,7 +24,7 @@
  *
 */
 
-use super::def::{AsKey, AsKeyRef, AsValue, IndexBaseSpec, STIndex, STIndexSeq};
+use super::{AsKey, AsKeyRef, AsValue, IndexBaseSpec, STIndex, STIndexSeq};
 use std::{
     alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
     borrow::Borrow,

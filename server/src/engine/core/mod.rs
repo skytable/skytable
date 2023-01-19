@@ -26,11 +26,7 @@
 
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
 
-mod def;
-mod idx;
-#[cfg(test)]
-mod tests;
-use super::ql::lexer::{Lit, LitIR};
+use super::ql::lex::{Lit, LitIR};
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.

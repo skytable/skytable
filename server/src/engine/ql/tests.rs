@@ -26,7 +26,7 @@
 
 use {
     super::{
-        lexer::{InsecureLexer, SafeLexer, Symbol, Token},
+        lex::{InsecureLexer, SafeLexer, Symbol, Token},
         LangResult,
     },
     crate::{engine::core::DataType, util::test_utils},
@@ -91,7 +91,7 @@ impl NullableMapEntry for Null {
     }
 }
 
-impl<'a> NullableMapEntry for super::lexer::Lit<'a> {
+impl<'a> NullableMapEntry for super::lex::Lit<'a> {
     fn data(self) -> Option<super::schema::DictEntry> {
         Some(super::schema::DictEntry::Lit(self.as_ir().to_litir_owned()))
     }

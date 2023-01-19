@@ -29,8 +29,8 @@ mod list_parse {
     use super::*;
     use crate::engine::ql::{
         ast::{InplaceData, SubstitutedData},
-        dml::insert::parse_list_full,
-        lexer::LitIR,
+        dml::ins::parse_list_full,
+        lex::LitIR,
     };
 
     #[test]
@@ -194,7 +194,7 @@ mod list_parse {
 
 mod tuple_syntax {
     use super::*;
-    use crate::engine::ql::dml::insert::parse_data_tuple_syntax_full;
+    use crate::engine::ql::dml::ins::parse_data_tuple_syntax_full;
 
     #[test]
     fn tuple_mini() {
@@ -284,7 +284,7 @@ mod tuple_syntax {
 }
 mod map_syntax {
     use super::*;
-    use crate::engine::ql::dml::insert::parse_data_map_syntax_full;
+    use crate::engine::ql::dml::ins::parse_data_map_syntax_full;
 
     #[test]
     fn map_mini() {
@@ -387,7 +387,7 @@ mod stmt_insert {
         super::*,
         crate::engine::ql::{
             ast::Entity,
-            dml::{self, insert::InsertStatement},
+            dml::{self, ins::InsertStatement},
         },
     };
 
@@ -399,7 +399,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&x[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable!["sayan"].to_vec().into(),
@@ -421,7 +421,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&x[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
@@ -448,7 +448,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&x[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable![
@@ -475,7 +475,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -500,7 +500,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -533,7 +533,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -555,10 +555,10 @@ mod stmt_insert {
     fn insert_tuple_fnsub() {
         let tok =
             lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
-        let ret = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let ret = dml::ins::parse_insert_full(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
-            into_array_nullable![dml::insert::T_UUIDSTR, "sayan", dml::insert::T_TIMESEC]
+            into_array_nullable![dml::ins::T_UUIDSTR, "sayan", dml::ins::T_TIMESEC]
                 .to_vec()
                 .into(),
         );
@@ -569,13 +569,13 @@ mod stmt_insert {
         let tok = lex_insecure(
             br#"insert into jotsy.app { uuid: @uuidstr(), username: "sayan", signup_time: @timesec() }"#
         ).unwrap();
-        let ret = dml::insert::parse_insert_full(&tok[1..]).unwrap();
+        let ret = dml::ins::parse_insert_full(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
-                "uuid".as_bytes() => dml::insert::T_UUIDSTR,
+                "uuid".as_bytes() => dml::ins::T_UUIDSTR,
                 "username".as_bytes() => "sayan",
-                "signup_time".as_bytes() => dml::insert::T_TIMESEC,
+                "signup_time".as_bytes() => dml::ins::T_TIMESEC,
             }
             .into(),
         );
@@ -590,8 +590,8 @@ mod stmt_select {
         super::*,
         crate::engine::ql::{
             ast::Entity,
-            dml::{self, select::SelectStatement},
-            lexer::LitIR,
+            dml::{self, sel::SelectStatement},
+            lex::LitIR,
         },
     };
     #[test]
@@ -602,7 +602,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::select::parse_select_full(&tok[1..]).unwrap();
+        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Single(b"users"),
             [].to_vec(),
@@ -623,7 +623,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::select::parse_select_full(&tok[1..]).unwrap();
+        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Single(b"users"),
             [b"field1".as_slice()].to_vec(),
@@ -644,7 +644,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::select::parse_select_full(&tok[1..]).unwrap();
+        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Full(b"twitter", b"users"),
             [b"field1".as_slice()].to_vec(),
@@ -665,7 +665,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::select::parse_select_full(&tok[1..]).unwrap();
+        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Full(b"twitter", b"users"),
             [b"field1".as_slice(), b"field2".as_slice()].to_vec(),
@@ -685,15 +685,15 @@ mod expression_tests {
         crate::engine::ql::{
             dml::{
                 self,
-                update::{AssignmentExpression, Operator},
+                upd::{AssignmentExpression, Operator},
             },
-            lexer::LitIR,
+            lex::LitIR,
         },
     };
     #[test]
     fn expr_assign() {
         let src = lex_insecure(b"username = 'sayan'").unwrap();
-        let r = dml::update::parse_assn_expression_full(&src).unwrap();
+        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"username", LitIR::Str("sayan"), Operator::Assign)
@@ -702,7 +702,7 @@ mod expression_tests {
     #[test]
     fn expr_add_assign() {
         let src = lex_insecure(b"followers += 100").unwrap();
-        let r = dml::update::parse_assn_expression_full(&src).unwrap();
+        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"followers", LitIR::UInt(100), Operator::AddAssign)
@@ -711,7 +711,7 @@ mod expression_tests {
     #[test]
     fn expr_sub_assign() {
         let src = lex_insecure(b"following -= 150").unwrap();
-        let r = dml::update::parse_assn_expression_full(&src).unwrap();
+        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"following", LitIR::UInt(150), Operator::SubAssign)
@@ -720,7 +720,7 @@ mod expression_tests {
     #[test]
     fn expr_mul_assign() {
         let src = lex_insecure(b"product_qty *= 2").unwrap();
-        let r = dml::update::parse_assn_expression_full(&src).unwrap();
+        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"product_qty", LitIR::UInt(2), Operator::MulAssign)
@@ -729,7 +729,7 @@ mod expression_tests {
     #[test]
     fn expr_div_assign() {
         let src = lex_insecure(b"image_crop_factor /= 2").unwrap();
-        let r = dml::update::parse_assn_expression_full(&src).unwrap();
+        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"image_crop_factor", LitIR::UInt(2), Operator::DivAssign)
@@ -743,10 +743,10 @@ mod update_statement {
             ast::Entity,
             dml::{
                 self,
-                update::{AssignmentExpression, Operator, UpdateStatement},
+                upd::{AssignmentExpression, Operator, UpdateStatement},
                 RelationalExpr, WhereClause,
             },
-            lexer::LitIR,
+            lex::LitIR,
         },
     };
     #[test]
@@ -757,7 +757,7 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let r = dml::update::parse_update_full(&tok[1..]).unwrap();
+        let r = dml::upd::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
             Entity::Single(b"app"),
             vec![AssignmentExpression::new(
@@ -789,7 +789,7 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let r = dml::update::parse_update_full(&tok[1..]).unwrap();
+        let r = dml::upd::parse_update_full(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
             Entity::Full(b"jotsy", b"app"),
             vec![
@@ -821,10 +821,10 @@ mod delete_stmt {
         crate::engine::ql::{
             ast::Entity,
             dml::{
-                delete::{self, DeleteStatement},
+                del::{self, DeleteStatement},
                 RelationalExpr,
             },
-            lexer::LitIR,
+            lex::LitIR,
         },
     };
 
@@ -846,7 +846,7 @@ mod delete_stmt {
                 )
             },
         );
-        let r = delete::parse_delete_full(&tok[1..]).unwrap();
+        let r = del::parse_delete_full(&tok[1..]).unwrap();
         assert_eq!(r, e);
     }
     #[test]
@@ -867,7 +867,7 @@ mod delete_stmt {
                 )
             },
         );
-        let r = delete::parse_delete_full(&tok[1..]).unwrap();
+        let r = del::parse_delete_full(&tok[1..]).unwrap();
         assert_eq!(r, e);
     }
 }
@@ -876,7 +876,7 @@ mod relational_expr {
         super::*,
         crate::engine::ql::{
             dml::{self, RelationalExpr},
-            lexer::LitIR,
+            lex::LitIR,
         },
     };
 
@@ -964,7 +964,7 @@ mod where_clause {
         super::*,
         crate::engine::ql::{
             dml::{self, RelationalExpr, WhereClause},
-            lexer::LitIR,
+            lex::LitIR,
         },
     };
     #[test]

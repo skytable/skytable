@@ -29,7 +29,7 @@ use super::ast::InplaceData;
 use {
     super::{
         ast::{Entity, QueryData, State, Statement},
-        lexer::{Slice, Token},
+        lex::{Slice, Token},
         LangError, LangResult,
     },
     crate::util::compiler,

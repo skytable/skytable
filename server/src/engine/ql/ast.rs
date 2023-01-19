@@ -27,7 +27,7 @@
 use {
     super::{
         ddl, dml,
-        lexer::{LitIR, Slice, Token},
+        lex::{LitIR, Slice, Token},
         schema, LangError, LangResult,
     },
     crate::{
@@ -538,13 +538,13 @@ pub enum Statement<'a> {
     /// DDL query to inspect all spaces (returns a list of spaces in the database)
     InspectSpaces,
     /// DML insert
-    Insert(dml::insert::InsertStatement<'a>),
+    Insert(dml::ins::InsertStatement<'a>),
     /// DML select
-    Select(dml::select::SelectStatement<'a>),
+    Select(dml::sel::SelectStatement<'a>),
     /// DML update
-    Update(dml::update::UpdateStatement<'a>),
+    Update(dml::upd::UpdateStatement<'a>),
     /// DML delete
-    Delete(dml::delete::DeleteStatement<'a>),
+    Delete(dml::del::DeleteStatement<'a>),
 }
 
 #[inline(always)]
@@ -578,16 +578,16 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
         Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => ddl::parse_inspect(&mut state),
         // DML
         Token![insert] => {
-            dml::insert::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
+            dml::ins::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
         }
         Token![select] => {
-            dml::select::SelectStatement::parse_select(&mut state).map(Statement::Select)
+            dml::sel::SelectStatement::parse_select(&mut state).map(Statement::Select)
         }
         Token![update] => {
-            dml::update::UpdateStatement::parse_update(&mut state).map(Statement::Update)
+            dml::upd::UpdateStatement::parse_update(&mut state).map(Statement::Update)
         }
         Token![delete] => {
-            dml::delete::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
+            dml::del::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
         }
         _ => compiler::cold_rerr(LangError::ExpectedStatement),
     }

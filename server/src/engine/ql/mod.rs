@@ -32,7 +32,7 @@ pub(super) mod ast;
 mod benches;
 pub(super) mod ddl;
 pub(super) mod dml;
-pub(super) mod lexer;
+pub(super) mod lex;
 pub(super) mod schema;
 #[cfg(test)]
 mod tests;

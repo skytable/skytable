@@ -33,7 +33,7 @@ use {
             core::DataType,
             ql::{
                 ast::{Entity, QueryData, State},
-                lexer::Token,
+                lex::Token,
                 LangError, LangResult,
             },
         },

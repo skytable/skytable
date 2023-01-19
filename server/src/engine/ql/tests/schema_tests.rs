@@ -26,7 +26,7 @@
 
 use super::{
     super::{
-        lexer::{Lit, Token},
+        lex::{Lit, Token},
         schema,
     },
     lex_insecure, *,
@@ -74,7 +74,7 @@ mod alter_space {
     use {
         super::*,
         crate::engine::ql::{
-            lexer::Lit,
+            lex::Lit,
             schema::{self, AlterSpace},
         },
     };

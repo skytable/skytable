@@ -26,7 +26,7 @@
 
 use {
     super::*,
-    crate::engine::ql::{lexer::Lit, schema},
+    crate::engine::ql::{lex::Lit, schema},
 };
 mod dict {
     use super::*;
@@ -219,7 +219,7 @@ mod dict {
 mod nullable_dict_tests {
     use super::*;
     mod dict {
-        use {super::*, crate::engine::ql::lexer::Lit};
+        use {super::*, crate::engine::ql::lex::Lit};
 
         #[test]
         fn null_mini() {

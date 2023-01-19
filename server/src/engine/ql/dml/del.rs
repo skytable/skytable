@@ -37,7 +37,7 @@ use {
 #[cfg(test)]
 use {
     super::WhereClauseCollection,
-    crate::engine::ql::{ast::InplaceData, lexer::Token},
+    crate::engine::ql::{ast::InplaceData, lex::Token},
 };
 
 /*

@@ -30,4 +30,5 @@
 #[macro_use]
 mod macros;
 mod core;
+mod idx;
 mod ql;

@@ -49,7 +49,7 @@ use crate::engine::ql::ast::InplaceData;
 use {
     super::{
         ast::{QueryData, State},
-        lexer::{LitIR, LitIROwned, Slice, Symbol, Token},
+        lex::{LitIR, LitIROwned, Slice, Symbol, Token},
         LangError, LangResult,
     },
     crate::util::{compiler, MaybeInit},

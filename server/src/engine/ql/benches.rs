@@ -42,7 +42,7 @@ use {crate::engine::ql::tests::lex_insecure, test::Bencher};
 mod lexer {
     use {
         super::*,
-        crate::engine::ql::lexer::{Lit, Token},
+        crate::engine::ql::lex::{Lit, Token},
     };
     #[bench]
     fn lex_number(b: &mut Bencher) {
@@ -122,7 +122,7 @@ mod ddl_queries {
         super::*,
         crate::engine::ql::{
             ast::{compile, Entity, InplaceData, Statement},
-            lexer::InsecureLexer,
+            lex::InsecureLexer,
         },
     };
     mod use_stmt {
