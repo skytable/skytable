@@ -67,14 +67,14 @@ impl<T: Clone> AsValue for T {
     }
 }
 
-pub trait MTIndex<K, V>
+/// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
+/// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
+pub trait IndexBaseSpec<K, V>
 where
     K: AsKey,
     V: AsValue,
 {
-    /// State whether the underlying structure provides any ordering on the iterators
-    const HAS_ORDER: bool;
-    /// Base support prealloc?
+    /// Index supports prealloc?
     const PREALLOC: bool;
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
@@ -92,10 +92,26 @@ where
     where
         Self: 'a,
         V: 'a;
-    /// Initialize an empty instance of the MTIndex
-    fn mt_init() -> Self;
-    /// Initialize a pre-loaded instance of the MTIndex
-    fn mt_init_with(s: Self) -> Self;
+    // init
+    /// Initialize an empty instance of the index
+    fn idx_init() -> Self;
+    /// Initialize a pre-loaded instance of the index
+    fn idx_init_with(s: Self) -> Self;
+    // iter
+    /// Returns an iterator over a tuple of keys and values
+    fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    /// Returns an iterator over the keys
+    fn idx_iter_key<'a>(&'a self) -> Self::IterKey<'a>;
+    /// Returns an iterator over the values
+    fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
+}
+
+/// An unordered MTIndex
+pub trait MTIndex<K, V>: IndexBaseSpec<K, V>
+where
+    K: AsKey,
+    V: AsValue,
+{
     /// Clears all the entries in the MTIndex
     fn mt_clear(&self);
     // write
@@ -104,71 +120,47 @@ where
     fn mt_insert(&self, key: K, val: V) -> bool;
     /// Updates or inserts the given value
     fn mt_upsert(&self, key: K, val: V);
-
     // read
     /// Returns a reference to the value corresponding to the key, if it exists
-    fn mt_get<Q>(&self, key: &Q) -> Option<&K>
+    fn mt_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Returns a clone of the value corresponding to the key, if it exists
-    fn mt_get_cloned<Q>(&self, key: &Q) -> Option<K>
+    fn mt_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>;
-
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     // update
     /// Returns true if the entry is updated
     fn mt_update<Q>(&self, key: &Q, val: V) -> bool
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Updates the entry and returns the old value, if it exists
-    fn mt_update_return<Q>(&self, key: &Q, val: V) -> Option<K>
+    fn mt_update_return<Q>(&self, key: &Q, val: V) -> Option<V>
     where
-        K: Borrow<Q>;
-
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     // delete
     /// Returns true if the entry was deleted
     fn mt_delete<Q>(&self, key: &Q) -> bool
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Removes the entry and returns it, if it exists
-    fn mt_delete_return<Q>(&self, key: &Q) -> Option<K>
+    fn mt_delete_return<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>;
-
-    // iter
-    /// Returns an iterator over a tuple of keys and values
-    fn mt_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
-    /// Returns an iterator over the keys
-    fn mt_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
-    /// Returns an iterator over the values
-    fn mt_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
 }
 
-pub trait STIndex<K, V> {
-    /// State whether the underlying structure provides any ordering on the iterators
-    const HAS_ORDER: bool;
-    /// Base support prealloc?
-    const PREALLOC: bool;
-    /// An iterator over the keys and values
-    type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
-    where
-        Self: 'a,
-        K: 'a,
-        V: 'a;
-    /// An iterator over the keys
-    type IterKey<'a>: Iterator<Item = &'a K>
-    where
-        Self: 'a,
-        K: 'a;
-    /// An iterator over the values
-    type IterValue<'a>: Iterator<Item = &'a V>
-    where
-        Self: 'a,
-        V: 'a;
-    /// Initialize an empty instance of the MTIndex
-    fn st_init() -> Self;
-    /// Initialize a pre-loaded instance of the MTIndex
-    fn st_init_with(s: Self) -> Self;
+/// An unordered STIndex
+pub trait STIndex<K, V>: IndexBaseSpec<K, V>
+where
+    K: AsKey,
+    V: AsValue,
+{
     /// Clears all the entries in the STIndex
     fn st_clear(&mut self);
     // write
@@ -177,42 +169,66 @@ pub trait STIndex<K, V> {
     fn st_insert(&mut self, key: K, val: V) -> bool;
     /// Updates or inserts the given value
     fn st_upsert(&mut self, key: K, val: V);
-
     // read
     /// Returns a reference to the value corresponding to the key, if it exists
-    fn st_get<Q>(&self, key: &Q) -> Option<&K>
+    fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Returns a clone of the value corresponding to the key, if it exists
-    fn st_get_cloned<Q>(&self, key: &Q) -> Option<K>
+    fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>;
-
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     // update
     /// Returns true if the entry is updated
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Updates the entry and returns the old value, if it exists
-    fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<K>
+    fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
-        K: Borrow<Q>;
-
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     // delete
     /// Returns true if the entry was deleted
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
     /// Removes the entry and returns it, if it exists
-    fn st_delete_return<Q>(&mut self, key: &Q) -> Option<K>
+    fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>;
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef;
+}
 
-    // iter
-    /// Returns an iterator over a tuple of keys and values
-    fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
-    /// Returns an iterator over the keys
-    fn st_iter_k<'a>(&'a self) -> Self::IterKey<'a>;
-    /// Returns an iterator over the values
-    fn st_iter_v<'a>(&'a self) -> Self::IterValue<'a>;
+pub trait STIndexSeq<K, V>: STIndex<K, V>
+where
+    K: AsKey,
+    V: AsValue,
+{
+    /// An ordered iterator over the keys and values
+    type IterOrdKV<'a>: Iterator<Item = (&'a K, &'a V)> + DoubleEndedIterator<Item = (&'a K, &'a V)>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
+    /// An ordered iterator over the keys
+    type IterOrdKey<'a>: Iterator<Item = &'a K> + DoubleEndedIterator<Item = &'a K>
+    where
+        Self: 'a,
+        K: 'a;
+    /// An ordered iterator over the values
+    type IterOrdValue<'a>: Iterator<Item = &'a V> + DoubleEndedIterator<Item = &'a V>
+    where
+        Self: 'a,
+        V: 'a;
+    /// Returns an ordered iterator over the KV pairs
+    fn stseq_ord_kv<'a>(&'a self) -> Self::IterOrdKV<'a>;
+    /// Returns an ordered iterator over the keys
+    fn stseq_ord_key<'a>(&'a self) -> Self::IterOrdKey<'a>;
+    /// Returns an ordered iterator over the values
+    fn stseq_ord_value<'a>(&'a self) -> Self::IterOrdValue<'a>;
 }
