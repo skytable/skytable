@@ -122,6 +122,8 @@ where
     K: AsKey,
     V: AsValue,
 {
+    /// Attempts to compact the backing storage
+    fn mt_compact(&self) {}
     /// Clears all the entries in the MTIndex
     fn mt_clear(&self);
     // write
@@ -171,6 +173,8 @@ where
     K: AsKey,
     V: AsValue,
 {
+    /// Attempts to compact the backing storage
+    fn st_compact(&mut self) {}
     /// Clears all the entries in the STIndex
     fn st_clear(&mut self);
     // write

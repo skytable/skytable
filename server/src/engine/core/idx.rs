@@ -220,7 +220,7 @@ pub struct IndexSTSeqDllMetrics {
 }
 
 impl IndexSTSeqDllMetrics {
-    pub fn report_f(&self) -> usize {
+    pub fn raw_f(&self) -> usize {
         self.stat_f
     }
     fn new() -> IndexSTSeqDllMetrics {
@@ -610,6 +610,10 @@ where
     K: AsKey,
     V: AsValue,
 {
+    fn st_compact(&mut self) {
+        self.vacuum_full();
+    }
+
     fn st_clear(&mut self) {
         self._clear()
     }
@@ -659,7 +663,7 @@ where
         K: Borrow<Q>,
         Q: ?Sized + AsKeyRef,
     {
-        self._remove(key).is_none()
+        self._remove(key).is_some()
     }
 
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
