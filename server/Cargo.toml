@@ -10,34 +10,34 @@ version = "0.7.6"
 libsky = { path = "../libsky" }
 sky_macros = { path = "../sky-macros" }
 # external deps
-ahash = "0.7.6"
-bytes = "1.1.0"
-chrono = "0.4.19"
+ahash = "0.8.2"
+bytes = "1.3.0"
+chrono = "0.4.23"
 clap = { version = "2", features = ["yaml"] }
-env_logger = "0.9.0"
-hashbrown = { version = "0.12.0", features = ["raw"] }
-log = "0.4.16"
-num_cpus = "1.13.1"
-openssl = { version = "0.10.38", features = ["vendored"] }
-parking_lot = "0.12.0"
-regex = "1.5.5"
-serde = { version = "1.0.136", features = ["derive"] }
-tokio = { version = "1.17.0", features = ["full"] }
+env_logger = "0.10.0"
+hashbrown = { version = "0.13.2", features = ["raw"] }
+log = "0.4.17"
+num_cpus = "1.15.0"
+openssl = { version = "0.10.45", features = ["vendored"] }
+parking_lot = "0.12.1"
+regex = "1.7.1"
+serde = { version = "1.0.152", features = ["derive"] }
+tokio = { version = "1.24.2", features = ["full"] }
 tokio-openssl = "0.6.3"
-toml = "0.5.8"
+toml = "0.5.11"
 rcrypt = "0.4.0"
-base64 = "0.13.0"
+base64 = "0.13.1"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
-jemallocator = "0.3.2"
+jemallocator = "0.5.0"
 [target.'cfg(target_os = "windows")'.dependencies]
 # external deps
 winapi = { version = "0.3.9", features = ["fileapi"] }
 
 [target.'cfg(unix)'.build-dependencies]
 # external deps
-cc = "1.0.73"
+cc = "1.0.78"
 
 [dev-dependencies]
 # internal deps
@@ -49,10 +49,10 @@ skytable = { git = "https://github.com/skytable/client-rust", features = [
 # external deps
 bincode = "1.3.3"
 rand = "0.8.5"
-tokio = { version = "1.17.0", features = ["test-util"] }
+tokio = { version = "1.24.2", features = ["test-util"] }
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.121"
+libc = "0.2.139"
 
 [features]
 nightly = []

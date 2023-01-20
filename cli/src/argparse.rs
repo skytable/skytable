@@ -109,7 +109,7 @@ pub async fn start_repl() {
         },
         None => 2003,
     };
-    let mut editor = Editor::<()>::new();
+    let mut editor = Editor::<()>::new().unwrap_or_else(|_| fatal!("failed to init terminal"));
     editor.set_auto_add_history(true);
     editor.set_history_ignore_dups(true);
     editor.bind_sequence(
