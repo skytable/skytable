@@ -24,15 +24,12 @@
  *
 */
 
-use core::{
-    fmt,
-    mem::{self, size_of},
-    ops::Deref,
+use core::{fmt, mem, ops::Deref, sync::atomic::Ordering};
+use crossbeam_epoch::{Atomic as CBAtomic, CompareExchangeError, Pointable, Pointer};
+// re-export here because we have some future plans ;) (@ohsayan)
+pub use crossbeam_epoch::{
+    pin as pin_current, unprotected as pin_unprotected, Guard, Owned, Shared,
 };
-use crossbeam_epoch::{
-    Atomic as CBAtomic, CompareExchangeError, Guard, Pointable, Pointer, Shared,
-};
-use std::sync::atomic::Ordering;
 
 pub(super) const ORD_RLX: Ordering = Ordering::Relaxed;
 pub(super) const ORD_ACQ: Ordering = Ordering::Acquire;
@@ -58,7 +55,10 @@ impl<T> fmt::Debug for Atomic<T> {
 
 impl<T: Pointable> Atomic<T> {
     // the compile time address size check ensures "first class" sanity
-    const _ENSURE_FLAG_STATIC_CHECK: () = ensure_flag_align::<T>(size_of::<Self>());
+    const _ENSURE_FLAG_STATIC_CHECK: () = ensure_flag_align::<T>(0);
+    /// Instantiates a new atomic
+    ///
+    /// **This will allocate**
     pub fn new_alloc(t: T) -> Self {
         let _ = Self::_ENSURE_FLAG_STATIC_CHECK;
         Self {
@@ -113,6 +113,10 @@ impl<T: Pointable> Atomic<T> {
     #[inline(always)]
     pub(super) fn ld_acq<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
         self.ld(ORD_ACQ, g)
+    }
+    #[inline(always)]
+    pub(crate) fn ld_rlx<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
+        self.ld(ORD_RLX, g)
     }
 }
 
