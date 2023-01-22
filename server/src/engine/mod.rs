@@ -33,3 +33,4 @@ mod core;
 mod idx;
 mod ql;
 mod sync;
+mod mem;
