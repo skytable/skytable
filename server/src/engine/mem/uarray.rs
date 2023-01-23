@@ -25,6 +25,7 @@
 */
 
 use core::{
+    iter::FusedIterator,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
     ptr, slice,
@@ -56,10 +57,6 @@ impl<const N: usize, T> UArray<N, T> {
     #[inline(always)]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-    #[inline(always)]
-    unsafe fn incr_len(&mut self) {
-        self.l += 1;
     }
     #[inline(always)]
     pub fn push(&mut self, v: T) {
@@ -110,6 +107,14 @@ impl<const N: usize, T> UArray<N, T> {
             slice::from_raw_parts_mut(self.a.as_mut_ptr() as *mut T, self.l)
         }
     }
+    #[inline(always)]
+    unsafe fn set_len(&mut self, l: usize) {
+        self.l = l;
+    }
+    #[inline(always)]
+    unsafe fn incr_len(&mut self) {
+        self.set_len(self.len() + 1)
+    }
 }
 
 impl<const N: usize, T> Drop for UArray<N, T> {
@@ -147,5 +152,66 @@ impl<const N: usize, T> FromIterator<T> for UArray<N, T> {
 impl<const N: usize, T> Extend<T> for UArray<N, T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         iter.into_iter().for_each(|v| self.push(v))
+    }
+}
+
+pub struct IntoIter<const N: usize, T> {
+    i: usize,
+    l: usize,
+    d: UArray<N, T>,
+}
+
+impl<const N: usize, T> IntoIter<N, T> {
+    fn _next(&mut self) -> Option<T> {
+        if self.i == self.l {
+            return None;
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): Below length, so this is legal
+            let target = self.d.a.as_ptr().add(self.i) as *mut T;
+            // UNSAFE(@ohsayan): Again, non-null and part of our stack
+            let ret = ptr::read(target);
+            self.i += 1;
+            Some(ret)
+        }
+    }
+}
+
+impl<const N: usize, T> Drop for IntoIter<N, T> {
+    fn drop(&mut self) {
+        if self.i < self.l {
+            unsafe {
+                // UNSAFE(@ohsayan): Len is verified, due to intoiter init
+                let ptr = self.d.a.as_mut_ptr().add(self.i) as *mut T;
+                let len = self.l - self.i;
+                // UNSAFE(@ohsayan): we know the segment to drop
+                ptr::drop_in_place(ptr::slice_from_raw_parts_mut(ptr, len))
+            }
+        }
+    }
+}
+
+impl<const N: usize, T> Iterator for IntoIter<N, T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self._next()
+    }
+}
+impl<const N: usize, T> ExactSizeIterator for IntoIter<N, T> {}
+impl<const N: usize, T> FusedIterator for IntoIter<N, T> {}
+
+impl<const N: usize, T> IntoIterator for UArray<N, T> {
+    type Item = T;
+
+    type IntoIter = IntoIter<N, T>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let l = self.len();
+        unsafe {
+            // UNSAFE(@ohsayan): Leave drop to intoiter
+            // HACK(@ohsayan): sneaky trick to let drop be handled by intoiter
+            self.set_len(0);
+        }
+        Self::IntoIter { d: self, i: 0, l }
     }
 }

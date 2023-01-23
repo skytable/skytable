@@ -170,4 +170,31 @@ mod uarray {
         a.iter_mut().for_each(|v| *v += 1);
         assert_eq!(a.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8])
     }
+    #[test]
+    fn into_iter_empty() {
+        let a: UArray<CAP, u8> = UArray::new();
+        let r: Vec<u8> = a.into_iter().collect();
+        assert!(r.is_empty());
+    }
+    #[test]
+    fn into_iter() {
+        let a: UArray<CAP, _> = (0u8..8).into_iter().collect();
+        let r: Vec<u8> = a.into_iter().collect();
+        (0..8)
+            .into_iter()
+            .zip(r.into_iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
+    }
+    #[test]
+    fn into_iter_partial() {
+        let a: UArray<CAP, String> = (0u8..8)
+            .into_iter()
+            .map(|v| ToString::to_string(&v))
+            .collect();
+        let r: Vec<String> = a.into_iter().take(4).collect();
+        (0..4)
+            .into_iter()
+            .zip(r.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
 }
