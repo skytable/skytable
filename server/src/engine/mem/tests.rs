@@ -27,7 +27,7 @@
 use super::*;
 
 mod vinline {
-    use super::*;
+    use super::VInline;
     const CAP: usize = 8;
     #[test]
     fn drop_empty() {
@@ -130,7 +130,7 @@ mod vinline {
 }
 
 mod uarray {
-    use super::*;
+    use super::UArray;
     const CAP: usize = 8;
     #[test]
     fn empty() {
