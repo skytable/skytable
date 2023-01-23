@@ -25,6 +25,7 @@
 */
 
 use core::{
+    fmt,
     iter::FusedIterator,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
@@ -117,6 +118,18 @@ impl<const N: usize, T> UArray<N, T> {
     }
 }
 
+impl<const N: usize, T: Clone> Clone for UArray<N, T> {
+    fn clone(&self) -> Self {
+        self.iter().cloned().collect()
+    }
+}
+
+impl<const M: usize, const N: usize, T: PartialEq> PartialEq<UArray<M, T>> for UArray<N, T> {
+    fn eq(&self, other: &UArray<M, T>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 impl<const N: usize, T> Drop for UArray<N, T> {
     fn drop(&mut self) {
         if !self.is_empty() {
@@ -152,6 +165,12 @@ impl<const N: usize, T> FromIterator<T> for UArray<N, T> {
 impl<const N: usize, T> Extend<T> for UArray<N, T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         iter.into_iter().for_each(|v| self.push(v))
+    }
+}
+
+impl<const N: usize, T: fmt::Debug> fmt::Debug for UArray<N, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 

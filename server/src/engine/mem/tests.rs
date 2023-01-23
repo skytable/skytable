@@ -127,6 +127,18 @@ mod vinline {
         assert_eq!(vi.capacity(), CAP * 2);
         assert_eq!(vi.len(), 0);
     }
+    #[test]
+    fn clone_stack() {
+        let v1 = mkvi(CAP);
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+    }
+    #[test]
+    fn clone_heap() {
+        let v1 = mkvi(CAP + 1);
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+    }
 }
 
 mod uarray {
@@ -196,5 +208,11 @@ mod uarray {
             .into_iter()
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn clone() {
+        let a: UArray<CAP, u8> = (0u8..CAP as _).into_iter().collect();
+        let b = a.clone();
+        assert_eq!(a, b);
     }
 }

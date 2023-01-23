@@ -258,6 +258,12 @@ impl<const N: usize, T> DerefMut for VInline<N, T> {
     }
 }
 
+impl<const M: usize, const N: usize, T: PartialEq> PartialEq<VInline<M, T>> for VInline<N, T> {
+    fn eq(&self, other: &VInline<M, T>) -> bool {
+        self._as_slice() == other._as_slice()
+    }
+}
+
 impl<const N: usize, T> Drop for VInline<N, T> {
     fn drop(&mut self) {
         unsafe {
