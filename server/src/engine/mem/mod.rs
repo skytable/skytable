@@ -252,3 +252,98 @@ impl<T, const N: usize> FromIterator<T> for VInline<N, T> {
         slf
     }
 }
+
+pub struct UArray<const N: usize, T> {
+    a: [MaybeUninit<T>; N],
+    l: usize,
+}
+
+impl<const N: usize, T> UArray<N, T> {
+    const NULL: MaybeUninit<T> = MaybeUninit::uninit();
+    const NULLED_ARRAY: [MaybeUninit<T>; N] = [Self::NULL; N];
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            a: Self::NULLED_ARRAY,
+            l: 0,
+        }
+    }
+    #[inline(always)]
+    pub const fn len(&self) -> usize {
+        self.l
+    }
+    #[inline(always)]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+    #[inline(always)]
+    pub const fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    #[inline(always)]
+    unsafe fn incr_len(&mut self) {
+        self.l += 1;
+    }
+    #[inline(always)]
+    pub fn push(&mut self, v: T) {
+        if self.l == N {
+            panic!("stack,capof");
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): verified correct offsets (N)
+            self.a.as_mut_ptr().add(self.l).write(MaybeUninit::new(v));
+            // UNSAFE(@ohsayan): all G since l =< N
+            self.incr_len();
+        }
+    }
+    pub fn as_slice(&self) -> &[T] {
+        unsafe {
+            // UNSAFE(@ohsayan): ptr is always valid and len is correct, due to push impl
+            slice::from_raw_parts(self.a.as_ptr() as *const T, self.l)
+        }
+    }
+    pub fn as_slice_mut(&mut self) -> &mut [T] {
+        unsafe {
+            // UNSAFE(@ohsayan): ptr is always valid and len is correct, due to push impl
+            slice::from_raw_parts_mut(self.a.as_mut_ptr() as *mut T, self.l)
+        }
+    }
+}
+
+impl<const N: usize, T> Drop for UArray<N, T> {
+    fn drop(&mut self) {
+        if !self.is_empty() {
+            unsafe {
+                // UNSAFE(@ohsayan): as_slice_mut returns a correct offset
+                ptr::drop_in_place(self.as_slice_mut())
+            }
+        }
+    }
+}
+
+impl<const N: usize, T> Deref for UArray<N, T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<const N: usize, T> DerefMut for UArray<N, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_slice_mut()
+    }
+}
+
+impl<const N: usize, T> FromIterator<T> for UArray<N, T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut slf = Self::new();
+        iter.into_iter().for_each(|v| slf.push(v));
+        slf
+    }
+}
+
+impl<const N: usize, T> Extend<T> for UArray<N, T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        iter.into_iter().for_each(|v| self.push(v))
+    }
+}
