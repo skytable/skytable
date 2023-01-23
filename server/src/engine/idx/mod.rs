@@ -26,12 +26,13 @@
 
 use core::{borrow::Borrow, hash::Hash};
 
-mod stseq;
+mod stord;
+mod stdhm;
 #[cfg(test)]
 mod tests;
 
 // re-exports
-pub use stseq::{IndexSTSeq, IndexSTSeqDef, IndexSTSeqHasher};
+pub use stord::{IndexSTSeq, IndexSTSeqDef, IndexSTSeqHasher};
 
 /// Any type implementing this trait can be used as a key inside memory engine structures
 pub trait AsKey: Hash + Eq + Clone {
