@@ -40,10 +40,8 @@ use std::{
     ptr::{self, NonNull},
 };
 
-// re-exports for convenience
-pub type IndexSTSeq<K, V, S> = IndexSTSeqDll<K, V, S>;
-pub type IndexSTSeqDef<K, V> = IndexSTSeq<K, V, IndexSTSeqHasher>;
-pub type IndexSTSeqHasher = RandomState;
+pub type IndexSTSeqDllDef<K, V> = IndexSTSeqDll<K, V, IndexSTSeqDllHasher>;
+pub type IndexSTSeqDllHasher = RandomState;
 
 /*
     For the ordered index impl, we resort to some crazy unsafe code, especially because there's no other way to

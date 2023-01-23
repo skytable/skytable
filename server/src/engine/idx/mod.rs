@@ -32,7 +32,9 @@ mod stord;
 mod tests;
 
 // re-exports
-pub use stord::{IndexSTSeq, IndexSTSeqDef, IndexSTSeqHasher};
+pub type IndexSTSeq<K, V, S> = stord::IndexSTSeqDll<K, V, S>;
+pub type IndexSTSeqDef<K, V> = IndexSTSeq<K, V, IndexSTSeqHasher>;
+pub type IndexSTSeqHasher = stord::IndexSTSeqDllHasher;
 
 /// Any type implementing this trait can be used as a key inside memory engine structures
 pub trait AsKey: Hash + Eq + Clone {
