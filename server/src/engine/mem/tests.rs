@@ -28,40 +28,104 @@ use super::*;
 
 mod vinline {
     use super::*;
-    const CAP: usize = 512;
+    const CAP: usize = 8;
     #[test]
-    fn vinline_drop_empty() {
-        let array = VInline::<CAP, String>::new();
-        drop(array);
+    fn drop_empty() {
+        let vi = VInline::<CAP, String>::new();
+        drop(vi);
     }
-
+    /// This will:
+    /// - returns an array [0..upto]
+    /// - verify length
+    /// - verify payload
+    /// - verify capacity (if upto <= CAP)
+    /// - verify stack/heap logic
+    fn mkvi(upto: usize) -> VInline<CAP, usize> {
+        let r: VInline<CAP, _> = (0..upto).into_iter().collect();
+        assert_eq!(r.len(), upto);
+        if upto <= CAP {
+            assert_eq!(r.capacity(), CAP);
+            assert!(r.on_stack());
+        } else {
+            assert!(r.on_heap());
+        }
+        assert!((0..upto)
+            .into_iter()
+            .zip(r.iter())
+            .all(|(x, y)| { x == *y }));
+        r
+    }
     #[test]
-    fn vinline_test() {
-        // first alloc on stack
-        let mut array = VInline::<CAP, String>::new();
-        (0..CAP).for_each(|i| array.push(format!("elem-{i}")));
-        // check meta methods
-        debug_assert!(array.on_stack());
-        debug_assert!(!array.will_be_on_stack());
-        // now iterate
-        array
-            .iter()
-            .enumerate()
-            .for_each(|(i, elem)| assert_eq!(elem, format!("elem-{i}").as_str()));
-        // now iter_mut
-        array
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, st)| *st = format!("elem-{}", i + 1));
-        // now let's get off the stack
-        (0..10).for_each(|i| array.push(format!("elem-{}", CAP + i + 1)));
-        // verify all elements
-        array
-            .iter()
-            .enumerate()
-            .for_each(|(i, st)| assert_eq!(st, format!("elem-{}", i + 1).as_str()));
-        debug_assert!(!array.on_stack());
-        debug_assert!(!array.will_be_on_stack());
+    fn push_on_stack() {
+        let vi = mkvi(CAP);
+        assert!(vi.on_stack());
+    }
+    #[test]
+    fn push_on_heap() {
+        let vi = mkvi(CAP + 1);
+        assert_eq!(vi.capacity(), CAP * 2);
+    }
+    #[test]
+    fn remove_on_stack() {
+        let mut vi = mkvi(CAP);
+        assert_eq!(vi.remove(6), 6);
+        assert_eq!(vi.len(), CAP - 1);
+        assert_eq!(vi.capacity(), CAP);
+        assert_eq!(vi.as_ref(), [0, 1, 2, 3, 4, 5, 7]);
+    }
+    #[test]
+    fn remove_on_heap() {
+        let mut vi = mkvi(CAP + 1);
+        assert_eq!(vi.remove(6), 6);
+        assert_eq!(vi.len(), CAP);
+        assert_eq!(vi.capacity(), CAP * 2);
+        assert_eq!(vi.as_ref(), [0, 1, 2, 3, 4, 5, 7, 8]);
+    }
+    #[test]
+    fn optimize_capacity_none_on_stack() {
+        let mut vi = mkvi(CAP);
+        vi.optimize_capacity();
+        assert_eq!(vi.capacity(), CAP);
+        assert!(vi.on_stack());
+    }
+    #[test]
+    fn optimize_capacity_none_on_heap() {
+        let mut vi = mkvi(CAP + 1);
+        assert_eq!(vi.capacity(), CAP * 2);
+        vi.extend((CAP + 1..CAP * 2).into_iter());
+        assert_eq!(vi.capacity(), CAP * 2);
+        vi.optimize_capacity();
+        assert_eq!(vi.capacity(), CAP * 2);
+    }
+    #[test]
+    fn optimize_capacity_on_heap() {
+        let mut vi = mkvi(CAP + 1);
+        assert_eq!(vi.capacity(), CAP * 2);
+        vi.optimize_capacity();
+        assert_eq!(vi.capacity(), CAP + 1);
+    }
+    #[test]
+    fn optimize_capacity_mv_stack() {
+        let mut vi = mkvi(CAP + 1);
+        assert_eq!(vi.capacity(), CAP * 2);
+        let _ = vi.remove_compact(0);
+        assert_eq!(vi.len(), CAP);
+        assert_eq!(vi.capacity(), CAP);
+        assert!(vi.on_stack());
+    }
+    #[test]
+    fn clear_stack() {
+        let mut vi = mkvi(CAP);
+        vi.clear();
+        assert_eq!(vi.capacity(), CAP);
+        assert_eq!(vi.len(), 0);
+    }
+    #[test]
+    fn clear_heap() {
+        let mut vi = mkvi(CAP + 1);
+        vi.clear();
+        assert_eq!(vi.capacity(), CAP * 2);
+        assert_eq!(vi.len(), 0);
     }
 }
 

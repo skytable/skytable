@@ -74,9 +74,50 @@ impl<const N: usize, T> VInline<N, T> {
         self.grow();
         unsafe {
             // UNSAFE(@ohsayan): grow allocated the cap we needed
-            self._as_mut_ptr().add(self.l).write(v);
+            self.push_unchecked(v);
         }
         self.l += 1;
+    }
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        unsafe {
+            // UNSAFE(@ohsayan): as_slice_mut will always give a valid ptr
+            ptr::drop_in_place(self._as_slice_mut());
+        }
+        self.l = 0;
+    }
+    #[inline(always)]
+    pub fn remove(&mut self, idx: usize) -> T {
+        if idx >= self.len() {
+            panic!("index out of range");
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): Verified index is within range
+            self.remove_unchecked(idx)
+        }
+    }
+    #[inline(always)]
+    pub fn remove_compact(&mut self, idx: usize) -> T {
+        let r = self.remove(idx);
+        self.optimize_capacity();
+        r
+    }
+    #[inline(always)]
+    /// SAFETY: `idx` must be < l
+    unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
+        // UNSAFE(@ohsayan): idx is in range
+        let ptr = self.as_mut_ptr().add(idx);
+        // UNSAFE(@ohsayan): idx is in range and is valid
+        let ret = ptr::read(ptr);
+        // UNSAFE(@ohsayan): move all elements to the left
+        ptr::copy(ptr.add(1), ptr, self.len() - idx - 1);
+        // UNSAFE(@ohsayan): this is our new length
+        self.set_len(self.len() - 1);
+        ret
+    }
+    #[inline(always)]
+    unsafe fn set_len(&mut self, len: usize) {
+        self.l = len;
     }
 }
 
@@ -86,9 +127,9 @@ impl<const N: usize, T> VInline<N, T> {
     const ALLOC_MULTIPLIER: usize = 2;
     const _ENSURE_ALIGN: () =
         debug_assert!(mem::align_of::<Vec<String>>() == mem::align_of::<VInline<N, String>>());
-    #[cfg(test)]
-    fn will_be_on_stack(&self) -> bool {
-        N >= self.l + 1
+    #[inline(always)]
+    fn on_heap(&self) -> bool {
+        self.c > N
     }
     #[inline(always)]
     fn on_stack(&self) -> bool {
@@ -146,6 +187,39 @@ impl<const N: usize, T> VInline<N, T> {
             p as *mut T
         }
     }
+    unsafe fn push_unchecked(&mut self, v: T) {
+        self._as_mut_ptr().add(self.l).write(v);
+    }
+    pub fn optimize_capacity(&mut self) {
+        if self.on_stack() || self.len() == self.capacity() {
+            return;
+        }
+        if self.l <= N {
+            unsafe {
+                // UNSAFE(@ohsayan): non-null heap
+                self.mv_to_stack();
+            }
+        } else {
+            let nb = Self::alloc_block(self.len());
+            unsafe {
+                // UNSAFE(@ohsayan): nonov; non-null
+                ptr::copy_nonoverlapping(self.d.h, nb, self.len());
+                // UNSAFE(@ohsayan): non-null heap
+                self.dealloc_heap(self.d.h);
+            }
+            self.d.h = nb;
+            self.c = self.len();
+        }
+    }
+    /// SAFETY: (1) non-null heap
+    unsafe fn mv_to_stack(&mut self) {
+        let heap = self.d.h;
+        // UNSAFE(@ohsayan): nonov; non-null (stack lol)
+        ptr::copy_nonoverlapping(self.d.h, (&mut self.d).s.as_mut_ptr() as *mut T, self.len());
+        // UNSAFE(@ohsayan): non-null heap
+        self.dealloc_heap(heap);
+        self.c = N;
+    }
     #[inline]
     fn grow(&mut self) {
         if !(self.l == self.capacity()) {
@@ -165,15 +239,15 @@ impl<const N: usize, T> VInline<N, T> {
                 // UNSAFE(@ohsayan): non-null; valid len
                 ptr::copy_nonoverlapping(self.d.h.cast_const(), nb, self.l);
                 // UNSAFE(@ohsayan): non-null heap
-                self.dealloc_heap();
+                self.dealloc_heap(self.d.h);
             }
         }
         self.d.h = nb;
         self.c = nc;
     }
     #[inline(always)]
-    unsafe fn dealloc_heap(&mut self) {
-        dealloc(self.d.h as *mut u8, Self::layout(self.capacity()))
+    unsafe fn dealloc_heap(&mut self, heap: *mut T) {
+        dealloc(heap as *mut u8, Self::layout(self.capacity()))
     }
 }
 
@@ -197,7 +271,7 @@ impl<const N: usize, T> Drop for VInline<N, T> {
             ptr::drop_in_place(self._as_slice_mut());
             if !self.on_stack() {
                 // UNSAFE(@ohsayan): non-null heap
-                self.dealloc_heap();
+                self.dealloc_heap(self.d.h);
             }
         }
     }
@@ -290,11 +364,36 @@ impl<const N: usize, T> UArray<N, T> {
             panic!("stack,capof");
         }
         unsafe {
-            // UNSAFE(@ohsayan): verified correct offsets (N)
-            self.a.as_mut_ptr().add(self.l).write(MaybeUninit::new(v));
-            // UNSAFE(@ohsayan): all G since l =< N
-            self.incr_len();
+            // UNSAFE(@ohsayan): verified length is smaller
+            self.push_unchecked(v);
         }
+    }
+    pub fn remove(&mut self, idx: usize) -> T {
+        if idx >= self.len() {
+            panic!("out of range. idx is `{idx}` but len is `{}`", self.len());
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): verified idx < l
+            self.remove_unchecked(idx)
+        }
+    }
+    /// SAFETY: idx < self.l
+    unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
+        // UNSAFE(@ohsayan): Verified idx
+        let target = self.a.as_mut_ptr().add(idx).cast::<T>();
+        // UNSAFE(@ohsayan): Verified idx
+        let ret = ptr::read(target);
+        // UNSAFE(@ohsayan): ov; not-null; correct len
+        ptr::copy(target.add(1), target, self.len() - idx - 1);
+        ret
+    }
+    #[inline(always)]
+    /// SAFETY: self.l < N
+    unsafe fn push_unchecked(&mut self, v: T) {
+        // UNSAFE(@ohsayan): verified correct offsets (N)
+        self.a.as_mut_ptr().add(self.l).write(MaybeUninit::new(v));
+        // UNSAFE(@ohsayan): all G since l =< N
+        self.incr_len();
     }
     pub fn as_slice(&self) -> &[T] {
         unsafe {
