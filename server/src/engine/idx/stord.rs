@@ -358,6 +358,39 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
     }
 }
 
+impl<K, V, S> IndexSTSeqDll<K, V, S> {
+    #[inline(always)]
+    fn _iter_unord_kv<'a>(&'a self) -> IndexSTSeqDllIterUnordKV<'a, K, V> {
+        IndexSTSeqDllIterUnordKV::new(&self.m)
+    }
+    #[inline(always)]
+    fn _iter_unord_k<'a>(&'a self) -> IndexSTSeqDllIterUnordKey<'a, K, V> {
+        IndexSTSeqDllIterUnordKey::new(&self.m)
+    }
+    #[inline(always)]
+    fn _iter_unord_v<'a>(&'a self) -> IndexSTSeqDllIterUnordValue<'a, K, V> {
+        IndexSTSeqDllIterUnordValue::new(&self.m)
+    }
+    #[inline(always)]
+    fn _iter_ord_kv<'a>(&'a self) -> IndexSTSeqDllIterOrdKV<'a, K, V> {
+        IndexSTSeqDllIterOrdKV {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
+    #[inline(always)]
+    fn _iter_ord_k<'a>(&'a self) -> IndexSTSeqDllIterOrdKey<'a, K, V> {
+        IndexSTSeqDllIterOrdKey {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
+    #[inline(always)]
+    fn _iter_ord_v<'a>(&'a self) -> IndexSTSeqDllIterOrdValue<'a, K, V> {
+        IndexSTSeqDllIterOrdValue {
+            i: IndexSTSeqDllIterOrdBase::new(self),
+        }
+    }
+}
+
 impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     #[inline(always)]
     /// Clean up unused and cached memory
@@ -497,36 +530,6 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
             }
         }
     }
-    #[inline(always)]
-    fn _iter_unord_kv<'a>(&'a self) -> IndexSTSeqDllIterUnordKV<'a, K, V> {
-        IndexSTSeqDllIterUnordKV::new(&self.m)
-    }
-    #[inline(always)]
-    fn _iter_unord_k<'a>(&'a self) -> IndexSTSeqDllIterUnordKey<'a, K, V> {
-        IndexSTSeqDllIterUnordKey::new(&self.m)
-    }
-    #[inline(always)]
-    fn _iter_unord_v<'a>(&'a self) -> IndexSTSeqDllIterUnordValue<'a, K, V> {
-        IndexSTSeqDllIterUnordValue::new(&self.m)
-    }
-    #[inline(always)]
-    fn _iter_ord_kv<'a>(&'a self) -> IndexSTSeqDllIterOrdKV<'a, K, V> {
-        IndexSTSeqDllIterOrdKV {
-            i: IndexSTSeqDllIterOrdBase::new(self),
-        }
-    }
-    #[inline(always)]
-    fn _iter_ord_k<'a>(&'a self) -> IndexSTSeqDllIterOrdKey<'a, K, V> {
-        IndexSTSeqDllIterOrdKey {
-            i: IndexSTSeqDllIterOrdBase::new(self),
-        }
-    }
-    #[inline(always)]
-    fn _iter_ord_v<'a>(&'a self) -> IndexSTSeqDllIterOrdValue<'a, K, V> {
-        IndexSTSeqDllIterOrdValue {
-            i: IndexSTSeqDllIterOrdBase::new(self),
-        }
-    }
 }
 
 impl<K, V, S> Drop for IndexSTSeqDll<K, V, S> {
@@ -554,11 +557,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher + Default> FromIterator<(K, V)>
     }
 }
 
-impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, S>
-where
-    K: AsKey,
-    V: AsValue,
-{
+impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, S> {
     const PREALLOC: bool = true;
 
     type Metrics = IndexSTSeqDllMetrics;
@@ -624,6 +623,17 @@ where
 
     fn st_upsert(&mut self, key: K, val: V) {
         let _ = self._upsert(key, val);
+    }
+
+    fn st_contains<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q> + AsKey,
+        Q: ?Sized + AsKeyRef,
+    {
+        self.m.contains_key(unsafe {
+            // UNSAFE(@ohsayan): Valid ref with correct bounds
+            IndexSTSeqDllQref::from_ref(key)
+        })
     }
 
     fn st_get<Q>(&self, key: &Q) -> Option<&V>

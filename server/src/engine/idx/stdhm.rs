@@ -24,8 +24,9 @@
  *
 */
 
-use super::{AsKey, AsValue, DummyMetrics, IndexBaseSpec, STIndex};
+use super::{AsKey, AsKeyRef, AsValue, DummyMetrics, IndexBaseSpec, STIndex};
 use std::{
+    borrow::Borrow,
     collections::{
         hash_map::{Entry, Iter as StdMapIterKV, Keys as StdMapIterKey, Values as StdMapIterVal},
         HashMap as StdMap,
@@ -36,8 +37,6 @@ use std::{
 
 impl<K, V, S> IndexBaseSpec<K, V> for StdMap<K, V, S>
 where
-    K: AsKey,
-    V: AsValue,
     S: BuildHasher + Default,
 {
     const PREALLOC: bool = true;
@@ -113,34 +112,42 @@ where
         let _ = self.insert(key, val);
     }
 
+    fn st_contains<Q>(&self, k: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
+    {
+        self.contains_key(k)
+    }
+
     fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.get(key)
     }
 
     fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.get(key).cloned()
     }
 
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.get_mut(key).map(move |e| *e = val).is_some()
     }
 
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.get_mut(key).map(move |e| {
             let mut new = val;
@@ -151,16 +158,16 @@ where
 
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.remove(key).is_some()
     }
 
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: std::borrow::Borrow<Q>,
-        Q: ?Sized + super::AsKeyRef,
+        K: Borrow<Q>,
+        Q: ?Sized + AsKeyRef,
     {
         self.remove(key)
     }

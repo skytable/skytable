@@ -26,8 +26,8 @@
 
 use core::{borrow::Borrow, hash::Hash};
 
-mod stord;
 mod stdhm;
+mod stord;
 #[cfg(test)]
 mod tests;
 
@@ -81,11 +81,7 @@ pub struct DummyMetrics;
 
 /// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
 /// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
-pub trait IndexBaseSpec<K, V>
-where
-    K: AsKey,
-    V: AsValue,
-{
+pub trait IndexBaseSpec<K, V> {
     /// Index supports prealloc?
     const PREALLOC: bool;
     #[cfg(debug_assertions)]
@@ -125,11 +121,7 @@ where
 }
 
 /// An unordered MTIndex
-pub trait MTIndex<K, V>: IndexBaseSpec<K, V>
-where
-    K: AsKey,
-    V: AsValue,
-{
+pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     /// Attempts to compact the backing storage
     fn mt_compact(&self) {}
     /// Clears all the entries in the MTIndex
@@ -137,50 +129,58 @@ where
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn mt_insert(&self, key: K, val: V) -> bool;
+    fn mt_insert(&self, key: K, val: V) -> bool
+    where
+        K: AsKey,
+        V: AsValue;
     /// Updates or inserts the given value
-    fn mt_upsert(&self, key: K, val: V);
+    fn mt_upsert(&self, key: K, val: V)
+    where
+        K: AsKey,
+        V: AsValue;
     // read
+    fn mt_contains<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q> + AsKey,
+        Q: ?Sized + AsKeyRef;
     /// Returns a reference to the value corresponding to the key, if it exists
     fn mt_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     /// Returns a clone of the value corresponding to the key, if it exists
     fn mt_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     // update
     /// Returns true if the entry is updated
     fn mt_update<Q>(&self, key: &Q, val: V) -> bool
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
+        V: AsValue,
         Q: ?Sized + AsKeyRef;
     /// Updates the entry and returns the old value, if it exists
     fn mt_update_return<Q>(&self, key: &Q, val: V) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
+        V: AsValue,
         Q: ?Sized + AsKeyRef;
     // delete
     /// Returns true if the entry was deleted
     fn mt_delete<Q>(&self, key: &Q) -> bool
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     /// Removes the entry and returns it, if it exists
     fn mt_delete_return<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
 }
 
 /// An unordered STIndex
-pub trait STIndex<K, V>: IndexBaseSpec<K, V>
-where
-    K: AsKey,
-    V: AsValue,
-{
+pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
     /// Attempts to compact the backing storage
     fn st_compact(&mut self) {}
     /// Clears all the entries in the STIndex
@@ -188,49 +188,57 @@ where
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn st_insert(&mut self, key: K, val: V) -> bool;
+    fn st_insert(&mut self, key: K, val: V) -> bool
+    where
+        K: AsKey,
+        V: AsValue;
     /// Updates or inserts the given value
-    fn st_upsert(&mut self, key: K, val: V);
+    fn st_upsert(&mut self, key: K, val: V)
+    where
+        K: AsKey,
+        V: AsValue;
     // read
+    fn st_contains<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q> + AsKey,
+        Q: ?Sized + AsKeyRef;
     /// Returns a reference to the value corresponding to the key, if it exists
     fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     /// Returns a clone of the value corresponding to the key, if it exists
     fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     // update
     /// Returns true if the entry is updated
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
+        V: AsValue,
         Q: ?Sized + AsKeyRef;
     /// Updates the entry and returns the old value, if it exists
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
+        V: AsValue,
         Q: ?Sized + AsKeyRef;
     // delete
     /// Returns true if the entry was deleted
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
     /// Removes the entry and returns it, if it exists
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKeyRef;
 }
 
-pub trait STIndexSeq<K, V>: STIndex<K, V>
-where
-    K: AsKey,
-    V: AsValue,
-{
+pub trait STIndexSeq<K, V>: STIndex<K, V> {
     /// An ordered iterator over the keys and values
     type IterOrdKV<'a>: Iterator<Item = (&'a K, &'a V)> + DoubleEndedIterator<Item = (&'a K, &'a V)>
     where
