@@ -586,6 +586,10 @@ impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V,
         Self::from(s)
     }
 
+    fn idx_init_cap(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, S::default())
+    }
+
     fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
         self._iter_unord_kv()
     }

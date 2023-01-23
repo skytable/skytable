@@ -81,7 +81,7 @@ pub struct DummyMetrics;
 
 /// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
 /// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
-pub trait IndexBaseSpec<K, V> {
+pub trait IndexBaseSpec<K, V>: Sized {
     /// Index supports prealloc?
     const PREALLOC: bool;
     #[cfg(debug_assertions)]
@@ -108,6 +108,15 @@ pub trait IndexBaseSpec<K, V> {
     fn idx_init() -> Self;
     /// Initialize a pre-loaded instance of the index
     fn idx_init_with(s: Self) -> Self;
+    /// Init the idx with the given cap
+    ///
+    /// By default doesn't attempt to allocate
+    fn idx_init_cap(_: usize) -> Self {
+        if Self::PREALLOC {
+            panic!("expected prealloc");
+        }
+        Self::idx_init()
+    }
     // iter
     /// Returns an iterator over a tuple of keys and values
     fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;

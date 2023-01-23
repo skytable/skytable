@@ -67,6 +67,10 @@ where
         s
     }
 
+    fn idx_init_cap(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, S::default())
+    }
+
     fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
         self.iter()
     }

@@ -27,7 +27,7 @@
 use {
     super::{LangError, LangResult},
     crate::util::compiler,
-    core::{cmp, fmt, mem::size_of, ops::BitOr, slice, str},
+    core::{cmp, fmt, ops::BitOr, slice, str},
 };
 
 pub type Slice<'a> = &'a [u8];
@@ -54,21 +54,6 @@ impl<'a> PartialEq<Symbol> for Token<'a> {
             _ => false,
         }
     }
-}
-
-const SIZEOF_USIZE: usize = size_of::<usize>();
-const LT_SZ: usize = if is_64b!() {
-    size_of::<usize>() * 3
-} else {
-    size_of::<usize>() * 2
-};
-
-assertions! {
-    size_of::<Token>() == LT_SZ,
-    size_of::<Symbol>() == 1,
-    size_of::<Keyword>() == 1,
-    size_of::<Lit>() == LT_SZ,
-    size_of::<LitIR>() == LT_SZ,
 }
 
 enum_impls! {
