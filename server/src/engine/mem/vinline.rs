@@ -27,6 +27,7 @@
 use std::{
     alloc::{alloc, dealloc, Layout},
     fmt,
+    iter::FusedIterator,
     mem::{self, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut},
     ptr, slice,
@@ -324,5 +325,69 @@ impl<T, const N: usize> FromIterator<T> for VInline<N, T> {
         let mut slf = Self::new();
         slf.extend(it);
         slf
+    }
+}
+
+pub struct IntoIter<const N: usize, T> {
+    v: VInline<N, T>,
+    l: usize,
+    i: usize,
+}
+
+impl<const N: usize, T> IntoIter<N, T> {
+    fn _next(&mut self) -> Option<T> {
+        if self.i == self.l {
+            return None;
+        }
+        unsafe {
+            let current = self.i;
+            self.i += 1;
+            // UNSAFE(@ohsayan): i < l; so in all cases we are behind EOA
+            ptr::read(self.v._as_ptr().add(current).cast())
+        }
+    }
+}
+
+impl<const N: usize, T> Drop for IntoIter<N, T> {
+    fn drop(&mut self) {
+        if self.i < self.l {
+            // sweet
+            unsafe {
+                // UNSAFE(@ohsayan): Safe because we maintain the EOA cond; second, the l is the remaining part
+                ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
+                    self.v._as_mut_ptr().add(self.i),
+                    self.l - self.i,
+                ))
+            }
+        }
+    }
+}
+
+impl<const N: usize, T> Iterator for IntoIter<N, T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self._next()
+    }
+}
+impl<const N: usize, T> ExactSizeIterator for IntoIter<N, T> {}
+impl<const N: usize, T> FusedIterator for IntoIter<N, T> {}
+
+impl<const N: usize, T> IntoIterator for VInline<N, T> {
+    type Item = T;
+
+    type IntoIter = IntoIter<N, T>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let real = self.len();
+        unsafe {
+            // UNSAFE(@ohsayan): drop work for intoiter
+            // HACK(@ohsayan): same juicy drop hack
+            self.set_len(0);
+        }
+        Self::IntoIter {
+            v: self,
+            l: real,
+            i: 0,
+        }
     }
 }

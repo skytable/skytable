@@ -139,6 +139,42 @@ mod vinline {
         let v2 = v1.clone();
         assert_eq!(v1, v2);
     }
+    #[test]
+    fn into_iter_stack() {
+        let v1 = mkvi(CAP);
+        let v: Vec<usize> = v1.into_iter().collect();
+        (0..CAP)
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
+    }
+    #[test]
+    fn into_iter_stack_partial() {
+        let v1 = mkvi(CAP);
+        let v: Vec<usize> = v1.into_iter().take(CAP / 2).collect();
+        (0..CAP / 2)
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
+    }
+    #[test]
+    fn into_iter_heap() {
+        let v1 = mkvi(CAP + 2);
+        let v: Vec<usize> = v1.into_iter().collect();
+        (0..CAP)
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
+    }
+    #[test]
+    fn into_iter_heap_partial() {
+        let v1 = mkvi(CAP + 2);
+        let v: Vec<usize> = v1.into_iter().take(CAP / 2).collect();
+        (0..CAP / 2)
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x, y));
+    }
 }
 
 mod uarray {
