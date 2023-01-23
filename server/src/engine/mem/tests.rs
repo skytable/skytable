@@ -251,4 +251,24 @@ mod uarray {
         let b = a.clone();
         assert_eq!(a, b);
     }
+    #[test]
+    fn into_iter_rev() {
+        let a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let r: Vec<String> = a.into_iter().rev().collect();
+        (0..8)
+            .rev()
+            .into_iter()
+            .zip(r.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn into_iter_rev_partial() {
+        let a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let r: Vec<String> = a.into_iter().rev().take(4).collect();
+        (4..8)
+            .rev()
+            .into_iter()
+            .zip(r.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
 }

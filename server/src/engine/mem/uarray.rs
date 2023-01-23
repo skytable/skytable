@@ -181,6 +181,7 @@ pub struct IntoIter<const N: usize, T> {
 }
 
 impl<const N: usize, T> IntoIter<N, T> {
+    #[inline(always)]
     fn _next(&mut self) -> Option<T> {
         if self.i == self.l {
             return None;
@@ -192,6 +193,17 @@ impl<const N: usize, T> IntoIter<N, T> {
             let ret = ptr::read(target);
             self.i += 1;
             Some(ret)
+        }
+    }
+    #[inline(always)]
+    fn _next_back(&mut self) -> Option<T> {
+        if self.i == self.l {
+            return None;
+        }
+        unsafe {
+            self.l -= 1;
+            // UNSAFE(@ohsayan): we always ensure EOA condition
+            Some(ptr::read(self.d.a.as_ptr().add(self.l).cast()))
         }
     }
 }
@@ -218,6 +230,11 @@ impl<const N: usize, T> Iterator for IntoIter<N, T> {
 }
 impl<const N: usize, T> ExactSizeIterator for IntoIter<N, T> {}
 impl<const N: usize, T> FusedIterator for IntoIter<N, T> {}
+impl<const N: usize, T> DoubleEndedIterator for IntoIter<N, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self._next_back()
+    }
+}
 
 impl<const N: usize, T> IntoIterator for UArray<N, T> {
     type Item = T;
