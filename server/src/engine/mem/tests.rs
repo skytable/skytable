@@ -40,8 +40,12 @@ mod vinline {
     /// - verify payload
     /// - verify capacity (if upto <= CAP)
     /// - verify stack/heap logic
-    fn mkvi(upto: usize) -> VInline<CAP, usize> {
-        let r: VInline<CAP, _> = (0..upto).into_iter().collect();
+    fn cmkvi<F, T: PartialEq>(upto: usize, map: F) -> VInline<CAP, T>
+    where
+        F: Clone + FnMut(usize) -> T,
+    {
+        let map2 = map.clone();
+        let r: VInline<CAP, _> = (0..upto).into_iter().map(map).collect();
         assert_eq!(r.len(), upto);
         if upto <= CAP {
             assert_eq!(r.capacity(), CAP);
@@ -51,9 +55,16 @@ mod vinline {
         }
         assert!((0..upto)
             .into_iter()
+            .map(map2)
             .zip(r.iter())
             .all(|(x, y)| { x == *y }));
         r
+    }
+    fn mkvi(upto: usize) -> VInline<CAP, usize> {
+        cmkvi(upto, |v| v)
+    }
+    fn mkvi_str(upto: usize) -> VInline<CAP, String> {
+        cmkvi(upto, |v| v.to_string())
     }
     #[test]
     fn push_on_stack() {
@@ -141,39 +152,79 @@ mod vinline {
     }
     #[test]
     fn into_iter_stack() {
-        let v1 = mkvi(CAP);
-        let v: Vec<usize> = v1.into_iter().collect();
+        let v1 = mkvi_str(CAP);
+        let v: Vec<String> = v1.into_iter().collect();
         (0..CAP)
             .into_iter()
             .zip(v.into_iter())
-            .for_each(|(x, y)| assert_eq!(x, y));
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_stack_partial() {
-        let v1 = mkvi(CAP);
-        let v: Vec<usize> = v1.into_iter().take(CAP / 2).collect();
+        let v1 = mkvi_str(CAP);
+        let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
         (0..CAP / 2)
             .into_iter()
             .zip(v.into_iter())
-            .for_each(|(x, y)| assert_eq!(x, y));
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_heap() {
-        let v1 = mkvi(CAP + 2);
-        let v: Vec<usize> = v1.into_iter().collect();
+        let v1 = mkvi_str(CAP + 2);
+        let v: Vec<String> = v1.into_iter().collect();
         (0..CAP)
             .into_iter()
             .zip(v.into_iter())
-            .for_each(|(x, y)| assert_eq!(x, y));
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_heap_partial() {
-        let v1 = mkvi(CAP + 2);
-        let v: Vec<usize> = v1.into_iter().take(CAP / 2).collect();
+        let v1 = mkvi_str(CAP + 2);
+        let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
         (0..CAP / 2)
             .into_iter()
             .zip(v.into_iter())
-            .for_each(|(x, y)| assert_eq!(x, y));
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn into_iter_rev_stack() {
+        let v1 = mkvi_str(CAP);
+        let v: Vec<String> = v1.into_iter().rev().collect();
+        (0..CAP)
+            .rev()
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn into_iter_rev_stack_partial() {
+        let v1 = mkvi_str(CAP);
+        let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
+        (CAP..CAP / 2)
+            .rev()
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn into_iter_rev_heap() {
+        let v1 = mkvi_str(CAP + 2);
+        let v: Vec<String> = v1.into_iter().rev().collect();
+        (0..CAP + 2)
+            .rev()
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+    }
+    #[test]
+    fn into_iter_rev_heap_partial() {
+        let v1 = mkvi_str(CAP + 2);
+        let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
+        (CAP..CAP / 2)
+            .rev()
+            .into_iter()
+            .zip(v.into_iter())
+            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
 }
 
