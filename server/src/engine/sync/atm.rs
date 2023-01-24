@@ -27,9 +27,7 @@
 use core::{fmt, mem, ops::Deref, sync::atomic::Ordering};
 use crossbeam_epoch::{Atomic as CBAtomic, CompareExchangeError, Pointable, Pointer};
 // re-export here because we have some future plans ;) (@ohsayan)
-pub use crossbeam_epoch::{
-    pin as pin_current, unprotected as pin_unprotected, Guard, Owned, Shared,
-};
+pub use crossbeam_epoch::{pin as cpin, unprotected as upin, Guard, Owned, Shared};
 
 pub(super) const ORD_RLX: Ordering = Ordering::Relaxed;
 pub(super) const ORD_ACQ: Ordering = Ordering::Acquire;

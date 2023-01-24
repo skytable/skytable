@@ -24,12 +24,13 @@
  *
 */
 
-use super::atm::{pin_unprotected, Atomic, Guard, Owned, Shared, ORD_REL};
+use super::atm::{upin, Atomic, Guard, Owned, Shared, ORD_REL};
 use core::ops::Deref;
 use parking_lot::{Mutex, MutexGuard};
 use std::marker::PhantomData;
 
 /// A [`TMCell`] provides atomic reads and serialized writes; the `static` is a CB hack
+#[derive(Debug)]
 pub struct TMCell<T: 'static> {
     a: Atomic<T>,
     g: Mutex<()>,
@@ -65,13 +66,17 @@ impl<T> Drop for TMCell<T> {
     fn drop(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): Sole owner with mutable access
-            let g = pin_unprotected();
+            let g = upin();
             let shptr = self.a.ld_rlx(&g);
             g.defer_destroy(shptr);
         }
     }
 }
 
+unsafe impl<T: Send> Send for TMCell<T> {}
+unsafe impl<T: Sync> Sync for TMCell<T> {}
+
+#[derive(Debug)]
 pub struct TMCellReadTxn<'a, 'g, T: 'static> {
     d: &'g T,
     _m: PhantomData<&'a TMCell<T>>,
@@ -88,6 +93,13 @@ impl<'a, 'g, T> TMCellReadTxn<'a, 'g, T> {
     }
 }
 
+impl<'a, 'g, T: Clone> TMCellReadTxn<'a, 'g, T> {
+    #[inline(always)]
+    pub fn read_copied(&self) -> T {
+        self.read().clone()
+    }
+}
+
 impl<'a, 'g, T: Copy> TMCellReadTxn<'a, 'g, T> {
     fn read_copy(&self) -> T {
         *self.d
@@ -101,6 +113,10 @@ impl<'a, 'g, T> Deref for TMCellReadTxn<'a, 'g, T> {
     }
 }
 
+unsafe impl<'a, 'g, T: Send> Send for TMCellReadTxn<'a, 'g, T> {}
+unsafe impl<'a, 'g, T: Sync> Sync for TMCellReadTxn<'a, 'g, T> {}
+
+#[derive(Debug)]
 pub struct TMCellWriteTxn<'a, 'g, T: 'static> {
     d: &'g T,
     a: &'a Atomic<T>,
@@ -134,6 +150,13 @@ impl<'a, 'g, T> TMCellWriteTxn<'a, 'g, T> {
     }
 }
 
+impl<'a, 'g, T: Clone> TMCellWriteTxn<'a, 'g, T> {
+    #[inline(always)]
+    pub fn read_copied(&self) -> T {
+        self.read().clone()
+    }
+}
+
 impl<'a, 'g, T: Copy> TMCellWriteTxn<'a, 'g, T> {
     fn read_copy(&self) -> T {
         *self.d
@@ -146,3 +169,5 @@ impl<'a, 'g, T> Deref for TMCellWriteTxn<'a, 'g, T> {
         self.d
     }
 }
+
+unsafe impl<'a, 'g, T: Sync> Sync for TMCellWriteTxn<'a, 'g, T> {}
