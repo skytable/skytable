@@ -24,7 +24,9 @@
  *
 */
 
-use super::{AsKey, AsKeyRef, AsValue, DummyMetrics, IndexBaseSpec, STIndex};
+#[cfg(debug_assertions)]
+use super::DummyMetrics;
+use super::{AsKey, AsValue, AsValueClone, IndexBaseSpec, STIndex};
 use std::{
     borrow::Borrow,
     collections::{
@@ -41,6 +43,7 @@ where
 {
     const PREALLOC: bool = true;
 
+    #[cfg(debug_assertions)]
     type Metrics = DummyMetrics;
 
     type IterKV<'a> = StdMapIterKV<'a, K, V>
@@ -83,6 +86,7 @@ where
         self.values()
     }
 
+    #[cfg(debug_assertions)]
     fn idx_metrics(&self) -> &Self::Metrics {
         &DummyMetrics
     }
@@ -119,7 +123,7 @@ where
     fn st_contains<Q>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.contains_key(k)
     }
@@ -127,7 +131,7 @@ where
     fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.get(key)
     }
@@ -135,7 +139,8 @@ where
     fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
+        V: AsValueClone,
     {
         self.get(key).cloned()
     }
@@ -143,7 +148,7 @@ where
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.get_mut(key).map(move |e| *e = val).is_some()
     }
@@ -151,7 +156,7 @@ where
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.get_mut(key).map(move |e| {
             let mut new = val;
@@ -163,7 +168,7 @@ where
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.remove(key).is_some()
     }
@@ -171,7 +176,7 @@ where
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.remove(key)
     }

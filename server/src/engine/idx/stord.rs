@@ -24,7 +24,7 @@
  *
 */
 
-use super::{AsKey, AsKeyRef, AsValue, IndexBaseSpec, STIndex, STIndexSeq};
+use super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq};
 use std::{
     alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
     borrow::Borrow,
@@ -217,6 +217,7 @@ pub struct IndexSTSeqDllMetrics {
     stat_f: usize,
 }
 
+#[cfg(debug_assertions)]
 impl IndexSTSeqDllMetrics {
     pub fn raw_f(&self) -> usize {
         self.stat_f
@@ -247,6 +248,7 @@ impl<K, V, S: BuildHasher> IndexSTSeqDll<K, V, S> {
             m,
             h,
             f,
+            #[cfg(debug_assertions)]
             metrics: IndexSTSeqDllMetrics::new(),
         }
     }
@@ -411,7 +413,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     fn _get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: AsKeyRef,
+        Q: AsKey,
     {
         self.m
             .get(unsafe {
@@ -427,7 +429,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     fn _update<Q: ?Sized>(&mut self, k: &Q, v: V) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: AsKeyRef,
+        Q: AsKey,
     {
         match self.m.get(unsafe {
             // UNSAFE(@ohsayan): Just got a ref with the right bounds
@@ -457,7 +459,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     fn _remove<Q>(&mut self, k: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: AsKeyRef + ?Sized,
+        Q: AsKey + ?Sized,
     {
         self.m
             .remove(unsafe {
@@ -558,6 +560,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher + Default> FromIterator<(K, V)>
 impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, S> {
     const PREALLOC: bool = true;
 
+    #[cfg(debug_assertions)]
     type Metrics = IndexSTSeqDllMetrics;
 
     type IterKV<'a> = IndexSTSeqDllIterUnordKV<'a, K, V>
@@ -630,7 +633,7 @@ where
     fn st_contains<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q> + AsKey,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self.m.contains_key(unsafe {
             // UNSAFE(@ohsayan): Valid ref with correct bounds
@@ -641,7 +644,7 @@ where
     fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self._get(key)
     }
@@ -649,7 +652,8 @@ where
     fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
+        V: AsValueClone,
     {
         self._get(key).cloned()
     }
@@ -657,7 +661,7 @@ where
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self._update(key, val).is_some()
     }
@@ -665,7 +669,7 @@ where
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self._update(key, val)
     }
@@ -673,7 +677,7 @@ where
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self._remove(key).is_some()
     }
@@ -681,7 +685,7 @@ where
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: ?Sized + AsKeyRef,
+        Q: ?Sized + AsKey,
     {
         self._remove(key)
     }
@@ -722,7 +726,7 @@ where
     }
 }
 
-impl<K: AsKey, V: AsValue, S: BuildHasher + Default> Clone for IndexSTSeqDll<K, V, S> {
+impl<K: AsKeyClone, V: AsValueClone, S: BuildHasher + Default> Clone for IndexSTSeqDll<K, V, S> {
     fn clone(&self) -> Self {
         let mut slf = Self::with_capacity_and_hasher(self.len(), S::default());
         self._iter_ord_kv()
