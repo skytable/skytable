@@ -322,4 +322,16 @@ mod uarray {
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
+    #[test]
+    fn pop_array() {
+        let mut a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        assert_eq!(a.pop().unwrap(), "7");
+        assert_eq!(a.len(), CAP - 1);
+    }
+    #[test]
+    fn clear_array() {
+        let mut a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        a.clear();
+        assert!(a.is_empty());
+    }
 }

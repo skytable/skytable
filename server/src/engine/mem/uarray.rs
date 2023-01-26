@@ -78,19 +78,42 @@ impl<const N: usize, T> UArray<N, T> {
             self.remove_unchecked(idx)
         }
     }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            unsafe {
+                // UNSAFE(@ohsayan): Non-empty checked
+                Some(self.remove_unchecked(self.len() - 1))
+            }
+        }
+    }
+    pub fn clear(&mut self) {
+        unsafe {
+            let ptr = self.as_slice_mut();
+            // UNSAFE(@ohsayan): We know this is the initialized length
+            ptr::drop_in_place(ptr);
+            // UNSAFE(@ohsayan): we've destroyed everything, so yeah, all g
+            self.set_len(0);
+        }
+    }
     /// SAFETY: idx < self.l
     unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
+        debug_assert!(idx < self.len());
         // UNSAFE(@ohsayan): Verified idx
         let target = self.a.as_mut_ptr().add(idx).cast::<T>();
         // UNSAFE(@ohsayan): Verified idx
         let ret = ptr::read(target);
         // UNSAFE(@ohsayan): ov; not-null; correct len
         ptr::copy(target.add(1), target, self.len() - idx - 1);
+        // UNSAFE(@ohsayan): we just removed something, account for it
+        self.decr_len();
         ret
     }
     #[inline(always)]
     /// SAFETY: self.l < N
     unsafe fn push_unchecked(&mut self, v: T) {
+        debug_assert!(self.len() < N);
         // UNSAFE(@ohsayan): verified correct offsets (N)
         self.a.as_mut_ptr().add(self.l).write(MaybeUninit::new(v));
         // UNSAFE(@ohsayan): all G since l =< N
@@ -115,6 +138,10 @@ impl<const N: usize, T> UArray<N, T> {
     #[inline(always)]
     unsafe fn incr_len(&mut self) {
         self.set_len(self.len() + 1)
+    }
+    #[inline(always)]
+    unsafe fn decr_len(&mut self) {
+        self.set_len(self.len() - 1)
     }
 }
 
