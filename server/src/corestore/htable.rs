@@ -37,6 +37,7 @@ use std::borrow::Borrow;
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Deref;
+use std::cmp;
 
 type HashTable<K, V> = Skymap<K, V, RandomState>;
 
@@ -187,7 +188,7 @@ impl<K: Eq + Hash, V: Clone> Coremap<K, V> {
 impl<K: Eq + Hash + Clone, V> Coremap<K, V> {
     /// Returns atleast `count` number of keys from the hashtable
     pub fn get_keys(&self, count: usize) -> Vec<K> {
-        let mut v = Vec::with_capacity(count);
+        let mut v = Vec::with_capacity(cmp::min(count, self.len()));
         self.iter()
             .take(count)
             .map(|kv| kv.key().clone())
