@@ -29,15 +29,15 @@ use crossbeam_epoch::{Atomic as CBAtomic, CompareExchangeError, Pointable, Point
 // re-export here because we have some future plans ;) (@ohsayan)
 pub use crossbeam_epoch::{pin as cpin, unprotected as upin, Guard, Owned, Shared};
 
-pub(super) const ORD_RLX: Ordering = Ordering::Relaxed;
-pub(super) const ORD_ACQ: Ordering = Ordering::Acquire;
-pub(super) const ORD_REL: Ordering = Ordering::Release;
-pub(super) const ORD_ACR: Ordering = Ordering::AcqRel;
+pub const ORD_RLX: Ordering = Ordering::Relaxed;
+pub const ORD_ACQ: Ordering = Ordering::Acquire;
+pub const ORD_REL: Ordering = Ordering::Release;
+pub const ORD_ACR: Ordering = Ordering::AcqRel;
 
 type CxResult<'g, T, P> = Result<Shared<'g, T>, CompareExchangeError<'g, T, P>>;
 
-pub(super) const fn ensure_flag_align<T>(fsize: usize) {
-    debug_assert!(mem::align_of::<T>().trailing_zeros() as usize >= fsize);
+pub const fn ensure_flag_align<T, const FSIZE: usize>() -> bool {
+    mem::align_of::<T>().trailing_zeros() as usize >= FSIZE
 }
 
 pub struct Atomic<T> {
@@ -52,25 +52,22 @@ impl<T> fmt::Debug for Atomic<T> {
 }
 
 impl<T: Pointable> Atomic<T> {
-    // the compile time address size check ensures "first class" sanity
-    const _ENSURE_FLAG_STATIC_CHECK: () = ensure_flag_align::<T>(0);
     /// Instantiates a new atomic
     ///
     /// **This will allocate**
     pub fn new_alloc(t: T) -> Self {
-        let _ = Self::_ENSURE_FLAG_STATIC_CHECK;
         Self {
             a: CBAtomic::new(t),
         }
     }
     #[inline(always)]
-    pub(super) const fn null() -> Self {
+    pub const fn null() -> Self {
         Self {
             a: CBAtomic::null(),
         }
     }
     #[inline(always)]
-    pub(super) fn cx<'g, P>(
+    pub fn cx<'g, P>(
         &self,
         o: Shared<'g, T>,
         n: P,
@@ -84,7 +81,7 @@ impl<T: Pointable> Atomic<T> {
         self.a.compare_exchange(o, n, s, f, g)
     }
     #[inline(always)]
-    pub(super) fn cx_weak<'g, P>(
+    pub fn cx_weak<'g, P>(
         &self,
         o: Shared<'g, T>,
         n: P,
@@ -98,22 +95,22 @@ impl<T: Pointable> Atomic<T> {
         self.a.compare_exchange_weak(o, n, s, f, g)
     }
     #[inline(always)]
-    pub(super) fn cx_rel<'g, P>(&self, o: Shared<'g, T>, n: P, g: &'g Guard) -> CxResult<'g, T, P>
+    pub fn cx_rel<'g, P>(&self, o: Shared<'g, T>, n: P, g: &'g Guard) -> CxResult<'g, T, P>
     where
         P: Pointer<T>,
     {
         self.cx(o, n, ORD_REL, ORD_RLX, g)
     }
     #[inline(always)]
-    pub(super) fn ld<'g>(&self, o: Ordering, g: &'g Guard) -> Shared<'g, T> {
+    pub fn ld<'g>(&self, o: Ordering, g: &'g Guard) -> Shared<'g, T> {
         self.a.load(o, g)
     }
     #[inline(always)]
-    pub(super) fn ld_acq<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
+    pub fn ld_acq<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
         self.ld(ORD_ACQ, g)
     }
     #[inline(always)]
-    pub(crate) fn ld_rlx<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
+    pub fn ld_rlx<'g>(&self, g: &'g Guard) -> Shared<'g, T> {
         self.ld(ORD_RLX, g)
     }
 }
@@ -123,7 +120,6 @@ where
     A: Into<CBAtomic<T>>,
 {
     fn from(t: A) -> Self {
-        let _ = Self::_ENSURE_FLAG_STATIC_CHECK;
         Self { a: Into::into(t) }
     }
 }

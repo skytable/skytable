@@ -100,7 +100,7 @@ impl<const N: usize> From<[DataType; N]> for DataType {
     }
 }
 
-constgrp! {
+flags! {
     #[derive(PartialEq, Eq, Clone, Copy)]
     pub struct DataKind: u8 {
         // primitive: integer unsigned
@@ -120,9 +120,9 @@ constgrp! {
         FLOAT64 = 10,
         // compound: flat
         STR = 11,
-        STR_BX = Self::_BASE_HB | Self::STR.d(),
+        STR_BX = DataKind::_BASE_HB | DataKind::STR.d(),
         BIN = 12,
-        BIN_BX = Self::_BASE_HB | Self::BIN.d(),
+        BIN_BX = DataKind::_BASE_HB | DataKind::BIN.d(),
         // compound: recursive
         LIST = 13,
     }

@@ -11,7 +11,7 @@
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software fation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -53,9 +53,9 @@ macro_rules! assertions {
     ($($assert:expr),*$(,)?) => {$(const _:()=::core::assert!($assert);)*}
 }
 
-macro_rules! constgrp {
-    ($(#[$attr:meta])* $vis:vis struct $group:ident: $ty:ty { $($const:ident = $expr:expr),* $(,)?}) => (
-        $(#[$attr])* $vis struct $group {r#const: $ty}
+macro_rules! flags {
+    ($(#[$attr:meta])* $vis:vis struct $group:ident: $ty:ty { $($const:ident = $expr:expr),+ $(,)?}) => (
+        $(#[$attr])* #[repr(transparent)] $vis struct $group {r#const: $ty}
         impl $group {
             $(pub const $const: Self = Self { r#const: $expr };)*
             #[inline(always)] pub const fn d(&self) -> $ty { self.r#const }
@@ -63,9 +63,19 @@ macro_rules! constgrp {
             #[inline(always)] pub const fn name(&self) -> &'static str {
                 match self.r#const {$(capture if capture == $expr => ::core::stringify!($const),)* _ => ::core::unreachable!()}
             }
+            const LEN: usize = { let mut i = 0; $(let _ = $expr; i += 1;)+{i} };
+            const A: [$ty; $group::LEN] = [$($expr,)+];
+            const SANITY: () = {
+                let ref a = Self::A; let l = a.len(); let mut i = 0;
+                while i < l { let mut j = i + 1; while j < l { if a[i] == a[j] { panic!("conflict"); } j += 1; } i += 1; }
+            };
+            const ALL: $ty = { let mut r: $ty = 0; $( r |= $expr;)+ r };
+            pub const fn has_flags_in(v: $ty) -> bool { Self::ALL & v != 0 }
+            pub const fn bits() -> usize { let r: $ty = ($($expr+)+0); r.count_ones() as _ }
         }
         impl ::core::fmt::Debug for $group {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                const _V : () = $group::SANITY;
                 ::core::write!(f, "{}::{}", ::core::stringify!($group), Self::name(self))
             }
         }
