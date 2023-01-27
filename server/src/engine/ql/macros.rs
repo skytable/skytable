@@ -282,6 +282,7 @@ macro_rules! dict {
     }};
 }
 
+#[cfg(test)]
 macro_rules! nullable_dict {
     () => {
         dict! {}
@@ -295,6 +296,7 @@ macro_rules! nullable_dict {
     };
 }
 
+#[cfg(test)]
 macro_rules! dict_nullable {
     () => {
         <::std::collections::HashMap<_, _> as ::core::default::Default>::default()
@@ -306,6 +308,7 @@ macro_rules! dict_nullable {
     }};
 }
 
+#[cfg(test)]
 macro_rules! set {
     () => {
         <::std::collections::HashSet<_> as ::core::default::Default>::default()
@@ -317,14 +320,17 @@ macro_rules! set {
     }};
 }
 
+#[cfg(test)]
 macro_rules! into_array {
     ($($e:expr),* $(,)?) => { [$($e.into()),*] };
 }
 
+#[cfg(test)]
 macro_rules! into_array_nullable {
     ($($e:expr),* $(,)?) => { [$($crate::engine::ql::tests::nullable_datatype($e)),*] };
 }
 
+#[allow(unused_macros)]
 macro_rules! statictbl {
     ($name:ident: $kind:ty => [$($expr:expr),*]) => {{
         const LEN: usize = {let mut i = 0;$(let _ = $expr; i += 1;)*i};

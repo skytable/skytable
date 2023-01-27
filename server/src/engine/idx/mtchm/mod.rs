@@ -1,0 +1,658 @@
+/*
+ * Created on Thu Jan 26 2023
+ *
+ * This file is a part of Skytable
+ * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
+ * NoSQL database written by Sayan Nandan ("the Author") with the
+ * vision to provide flexibility in data modelling without compromising
+ * on performance, queryability or scalability.
+ *
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ *
+*/
+
+mod access;
+mod iter;
+mod meta;
+
+use self::{
+    access::{ReadMode, WriteMode},
+    iter::{IterKV, IterKey, IterVal},
+    meta::{AsHasher, CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
+};
+use super::{
+    super::{
+        mem::UArray,
+        sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACQ, ORD_ACR, ORD_RLX},
+    },
+    AsKey,
+};
+use crossbeam_epoch::CompareExchangeError;
+use std::{borrow::Borrow, hash::Hasher, marker::PhantomData, mem, sync::atomic::AtomicUsize};
+
+/*
+    HACK(@ohsayan): Until https://github.com/rust-lang/rust/issues/76560 is stabilized which is likely to take a while,
+    we need to settle for trait objects
+*/
+
+pub struct Node<C: Config> {
+    branch: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX],
+}
+
+impl<C: Config> Node<C> {
+    const NULL: Atomic<Self> = Atomic::null();
+    const NULL_BRANCH: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX] =
+        [Self::NULL; <DefConfig as Config>::BRANCH_MX];
+    #[inline(always)]
+    const fn null() -> Self {
+        Self {
+            branch: Self::NULL_BRANCH,
+        }
+    }
+}
+
+#[inline(always)]
+fn gc(g: &Guard) {
+    g.flush();
+}
+
+#[inline(always)]
+fn ldfl<C: Config>(c: &Shared<Node<C>>) -> usize {
+    c.tag()
+}
+
+#[inline(always)]
+const fn hf(c: usize, f: NodeFlag) -> bool {
+    (c & f.d()) == f.d()
+}
+
+#[inline(always)]
+const fn cf(c: usize, r: NodeFlag) -> usize {
+    c & !r.d()
+}
+
+trait CTFlagAlign {
+    const FL_A: bool;
+    const FL_B: bool;
+    const FLCK_A: () = assert!(Self::FL_A & Self::FL_B);
+    const FLCK: () = Self::FLCK_A;
+}
+
+impl<T, S, C: Config> CTFlagAlign for Tree<T, S, C> {
+    const FL_A: bool = atm::ensure_flag_align::<LNode<T>, { NodeFlag::bits() }>();
+    const FL_B: bool = atm::ensure_flag_align::<Node<C>, { NodeFlag::bits() }>();
+}
+
+pub struct Tree<T, S, C: Config> {
+    root: Atomic<Node<C>>,
+    h: S,
+    l: AtomicUsize,
+    _m: PhantomData<T>,
+}
+
+impl<T, S, C: Config> Tree<T, S, C> {
+    #[inline(always)]
+    const fn _new(h: S) -> Self {
+        let _ = Self::FLCK;
+        Self {
+            root: Atomic::null(),
+            h,
+            l: AtomicUsize::new(0),
+            _m: PhantomData,
+        }
+    }
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.l.load(ORD_RLX)
+    }
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    #[inline(always)]
+    pub const fn with_hasher(h: S) -> Self {
+        Self::_new(h)
+    }
+}
+
+impl<T, S: AsHasher, C: Config> Tree<T, S, C> {
+    #[inline(always)]
+    fn new() -> Self {
+        Self::_new(S::default())
+    }
+}
+
+impl<T, S: AsHasher, C: Config> Tree<T, S, C> {
+    fn hash<Q>(&self, k: &Q) -> u64
+    where
+        Q: ?Sized + AsKey,
+    {
+        let mut state = self.h.build_hasher();
+        k.hash(&mut state);
+        state.finish()
+    }
+}
+
+// iter
+impl<T: TreeElement, S, C: Config> Tree<T, S, C> {
+    fn iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKV<'t, 'g, 'v, T, S, C> {
+        IterKV::new(self, g)
+    }
+    fn iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKey<'t, 'g, 'v, T, S, C> {
+        IterKey::new(self, g)
+    }
+    fn iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterVal<'t, 'g, 'v, T, S, C> {
+        IterVal::new(self, g)
+    }
+}
+
+impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
+    fn insert(&self, elem: T, g: &Guard) -> bool {
+        self._insert::<access::WModeFresh>(elem, g)
+    }
+    fn update(&self, elem: T, g: &Guard) -> bool {
+        self._insert::<access::WModeUpdate>(elem, g)
+    }
+    fn update_return<'g>(&'g self, elem: T, g: &'g Guard) -> Option<&'g T::Value> {
+        self._insert::<access::WModeUpdateRetRef>(elem, g)
+    }
+    fn upsert(&self, elem: T, g: &Guard) {
+        self._insert::<access::WModeUpsert>(elem, g)
+    }
+    fn upsert_return<'g>(&'g self, elem: T, g: &'g Guard) -> Option<&'g T::Value> {
+        self._insert::<access::WModeUpsertRef>(elem, g)
+    }
+    fn _insert<'g, W: WriteMode<T>>(&'g self, elem: T, g: &'g Guard) -> W::Ret<'g> {
+        let hash = self.hash(elem.key());
+        let mut level = C::LEVEL_ZERO;
+        let mut current = &self.root;
+        let mut parent = None;
+        let mut child = None;
+        loop {
+            let node = current.ld_acq(g);
+            match ldfl(&node) {
+                flag if hf(flag, NodeFlag::PENDING_DELETE) => {
+                    /*
+                        FIXME(@ohsayan):
+                        this node is about to be deleted (well, maybe) so we'll attempt a cleanup as well. we might not exactly
+                        need to do this. also this is a potentially expensive thing since we're going all the way back to the root,
+                        we might be able to optimize this with a fixed-size queue.
+                    */
+                    unsafe {
+                        // UNSAFE(@ohsayan): we know that isn't the root and def doesn't have data (that's how the algorithm works)
+                        Self::compress(parent.unwrap(), child.unwrap(), g);
+                    }
+                    level = C::LEVEL_ZERO;
+                    current = &self.root;
+                    parent = None;
+                    child = None;
+                }
+                _ if node.is_null() => {
+                    // this is an empty slot
+                    if W::WMODE == access::WRITEMODE_REFRESH {
+                        // I call that a job well done
+                        return W::nx();
+                    }
+                    if (W::WMODE == access::WRITEMODE_ANY) | (W::WMODE == access::WRITEMODE_FRESH) {
+                        let new = Self::new_data(elem.clone());
+                        match current.cx_rel(node, new, g) {
+                            Ok(_) => {
+                                // we're done here
+                                self.incr_len();
+                                return W::nx();
+                            }
+                            Err(CompareExchangeError { new, .. }) => unsafe {
+                                /*
+                                    UNSAFE(@ohsayan): so we attempted to CAS it but the CAS failed. in that case, destroy the
+                                    lnode we created. We never published the value so no other thread has watched, making this
+                                    safe
+                                */
+                                Self::ldrop(new.into_shared(g));
+                            },
+                        }
+                    }
+                }
+                flag if hf(flag, NodeFlag::DATA) => {
+                    // so we have an lnode. well maybe an snode
+                    let data = unsafe {
+                        // UNSAFE(@ohsayan): flagck
+                        Self::read_data(node)
+                    };
+                    debug_assert!(!data.is_empty(), "logic,empty node not compressed");
+                    if data[0].key() != elem.key() && level < C::MAX_TREE_HEIGHT_UB {
+                        /*
+                            so this is a collision and since we haven't reached the max height, we should always
+                            create a new branch so let's do that
+                        */
+                        debug_assert_eq!(data.len(), 1, "logic,lnode before height ub");
+                        if W::WMODE == access::WRITEMODE_REFRESH {
+                            // another job well done; an snode with the wrong key; so basically it's missing
+                            return W::nx();
+                        }
+                        let next_chunk = (self.hash(data[0].key()) >> level) & C::HASH_MASK;
+                        let mut new_branch = Node::null();
+                        // stick this one in
+                        new_branch.branch[next_chunk as usize] = Atomic::from(node);
+                        // we don't care about what happens
+                        let _ = current.cx_rel(node, Owned::new(new_branch), g);
+                    } else {
+                        /*
+                            in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
+                            to update
+                        */
+                        let p = data.iter().position(|e| e.key() == elem.key());
+                        match p {
+                            Some(v) if W::WMODE == access::WRITEMODE_FRESH => {
+                                return W::ex(&data[v])
+                            }
+                            Some(i)
+                                if W::WMODE == access::WRITEMODE_REFRESH
+                                    || W::WMODE == access::WRITEMODE_ANY =>
+                            {
+                                // update the entry and create a new node
+                                let mut new_ln = data.clone();
+                                new_ln[i] = elem.clone();
+                                match current.cx_rel(
+                                    node,
+                                    Self::new_lnode(new_ln).into_shared(g),
+                                    g,
+                                ) {
+                                    Ok(_) => {
+                                        unsafe {
+                                            /*
+                                                UNSAFE(@ohsayan): swapped out, and we'll be the last thread to see this once the epoch proceeds
+                                                sufficiently
+                                            */
+                                            g.defer_destroy(Shared::<LNode<T>>::from(
+                                                node.as_raw() as *const LNode<_>
+                                            ))
+                                        }
+                                        return W::ex(&data[i]);
+                                    }
+                                    Err(CompareExchangeError { new, .. }) => {
+                                        // failed to swap it in
+                                        unsafe {
+                                            // UNSAFE(@ohsayan): Failed to swap this in, and no one else saw it (well)
+                                            Self::ldrop(new)
+                                        }
+                                    }
+                                }
+                            }
+                            None if W::WMODE == access::WRITEMODE_ANY => {
+                                // no funk here
+                                let new_node = Self::new_data(elem.clone());
+                                match current.cx_rel(node, new_node.into_shared(g), g) {
+                                    Ok(_) => {
+                                        // swapped out
+                                        unsafe {
+                                            // UNSAFE(@ohsayan): last thread to see this (well, sorta)
+                                            g.defer_destroy(Shared::<LNode<T>>::from(
+                                                node.as_raw() as *const LNode<_>,
+                                            ));
+                                        }
+                                        self.incr_len();
+                                        return W::nx();
+                                    }
+                                    Err(CompareExchangeError { new, .. }) => {
+                                        // failed to swap it
+                                        unsafe {
+                                            // UNSAFE(@ohsayan): never published this, so we're the last one
+                                            Self::ldrop(new)
+                                        }
+                                    }
+                                }
+                            }
+                            None if W::WMODE == access::WRITEMODE_REFRESH => return W::nx(),
+                            _ => {
+                                unreachable!("logic,W::WMODE mismatch: `{}`", W::WMODE);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    // branch
+                    let nxidx = (hash >> level) & C::HASH_MASK;
+                    level += C::BRANCH_LG;
+                    parent = Some(current);
+                    child = Some(node);
+                    current = &unsafe { node.deref() }.branch[nxidx as usize];
+                }
+            }
+        }
+    }
+    fn contains_key<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> bool
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        self._lookup::<Q, access::RModeExists>(k, g)
+    }
+    fn get<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        self._lookup::<Q, access::RModeRef>(k, g)
+    }
+    fn _lookup<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> R::Ret<'g>
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        let mut hash = self.hash(k);
+        let mut current = &self.root;
+        loop {
+            let node = current.ld_acq(g);
+            match ldfl(&node) {
+                _ if node.is_null() => {
+                    // honestly, if this ran on the root I'm going to die laughing (@ohsayan)
+                    return R::nx();
+                }
+                flag if hf(flag, NodeFlag::DATA) => {
+                    let mut ret = R::nx();
+                    return unsafe {
+                        // UNSAFE(@ohsayan): checked flag + nullck
+                        Self::read_data(node).iter().find_map(|e| {
+                            e.key().borrow().eq(k).then_some({
+                                ret = R::ex(e);
+                                Some(())
+                            })
+                        });
+                        ret
+                    };
+                }
+                _ => {
+                    // branch
+                    current = &unsafe { node.deref() }.branch[(hash & C::HASH_MASK) as usize];
+                    hash >>= C::BRANCH_LG;
+                }
+            }
+        }
+    }
+    fn remove<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> bool
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        self._remove::<Q, access::WModeDelete>(k, g)
+    }
+    fn remove_return<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        self._remove::<Q, access::WModeDeleteRef>(k, g)
+    }
+    fn _remove<'g, Q, W: WriteMode<T>>(&'g self, k: &Q, g: &'g Guard) -> W::Ret<'g>
+    where
+        T::Key: Borrow<Q>,
+        Q: AsKey + ?Sized,
+    {
+        let hash = self.hash(k);
+        let mut current = &self.root;
+        let mut level = C::LEVEL_ZERO;
+        let mut levels = UArray::<{ <DefConfig as Config>::BRANCH_MX }, _>::new();
+        'retry: loop {
+            let node = current.ld_acq(g);
+            match ldfl(&node) {
+                _ if node.is_null() => {
+                    // lol
+                    return W::nx();
+                }
+                flag if hf(flag, NodeFlag::PENDING_DELETE) => {
+                    let (p, c) = levels.pop().unwrap();
+                    unsafe {
+                        /*
+                            we hit a node that might be deleted, we aren't allowed to change it, so we'll attempt a
+                            compression as well. same thing here as the other routines....can we do anything to avoid
+                            the expensive root traversal?
+                        */
+                        Self::compress(p, c, g);
+                    }
+                    levels.clear();
+                    level = C::LEVEL_ZERO;
+                    current = &self.root;
+                }
+                flag if hf(flag, NodeFlag::DATA) => {
+                    let data = unsafe {
+                        // UNSAFE(@ohsayan): flagck
+                        Self::read_data(node)
+                    };
+                    let mut ret = W::nx();
+                    // this node shouldn't be empty
+                    debug_assert!(!data.is_empty(), "logic,empty node not collected");
+                    // build new lnode
+                    let r: LNode<T> = data
+                        .iter()
+                        .filter_map(|this_elem| {
+                            if this_elem.key().borrow() == k {
+                                ret = W::ex(this_elem);
+                                None
+                            } else {
+                                Some(this_elem.clone())
+                            }
+                        })
+                        .collect();
+                    let replace = if r.is_empty() {
+                        // don't create dead nodes
+                        Shared::null()
+                    } else {
+                        Self::new_lnode(r).into_shared(g)
+                    };
+                    match current.cx_rel(node, replace, g) {
+                        Ok(_) => {
+                            // swapped it out
+                            unsafe {
+                                // UNSAFE(@ohsayan): flagck
+                                g.defer_destroy(Shared::<LNode<T>>::from(
+                                    node.as_raw() as *const LNode<_>
+                                ));
+                            }
+                        }
+                        Err(CompareExchangeError { new, .. }) if !new.is_null() => {
+                            // failed to swap it in, and it had some data
+                            unsafe {
+                                // UNSAFE(@ohsayan): Never published it, all ours
+                                g.defer_destroy(Shared::<LNode<T>>::from(
+                                    new.as_raw() as *const LNode<_>
+                                ));
+                            }
+                            continue 'retry;
+                        }
+                        Err(_) => continue 'retry,
+                    }
+                    // attempt compressions
+                    for (p, c) in levels.into_iter().rev() {
+                        let live_nodes = unsafe {
+                            // UNSAFE(@ohsayan): guard
+                            c.deref()
+                        }
+                        .branch
+                        .iter()
+                        .filter(|n| !n.ld_rlx(g).is_null())
+                        .count();
+                        if live_nodes > 1 {
+                            break;
+                        }
+                        if unsafe {
+                            // UNSAFE(@ohsayan): we know for a fact that we only have sensible levels
+                            Self::compress(p, c, g)
+                        } == CompressState::RESTORED
+                        {
+                            // simply restored the earlier state, so let's stop
+                            break;
+                        }
+                    }
+                    gc(g);
+                    return ret;
+                }
+                _ => {
+                    // branch
+                    levels.push((current, node));
+                    let nxidx = (hash >> level) & C::HASH_MASK;
+                    level += C::BRANCH_LG;
+                    current = &unsafe { node.deref() }.branch[nxidx as usize];
+                }
+            }
+        }
+    }
+}
+
+// low-level methods
+impl<T, S, C: Config> Tree<T, S, C> {
+    // hilarious enough but true, l doesn't affect safety but only creates an incorrect state
+    fn decr_len(&self) {
+        self.l.fetch_sub(1, ORD_ACQ);
+    }
+    fn incr_len(&self) {
+        self.l.fetch_add(1, ORD_ACQ);
+    }
+    #[inline(always)]
+    fn new_lnode(node: LNode<T>) -> Owned<Node<C>> {
+        unsafe {
+            Owned::<Node<_>>::from_raw(Box::into_raw(Box::new(node)) as *mut Node<_>)
+                .with_tag(NodeFlag::DATA.d())
+        }
+    }
+    /// Returns a new inner node, in the form of a data probe leaf
+    /// ☢ WARNING ☢: Do not drop this naively for god's sake
+    #[inline(always)]
+    fn new_data(data: T) -> Owned<Node<C>> {
+        let mut d = LNode::new();
+        unsafe {
+            // UNSAFE(@ohsayan): empty arr
+            d.push_unchecked(data)
+        };
+        Self::new_lnode(d)
+    }
+    unsafe fn read_data<'g>(d: Shared<'g, Node<C>>) -> &'g LNode<T> {
+        debug_assert!(hf(ldfl(&d), NodeFlag::DATA));
+        (d.as_raw() as *const LNode<_>)
+            .as_ref()
+            .expect("logic,nullptr in lnode")
+    }
+    /// SAFETY: Ensure you have some actual data and not random garbage
+    #[inline(always)]
+    unsafe fn ldrop(leaf: Shared<Node<C>>) {
+        debug_assert!(hf(ldfl(&leaf), NodeFlag::DATA));
+        drop(Owned::<LNode<T>>::from_raw(leaf.as_raw() as *mut _))
+    }
+    unsafe fn rdrop(n: &Atomic<Node<C>>) {
+        let g = upin();
+        let node = n.ld_acq(g);
+        match ldfl(&node) {
+            _ if node.is_null() => {}
+            flag if hf(flag, NodeFlag::DATA) => Self::ldrop(node),
+            _ => {
+                // a branch
+                let this_branch = node.into_owned();
+                for child in &this_branch.branch {
+                    Self::rdrop(child)
+                }
+                drop(this_branch);
+            }
+        }
+    }
+    unsafe fn compress<'g>(
+        parent: &Atomic<Node<C>>,
+        child: Shared<'g, Node<C>>,
+        g: &'g Guard,
+    ) -> CompressState {
+        /*
+            We look at the child's children and determine whether we can clean the child up. Although the amount of
+            memory we can save is not something very signficant but it becomes important with larger cardinalities
+        */
+        debug_assert!(!hf(ldfl(&child), NodeFlag::DATA), "logic,compress lnode");
+        debug_assert_eq!(ldfl(&child), 0, "logic,compress pending delete node");
+        let branch = child.deref();
+        let mut continue_compress = true;
+        let mut last_leaf = None;
+        let mut new_child = Node::null();
+        let mut cnt = 0_usize;
+
+        let mut i = 0;
+        while i < C::BRANCH_MX {
+            let ref child_ref = branch.branch[i];
+            let this_child = child_ref.fetch_or(NodeFlag::PENDING_DELETE.d(), ORD_ACR, g);
+            let this_child = this_child.with_tag(cf(ldfl(&this_child), NodeFlag::PENDING_DELETE));
+            match ldfl(&this_child) {
+                // lol, dangling child
+                _ if this_child.is_null() => {}
+                // some data in here
+                flag if hf(flag, NodeFlag::DATA) => {
+                    last_leaf = Some(this_child);
+                    cnt += Self::read_data(this_child).len();
+                }
+                // branch
+                _ => {
+                    continue_compress = false;
+                    cnt += 1;
+                }
+            }
+            new_child.branch[i] = Atomic::from(this_child);
+            i += 1;
+        }
+
+        let insert;
+        let ret;
+        let mut drop = None;
+
+        match last_leaf {
+            Some(node) if continue_compress && cnt == 1 => {
+                // snode
+                insert = node;
+                ret = CompressState::SNODE;
+            }
+            None if cnt == 0 => {
+                // a dangling branch
+                insert = Shared::null();
+                ret = CompressState::NULL;
+            }
+            _ => {
+                // we can't compress this since we have a lot of children
+                let new = Owned::new(new_child).into_shared(g);
+                insert = new;
+                drop = Some(new);
+                ret = CompressState::RESTORED;
+            }
+        }
+
+        // all logic done; let's see what fate the CAS brings us
+        match parent.cx_rel(child, insert, g) {
+            Ok(_) => {
+                unsafe {
+                    // UNSAFE(@ohsayan): We're the thread in the last epoch who's seeing this; so, we're good
+                    g.defer_destroy(child);
+                }
+                ret
+            }
+            Err(_) => {
+                mem::drop(drop.map(|n| Shared::into_owned(n)));
+                CompressState::CASFAIL
+            }
+        }
+    }
+}
+
+impl<T, S, C: Config> Drop for Tree<T, S, C> {
+    fn drop(&mut self) {
+        unsafe {
+            // UNSAFE(@ohsayan): sole live owner
+            Self::rdrop(&self.root);
+        }
+        gc(&cpin())
+    }
+}

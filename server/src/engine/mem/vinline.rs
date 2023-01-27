@@ -71,7 +71,6 @@ impl<const N: usize, T> VInline<N, T> {
             // UNSAFE(@ohsayan): grow allocated the cap we needed
             self.push_unchecked(v);
         }
-        self.l += 1;
     }
     #[inline(always)]
     pub fn clear(&mut self) {
@@ -182,8 +181,9 @@ impl<const N: usize, T> VInline<N, T> {
             p as *mut T
         }
     }
-    unsafe fn push_unchecked(&mut self, v: T) {
+    pub unsafe fn push_unchecked(&mut self, v: T) {
         self._as_mut_ptr().add(self.l).write(v);
+        self.l += 1;
     }
     pub fn optimize_capacity(&mut self) {
         if self.on_stack() || self.len() == self.capacity() {

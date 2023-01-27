@@ -34,6 +34,7 @@ macro_rules! extract {
     };
 }
 
+#[cfg(test)]
 macro_rules! multi_assert_eq {
     ($($lhs:expr),* => $rhs:expr) => {
         $(assert_eq!($lhs, $rhs);)*
@@ -49,6 +50,7 @@ macro_rules! enum_impls {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! assertions {
     ($($assert:expr),*$(,)?) => {$(const _:()=::core::assert!($assert);)*}
 }
@@ -82,6 +84,7 @@ macro_rules! flags {
     );
 }
 
+#[allow(unused_macros)]
 macro_rules! union {
     ($(#[$attr:meta])* $vis:vis union $name:ident $tail:tt) => (union!(@parse [$(#[$attr])* $vis union $name] [] $tail););
     ($(#[$attr:meta])* $vis:vis union $name:ident<$($lt:lifetime),*> $tail:tt) => (union!(@parse [$(#[$attr])* $vis union $name<$($lt),*>] [] $tail););

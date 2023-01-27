@@ -25,12 +25,11 @@
 */
 
 #![allow(dead_code)]
-#![allow(unused_macros)]
 
 #[macro_use]
 mod macros;
 mod core;
 mod idx;
+mod mem;
 mod ql;
 mod sync;
-mod mem;
