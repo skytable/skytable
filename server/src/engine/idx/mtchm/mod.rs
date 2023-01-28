@@ -25,9 +25,9 @@
 */
 
 mod access;
-mod imp;
+pub(super) mod imp;
 mod iter;
-mod meta;
+pub(super) mod meta;
 
 use self::{
     access::{ReadMode, WriteMode},
