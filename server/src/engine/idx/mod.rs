@@ -30,6 +30,7 @@ mod stord;
 #[cfg(test)]
 mod tests;
 
+use super::sync::atm::Guard;
 use core::{borrow::Borrow, hash::Hash};
 
 // re-exports
@@ -139,59 +140,65 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     /// Attempts to compact the backing storage
     fn mt_compact(&self) {}
     /// Clears all the entries in the MTIndex
-    fn mt_clear(&self);
+    fn mt_clear(&self, g: &Guard);
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn mt_insert(&self, key: K, val: V) -> bool
+    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool
     where
         K: AsKeyClone,
         V: AsValue;
     /// Updates or inserts the given value
-    fn mt_upsert(&self, key: K, val: V)
+    fn mt_upsert(&self, key: K, val: V, g: &Guard)
     where
         K: AsKeyClone,
         V: AsValue;
     // read
-    fn mt_contains<Q>(&self, key: &Q) -> bool
+    fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
     where
         K: Borrow<Q> + AsKeyClone,
         Q: ?Sized + AsKey;
     /// Returns a reference to the value corresponding to the key, if it exists
-    fn mt_get<Q>(&self, key: &Q) -> Option<&V>
+    fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
     where
         K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey;
+        Q: ?Sized + AsKey,
+        't: 'v,
+        'g: 't + 'v;
     /// Returns a clone of the value corresponding to the key, if it exists
-    fn mt_get_cloned<Q>(&self, key: &Q) -> Option<V>
+    fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<V>
     where
         K: AsKeyClone + Borrow<Q>,
         Q: ?Sized + AsKey,
         V: AsValueClone;
     // update
     /// Returns true if the entry is updated
-    fn mt_update<Q>(&self, key: &Q, val: V) -> bool
+    fn mt_update<Q>(&self, key: K, val: V, g: &Guard) -> bool
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKeyClone,
         V: AsValue,
         Q: ?Sized + AsKey;
     /// Updates the entry and returns the old value, if it exists
-    fn mt_update_return<Q>(&self, key: &Q, val: V) -> Option<V>
+    fn mt_update_return<'t, 'g, 'v, Q>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKeyClone,
         V: AsValue,
-        Q: ?Sized + AsKey;
+        Q: ?Sized + AsKey,
+        't: 'v,
+        'g: 't + 'v;
     // delete
     /// Returns true if the entry was deleted
-    fn mt_delete<Q>(&self, key: &Q) -> bool
+    fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
     where
         K: AsKeyClone + Borrow<Q>,
         Q: ?Sized + AsKey;
     /// Removes the entry and returns it, if it exists
-    fn mt_delete_return<Q>(&self, key: &Q) -> Option<V>
+    fn mt_delete_return<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
     where
         K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey;
+        Q: ?Sized + AsKey,
+        't: 'v,
+        'g: 't + 'v;
 }
 
 /// An unordered STIndex

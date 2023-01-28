@@ -39,6 +39,7 @@ where
     't: 'v,
     'g: 'v + 't,
     C: Config,
+    T: TreeElement,
 {
     i: RawIter<'t, 'g, 'v, T, S, C, CfgIterKV>,
 }
@@ -48,6 +49,7 @@ where
     't: 'v,
     'g: 'v + 't,
     C: Config,
+    T: TreeElement,
 {
     pub fn new(t: &'t Tree<T, S, C>, g: &'g Guard) -> Self {
         Self {
@@ -63,7 +65,7 @@ where
     C: Config,
     T: TreeElement,
 {
-    type Item = &'v T;
+    type Item = (&'v T::Key, &'v T::Value);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.i.next()
@@ -154,10 +156,10 @@ trait IterConfig<T> {
 }
 
 struct CfgIterKV;
-impl<T> IterConfig<T> for CfgIterKV {
-    type Ret<'a> = &'a T where T: 'a;
+impl<T: TreeElement> IterConfig<T> for CfgIterKV {
+    type Ret<'a> = (&'a T::Key, &'a T::Value) where T: 'a;
     fn some<'a>(v: &'a T) -> Option<Self::Ret<'a>> {
-        Some(v)
+        Some((v.key(), v.val()))
     }
 }
 

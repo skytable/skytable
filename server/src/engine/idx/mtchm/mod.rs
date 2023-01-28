@@ -25,9 +25,9 @@
 */
 
 mod access;
+mod imp;
 mod iter;
 mod meta;
-mod imp;
 
 use self::{
     access::{ReadMode, WriteMode},
@@ -57,8 +57,12 @@ impl<C: Config> Node<C> {
     const NULL: Atomic<Self> = Atomic::null();
     const NULL_BRANCH: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX] =
         [Self::NULL; <DefConfig as Config>::BRANCH_MX];
+    const _SZ: usize = mem::size_of::<Self>() / mem::size_of::<Atomic<Self>>();
+    const _ALIGN: usize = C::BRANCH_MX / Self::_SZ;
+    const _EQ: () = assert!(Self::_ALIGN == 1);
     #[inline(always)]
     const fn null() -> Self {
+        let _ = Self::_EQ;
         Self {
             branch: Self::NULL_BRANCH,
         }
@@ -161,6 +165,11 @@ impl<T: TreeElement, S, C: Config> Tree<T, S, C> {
 }
 
 impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
+    fn nontransactional_clear(&self, g: &Guard) {
+        self.iter_key(g).for_each(|k| {
+            let _ = self.remove(k, g);
+        });
+    }
     fn insert(&self, elem: T, g: &Guard) -> bool {
         self._insert::<access::WModeFresh>(elem, g)
     }
@@ -334,14 +343,14 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
             }
         }
     }
-    fn contains_key<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> bool
+    fn contains_key<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> bool
     where
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
     {
         self._lookup::<Q, access::RModeExists>(k, g)
     }
-    fn get<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
+    fn get<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
     where
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
@@ -551,9 +560,7 @@ impl<T, S, C: Config> Tree<T, S, C> {
         debug_assert!(hf(ldfl(&leaf), NodeFlag::DATA));
         drop(Owned::<LNode<T>>::from_raw(leaf.as_raw() as *mut _))
     }
-    unsafe fn rdrop(n: &Atomic<Node<C>>) {
-        let g = upin();
-        let node = n.ld_acq(g);
+    unsafe fn _rdrop(node: Shared<Node<C>>) {
         match ldfl(&node) {
             _ if node.is_null() => {}
             flag if hf(flag, NodeFlag::DATA) => Self::ldrop(node),
@@ -566,6 +573,11 @@ impl<T, S, C: Config> Tree<T, S, C> {
                 drop(this_branch);
             }
         }
+    }
+    unsafe fn rdrop(n: &Atomic<Node<C>>) {
+        let g = upin();
+        let node = n.ld_acq(g);
+        Self::_rdrop(node);
     }
     unsafe fn compress<'g>(
         parent: &Atomic<Node<C>>,
