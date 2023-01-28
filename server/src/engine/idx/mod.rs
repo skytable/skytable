@@ -24,9 +24,9 @@
  *
 */
 
+mod mtchm;
 mod stdhm;
 mod stord;
-mod mtchm;
 #[cfg(test)]
 mod tests;
 
@@ -96,22 +96,6 @@ pub trait IndexBaseSpec<K, V>: Sized {
     #[cfg(debug_assertions)]
     /// A type representing debug metrics
     type Metrics;
-    /// An iterator over the keys and values
-    type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
-    where
-        Self: 'a,
-        K: 'a,
-        V: 'a;
-    /// An iterator over the keys
-    type IterKey<'a>: Iterator<Item = &'a K>
-    where
-        Self: 'a,
-        K: 'a;
-    /// An iterator over the values
-    type IterValue<'a>: Iterator<Item = &'a V>
-    where
-        Self: 'a,
-        V: 'a;
     // init
     /// Initialize an empty instance of the index
     fn idx_init() -> Self;
@@ -126,13 +110,6 @@ pub trait IndexBaseSpec<K, V>: Sized {
         }
         Self::idx_init()
     }
-    // iter
-    /// Returns an iterator over a tuple of keys and values
-    fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
-    /// Returns an iterator over the keys
-    fn idx_iter_key<'a>(&'a self) -> Self::IterKey<'a>;
-    /// Returns an iterator over the values
-    fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
     #[cfg(debug_assertions)]
     /// Returns a reference to the index metrics
     fn idx_metrics(&self) -> &Self::Metrics;
@@ -140,6 +117,25 @@ pub trait IndexBaseSpec<K, V>: Sized {
 
 /// An unordered MTIndex
 pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
+    type IterKV<'t, 'g, 'v>: Iterator<Item = (&'v K, &'v V)>
+    where
+        'g: 't + 'v,
+        't: 'v,
+        K: 'v,
+        V: 'v,
+        Self: 't;
+    type IterKey<'t, 'g, 'v>: Iterator<Item = &'v K>
+    where
+        'g: 't + 'v,
+        't: 'v,
+        K: 'v,
+        Self: 't;
+    type IterVal<'t, 'g, 'v>: Iterator<Item = &'v V>
+    where
+        'g: 't + 'v,
+        't: 'v,
+        V: 'v,
+        Self: 't;
     /// Attempts to compact the backing storage
     fn mt_compact(&self) {}
     /// Clears all the entries in the MTIndex
@@ -200,6 +196,22 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
 
 /// An unordered STIndex
 pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
+    /// An iterator over the keys and values
+    type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
+    where
+        Self: 'a,
+        K: 'a,
+        V: 'a;
+    /// An iterator over the keys
+    type IterKey<'a>: Iterator<Item = &'a K>
+    where
+        Self: 'a,
+        K: 'a;
+    /// An iterator over the values
+    type IterValue<'a>: Iterator<Item = &'a V>
+    where
+        Self: 'a,
+        V: 'a;
     /// Attempts to compact the backing storage
     fn st_compact(&mut self) {}
     /// Clears all the entries in the STIndex
@@ -256,6 +268,13 @@ pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
     where
         K: AsKeyClone + Borrow<Q>,
         Q: ?Sized + AsKey;
+    // iter
+    /// Returns an iterator over a tuple of keys and values
+    fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;
+    /// Returns an iterator over the keys
+    fn st_iter_key<'a>(&'a self) -> Self::IterKey<'a>;
+    /// Returns an iterator over the values
+    fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
 }
 
 pub trait STIndexSeq<K, V>: STIndex<K, V> {

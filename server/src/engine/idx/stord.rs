@@ -563,6 +563,29 @@ impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V,
     #[cfg(debug_assertions)]
     type Metrics = IndexSTSeqDllMetrics;
 
+    fn idx_init() -> Self {
+        Self::with_hasher(S::default())
+    }
+
+    fn idx_init_with(s: Self) -> Self {
+        Self::from(s)
+    }
+
+    fn idx_init_cap(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, S::default())
+    }
+
+    #[cfg(debug_assertions)]
+    fn idx_metrics(&self) -> &Self::Metrics {
+        &self.metrics
+    }
+}
+
+impl<K, V, S: BuildHasher + Default> STIndex<K, V> for IndexSTSeqDll<K, V, S>
+where
+    K: AsKey,
+    V: AsValue,
+{
     type IterKV<'a> = IndexSTSeqDllIterUnordKV<'a, K, V>
     where
         Self: 'a,
@@ -579,41 +602,6 @@ impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V,
         Self: 'a,
         V: 'a;
 
-    fn idx_init() -> Self {
-        Self::with_hasher(S::default())
-    }
-
-    fn idx_init_with(s: Self) -> Self {
-        Self::from(s)
-    }
-
-    fn idx_init_cap(cap: usize) -> Self {
-        Self::with_capacity_and_hasher(cap, S::default())
-    }
-
-    fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
-        self._iter_unord_kv()
-    }
-
-    fn idx_iter_key<'a>(&'a self) -> Self::IterKey<'a> {
-        self._iter_unord_k()
-    }
-
-    fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
-        self._iter_unord_v()
-    }
-
-    #[cfg(debug_assertions)]
-    fn idx_metrics(&self) -> &Self::Metrics {
-        &self.metrics
-    }
-}
-
-impl<K, V, S: BuildHasher + Default> STIndex<K, V> for IndexSTSeqDll<K, V, S>
-where
-    K: AsKey,
-    V: AsValue,
-{
     fn st_compact(&mut self) {
         self.vacuum_full();
     }
@@ -688,6 +676,18 @@ where
         Q: ?Sized + AsKey,
     {
         self._remove(key)
+    }
+
+    fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
+        self._iter_unord_kv()
+    }
+
+    fn st_iter_key<'a>(&'a self) -> Self::IterKey<'a> {
+        self._iter_unord_k()
+    }
+
+    fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
+        self._iter_unord_v()
     }
 }
 

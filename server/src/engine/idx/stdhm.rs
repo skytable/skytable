@@ -46,6 +46,30 @@ where
     #[cfg(debug_assertions)]
     type Metrics = DummyMetrics;
 
+    fn idx_init() -> Self {
+        StdMap::with_hasher(S::default())
+    }
+
+    fn idx_init_with(s: Self) -> Self {
+        s
+    }
+
+    fn idx_init_cap(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, S::default())
+    }
+
+    #[cfg(debug_assertions)]
+    fn idx_metrics(&self) -> &Self::Metrics {
+        &DummyMetrics
+    }
+}
+
+impl<K, V, S> STIndex<K, V> for StdMap<K, V, S>
+where
+    K: AsKey,
+    V: AsValue,
+    S: BuildHasher + Default,
+{
     type IterKV<'a> = StdMapIterKV<'a, K, V>
     where
         Self: 'a,
@@ -62,42 +86,6 @@ where
         Self: 'a,
         V: 'a;
 
-    fn idx_init() -> Self {
-        StdMap::with_hasher(S::default())
-    }
-
-    fn idx_init_with(s: Self) -> Self {
-        s
-    }
-
-    fn idx_init_cap(cap: usize) -> Self {
-        Self::with_capacity_and_hasher(cap, S::default())
-    }
-
-    fn idx_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
-        self.iter()
-    }
-
-    fn idx_iter_key<'a>(&'a self) -> Self::IterKey<'a> {
-        self.keys()
-    }
-
-    fn idx_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
-        self.values()
-    }
-
-    #[cfg(debug_assertions)]
-    fn idx_metrics(&self) -> &Self::Metrics {
-        &DummyMetrics
-    }
-}
-
-impl<K, V, S> STIndex<K, V> for StdMap<K, V, S>
-where
-    K: AsKey,
-    V: AsValue,
-    S: BuildHasher + Default,
-{
     fn st_compact(&mut self) {
         self.shrink_to_fit()
     }
@@ -179,5 +167,17 @@ where
         Q: ?Sized + AsKey,
     {
         self.remove(key)
+    }
+
+    fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
+        self.iter()
+    }
+
+    fn st_iter_key<'a>(&'a self) -> Self::IterKey<'a> {
+        self.keys()
+    }
+
+    fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
+        self.values()
     }
 }
