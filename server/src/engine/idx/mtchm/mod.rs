@@ -151,12 +151,12 @@ impl<T, C: Config> CTFlagAlign for Tree<T, C> {
     const FL_B: bool = atm::ensure_flag_align::<Node<C>, { NodeFlag::bits() }>();
 }
 
-pub struct Tree<T, C: Config> {
+pub struct Tree<T, C: Config = DefConfig> {
     root: Atomic<Node<C>>,
     h: C::HState,
     l: AtomicUsize,
-    _m: PhantomData<T>,
     m: CHTRuntimeLog,
+    _m: PhantomData<T>,
 }
 
 impl<T, C: Config> Tree<T, C> {

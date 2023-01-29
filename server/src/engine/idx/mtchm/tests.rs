@@ -26,12 +26,17 @@
 
 use super::{
     super::{super::sync::atm::cpin, IndexBaseSpec, MTIndex},
-    imp::ChmCopy,
+    imp::ChmCopy as _ChmCopy,
     meta::DefConfig,
 };
-use std::hash::{BuildHasher, Hasher};
+use std::{
+    hash::{BuildHasher, Hasher},
+    sync::{Arc, RwLock},
+    thread::{self, JoinHandle},
+};
 
-type Chm<K, V> = ChmCopy<K, V, DefConfig>;
+type Chm<K, V> = ChmCopy<K, V>;
+type ChmCopy<K, V> = _ChmCopy<K, V, DefConfig>;
 
 struct LolHash {
     seed: usize,
@@ -96,4 +101,58 @@ fn get_empty() {
 fn update_empty() {
     let idx = ChmU8::idx_init();
     assert!(!idx.mt_update(10, 20, &cpin()));
+}
+
+const SPAM_INSERT: usize = 16_384;
+const SPAM_TENANTS: usize = 32;
+
+#[test]
+fn multispam_insert() {
+    let idx = Arc::new(ChmCopy::new());
+    let token = Arc::new(RwLock::new(()));
+    let hold = token.write();
+    let data: Vec<(Arc<String>, Arc<String>)> = (0..SPAM_INSERT)
+        .into_iter()
+        .map(|int| (format!("{int}"), format!("x-{int}-{}", int + 1)))
+        .map(|(k, v)| (Arc::new(k), Arc::new(v)))
+        .collect();
+    let distr_data: Vec<Vec<(Arc<String>, Arc<String>)>> = data
+        .chunks(SPAM_INSERT / SPAM_TENANTS)
+        .map(|chunk| {
+            chunk
+                .iter()
+                .map(|(k, v)| (Arc::clone(k), Arc::clone(v)))
+                .collect()
+        })
+        .collect();
+    let threads: Vec<JoinHandle<_>> = distr_data
+        .into_iter()
+        .enumerate()
+        .map(|(tid, this_data)| {
+            let this_token = token.clone();
+            let this_idx = idx.clone();
+            thread::Builder::new()
+                .name(tid.to_string())
+                .spawn(move || {
+                    let _token = this_token.read();
+                    let g = cpin();
+                    this_data.into_iter().for_each(|(k, v)| {
+                        assert!(this_idx.insert((k, v), &g));
+                    })
+                })
+                .unwrap()
+        })
+        .collect();
+    // rush everyone to insert; superb intercore traffic
+    drop(hold);
+    let _x: Box<[()]> = threads
+        .into_iter()
+        .map(JoinHandle::join)
+        .map(Result::unwrap)
+        .collect();
+    let pin = cpin();
+    assert_eq!(idx.len(), SPAM_INSERT);
+    data.into_iter().for_each(|(k, v)| {
+        assert_eq!(idx.mt_get(&k, &pin).unwrap().as_str(), &*v);
+    });
 }
