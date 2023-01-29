@@ -28,6 +28,8 @@ mod access;
 pub(super) mod imp;
 mod iter;
 pub(super) mod meta;
+#[cfg(test)]
+mod tests;
 
 use self::{
     access::{ReadMode, WriteMode},

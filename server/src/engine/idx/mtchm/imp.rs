@@ -25,10 +25,10 @@
 */
 
 use super::{
-    super::{super::sync::atm::Guard, AsKey, DummyMetrics, IndexBaseSpec, MTIndex},
+    super::{super::sync::atm::Guard, AsKey, IndexBaseSpec, MTIndex},
     iter::{IterKV, IterKey, IterVal},
     meta::{Config, Key, Value},
-    Tree,
+    CHTRuntimeLog, Tree,
 };
 use std::{borrow::Borrow, sync::Arc};
 
@@ -45,7 +45,7 @@ where
 {
     const PREALLOC: bool = false;
 
-    type Metrics = DummyMetrics;
+    type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {
         ChmArc::new()
@@ -55,8 +55,9 @@ where
         s
     }
 
+    #[cfg(debug_assertions)]
     fn idx_metrics(&self) -> &Self::Metrics {
-        &DummyMetrics
+        &self.m
     }
 }
 
@@ -127,16 +128,12 @@ where
         self.get(key, g).cloned()
     }
 
-    fn mt_update<Q>(&self, key: K, val: V, g: &Guard) -> bool
-    where
-        Q: ?Sized + AsKey,
-    {
+    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
         self.update(arc(key, val), g)
     }
 
-    fn mt_update_return<'t, 'g, 'v, Q>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
+    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
     where
-        Q: ?Sized + AsKey,
         't: 'v,
         'g: 't + 'v,
     {
@@ -170,7 +167,7 @@ where
 {
     const PREALLOC: bool = false;
 
-    type Metrics = DummyMetrics;
+    type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {
         ChmCopy::new()
@@ -180,8 +177,9 @@ where
         s
     }
 
+    #[cfg(debug_assertions)]
     fn idx_metrics(&self) -> &Self::Metrics {
-        &DummyMetrics
+        &self.m
     }
 }
 
@@ -252,16 +250,12 @@ where
         self.get(key, g).cloned()
     }
 
-    fn mt_update<Q>(&self, key: K, val: V, g: &Guard) -> bool
-    where
-        Q: ?Sized + AsKey,
-    {
+    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
         self.update((key, val), g)
     }
 
-    fn mt_update_return<'t, 'g, 'v, Q>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
+    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
     where
-        Q: ?Sized + AsKey,
         't: 'v,
         'g: 't + 'v,
     {

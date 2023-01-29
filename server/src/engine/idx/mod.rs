@@ -175,17 +175,15 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
         V: AsValueClone;
     // update
     /// Returns true if the entry is updated
-    fn mt_update<Q>(&self, key: K, val: V, g: &Guard) -> bool
+    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool
     where
         K: AsKeyClone,
-        V: AsValue,
-        Q: ?Sized + AsKey;
+        V: AsValue;
     /// Updates the entry and returns the old value, if it exists
-    fn mt_update_return<'t, 'g, 'v, Q>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
+    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
     where
         K: AsKeyClone,
         V: AsValue,
-        Q: ?Sized + AsKey,
         't: 'v,
         'g: 't + 'v;
     // delete

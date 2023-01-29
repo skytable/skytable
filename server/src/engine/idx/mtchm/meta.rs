@@ -28,7 +28,7 @@ use super::super::{super::mem::VInline, AsKeyClone};
 use std::{collections::hash_map::RandomState, hash::BuildHasher, sync::Arc};
 
 const LNODE_STACK: usize = 2;
-pub type DefConfig = Config2BRandomState;
+pub type DefConfig = Config2B<RandomState>;
 pub type LNode<T> = VInline<LNODE_STACK, T>;
 
 pub trait PreConfig: Sized + 'static {
@@ -58,15 +58,11 @@ pub trait Config: PreConfig {
 
 impl<T: PreConfig> Config for T {}
 
-macro_rules! impl_config {
-    ($($vis:vis $name:ident: $state:ty = $ty:ty),*) => {
-        $($vis struct $name; impl $crate::engine::idx::mtchm::meta::PreConfig for $name {
-            type HState = $state; const BITS: u32 = <$ty>::BITS;
-        })*
-    }
+pub struct Config2B<T: AsHasher + 'static>(T);
+impl<T: AsHasher> PreConfig for Config2B<T> {
+    const BITS: u32 = u16::BITS;
+    type HState = T;
 }
-
-impl_config!(pub Config2BRandomState: RandomState = u16);
 
 pub trait Key: AsKeyClone + 'static {}
 impl<T> Key for T where T: AsKeyClone + 'static {}
