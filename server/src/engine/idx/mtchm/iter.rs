@@ -34,31 +34,31 @@ use super::{
 };
 use std::marker::PhantomData;
 
-pub struct IterKV<'t, 'g, 'v, T, S, C>
+pub struct IterKV<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    i: RawIter<'t, 'g, 'v, T, S, C, CfgIterKV>,
+    i: RawIter<'t, 'g, 'v, T, C, CfgIterKV>,
 }
 
-impl<'t, 'g, 'v, T, S, C> IterKV<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> IterKV<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, S, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
     }
 }
 
-impl<'t, 'g, 'v, T, S, C> Iterator for IterKV<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> Iterator for IterKV<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
@@ -72,31 +72,31 @@ where
     }
 }
 
-pub struct IterKey<'t, 'g, 'v, T, S, C>
+pub struct IterKey<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    i: RawIter<'t, 'g, 'v, T, S, C, CfgIterKey>,
+    i: RawIter<'t, 'g, 'v, T, C, CfgIterKey>,
 }
 
-impl<'t, 'g, 'v, T, S, C> IterKey<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> IterKey<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, S, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
     }
 }
 
-impl<'t, 'g, 'v, T, S, C> Iterator for IterKey<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> Iterator for IterKey<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
@@ -110,31 +110,31 @@ where
     }
 }
 
-pub struct IterVal<'t, 'g, 'v, T, S, C>
+pub struct IterVal<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    i: RawIter<'t, 'g, 'v, T, S, C, CfgIterVal>,
+    i: RawIter<'t, 'g, 'v, T, C, CfgIterVal>,
 }
 
-impl<'t, 'g, 'v, T, S, C> IterVal<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> IterVal<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, S, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
     }
 }
 
-impl<'t, 'g, 'v, T, S, C> Iterator for IterVal<'t, 'g, 'v, T, S, C>
+impl<'t, 'g, 'v, T, C> Iterator for IterVal<'t, 'g, 'v, T, C>
 where
     't: 'v,
     'g: 'v + 't,
@@ -184,7 +184,7 @@ struct DFSCNodeCtx<'g, C: Config> {
     idx: usize,
 }
 
-struct RawIter<'t, 'g, 'v, T, S, C, I>
+struct RawIter<'t, 'g, 'v, T, C, I>
 where
     't: 'v,
     'g: 'v + 't,
@@ -193,17 +193,17 @@ where
 {
     g: &'g Guard,
     stack: UArray<{ <DefConfig as Config>::BRANCH_MX + 1 }, DFSCNodeCtx<'g, C>>,
-    _m: PhantomData<(&'v T, C, &'t Tree<T, S, C>, I)>,
+    _m: PhantomData<(&'v T, C, &'t Tree<T, C>, I)>,
 }
 
-impl<'t, 'g, 'v, T, S, C, I> RawIter<'t, 'g, 'v, T, S, C, I>
+impl<'t, 'g, 'v, T, C, I> RawIter<'t, 'g, 'v, T, C, I>
 where
     't: 'v,
     'g: 'v + 't,
     I: IterConfig<T>,
     C: Config,
 {
-    pub(super) fn new(tree: &'t Tree<T, S, C>, g: &'g Guard) -> Self {
+    pub(super) fn new(tree: &'t Tree<T, C>, g: &'g Guard) -> Self {
         let mut stack = UArray::new();
         let sptr = tree.root.ld_acq(g);
         stack.push(DFSCNodeCtx { sptr, idx: 0 });
@@ -227,7 +227,7 @@ where
                 flag if super::hf(flag, NodeFlag::DATA) => {
                     let data = unsafe {
                         // UNSAFE(@ohsayan): flagck
-                        Tree::<T, S, C>::read_data(current.sptr)
+                        Tree::<T, C>::read_data(current.sptr)
                     };
                     if current.idx < data.len() {
                         let ref ret = data[current.idx];
@@ -255,7 +255,7 @@ where
     }
 }
 
-impl<'t, 'g, 'v, T, S, C, I> Iterator for RawIter<'t, 'g, 'v, T, S, C, I>
+impl<'t, 'g, 'v, T, C, I> Iterator for RawIter<'t, 'g, 'v, T, C, I>
 where
     't: 'v,
     'g: 'v + 't,

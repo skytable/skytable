@@ -98,3 +98,23 @@ macro_rules! union {
     (@defeat0 [$($decls:tt)*] [$($head:tt)*]) => (union!(@defeat1 $($decls)* { $($head)* }););
     (@defeat1 $i:item) => ($i);
 }
+
+macro_rules! dbgfn {
+    ($($vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block)*) => {
+        $(dbgfn!(@int $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block {panic!("called dbg symbol in non-dbg build")});)*
+    };
+    ($($vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block:block else $block_b:block)*) => {
+        $(dbgfn!(@int $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block $block_b);)*
+    };
+    (@int $vis:vis fn $fn:ident($($arg:ident: $argty:ty),* $(,)?) $(-> $ret:ty)? $block_a:block $block_b:block) => {
+        #[cfg(debug_assertions)]
+        $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_a
+        #[cfg(not(debug_assertions))]
+        $vis fn $fn($($arg: $argty),*) $(-> $ret)? $block_b
+    }
+}
+
+#[allow(unused_macros)]
+macro_rules! void {
+    () => {()};
+}

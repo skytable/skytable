@@ -32,7 +32,7 @@ pub(super) mod meta;
 use self::{
     access::{ReadMode, WriteMode},
     iter::{IterKV, IterKey, IterVal},
-    meta::{AsHasher, CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
+    meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
 };
 use super::{
     super::{
@@ -42,12 +42,60 @@ use super::{
     AsKey,
 };
 use crossbeam_epoch::CompareExchangeError;
-use std::{borrow::Borrow, hash::Hasher, marker::PhantomData, mem, sync::atomic::AtomicUsize};
+use std::{
+    borrow::Borrow,
+    hash::{BuildHasher, Hasher},
+    marker::PhantomData,
+    mem,
+    sync::atomic::AtomicUsize,
+};
 
 /*
     HACK(@ohsayan): Until https://github.com/rust-lang/rust/issues/76560 is stabilized which is likely to take a while,
     we need to settle for trait objects
 */
+
+#[cfg(debug_assertions)]
+struct CHTMetricsData {
+    split: AtomicUsize,
+    hln: AtomicUsize,
+}
+
+pub struct CHTRuntimeLog {
+    #[cfg(debug_assertions)]
+    data: CHTMetricsData,
+    #[cfg(not(debug_assertions))]
+    data: (),
+}
+
+impl CHTRuntimeLog {
+    #[cfg(debug_assertions)]
+    const ZERO: AtomicUsize = AtomicUsize::new(0);
+    #[cfg(not(debug_assertions))]
+    const NEW: Self = Self { data: () };
+    #[cfg(debug_assertions)]
+    const NEW: Self = Self {
+        data: CHTMetricsData {
+            split: Self::ZERO,
+            hln: Self::ZERO,
+        },
+    };
+    const fn new() -> Self {
+        Self::NEW
+    }
+    dbgfn! {
+        fn hsplit(self: &Self) {
+            self.data.split.fetch_add(1, ORD_ACQ);
+        } else {
+            void!()
+        }
+        fn hlnode(self: &Self) {
+            self.data.hln.fetch_add(1, ORD_ACQ);
+        } else {
+            void!()
+        }
+    }
+}
 
 pub struct Node<C: Config> {
     branch: [Atomic<Self>; <DefConfig as Config>::BRANCH_MX],
@@ -96,27 +144,29 @@ trait CTFlagAlign {
     const FLCK: () = Self::FLCK_A;
 }
 
-impl<T, S, C: Config> CTFlagAlign for Tree<T, S, C> {
+impl<T, C: Config> CTFlagAlign for Tree<T, C> {
     const FL_A: bool = atm::ensure_flag_align::<LNode<T>, { NodeFlag::bits() }>();
     const FL_B: bool = atm::ensure_flag_align::<Node<C>, { NodeFlag::bits() }>();
 }
 
-pub struct Tree<T, S, C: Config> {
+pub struct Tree<T, C: Config> {
     root: Atomic<Node<C>>,
-    h: S,
+    h: C::HState,
     l: AtomicUsize,
     _m: PhantomData<T>,
+    m: CHTRuntimeLog,
 }
 
-impl<T, S, C: Config> Tree<T, S, C> {
+impl<T, C: Config> Tree<T, C> {
     #[inline(always)]
-    const fn _new(h: S) -> Self {
+    const fn _new(h: C::HState) -> Self {
         let _ = Self::FLCK;
         Self {
             root: Atomic::null(),
             h,
             l: AtomicUsize::new(0),
             _m: PhantomData,
+            m: CHTRuntimeLog::new(),
         }
     }
     #[inline(always)]
@@ -128,19 +178,19 @@ impl<T, S, C: Config> Tree<T, S, C> {
         self.len() == 0
     }
     #[inline(always)]
-    pub const fn with_hasher(h: S) -> Self {
+    pub const fn with_state(h: C::HState) -> Self {
         Self::_new(h)
     }
 }
 
-impl<T, S: AsHasher, C: Config> Tree<T, S, C> {
+impl<T, C: Config> Tree<T, C> {
     #[inline(always)]
     fn new() -> Self {
-        Self::_new(S::default())
+        Self::_new(C::HState::default())
     }
 }
 
-impl<T, S: AsHasher, C: Config> Tree<T, S, C> {
+impl<T, C: Config> Tree<T, C> {
     fn hash<Q>(&self, k: &Q) -> u64
     where
         Q: ?Sized + AsKey,
@@ -152,19 +202,19 @@ impl<T, S: AsHasher, C: Config> Tree<T, S, C> {
 }
 
 // iter
-impl<T: TreeElement, S, C: Config> Tree<T, S, C> {
-    fn iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKV<'t, 'g, 'v, T, S, C> {
+impl<T: TreeElement, C: Config> Tree<T, C> {
+    fn iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKV<'t, 'g, 'v, T, C> {
         IterKV::new(self, g)
     }
-    fn iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKey<'t, 'g, 'v, T, S, C> {
+    fn iter_key<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKey<'t, 'g, 'v, T, C> {
         IterKey::new(self, g)
     }
-    fn iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterVal<'t, 'g, 'v, T, S, C> {
+    fn iter_val<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterVal<'t, 'g, 'v, T, C> {
         IterVal::new(self, g)
     }
 }
 
-impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
+impl<T: TreeElement, C: Config> Tree<T, C> {
     fn nontransactional_clear(&self, g: &Guard) {
         self.iter_key(g).for_each(|k| {
             let _ = self.remove(k, g);
@@ -247,12 +297,13 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
                             so this is a collision and since we haven't reached the max height, we should always
                             create a new branch so let's do that
                         */
+                        self.m.hsplit();
                         debug_assert_eq!(data.len(), 1, "logic,lnode before height ub");
                         if W::WMODE == access::WRITEMODE_REFRESH {
                             // another job well done; an snode with the wrong key; so basically it's missing
                             return W::nx();
                         }
-                        let next_chunk = (self.hash(data[0].key()) >> level) & C::HASH_MASK;
+                        let next_chunk = (self.hash(data[0].key()) >> level) & C::MASK;
                         let mut new_branch = Node::null();
                         // stick this one in
                         new_branch.branch[next_chunk as usize] = Atomic::from(node);
@@ -263,6 +314,7 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
                             in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
                             to update
                         */
+                        self.m.hlnode();
                         let p = data.iter().position(|e| e.key() == elem.key());
                         match p {
                             Some(v) if W::WMODE == access::WRITEMODE_FRESH => {
@@ -334,7 +386,7 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
                 }
                 _ => {
                     // branch
-                    let nxidx = (hash >> level) & C::HASH_MASK;
+                    let nxidx = (hash >> level) & C::MASK;
                     level += C::BRANCH_LG;
                     parent = Some(current);
                     child = Some(node);
@@ -386,7 +438,7 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
                 }
                 _ => {
                     // branch
-                    current = &unsafe { node.deref() }.branch[(hash & C::HASH_MASK) as usize];
+                    current = &unsafe { node.deref() }.branch[(hash & C::MASK) as usize];
                     hash >>= C::BRANCH_LG;
                 }
             }
@@ -512,7 +564,7 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
                 _ => {
                     // branch
                     levels.push((current, node));
-                    let nxidx = (hash >> level) & C::HASH_MASK;
+                    let nxidx = (hash >> level) & C::MASK;
                     level += C::BRANCH_LG;
                     current = &unsafe { node.deref() }.branch[nxidx as usize];
                 }
@@ -522,7 +574,7 @@ impl<T: TreeElement, S: AsHasher, C: Config> Tree<T, S, C> {
 }
 
 // low-level methods
-impl<T, S, C: Config> Tree<T, S, C> {
+impl<T, C: Config> Tree<T, C> {
     // hilarious enough but true, l doesn't affect safety but only creates an incorrect state
     fn decr_len(&self) {
         self.l.fetch_sub(1, ORD_ACQ);
@@ -660,7 +712,7 @@ impl<T, S, C: Config> Tree<T, S, C> {
     }
 }
 
-impl<T, S, C: Config> Drop for Tree<T, S, C> {
+impl<T, C: Config> Drop for Tree<T, C> {
     fn drop(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): sole live owner

@@ -25,13 +25,14 @@
 */
 
 use super::super::{super::mem::VInline, AsKeyClone};
-use std::{hash::BuildHasher, sync::Arc};
+use std::{collections::hash_map::RandomState, hash::BuildHasher, sync::Arc};
 
 const LNODE_STACK: usize = 2;
-pub type DefConfig = Config2B;
+pub type DefConfig = Config2BRandomState;
 pub type LNode<T> = VInline<LNODE_STACK, T>;
 
 pub trait PreConfig: Sized + 'static {
+    type HState: AsHasher;
     const BITS: u32;
 }
 
@@ -48,7 +49,7 @@ pub trait Config: PreConfig {
         }
         log
     };
-    const HASH_MASK: u64 = (<Self as PreConfig>::BITS - 1) as _;
+    const MASK: u64 = (<Self as PreConfig>::BITS - 1) as _;
     const MAX_TREE_HEIGHT_UB: usize = 0x40;
     const MAX_TREE_HEIGHT: usize =
         <Self as Config>::MAX_TREE_HEIGHT_UB / <Self as Config>::BRANCH_LG;
@@ -58,12 +59,14 @@ pub trait Config: PreConfig {
 impl<T: PreConfig> Config for T {}
 
 macro_rules! impl_config {
-    ($($vis:vis $name:ident = $ty:ty),*) => {
-        $($vis struct $name; impl $crate::engine::idx::mtchm::meta::PreConfig for $name { const BITS: u32 = <$ty>::BITS; })*
+    ($($vis:vis $name:ident: $state:ty = $ty:ty),*) => {
+        $($vis struct $name; impl $crate::engine::idx::mtchm::meta::PreConfig for $name {
+            type HState = $state; const BITS: u32 = <$ty>::BITS;
+        })*
     }
 }
 
-impl_config!(pub Config2B = u16);
+impl_config!(pub Config2BRandomState: RandomState = u16);
 
 pub trait Key: AsKeyClone + 'static {}
 impl<T> Key for T where T: AsKeyClone + 'static {}

@@ -27,7 +27,7 @@
 use super::{
     super::{super::sync::atm::Guard, AsKey, DummyMetrics, IndexBaseSpec, MTIndex},
     iter::{IterKV, IterKey, IterVal},
-    meta::{AsHasher, Config, Key, Value},
+    meta::{Config, Key, Value},
     Tree,
 };
 use std::{borrow::Borrow, sync::Arc};
@@ -37,12 +37,11 @@ fn arc<K, V>(k: K, v: V) -> Arc<(K, V)> {
     Arc::new((k, v))
 }
 
-pub type ChmArc<K, V, S, C> = Tree<Arc<(K, V)>, S, C>;
+pub type ChmArc<K, V, C> = Tree<Arc<(K, V)>, C>;
 
-impl<K, V, S, C> IndexBaseSpec<K, V> for ChmArc<K, V, S, C>
+impl<K, V, C> IndexBaseSpec<K, V> for ChmArc<K, V, C>
 where
     C: Config,
-    S: AsHasher,
 {
     const PREALLOC: bool = false;
 
@@ -61,14 +60,14 @@ where
     }
 }
 
-impl<K, V, S, C> MTIndex<K, V> for ChmArc<K, V, S, C>
+impl<K, V, C> MTIndex<K, V> for ChmArc<K, V, C>
 where
     C: Config,
-    S: AsHasher,
+
     K: Key,
     V: Value,
 {
-    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), S, C>
+    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,
@@ -76,14 +75,14 @@ where
         V: 'v,
         Self: 't;
 
-    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), S, C>
+    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,
         K: 'v,
         Self: 't;
 
-    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), S, C>
+    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,
@@ -163,12 +162,11 @@ where
     }
 }
 
-pub type ChmCopy<K, V, S, C> = Tree<(K, V), S, C>;
+pub type ChmCopy<K, V, C> = Tree<(K, V), C>;
 
-impl<K, V, S, C> IndexBaseSpec<K, V> for ChmCopy<K, V, S, C>
+impl<K, V, C> IndexBaseSpec<K, V> for ChmCopy<K, V, C>
 where
     C: Config,
-    S: AsHasher,
 {
     const PREALLOC: bool = false;
 
@@ -187,14 +185,14 @@ where
     }
 }
 
-impl<K, V, S, C> MTIndex<K, V> for ChmCopy<K, V, S, C>
+impl<K, V, C> MTIndex<K, V> for ChmCopy<K, V, C>
 where
     C: Config,
-    S: AsHasher,
+
     K: Key,
     V: Value,
 {
-    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), S, C>
+    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,
@@ -202,14 +200,14 @@ where
         V: 'v,
         Self: 't;
 
-    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), S, C>
+    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,
         K: 'v,
         Self: 't;
 
-    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), S, C>
+    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), C>
     where
         'g: 't + 'v,
         't: 'v,

@@ -37,8 +37,8 @@ use core::{borrow::Borrow, hash::Hash};
 pub type IndexSTSeq<K, V, S> = stord::IndexSTSeqDll<K, V, S>;
 pub type IndexSTSeqDef<K, V> = IndexSTSeq<K, V, IndexSTSeqHasher>;
 pub type IndexSTSeqHasher = stord::IndexSTSeqDllHasher;
-pub type IndexMTRC<K, V, S> = mtchm::imp::ChmArc<K, V, S, mtchm::meta::DefConfig>;
-pub type IndexMTCp<K, V, S> = mtchm::imp::ChmCopy<K, V, S, mtchm::meta::DefConfig>;
+pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
+pub type IndexMTCp<K, V> = mtchm::imp::ChmCopy<K, V, mtchm::meta::DefConfig>;
 
 /// Any type implementing this trait can be used as a key inside memory engine structures
 pub trait AsKey: Hash + Eq {
