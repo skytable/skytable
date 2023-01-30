@@ -26,3 +26,4 @@
 
 pub(super) mod atm;
 pub(super) mod cell;
+pub(super) mod smart;
