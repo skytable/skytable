@@ -24,24 +24,24 @@
  *
 */
 
+pub(super) mod config;
+
+use self::config::{AllocStrategy, Config};
 use super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq};
 use std::{
     alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
     borrow::Borrow,
     collections::{
-        hash_map::{Iter, Keys as StdMapIterKey, RandomState, Values as StdMapIterVal},
+        hash_map::{Iter, Keys as StdMapIterKey, Values as StdMapIterVal},
         HashMap as StdMap,
     },
     fmt::{self, Debug},
-    hash::{BuildHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     iter::FusedIterator,
     marker::PhantomData,
     mem,
     ptr::{self, NonNull},
 };
-
-pub type IndexSTSeqDllDef<K, V> = IndexSTSeqDll<K, V, IndexSTSeqDllHasher>;
-pub type IndexSTSeqDllHasher = RandomState;
 
 /*
     For the ordered index impl, we resort to some crazy unsafe code, especially because there's no other way to
@@ -130,7 +130,7 @@ where
 }
 
 #[derive(Debug)]
-struct IndexSTSeqDllNode<K, V> {
+pub struct IndexSTSeqDllNode<K, V> {
     k: K,
     v: V,
     n: *mut Self,
@@ -210,7 +210,7 @@ impl<K, V> IndexSTSeqDllNode<K, V> {
     }
 }
 
-type IndexSTSeqDllNodePtr<K, V> = NonNull<IndexSTSeqDllNode<K, V>>;
+pub type IndexSTSeqDllNodePtr<K, V> = NonNull<IndexSTSeqDllNode<K, V>>;
 
 #[cfg(debug_assertions)]
 pub struct IndexSTSeqDllMetrics {
@@ -219,65 +219,59 @@ pub struct IndexSTSeqDllMetrics {
 
 #[cfg(debug_assertions)]
 impl IndexSTSeqDllMetrics {
-    pub fn raw_f(&self) -> usize {
+    pub const fn raw_f(&self) -> usize {
         self.stat_f
     }
-    fn new() -> IndexSTSeqDllMetrics {
+    const fn new() -> IndexSTSeqDllMetrics {
         Self { stat_f: 0 }
     }
 }
 
 /// An ST-index with ordering. Inefficient ordered scanning since not in block
-pub struct IndexSTSeqDll<K, V, S> {
-    m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>,
+pub struct IndexSTSeqDll<K, V, C: Config<K, V>> {
+    m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, C::Hasher>,
     h: *mut IndexSTSeqDllNode<K, V>,
-    f: *mut IndexSTSeqDllNode<K, V>,
+    a: C::AllocStrategy,
     #[cfg(debug_assertions)]
     metrics: IndexSTSeqDllMetrics,
 }
 
-impl<K, V, S: BuildHasher> IndexSTSeqDll<K, V, S> {
+impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     const DEF_CAP: usize = 0;
     #[inline(always)]
-    fn _new(
-        m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>,
+    const fn _new(
+        m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, C::Hasher>,
         h: *mut IndexSTSeqDllNode<K, V>,
-        f: *mut IndexSTSeqDllNode<K, V>,
-    ) -> IndexSTSeqDll<K, V, S> {
+    ) -> IndexSTSeqDll<K, V, C> {
         Self {
             m,
             h,
-            f,
+            a: C::AllocStrategy::NEW,
             #[cfg(debug_assertions)]
             metrics: IndexSTSeqDllMetrics::new(),
         }
     }
     #[inline(always)]
-    fn _new_map(m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, S>) -> Self {
-        Self::_new(m, ptr::null_mut(), ptr::null_mut())
+    fn _new_map(m: StdMap<IndexSTSeqDllKeyptr<K>, IndexSTSeqDllNodePtr<K, V>, C::Hasher>) -> Self {
+        Self::_new(m, ptr::null_mut())
     }
     #[inline(always)]
-    pub fn with_hasher(hasher: S) -> Self {
+    pub fn with_hasher(hasher: C::Hasher) -> Self {
         Self::with_capacity_and_hasher(Self::DEF_CAP, hasher)
     }
     #[inline(always)]
-    pub fn with_capacity_and_hasher(cap: usize, hasher: S) -> Self {
+    pub fn with_capacity_and_hasher(cap: usize, hasher: C::Hasher) -> Self {
         Self::_new_map(StdMap::with_capacity_and_hasher(cap, hasher))
     }
-}
-
-impl<K, V> IndexSTSeqDll<K, V, RandomState> {
-    #[inline(always)]
-    pub fn new() -> Self {
-        Self::with_capacity(Self::DEF_CAP)
-    }
-    #[inline(always)]
-    pub fn with_capacity(cap: usize) -> Self {
-        Self::with_capacity_and_hasher(cap, RandomState::default())
+    fn metrics_update_f_empty(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.metrics.stat_f = 0;
+        }
     }
 }
 
-impl<K, V, S> IndexSTSeqDll<K, V, S> {
+impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     #[inline(always)]
     fn metrics_update_f_decr(&mut self) {
         #[cfg(debug_assertions)]
@@ -318,35 +312,6 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
         }
     }
     #[inline(always)]
-    fn vacuum_free(&mut self) {
-        unsafe {
-            // UNSAFE(@ohsayan): All nullck
-            let mut c = self.f;
-            while !c.is_null() {
-                let nx = (*c).n;
-                IndexSTSeqDllNode::dealloc_headless(c);
-                c = nx;
-                self.metrics_update_f_decr();
-            }
-        }
-        self.f = ptr::null_mut();
-    }
-    #[inline(always)]
-    fn recycle_or_alloc(&mut self, node: IndexSTSeqDllNode<K, V>) -> IndexSTSeqDllNodePtr<K, V> {
-        if self.f.is_null() {
-            IndexSTSeqDllNode::alloc_box(node)
-        } else {
-            self.metrics_update_f_decr();
-            unsafe {
-                // UNSAFE(@ohsayan): Safe because we already did a nullptr check
-                let f = self.f;
-                self.f = (*self.f).n;
-                ptr::write(f, node);
-                IndexSTSeqDllNodePtr::new_unchecked(f)
-            }
-        }
-    }
-    #[inline(always)]
     /// NOTE: `&mut Self` for aliasing
     /// ## Safety
     /// Ensure head is non null
@@ -358,7 +323,7 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
     }
 }
 
-impl<K, V, S> IndexSTSeqDll<K, V, S> {
+impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     #[inline(always)]
     fn _iter_unord_kv<'a>(&'a self) -> IndexSTSeqDllIterUnordKV<'a, K, V> {
         IndexSTSeqDllIterUnordKV::new(&self.m)
@@ -391,16 +356,19 @@ impl<K, V, S> IndexSTSeqDll<K, V, S> {
     }
 }
 
-impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
+impl<K: AsKey, V: AsValue, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     #[inline(always)]
     /// Clean up unused and cached memory
     fn vacuum_full(&mut self) {
         self.m.shrink_to_fit();
-        self.vacuum_free();
+        self.a.cleanup();
+        if C::AllocStrategy::METRIC_REFRESH {
+            self.metrics_update_f_empty();
+        }
     }
 }
 
-impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
+impl<K: AsKey, V: AsValue, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
     const GET_REFRESH: bool = true;
     const GET_BYPASS: bool = false;
     #[inline(always)]
@@ -474,16 +442,23 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
                 let v = ptr::read(&(*n).v);
                 // UNSAFE(@ohsayan): non-null guaranteed by as_ptr
                 IndexSTSeqDllNode::unlink(n);
-                (*n).n = self.f;
-                self.f = n;
-                self.metrics_update_f_incr();
+                self.a.free(n);
+                if C::AllocStrategy::METRIC_REFRESH {
+                    self.metrics_update_f_incr();
+                }
                 v
             })
     }
     #[inline(always)]
     fn __insert(&mut self, k: K, v: V) -> bool {
         self.ensure_sentinel();
-        let node = self.recycle_or_alloc(IndexSTSeqDllNode::new_null(k, v));
+        let mut refresh = false;
+        let node = self
+            .a
+            .alloc(IndexSTSeqDllNode::new_null(k, v), &mut refresh);
+        if C::AllocStrategy::METRIC_REFRESH & cfg!(debug_assertions) & refresh {
+            self.metrics_update_f_decr();
+        }
         let kptr = unsafe {
             // UNSAFE(@ohsayan): All g, we allocated it rn
             IndexSTSeqDllKeyptr::new(&node.as_ref().k)
@@ -532,7 +507,7 @@ impl<K: AsKey, V: AsValue, S: BuildHasher> IndexSTSeqDll<K, V, S> {
     }
 }
 
-impl<K, V, S> Drop for IndexSTSeqDll<K, V, S> {
+impl<K, V, C: Config<K, V>> Drop for IndexSTSeqDll<K, V, C> {
     fn drop(&mut self) {
         if !self.h.is_null() {
             unsafe {
@@ -542,29 +517,27 @@ impl<K, V, S> Drop for IndexSTSeqDll<K, V, S> {
                 IndexSTSeqDllNode::dealloc_headless(self.h);
             }
         }
-        self.vacuum_free();
+        self.a.cleanup();
     }
 }
 
-impl<K: AsKey, V: AsValue, S: BuildHasher + Default> FromIterator<(K, V)>
-    for IndexSTSeqDll<K, V, S>
-{
+impl<K: AsKey, V: AsValue, C: Config<K, V>> FromIterator<(K, V)> for IndexSTSeqDll<K, V, C> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        let mut slf = Self::with_hasher(S::default());
+        let mut slf = Self::with_hasher(C::Hasher::default());
         iter.into_iter()
             .for_each(|(k, v)| assert!(slf._insert(k, v)));
         slf
     }
 }
 
-impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, S> {
+impl<K, V, C: Config<K, V>> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, C> {
     const PREALLOC: bool = true;
 
     #[cfg(debug_assertions)]
     type Metrics = IndexSTSeqDllMetrics;
 
     fn idx_init() -> Self {
-        Self::with_hasher(S::default())
+        Self::with_hasher(C::Hasher::default())
     }
 
     fn idx_init_with(s: Self) -> Self {
@@ -572,7 +545,7 @@ impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V,
     }
 
     fn idx_init_cap(cap: usize) -> Self {
-        Self::with_capacity_and_hasher(cap, S::default())
+        Self::with_capacity_and_hasher(cap, C::Hasher::default())
     }
 
     #[cfg(debug_assertions)]
@@ -581,7 +554,7 @@ impl<K, V, S: BuildHasher + Default> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V,
     }
 }
 
-impl<K, V, S: BuildHasher + Default> STIndex<K, V> for IndexSTSeqDll<K, V, S>
+impl<K, V, C: Config<K, V>> STIndex<K, V> for IndexSTSeqDll<K, V, C>
 where
     K: AsKey,
     V: AsValue,
@@ -691,11 +664,11 @@ where
     }
 }
 
-impl<K, V, S> STIndexSeq<K, V> for IndexSTSeqDll<K, V, S>
+impl<K, V, C> STIndexSeq<K, V> for IndexSTSeqDll<K, V, C>
 where
     K: AsKey,
     V: AsValue,
-    S: BuildHasher + Default,
+    C: Config<K, V>,
 {
     type IterOrdKV<'a> = IndexSTSeqDllIterOrdKV<'a, K, V>
     where
@@ -726,9 +699,9 @@ where
     }
 }
 
-impl<K: AsKeyClone, V: AsValueClone, S: BuildHasher + Default> Clone for IndexSTSeqDll<K, V, S> {
+impl<K: AsKeyClone, V: AsValueClone, C: Config<K, V>> Clone for IndexSTSeqDll<K, V, C> {
     fn clone(&self) -> Self {
-        let mut slf = Self::with_capacity_and_hasher(self.len(), S::default());
+        let mut slf = Self::with_capacity_and_hasher(self.len(), C::Hasher::default());
         self._iter_ord_kv()
             .map(|(k, v)| (k.clone(), v.clone()))
             .for_each(|(k, v)| {
@@ -738,8 +711,8 @@ impl<K: AsKeyClone, V: AsValueClone, S: BuildHasher + Default> Clone for IndexST
     }
 }
 
-unsafe impl<K: Send, V: Send, S: Send> Send for IndexSTSeqDll<K, V, S> {}
-unsafe impl<K: Sync, V: Sync, S: Sync> Sync for IndexSTSeqDll<K, V, S> {}
+unsafe impl<K: Send, V: Send, C: Config<K, V> + Send> Send for IndexSTSeqDll<K, V, C> {}
+unsafe impl<K: Sync, V: Sync, C: Config<K, V> + Sync> Sync for IndexSTSeqDll<K, V, C> {}
 
 macro_rules! unsafe_marker_impl {
     (unsafe impl for $ty:ty) => {
@@ -967,7 +940,7 @@ struct IndexSTSeqDllIterOrdBase<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<
 
 impl<'a, K: 'a, V: 'a, C: IndexSTSeqDllIterOrdConfig<K, V>> IndexSTSeqDllIterOrdBase<'a, K, V, C> {
     #[inline(always)]
-    fn new<S>(idx: &'a IndexSTSeqDll<K, V, S>) -> Self {
+    fn new<Mc: Config<K, V>>(idx: &'a IndexSTSeqDll<K, V, Mc>) -> Self {
         Self {
             h: if idx.h.is_null() {
                 ptr::null_mut()

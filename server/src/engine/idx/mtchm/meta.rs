@@ -24,8 +24,8 @@
  *
 */
 
-use super::super::{super::mem::VInline, AsKeyClone};
-use std::{collections::hash_map::RandomState, hash::BuildHasher, sync::Arc};
+use super::super::{super::mem::VInline, meta::AsHasher, AsKeyClone};
+use std::{collections::hash_map::RandomState, sync::Arc};
 
 const LNODE_STACK: usize = 2;
 pub type DefConfig = Config2B<RandomState>;
@@ -68,8 +68,6 @@ pub trait Key: AsKeyClone + 'static {}
 impl<T> Key for T where T: AsKeyClone + 'static {}
 pub trait Value: Clone + 'static {}
 impl<T> Value for T where T: Clone + 'static {}
-pub trait AsHasher: BuildHasher + Default {}
-impl<T> AsHasher for T where T: BuildHasher + Default {}
 
 pub trait TreeElement: Clone + 'static {
     type Key: Key;

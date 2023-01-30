@@ -27,16 +27,23 @@
 use super::*;
 
 mod idx_st_seq_dll {
-    use super::{stord::IndexSTSeqDllDef, IndexBaseSpec, STIndex, STIndexSeq};
+    use super::{IndexBaseSpec, IndexSTSeqLib, STIndex, STIndexSeq};
     use rand::{distributions::Alphanumeric, Rng};
 
+    #[cfg(not(miri))]
     const SPAM_CNT: usize = 131_072;
+    #[cfg(miri)]
+    const SPAM_CNT: usize = 128;
+    #[cfg(not(miri))]
     const SPAM_SIZE: usize = 128;
-    type Index = IndexSTSeqDllDef<String, String>;
+    #[cfg(miri)]
+    const SPAM_SIZE: usize = 4;
+
+    type Index = IndexSTSeqLib<String, String>;
 
     /// Returns an index with: `i -> "{i+1}"` starting from 0 upto the value of [`SPAM_CNT`]
-    fn mkidx() -> IndexSTSeqDllDef<usize, String> {
-        let mut idx = IndexSTSeqDllDef::idx_init();
+    fn mkidx() -> IndexSTSeqLib<usize, String> {
+        let mut idx = IndexSTSeqLib::idx_init();
         for int in 0..SPAM_CNT {
             assert!(idx.st_insert(int, (int + 1).to_string()));
         }
@@ -66,7 +73,7 @@ mod idx_st_seq_dll {
     }
     #[test]
     fn spam_read_nx() {
-        let idx = IndexSTSeqDllDef::<usize, String>::new();
+        let idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in SPAM_CNT..SPAM_CNT * 2 {
             assert!(idx.st_get(&int).is_none());
         }
@@ -80,14 +87,14 @@ mod idx_st_seq_dll {
     }
     #[test]
     fn spam_update_nx() {
-        let mut idx = IndexSTSeqDllDef::<usize, String>::new();
+        let mut idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in 0..SPAM_CNT {
             assert!(!idx.st_update(&int, (int + 2).to_string()));
         }
     }
     #[test]
     fn spam_delete_nx() {
-        let mut idx = IndexSTSeqDllDef::<usize, String>::new();
+        let mut idx = IndexSTSeqLib::<usize, String>::idx_init();
         for int in 0..SPAM_CNT {
             assert!(!idx.st_delete(&int));
         }
@@ -104,7 +111,7 @@ mod idx_st_seq_dll {
     }
     #[test]
     fn spam_crud() {
-        let mut idx = IndexSTSeqDllDef::idx_init();
+        let mut idx = IndexSTSeqLib::idx_init();
         for int in 0..SPAM_CNT {
             assert!(idx.st_insert(int, int + 1));
             assert_eq!(*idx.st_get(&int).unwrap(), int + 1);
@@ -116,7 +123,7 @@ mod idx_st_seq_dll {
     }
     #[test]
     fn spam_read() {
-        let mut idx = IndexSTSeqDllDef::idx_init();
+        let mut idx = IndexSTSeqLib::idx_init();
         for int in 0..SPAM_CNT {
             let v = (int + 1).to_string();
             assert!(idx.st_insert(int, v.clone()));
