@@ -25,9 +25,12 @@
 */
 
 use super::{
-    super::{super::sync::atm::Guard, AsKey, IndexBaseSpec, MTIndex},
+    super::{
+        super::sync::atm::{upin, Guard},
+        AsKey, IndexBaseSpec, MTIndex,
+    },
     iter::{IterKV, IterKey, IterVal},
-    meta::{Config, Key, Value},
+    meta::{Config, Key, TreeElement, Value},
     CHTRuntimeLog, Tree,
 };
 use std::{borrow::Borrow, sync::Arc};
@@ -278,5 +281,17 @@ where
         'g: 't + 'v,
     {
         self.remove_return(key, g)
+    }
+}
+
+impl<T: TreeElement, C: Config> FromIterator<T> for Tree<T, C> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let g = unsafe {
+            // UNSAFE(@ohsayan): it's me, hi, I'm the problem, it's me. yeah, Taylor knows it too. it's just us
+            upin()
+        };
+        let t = Tree::new();
+        iter.into_iter().for_each(|te| assert!(t.insert(te, &g)));
+        t
     }
 }

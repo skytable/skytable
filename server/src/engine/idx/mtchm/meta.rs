@@ -74,6 +74,7 @@ pub trait TreeElement: Clone + 'static {
     type Value: Value;
     fn key(&self) -> &Self::Key;
     fn val(&self) -> &Self::Value;
+    fn new(k: Self::Key, v: Self::Value) -> Self;
 }
 
 impl<K: Key, V: Value> TreeElement for (K, V) {
@@ -87,6 +88,9 @@ impl<K: Key, V: Value> TreeElement for (K, V) {
     fn val(&self) -> &V {
         &self.1
     }
+    fn new(k: Self::Key, v: Self::Value) -> Self {
+        (k, v)
+    }
 }
 
 impl<K: Key, V: Value> TreeElement for Arc<(K, V)> {
@@ -99,6 +103,9 @@ impl<K: Key, V: Value> TreeElement for Arc<(K, V)> {
     #[inline(always)]
     fn val(&self) -> &V {
         &self.1
+    }
+    fn new(k: Self::Key, v: Self::Value) -> Self {
+        Arc::new((k, v))
     }
 }
 

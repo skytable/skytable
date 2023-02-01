@@ -151,6 +151,12 @@ impl<T, C: Config> CTFlagAlign for Tree<T, C> {
     const FL_B: bool = atm::ensure_flag_align::<Node<C>, { NodeFlag::bits() }>();
 }
 
+impl<T, C: Config> Default for Tree<T, C> {
+    fn default() -> Self {
+        Self::_new(C::HState::default())
+    }
+}
+
 pub struct Tree<T, C: Config = DefConfig> {
     root: Atomic<Node<C>>,
     h: C::HState,
@@ -303,7 +309,6 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         debug_assert_eq!(data.len(), 1, "logic,lnode before height ub");
                         if W::WMODE == access::WRITEMODE_REFRESH {
                             // another job well done; an snode with the wrong key; so basically it's missing
-                            return W::nx();
                         }
                         let next_chunk = (self.hash(data[0].key()) >> level) & C::MASK;
                         let mut new_branch = Node::null();
@@ -327,8 +332,10 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                     || W::WMODE == access::WRITEMODE_ANY =>
                             {
                                 // update the entry and create a new node
-                                let mut new_ln = data.clone();
-                                new_ln[i] = elem.clone();
+                                let mut new_ln = LNode::new();
+                                new_ln.extend(data[..i].iter().cloned());
+                                new_ln.extend(data[i + 1..].iter().cloned());
+                                new_ln.push(elem.clone());
                                 match current.cx_rel(
                                     node,
                                     Self::new_lnode(new_ln).into_shared(g),
@@ -381,7 +388,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             }
                             None if W::WMODE == access::WRITEMODE_REFRESH => return W::nx(),
                             _ => {
-                                unreachable!("logic,W::WMODE mismatch: `{}`", W::WMODE);
+                                unreachable!("logic, WMODE mismatch: `{}`", W::WMODE);
                             }
                         }
                     }
