@@ -201,7 +201,7 @@ fn tjoin_all<T>(handles: Vec<JoinHandle<T>>) -> Box<[T]> {
         .collect()
 }
 
-fn store_and_verify_integrity<K, V>(
+fn modify_and_verify_integrity<K, V>(
     token: &ControlToken,
     tree: &Arc<ChmCopy<K, V>>,
     source_buf: &[StringTup],
@@ -230,7 +230,7 @@ fn _action_put(
     let _token = token.acquire_permit();
     let g = cpin();
     data.into_iter().for_each(|(k, v)| {
-        assert!(idx.insert((k, v), &g));
+        assert!(idx.mt_insert(k, v, &g));
     });
 }
 fn _verify_eq(
@@ -255,7 +255,7 @@ fn multispam_insert() {
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);
-    store_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
+    modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
 }
 
 #[test]
@@ -264,21 +264,13 @@ fn multispam_update() {
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);
-    assert!(data
-        .iter()
-        .enumerate()
-        .all(|(i, (k, v))| { i == k.parse().unwrap() && i + 1 == v.parse().unwrap() }));
-    store_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
+    modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
     // update our data set
     data.iter_mut().enumerate().for_each(|(i, (_, v))| {
         *v = Arc::new((i + 2).to_string());
     });
-    assert!(data
-        .iter()
-        .enumerate()
-        .all(|(i, (k, v))| { i == k.parse().unwrap() && i + 2 == v.parse().unwrap() }));
     // store and verify integrity
-    store_and_verify_integrity(
+    modify_and_verify_integrity(
         &token,
         &idx,
         &data,
@@ -304,6 +296,32 @@ fn multispam_update() {
                     .expect(&format!("couldn't find key: {}", k));
                 assert_eq!(ret.as_str(), v.as_str());
             });
+        },
+    );
+}
+
+#[test]
+fn multispam_delete() {
+    let idx = Arc::default();
+    let token = ControlToken::new();
+    let mut data = Vec::new();
+    prepare_data(&mut data, TUP_INCR);
+    modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
+    // now expunge
+    modify_and_verify_integrity(
+        &token,
+        &idx,
+        &data,
+        |tok, idx, chunk| {
+            let g = cpin();
+            let _permit = tok.acquire_permit();
+            chunk.into_iter().for_each(|(k, v)| {
+                assert_eq!(idx.mt_delete_return(&k, &g).unwrap().as_str(), v.as_str());
+            });
+        },
+        |g, idx, orig| {
+            assert!(orig.into_iter().all(|(k, _)| idx.mt_get(k, &g).is_none()));
+            assert!(idx.is_empty(), "expected empty, found {} elements instead", idx.len());
         },
     );
 }

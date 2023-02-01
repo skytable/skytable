@@ -503,6 +503,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         Self::read_data(node)
                     };
                     let mut ret = W::nx();
+                    let mut rem = false;
                     // this node shouldn't be empty
                     debug_assert!(!data.is_empty(), "logic,empty node not collected");
                     // build new lnode
@@ -511,6 +512,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         .filter_map(|this_elem| {
                             if this_elem.key().borrow() == k {
                                 ret = W::ex(this_elem);
+                                rem = true;
                                 None
                             } else {
                                 Some(this_elem.clone())
@@ -567,6 +569,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             break;
                         }
                     }
+                    self.decr_len_by(rem as _);
                     gc(g);
                     return ret;
                 }
@@ -586,10 +589,13 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
 impl<T, C: Config> Tree<T, C> {
     // hilarious enough but true, l doesn't affect safety but only creates an incorrect state
     fn decr_len(&self) {
-        self.l.fetch_sub(1, ORD_ACQ);
+        self.decr_len_by(1)
+    }
+    fn decr_len_by(&self, by: usize) {
+        self.l.fetch_sub(by, ORD_RLX);
     }
     fn incr_len(&self) {
-        self.l.fetch_add(1, ORD_ACQ);
+        self.l.fetch_add(1, ORD_RLX);
     }
     #[inline(always)]
     fn new_lnode(node: LNode<T>) -> Owned<Node<C>> {
