@@ -24,6 +24,8 @@
  *
 */
 
+#![deny(unreachable_patterns)]
+
 mod meta;
 mod mtchm;
 mod stdhm;

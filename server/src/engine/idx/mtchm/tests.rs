@@ -30,7 +30,7 @@ use super::{
         IndexBaseSpec, MTIndex,
     },
     imp::ChmCopy as _ChmCopy,
-    meta::DefConfig,
+    meta::{Config, DefConfig},
 };
 use std::{
     hash::{BuildHasher, Hasher},
@@ -110,11 +110,11 @@ fn update_empty() {
 #[cfg(not(miri))]
 const SPAM_QCOUNT: usize = 16_384;
 #[cfg(miri)]
-const SPAM_QCOUNT: usize = 128;
+const SPAM_QCOUNT: usize = 32;
 #[cfg(not(miri))]
 const SPAM_TENANTS: usize = 32;
 #[cfg(miri)]
-const SPAM_TENANTS: usize = 1;
+const SPAM_TENANTS: usize = 2;
 
 #[derive(Clone, Debug)]
 struct ControlToken(Arc<RwLock<()>>);
@@ -161,16 +161,17 @@ where
 
 type StringTup = (Arc<String>, Arc<String>);
 
-fn tdistribute_jobs<K, V, F>(
+fn tdistribute_jobs<K, V, C: Config, F>(
     token: &ControlToken,
-    tree: &Arc<ChmCopy<K, V>>,
+    tree: &Arc<_ChmCopy<K, V, C>>,
     distr_data: Vec<Vec<StringTup>>,
     f: F,
 ) -> Vec<JoinHandle<()>>
 where
-    F: FnOnce(ControlToken, Arc<ChmCopy<K, V>>, Vec<StringTup>) + Send + 'static + Copy,
+    F: FnOnce(ControlToken, Arc<_ChmCopy<K, V, C>>, Vec<StringTup>) + Send + 'static + Copy,
     K: Send + Sync + 'static,
     V: Send + Sync + 'static,
+    C::HState: Send + Sync,
 {
     let r = distr_data
         .into_iter()
@@ -201,15 +202,16 @@ fn tjoin_all<T>(handles: Vec<JoinHandle<T>>) -> Box<[T]> {
         .collect()
 }
 
-fn modify_and_verify_integrity<K, V>(
+fn modify_and_verify_integrity<K, V, C: Config>(
     token: &ControlToken,
-    tree: &Arc<ChmCopy<K, V>>,
+    tree: &Arc<_ChmCopy<K, V, C>>,
     source_buf: &[StringTup],
-    action: fn(token: ControlToken, tree: Arc<ChmCopy<K, V>>, thread_chunk: Vec<StringTup>),
-    verify: fn(g: &Guard, tree: &ChmCopy<K, V>, src: &[StringTup]),
+    action: fn(token: ControlToken, tree: Arc<_ChmCopy<K, V, C>>, thread_chunk: Vec<StringTup>),
+    verify: fn(g: &Guard, tree: &_ChmCopy<K, V, C>, src: &[StringTup]),
 ) where
     K: Send + Sync + 'static,
     V: Send + Sync + 'static,
+    C::HState: Send + Sync,
 {
     let mut distr_data = Vec::new();
     prepare_distr_data(source_buf, &mut distr_data);
@@ -222,9 +224,9 @@ fn modify_and_verify_integrity<K, V>(
     verify(&pin, tree, source_buf);
 }
 
-fn _action_put(
+fn _action_put<C: Config>(
     token: ControlToken,
-    idx: Arc<ChmCopy<Arc<String>, Arc<String>>>,
+    idx: Arc<_ChmCopy<Arc<String>, Arc<String>, C>>,
     data: Vec<StringTup>,
 ) {
     let _token = token.acquire_permit();
@@ -233,9 +235,9 @@ fn _action_put(
         assert!(idx.mt_insert(k, v, &g));
     });
 }
-fn _verify_eq(
+fn _verify_eq<C: Config>(
     pin: &Guard,
-    idx: &ChmCopy<Arc<String>, Arc<String>>,
+    idx: &_ChmCopy<Arc<String>, Arc<String>, C>,
     source: &[(Arc<String>, Arc<String>)],
 ) {
     assert_eq!(idx.len(), SPAM_QCOUNT);
@@ -251,7 +253,7 @@ fn _verify_eq(
 
 #[test]
 fn multispam_insert() {
-    let idx = Arc::default();
+    let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);
@@ -260,7 +262,7 @@ fn multispam_insert() {
 
 #[test]
 fn multispam_update() {
-    let idx = Arc::default();
+    let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);
@@ -302,7 +304,7 @@ fn multispam_update() {
 
 #[test]
 fn multispam_delete() {
-    let idx = Arc::default();
+    let idx = Arc::new(ChmCopy::default());
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);
@@ -321,7 +323,21 @@ fn multispam_delete() {
         },
         |g, idx, orig| {
             assert!(orig.into_iter().all(|(k, _)| idx.mt_get(k, &g).is_none()));
-            assert!(idx.is_empty(), "expected empty, found {} elements instead", idx.len());
+            assert!(
+                idx.is_empty(),
+                "expected empty, found {} elements instead",
+                idx.len()
+            );
         },
     );
+}
+
+#[test]
+fn multispam_lol() {
+    let idx = Arc::new(super::Tree::<StringTup, super::meta::Config2B<LolState>>::new());
+    let token = ControlToken::new();
+    let mut data = Vec::new();
+    prepare_data(&mut data, TUP_INCR);
+    modify_and_verify_integrity(&token, &idx, &data, _action_put, _verify_eq);
+    assert_eq!(idx.idx_metrics().replnode(), SPAM_QCOUNT - 1);
 }

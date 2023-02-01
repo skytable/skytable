@@ -293,29 +293,7 @@ impl<T, const N: usize> Extend<T> for VInline<N, T> {
 
 impl<T: Clone, const N: usize> Clone for VInline<N, T> {
     fn clone(&self) -> Self {
-        unsafe {
-            if self.on_stack() {
-                // simple stack copy
-                let mut new_stack = Self::INLINE_NULL_STACK;
-                ptr::copy_nonoverlapping(self.d.s.as_ptr(), new_stack.as_mut_ptr(), self.l);
-                Self {
-                    d: VData {
-                        s: ManuallyDrop::new(new_stack),
-                    },
-                    l: self.l,
-                    c: N,
-                }
-            } else {
-                // new allocation
-                let nb = Self::alloc_block(self.len());
-                ptr::copy_nonoverlapping(self._as_ptr(), nb, self.l);
-                Self {
-                    d: VData { h: nb },
-                    l: self.l,
-                    c: self.l,
-                }
-            }
-        }
+        self.iter().cloned().collect()
     }
 }
 

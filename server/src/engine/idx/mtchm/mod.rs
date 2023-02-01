@@ -96,6 +96,16 @@ impl CHTRuntimeLog {
         } else {
             void!()
         }
+        fn repsplit(self: &Self) -> usize {
+            self.data.split.load(ORD_RLX)
+        } else {
+            void!()
+        }
+        fn replnode(self: &Self) -> usize {
+            self.data.hln.load(ORD_RLX)
+        } else {
+            void!()
+        }
     }
 }
 
@@ -321,7 +331,6 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
                             to update
                         */
-                        self.m.hlnode();
                         let p = data.iter().position(|e| e.key() == elem.key());
                         match p {
                             Some(v) if W::WMODE == access::WRITEMODE_FRESH => {
@@ -336,12 +345,13 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                 new_ln.extend(data[..i].iter().cloned());
                                 new_ln.extend(data[i + 1..].iter().cloned());
                                 new_ln.push(elem.clone());
-                                match current.cx_rel(
-                                    node,
-                                    Self::new_lnode(new_ln).into_shared(g),
-                                    g,
-                                ) {
-                                    Ok(_) => {
+                                match current.cx_rel(node, Self::new_lnode(new_ln), g) {
+                                    Ok(new) => {
+                                        if cfg!(debug_assertions)
+                                            && unsafe { Self::read_data(new) }.len() > 1
+                                        {
+                                            self.m.hlnode();
+                                        }
                                         unsafe {
                                             /*
                                                 UNSAFE(@ohsayan): swapped out, and we'll be the last thread to see this once the epoch proceeds
@@ -356,17 +366,24 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                     Err(CompareExchangeError { new, .. }) => {
                                         // failed to swap it in
                                         unsafe {
-                                            // UNSAFE(@ohsayan): Failed to swap this in, and no one else saw it (well)
-                                            Self::ldrop(new)
+                                            Self::ldrop(new.into_shared(g));
                                         }
                                     }
                                 }
                             }
-                            None if W::WMODE == access::WRITEMODE_ANY => {
+                            None if W::WMODE == access::WRITEMODE_ANY
+                                || W::WMODE == access::WRITEMODE_FRESH =>
+                            {
                                 // no funk here
-                                let new_node = Self::new_data(elem.clone());
-                                match current.cx_rel(node, new_node.into_shared(g), g) {
-                                    Ok(_) => {
+                                let mut new_node = data.clone();
+                                new_node.push(elem.clone());
+                                match current.cx_rel(node, Self::new_lnode(new_node), g) {
+                                    Ok(new) => {
+                                        if cfg!(debug_assertions)
+                                            && unsafe { Self::read_data(new) }.len() > 1
+                                        {
+                                            self.m.hlnode();
+                                        }
                                         // swapped out
                                         unsafe {
                                             // UNSAFE(@ohsayan): last thread to see this (well, sorta)
@@ -381,7 +398,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                         // failed to swap it
                                         unsafe {
                                             // UNSAFE(@ohsayan): never published this, so we're the last one
-                                            Self::ldrop(new)
+                                            Self::ldrop(new.into_shared(g))
                                         }
                                     }
                                 }
