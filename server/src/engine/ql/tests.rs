@@ -123,7 +123,6 @@ fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
         let mut new_src = Vec::with_capacity(src_tokens.len());
         let mut should_pass = true;
         src_tokens.iter().for_each(|tok| {
-            println!("fuse: {should_pass}");
             match tok {
                 Token::IgnorableComma => {
                     let added = inject(&mut new_src, &mut rng);

@@ -1,5 +1,5 @@
 /*
- * Created on Wed Nov 16 2022
+ * Created on Wed Feb 01 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -25,14 +25,11 @@
 */
 
 #[cfg(test)]
-use super::ast::InplaceData;
-use {
-    super::{
-        ast::{Entity, QueryData, State, Statement},
-        lex::{Slice, Token},
-        LangError, LangResult,
-    },
-    crate::util::compiler,
+use crate::engine::ql::ast::InplaceData;
+use crate::engine::ql::{
+    ast::{Entity, QueryData, State, Statement},
+    lex::{Slice, Token},
+    LangError, LangResult,
 };
 
 #[derive(Debug, PartialEq)]
@@ -45,7 +42,7 @@ pub struct DropSpace<'a> {
 impl<'a> DropSpace<'a> {
     #[inline(always)]
     /// Instantiate
-    pub(super) const fn new(space: Slice<'a>, force: bool) -> Self {
+    pub const fn new(space: Slice<'a>, force: bool) -> Self {
         Self { space, force }
     }
 }
@@ -67,9 +64,7 @@ impl<'a> DropModel<'a> {
 /// ## Panic
 ///
 /// If token stream length is < 2
-pub(super) fn parse_drop<'a, Qd: QueryData<'a>>(
-    state: &mut State<'a, Qd>,
-) -> LangResult<Statement<'a>> {
+pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Statement<'a>> {
     match state.fw_read() {
         Token![model] => {
             // we have a model. now parse entity and see if we should force deletion
@@ -103,50 +98,9 @@ pub(super) fn parse_drop<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub(super) fn parse_drop_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
+pub fn parse_drop_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
     let mut state = State::new(tok, InplaceData::new());
     let r = self::parse_drop(&mut state);
-    assert_full_tt!(state);
-    r
-}
-
-pub(super) fn parse_inspect<'a, Qd: QueryData<'a>>(
-    state: &mut State<'a, Qd>,
-) -> LangResult<Statement<'a>> {
-    /*
-        inpsect model <entity>
-        inspect space <entity>
-        inspect spaces
-
-        min length -> (<model> | <space>) <model> = 2
-    */
-
-    if compiler::unlikely(state.remaining() < 1) {
-        return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
-    }
-
-    match state.fw_read() {
-        Token![model] => Entity::attempt_process_entity_result(state).map(Statement::InspectModel),
-        Token![space] if state.cursor_has_ident_rounded() => {
-            Ok(Statement::InspectSpace(unsafe {
-                // UNSAFE(@ohsayan): Safe because of the match predicate
-                extract!(state.fw_read(), Token::Ident(ref space) => space)
-            }))
-        }
-        Token::Ident(id) if id.eq_ignore_ascii_case(b"spaces") && state.exhausted() => {
-            Ok(Statement::InspectSpaces)
-        }
-        _ => {
-            state.cursor_back();
-            Err(LangError::ExpectedStatement)
-        }
-    }
-}
-
-#[cfg(test)]
-pub(super) fn parse_inspect_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = self::parse_inspect(&mut state);
     assert_full_tt!(state);
     r
 }

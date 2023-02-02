@@ -43,7 +43,7 @@ mod inspect {
     fn inspect_space() {
         let tok = lex_insecure(b"inspect space myspace").unwrap();
         assert_eq!(
-            ddl::parse_inspect_full(&tok[1..]).unwrap(),
+            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectSpace(b"myspace")
         );
     }
@@ -51,12 +51,12 @@ mod inspect {
     fn inspect_model() {
         let tok = lex_insecure(b"inspect model users").unwrap();
         assert_eq!(
-            ddl::parse_inspect_full(&tok[1..]).unwrap(),
+            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectModel(Entity::Single(b"users"))
         );
         let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
         assert_eq!(
-            ddl::parse_inspect_full(&tok[1..]).unwrap(),
+            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectModel(Entity::Full(b"tweeter", b"users"))
         );
     }
@@ -64,7 +64,7 @@ mod inspect {
     fn inspect_spaces() {
         let tok = lex_insecure(b"inspect spaces").unwrap();
         assert_eq!(
-            ddl::parse_inspect_full(&tok[1..]).unwrap(),
+            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
             Statement::InspectSpaces
         );
     }
@@ -1212,14 +1212,14 @@ mod ddl_other_query_tests {
         super::*,
         crate::engine::ql::{
             ast::{Entity, Statement},
-            ddl::{self, DropModel, DropSpace},
+            ddl::drop::{self, DropModel, DropSpace},
         },
     };
     #[test]
     fn drop_space() {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
-            ddl::parse_drop_full(&src[1..]).unwrap(),
+            drop::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new(b"myspace", false))
         );
     }
@@ -1227,7 +1227,7 @@ mod ddl_other_query_tests {
     fn drop_space_force() {
         let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
-            ddl::parse_drop_full(&src[1..]).unwrap(),
+            drop::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new(b"myspace", true))
         );
     }
@@ -1235,7 +1235,7 @@ mod ddl_other_query_tests {
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
-            ddl::parse_drop_full(&src[1..]).unwrap(),
+            drop::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), false))
         );
     }
@@ -1243,7 +1243,7 @@ mod ddl_other_query_tests {
     fn drop_model_force() {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
-            ddl::parse_drop_full(&src[1..]).unwrap(),
+            drop::parse_drop_full(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), true))
         );
     }

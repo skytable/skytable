@@ -524,13 +524,13 @@ pub enum Statement<'a> {
     /// Conditions:
     /// - Model view is empty
     /// - Model is not in active use
-    DropModel(ddl::DropModel<'a>),
+    DropModel(ddl::drop::DropModel<'a>),
     /// DDL query to drop a space
     ///
     /// Conditions:
     /// - Space doesn't have any other structures
     /// - Space is not in active use
-    DropSpace(ddl::DropSpace<'a>),
+    DropSpace(ddl::drop::DropSpace<'a>),
     /// DDL query to inspect a space (returns a list of models in the space)
     InspectSpace(Slice<'a>),
     /// DDL query to inspect a model (returns the model definition)
@@ -574,8 +574,10 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
             }
             _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
         },
-        Token![drop] if state.remaining() >= 2 => ddl::parse_drop(&mut state),
-        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => ddl::parse_inspect(&mut state),
+        Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
+        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => {
+            ddl::ins::parse_inspect(&mut state)
+        }
         // DML
         Token![insert] => {
             dml::ins::InsertStatement::parse_insert(&mut state).map(Statement::Insert)

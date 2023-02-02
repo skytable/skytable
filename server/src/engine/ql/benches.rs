@@ -188,7 +188,7 @@ mod ddl_queries {
     mod drop_stmt {
         use {
             super::*,
-            crate::engine::ql::ddl::{DropModel, DropSpace},
+            crate::engine::ql::ddl::drop::{DropModel, DropSpace},
         };
         #[bench]
         fn drop_space(b: &mut Bencher) {
