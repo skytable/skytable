@@ -207,18 +207,15 @@ mod tymeta {
     fn fuzz_tymeta_normal() {
         // { maxlen: 10, unique: true, users: "sayan" }
         //   ^start
-        let tok = lex_insecure(
-            b"
-                    maxlen: 10,
-                    unique: true,
-                    auth: {
-                        maybe: true\x01
-                    },
-                    users: \"sayan\"\x01
-                }
-            ",
-        )
-        .unwrap();
+        let tok = b"
+                maxlen: 10,
+                unique: true,
+                auth: {
+                    maybe: true\x01
+                },
+                users: \"sayan\"\x01
+            }
+        ";
         let expected = nullable_dict! {
             "maxlen" => Lit::UnsignedInt(10),
             "unique" => Lit::Bool(true),
@@ -227,38 +224,31 @@ mod tymeta {
             },
             "users" => Lit::Str("sayan".into())
         };
-        fuzz_tokens(&tok, |should_pass, new_src| {
+        fuzz_tokens(tok.as_slice(), |should_pass, new_src| {
             let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
             if should_pass {
                 assert!(okay, "{:?}", &new_src);
                 assert!(!tymeta.has_more());
                 assert_eq!(cursor, new_src.len());
                 assert_eq!(data, expected);
-            } else if okay {
-                panic!(
-                    "Expected failure but passed for token stream: `{:?}`",
-                    new_src
-                );
             }
+            okay
         });
     }
     #[test]
     fn fuzz_tymeta_with_ty() {
         // list { maxlen: 10, unique: true, type string, users: "sayan" }
         //   ^start
-        let tok = lex_insecure(
-            b"
-                    maxlen: 10,
-                    unique: true,
-                    auth: {
-                        maybe: true\x01
-                    },
-                    type string,
-                    users: \"sayan\"\x01
-                }
-            ",
-        )
-        .unwrap();
+        let tok = b"
+                maxlen: 10,
+                unique: true,
+                auth: {
+                    maybe: true\x01
+                },
+                type string,
+                users: \"sayan\"\x01
+            }
+        ";
         let expected = nullable_dict! {
             "maxlen" => Lit::UnsignedInt(10),
             "unique" => Lit::Bool(true),
@@ -266,16 +256,15 @@ mod tymeta {
                 "maybe" => Lit::Bool(true),
             },
         };
-        fuzz_tokens(&tok, |should_pass, new_src| {
+        fuzz_tokens(tok.as_slice(), |should_pass, new_src| {
             let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
             if should_pass {
                 assert!(okay);
                 assert!(tymeta.has_more());
                 assert!(new_src[cursor] == Token::Ident(b"string"));
                 assert_eq!(data, expected);
-            } else if okay {
-                panic!("Expected failure but passed for token stream: `{:?}`", tok);
             }
+            okay
         });
     }
 }
@@ -375,8 +364,7 @@ mod layer {
 
     #[test]
     fn fuzz_layer() {
-        let tok = lex_insecure(
-            b"
+        let tok = b"
             list {
                 type list {
                     maxlen: 100,
@@ -384,9 +372,7 @@ mod layer {
                 },
                 unique: true\x01
             }
-        ",
-        )
-        .unwrap();
+        ";
         let expected = vec![
             Layer::new_noreset(b"string", nullable_dict!()),
             Layer::new_noreset(
@@ -397,18 +383,14 @@ mod layer {
             ),
             Layer::new_noreset(b"list", nullable_dict!("unique" => Lit::Bool(true))),
         ];
-        fuzz_tokens(&tok, |should_pass, new_tok| {
+        fuzz_tokens(tok.as_slice(), |should_pass, new_tok| {
             let (layers, c, okay) = schema::fold_layers(&new_tok);
             if should_pass {
                 assert!(okay);
                 assert_eq!(c, new_tok.len());
                 assert_eq!(layers, expected);
-            } else if okay {
-                panic!(
-                    "expected failure but passed for token stream: `{:?}`",
-                    new_tok
-                );
             }
+            okay
         });
     }
 }

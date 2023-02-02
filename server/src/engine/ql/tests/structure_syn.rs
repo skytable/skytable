@@ -170,25 +170,22 @@ mod dict {
 
     #[test]
     fn fuzz_dict() {
-        let ret = lex_insecure(
-            b"
-                {
-                    the_tradition_is: \"hello, world\",
-                    could_have_been: {
-                        this: true,
-                        or_maybe_this: 100,
-                        even_this: \"hello, universe!\"\x01
-                    },
-                    but_oh_well: \"it continues to be the 'annoying' phrase\",
-                    lorem: {
-                        ipsum: {
-                            dolor: \"sit amet\"\x01
-                        }\x01
+        let tok = b"
+            {
+                the_tradition_is: \"hello, world\",
+                could_have_been: {
+                    this: true,
+                    or_maybe_this: 100,
+                    even_this: \"hello, universe!\"\x01
+                },
+                but_oh_well: \"it continues to be the 'annoying' phrase\",
+                lorem: {
+                    ipsum: {
+                        dolor: \"sit amet\"\x01
                     }\x01
-                }
-            ",
-        )
-        .unwrap();
+                }\x01
+            }
+        ";
         let ret_dict = nullable_dict! {
             "the_tradition_is" => Lit::Str("hello, world".into()),
             "could_have_been" => nullable_dict! {
@@ -203,16 +200,13 @@ mod dict {
                 }
             }
         };
-        fuzz_tokens(&ret, |should_pass, new_src| {
+        fuzz_tokens(&tok[..], |should_pass, new_src| {
             let r = schema::fold_dict(&new_src);
+            let okay = r.is_some();
             if should_pass {
                 assert_eq!(r.unwrap(), ret_dict)
-            } else if r.is_some() {
-                panic!(
-                    "expected failure, but passed for token stream: `{:?}`",
-                    new_src
-                );
             }
+            okay
         });
     }
 }

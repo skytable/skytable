@@ -104,7 +104,8 @@ impl NullableMapEntry for super::schema::Dict {
 }
 
 /// A very "basic" fuzzer that will randomly inject tokens wherever applicable
-fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
+fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
+    let src_tokens = lex_insecure(src).unwrap();
     static FUZZ_TARGETS: [Token; 2] = [Token::Symbol(Symbol::SymComma), Token::IgnorableComma];
     let mut rng = rand::thread_rng();
     #[inline(always)]
@@ -114,25 +115,37 @@ fn fuzz_tokens(src: &[Token], fuzzwith: impl Fn(bool, &[Token])) {
             .for_each(|_| new_src.push(Token::Symbol(Symbol::SymComma)));
         new_src.len() - start
     }
-    let fuzz_amount = src.iter().filter(|tok| FUZZ_TARGETS.contains(tok)).count();
+    let fuzz_amount = src_tokens
+        .iter()
+        .filter(|tok| FUZZ_TARGETS.contains(tok))
+        .count();
     for _ in 0..(fuzz_amount.pow(2)) {
-        let mut new_src = Vec::with_capacity(src.len());
+        let mut new_src = Vec::with_capacity(src_tokens.len());
         let mut should_pass = true;
-        src.iter().for_each(|tok| match tok {
-            Token::IgnorableComma => {
-                let added = inject(&mut new_src, &mut rng);
-                should_pass &= added <= 1;
+        src_tokens.iter().for_each(|tok| {
+            println!("fuse: {should_pass}");
+            match tok {
+                Token::IgnorableComma => {
+                    let added = inject(&mut new_src, &mut rng);
+                    should_pass &= added <= 1;
+                }
+                Token::Symbol(Symbol::SymComma) => {
+                    let added = inject(&mut new_src, &mut rng);
+                    should_pass &= added == 1;
+                }
+                tok => new_src.push(tok.clone()),
             }
-            Token::Symbol(Symbol::SymComma) => {
-                let added = inject(&mut new_src, &mut rng);
-                should_pass &= added == 1;
-            }
-            tok => new_src.push(tok.clone()),
         });
-        assert!(
-            new_src.iter().all(|tok| tok != &Token::IgnorableComma),
-            "found ignorable comma in rectified source"
-        );
-        fuzzwith(should_pass, &new_src);
+        if fuzzverify(should_pass, &new_src) && !should_pass {
+            panic!(
+                "expected failure for `{}`, but it passed",
+                new_src
+                    .iter()
+                    .map(|tok| format!("{} ", tok.to_string()).into_bytes())
+                    .flatten()
+                    .map(char::from)
+                    .collect::<String>()
+            )
+        }
     }
 }

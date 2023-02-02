@@ -338,3 +338,22 @@ macro_rules! statictbl {
         &'static $name
     }};
 }
+
+macro_rules! build_lut {
+    (
+        $(#[$attr_s:meta])* $vis_s:vis static $LUT:ident in $lut:ident; $(#[$attr_e:meta])* $vis_e:vis enum $SYM:ident {$($variant:ident = $match:literal),*$(,)?}
+        |$arg:ident: $inp:ty| -> $ret:ty $block:block,
+        |$arg2:ident: $inp2:ty| -> String $block2:block
+    ) => {
+        mod $lut {
+            pub const L: usize = { let mut i = 0; $(let _ = $match;i += 1;)*i };
+            pub const fn f($arg: $inp) -> $ret $block
+            pub fn s($arg2: $inp2) -> String $block2
+        }
+        $(#[$attr_e])* $vis_e enum $SYM {$($variant),*}
+        $(#[$attr_s])* $vis_s static $LUT: [($ret, $SYM); $lut::L] = {[$(($lut::f($match), $SYM::$variant)),*]};
+        impl ::std::string::ToString for $SYM {
+            fn to_string(&self) -> ::std::string::String {match self {$(Self::$variant => {$lut::s($match)},)*}}
+        }
+    }
+}
