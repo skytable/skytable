@@ -27,22 +27,24 @@
 pub(super) mod config;
 mod iter;
 
-use self::{
-    config::{AllocStrategy, Config},
-    iter::{
-        IndexSTSeqDllIterOrdKV, IndexSTSeqDllIterOrdKey, IndexSTSeqDllIterOrdValue,
-        IndexSTSeqDllIterUnordKV, IndexSTSeqDllIterUnordKey, IndexSTSeqDllIterUnordValue,
+use {
+    self::{
+        config::{AllocStrategy, Config},
+        iter::{
+            IndexSTSeqDllIterOrdKV, IndexSTSeqDllIterOrdKey, IndexSTSeqDllIterOrdValue,
+            IndexSTSeqDllIterUnordKV, IndexSTSeqDllIterUnordKey, IndexSTSeqDllIterUnordValue,
+        },
     },
-};
-use super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq};
-use std::{
-    alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
-    borrow::Borrow,
-    collections::HashMap as StdMap,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    mem,
-    ptr::{self, NonNull},
+    super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq},
+    std::{
+        alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
+        borrow::Borrow,
+        collections::HashMap as StdMap,
+        fmt::Debug,
+        hash::{Hash, Hasher},
+        mem,
+        ptr::{self, NonNull},
+    },
 };
 
 /*

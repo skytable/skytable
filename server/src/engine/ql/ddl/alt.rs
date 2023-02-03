@@ -24,14 +24,16 @@
  *
 */
 
-use super::syn::{self, Dict, DictFoldState, ExpandedField};
-use crate::{
-    engine::ql::{
-        ast::{QueryData, State},
-        lex::{Slice, Token},
-        LangError, LangResult,
+use {
+    super::syn::{self, Dict, DictFoldState, ExpandedField},
+    crate::{
+        engine::ql::{
+            ast::{QueryData, State},
+            lex::{Slice, Token},
+            LangError, LangResult,
+        },
+        util::compiler,
     },
-    util::compiler,
 };
 
 #[derive(Debug, PartialEq)]
@@ -177,10 +179,12 @@ impl<'a> AlterKind<'a> {
 }
 
 mod impls {
-    use super::{AlterModel, AlterSpace};
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::{AlterModel, AlterSpace},
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for AlterModel<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

@@ -44,15 +44,17 @@
     Feb. 2, 2023
 */
 
-use crate::{
-    engine::ql::{
-        ast::{QueryData, State},
-        lex::{LitIR, LitIROwned, Slice, Token},
-        LangError, LangResult,
+use {
+    crate::{
+        engine::ql::{
+            ast::{QueryData, State},
+            lex::{LitIR, LitIROwned, Slice, Token},
+            LangError, LangResult,
+        },
+        util::{compiler, MaybeInit},
     },
-    util::{compiler, MaybeInit},
+    std::{collections::HashMap, str},
 };
-use std::{collections::HashMap, str};
 
 #[derive(Debug, PartialEq)]
 /// A dictionary entry type. Either a literal or another dictionary
@@ -499,13 +501,15 @@ impl<'a> ExpandedField<'a> {
 pub use impls::{DictBasic, DictTypeMeta, DictTypeMetaSplit};
 #[cfg(test)]
 mod impls {
-    use super::{
-        rfold_dict, rfold_layers, rfold_tymeta, Dict, DictFoldState, ExpandedField, Field, Layer,
-        LayerFoldState,
-    };
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::{
+            rfold_dict, rfold_layers, rfold_tymeta, Dict, DictFoldState, ExpandedField, Field,
+            Layer, LayerFoldState,
+        },
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for ExpandedField<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

@@ -24,18 +24,20 @@
  *
 */
 
-use super::{
-    config::Config, IndexSTSeqDll, IndexSTSeqDllKeyptr, IndexSTSeqDllNode, IndexSTSeqDllNodePtr,
-};
-use std::{
-    collections::{
-        hash_map::{Iter, Keys as StdMapIterKey, Values as StdMapIterVal},
-        HashMap as StdMap,
+use {
+    super::{
+        config::Config, IndexSTSeqDll, IndexSTSeqDllKeyptr, IndexSTSeqDllNode, IndexSTSeqDllNodePtr,
     },
-    fmt::{self, Debug},
-    iter::FusedIterator,
-    marker::PhantomData,
-    ptr::{self, NonNull},
+    std::{
+        collections::{
+            hash_map::{Iter, Keys as StdMapIterKey, Values as StdMapIterVal},
+            HashMap as StdMap,
+        },
+        fmt::{self, Debug},
+        iter::FusedIterator,
+        marker::PhantomData,
+        ptr::{self, NonNull},
+    },
 };
 
 macro_rules! unsafe_marker_impl {

@@ -26,8 +26,8 @@
 
 mod raw;
 
-use self::raw::RawLexer;
 use {
+    self::raw::RawLexer,
     super::{LangError, LangResult},
     crate::util::compiler,
     core::{cmp, fmt, ops::BitOr, slice, str},

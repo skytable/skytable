@@ -24,19 +24,21 @@
  *
 */
 
-use super::{
+use {
     super::{
-        super::sync::atm::{cpin, Guard},
-        IndexBaseSpec, MTIndex,
+        imp::ChmCopy as _ChmCopy,
+        meta::{Config, DefConfig},
     },
-    imp::ChmCopy as _ChmCopy,
-    meta::{Config, DefConfig},
-};
-use std::{
-    hash::{BuildHasher, Hasher},
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    thread::{self, JoinHandle},
-    time::Duration,
+    crate::engine::{
+        idx::{IndexBaseSpec, MTIndex},
+        sync::atm::{cpin, Guard},
+    },
+    std::{
+        hash::{BuildHasher, Hasher},
+        sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+        thread::{self, JoinHandle},
+        time::Duration,
+    },
 };
 
 type Chm<K, V> = ChmCopy<K, V>;

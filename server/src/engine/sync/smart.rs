@@ -24,18 +24,20 @@
  *
 */
 
-use super::atm::{ORD_ACQ, ORD_REL, ORD_RLX};
-use std::{
-    alloc::{dealloc, Layout},
-    borrow::Borrow,
-    fmt,
-    hash::{Hash, Hasher},
-    mem::{self, ManuallyDrop},
-    ops::Deref,
-    process,
-    ptr::{self, NonNull},
-    slice, str,
-    sync::atomic::{self, AtomicUsize},
+use {
+    super::atm::{ORD_ACQ, ORD_REL, ORD_RLX},
+    std::{
+        alloc::{dealloc, Layout},
+        borrow::Borrow,
+        fmt,
+        hash::{Hash, Hasher},
+        mem::{self, ManuallyDrop},
+        ops::Deref,
+        process,
+        ptr::{self, NonNull},
+        slice, str,
+        sync::atomic::{self, AtomicUsize},
+    },
 };
 
 pub type BytesRC = SliceRC<u8>;

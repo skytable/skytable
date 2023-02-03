@@ -24,8 +24,13 @@
  *
 */
 
-use super::super::{super::mem::VInline, meta::AsHasher, AsKeyClone};
-use std::{collections::hash_map::RandomState, sync::Arc};
+use {
+    crate::engine::{
+        idx::{meta::AsHasher, AsKeyClone},
+        mem::VInline,
+    },
+    std::{collections::hash_map::RandomState, sync::Arc},
+};
 
 const LNODE_STACK: usize = 2;
 pub type DefConfig = Config2B<RandomState>;

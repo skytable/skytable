@@ -26,15 +26,19 @@
 
 #[cfg(debug_assertions)]
 use super::DummyMetrics;
-use super::{AsKey, AsValue, AsValueClone, IndexBaseSpec, STIndex};
-use std::{
-    borrow::Borrow,
-    collections::{
-        hash_map::{Entry, Iter as StdMapIterKV, Keys as StdMapIterKey, Values as StdMapIterVal},
-        HashMap as StdMap,
+use {
+    super::{AsKey, AsValue, AsValueClone, IndexBaseSpec, STIndex},
+    std::{
+        borrow::Borrow,
+        collections::{
+            hash_map::{
+                Entry, Iter as StdMapIterKV, Keys as StdMapIterKey, Values as StdMapIterVal,
+            },
+            HashMap as StdMap,
+        },
+        hash::BuildHasher,
+        mem,
     },
-    hash::BuildHasher,
-    mem,
 };
 
 impl<K, V, S> IndexBaseSpec<K, V> for StdMap<K, V, S>

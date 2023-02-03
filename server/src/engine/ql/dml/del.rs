@@ -95,10 +95,12 @@ impl<'a> DeleteStatement<'a> {
 }
 
 mod impls {
-    use super::DeleteStatement;
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::DeleteStatement,
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for DeleteStatement<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

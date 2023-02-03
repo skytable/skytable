@@ -101,10 +101,12 @@ pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResul
 
 pub use impls::DropStatementAST;
 mod impls {
-    use super::{DropModel, DropSpace};
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State, Statement},
-        LangResult,
+    use {
+        super::{DropModel, DropSpace},
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State, Statement},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

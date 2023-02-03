@@ -392,10 +392,12 @@ impl<'a> InsertStatement<'a> {
 #[cfg(test)]
 pub use impls::test::{DataMap, DataTuple, List};
 mod impls {
-    use super::InsertStatement;
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::InsertStatement,
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for InsertStatement<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
@@ -404,12 +406,14 @@ mod impls {
     }
     #[cfg(test)]
     pub mod test {
-        use super::super::{
-            parse_data_map_syntax, parse_data_tuple_syntax, parse_list, DataType, HashMap,
-        };
-        use crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        use {
+            super::super::{
+                parse_data_map_syntax, parse_data_tuple_syntax, parse_list, DataType, HashMap,
+            },
+            crate::engine::ql::{
+                ast::{traits::ASTNode, QueryData, State},
+                LangResult,
+            },
         };
         #[derive(sky_macros::Wrapper, Debug)]
         pub struct List(Vec<DataType>);

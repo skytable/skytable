@@ -33,8 +33,10 @@ mod stord;
 #[cfg(test)]
 mod tests;
 
-use super::sync::atm::Guard;
-use core::{borrow::Borrow, hash::Hash};
+use {
+    crate::engine::sync::atm::Guard,
+    core::{borrow::Borrow, hash::Hash},
+};
 
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;

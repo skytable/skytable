@@ -159,12 +159,12 @@ impl<'a> WhereClause<'a> {
 
 #[cfg(test)]
 mod impls {
-    use super::{
-        super::{
+    use {
+        super::{RelationalExpr, WhereClause},
+        crate::engine::ql::{
             ast::{traits::ASTNode, QueryData, State},
             LangError, LangResult,
         },
-        RelationalExpr, WhereClause,
     };
     impl<'a> ASTNode<'a> for WhereClause<'a> {
         // important: upstream must verify this

@@ -26,16 +26,18 @@
 
 #[cfg(debug_assertions)]
 use super::CHTRuntimeLog;
-use super::{
+use {
     super::{
-        super::sync::atm::{upin, Guard},
-        AsKey, IndexBaseSpec, MTIndex,
+        iter::{IterKV, IterKey, IterVal},
+        meta::{Config, Key, TreeElement, Value},
+        Tree,
     },
-    iter::{IterKV, IterKey, IterVal},
-    meta::{Config, Key, TreeElement, Value},
-    Tree,
+    crate::engine::{
+        idx::{AsKey, IndexBaseSpec, MTIndex},
+        sync::atm::{upin, Guard},
+    },
+    std::{borrow::Borrow, sync::Arc},
 };
-use std::{borrow::Borrow, sync::Arc};
 
 #[inline(always)]
 fn arc<K, V>(k: K, v: V) -> Arc<(K, V)> {

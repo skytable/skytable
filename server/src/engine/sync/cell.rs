@@ -24,10 +24,11 @@
  *
 */
 
-use super::atm::{upin, Atomic, Guard, Owned, Shared, ORD_REL};
-use core::ops::Deref;
-use parking_lot::{Mutex, MutexGuard};
-use std::marker::PhantomData;
+use {
+    super::atm::{upin, Atomic, Guard, Owned, Shared, ORD_REL},
+    core::{marker::PhantomData, ops::Deref},
+    parking_lot::{Mutex, MutexGuard},
+};
 
 /// A [`TMCell`] provides atomic reads and serialized writes; the `static` is a CB hack
 #[derive(Debug)]

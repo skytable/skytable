@@ -24,14 +24,16 @@
  *
 */
 
-use super::syn::{self, Dict, DictFoldState, Field};
-use crate::{
-    engine::ql::{
-        ast::{QueryData, State},
-        lex::{Slice, Token},
-        LangError, LangResult,
+use {
+    super::syn::{self, Dict, DictFoldState, Field},
+    crate::{
+        engine::ql::{
+            ast::{QueryData, State},
+            lex::{Slice, Token},
+            LangError, LangResult,
+        },
+        util::compiler,
     },
-    util::compiler,
 };
 
 #[derive(Debug, PartialEq)]
@@ -142,10 +144,12 @@ impl<'a> CreateModel<'a> {
 }
 
 mod impls {
-    use super::{CreateModel, CreateSpace};
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::{CreateModel, CreateSpace},
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for CreateSpace<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

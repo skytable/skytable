@@ -211,10 +211,12 @@ impl<'a> UpdateStatement<'a> {
 }
 
 mod impls {
-    use super::UpdateStatement;
-    use crate::engine::ql::{
-        ast::{traits::ASTNode, QueryData, State},
-        LangResult,
+    use {
+        super::UpdateStatement,
+        crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        },
     };
     impl<'a> ASTNode<'a> for UpdateStatement<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
@@ -223,7 +225,7 @@ mod impls {
     }
     #[cfg(test)]
     mod test {
-        use super::{super::AssignmentExpression, *};
+        use super::{super::AssignmentExpression, ASTNode, LangResult, QueryData, State};
         impl<'a> ASTNode<'a> for AssignmentExpression<'a> {
             // important: upstream must verify this
             const VERIFY: bool = true;

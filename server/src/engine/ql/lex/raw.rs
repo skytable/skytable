@@ -24,8 +24,7 @@
  *
 */
 
-use super::{super::LangError, Slice};
-use core::slice;
+use {super::Slice, crate::engine::ql::LangError, core::slice};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token<'a> {

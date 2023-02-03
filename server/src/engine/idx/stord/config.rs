@@ -24,8 +24,11 @@
  *
 */
 
-use super::{super::meta::AsHasher, IndexSTSeqDllNode, IndexSTSeqDllNodePtr};
-use std::{collections::hash_map::RandomState, marker::PhantomData, ptr};
+use {
+    super::{IndexSTSeqDllNode, IndexSTSeqDllNodePtr},
+    crate::engine::idx::meta::AsHasher,
+    std::{collections::hash_map::RandomState, marker::PhantomData, ptr},
+};
 
 pub struct LiberalStrategy<K, V> {
     f: *mut IndexSTSeqDllNode<K, V>,

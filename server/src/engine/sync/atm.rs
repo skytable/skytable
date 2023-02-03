@@ -24,8 +24,10 @@
  *
 */
 
-use core::{fmt, mem, ops::Deref, sync::atomic::Ordering};
-use crossbeam_epoch::{Atomic as CBAtomic, CompareExchangeError, Pointable, Pointer};
+use {
+    core::{fmt, mem, ops::Deref, sync::atomic::Ordering},
+    crossbeam_epoch::{Atomic as CBAtomic, CompareExchangeError, Pointable, Pointer},
+};
 // re-export here because we have some future plans ;) (@ohsayan)
 pub use crossbeam_epoch::{pin as cpin, unprotected as upin, Guard, Owned, Shared};
 
