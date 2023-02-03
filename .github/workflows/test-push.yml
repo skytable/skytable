@@ -72,29 +72,6 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
 
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: runner.os != 'Windows'
-
-      - name: Archive artifacts
-        shell: cmd
-        run: |
-          cargo build --target ${{ matrix.rust }}
-          rm -rf dist
-          mkdir dist
-          move target\${{ matrix.rust }}\debug\*.exe dist
-        env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: runner.os == 'Windows'
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
   test_32bit:
     name: Test (32-bit)
     runs-on: ${{ matrix.os }}
@@ -141,29 +118,6 @@ jobs:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
 
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-        if: runner.os == 'Linux'
-
-      - name: Archive artifacts
-        shell: cmd
-        run: |
-          cargo build --target ${{ matrix.rust }}
-          rm -rf dist
-          mkdir dist
-          move target\${{ matrix.rust }}\debug\*.exe dist
-        env:
-          RUSTFLAGS: -Ctarget-feature=+crt-static
-        if: runner.os == 'Windows'
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
   test_musl64:
     name: Test MUSL x86_64 (Tier 2)
     runs-on: ${{ matrix.os }}
@@ -207,15 +161,3 @@ jobs:
         env:
           RUST_BACKTRACE: 1
           TARGET: ${{ matrix.rust }}
-
-      - name: Archive artifacts
-        run: |
-          mkdir dist
-          cargo build --target ${{ matrix.rust }}
-          mv target/${{ matrix.rust }}/debug/skyd target/${{ matrix.rust }}/debug/skysh target/${{ matrix.rust }}/debug/sky-bench dist
-
-      - name: Save artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ github.sha }}-${{ matrix.rust }}-builds.zip
-          path: dist
