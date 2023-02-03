@@ -283,14 +283,14 @@ macro_rules! dict {
 }
 
 #[cfg(test)]
-macro_rules! nullable_dict {
+macro_rules! null_dict {
     () => {
         dict! {}
     };
     ($($key:expr => $value:expr),* $(,)?) => {
         dict! {
             $(
-                $key => $crate::engine::ql::tests::NullableMapEntry::data($value),
+                $key => $crate::engine::ql::tests::NullableDictEntry::data($value),
             )*
         }
     };
@@ -305,18 +305,6 @@ macro_rules! dict_nullable {
         let mut hm: ::std::collections::HashMap<_, _> = ::core::default::Default::default();
         $(hm.insert($key.into(), $crate::engine::ql::tests::nullable_datatype($value));)*
         hm
-    }};
-}
-
-#[cfg(test)]
-macro_rules! set {
-    () => {
-        <::std::collections::HashSet<_> as ::core::default::Default>::default()
-    };
-    ($($key:expr),* $(,)?) => {{
-        let mut hs: ::std::collections::HashSet<_> = ::core::default::Default::default();
-        $(hs.insert($key.into());)*
-        hs
     }};
 }
 

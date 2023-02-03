@@ -24,11 +24,16 @@
  *
 */
 
+pub mod traits;
+
+#[cfg(test)]
+pub use traits::{parse_ast_node_full, parse_ast_node_multiple_full};
 use {
+    self::traits::ASTNode,
     super::{
         ddl, dml,
         lex::{LitIR, Slice, Token},
-        schema, LangError, LangResult,
+        LangError, LangResult,
     },
     crate::{
         engine::core::DataType,
@@ -49,6 +54,12 @@ pub struct State<'a, Qd> {
     d: Qd,
     i: usize,
     f: bool,
+}
+
+impl<'a> State<'a, InplaceData> {
+    pub const fn new_inplace(tok: &'a [Token<'a>]) -> Self {
+        Self::new(tok, InplaceData::new())
+    }
 }
 
 impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
@@ -512,13 +523,13 @@ pub enum Statement<'a> {
     /// DDL query to switch between spaces and models
     Use(Entity<'a>),
     /// DDL query to create a model
-    CreateModel(schema::Model<'a>),
+    CreateModel(ddl::crt::Model<'a>),
     /// DDL query to create a space
-    CreateSpace(schema::Space<'a>),
+    CreateSpace(ddl::crt::Space<'a>),
     /// DDL query to alter a space (properties)
-    AlterSpace(schema::AlterSpace<'a>),
+    AlterSpace(ddl::alt::AlterSpace<'a>),
     /// DDL query to alter a model (properties, field types, etc)
-    AlterModel(schema::Alter<'a>),
+    AlterModel(ddl::alt::AlterModel<'a>),
     /// DDL query to drop a model
     ///
     /// Conditions:
@@ -557,21 +568,13 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
         // DDL
         Token![use] => Entity::attempt_process_entity_result(&mut state).map(Statement::Use),
         Token![create] => match state.fw_read() {
-            Token![model] => {
-                schema::parse_model_from_tokens(&mut state).map(Statement::CreateModel)
-            }
-            Token![space] => {
-                schema::parse_space_from_tokens(&mut state).map(Statement::CreateSpace)
-            }
+            Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
+            Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
             _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
         },
         Token![alter] => match state.fw_read() {
-            Token![model] => {
-                schema::parse_alter_kind_from_tokens(&mut state).map(Statement::AlterModel)
-            }
-            Token![space] => {
-                schema::parse_alter_space_from_tokens(&mut state).map(Statement::AlterSpace)
-            }
+            Token![model] => ASTNode::from_state(&mut state).map(Statement::AlterModel),
+            Token![space] => ASTNode::from_state(&mut state).map(Statement::AlterSpace),
             _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
@@ -579,18 +582,10 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
             ddl::ins::parse_inspect(&mut state)
         }
         // DML
-        Token![insert] => {
-            dml::ins::InsertStatement::parse_insert(&mut state).map(Statement::Insert)
-        }
-        Token![select] => {
-            dml::sel::SelectStatement::parse_select(&mut state).map(Statement::Select)
-        }
-        Token![update] => {
-            dml::upd::UpdateStatement::parse_update(&mut state).map(Statement::Update)
-        }
-        Token![delete] => {
-            dml::del::DeleteStatement::parse_delete(&mut state).map(Statement::Delete)
-        }
+        Token![insert] => ASTNode::from_state(&mut state).map(Statement::Insert),
+        Token![select] => ASTNode::from_state(&mut state).map(Statement::Select),
+        Token![update] => ASTNode::from_state(&mut state).map(Statement::Update),
+        Token![delete] => ASTNode::from_state(&mut state).map(Statement::Delete),
         _ => compiler::cold_rerr(LangError::ExpectedStatement),
     }
 }

@@ -34,12 +34,11 @@ pub mod ins;
 pub mod sel;
 pub mod upd;
 
-#[cfg(test)]
-use super::ast::InplaceData;
 use {
     super::{
-        ast::{QueryData, State},
+        ast::{traits::ASTNode, QueryData, State},
         lex::{LitIR, Token},
+        LangError, LangResult,
     },
     crate::util::compiler,
     std::collections::HashMap,
@@ -120,6 +119,12 @@ impl<'a> RelationalExpr<'a> {
     }
 }
 
+impl<'a> ASTNode<'a> for RelationalExpr<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        Self::try_parse(state).ok_or(LangError::UnexpectedToken)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct WhereClause<'a> {
     c: WhereClauseCollection<'a>,
@@ -159,19 +164,13 @@ impl<'a> WhereClause<'a> {
     }
 }
 
-#[cfg(test)]
-pub(super) fn parse_where_clause_full<'a>(tok: &'a [Token]) -> Option<WhereClause<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let ret = WhereClause::parse_where(&mut state);
-    assert_full_tt!(state);
-    state.okay().then_some(ret)
-}
-
-#[cfg(test)]
-#[inline(always)]
-pub(super) fn parse_relexpr_full<'a>(tok: &'a [Token]) -> Option<RelationalExpr<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let ret = RelationalExpr::try_parse(&mut state);
-    assert_full_tt!(state);
-    ret
+impl<'a> ASTNode<'a> for WhereClause<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        let wh = Self::parse_where(state);
+        if state.okay() {
+            Ok(wh)
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
 }

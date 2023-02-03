@@ -25,25 +25,24 @@
 */
 
 use super::{
-    super::{
-        lex::{Lit, Token},
-        schema,
-    },
+    super::lex::{Lit, Token},
     lex_insecure, *,
 };
 mod inspect {
     use {
         super::*,
         crate::engine::ql::{
-            ast::{Entity, Statement},
-            ddl,
+            ast::{parse_ast_node_full, Entity, Statement},
+            ddl::ins::InspectStatementAST,
         },
     };
     #[test]
     fn inspect_space() {
         let tok = lex_insecure(b"inspect space myspace").unwrap();
         assert_eq!(
-            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
+                .unwrap()
+                .0,
             Statement::InspectSpace(b"myspace")
         );
     }
@@ -51,12 +50,16 @@ mod inspect {
     fn inspect_model() {
         let tok = lex_insecure(b"inspect model users").unwrap();
         assert_eq!(
-            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
+                .unwrap()
+                .0,
             Statement::InspectModel(Entity::Single(b"users"))
         );
         let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
         assert_eq!(
-            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
+                .unwrap()
+                .0,
             Statement::InspectModel(Entity::Full(b"tweeter", b"users"))
         );
     }
@@ -64,7 +67,9 @@ mod inspect {
     fn inspect_spaces() {
         let tok = lex_insecure(b"inspect spaces").unwrap();
         assert_eq!(
-            ddl::ins::parse_inspect_full(&tok[1..]).unwrap(),
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
+                .unwrap()
+                .0,
             Statement::InspectSpaces
         );
     }
@@ -73,22 +78,13 @@ mod inspect {
 mod alter_space {
     use {
         super::*,
-        crate::engine::ql::{
-            lex::Lit,
-            schema::{self, AlterSpace},
-        },
+        crate::engine::ql::{ast::parse_ast_node_full, ddl::alt::AlterSpace, lex::Lit},
     };
     #[test]
     fn alter_space_mini() {
         let tok = lex_insecure(b"alter model mymodel with {}").unwrap();
-        let r = schema::alter_space_full(&tok[2..]).unwrap();
-        assert_eq!(
-            r,
-            AlterSpace {
-                space_name: b"mymodel",
-                updated_props: nullable_dict! {}
-            }
-        );
+        let r = parse_ast_node_full::<AlterSpace>(&tok[2..]).unwrap();
+        assert_eq!(r, AlterSpace::new(b"mymodel", null_dict! {}));
     }
     #[test]
     fn alter_space() {
@@ -101,49 +97,44 @@ mod alter_space {
             "#,
         )
         .unwrap();
-        let r = schema::alter_space_full(&tok[2..]).unwrap();
+        let r = parse_ast_node_full::<AlterSpace>(&tok[2..]).unwrap();
         assert_eq!(
             r,
-            AlterSpace {
-                space_name: b"mymodel",
-                updated_props: nullable_dict! {
+            AlterSpace::new(
+                b"mymodel",
+                null_dict! {
                     "max_entry" => Lit::UnsignedInt(1000),
                     "driver" => Lit::Str("ts-0.8".into())
                 }
-            }
+            )
         );
     }
 }
 mod tymeta {
     use super::*;
+    use crate::engine::ql::{
+        ast::{parse_ast_node_full, traits::ASTNode, State},
+        ddl::syn::{DictTypeMeta, DictTypeMetaSplit},
+    };
     #[test]
     fn tymeta_mini() {
-        let tok = lex_insecure(b"}").unwrap();
-        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
-        assert!(okay);
-        assert!(!tymeta.has_more());
-        assert_eq!(cursor, 1);
-        assert_eq!(data, nullable_dict!());
+        let tok = lex_insecure(b"{}").unwrap();
+        let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
+        assert_eq!(tymeta.0, null_dict!());
     }
     #[test]
+    #[should_panic]
     fn tymeta_mini_fail() {
-        let tok = lex_insecure(b",}").unwrap();
-        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
-        assert!(!okay);
-        assert!(!tymeta.has_more());
-        assert_eq!(cursor, 0);
-        assert_eq!(data, nullable_dict!());
+        let tok = lex_insecure(b"{,}").unwrap();
+        parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
     }
     #[test]
     fn tymeta() {
-        let tok = lex_insecure(br#"hello: "world", loading: true, size: 100 }"#).unwrap();
-        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
-        assert!(okay);
-        assert!(!tymeta.has_more());
-        assert_eq!(cursor, tok.len());
+        let tok = lex_insecure(br#"{hello: "world", loading: true, size: 100 }"#).unwrap();
+        let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
         assert_eq!(
-            data,
-            nullable_dict! {
+            tymeta.0,
+            null_dict! {
                 "hello" => Lit::Str("world".into()),
                 "loading" => Lit::Bool(true),
                 "size" => Lit::UnsignedInt(100)
@@ -152,23 +143,22 @@ mod tymeta {
     }
     #[test]
     fn tymeta_pro() {
-        // list { maxlen: 100, type string, unique: true }
+        // list { maxlen: 100, type: string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^ cursor should be at string
-        let tok = lex_insecure(br#"maxlen: 100, type string, unique: true }"#).unwrap();
-        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
-        assert!(okay);
-        assert!(tymeta.has_more());
-        assert_eq!(cursor, 5);
-        let remslice = &tok[cursor + 2..];
-        let (tymeta2, okay2, cursor2, data2) = schema::fold_tymeta(remslice);
-        assert!(okay2);
-        assert!(!tymeta2.has_more());
-        assert_eq!(cursor2 + cursor + 2, tok.len());
-        let mut final_ret = data;
-        final_ret.extend(data2);
+        let tok = lex_insecure(br#"{maxlen: 100, type: string, unique: true }"#).unwrap();
+        let mut state = State::new_inplace(&tok);
+        let tymeta: DictTypeMeta = ASTNode::from_state(&mut state).unwrap();
+        assert_eq!(state.cursor(), 6);
+        assert!(Token![:].eq(state.fw_read()));
+        assert!(Token::Ident(b"string").eq(state.fw_read()));
+        assert!(Token![,].eq(state.fw_read()));
+        let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
+        assert!(state.exhausted());
+        let mut final_ret = tymeta;
+        final_ret.0.extend(tymeta2.0);
         assert_eq!(
-            final_ret,
-            nullable_dict! {
+            final_ret.0,
+            null_dict! {
                 "maxlen" => Lit::UnsignedInt(100),
                 "unique" => Lit::Bool(true)
             }
@@ -176,123 +166,51 @@ mod tymeta {
     }
     #[test]
     fn tymeta_pro_max() {
-        // list { maxlen: 100, this: { is: "cool" }, type string, unique: true }
+        // list { maxlen: 100, this: { is: "cool" }, type: string, unique: true }
         //        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cursor should be at string
         let tok =
-            lex_insecure(br#"maxlen: 100, this: { is: "cool" }, type string, unique: true }"#)
+            lex_insecure(br#"{maxlen: 100, this: { is: "cool" }, type: string, unique: true }"#)
                 .unwrap();
-        let (tymeta, okay, cursor, data) = schema::fold_tymeta(&tok);
-        assert!(okay);
-        assert!(tymeta.has_more());
-        assert_eq!(cursor, 13);
-        let remslice = &tok[cursor + 2..];
-        let (tymeta2, okay2, cursor2, data2) = schema::fold_tymeta(remslice);
-        assert!(okay2);
-        assert!(!tymeta2.has_more());
-        assert_eq!(cursor2 + cursor + 2, tok.len());
-        let mut final_ret = data;
-        final_ret.extend(data2);
+        let mut state = State::new_inplace(&tok);
+        let tymeta: DictTypeMeta = ASTNode::from_state(&mut state).unwrap();
+        assert_eq!(state.cursor(), 14);
+        assert!(Token![:].eq(state.fw_read()));
+        assert!(Token::Ident(b"string").eq(state.fw_read()));
+        assert!(Token![,].eq(state.fw_read()));
+        let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
+        assert!(state.exhausted());
+        let mut final_ret = tymeta;
+        final_ret.0.extend(tymeta2.0);
         assert_eq!(
-            final_ret,
-            nullable_dict! {
+            final_ret.0,
+            null_dict! {
                 "maxlen" => Lit::UnsignedInt(100),
                 "unique" => Lit::Bool(true),
-                "this" => nullable_dict! {
+                "this" => null_dict! {
                     "is" => Lit::Str("cool".into())
                 }
             }
         )
     }
-    #[test]
-    fn fuzz_tymeta_normal() {
-        // { maxlen: 10, unique: true, users: "sayan" }
-        //   ^start
-        let tok = b"
-                maxlen: 10,
-                unique: true,
-                auth: {
-                    maybe: true\x01
-                },
-                users: \"sayan\"\x01
-            }
-        ";
-        let expected = nullable_dict! {
-            "maxlen" => Lit::UnsignedInt(10),
-            "unique" => Lit::Bool(true),
-            "auth" => nullable_dict! {
-                "maybe" => Lit::Bool(true),
-            },
-            "users" => Lit::Str("sayan".into())
-        };
-        fuzz_tokens(tok.as_slice(), |should_pass, new_src| {
-            let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
-            if should_pass {
-                assert!(okay, "{:?}", &new_src);
-                assert!(!tymeta.has_more());
-                assert_eq!(cursor, new_src.len());
-                assert_eq!(data, expected);
-            }
-            okay
-        });
-    }
-    #[test]
-    fn fuzz_tymeta_with_ty() {
-        // list { maxlen: 10, unique: true, type string, users: "sayan" }
-        //   ^start
-        let tok = b"
-                maxlen: 10,
-                unique: true,
-                auth: {
-                    maybe: true\x01
-                },
-                type string,
-                users: \"sayan\"\x01
-            }
-        ";
-        let expected = nullable_dict! {
-            "maxlen" => Lit::UnsignedInt(10),
-            "unique" => Lit::Bool(true),
-            "auth" => nullable_dict! {
-                "maybe" => Lit::Bool(true),
-            },
-        };
-        fuzz_tokens(tok.as_slice(), |should_pass, new_src| {
-            let (tymeta, okay, cursor, data) = schema::fold_tymeta(&new_src);
-            if should_pass {
-                assert!(okay);
-                assert!(tymeta.has_more());
-                assert!(new_src[cursor] == Token::Ident(b"string"));
-                assert_eq!(data, expected);
-            }
-            okay
-        });
-    }
 }
 mod layer {
     use super::*;
-    use crate::engine::ql::schema::Layer;
+    use crate::engine::ql::{ast::parse_ast_node_multiple_full, ddl::syn::Layer};
     #[test]
     fn layer_mini() {
-        let tok = lex_insecure(b"string)").unwrap();
-        let (layers, c, okay) = schema::fold_layers(&tok);
-        assert_eq!(c, tok.len() - 1);
-        assert!(okay);
-        assert_eq!(
-            layers,
-            vec![Layer::new_noreset(b"string", nullable_dict! {})]
-        );
+        let tok = lex_insecure(b"string").unwrap();
+        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        assert_eq!(layers, vec![Layer::new(b"string", null_dict! {})]);
     }
     #[test]
     fn layer() {
         let tok = lex_insecure(b"string { maxlen: 100 }").unwrap();
-        let (layers, c, okay) = schema::fold_layers(&tok);
-        assert_eq!(c, tok.len());
-        assert!(okay);
+        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
         assert_eq!(
             layers,
-            vec![Layer::new_noreset(
+            vec![Layer::new(
                 b"string",
-                nullable_dict! {
+                null_dict! {
                     "maxlen" => Lit::UnsignedInt(100)
                 }
             )]
@@ -300,31 +218,27 @@ mod layer {
     }
     #[test]
     fn layer_plus() {
-        let tok = lex_insecure(b"list { type string }").unwrap();
-        let (layers, c, okay) = schema::fold_layers(&tok);
-        assert_eq!(c, tok.len());
-        assert!(okay);
+        let tok = lex_insecure(b"list { type: string }").unwrap();
+        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new_noreset(b"string", nullable_dict! {}),
-                Layer::new_noreset(b"list", nullable_dict! {})
+                Layer::new(b"string", null_dict! {}),
+                Layer::new(b"list", null_dict! {})
             ]
         );
     }
     #[test]
     fn layer_pro() {
-        let tok = lex_insecure(b"list { unique: true, type string, maxlen: 10 }").unwrap();
-        let (layers, c, okay) = schema::fold_layers(&tok);
-        assert_eq!(c, tok.len());
-        assert!(okay);
+        let tok = lex_insecure(b"list { unique: true, type: string, maxlen: 10 }").unwrap();
+        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new_noreset(b"string", nullable_dict! {}),
-                Layer::new_noreset(
+                Layer::new(b"string", null_dict! {}),
+                Layer::new(
                     b"list",
-                    nullable_dict! {
+                    null_dict! {
                         "unique" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(10),
                     }
@@ -335,25 +249,23 @@ mod layer {
     #[test]
     fn layer_pro_max() {
         let tok = lex_insecure(
-            b"list { unique: true, type string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
+            b"list { unique: true, type: string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
         )
         .unwrap();
-        let (layers, c, okay) = schema::fold_layers(&tok);
-        assert_eq!(c, tok.len());
-        assert!(okay);
+        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new_noreset(
+                Layer::new(
                     b"string",
-                    nullable_dict! {
+                    null_dict! {
                         "ascii_only" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(255)
                     }
                 ),
-                Layer::new_noreset(
+                Layer::new(
                     b"list",
-                    nullable_dict! {
+                    null_dict! {
                         "unique" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(10),
                     }
@@ -366,101 +278,67 @@ mod layer {
     fn fuzz_layer() {
         let tok = b"
             list {
-                type list {
+                type: list {
                     maxlen: 100,
-                    type string\x01
+                    type: string\x01
                 },
                 unique: true\x01
             }
         ";
         let expected = vec![
-            Layer::new_noreset(b"string", nullable_dict!()),
-            Layer::new_noreset(
+            Layer::new(b"string", null_dict!()),
+            Layer::new(
                 b"list",
-                nullable_dict! {
+                null_dict! {
                     "maxlen" => Lit::UnsignedInt(100),
                 },
             ),
-            Layer::new_noreset(b"list", nullable_dict!("unique" => Lit::Bool(true))),
+            Layer::new(b"list", null_dict!("unique" => Lit::Bool(true))),
         ];
         fuzz_tokens(tok.as_slice(), |should_pass, new_tok| {
-            let (layers, c, okay) = schema::fold_layers(&new_tok);
+            let layers = parse_ast_node_multiple_full::<Layer>(&new_tok);
+            let ok = layers.is_ok();
             if should_pass {
-                assert!(okay);
-                assert_eq!(c, new_tok.len());
-                assert_eq!(layers, expected);
+                assert_eq!(layers.unwrap(), expected);
             }
-            okay
+            ok
         });
-    }
-}
-mod field_properties {
-    use {super::*, crate::engine::ql::schema::FieldProperties};
-
-    #[test]
-    fn field_properties_empty() {
-        let tok = lex_insecure(b"myfield:").unwrap();
-        let (props, c, okay) = schema::parse_field_properties(&tok);
-        assert!(okay);
-        assert_eq!(c, 0);
-        assert_eq!(props, FieldProperties::default());
-    }
-    #[test]
-    fn field_properties_full() {
-        let tok = lex_insecure(b"primary null myfield:").unwrap();
-        let (props, c, okay) = schema::parse_field_properties(&tok);
-        assert_eq!(c, 2);
-        assert_eq!(tok[c], Token::Ident(b"myfield"));
-        assert!(okay);
-        assert_eq!(
-            props,
-            FieldProperties {
-                properties: set!["primary", "null"],
-            }
-        )
     }
 }
 mod fields {
     use {
         super::*,
-        crate::engine::ql::schema::{Field, Layer},
+        crate::engine::ql::{
+            ast::parse_ast_node_full,
+            ddl::syn::{Field, Layer},
+        },
     };
     #[test]
     fn field_mini() {
-        let tok = lex_insecure(
-            b"
-                username: string,
-            ",
-        )
-        .unwrap();
-        let (c, f) = schema::parse_field_full(&tok).unwrap();
-        assert_eq!(c, tok.len() - 1);
+        let tok = lex_insecure(b"username: string").unwrap();
+        let f = parse_ast_node_full::<Field>(&tok).unwrap();
         assert_eq!(
             f,
-            Field {
-                field_name: b"username",
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                props: set![],
-            }
+            Field::new(
+                b"username",
+                [Layer::new(b"string", null_dict! {})].into(),
+                false,
+                false
+            )
         )
     }
     #[test]
     fn field() {
-        let tok = lex_insecure(
-            b"
-                primary username: string,    
-            ",
-        )
-        .unwrap();
-        let (c, f) = schema::parse_field_full(&tok).unwrap();
-        assert_eq!(c, tok.len() - 1);
+        let tok = lex_insecure(b"primary username: string").unwrap();
+        let f = parse_ast_node_full::<Field>(&tok).unwrap();
         assert_eq!(
             f,
-            Field {
-                field_name: b"username",
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                props: set!["primary"],
-            }
+            Field::new(
+                b"username",
+                [Layer::new(b"string", null_dict! {})].into(),
+                false,
+                true
+            )
         )
     }
     #[test]
@@ -474,22 +352,22 @@ mod fields {
             ",
         )
         .unwrap();
-        let (c, f) = schema::parse_field_full(&tok).unwrap();
-        assert_eq!(c, tok.len());
+        let f = parse_ast_node_full::<Field>(&tok).unwrap();
         assert_eq!(
             f,
-            Field {
-                field_name: b"username",
-                layers: [Layer::new_noreset(
+            Field::new(
+                b"username",
+                [Layer::new(
                     b"string",
-                    nullable_dict! {
+                    null_dict! {
                         "maxlen" => Lit::UnsignedInt(10),
                         "ascii_only" => Lit::Bool(true),
                     }
                 )]
                 .into(),
-                props: set!["primary"],
-            }
+                false,
+                true,
+            )
         )
     }
     #[test]
@@ -497,7 +375,7 @@ mod fields {
         let tok = lex_insecure(
             b"
                 null notes: list {
-                    type string {
+                    type: string {
                         maxlen: 255,
                         ascii_only: true,
                     },
@@ -506,44 +384,49 @@ mod fields {
             ",
         )
         .unwrap();
-        let (c, f) = schema::parse_field_full(&tok).unwrap();
-        assert_eq!(c, tok.len());
+        let f = parse_ast_node_full::<Field>(&tok).unwrap();
         assert_eq!(
             f,
-            Field {
-                field_name: b"notes",
-                layers: [
-                    Layer::new_noreset(
+            Field::new(
+                b"notes",
+                [
+                    Layer::new(
                         b"string",
-                        nullable_dict! {
+                        null_dict! {
                             "maxlen" => Lit::UnsignedInt(255),
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
-                    Layer::new_noreset(
+                    Layer::new(
                         b"list",
-                        nullable_dict! {
+                        null_dict! {
                             "unique" => Lit::Bool(true)
                         }
                     ),
                 ]
                 .into(),
-                props: set!["null"],
-            }
+                true,
+                false,
+            )
         )
     }
 }
 mod schemas {
-    use crate::engine::ql::schema::{Field, Layer, Model};
-
     use super::*;
+    use crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::{
+            crt::Model,
+            syn::{Field, Layer},
+        },
+    };
     #[test]
     fn schema_mini() {
         let tok = lex_insecure(
             b"
                 create model mymodel(
                     primary username: string,
-                    password: binary,
+                    password: binary
                 )
             ",
         )
@@ -551,26 +434,28 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
-        assert_eq!(c, tok.len());
+        let model = parse_ast_node_full::<Model>(tok).unwrap();
+
         assert_eq!(
             model,
-            Model {
-                model_name: b"mymodel",
-                fields: vec![
-                    Field {
-                        field_name: b"username",
-                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                        props: set!["primary"]
-                    },
-                    Field {
-                        field_name: b"password",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set![]
-                    }
+            Model::new(
+                b"mymodel",
+                vec![
+                    Field::new(
+                        b"username",
+                        vec![Layer::new(b"string", null_dict! {})],
+                        false,
+                        true,
+                    ),
+                    Field::new(
+                        b"password",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        false,
+                        false,
+                    )
                 ],
-                props: nullable_dict! {}
-            }
+                null_dict! {}
+            )
         )
     }
     #[test]
@@ -580,7 +465,7 @@ mod schemas {
                 create model mymodel(
                     primary username: string,
                     password: binary,
-                    null profile_pic: binary,
+                    null profile_pic: binary
                 )
             ",
         )
@@ -588,31 +473,34 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
-        assert_eq!(c, tok.len());
+        let model = parse_ast_node_full::<Model>(tok).unwrap();
+
         assert_eq!(
             model,
-            Model {
-                model_name: b"mymodel",
-                fields: vec![
-                    Field {
-                        field_name: b"username",
-                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                        props: set!["primary"]
-                    },
-                    Field {
-                        field_name: b"password",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set![]
-                    },
-                    Field {
-                        field_name: b"profile_pic",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set!["null"]
-                    }
+            Model::new(
+                b"mymodel",
+                vec![
+                    Field::new(
+                        b"username",
+                        vec![Layer::new(b"string", null_dict! {})],
+                        false,
+                        true,
+                    ),
+                    Field::new(
+                        b"password",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        false,
+                        false,
+                    ),
+                    Field::new(
+                        b"profile_pic",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        true,
+                        false,
+                    )
                 ],
-                props: nullable_dict! {}
-            }
+                null_dict! {}
+            )
         )
     }
 
@@ -625,9 +513,9 @@ mod schemas {
                     password: binary,
                     null profile_pic: binary,
                     null notes: list {
-                        type string,
+                        type: string,
                         unique: true,
-                    },
+                    }
                 )
             ",
         )
@@ -635,44 +523,48 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
-        assert_eq!(c, tok.len());
+        let model = parse_ast_node_full::<Model>(tok).unwrap();
+
         assert_eq!(
             model,
-            Model {
-                model_name: b"mymodel",
-                fields: vec![
-                    Field {
-                        field_name: b"username",
-                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                        props: set!["primary"]
-                    },
-                    Field {
-                        field_name: b"password",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set![]
-                    },
-                    Field {
-                        field_name: b"profile_pic",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set!["null"]
-                    },
-                    Field {
-                        field_name: b"notes",
-                        layers: vec![
-                            Layer::new_noreset(b"string", nullable_dict! {}),
-                            Layer::new_noreset(
+            Model::new(
+                b"mymodel",
+                vec![
+                    Field::new(
+                        b"username",
+                        vec![Layer::new(b"string", null_dict! {})],
+                        false,
+                        true
+                    ),
+                    Field::new(
+                        b"password",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        false,
+                        false
+                    ),
+                    Field::new(
+                        b"profile_pic",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        true,
+                        false
+                    ),
+                    Field::new(
+                        b"notes",
+                        vec![
+                            Layer::new(b"string", null_dict! {}),
+                            Layer::new(
                                 b"list",
-                                nullable_dict! {
+                                null_dict! {
                                     "unique" => Lit::Bool(true)
                                 }
                             )
                         ],
-                        props: set!["null"]
-                    }
+                        true,
+                        false
+                    )
                 ],
-                props: nullable_dict! {}
-            }
+                null_dict! {}
+            )
         )
     }
 
@@ -685,9 +577,9 @@ mod schemas {
                     password: binary,
                     null profile_pic: binary,
                     null notes: list {
-                        type string,
+                        type: string,
                         unique: true,
-                    },
+                    }
                 ) with {
                     env: {
                         free_user_limit: 100,
@@ -700,68 +592,73 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let (model, c) = schema::parse_schema_from_tokens_full(tok).unwrap();
-        assert_eq!(c, tok.len());
+        let model = parse_ast_node_full::<Model>(tok).unwrap();
+
         assert_eq!(
             model,
-            Model {
-                model_name: b"mymodel",
-                fields: vec![
-                    Field {
-                        field_name: b"username",
-                        layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                        props: set!["primary"]
-                    },
-                    Field {
-                        field_name: b"password",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set![]
-                    },
-                    Field {
-                        field_name: b"profile_pic",
-                        layers: vec![Layer::new_noreset(b"binary", nullable_dict! {})],
-                        props: set!["null"]
-                    },
-                    Field {
-                        field_name: b"notes",
-                        layers: vec![
-                            Layer::new_noreset(b"string", nullable_dict! {}),
-                            Layer::new_noreset(
+            Model::new(
+                b"mymodel",
+                vec![
+                    Field::new(
+                        b"username",
+                        vec![Layer::new(b"string", null_dict! {})],
+                        false,
+                        true
+                    ),
+                    Field::new(
+                        b"password",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        false,
+                        false
+                    ),
+                    Field::new(
+                        b"profile_pic",
+                        vec![Layer::new(b"binary", null_dict! {})],
+                        true,
+                        false
+                    ),
+                    Field::new(
+                        b"notes",
+                        vec![
+                            Layer::new(b"string", null_dict! {}),
+                            Layer::new(
                                 b"list",
-                                nullable_dict! {
+                                null_dict! {
                                     "unique" => Lit::Bool(true)
                                 }
                             )
                         ],
-                        props: set!["null"]
-                    }
+                        true,
+                        false
+                    )
                 ],
-                props: nullable_dict! {
-                    "env" => nullable_dict! {
+                null_dict! {
+                    "env" => null_dict! {
                         "free_user_limit" => Lit::UnsignedInt(100),
                     },
                     "storage_driver" => Lit::Str("skyheap".into()),
                 }
-            }
+            )
         )
     }
 }
 mod dict_field_syntax {
     use super::*;
-    use crate::engine::ql::schema::{ExpandedField, Layer};
+    use crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::syn::{ExpandedField, Layer},
+    };
     #[test]
     fn field_syn_mini() {
-        let tok = lex_insecure(b"username { type string }").unwrap();
-        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
-        assert_eq!(i, tok.len());
+        let tok = lex_insecure(b"username { type: string }").unwrap();
+        let ef = parse_ast_node_full::<ExpandedField>(&tok).unwrap();
         assert_eq!(
             ef,
-            ExpandedField {
-                field_name: b"username",
-                layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                props: nullable_dict! {},
-                reset: false
-            }
+            ExpandedField::new(
+                b"username",
+                vec![Layer::new(b"string", null_dict! {})],
+                null_dict! {}
+            )
         )
     }
     #[test]
@@ -770,23 +667,21 @@ mod dict_field_syntax {
             b"
                 username {
                     nullable: false,
-                    type string,
+                    type: string,
                 }
             ",
         )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
-        assert_eq!(i, tok.len());
+        let ef = parse_ast_node_full::<ExpandedField>(&tok).unwrap();
         assert_eq!(
             ef,
-            ExpandedField {
-                field_name: b"username",
-                props: nullable_dict! {
+            ExpandedField::new(
+                b"username",
+                vec![Layer::new(b"string", null_dict! {})],
+                null_dict! {
                     "nullable" => Lit::Bool(false),
                 },
-                layers: vec![Layer::new_noreset(b"string", nullable_dict! {})],
-                reset: false
-            }
+            )
         );
     }
     #[test]
@@ -795,7 +690,7 @@ mod dict_field_syntax {
             b"
                 username {
                     nullable: false,
-                    type string {
+                    type: string {
                         minlen: 6,
                         maxlen: 255,
                     },
@@ -804,25 +699,23 @@ mod dict_field_syntax {
             ",
         )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
-        assert_eq!(i, tok.len());
+        let ef = parse_ast_node_full::<ExpandedField>(&tok).unwrap();
         assert_eq!(
             ef,
-            ExpandedField {
-                field_name: b"username",
-                props: nullable_dict! {
-                    "nullable" => Lit::Bool(false),
-                    "jingle_bells" => Lit::Str("snow".into()),
-                },
-                layers: vec![Layer::new_noreset(
+            ExpandedField::new(
+                b"username",
+                vec![Layer::new(
                     b"string",
-                    nullable_dict! {
+                    null_dict! {
                         "minlen" => Lit::UnsignedInt(6),
                         "maxlen" => Lit::UnsignedInt(255),
                     }
                 )],
-                reset: false
-            }
+                null_dict! {
+                    "nullable" => Lit::Bool(false),
+                    "jingle_bells" => Lit::Str("snow".into()),
+                },
+            )
         );
     }
     #[test]
@@ -831,8 +724,8 @@ mod dict_field_syntax {
             b"
                 notes {
                     nullable: true,
-                    type list {
-                        type string {
+                    type: list {
+                        type: string {
                             ascii_only: true,
                         },
                         unique: true,
@@ -842,141 +735,165 @@ mod dict_field_syntax {
             ",
         )
         .unwrap();
-        let (ef, i) = schema::parse_field_syntax_full::<true>(&tok).unwrap();
-        assert_eq!(i, tok.len());
+        let ef = parse_ast_node_full::<ExpandedField>(&tok).unwrap();
         assert_eq!(
             ef,
-            ExpandedField {
-                field_name: b"notes",
-                props: nullable_dict! {
-                    "nullable" => Lit::Bool(true),
-                    "jingle_bells" => Lit::Str("snow".into()),
-                },
-                layers: vec![
-                    Layer::new_noreset(
+            ExpandedField::new(
+                b"notes",
+                vec![
+                    Layer::new(
                         b"string",
-                        nullable_dict! {
+                        null_dict! {
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
-                    Layer::new_noreset(
+                    Layer::new(
                         b"list",
-                        nullable_dict! {
+                        null_dict! {
                             "unique" => Lit::Bool(true),
                         }
                     )
                 ],
-                reset: false
-            }
+                null_dict! {
+                    "nullable" => Lit::Bool(true),
+                    "jingle_bells" => Lit::Str("snow".into()),
+                },
+            )
         );
     }
 }
 mod alter_model_remove {
     use super::*;
+    use crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::alt::{AlterKind, AlterModel},
+    };
     #[test]
     fn alter_mini() {
         let tok = lex_insecure(b"alter model mymodel remove myfield").unwrap();
-        let mut i = 4;
-        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
-        assert_eq!(remove, [b"myfield".as_slice()].into());
+        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        assert_eq!(
+            remove,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Remove(Box::from([b"myfield".as_slice()]))
+            )
+        );
     }
     #[test]
     fn alter_mini_2() {
         let tok = lex_insecure(b"alter model mymodel remove (myfield)").unwrap();
-        let mut i = 4;
-        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
-        assert_eq!(remove, [b"myfield".as_slice()].into());
+        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+        assert_eq!(
+            remove,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Remove(Box::from([b"myfield".as_slice()]))
+            )
+        );
     }
     #[test]
     fn alter() {
         let tok =
             lex_insecure(b"alter model mymodel remove (myfield1, myfield2, myfield3, myfield4)")
                 .unwrap();
-        let mut i = 4;
-        let remove = schema::alter_remove_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let remove = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
             remove,
-            [
-                b"myfield1".as_slice(),
-                b"myfield2".as_slice(),
-                b"myfield3".as_slice(),
-                b"myfield4".as_slice(),
-            ]
-            .into()
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Remove(Box::from([
+                    b"myfield1".as_slice(),
+                    b"myfield2".as_slice(),
+                    b"myfield3".as_slice(),
+                    b"myfield4".as_slice(),
+                ]))
+            )
         );
     }
 }
 mod alter_model_add {
     use super::*;
-    use crate::engine::ql::schema::{ExpandedField, Layer};
+    use crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::{
+            alt::{AlterKind, AlterModel},
+            syn::{ExpandedField, Layer},
+        },
+    };
     #[test]
     fn add_mini() {
         let tok = lex_insecure(
             b"
-                alter model mymodel add myfield { type string }
+                alter model mymodel add myfield { type: string }
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {},
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: false
-            }]
+            parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap(),
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Add(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {},
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
     fn add() {
         let tok = lex_insecure(
             b"
-                alter model mymodel add myfield { type string, nullable: true }
+                alter model mymodel add myfield { type: string, nullable: true }
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {
-                    "nullable" => Lit::Bool(true)
-                },
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: false
-            }]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Add(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
     fn add_pro() {
         let tok = lex_insecure(
             b"
-                alter model mymodel add (myfield { type string, nullable: true })
+                alter model mymodel add (myfield { type: string, nullable: true })
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {
-                    "nullable" => Lit::Bool(true)
-                },
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: false
-            }]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Add(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
@@ -985,12 +902,12 @@ mod alter_model_add {
             b"
                 alter model mymodel add (
                     myfield {
-                        type string,
+                        type: string,
                         nullable: true
                     },
                     another {
-                        type list {
-                            type string {
+                        type: list {
+                            type: string {
                                 maxlen: 255
                             },
                             unique: true
@@ -1001,90 +918,104 @@ mod alter_model_add {
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_add_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [
-                ExpandedField {
-                    field_name: b"myfield",
-                    props: nullable_dict! {
-                        "nullable" => Lit::Bool(true)
-                    },
-                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                    reset: false
-                },
-                ExpandedField {
-                    field_name: b"another",
-                    props: nullable_dict! {
-                        "nullable" => Lit::Bool(false)
-                    },
-                    layers: [
-                        Layer::new_noreset(
-                            b"string",
-                            nullable_dict! {
-                                "maxlen" => Lit::UnsignedInt(255)
-                            }
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Add(
+                    [
+                        ExpandedField::new(
+                            b"myfield",
+                            [Layer::new(b"string", null_dict! {})].into(),
+                            null_dict! {
+                                "nullable" => Lit::Bool(true)
+                            },
                         ),
-                        Layer::new_noreset(
-                            b"list",
-                            nullable_dict! {
-                               "unique" => Lit::Bool(true)
+                        ExpandedField::new(
+                            b"another",
+                            [
+                                Layer::new(
+                                    b"string",
+                                    null_dict! {
+                                        "maxlen" => Lit::UnsignedInt(255)
+                                    }
+                                ),
+                                Layer::new(
+                                    b"list",
+                                    null_dict! {
+                                       "unique" => Lit::Bool(true)
+                                    },
+                                )
+                            ]
+                            .into(),
+                            null_dict! {
+                                "nullable" => Lit::Bool(false)
                             },
                         )
                     ]
-                    .into(),
-                    reset: false
-                }
-            ]
+                    .into()
+                )
+            )
         );
     }
 }
 mod alter_model_update {
     use super::*;
-    use crate::engine::ql::schema::{ExpandedField, Layer};
+    use crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::{
+            alt::{AlterKind, AlterModel},
+            syn::{ExpandedField, Layer},
+        },
+    };
 
     #[test]
     fn alter_mini() {
         let tok = lex_insecure(
             b"
-                alter model mymodel update myfield { type string, .. }
+                alter model mymodel update myfield { type: string }
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {},
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: true
-            }]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Update(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {},
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
     fn alter_mini_2() {
         let tok = lex_insecure(
             b"
-                alter model mymodel update (myfield { type string, .. })
+                alter model mymodel update (myfield { type: string })
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {},
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: true
-            }]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Update(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {},
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
@@ -1093,27 +1024,29 @@ mod alter_model_update {
             b"
                 alter model mymodel update (
                     myfield {
-                        type string,
+                        type: string,
                         nullable: true,
-                        ..
                     }
                 )
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [ExpandedField {
-                field_name: b"myfield",
-                props: nullable_dict! {
-                    "nullable" => Lit::Bool(true)
-                },
-                layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                reset: true
-            }]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Update(
+                    [ExpandedField::new(
+                        b"myfield",
+                        [Layer::new(b"string", null_dict! {})].into(),
+                        null_dict! {
+                            "nullable" => Lit::Bool(true)
+                        },
+                    )]
+                    .into()
+                )
+            )
         );
     }
     #[test]
@@ -1122,39 +1055,39 @@ mod alter_model_update {
             b"
                 alter model mymodel update (
                     myfield {
-                        type string,
+                        type: string,
                         nullable: true,
-                        ..
                     },
                     myfield2 {
-                        type string,
-                        ..
+                        type: string,
                     }
                 )
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [
-                ExpandedField {
-                    field_name: b"myfield",
-                    props: nullable_dict! {
-                        "nullable" => Lit::Bool(true)
-                    },
-                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                    reset: true
-                },
-                ExpandedField {
-                    field_name: b"myfield2",
-                    props: nullable_dict! {},
-                    layers: [Layer::new_noreset(b"string", nullable_dict! {})].into(),
-                    reset: true
-                }
-            ]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Update(
+                    [
+                        ExpandedField::new(
+                            b"myfield",
+                            [Layer::new(b"string", null_dict! {})].into(),
+                            null_dict! {
+                                "nullable" => Lit::Bool(true)
+                            },
+                        ),
+                        ExpandedField::new(
+                            b"myfield2",
+                            [Layer::new(b"string", null_dict! {})].into(),
+                            null_dict! {},
+                        )
+                    ]
+                    .into()
+                )
+            )
         );
     }
     #[test]
@@ -1163,46 +1096,45 @@ mod alter_model_update {
             b"
                 alter model mymodel update (
                     myfield {
-                        type string {..},
+                        type: string {},
                         nullable: true,
-                        ..
                     },
                     myfield2 {
-                        type string {
+                        type: string {
                             maxlen: 255,
-                            ..
                         },
-                        ..
                     }
                 )
             ",
         )
         .unwrap();
-        let mut i = 4;
-        let r = schema::alter_update_full(&tok[i..], &mut i).unwrap();
-        assert_eq!(i, tok.len());
+        let r = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
         assert_eq!(
-            r.as_ref(),
-            [
-                ExpandedField {
-                    field_name: b"myfield",
-                    props: nullable_dict! {
-                        "nullable" => Lit::Bool(true)
-                    },
-                    layers: [Layer::new_reset(b"string", nullable_dict! {})].into(),
-                    reset: true
-                },
-                ExpandedField {
-                    field_name: b"myfield2",
-                    props: nullable_dict! {},
-                    layers: [Layer::new_reset(
-                        b"string",
-                        nullable_dict! {"maxlen" => Lit::UnsignedInt(255)}
-                    )]
-                    .into(),
-                    reset: true
-                }
-            ]
+            r,
+            AlterModel::new(
+                b"mymodel",
+                AlterKind::Update(
+                    [
+                        ExpandedField::new(
+                            b"myfield",
+                            [Layer::new(b"string", null_dict! {})].into(),
+                            null_dict! {
+                                "nullable" => Lit::Bool(true)
+                            },
+                        ),
+                        ExpandedField::new(
+                            b"myfield2",
+                            [Layer::new(
+                                b"string",
+                                null_dict! {"maxlen" => Lit::UnsignedInt(255)}
+                            )]
+                            .into(),
+                            null_dict! {},
+                        )
+                    ]
+                    .into()
+                )
+            )
         );
     }
 }
@@ -1211,15 +1143,17 @@ mod ddl_other_query_tests {
     use {
         super::*,
         crate::engine::ql::{
-            ast::{Entity, Statement},
-            ddl::drop::{self, DropModel, DropSpace},
+            ast::{parse_ast_node_full, Entity, Statement},
+            ddl::drop::{DropModel, DropSpace, DropStatementAST},
         },
     };
     #[test]
     fn drop_space() {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
-            drop::parse_drop_full(&src[1..]).unwrap(),
+            parse_ast_node_full::<DropStatementAST>(&src[1..])
+                .unwrap()
+                .0,
             Statement::DropSpace(DropSpace::new(b"myspace", false))
         );
     }
@@ -1227,7 +1161,9 @@ mod ddl_other_query_tests {
     fn drop_space_force() {
         let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
-            drop::parse_drop_full(&src[1..]).unwrap(),
+            parse_ast_node_full::<DropStatementAST>(&src[1..])
+                .unwrap()
+                .0,
             Statement::DropSpace(DropSpace::new(b"myspace", true))
         );
     }
@@ -1235,7 +1171,9 @@ mod ddl_other_query_tests {
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
-            drop::parse_drop_full(&src[1..]).unwrap(),
+            parse_ast_node_full::<DropStatementAST>(&src[1..])
+                .unwrap()
+                .0,
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), false))
         );
     }
@@ -1243,7 +1181,9 @@ mod ddl_other_query_tests {
     fn drop_model_force() {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
-            drop::parse_drop_full(&src[1..]).unwrap(),
+            parse_ast_node_full::<DropStatementAST>(&src[1..])
+                .unwrap()
+                .0,
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), true))
         );
     }

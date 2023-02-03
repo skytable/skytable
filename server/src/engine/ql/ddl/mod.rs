@@ -24,5 +24,9 @@
  *
 */
 
-pub mod drop;
-pub mod ins;
+#[macro_use]
+pub(super) mod syn;
+pub(super) mod alt;
+pub(super) mod crt;
+pub(super) mod drop;
+pub(super) mod ins;

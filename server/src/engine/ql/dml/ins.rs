@@ -24,15 +24,13 @@
  *
 */
 
-#[cfg(test)]
-use crate::engine::ql::ast::InplaceData;
 use {
     super::read_ident,
     crate::{
         engine::{
             core::DataType,
             ql::{
-                ast::{Entity, QueryData, State},
+                ast::{traits::ASTNode, Entity, QueryData, State},
                 lex::Token,
                 LangError, LangResult,
             },
@@ -210,12 +208,18 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
 }
 
 #[cfg(test)]
-pub fn parse_list_full<'a>(tok: &'a [Token], qd: impl QueryData<'a>) -> Option<Vec<DataType>> {
-    let mut l = Vec::new();
-    let mut state = State::new(tok, qd);
-    parse_list(&mut state, &mut l);
-    assert_full_tt!(state);
-    state.okay().then_some(l)
+pub struct List(pub Vec<DataType>);
+#[cfg(test)]
+impl<'a> ASTNode<'a> for List {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        let mut l = Vec::new();
+        parse_list(state, &mut l);
+        if state.okay() {
+            Ok(List(l))
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
 }
 
 /// ## Panics
@@ -266,11 +270,17 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub fn parse_data_tuple_syntax_full(tok: &[Token]) -> Option<Vec<Option<DataType>>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let ret = parse_data_tuple_syntax(&mut state);
-    assert_full_tt!(state);
-    state.okay().then_some(ret)
+pub struct DataTuple(pub Vec<Option<DataType>>);
+#[cfg(test)]
+impl<'a> ASTNode<'a> for DataTuple {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        let r = parse_data_tuple_syntax(state);
+        if state.okay() {
+            Ok(Self(r))
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
 }
 
 /// ## Panics
@@ -330,20 +340,26 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub fn parse_data_map_syntax_full(tok: &[Token]) -> Option<HashMap<Box<str>, Option<DataType>>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = parse_data_map_syntax(&mut state);
-    assert_full_tt!(state);
-    state.okay().then_some(
-        r.into_iter()
-            .map(|(ident, val)| {
-                (
-                    String::from_utf8_lossy(ident).to_string().into_boxed_str(),
-                    val,
-                )
-            })
-            .collect(),
-    )
+pub struct DataMap(pub HashMap<Box<str>, Option<DataType>>);
+#[cfg(test)]
+impl<'a> ASTNode<'a> for DataMap {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        let r = parse_data_map_syntax(state);
+        if state.okay() {
+            Ok(Self(
+                r.into_iter()
+                    .map(|(ident, val)| {
+                        (
+                            String::from_utf8_lossy(ident).to_string().into_boxed_str(),
+                            val,
+                        )
+                    })
+                    .collect(),
+            ))
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -425,10 +441,8 @@ impl<'a> InsertStatement<'a> {
     }
 }
 
-#[cfg(test)]
-pub fn parse_insert_full<'a>(tok: &'a [Token]) -> Option<InsertStatement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let ret = InsertStatement::parse_insert(&mut state);
-    assert_full_tt!(state);
-    ret.ok()
+impl<'a> ASTNode<'a> for InsertStatement<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        Self::parse_insert(state)
+    }
 }

@@ -24,6 +24,8 @@
  *
 */
 
+#[cfg(debug_assertions)]
+use super::CHTRuntimeLog;
 use super::{
     super::{
         super::sync::atm::{upin, Guard},
@@ -31,7 +33,7 @@ use super::{
     },
     iter::{IterKV, IterKey, IterVal},
     meta::{Config, Key, TreeElement, Value},
-    CHTRuntimeLog, Tree,
+    Tree,
 };
 use std::{borrow::Borrow, sync::Arc};
 
@@ -48,6 +50,7 @@ where
 {
     const PREALLOC: bool = false;
 
+    #[cfg(debug_assertions)]
     type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {
@@ -170,6 +173,7 @@ where
 {
     const PREALLOC: bool = false;
 
+    #[cfg(debug_assertions)]
     type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {

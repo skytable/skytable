@@ -36,10 +36,12 @@ use self::{
     iter::{IterKV, IterKey, IterVal},
     meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
 };
+#[cfg(debug_assertions)]
+use super::super::sync::atm::ORD_ACQ;
 use super::{
     super::{
         mem::UArray,
-        sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACQ, ORD_ACR, ORD_RLX},
+        sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACR, ORD_RLX},
     },
     AsKey,
 };
@@ -99,12 +101,12 @@ impl CHTRuntimeLog {
         fn repsplit(self: &Self) -> usize {
             self.data.split.load(ORD_RLX)
         } else {
-            void!()
+            0
         }
         fn replnode(self: &Self) -> usize {
             self.data.hln.load(ORD_RLX)
         } else {
-            void!()
+            0
         }
     }
 }

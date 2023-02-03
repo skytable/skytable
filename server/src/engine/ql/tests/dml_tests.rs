@@ -28,8 +28,8 @@ use super::*;
 mod list_parse {
     use super::*;
     use crate::engine::ql::{
-        ast::{InplaceData, SubstitutedData},
-        dml::ins::parse_list_full,
+        ast::{parse_ast_node_full, traits::ASTNode, State, SubstitutedData},
+        dml::ins::List,
         lex::LitIR,
     };
 
@@ -41,7 +41,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..], InplaceData::new()).unwrap();
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
         assert_eq!(r, vec![])
     }
     #[test]
@@ -52,7 +52,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..], InplaceData::new()).unwrap();
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
     }
     #[test]
@@ -69,8 +69,11 @@ mod list_parse {
             LitIR::UInt(3),
             LitIR::UInt(4),
         ];
-        let r = parse_list_full(&tok[1..], SubstitutedData::new(&data)).unwrap();
-        assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
+        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
+        assert_eq!(
+            <List as ASTNode>::from_state(&mut state).unwrap().0,
+            into_array![1, 2, 3, 4]
+        )
     }
     #[test]
     fn list_pro() {
@@ -85,7 +88,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..], InplaceData::new()).unwrap();
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -117,9 +120,9 @@ mod list_parse {
             LitIR::UInt(5),
             LitIR::UInt(6),
         ];
-        let r = parse_list_full(&tok[1..], SubstitutedData::new(&data)).unwrap();
+        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
         assert_eq!(
-            r.as_slice(),
+            <List as ASTNode>::from_state(&mut state).unwrap().0,
             into_array![
                 into_array![1, 2],
                 into_array![3, 4],
@@ -141,7 +144,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_list_full(&tok[1..], InplaceData::new()).unwrap();
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -179,9 +182,9 @@ mod list_parse {
             LitIR::UInt(7),
             LitIR::UInt(7),
         ];
-        let r = parse_list_full(&tok[1..], SubstitutedData::new(&data)).unwrap();
+        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
         assert_eq!(
-            r.as_slice(),
+            <List as ASTNode>::from_state(&mut state).unwrap().0,
             into_array![
                 into_array![into_array![1, 1], into_array![2, 2]],
                 into_array![into_array![], into_array![4, 4]],
@@ -194,12 +197,12 @@ mod list_parse {
 
 mod tuple_syntax {
     use super::*;
-    use crate::engine::ql::dml::ins::parse_data_tuple_syntax_full;
+    use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::DataTuple};
 
     #[test]
     fn tuple_mini() {
         let tok = lex_insecure(b"()").unwrap();
-        let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
         assert_eq!(r, vec![]);
     }
 
@@ -211,7 +214,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
         assert_eq!(
             r.as_slice(),
             into_array_nullable![1234, "email@example.com", true]
@@ -231,7 +234,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
         assert_eq!(
             r.as_slice(),
             into_array_nullable![
@@ -263,7 +266,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_data_tuple_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
         assert_eq!(
             r.as_slice(),
             into_array_nullable![
@@ -284,13 +287,13 @@ mod tuple_syntax {
 }
 mod map_syntax {
     use super::*;
-    use crate::engine::ql::dml::ins::parse_data_map_syntax_full;
+    use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::DataMap};
 
     #[test]
     fn map_mini() {
         let tok = lex_insecure(b"{}").unwrap();
-        let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
-        assert_eq!(r, nullable_dict! {})
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
+        assert_eq!(r, null_dict! {})
     }
 
     #[test]
@@ -306,7 +309,7 @@ mod map_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
         assert_eq!(
             r,
             dict_nullable! {
@@ -332,7 +335,7 @@ mod map_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
         assert_eq!(
             r,
             dict_nullable! {
@@ -361,7 +364,7 @@ mod map_syntax {
                 }
             "#)
         .unwrap();
-        let r = parse_data_map_syntax_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
         assert_eq!(
             r,
             dict_nullable! {
@@ -386,7 +389,7 @@ mod stmt_insert {
     use {
         super::*,
         crate::engine::ql::{
-            ast::Entity,
+            ast::{parse_ast_node_full, Entity},
             dml::{self, ins::InsertStatement},
         },
     };
@@ -399,7 +402,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable!["sayan"].to_vec().into(),
@@ -421,7 +424,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
@@ -448,7 +451,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&x[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"twitter", b"users"),
             into_array_nullable![
@@ -475,7 +478,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -500,7 +503,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -533,7 +536,7 @@ mod stmt_insert {
             "#,
         )
         .unwrap();
-        let r = dml::ins::parse_insert_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -555,7 +558,7 @@ mod stmt_insert {
     fn insert_tuple_fnsub() {
         let tok =
             lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
-        let ret = dml::ins::parse_insert_full(&tok[1..]).unwrap();
+        let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             into_array_nullable![dml::ins::T_UUIDSTR, "sayan", dml::ins::T_TIMESEC]
@@ -569,7 +572,7 @@ mod stmt_insert {
         let tok = lex_insecure(
             br#"insert into jotsy.app { uuid: @uuidstr(), username: "sayan", signup_time: @timesec() }"#
         ).unwrap();
-        let ret = dml::ins::parse_insert_full(&tok[1..]).unwrap();
+        let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
             Entity::Full(b"jotsy", b"app"),
             dict_nullable! {
@@ -584,13 +587,11 @@ mod stmt_insert {
 }
 
 mod stmt_select {
-    use crate::engine::ql::dml::RelationalExpr;
-
     use {
         super::*,
         crate::engine::ql::{
-            ast::Entity,
-            dml::{self, sel::SelectStatement},
+            ast::{parse_ast_node_full, Entity},
+            dml::{sel::SelectStatement, RelationalExpr},
             lex::LitIR,
         },
     };
@@ -602,7 +603,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Single(b"users"),
             [].to_vec(),
@@ -623,7 +624,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Single(b"users"),
             [b"field1".as_slice()].to_vec(),
@@ -644,7 +645,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Full(b"twitter", b"users"),
             [b"field1".as_slice()].to_vec(),
@@ -665,7 +666,7 @@ mod stmt_select {
             "#,
         )
         .unwrap();
-        let r = dml::sel::parse_select_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
             Entity::Full(b"twitter", b"users"),
             [b"field1".as_slice(), b"field2".as_slice()].to_vec(),
@@ -740,9 +741,8 @@ mod update_statement {
     use {
         super::*,
         crate::engine::ql::{
-            ast::Entity,
+            ast::{parse_ast_node_full, Entity},
             dml::{
-                self,
                 upd::{AssignmentExpression, Operator, UpdateStatement},
                 RelationalExpr, WhereClause,
             },
@@ -757,7 +757,7 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let r = dml::upd::parse_update_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
             Entity::Single(b"app"),
             vec![AssignmentExpression::new(
@@ -789,7 +789,7 @@ mod update_statement {
             "#,
         )
         .unwrap();
-        let r = dml::upd::parse_update_full(&tok[1..]).unwrap();
+        let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
             Entity::Full(b"jotsy", b"app"),
             vec![
@@ -819,11 +819,8 @@ mod delete_stmt {
     use {
         super::*,
         crate::engine::ql::{
-            ast::Entity,
-            dml::{
-                del::{self, DeleteStatement},
-                RelationalExpr,
-            },
+            ast::{parse_ast_node_full, Entity},
+            dml::{del::DeleteStatement, RelationalExpr},
             lex::LitIR,
         },
     };
@@ -846,8 +843,10 @@ mod delete_stmt {
                 )
             },
         );
-        let r = del::parse_delete_full(&tok[1..]).unwrap();
-        assert_eq!(r, e);
+        assert_eq!(
+            parse_ast_node_full::<DeleteStatement>(&tok[1..]).unwrap(),
+            e
+        );
     }
     #[test]
     fn delete() {
@@ -867,23 +866,22 @@ mod delete_stmt {
                 )
             },
         );
-        let r = del::parse_delete_full(&tok[1..]).unwrap();
-        assert_eq!(r, e);
+        assert_eq!(
+            parse_ast_node_full::<DeleteStatement>(&tok[1..]).unwrap(),
+            e
+        );
     }
 }
 mod relational_expr {
     use {
         super::*,
-        crate::engine::ql::{
-            dml::{self, RelationalExpr},
-            lex::LitIR,
-        },
+        crate::engine::ql::{ast::parse_ast_node_full, dml::RelationalExpr, lex::LitIR},
     };
 
     #[test]
     fn expr_eq() {
         let expr = lex_insecure(b"primary_key = 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr {
@@ -896,7 +894,7 @@ mod relational_expr {
     #[test]
     fn expr_ne() {
         let expr = lex_insecure(b"primary_key != 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr {
@@ -909,7 +907,7 @@ mod relational_expr {
     #[test]
     fn expr_gt() {
         let expr = lex_insecure(b"primary_key > 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr {
@@ -922,7 +920,7 @@ mod relational_expr {
     #[test]
     fn expr_ge() {
         let expr = lex_insecure(b"primary_key >= 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr {
@@ -935,7 +933,7 @@ mod relational_expr {
     #[test]
     fn expr_lt() {
         let expr = lex_insecure(b"primary_key < 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr {
@@ -948,7 +946,7 @@ mod relational_expr {
     #[test]
     fn expr_le() {
         let expr = lex_insecure(b"primary_key <= 10").unwrap();
-        let r = dml::parse_relexpr_full(&expr).unwrap();
+        let r = parse_ast_node_full::<RelationalExpr>(&expr).unwrap();
         assert_eq!(
             r,
             RelationalExpr::new(
@@ -963,7 +961,8 @@ mod where_clause {
     use {
         super::*,
         crate::engine::ql::{
-            dml::{self, RelationalExpr, WhereClause},
+            ast::parse_ast_node_full,
+            dml::{RelationalExpr, WhereClause},
             lex::LitIR,
         },
     };
@@ -982,7 +981,7 @@ mod where_clause {
                 RelationalExpr::OP_EQ
             )
         });
-        assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
+        assert_eq!(expected, parse_ast_node_full::<WhereClause>(&tok).unwrap());
     }
     #[test]
     fn where_double() {
@@ -1004,7 +1003,7 @@ mod where_clause {
                 RelationalExpr::OP_EQ
             )
         });
-        assert_eq!(expected, dml::parse_where_clause_full(&tok).unwrap());
+        assert_eq!(expected, parse_ast_node_full::<WhereClause>(&tok).unwrap());
     }
     #[test]
     fn where_duplicate_condition() {
@@ -1014,6 +1013,6 @@ mod where_clause {
             "#,
         )
         .unwrap();
-        assert!(dml::parse_where_clause_full(&tok).is_none());
+        assert!(parse_ast_node_full::<WhereClause>(&tok).is_err());
     }
 }

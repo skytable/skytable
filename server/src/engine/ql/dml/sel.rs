@@ -24,13 +24,11 @@
  *
 */
 
-#[cfg(test)]
-use crate::engine::ql::ast::InplaceData;
 use {
     super::{WhereClause, WhereClauseCollection},
     crate::{
         engine::ql::{
-            ast::{Entity, QueryData, State},
+            ast::{traits::ASTNode, Entity, QueryData, State},
             lex::Token,
             LangError, LangResult,
         },
@@ -78,15 +76,6 @@ impl<'a> SelectStatement<'a> {
             clause: WhereClause::new(clauses),
         }
     }
-}
-
-#[cfg(test)]
-/// **test-mode only** parse for a `select` where the full token stream is exhausted
-pub fn parse_select_full<'a>(tok: &'a [Token]) -> Option<SelectStatement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = SelectStatement::parse_select(&mut state);
-    assert_full_tt!(state);
-    r.ok()
 }
 
 impl<'a> SelectStatement<'a> {
@@ -142,5 +131,11 @@ impl<'a> SelectStatement<'a> {
         } else {
             compiler::cold_rerr(LangError::UnexpectedToken)
         }
+    }
+}
+
+impl<'a> ASTNode<'a> for SelectStatement<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        Self::parse_select(state)
     }
 }

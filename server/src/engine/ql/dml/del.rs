@@ -24,20 +24,17 @@
  *
 */
 
+#[cfg(test)]
+use super::WhereClauseCollection;
 use {
     super::WhereClause,
     crate::{
         engine::ql::{
-            ast::{Entity, QueryData, State},
+            ast::{traits::ASTNode, Entity, QueryData, State},
             LangError, LangResult,
         },
         util::{compiler, MaybeInit},
     },
-};
-#[cfg(test)]
-use {
-    super::WhereClauseCollection,
-    crate::engine::ql::{ast::InplaceData, lex::Token},
 };
 
 /*
@@ -97,10 +94,8 @@ impl<'a> DeleteStatement<'a> {
     }
 }
 
-#[cfg(test)]
-pub fn parse_delete_full<'a>(tok: &'a [Token]) -> LangResult<DeleteStatement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let ret = DeleteStatement::parse_delete(&mut state);
-    assert_full_tt!(state);
-    ret
+impl<'a> ASTNode<'a> for DeleteStatement<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        Self::parse_delete(state)
+    }
 }

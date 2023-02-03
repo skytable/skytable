@@ -33,12 +33,6 @@ use {
     rand::{self, Rng},
 };
 
-macro_rules! fold_dict {
-    ($($input:expr),* $(,)?) => {
-        ($({$crate::engine::ql::schema::fold_dict(&super::lex_insecure($input).unwrap()).unwrap()}),*)
-    }
-}
-
 mod dml_tests;
 mod entity;
 mod lexer_tests;
@@ -81,25 +75,27 @@ fn nullable_datatype(v: impl NullableData<DataType>) -> Option<DataType> {
     v.data()
 }
 
-pub trait NullableMapEntry {
-    fn data(self) -> Option<super::schema::DictEntry>;
+pub trait NullableDictEntry {
+    fn data(self) -> Option<super::ddl::syn::DictEntry>;
 }
 
-impl NullableMapEntry for Null {
-    fn data(self) -> Option<super::schema::DictEntry> {
+impl NullableDictEntry for Null {
+    fn data(self) -> Option<super::ddl::syn::DictEntry> {
         None
     }
 }
 
-impl<'a> NullableMapEntry for super::lex::Lit<'a> {
-    fn data(self) -> Option<super::schema::DictEntry> {
-        Some(super::schema::DictEntry::Lit(self.as_ir().to_litir_owned()))
+impl<'a> NullableDictEntry for super::lex::Lit<'a> {
+    fn data(self) -> Option<super::ddl::syn::DictEntry> {
+        Some(super::ddl::syn::DictEntry::Lit(
+            self.as_ir().to_litir_owned(),
+        ))
     }
 }
 
-impl NullableMapEntry for super::schema::Dict {
-    fn data(self) -> Option<super::schema::DictEntry> {
-        Some(super::schema::DictEntry::Map(self))
+impl NullableDictEntry for super::ddl::syn::Dict {
+    fn data(self) -> Option<super::ddl::syn::DictEntry> {
+        Some(super::ddl::syn::DictEntry::Map(self))
     }
 }
 
@@ -119,21 +115,19 @@ fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
         .iter()
         .filter(|tok| FUZZ_TARGETS.contains(tok))
         .count();
-    for _ in 0..(fuzz_amount.pow(2)) {
+    for _ in 0..(fuzz_amount.pow(3)) {
         let mut new_src = Vec::with_capacity(src_tokens.len());
         let mut should_pass = true;
-        src_tokens.iter().for_each(|tok| {
-            match tok {
-                Token::IgnorableComma => {
-                    let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added <= 1;
-                }
-                Token::Symbol(Symbol::SymComma) => {
-                    let added = inject(&mut new_src, &mut rng);
-                    should_pass &= added == 1;
-                }
-                tok => new_src.push(tok.clone()),
+        src_tokens.iter().for_each(|tok| match tok {
+            Token::IgnorableComma => {
+                let added = inject(&mut new_src, &mut rng);
+                should_pass &= added <= 1;
             }
+            Token::Symbol(Symbol::SymComma) => {
+                let added = inject(&mut new_src, &mut rng);
+                should_pass &= added == 1;
+            }
+            tok => new_src.push(tok.clone()),
         });
         if fuzzverify(should_pass, &new_src) && !should_pass {
             panic!(

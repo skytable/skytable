@@ -24,8 +24,6 @@
  *
 */
 
-#[cfg(test)]
-use crate::engine::ql::ast::InplaceData;
 use crate::{
     engine::ql::{
         ast::{Entity, QueryData, State, Statement},
@@ -68,10 +66,15 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     }
 }
 
-#[cfg(test)]
-pub fn parse_inspect_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = self::parse_inspect(&mut state);
-    assert_full_tt!(state);
-    r
+pub use impls::InspectStatementAST;
+mod impls {
+    use crate::engine::ql::ast::{traits::ASTNode, QueryData, State, Statement};
+    pub struct InspectStatementAST<'a>(pub Statement<'a>);
+    impl<'a> ASTNode<'a> for InspectStatementAST<'a> {
+        fn from_state<Qd: QueryData<'a>>(
+            state: &mut State<'a, Qd>,
+        ) -> crate::engine::ql::LangResult<Self> {
+            super::parse_inspect(state).map(Self)
+        }
+    }
 }

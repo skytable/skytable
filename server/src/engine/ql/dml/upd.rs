@@ -33,7 +33,7 @@ use {
     super::{read_ident, u, WhereClause},
     crate::{
         engine::ql::{
-            ast::{Entity, QueryData, State},
+            ast::{traits::ASTNode, Entity, QueryData, State},
             lex::LitIR,
             LangError, LangResult,
         },
@@ -227,10 +227,8 @@ impl<'a> UpdateStatement<'a> {
     }
 }
 
-#[cfg(test)]
-pub fn parse_update_full<'a>(tok: &'a [Token]) -> LangResult<UpdateStatement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = UpdateStatement::parse_update(&mut state);
-    assert_full_tt!(state);
-    r
+impl<'a> ASTNode<'a> for UpdateStatement<'a> {
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        Self::parse_update(state)
+    }
 }

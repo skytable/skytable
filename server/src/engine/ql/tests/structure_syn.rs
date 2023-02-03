@@ -26,8 +26,26 @@
 
 use {
     super::*,
-    crate::engine::ql::{lex::Lit, schema},
+    crate::engine::ql::{
+        ast::parse_ast_node_full,
+        ddl::syn::{Dict, DictBasic},
+        lex::Lit,
+    },
 };
+
+macro_rules! fold_dict {
+    ($($dict:expr),+ $(,)?) => {
+        ($(
+            fold_dict($dict).unwrap()
+        ),+)
+    }
+}
+
+fn fold_dict(raw: &[u8]) -> Option<Dict> {
+    let lexed = lex_insecure(raw).unwrap();
+    parse_ast_node_full::<DictBasic>(&lexed).map(|v| v.0).ok()
+}
+
 mod dict {
     use super::*;
 
@@ -37,7 +55,7 @@ mod dict {
             br#"{name: "sayan"}"#,
             br#"{name: "sayan",}"#,
         };
-        let r = nullable_dict!("name" => Lit::Str("sayan".into()));
+        let r = null_dict!("name" => Lit::Str("sayan".into()));
         multi_assert_eq!(d1, d2 => r);
     }
     #[test]
@@ -58,7 +76,7 @@ mod dict {
                 }
             "#,
         };
-        let r = nullable_dict! (
+        let r = null_dict! (
             "name" => Lit::Str("sayan".into()),
             "verified" => Lit::Bool(true),
             "burgers" => Lit::UnsignedInt(152),
@@ -99,9 +117,9 @@ mod dict {
             }"#
         };
         multi_assert_eq!(
-            d1, d2, d3 => nullable_dict! {
+            d1, d2, d3 => null_dict! {
                 "name" => Lit::Str("sayan".into()),
-                "notes" => nullable_dict! {
+                "notes" => null_dict! {
                     "burgers" => Lit::Str("all the time, extra mayo".into()),
                     "taco" => Lit::Bool(true),
                     "pretzels" => Lit::UnsignedInt(1),
@@ -151,14 +169,14 @@ mod dict {
                         },
                     },
                 }
-            }"#
+            "#
         };
         multi_assert_eq!(
-            d1, d2, d3 => nullable_dict! {
-                "well" => nullable_dict! {
-                    "now" => nullable_dict! {
-                        "this" => nullable_dict! {
-                            "is" => nullable_dict! {
+            d1, d2, d3 => null_dict! {
+                "well" => null_dict! {
+                    "now" => null_dict! {
+                        "this" => null_dict! {
+                            "is" => null_dict! {
                                 "ridiculous" => Lit::Bool(true),
                             }
                         }
@@ -186,31 +204,31 @@ mod dict {
                 }\x01
             }
         ";
-        let ret_dict = nullable_dict! {
+        let ret_dict = null_dict! {
             "the_tradition_is" => Lit::Str("hello, world".into()),
-            "could_have_been" => nullable_dict! {
+            "could_have_been" => null_dict! {
                 "this" => Lit::Bool(true),
                 "or_maybe_this" => Lit::UnsignedInt(100),
                 "even_this" => Lit::Str("hello, universe!".into()),
             },
             "but_oh_well" => Lit::Str("it continues to be the 'annoying' phrase".into()),
-            "lorem" => nullable_dict! {
-                "ipsum" => nullable_dict! {
+            "lorem" => null_dict! {
+                "ipsum" => null_dict! {
                     "dolor" => Lit::Str("sit amet".into())
                 }
             }
         };
         fuzz_tokens(&tok[..], |should_pass, new_src| {
-            let r = schema::fold_dict(&new_src);
-            let okay = r.is_some();
+            let r = parse_ast_node_full::<DictBasic>(new_src);
+            let okay = r.is_ok();
             if should_pass {
-                assert_eq!(r.unwrap(), ret_dict)
+                assert_eq!(r.unwrap().0, ret_dict)
             }
             okay
         });
     }
 }
-mod nullable_dict_tests {
+mod null_dict_tests {
     use super::*;
     mod dict {
         use {super::*, crate::engine::ql::lex::Lit};
@@ -220,7 +238,7 @@ mod nullable_dict_tests {
             let d = fold_dict!(br"{ x: null }");
             assert_eq!(
                 d,
-                nullable_dict! {
+                null_dict! {
                     "x" => Null,
                 }
             );
@@ -237,7 +255,7 @@ mod nullable_dict_tests {
             };
             assert_eq!(
                 d,
-                nullable_dict! {
+                null_dict! {
                     "this_is_non_null" => Lit::Str("hello".into()),
                     "but_this_is_null" => Null,
                 }
@@ -258,10 +276,10 @@ mod nullable_dict_tests {
             };
             assert_eq!(
                 d,
-                nullable_dict! {
+                null_dict! {
                     "a_string" => Lit::Str("this is a string".into()),
                     "num" => Lit::UnsignedInt(1234),
-                    "a_dict" => nullable_dict! {
+                    "a_dict" => null_dict! {
                         "a_null" => Null,
                     }
                 }
@@ -283,10 +301,10 @@ mod nullable_dict_tests {
             };
             assert_eq!(
                 d,
-                nullable_dict! {
+                null_dict! {
                     "a_string" => Lit::Str("this is a string".into()),
                     "num" => Lit::UnsignedInt(1234),
-                    "a_dict" => nullable_dict! {
+                    "a_dict" => null_dict! {
                         "a_null" => Null,
                     },
                     "another_null" => Null,

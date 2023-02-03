@@ -24,8 +24,6 @@
  *
 */
 
-#[cfg(test)]
-use crate::engine::ql::ast::InplaceData;
 use crate::engine::ql::{
     ast::{Entity, QueryData, State, Statement},
     lex::{Slice, Token},
@@ -45,6 +43,25 @@ impl<'a> DropSpace<'a> {
     pub const fn new(space: Slice<'a>, force: bool) -> Self {
         Self { space, force }
     }
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<DropSpace<'a>> {
+        if state.cursor_is_ident() {
+            let ident = state.fw_read();
+            // should we force drop?
+            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+            state.cursor_ahead_if(force);
+            // either `force` or nothing
+            if state.exhausted() {
+                return Ok(DropSpace::new(
+                    unsafe {
+                        // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
+                        extract!(ident, Token::Ident(ref space) => *space)
+                    },
+                    force,
+                ));
+            }
+        }
+        Err(LangError::UnexpectedToken)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,6 +75,16 @@ impl<'a> DropModel<'a> {
     pub fn new(entity: Entity<'a>, force: bool) -> Self {
         Self { entity, force }
     }
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        let e = Entity::attempt_process_entity_result(state)?;
+        let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+        state.cursor_ahead_if(force);
+        if state.exhausted() {
+            return Ok(DropModel::new(e, force));
+        } else {
+            Err(LangError::UnexpectedToken)
+        }
+    }
 }
 
 // drop (<space> | <model>) <ident> [<force>]
@@ -66,41 +93,33 @@ impl<'a> DropModel<'a> {
 /// If token stream length is < 2
 pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Statement<'a>> {
     match state.fw_read() {
-        Token![model] => {
-            // we have a model. now parse entity and see if we should force deletion
-            let e = Entity::attempt_process_entity_result(state)?;
-            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
-            state.cursor_ahead_if(force);
-            // if we've exhausted the stream, we're good to go (either `force`, or nothing)
-            if state.exhausted() {
-                return Ok(Statement::DropModel(DropModel::new(e, force)));
-            }
-        }
-        Token![space] if state.cursor_is_ident() => {
-            let ident = state.fw_read();
-            // should we force drop?
-            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
-            state.cursor_ahead_if(force);
-            // either `force` or nothing
-            if state.exhausted() {
-                return Ok(Statement::DropSpace(DropSpace::new(
-                    unsafe {
-                        // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
-                        extract!(ident, Token::Ident(ref space) => *space)
-                    },
-                    force,
-                )));
-            }
-        }
-        _ => {}
+        Token![model] => DropModel::parse(state).map(Statement::DropModel),
+        Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
+        _ => Err(LangError::UnexpectedToken),
     }
-    Err(LangError::UnexpectedToken)
 }
 
-#[cfg(test)]
-pub fn parse_drop_full<'a>(tok: &'a [Token]) -> LangResult<Statement<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let r = self::parse_drop(&mut state);
-    assert_full_tt!(state);
-    r
+pub use impls::DropStatementAST;
+mod impls {
+    use super::{DropModel, DropSpace};
+    use crate::engine::ql::{
+        ast::{traits::ASTNode, QueryData, State, Statement},
+        LangResult,
+    };
+    impl<'a> ASTNode<'a> for DropModel<'a> {
+        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::parse(state)
+        }
+    }
+    impl<'a> ASTNode<'a> for DropSpace<'a> {
+        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::parse(state)
+        }
+    }
+    pub struct DropStatementAST<'a>(pub Statement<'a>);
+    impl<'a> ASTNode<'a> for DropStatementAST<'a> {
+        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            super::parse_drop(state).map(Self)
+        }
+    }
 }

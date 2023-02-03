@@ -24,6 +24,8 @@
  *
 */
 
+use std::mem;
+
 #[macro_use]
 mod macros;
 pub mod compiler;
@@ -228,6 +230,8 @@ unsafe impl<'a, T: Sync> Sync for Life<'a, T> {}
 pub struct MaybeInit<T> {
     #[cfg(test)]
     is_init: bool,
+    #[cfg(not(test))]
+    is_init: (),
     base: MaybeUninit<T>,
 }
 
@@ -238,6 +242,8 @@ impl<T> MaybeInit<T> {
         Self {
             #[cfg(test)]
             is_init: false,
+            #[cfg(not(test))]
+            is_init: (),
             base: MaybeUninit::uninit(),
         }
     }
@@ -247,8 +253,19 @@ impl<T> MaybeInit<T> {
         Self {
             #[cfg(test)]
             is_init: true,
+            #[cfg(not(test))]
+            is_init: (),
             base: MaybeUninit::new(val),
         }
+    }
+    const fn ensure_init(#[cfg(test)] is_init: bool, #[cfg(not(test))] is_init: ()) {
+        #[cfg(test)]
+        {
+            if !is_init {
+                panic!("Tried to `assume_init` on uninitialized data");
+            }
+        }
+        let _ = is_init;
     }
     /// Assume that `self` is initialized and return the inner value
     ///
@@ -257,12 +274,7 @@ impl<T> MaybeInit<T> {
     /// Caller needs to ensure that the data is actually initialized
     #[inline(always)]
     pub const unsafe fn assume_init(self) -> T {
-        #[cfg(test)]
-        {
-            if !self.is_init {
-                panic!("Tried to `assume_init` on uninitialized data");
-            }
-        }
+        Self::ensure_init(self.is_init);
         self.base.assume_init()
     }
     /// Assume that `self` is initialized and return a reference
@@ -272,13 +284,22 @@ impl<T> MaybeInit<T> {
     /// Caller needs to ensure that the data is actually initialized
     #[inline(always)]
     pub const unsafe fn assume_init_ref(&self) -> &T {
+        Self::ensure_init(self.is_init);
+        self.base.assume_init_ref()
+    }
+    /// Assumes `self` is initialized, replaces `self` with an uninit state, returning
+    /// the older value
+    ///
+    /// ## Safety
+    pub unsafe fn take(&mut self) -> T {
+        Self::ensure_init(self.is_init);
+        let mut r = MaybeUninit::uninit();
+        mem::swap(&mut r, &mut self.base);
         #[cfg(test)]
         {
-            if !self.is_init {
-                panic!("Tried to `assume_init_ref` on uninitialized data");
-            }
+            self.is_init = false;
         }
-        self.base.assume_init_ref()
+        r.assume_init()
     }
 }
 
