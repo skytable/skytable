@@ -523,9 +523,9 @@ pub enum Statement<'a> {
     /// DDL query to switch between spaces and models
     Use(Entity<'a>),
     /// DDL query to create a model
-    CreateModel(ddl::crt::Model<'a>),
+    CreateModel(ddl::crt::CreateModel<'a>),
     /// DDL query to create a space
-    CreateSpace(ddl::crt::Space<'a>),
+    CreateSpace(ddl::crt::CreateSpace<'a>),
     /// DDL query to alter a space (properties)
     AlterSpace(ddl::alt::AlterSpace<'a>),
     /// DDL query to alter a model (properties, field types, etc)

@@ -30,7 +30,7 @@ use {
         engine::{
             core::DataType,
             ql::{
-                ast::{traits::ASTNode, Entity, QueryData, State},
+                ast::{Entity, QueryData, State},
                 lex::Token,
                 LangError, LangResult,
             },
@@ -207,22 +207,6 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
     ldfunc(func).map(move |f| f())
 }
 
-#[cfg(test)]
-#[derive(sky_macros::Wrapper, Debug)]
-pub struct List(Vec<DataType>);
-#[cfg(test)]
-impl<'a> ASTNode<'a> for List {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        let mut l = Vec::new();
-        parse_list(state, &mut l);
-        if state.okay() {
-            Ok(List(l))
-        } else {
-            Err(LangError::UnexpectedToken)
-        }
-    }
-}
-
 /// ## Panics
 /// - If tt is empty
 pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
@@ -268,21 +252,6 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
         stop = nx_csprn;
     }
     data
-}
-
-#[cfg(test)]
-#[derive(sky_macros::Wrapper, Debug)]
-pub struct DataTuple(Vec<Option<DataType>>);
-#[cfg(test)]
-impl<'a> ASTNode<'a> for DataTuple {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        let r = parse_data_tuple_syntax(state);
-        if state.okay() {
-            Ok(Self(r))
-        } else {
-            Err(LangError::UnexpectedToken)
-        }
-    }
 }
 
 /// ## Panics
@@ -339,30 +308,6 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
         stop = nx_csbrc;
     }
     data
-}
-
-#[cfg(test)]
-#[derive(sky_macros::Wrapper, Debug)]
-pub struct DataMap(HashMap<Box<str>, Option<DataType>>);
-#[cfg(test)]
-impl<'a> ASTNode<'a> for DataMap {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        let r = parse_data_map_syntax(state);
-        if state.okay() {
-            Ok(Self(
-                r.into_iter()
-                    .map(|(ident, val)| {
-                        (
-                            String::from_utf8_lossy(ident).to_string().into_boxed_str(),
-                            val,
-                        )
-                    })
-                    .collect(),
-            ))
-        } else {
-            Err(LangError::UnexpectedToken)
-        }
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -444,8 +389,67 @@ impl<'a> InsertStatement<'a> {
     }
 }
 
-impl<'a> ASTNode<'a> for InsertStatement<'a> {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        Self::parse_insert(state)
+#[cfg(test)]
+pub use impls::test::{DataMap, DataTuple, List};
+mod impls {
+    use super::InsertStatement;
+    use crate::engine::ql::{
+        ast::{traits::ASTNode, QueryData, State},
+        LangResult,
+    };
+    impl<'a> ASTNode<'a> for InsertStatement<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::parse_insert(state)
+        }
+    }
+    #[cfg(test)]
+    pub mod test {
+        use super::super::{
+            parse_data_map_syntax, parse_data_tuple_syntax, parse_list, DataType, HashMap,
+        };
+        use crate::engine::ql::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangResult,
+        };
+        #[derive(sky_macros::Wrapper, Debug)]
+        pub struct List(Vec<DataType>);
+        impl<'a> ASTNode<'a> for List {
+            // important: upstream must verify this
+            const VERIFY: bool = true;
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+                let mut l = Vec::new();
+                parse_list(state, &mut l);
+                Ok(List(l))
+            }
+        }
+        #[derive(sky_macros::Wrapper, Debug)]
+        pub struct DataTuple(Vec<Option<DataType>>);
+        impl<'a> ASTNode<'a> for DataTuple {
+            // important: upstream must verify this
+            const VERIFY: bool = true;
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+                let r = parse_data_tuple_syntax(state);
+                Ok(Self(r))
+            }
+        }
+        #[derive(sky_macros::Wrapper, Debug)]
+        pub struct DataMap(HashMap<Box<str>, Option<DataType>>);
+        impl<'a> ASTNode<'a> for DataMap {
+            // important: upstream must verify this
+            const VERIFY: bool = true;
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+                let r = parse_data_map_syntax(state);
+                Ok(Self(
+                    r.into_iter()
+                        .map(|(ident, val)| {
+                            (
+                                String::from_utf8_lossy(ident).to_string().into_boxed_str(),
+                                val,
+                            )
+                        })
+                        .collect(),
+                ))
+            }
+        }
     }
 }

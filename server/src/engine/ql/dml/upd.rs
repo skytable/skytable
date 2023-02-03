@@ -25,15 +25,12 @@
 */
 
 #[cfg(test)]
-use {
-    super::WhereClauseCollection,
-    crate::engine::ql::{ast::InplaceData, lex::Token},
-};
+use super::WhereClauseCollection;
 use {
     super::{read_ident, u, WhereClause},
     crate::{
         engine::ql::{
-            ast::{traits::ASTNode, Entity, QueryData, State},
+            ast::{Entity, QueryData, State},
             lex::LitIR,
             LangError, LangResult,
         },
@@ -132,20 +129,6 @@ impl<'a> AssignmentExpression<'a> {
     }
 }
 
-#[cfg(test)]
-pub fn parse_assn_expression_full<'a>(tok: &'a [Token]) -> Option<AssignmentExpression<'a>> {
-    let mut state = State::new(tok, InplaceData::new());
-    let mut exprs = Vec::new();
-    AssignmentExpression::parse_and_append_expression(&mut state, &mut exprs);
-    assert_full_tt!(state);
-    if state.okay() {
-        assert_eq!(exprs.len(), 1, "expected one expression, found multiple");
-        Some(exprs.remove(0))
-    } else {
-        None
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct UpdateStatement<'a> {
     pub(super) entity: Entity<'a>,
@@ -227,8 +210,36 @@ impl<'a> UpdateStatement<'a> {
     }
 }
 
-impl<'a> ASTNode<'a> for UpdateStatement<'a> {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        Self::parse_update(state)
+mod impls {
+    use super::UpdateStatement;
+    use crate::engine::ql::{
+        ast::{traits::ASTNode, QueryData, State},
+        LangResult,
+    };
+    impl<'a> ASTNode<'a> for UpdateStatement<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::parse_update(state)
+        }
+    }
+    #[cfg(test)]
+    mod test {
+        use super::{super::AssignmentExpression, *};
+        impl<'a> ASTNode<'a> for AssignmentExpression<'a> {
+            // important: upstream must verify this
+            const VERIFY: bool = true;
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+                let mut expr = Vec::new();
+                AssignmentExpression::parse_and_append_expression(state, &mut expr);
+                state.poison_if_not(expr.len() == 1);
+                Ok(expr.remove(0))
+            }
+            fn _multiple_from_state<Qd: QueryData<'a>>(
+                state: &mut State<'a, Qd>,
+            ) -> LangResult<Vec<Self>> {
+                let mut expr = Vec::new();
+                AssignmentExpression::parse_and_append_expression(state, &mut expr);
+                Ok(expr)
+            }
+        }
     }
 }

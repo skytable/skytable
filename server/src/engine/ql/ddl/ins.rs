@@ -72,7 +72,7 @@ mod impls {
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct InspectStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for InspectStatementAST<'a> {
-        fn from_state<Qd: QueryData<'a>>(
+        fn _from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,
         ) -> crate::engine::ql::LangResult<Self> {
             super::parse_inspect(state).map(Self)

@@ -183,12 +183,12 @@ mod impls {
         LangResult,
     };
     impl<'a> ASTNode<'a> for AlterModel<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for AlterSpace<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }

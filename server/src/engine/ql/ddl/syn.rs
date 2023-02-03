@@ -505,78 +505,70 @@ mod impls {
     };
     use crate::engine::ql::{
         ast::{traits::ASTNode, QueryData, State},
-        LangError, LangResult,
+        LangResult,
     };
     impl<'a> ASTNode<'a> for ExpandedField<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
-        fn multiple_from_state<Qd: QueryData<'a>>(
+        fn _multiple_from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,
         ) -> LangResult<Vec<Self>> {
             Self::parse_multiple(state).map(Vec::from)
         }
     }
     impl<'a> ASTNode<'a> for Layer<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        // important: upstream must verify this
+        const VERIFY: bool = true;
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut layers = Vec::new();
             rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut layers);
             assert!(layers.len() == 1);
             Ok(layers.swap_remove(0))
         }
-        fn multiple_from_state<Qd: QueryData<'a>>(
+        fn _multiple_from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,
         ) -> LangResult<Vec<Self>> {
             let mut l = Vec::new();
             rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut l);
-            if state.okay() {
-                Ok(l)
-            } else {
-                Err(LangError::UnexpectedToken)
-            }
+            Ok(l)
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictBasic(Dict);
     impl<'a> ASTNode<'a> for DictBasic {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        // important: upstream must verify this
+        const VERIFY: bool = true;
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
             rfold_dict(DictFoldState::OB, state, &mut dict);
-            if state.okay() {
-                Ok(Self(dict))
-            } else {
-                Err(LangError::UnexpectedToken)
-            }
+            Ok(Self(dict))
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictTypeMetaSplit(Dict);
     impl<'a> ASTNode<'a> for DictTypeMetaSplit {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        // important: upstream must verify this
+        const VERIFY: bool = true;
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
             rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut dict);
-            if state.okay() {
-                Ok(Self(dict))
-            } else {
-                Err(LangError::UnexpectedToken)
-            }
+            Ok(Self(dict))
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DictTypeMeta(Dict);
     impl<'a> ASTNode<'a> for DictTypeMeta {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        // important: upstream must verify this
+        const VERIFY: bool = true;
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
             rfold_tymeta(DictFoldState::OB, state, &mut dict);
-            if state.okay() {
-                Ok(Self(dict))
-            } else {
-                Err(LangError::UnexpectedToken)
-            }
+            Ok(Self(dict))
         }
     }
     impl<'a> ASTNode<'a> for Field<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }

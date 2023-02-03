@@ -690,17 +690,15 @@ mod expression_tests {
     use {
         super::*,
         crate::engine::ql::{
-            dml::{
-                self,
-                upd::{AssignmentExpression, Operator},
-            },
+            ast::parse_ast_node_full,
+            dml::upd::{AssignmentExpression, Operator},
             lex::LitIR,
         },
     };
     #[test]
     fn expr_assign() {
         let src = lex_insecure(b"username = 'sayan'").unwrap();
-        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
+        let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"username", LitIR::Str("sayan"), Operator::Assign)
@@ -709,7 +707,7 @@ mod expression_tests {
     #[test]
     fn expr_add_assign() {
         let src = lex_insecure(b"followers += 100").unwrap();
-        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
+        let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"followers", LitIR::UInt(100), Operator::AddAssign)
@@ -718,7 +716,7 @@ mod expression_tests {
     #[test]
     fn expr_sub_assign() {
         let src = lex_insecure(b"following -= 150").unwrap();
-        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
+        let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"following", LitIR::UInt(150), Operator::SubAssign)
@@ -727,7 +725,7 @@ mod expression_tests {
     #[test]
     fn expr_mul_assign() {
         let src = lex_insecure(b"product_qty *= 2").unwrap();
-        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
+        let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"product_qty", LitIR::UInt(2), Operator::MulAssign)
@@ -736,7 +734,7 @@ mod expression_tests {
     #[test]
     fn expr_div_assign() {
         let src = lex_insecure(b"image_crop_factor /= 2").unwrap();
-        let r = dml::upd::parse_assn_expression_full(&src).unwrap();
+        let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
             AssignmentExpression::new(b"image_crop_factor", LitIR::UInt(2), Operator::DivAssign)

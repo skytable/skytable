@@ -24,21 +24,6 @@
  *
 */
 
-#[cfg(test)]
-macro_rules! assert_full_tt {
-    ($a:expr, $b:expr) => {
-        assert_eq!($a, $b, "full token stream not utilized")
-    };
-    ($a:expr) => {
-        assert!(
-            crate::engine::ql::ast::State::exhausted(&$a),
-            "full tt not utilized at: {}:{}",
-            ::core::file!(),
-            ::core::line!()
-        )
-    };
-}
-
 macro_rules! __sym_token {
     ($ident:ident) => {
         $crate::engine::ql::lex::Token::Symbol($crate::engine::ql::lex::Symbol::$ident)

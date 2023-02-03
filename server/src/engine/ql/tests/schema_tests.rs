@@ -408,7 +408,7 @@ mod schemas {
     use crate::engine::ql::{
         ast::parse_ast_node_full,
         ddl::{
-            crt::Model,
+            crt::CreateModel,
             syn::{Field, Layer},
         },
     };
@@ -426,11 +426,11 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<Model>(tok).unwrap();
+        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
 
         assert_eq!(
             model,
-            Model::new(
+            CreateModel::new(
                 b"mymodel",
                 vec![
                     Field::new(
@@ -465,11 +465,11 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<Model>(tok).unwrap();
+        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
 
         assert_eq!(
             model,
-            Model::new(
+            CreateModel::new(
                 b"mymodel",
                 vec![
                     Field::new(
@@ -515,11 +515,11 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<Model>(tok).unwrap();
+        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
 
         assert_eq!(
             model,
-            Model::new(
+            CreateModel::new(
                 b"mymodel",
                 vec![
                     Field::new(
@@ -584,11 +584,11 @@ mod schemas {
         let tok = &tok[2..];
 
         // parse model
-        let model = parse_ast_node_full::<Model>(tok).unwrap();
+        let model = parse_ast_node_full::<CreateModel>(tok).unwrap();
 
         assert_eq!(
             model,
-            Model::new(
+            CreateModel::new(
                 b"mymodel",
                 vec![
                     Field::new(

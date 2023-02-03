@@ -36,9 +36,8 @@ pub mod upd;
 
 use {
     super::{
-        ast::{traits::ASTNode, QueryData, State},
+        ast::{QueryData, State},
         lex::{LitIR, Token},
-        LangError, LangResult,
     },
     crate::util::compiler,
     std::collections::HashMap,
@@ -119,12 +118,6 @@ impl<'a> RelationalExpr<'a> {
     }
 }
 
-impl<'a> ASTNode<'a> for RelationalExpr<'a> {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        Self::try_parse(state).ok_or(LangError::UnexpectedToken)
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct WhereClause<'a> {
     c: WhereClauseCollection<'a>,
@@ -164,13 +157,26 @@ impl<'a> WhereClause<'a> {
     }
 }
 
-impl<'a> ASTNode<'a> for WhereClause<'a> {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        let wh = Self::parse_where(state);
-        if state.okay() {
+#[cfg(test)]
+mod impls {
+    use super::{
+        super::{
+            ast::{traits::ASTNode, QueryData, State},
+            LangError, LangResult,
+        },
+        RelationalExpr, WhereClause,
+    };
+    impl<'a> ASTNode<'a> for WhereClause<'a> {
+        // important: upstream must verify this
+        const VERIFY: bool = true;
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            let wh = Self::parse_where(state);
             Ok(wh)
-        } else {
-            Err(LangError::UnexpectedToken)
+        }
+    }
+    impl<'a> ASTNode<'a> for RelationalExpr<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::try_parse(state).ok_or(LangError::UnexpectedToken)
         }
     }
 }

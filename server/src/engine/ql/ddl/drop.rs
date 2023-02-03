@@ -107,19 +107,19 @@ mod impls {
         LangResult,
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for DropSpace<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DropStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for DropStatementAST<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             super::parse_drop(state).map(Self)
         }
     }

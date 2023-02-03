@@ -36,14 +36,14 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 /// A space
-pub struct Space<'a> {
+pub struct CreateSpace<'a> {
     /// the space name
     pub(super) space_name: Slice<'a>,
     /// properties
     pub(super) props: Dict,
 }
 
-impl<'a> Space<'a> {
+impl<'a> CreateSpace<'a> {
     #[inline(always)]
     /// Parse space data from the given tokens
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
@@ -63,7 +63,7 @@ impl<'a> Space<'a> {
             syn::rfold_dict(DictFoldState::OB, state, &mut d);
         }
         if state.okay() {
-            Ok(Space {
+            Ok(CreateSpace {
                 space_name: unsafe { extract!(space_name, Token::Ident(ref id) => id.clone()) },
                 props: d,
             })
@@ -75,7 +75,7 @@ impl<'a> Space<'a> {
 
 #[derive(Debug, PartialEq)]
 /// A model definition
-pub struct Model<'a> {
+pub struct CreateModel<'a> {
     /// the model name
     model_name: Slice<'a>,
     /// the fields
@@ -91,7 +91,7 @@ pub struct Model<'a> {
     )
 */
 
-impl<'a> Model<'a> {
+impl<'a> CreateModel<'a> {
     pub fn new(model_name: Slice<'a>, fields: Vec<Field<'a>>, props: Dict) -> Self {
         Self {
             model_name,
@@ -142,18 +142,18 @@ impl<'a> Model<'a> {
 }
 
 mod impls {
-    use super::{Model, Space};
+    use super::{CreateModel, CreateSpace};
     use crate::engine::ql::{
         ast::{traits::ASTNode, QueryData, State},
         LangResult,
     };
-    impl<'a> ASTNode<'a> for Space<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    impl<'a> ASTNode<'a> for CreateSpace<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }
-    impl<'a> ASTNode<'a> for Model<'a> {
-        fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    impl<'a> ASTNode<'a> for CreateModel<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }
     }

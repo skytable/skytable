@@ -30,7 +30,7 @@ use {
     super::WhereClause,
     crate::{
         engine::ql::{
-            ast::{traits::ASTNode, Entity, QueryData, State},
+            ast::{Entity, QueryData, State},
             LangError, LangResult,
         },
         util::{compiler, MaybeInit},
@@ -94,8 +94,15 @@ impl<'a> DeleteStatement<'a> {
     }
 }
 
-impl<'a> ASTNode<'a> for DeleteStatement<'a> {
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        Self::parse_delete(state)
+mod impls {
+    use super::DeleteStatement;
+    use crate::engine::ql::{
+        ast::{traits::ASTNode, QueryData, State},
+        LangResult,
+    };
+    impl<'a> ASTNode<'a> for DeleteStatement<'a> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            Self::parse_delete(state)
+        }
     }
 }
