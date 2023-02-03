@@ -43,7 +43,12 @@
 //!     - `__MYENTITY__` - `String` with entity
 //!
 
-use {proc_macro::TokenStream, quote::quote, syn::Lit};
+use {
+    proc_macro::TokenStream,
+    proc_macro2::TokenStream as TokenStream2,
+    quote::quote,
+    syn::{Data, DataStruct, DeriveInput, Fields, Lit},
+};
 
 mod dbtest_fn;
 mod dbtest_mod;
@@ -176,4 +181,48 @@ pub fn compiled_eresp_bytes_v1(tokens: TokenStream) -> TokenStream {
         &#ret
     }
     .into()
+}
+
+#[proc_macro_derive(Wrapper)]
+/// Implements necessary traits for some type `T` to make it identify as a different type but mimic the functionality
+/// as the inner type it wraps around
+pub fn derive_wrapper(t: TokenStream) -> TokenStream {
+    let item = syn::parse_macro_input!(t as DeriveInput);
+    let r = wrapper(item);
+    r.into()
+}
+
+fn wrapper(item: DeriveInput) -> TokenStream2 {
+    let st_name = &item.ident;
+    let fields = match item.data {
+        Data::Struct(DataStruct {
+            fields: Fields::Unnamed(ref f),
+            ..
+        }) if f.unnamed.len() == 1 => f,
+        _ => panic!("only works on tuple structs with one field"),
+    };
+    let field = &fields.unnamed[0];
+    let ty = &field.ty;
+    let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
+    quote! {
+        #[automatically_derived]
+        impl #impl_generics #st_name #ty_generics #where_clause { pub fn into_inner(self) -> #ty { self.0 } }
+        #[automatically_derived]
+        impl #impl_generics ::core::ops::Deref for #st_name #ty_generics #where_clause {
+            type Target = #ty;
+            fn deref(&self) -> &Self::Target { &self.0 }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::ops::DerefMut for #st_name #ty_generics #where_clause {
+            fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::PartialEq<#ty> for #st_name #ty_generics #where_clause {
+            fn eq(&self, other: &#ty) -> bool { ::core::cmp::PartialEq::eq(&self.0, other) }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::PartialEq<#st_name #ty_generics> for #ty #where_clause {
+            fn eq(&self, other: &#st_name #ty_generics) -> bool { ::core::cmp::PartialEq::eq(self, &other.0) }
+        }
+    }
 }

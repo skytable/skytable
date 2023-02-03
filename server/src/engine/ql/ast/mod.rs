@@ -516,7 +516,7 @@ impl<'a> Entity<'a> {
     }
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug, PartialEq)]
 /// A [`Statement`] is a fully BlueQL statement that can be executed by the query engine
 // TODO(@ohsayan): Determine whether we actually need this
 pub enum Statement<'a> {

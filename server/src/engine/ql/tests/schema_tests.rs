@@ -40,9 +40,7 @@ mod inspect {
     fn inspect_space() {
         let tok = lex_insecure(b"inspect space myspace").unwrap();
         assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
             Statement::InspectSpace(b"myspace")
         );
     }
@@ -50,16 +48,12 @@ mod inspect {
     fn inspect_model() {
         let tok = lex_insecure(b"inspect model users").unwrap();
         assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
             Statement::InspectModel(Entity::Single(b"users"))
         );
         let tok = lex_insecure(b"inspect model tweeter.users").unwrap();
         assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
             Statement::InspectModel(Entity::Full(b"tweeter", b"users"))
         );
     }
@@ -67,9 +61,7 @@ mod inspect {
     fn inspect_spaces() {
         let tok = lex_insecure(b"inspect spaces").unwrap();
         assert_eq!(
-            parse_ast_node_full::<InspectStatementAST>(&tok[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<InspectStatementAST>(&tok[1..]).unwrap(),
             Statement::InspectSpaces
         );
     }
@@ -120,7 +112,7 @@ mod tymeta {
     fn tymeta_mini() {
         let tok = lex_insecure(b"{}").unwrap();
         let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
-        assert_eq!(tymeta.0, null_dict!());
+        assert_eq!(tymeta, null_dict!());
     }
     #[test]
     #[should_panic]
@@ -133,7 +125,7 @@ mod tymeta {
         let tok = lex_insecure(br#"{hello: "world", loading: true, size: 100 }"#).unwrap();
         let tymeta = parse_ast_node_full::<DictTypeMeta>(&tok).unwrap();
         assert_eq!(
-            tymeta.0,
+            tymeta,
             null_dict! {
                 "hello" => Lit::Str("world".into()),
                 "loading" => Lit::Bool(true),
@@ -154,10 +146,10 @@ mod tymeta {
         assert!(Token![,].eq(state.fw_read()));
         let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
         assert!(state.exhausted());
-        let mut final_ret = tymeta;
-        final_ret.0.extend(tymeta2.0);
+        let mut final_ret = tymeta.into_inner();
+        final_ret.extend(tymeta2.into_inner());
         assert_eq!(
-            final_ret.0,
+            final_ret,
             null_dict! {
                 "maxlen" => Lit::UnsignedInt(100),
                 "unique" => Lit::Bool(true)
@@ -179,10 +171,10 @@ mod tymeta {
         assert!(Token![,].eq(state.fw_read()));
         let tymeta2: DictTypeMetaSplit = ASTNode::from_state(&mut state).unwrap();
         assert!(state.exhausted());
-        let mut final_ret = tymeta;
-        final_ret.0.extend(tymeta2.0);
+        let mut final_ret = tymeta.into_inner();
+        final_ret.extend(tymeta2.into_inner());
         assert_eq!(
-            final_ret.0,
+            final_ret,
             null_dict! {
                 "maxlen" => Lit::UnsignedInt(100),
                 "unique" => Lit::Bool(true),
@@ -1151,9 +1143,7 @@ mod ddl_other_query_tests {
     fn drop_space() {
         let src = lex_insecure(br"drop space myspace").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new(b"myspace", false))
         );
     }
@@ -1161,9 +1151,7 @@ mod ddl_other_query_tests {
     fn drop_space_force() {
         let src = lex_insecure(br"drop space myspace force").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
             Statement::DropSpace(DropSpace::new(b"myspace", true))
         );
     }
@@ -1171,9 +1159,7 @@ mod ddl_other_query_tests {
     fn drop_model() {
         let src = lex_insecure(br"drop model mymodel").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), false))
         );
     }
@@ -1181,9 +1167,7 @@ mod ddl_other_query_tests {
     fn drop_model_force() {
         let src = lex_insecure(br"drop model mymodel force").unwrap();
         assert_eq!(
-            parse_ast_node_full::<DropStatementAST>(&src[1..])
-                .unwrap()
-                .0,
+            parse_ast_node_full::<DropStatementAST>(&src[1..]).unwrap(),
             Statement::DropModel(DropModel::new(Entity::Single(b"mymodel"), true))
         );
     }

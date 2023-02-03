@@ -78,8 +78,7 @@ impl<'a> AlterSpace<'a> {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(Debug, PartialEq)]
 pub struct AlterModel<'a> {
     model: Slice<'a>,
     kind: AlterKind<'a>,

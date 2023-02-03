@@ -507,7 +507,6 @@ mod impls {
         ast::{traits::ASTNode, QueryData, State},
         LangError, LangResult,
     };
-    use std::ops::{Deref, DerefMut};
     impl<'a> ASTNode<'a> for ExpandedField<'a> {
         fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
@@ -537,7 +536,8 @@ mod impls {
             }
         }
     }
-    pub struct DictBasic(pub Dict);
+    #[derive(sky_macros::Wrapper, Debug)]
+    pub struct DictBasic(Dict);
     impl<'a> ASTNode<'a> for DictBasic {
         fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
@@ -549,18 +549,8 @@ mod impls {
             }
         }
     }
-    impl Deref for DictBasic {
-        type Target = Dict;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-    impl DerefMut for DictBasic {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.0
-        }
-    }
-    pub struct DictTypeMetaSplit(pub Dict);
+    #[derive(sky_macros::Wrapper, Debug)]
+    pub struct DictTypeMetaSplit(Dict);
     impl<'a> ASTNode<'a> for DictTypeMetaSplit {
         fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
@@ -572,18 +562,8 @@ mod impls {
             }
         }
     }
-    impl Deref for DictTypeMetaSplit {
-        type Target = Dict;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-    impl DerefMut for DictTypeMetaSplit {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.0
-        }
-    }
-    pub struct DictTypeMeta(pub Dict);
+    #[derive(sky_macros::Wrapper, Debug)]
+    pub struct DictTypeMeta(Dict);
     impl<'a> ASTNode<'a> for DictTypeMeta {
         fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut dict = Dict::new();
@@ -593,17 +573,6 @@ mod impls {
             } else {
                 Err(LangError::UnexpectedToken)
             }
-        }
-    }
-    impl Deref for DictTypeMeta {
-        type Target = Dict;
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-    impl DerefMut for DictTypeMeta {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.0
         }
     }
     impl<'a> ASTNode<'a> for Field<'a> {

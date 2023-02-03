@@ -43,7 +43,9 @@ macro_rules! fold_dict {
 
 fn fold_dict(raw: &[u8]) -> Option<Dict> {
     let lexed = lex_insecure(raw).unwrap();
-    parse_ast_node_full::<DictBasic>(&lexed).map(|v| v.0).ok()
+    parse_ast_node_full::<DictBasic>(&lexed)
+        .map(|v| v.into_inner())
+        .ok()
 }
 
 mod dict {
@@ -222,7 +224,7 @@ mod dict {
             let r = parse_ast_node_full::<DictBasic>(new_src);
             let okay = r.is_ok();
             if should_pass {
-                assert_eq!(r.unwrap().0, ret_dict)
+                assert_eq!(r.unwrap(), ret_dict)
             }
             okay
         });

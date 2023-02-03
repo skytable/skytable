@@ -69,7 +69,8 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
 pub use impls::InspectStatementAST;
 mod impls {
     use crate::engine::ql::ast::{traits::ASTNode, QueryData, State, Statement};
-    pub struct InspectStatementAST<'a>(pub Statement<'a>);
+    #[derive(sky_macros::Wrapper, Debug)]
+    pub struct InspectStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for InspectStatementAST<'a> {
         fn from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,

@@ -116,7 +116,8 @@ mod impls {
             Self::parse(state)
         }
     }
-    pub struct DropStatementAST<'a>(pub Statement<'a>);
+    #[derive(sky_macros::Wrapper, Debug)]
+    pub struct DropStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for DropStatementAST<'a> {
         fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             super::parse_drop(state).map(Self)

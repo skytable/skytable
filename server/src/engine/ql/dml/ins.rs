@@ -208,7 +208,8 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
 }
 
 #[cfg(test)]
-pub struct List(pub Vec<DataType>);
+#[derive(sky_macros::Wrapper, Debug)]
+pub struct List(Vec<DataType>);
 #[cfg(test)]
 impl<'a> ASTNode<'a> for List {
     fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
@@ -270,7 +271,8 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub struct DataTuple(pub Vec<Option<DataType>>);
+#[derive(sky_macros::Wrapper, Debug)]
+pub struct DataTuple(Vec<Option<DataType>>);
 #[cfg(test)]
 impl<'a> ASTNode<'a> for DataTuple {
     fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
@@ -340,7 +342,8 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 }
 
 #[cfg(test)]
-pub struct DataMap(pub HashMap<Box<str>, Option<DataType>>);
+#[derive(sky_macros::Wrapper, Debug)]
+pub struct DataMap(HashMap<Box<str>, Option<DataType>>);
 #[cfg(test)]
 impl<'a> ASTNode<'a> for DataMap {
     fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

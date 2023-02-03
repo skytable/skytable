@@ -41,7 +41,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(r, vec![])
     }
     #[test]
@@ -52,7 +52,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
     }
     #[test]
@@ -71,7 +71,9 @@ mod list_parse {
         ];
         let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
         assert_eq!(
-            <List as ASTNode>::from_state(&mut state).unwrap().0,
+            <List as ASTNode>::from_state(&mut state)
+                .unwrap()
+                .into_inner(),
             into_array![1, 2, 3, 4]
         )
     }
@@ -88,7 +90,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -122,7 +124,9 @@ mod list_parse {
         ];
         let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
         assert_eq!(
-            <List as ASTNode>::from_state(&mut state).unwrap().0,
+            <List as ASTNode>::from_state(&mut state)
+                .unwrap()
+                .into_inner(),
             into_array![
                 into_array![1, 2],
                 into_array![3, 4],
@@ -144,7 +148,7 @@ mod list_parse {
             ",
         )
         .unwrap();
-        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array![
@@ -184,7 +188,9 @@ mod list_parse {
         ];
         let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
         assert_eq!(
-            <List as ASTNode>::from_state(&mut state).unwrap().0,
+            <List as ASTNode>::from_state(&mut state)
+                .unwrap()
+                .into_inner(),
             into_array![
                 into_array![into_array![1, 1], into_array![2, 2]],
                 into_array![into_array![], into_array![4, 4]],
@@ -202,7 +208,7 @@ mod tuple_syntax {
     #[test]
     fn tuple_mini() {
         let tok = lex_insecure(b"()").unwrap();
-        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap();
         assert_eq!(r, vec![]);
     }
 
@@ -214,7 +220,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array_nullable![1234, "email@example.com", true]
@@ -234,7 +240,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array_nullable![
@@ -266,7 +272,7 @@ mod tuple_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataTuple>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
             into_array_nullable![
@@ -292,7 +298,7 @@ mod map_syntax {
     #[test]
     fn map_mini() {
         let tok = lex_insecure(b"{}").unwrap();
-        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap();
         assert_eq!(r, null_dict! {})
     }
 
@@ -309,7 +315,7 @@ mod map_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap();
         assert_eq!(
             r,
             dict_nullable! {
@@ -335,7 +341,7 @@ mod map_syntax {
             "#,
         )
         .unwrap();
-        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap();
         assert_eq!(
             r,
             dict_nullable! {
@@ -364,7 +370,7 @@ mod map_syntax {
                 }
             "#)
         .unwrap();
-        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap().0;
+        let r = parse_ast_node_full::<DataMap>(&tok[1..]).unwrap();
         assert_eq!(
             r,
             dict_nullable! {
