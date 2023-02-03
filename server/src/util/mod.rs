@@ -47,6 +47,8 @@ use {
     std::process,
 };
 
+pub const IS_ON_CI: bool = option_env!("CI").is_some();
+
 const EXITCODE_ONE: i32 = 0x01;
 
 /// # Unsafe unwrapping

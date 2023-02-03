@@ -107,14 +107,14 @@ fn update_empty() {
     assert!(!idx.mt_update(10, 20, &cpin()));
 }
 
-#[cfg(not(miri))]
-const SPAM_QCOUNT: usize = 16_384;
-#[cfg(miri)]
-const SPAM_QCOUNT: usize = 32;
-#[cfg(not(miri))]
-const SPAM_TENANTS: usize = 32;
-#[cfg(miri)]
-const SPAM_TENANTS: usize = 2;
+const SPAM_QCOUNT: usize = if crate::util::IS_ON_CI {
+    1_024
+} else if cfg!(miri) {
+    32
+} else {
+    16_384
+};
+const SPAM_TENANTS: usize = if cfg!(miri) { 2 } else { 32 };
 
 #[derive(Clone, Debug)]
 struct ControlToken(Arc<RwLock<()>>);
