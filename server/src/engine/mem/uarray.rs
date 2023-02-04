@@ -26,6 +26,7 @@
 
 use core::{
     fmt,
+    hash::{Hash, Hasher},
     iter::FusedIterator,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
@@ -145,11 +146,25 @@ impl<const N: usize, T> UArray<N, T> {
     }
 }
 
+impl<const N: usize, T: Copy> UArray<N, T> {
+    pub unsafe fn from_slice(s: &[T]) -> Self {
+        debug_assert!(s.len() <= N);
+        let mut new = Self::new();
+        unsafe {
+            ptr::copy_nonoverlapping(s.as_ptr(), new.a.as_mut_ptr() as *mut T, s.len());
+            new.set_len(s.len());
+        }
+        new
+    }
+}
+
 impl<const N: usize, T: Clone> Clone for UArray<N, T> {
     fn clone(&self) -> Self {
         self.iter().cloned().collect()
     }
 }
+
+impl<const N: usize, T: Eq> Eq for UArray<N, T> {}
 
 impl<const M: usize, const N: usize, T: PartialEq> PartialEq<UArray<M, T>> for UArray<N, T> {
     fn eq(&self, other: &UArray<M, T>) -> bool {
@@ -198,6 +213,12 @@ impl<const N: usize, T> Extend<T> for UArray<N, T> {
 impl<const N: usize, T: fmt::Debug> fmt::Debug for UArray<N, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<const N: usize, T: Hash> Hash for UArray<N, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_slice().hash(state)
     }
 }
 

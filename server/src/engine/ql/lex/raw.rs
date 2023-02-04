@@ -44,7 +44,10 @@ impl<'a> Ident<'a> {
         self.0
     }
     pub fn as_str(&self) -> &'a str {
-        unsafe { str::from_utf8_unchecked(self.0) }
+        unsafe {
+            // UNSAFE(@ohsayan): it's the ctor
+            str::from_utf8_unchecked(self.0)
+        }
     }
 }
 impl<'a> fmt::Debug for Ident<'a> {
