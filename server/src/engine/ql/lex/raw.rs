@@ -419,29 +419,6 @@ pub enum LitIR<'a> {
     Float(f64),
 }
 
-impl<'a> LitIR<'a> {
-    pub fn to_litir_owned(&self) -> LitIROwned {
-        match self {
-            Self::Str(s) => LitIROwned::Str(s.to_string().into_boxed_str()),
-            Self::Bin(b) => LitIROwned::Bin(b.to_vec().into_boxed_slice()),
-            Self::UInt(u) => LitIROwned::UInt(*u),
-            Self::SInt(s) => LitIROwned::SInt(*s),
-            Self::Bool(b) => LitIROwned::Bool(*b),
-            Self::Float(f) => LitIROwned::Float(*f),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum LitIROwned {
-    Str(Box<str>),
-    Bin(Box<[u8]>),
-    UInt(u64),
-    SInt(i64),
-    Bool(bool),
-    Float(f64),
-}
-
 #[derive(Debug)]
 pub struct RawLexer<'a> {
     c: *const u8,

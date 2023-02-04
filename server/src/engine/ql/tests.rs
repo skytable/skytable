@@ -29,7 +29,7 @@ use {
         lex::{InsecureLexer, SafeLexer, Symbol, Token},
         LangResult,
     },
-    crate::{engine::core::DataType, util::test_utils},
+    crate::{engine::core::HSData, util::test_utils},
     rand::{self, Rng},
 };
 
@@ -54,24 +54,24 @@ pub trait NullableData<T> {
     fn data(self) -> Option<T>;
 }
 
-impl<T> NullableData<DataType> for T
+impl<T> NullableData<HSData> for T
 where
-    T: Into<DataType>,
+    T: Into<HSData>,
 {
-    fn data(self) -> Option<DataType> {
+    fn data(self) -> Option<HSData> {
         Some(self.into())
     }
 }
 
 struct Null;
 
-impl NullableData<DataType> for Null {
-    fn data(self) -> Option<DataType> {
+impl NullableData<HSData> for Null {
+    fn data(self) -> Option<HSData> {
         None
     }
 }
 
-fn nullable_datatype(v: impl NullableData<DataType>) -> Option<DataType> {
+fn nullable_datatype(v: impl NullableData<HSData>) -> Option<HSData> {
     v.data()
 }
 
@@ -87,9 +87,7 @@ impl NullableDictEntry for Null {
 
 impl<'a> NullableDictEntry for super::lex::Lit<'a> {
     fn data(self) -> Option<super::ddl::syn::DictEntry> {
-        Some(super::ddl::syn::DictEntry::Lit(
-            self.as_ir().to_litir_owned(),
-        ))
+        Some(super::ddl::syn::DictEntry::from(self.as_ir()))
     }
 }
 

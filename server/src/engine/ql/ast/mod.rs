@@ -36,7 +36,7 @@ use {
         LangError, LangResult,
     },
     crate::{
-        engine::core::DataType,
+        engine::core::HSData,
         util::{compiler, MaybeInit},
     },
     core::cmp,
@@ -236,7 +236,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     ///
     /// Caller should have checked that the token matches a lit signature and that enough data is available
     /// in the data source. (ideally should run `can_read_lit_from` or `can_read_lit_rounded`)
-    pub unsafe fn read_lit_into_data_type_unchecked_from(&mut self, tok: &'a Token) -> DataType {
+    pub unsafe fn read_lit_into_data_type_unchecked_from(&mut self, tok: &'a Token) -> HSData {
         self.d.read_data_type(tok)
     }
     #[inline(always)]
@@ -278,7 +278,7 @@ pub trait QueryData<'a> {
     ///
     /// ## Safety
     /// The current token must match the signature of a lit
-    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType;
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> HSData;
     /// Returns true if the data source has enough data
     fn nonzero(&self) -> bool;
 }
@@ -302,8 +302,8 @@ impl<'a> QueryData<'a> for InplaceData {
         extract!(tok, Token::Lit(l) => l.as_ir())
     }
     #[inline(always)]
-    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType {
-        DataType::clone_from_lit(extract!(tok, Token::Lit(ref l) => l))
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> HSData {
+        HSData::from(extract!(tok, Token::Lit(ref l) => l.to_owned()))
     }
     #[inline(always)]
     fn nonzero(&self) -> bool {
@@ -335,11 +335,11 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
         ret
     }
     #[inline(always)]
-    unsafe fn read_data_type(&mut self, tok: &'a Token) -> DataType {
+    unsafe fn read_data_type(&mut self, tok: &'a Token) -> HSData {
         debug_assert!(Token![?].eq(tok));
         let ret = self.data[0];
         self.data = &self.data[1..];
-        DataType::clone_from_litir(ret)
+        HSData::from(ret)
     }
     #[inline(always)]
     fn nonzero(&self) -> bool {

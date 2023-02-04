@@ -46,10 +46,13 @@
 
 use {
     crate::{
-        engine::ql::{
-            ast::{QueryData, State},
-            lex::{Ident, LitIR, LitIROwned, Token},
-            LangError, LangResult,
+        engine::{
+            core::HSData,
+            ql::{
+                ast::{QueryData, State},
+                lex::{Ident, Lit, LitIR, Token},
+                LangError, LangResult,
+            },
         },
         util::{compiler, MaybeInit},
     },
@@ -59,13 +62,19 @@ use {
 #[derive(Debug, PartialEq)]
 /// A dictionary entry type. Either a literal or another dictionary
 pub enum DictEntry {
-    Lit(LitIROwned),
+    Lit(HSData),
     Map(Dict),
 }
 
 impl<'a> From<LitIR<'a>> for DictEntry {
     fn from(l: LitIR<'a>) -> Self {
-        Self::Lit(l.to_litir_owned())
+        Self::Lit(HSData::from(l))
+    }
+}
+
+impl<'a> From<Lit<'a>> for DictEntry {
+    fn from(value: Lit<'a>) -> Self {
+        Self::Lit(HSData::from(value))
     }
 }
 

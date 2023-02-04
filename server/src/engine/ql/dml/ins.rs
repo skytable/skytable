@@ -28,7 +28,7 @@ use {
     super::read_ident,
     crate::{
         engine::{
-            core::DataType,
+            core::HSData,
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -56,7 +56,7 @@ pub const T_UUIDSTR: &str = "4593264b-0231-43e9-b0aa-50784f14e204";
 pub const T_UUIDBIN: &[u8] = T_UUIDSTR.as_bytes();
 pub const T_TIMESEC: u64 = 1673187839_u64;
 
-type ProducerFn = fn() -> DataType;
+type ProducerFn = fn() -> HSData;
 
 // base
 #[inline(always)]
@@ -77,16 +77,16 @@ fn pfnbase_uuid() -> Uuid {
 }
 // impl
 #[inline(always)]
-fn pfn_timesec() -> DataType {
-    DataType::UnsignedInt(pfnbase_time().as_secs())
+fn pfn_timesec() -> HSData {
+    HSData::UnsignedInt(pfnbase_time().as_secs())
 }
 #[inline(always)]
-fn pfn_uuidstr() -> DataType {
-    DataType::String(pfnbase_uuid().to_string().into_boxed_str())
+fn pfn_uuidstr() -> HSData {
+    HSData::String(pfnbase_uuid().to_string().into_boxed_str())
 }
 #[inline(always)]
-fn pfn_uuidbin() -> DataType {
-    DataType::Binary(pfnbase_uuid().as_bytes().to_vec().into_boxed_slice())
+fn pfn_uuidbin() -> HSData {
+    HSData::Binary(pfnbase_uuid().as_bytes().to_vec().into_boxed_slice())
 }
 
 static PRODUCER_G: [u8; 4] = [0, 2, 3, 0];
@@ -141,8 +141,8 @@ unsafe fn ldfunc_unchecked(func: &[u8]) -> ProducerFn {
 /// - If tt length is less than 1
 pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-    list: &mut Vec<DataType>,
-) -> Option<Discriminant<DataType>> {
+    list: &mut Vec<HSData>,
+) -> Option<Discriminant<HSData>> {
     let mut stop = state.cursor_eq(Token![close []]);
     state.cursor_ahead_if(stop);
     let mut overall_dscr = None;
@@ -169,7 +169,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
                 if prev_nlist_dscr.is_none() && nlist_dscr.is_some() {
                     prev_nlist_dscr = nlist_dscr;
                 }
-                DataType::List(nested_list)
+                HSData::List(nested_list)
             }
             Token![@] if state.cursor_signature_match_fn_arity0_rounded() => match unsafe {
                 // UNSAFE(@ohsayan): Just verified at guard
@@ -202,7 +202,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
 #[inline(always)]
 /// ## Safety
 /// - Cursor must match arity(0) function signature
-unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<DataType> {
+unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<HSData> {
     let func = read_ident(state.fw_read());
     state.cursor_ahead_by(2); // skip tt:paren
     ldfunc(func).map(move |f| f())
@@ -212,7 +212,7 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
 /// - If tt is empty
 pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> Vec<Option<DataType>> {
+) -> Vec<Option<HSData>> {
     let mut stop = state.cursor_eq(Token![() close]);
     state.cursor_ahead_if(stop);
     let mut data = Vec::new();
@@ -259,7 +259,7 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 /// Panics if tt is empty
 pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> HashMap<Ident<'a>, Option<DataType>> {
+) -> HashMap<Ident<'a>, Option<HSData>> {
     let mut stop = state.cursor_eq(Token![close {}]);
     state.cursor_ahead_if(stop);
     let mut data = HashMap::with_capacity(2);
@@ -313,18 +313,18 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 
 #[derive(Debug, PartialEq)]
 pub enum InsertData<'a> {
-    Ordered(Vec<Option<DataType>>),
-    Map(HashMap<Ident<'a>, Option<DataType>>),
+    Ordered(Vec<Option<HSData>>),
+    Map(HashMap<Ident<'a>, Option<HSData>>),
 }
 
-impl<'a> From<Vec<Option<DataType>>> for InsertData<'a> {
-    fn from(v: Vec<Option<DataType>>) -> Self {
+impl<'a> From<Vec<Option<HSData>>> for InsertData<'a> {
+    fn from(v: Vec<Option<HSData>>) -> Self {
         Self::Ordered(v)
     }
 }
 
-impl<'a> From<HashMap<Ident<'static>, Option<DataType>>> for InsertData<'a> {
-    fn from(m: HashMap<Ident<'static>, Option<DataType>>) -> Self {
+impl<'a> From<HashMap<Ident<'static>, Option<HSData>>> for InsertData<'a> {
+    fn from(m: HashMap<Ident<'static>, Option<HSData>>) -> Self {
         Self::Map(m)
     }
 }
@@ -409,7 +409,7 @@ mod impls {
     pub mod test {
         use {
             super::super::{
-                parse_data_map_syntax, parse_data_tuple_syntax, parse_list, DataType, HashMap,
+                parse_data_map_syntax, parse_data_tuple_syntax, parse_list, HSData, HashMap,
             },
             crate::engine::ql::{
                 ast::{traits::ASTNode, QueryData, State},
@@ -417,7 +417,7 @@ mod impls {
             },
         };
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct List(Vec<DataType>);
+        pub struct List(Vec<HSData>);
         impl<'a> ASTNode<'a> for List {
             // important: upstream must verify this
             const VERIFY: bool = true;
@@ -428,7 +428,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataTuple(Vec<Option<DataType>>);
+        pub struct DataTuple(Vec<Option<HSData>>);
         impl<'a> ASTNode<'a> for DataTuple {
             // important: upstream must verify this
             const VERIFY: bool = true;
@@ -438,7 +438,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataMap(HashMap<Box<str>, Option<DataType>>);
+        pub struct DataMap(HashMap<Box<str>, Option<HSData>>);
         impl<'a> ASTNode<'a> for DataMap {
             // important: upstream must verify this
             const VERIFY: bool = true;
