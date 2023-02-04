@@ -29,7 +29,7 @@ use {
     crate::{
         engine::ql::{
             ast::{QueryData, State},
-            lex::{Slice, Token},
+            lex::{Ident, Token},
             LangError, LangResult,
         },
         util::compiler,
@@ -40,7 +40,7 @@ use {
 /// A space
 pub struct CreateSpace<'a> {
     /// the space name
-    pub(super) space_name: Slice<'a>,
+    pub(super) space_name: Ident<'a>,
     /// properties
     pub(super) props: Dict,
 }
@@ -79,7 +79,7 @@ impl<'a> CreateSpace<'a> {
 /// A model definition
 pub struct CreateModel<'a> {
     /// the model name
-    model_name: Slice<'a>,
+    model_name: Ident<'a>,
     /// the fields
     fields: Vec<Field<'a>>,
     /// properties
@@ -94,7 +94,7 @@ pub struct CreateModel<'a> {
 */
 
 impl<'a> CreateModel<'a> {
-    pub fn new(model_name: Slice<'a>, fields: Vec<Field<'a>>, props: Dict) -> Self {
+    pub fn new(model_name: Ident<'a>, fields: Vec<Field<'a>>, props: Dict) -> Self {
         Self {
             model_name,
             fields,

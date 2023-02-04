@@ -397,6 +397,7 @@ mod stmt_insert {
         crate::engine::ql::{
             ast::{parse_ast_node_full, Entity},
             dml::{self, ins::InsertStatement},
+            lex::Ident,
         },
     };
 
@@ -410,7 +411,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"twitter", b"users"),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
             into_array_nullable!["sayan"].to_vec().into(),
         );
         assert_eq!(e, r);
@@ -432,7 +433,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"twitter", b"users"),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
             into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
                 .to_vec()
                 .into(),
@@ -459,7 +460,7 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"twitter", b"users"),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
             into_array_nullable![
                 "sayan",
                 "Sayan",
@@ -486,9 +487,9 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             dict_nullable! {
-                "username".as_bytes() => "sayan"
+                Ident::from("username") => "sayan"
             }
             .into(),
         );
@@ -511,14 +512,14 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             dict_nullable! {
-                "username".as_bytes() => "sayan",
-                "name".as_bytes() => "Sayan",
-                "email".as_bytes() => "sayan@example.com",
-                "verified".as_bytes() => true,
-                "following".as_bytes() => 12345,
-                "followers".as_bytes() => 67890
+                Ident::from("username") => "sayan",
+                Ident::from("name") => "Sayan",
+                Ident::from("email") => "sayan@example.com",
+                Ident::from("verified") => true,
+                Ident::from("following") => 12345,
+                Ident::from("followers") => 67890
             }
             .into(),
         );
@@ -544,17 +545,17 @@ mod stmt_insert {
         .unwrap();
         let r = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let e = InsertStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             dict_nullable! {
-                "username".as_bytes() => "sayan",
-                "password".as_bytes() => "pass123",
-                "email".as_bytes() => "sayan@example.com",
-                "verified".as_bytes() => true,
-                "following".as_bytes() => 12345,
-                "followers".as_bytes() => 67890,
-                "linked_smart_devices".as_bytes() => Null,
-                "bookmarks".as_bytes() => 12345,
-                "other_linked_accounts".as_bytes() => Null
+                Ident::from("username") => "sayan",
+                "password" => "pass123",
+                "email" => "sayan@example.com",
+                "verified" => true,
+                "following" => 12345,
+                "followers" => 67890,
+                "linked_smart_devices" => Null,
+                "bookmarks" => 12345,
+                "other_linked_accounts" => Null
             }
             .into(),
         );
@@ -566,7 +567,7 @@ mod stmt_insert {
             lex_insecure(br#"insert into jotsy.app(@uuidstr(), "sayan", @timesec())"#).unwrap();
         let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             into_array_nullable![dml::ins::T_UUIDSTR, "sayan", dml::ins::T_TIMESEC]
                 .to_vec()
                 .into(),
@@ -580,11 +581,11 @@ mod stmt_insert {
         ).unwrap();
         let ret = parse_ast_node_full::<InsertStatement>(&tok[1..]).unwrap();
         let expected = InsertStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             dict_nullable! {
-                "uuid".as_bytes() => dml::ins::T_UUIDSTR,
-                "username".as_bytes() => "sayan",
-                "signup_time".as_bytes() => dml::ins::T_TIMESEC,
+                "uuid" => dml::ins::T_UUIDSTR,
+                Ident::from("username") => "sayan",
+                "signup_time" => dml::ins::T_TIMESEC,
             }
             .into(),
         );
@@ -598,7 +599,7 @@ mod stmt_select {
         crate::engine::ql::{
             ast::{parse_ast_node_full, Entity},
             dml::{sel::SelectStatement, RelationalExpr},
-            lex::LitIR,
+            lex::{Ident, LitIR},
         },
     };
     #[test]
@@ -611,12 +612,12 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single(b"users"),
+            Entity::Single(Ident::from("users")),
             [].to_vec(),
             true,
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -632,12 +633,12 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Single(b"users"),
-            [b"field1".as_slice()].to_vec(),
+            Entity::Single(Ident::from("users")),
+            [Ident::from("field1")].to_vec(),
             false,
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -653,12 +654,12 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full(b"twitter", b"users"),
-            [b"field1".as_slice()].to_vec(),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            [Ident::from("field1")].to_vec(),
             false,
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -674,12 +675,12 @@ mod stmt_select {
         .unwrap();
         let r = parse_ast_node_full::<SelectStatement>(&tok[1..]).unwrap();
         let e = SelectStatement::new_test(
-            Entity::Full(b"twitter", b"users"),
-            [b"field1".as_slice(), b"field2".as_slice()].to_vec(),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
+            [Ident::from("field1"), Ident::from("field2")].to_vec(),
             false,
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -692,7 +693,7 @@ mod expression_tests {
         crate::engine::ql::{
             ast::parse_ast_node_full,
             dml::upd::{AssignmentExpression, Operator},
-            lex::LitIR,
+            lex::{Ident, LitIR},
         },
     };
     #[test]
@@ -701,7 +702,11 @@ mod expression_tests {
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
-            AssignmentExpression::new(b"username", LitIR::Str("sayan"), Operator::Assign)
+            AssignmentExpression::new(
+                Ident::from("username"),
+                LitIR::Str("sayan"),
+                Operator::Assign
+            )
         );
     }
     #[test]
@@ -710,7 +715,11 @@ mod expression_tests {
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
-            AssignmentExpression::new(b"followers", LitIR::UInt(100), Operator::AddAssign)
+            AssignmentExpression::new(
+                Ident::from("followers"),
+                LitIR::UInt(100),
+                Operator::AddAssign
+            )
         );
     }
     #[test]
@@ -719,7 +728,11 @@ mod expression_tests {
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
-            AssignmentExpression::new(b"following", LitIR::UInt(150), Operator::SubAssign)
+            AssignmentExpression::new(
+                Ident::from("following"),
+                LitIR::UInt(150),
+                Operator::SubAssign
+            )
         );
     }
     #[test]
@@ -728,7 +741,11 @@ mod expression_tests {
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
-            AssignmentExpression::new(b"product_qty", LitIR::UInt(2), Operator::MulAssign)
+            AssignmentExpression::new(
+                Ident::from("product_qty"),
+                LitIR::UInt(2),
+                Operator::MulAssign
+            )
         );
     }
     #[test]
@@ -737,7 +754,11 @@ mod expression_tests {
         let r = parse_ast_node_full::<AssignmentExpression>(&src).unwrap();
         assert_eq!(
             r,
-            AssignmentExpression::new(b"image_crop_factor", LitIR::UInt(2), Operator::DivAssign)
+            AssignmentExpression::new(
+                Ident::from("image_crop_factor"),
+                LitIR::UInt(2),
+                Operator::DivAssign
+            )
         );
     }
 }
@@ -750,7 +771,7 @@ mod update_statement {
                 upd::{AssignmentExpression, Operator, UpdateStatement},
                 RelationalExpr, WhereClause,
             },
-            lex::LitIR,
+            lex::{Ident, LitIR},
         },
     };
     #[test]
@@ -763,15 +784,15 @@ mod update_statement {
         .unwrap();
         let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
-            Entity::Single(b"app"),
+            Entity::Single(Ident::from("app")),
             vec![AssignmentExpression::new(
-                b"notes",
+                Ident::from("notes"),
                 LitIR::Str("this is my new note"),
                 Operator::AddAssign,
             )],
             WhereClause::new(dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(),
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"),
                     LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
@@ -795,22 +816,22 @@ mod update_statement {
         .unwrap();
         let r = parse_ast_node_full::<UpdateStatement>(&tok[1..]).unwrap();
         let e = UpdateStatement::new(
-            Entity::Full(b"jotsy", b"app"),
+            Entity::Full(Ident::from("jotsy"), Ident::from("app")),
             vec![
                 AssignmentExpression::new(
-                    b"notes",
+                    Ident::from("notes"),
                     LitIR::Str("this is my new note"),
                     Operator::AddAssign,
                 ),
                 AssignmentExpression::new(
-                    b"email",
+                    Ident::from("email"),
                     LitIR::Str("sayan@example.com"),
                     Operator::Assign,
                 ),
             ],
             WhereClause::new(dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(),
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"),
                     LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
@@ -825,7 +846,7 @@ mod delete_stmt {
         crate::engine::ql::{
             ast::{parse_ast_node_full, Entity},
             dml::{del::DeleteStatement, RelationalExpr},
-            lex::LitIR,
+            lex::{Ident, LitIR},
         },
     };
 
@@ -838,10 +859,10 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            Entity::Single(b"users"),
+            Entity::Single(Ident::from("users")),
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(),
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"),
                     LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
@@ -861,10 +882,10 @@ mod delete_stmt {
         )
         .unwrap();
         let e = DeleteStatement::new_test(
-            Entity::Full(b"twitter", b"users"),
+            Entity::Full(Ident::from("twitter"), Ident::from("users")),
             dict! {
-                "username".as_bytes() => RelationalExpr::new(
-                    "username".as_bytes(),
+                Ident::from("username") => RelationalExpr::new(
+                    Ident::from("username"),
                     LitIR::Str("sayan"),
                     RelationalExpr::OP_EQ
                 )
@@ -879,7 +900,11 @@ mod delete_stmt {
 mod relational_expr {
     use {
         super::*,
-        crate::engine::ql::{ast::parse_ast_node_full, dml::RelationalExpr, lex::LitIR},
+        crate::engine::ql::{
+            ast::parse_ast_node_full,
+            dml::RelationalExpr,
+            lex::{Ident, LitIR},
+        },
     };
 
     #[test]
@@ -890,7 +915,7 @@ mod relational_expr {
             r,
             RelationalExpr {
                 rhs: LitIR::UInt(10),
-                lhs: "primary_key".as_bytes(),
+                lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_EQ
             }
         );
@@ -903,7 +928,7 @@ mod relational_expr {
             r,
             RelationalExpr {
                 rhs: LitIR::UInt(10),
-                lhs: "primary_key".as_bytes(),
+                lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_NE
             }
         );
@@ -916,7 +941,7 @@ mod relational_expr {
             r,
             RelationalExpr {
                 rhs: LitIR::UInt(10),
-                lhs: "primary_key".as_bytes(),
+                lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_GT
             }
         );
@@ -929,7 +954,7 @@ mod relational_expr {
             r,
             RelationalExpr {
                 rhs: LitIR::UInt(10),
-                lhs: "primary_key".as_bytes(),
+                lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_GE
             }
         );
@@ -942,7 +967,7 @@ mod relational_expr {
             r,
             RelationalExpr {
                 rhs: LitIR::UInt(10),
-                lhs: "primary_key".as_bytes(),
+                lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_LT
             }
         );
@@ -954,7 +979,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr::new(
-                "primary_key".as_bytes(),
+                Ident::from("primary_key"),
                 LitIR::UInt(10),
                 RelationalExpr::OP_LE
             )
@@ -967,7 +992,7 @@ mod where_clause {
         crate::engine::ql::{
             ast::parse_ast_node_full,
             dml::{RelationalExpr, WhereClause},
-            lex::LitIR,
+            lex::{Ident, LitIR},
         },
     };
     #[test]
@@ -979,8 +1004,8 @@ mod where_clause {
         )
         .unwrap();
         let expected = WhereClause::new(dict! {
-            "x".as_bytes() => RelationalExpr::new(
-                "x".as_bytes(),
+            Ident::from("x") => RelationalExpr::new(
+                Ident::from("x"),
                 LitIR::UInt(100),
                 RelationalExpr::OP_EQ
             )
@@ -996,13 +1021,13 @@ mod where_clause {
         )
         .unwrap();
         let expected = WhereClause::new(dict! {
-            "userid".as_bytes() => RelationalExpr::new(
-                "userid".as_bytes(),
+            Ident::from("userid") => RelationalExpr::new(
+                Ident::from("userid"),
                 LitIR::UInt(100),
                 RelationalExpr::OP_EQ
             ),
-            "pass".as_bytes() => RelationalExpr::new(
-                "pass".as_bytes(),
+            Ident::from("pass") => RelationalExpr::new(
+                Ident::from("pass"),
                 LitIR::Str("password"),
                 RelationalExpr::OP_EQ
             )

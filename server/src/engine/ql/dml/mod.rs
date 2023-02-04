@@ -37,15 +37,15 @@ pub mod upd;
 use {
     super::{
         ast::{QueryData, State},
-        lex::{LitIR, Token},
+        lex::{Ident, LitIR, Token},
     },
     crate::util::compiler,
     std::collections::HashMap,
 };
 
 #[inline(always)]
-unsafe fn read_ident<'a>(tok: &'a Token<'a>) -> &'a [u8] {
-    extract!(tok, Token::Ident(ref tok) => tok)
+unsafe fn read_ident<'a>(tok: &'a Token<'a>) -> Ident<'a> {
+    extract!(tok, Token::Ident(ref tok) => *tok)
 }
 
 #[inline(always)]
@@ -63,14 +63,14 @@ fn u(b: bool) -> u8 {
 
 #[derive(Debug, PartialEq)]
 pub struct RelationalExpr<'a> {
-    pub(super) lhs: &'a [u8],
+    pub(super) lhs: Ident<'a>,
     pub(super) rhs: LitIR<'a>,
     pub(super) opc: u8,
 }
 
 impl<'a> RelationalExpr<'a> {
     #[inline(always)]
-    pub(super) fn new(lhs: &'a [u8], rhs: LitIR<'a>, opc: u8) -> RelationalExpr<'a> {
+    pub(super) fn new(lhs: Ident<'a>, rhs: LitIR<'a>, opc: u8) -> RelationalExpr<'a> {
         Self { lhs, rhs, opc }
     }
     pub(super) const OP_EQ: u8 = 1;
@@ -123,7 +123,7 @@ pub struct WhereClause<'a> {
     c: WhereClauseCollection<'a>,
 }
 
-type WhereClauseCollection<'a> = HashMap<&'a [u8], RelationalExpr<'a>>;
+type WhereClauseCollection<'a> = HashMap<Ident<'a>, RelationalExpr<'a>>;
 
 impl<'a> WhereClause<'a> {
     #[inline(always)]

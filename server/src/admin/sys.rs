@@ -25,10 +25,7 @@
 */
 
 use {
-    crate::{
-        corestore::booltable::BoolTable, dbnet::prelude::*,
-        storage::v1::interface::DIR_ROOT,
-    },
+    crate::{corestore::booltable::BoolTable, dbnet::prelude::*, storage::v1::interface::DIR_ROOT},
     libsky::VERSION,
 };
 

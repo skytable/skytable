@@ -26,7 +26,7 @@
 
 use {
     super::{
-        super::lex::{Lit, Token},
+        super::lex::{Ident, Lit, Token},
         lex_insecure,
     },
     crate::engine::ql::LangError,
@@ -44,7 +44,10 @@ macro_rules! v(
 #[test]
 fn lex_ident() {
     let src = v!("hello");
-    assert_eq!(lex_insecure(&src).unwrap(), vec![Token::Ident(b"hello")]);
+    assert_eq!(
+        lex_insecure(&src).unwrap(),
+        vec![Token::Ident(Ident::from("hello"))]
+    );
 }
 
 // literals
@@ -416,7 +419,7 @@ mod safequery_params {
 }
 
 mod safequery_full_param {
-    use crate::engine::ql::lex::{LitIR, SafeQueryData, Token};
+    use crate::engine::ql::lex::{Ident, LitIR, SafeQueryData, Token};
     #[test]
     fn p_mini() {
         let query = b"select * from myapp where username = ?";
@@ -430,9 +433,9 @@ mod safequery_full_param {
                     Token![select],
                     Token![*],
                     Token![from],
-                    Token::Ident(b"myapp"),
+                    Token::Ident(Ident::from("myapp")),
                     Token![where],
-                    Token::Ident(b"username"),
+                    Token::Ident(Ident::from("username")),
                     Token![=],
                     Token![?]
                 ]
@@ -452,13 +455,13 @@ mod safequery_full_param {
                     Token![select],
                     Token![*],
                     Token![from],
-                    Token::Ident(b"myapp"),
+                    Token::Ident(Ident::from("myapp")),
                     Token![where],
-                    Token::Ident(b"username"),
+                    Token::Ident(Ident::from("username")),
                     Token![=],
                     Token![?],
                     Token![and],
-                    Token::Ident(b"pass"),
+                    Token::Ident(Ident::from("pass")),
                     Token![=],
                     Token![?]
                 ]
@@ -482,19 +485,19 @@ mod safequery_full_param {
                 vec![
                     Token![select],
                     Token![$],
-                    Token::Ident(b"notes"),
+                    Token::Ident(Ident::from("notes")),
                     Token![open []],
                     Token![~],
                     Token![?],
                     Token![close []],
                     Token![from],
-                    Token::Ident(b"myapp"),
+                    Token::Ident(Ident::from("myapp")),
                     Token![where],
-                    Token::Ident(b"username"),
+                    Token::Ident(Ident::from("username")),
                     Token![=],
                     Token![?],
                     Token![and],
-                    Token::Ident(b"pass"),
+                    Token::Ident(Ident::from("pass")),
                     Token![=],
                     Token![?]
                 ]

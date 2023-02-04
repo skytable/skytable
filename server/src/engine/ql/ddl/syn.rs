@@ -48,12 +48,12 @@ use {
     crate::{
         engine::ql::{
             ast::{QueryData, State},
-            lex::{LitIR, LitIROwned, Slice, Token},
+            lex::{Ident, LitIR, LitIROwned, Token},
             LangError, LangResult,
         },
         util::{compiler, MaybeInit},
     },
-    std::{collections::HashMap, str},
+    std::collections::HashMap,
 };
 
 #[derive(Debug, PartialEq)]
@@ -163,7 +163,7 @@ where
                 break;
             }
             (Token::Ident(id), DictFoldState::CB_OR_IDENT) => {
-                key = MaybeInit::new(unsafe { str::from_utf8_unchecked(id) });
+                key = MaybeInit::new(*id);
                 // found a key, now expect colon
                 mstate = DictFoldState::COLON;
             }
@@ -241,13 +241,13 @@ pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>>(
 #[derive(Debug, PartialEq)]
 /// A layer contains a type and corresponding metadata
 pub struct Layer<'a> {
-    ty: Slice<'a>,
+    ty: Ident<'a>,
     props: Dict,
 }
 
 impl<'a> Layer<'a> {
     //// Create a new layer
-    pub const fn new(ty: Slice<'a>, props: Dict) -> Self {
+    pub const fn new(ty: Ident<'a>, props: Dict) -> Self {
         Self { ty, props }
     }
 }
@@ -332,7 +332,7 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
 /// A field definition
 pub struct Field<'a> {
     /// the field name
-    field_name: Slice<'a>,
+    field_name: Ident<'a>,
     /// layers
     layers: Vec<Layer<'a>>,
     /// is null
@@ -342,7 +342,7 @@ pub struct Field<'a> {
 }
 
 impl<'a> Field<'a> {
-    pub fn new(field_name: Slice<'a>, layers: Vec<Layer<'a>>, null: bool, primary: bool) -> Self {
+    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, null: bool, primary: bool) -> Self {
         Self {
             field_name,
             layers,
@@ -386,13 +386,13 @@ impl<'a> Field<'a> {
 #[derive(Debug, PartialEq)]
 /// An [`ExpandedField`] is a full field definition with advanced metadata
 pub struct ExpandedField<'a> {
-    field_name: Slice<'a>,
+    field_name: Ident<'a>,
     layers: Vec<Layer<'a>>,
     props: Dict,
 }
 
 impl<'a> ExpandedField<'a> {
-    pub fn new(field_name: Slice<'a>, layers: Vec<Layer<'a>>, props: Dict) -> Self {
+    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, props: Dict) -> Self {
         Self {
             field_name,
             layers,

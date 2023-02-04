@@ -29,7 +29,7 @@ use {
     crate::{
         engine::ql::{
             ast::{Entity, QueryData, State},
-            lex::Token,
+            lex::{Ident, Token},
             LangError, LangResult,
         },
         util::{compiler, MaybeInit},
@@ -45,7 +45,7 @@ pub struct SelectStatement<'a> {
     /// the entity
     pub(super) entity: Entity<'a>,
     /// fields in order of querying. will be zero when wildcard is set
-    pub(super) fields: Vec<&'a [u8]>,
+    pub(super) fields: Vec<Ident<'a>>,
     /// whether a wildcard was passed
     pub(super) wildcard: bool,
     /// where clause
@@ -56,7 +56,7 @@ impl<'a> SelectStatement<'a> {
     #[inline(always)]
     pub(crate) fn new_test(
         entity: Entity<'a>,
-        fields: Vec<&'a [u8]>,
+        fields: Vec<Ident<'a>>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {
@@ -65,7 +65,7 @@ impl<'a> SelectStatement<'a> {
     #[inline(always)]
     fn new(
         entity: Entity<'a>,
-        fields: Vec<&'a [u8]>,
+        fields: Vec<Ident<'a>>,
         wildcard: bool,
         clauses: WhereClauseCollection<'a>,
     ) -> SelectStatement<'a> {

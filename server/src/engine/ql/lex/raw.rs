@@ -24,13 +24,96 @@
  *
 */
 
-use {super::Slice, crate::engine::ql::LangError, core::slice};
+use {
+    super::Slice,
+    crate::engine::ql::LangError,
+    core::{borrow::Borrow, fmt, ops::Deref, slice, str},
+};
+
+#[repr(transparent)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+pub struct Ident<'a>(&'a [u8]);
+impl<'a> Ident<'a> {
+    pub const unsafe fn new(v: &'a [u8]) -> Self {
+        Self(v)
+    }
+    pub const fn new_str(v: &'a str) -> Self {
+        Self(v.as_bytes())
+    }
+    pub fn as_slice(&self) -> &'a [u8] {
+        self.0
+    }
+    pub fn as_str(&self) -> &'a str {
+        unsafe { str::from_utf8_unchecked(self.0) }
+    }
+}
+impl<'a> fmt::Debug for Ident<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl<'a> Deref for Ident<'a> {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+impl<'a> PartialEq<[u8]> for Ident<'a> {
+    fn eq(&self, other: &[u8]) -> bool {
+        self.0 == other
+    }
+}
+impl<'a> PartialEq<Ident<'a>> for [u8] {
+    fn eq(&self, other: &Ident<'a>) -> bool {
+        self == other.as_bytes()
+    }
+}
+impl<'a> PartialEq<str> for Ident<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other.as_bytes()
+    }
+}
+impl<'a> PartialEq<Ident<'a>> for str {
+    fn eq(&self, other: &Ident<'a>) -> bool {
+        self == other.as_str()
+    }
+}
+impl<'a> From<&'a str> for Ident<'a> {
+    fn from(s: &'a str) -> Self {
+        Self::new_str(s)
+    }
+}
+impl<'a> AsRef<[u8]> for Ident<'a> {
+    fn as_ref(&self) -> &'a [u8] {
+        self.0
+    }
+}
+impl<'a> AsRef<str> for Ident<'a> {
+    fn as_ref(&self) -> &'a str {
+        self.as_str()
+    }
+}
+impl<'a> Default for Ident<'a> {
+    fn default() -> Self {
+        Self::new_str("")
+    }
+}
+impl<'a> Borrow<[u8]> for Ident<'a> {
+    fn borrow(&self) -> &[u8] {
+        self.0
+    }
+}
+impl<'a> Borrow<str> for Ident<'a> {
+    fn borrow(&self) -> &'a str {
+        self.as_str()
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token<'a> {
     Symbol(Symbol),
     Keyword(Keyword),
-    Ident(Slice<'a>),
+    Ident(Ident<'a>),
     #[cfg(test)]
     /// A comma that can be ignored (used for fuzzing)
     IgnorableComma,
@@ -42,7 +125,7 @@ impl<'a> ToString for Token<'a> {
         match self {
             Self::Symbol(s) => s.to_string(),
             Self::Keyword(k) => k.to_string(),
-            Self::Ident(id) => String::from_utf8_lossy(id).to_string(),
+            Self::Ident(id) => id.to_string(),
             Self::Lit(l) => l.to_string(),
             #[cfg(test)]
             Self::IgnorableComma => "[IGNORE_COMMA]".to_owned(),
@@ -489,7 +572,10 @@ impl<'a> RawLexer<'a> {
             Some(kw) => self.tokens.push(kw.into()),
             // FIXME(@ohsayan): Uh, mind fixing this? The only advantage is that I can keep the graph *memory* footprint small
             None if st == b"true" || st == b"false" => self.push_token(Lit::Bool(st == b"true")),
-            None => self.tokens.push(Token::Ident(s)),
+            None => self.tokens.push(unsafe {
+                // UNSAFE(@ohsayan): scan_ident only returns a valid ident which is always a string
+                Token::Ident(Ident::new(s))
+            }),
         }
     }
     #[inline(always)]

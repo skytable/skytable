@@ -32,7 +32,7 @@ use {
     self::traits::ASTNode,
     super::{
         ddl, dml,
-        lex::{LitIR, Slice, Token},
+        lex::{Ident, LitIR, Token},
         LangError, LangResult,
     },
     crate::{
@@ -361,7 +361,7 @@ pub enum Entity<'a> {
     /// ```sql
     /// :model
     /// ```
-    Partial(Slice<'a>),
+    Partial(Ident<'a>),
     /// A single entity is used when switching to a model wrt the currently set space (commonly used
     /// when running DML queries)
     ///
@@ -369,7 +369,7 @@ pub enum Entity<'a> {
     /// ```sql
     /// model
     /// ```
-    Single(Slice<'a>),
+    Single(Ident<'a>),
     /// A full entity is a complete definition to a model wrt to the given space (commonly used with
     /// DML queries)
     ///
@@ -377,14 +377,7 @@ pub enum Entity<'a> {
     /// ```sql
     /// space.model
     /// ```
-    Full(Slice<'a>, Slice<'a>),
-}
-
-impl<'a> From<(Slice<'a>, Slice<'a>)> for Entity<'a> {
-    #[inline(always)]
-    fn from((space, model): (Slice<'a>, Slice<'a>)) -> Self {
-        Self::Full(space, model)
-    }
+    Full(Ident<'a>, Ident<'a>),
 }
 
 impl<'a> Entity<'a> {
@@ -543,7 +536,7 @@ pub enum Statement<'a> {
     /// - Space is not in active use
     DropSpace(ddl::drop::DropSpace<'a>),
     /// DDL query to inspect a space (returns a list of models in the space)
-    InspectSpace(Slice<'a>),
+    InspectSpace(Ident<'a>),
     /// DDL query to inspect a model (returns the model definition)
     InspectModel(Entity<'a>),
     /// DDL query to inspect all spaces (returns a list of spaces in the database)
@@ -578,7 +571,7 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
             _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
-        Token::Ident(id) if id.eq_ignore_ascii_case(b"inspect") => {
+        Token::Ident(id) if id.eq_ignore_ascii_case("inspect") => {
             ddl::ins::parse_inspect(&mut state)
         }
         // DML

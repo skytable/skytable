@@ -25,22 +25,22 @@
 */
 
 use super::*;
-use crate::engine::ql::ast::Entity;
+use crate::engine::ql::{ast::Entity, lex::Ident};
 #[test]
 fn entity_current() {
     let t = lex_insecure(b"hello").unwrap();
     let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Single(b"hello"))
+    assert_eq!(r, Entity::Single(Ident::from("hello")))
 }
 #[test]
 fn entity_partial() {
     let t = lex_insecure(b":hello").unwrap();
     let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Partial(b"hello"))
+    assert_eq!(r, Entity::Partial(Ident::from("hello")))
 }
 #[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();
     let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Full(b"hello", b"world"))
+    assert_eq!(r, Entity::Full(Ident::from("hello"), Ident::from("world")))
 }

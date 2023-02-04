@@ -116,5 +116,7 @@ macro_rules! dbgfn {
 
 #[allow(unused_macros)]
 macro_rules! void {
-    () => {()};
+    () => {
+        ()
+    };
 }

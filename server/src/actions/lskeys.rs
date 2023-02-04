@@ -33,7 +33,11 @@ const DEFAULT_COUNT: usize = 10;
 
 action!(
     /// Run an `LSKEYS` query
-    fn lskeys(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
+    fn lskeys(
+        handle: &crate::corestore::Corestore,
+        con: &mut Connection<C, P>,
+        mut act: ActionIter<'a>,
+    ) {
         ensure_length::<P>(act.len(), |size| size < 4)?;
         let (table, count) = if act.is_empty() {
             (get_tbl!(handle, con), DEFAULT_COUNT)

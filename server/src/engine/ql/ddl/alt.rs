@@ -29,7 +29,7 @@ use {
     crate::{
         engine::ql::{
             ast::{QueryData, State},
-            lex::{Slice, Token},
+            lex::{Ident, Token},
             LangError, LangResult,
         },
         util::compiler,
@@ -39,12 +39,12 @@ use {
 #[derive(Debug, PartialEq)]
 /// An alter space query with corresponding data
 pub struct AlterSpace<'a> {
-    space_name: Slice<'a>,
+    space_name: Ident<'a>,
     updated_props: Dict,
 }
 
 impl<'a> AlterSpace<'a> {
-    pub fn new(space_name: Slice<'a>, updated_props: Dict) -> Self {
+    pub fn new(space_name: Ident<'a>, updated_props: Dict) -> Self {
         Self {
             space_name,
             updated_props,
@@ -82,13 +82,13 @@ impl<'a> AlterSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct AlterModel<'a> {
-    model: Slice<'a>,
+    model: Ident<'a>,
     kind: AlterKind<'a>,
 }
 
 impl<'a> AlterModel<'a> {
     #[inline(always)]
-    pub fn new(model: Slice<'a>, kind: AlterKind<'a>) -> Self {
+    pub fn new(model: Ident<'a>, kind: AlterKind<'a>) -> Self {
         Self { model, kind }
     }
 }
@@ -97,7 +97,7 @@ impl<'a> AlterModel<'a> {
 /// The alter operation kind
 pub enum AlterKind<'a> {
     Add(Box<[ExpandedField<'a>]>),
-    Remove(Box<[Slice<'a>]>),
+    Remove(Box<[Ident<'a>]>),
     Update(Box<[ExpandedField<'a>]>),
 }
 

@@ -251,9 +251,7 @@ pub fn run_bench(servercfg: &ServerConfig, matches: ArgMatches) -> BResult<()> {
     binfo!("Finished benchmarks. Cleaning up ...");
     let r: Element = misc_connection.run_query(Query::from("drop model default.tmpbench force"))?;
     if r != Element::RespCode(RespCode::Okay) {
-        return Err(Error::Runtime(
-            "failed to clean up after benchmarks".into(),
-        ));
+        return Err(Error::Runtime("failed to clean up after benchmarks".into()));
     }
 
     if config::should_output_messages() {

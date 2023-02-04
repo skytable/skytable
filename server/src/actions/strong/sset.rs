@@ -108,9 +108,7 @@ pub(super) fn snapshot_and_insert<'a, T: 'a + DerefUnsafeSlice>(
             // fine, the keys were non-existent when we looked at them
             while let (Some(key), Some(value)) = (act.next(), act.next()) {
                 unsafe {
-                    if let Some(fresh) =
-                        lowtable.fresh_entry(SharedSlice::new(key.deref_slice()))
-                    {
+                    if let Some(fresh) = lowtable.fresh_entry(SharedSlice::new(key.deref_slice())) {
                         fresh.insert(SharedSlice::new(value.deref_slice()));
                     }
                     // we don't care if some other thread initialized the value we checked

@@ -31,7 +31,7 @@ use {
     crate::{
         engine::ql::{
             ast::{Entity, QueryData, State},
-            lex::LitIR,
+            lex::{Ident, LitIR},
             LangError, LangResult,
         },
         util::{compiler, MaybeInit},
@@ -64,7 +64,7 @@ static OPERATOR: [Operator; 6] = [
 #[derive(Debug, PartialEq)]
 pub struct AssignmentExpression<'a> {
     /// the LHS ident
-    pub(super) lhs: &'a [u8],
+    pub(super) lhs: Ident<'a>,
     /// the RHS lit
     pub(super) rhs: LitIR<'a>,
     /// operator
@@ -72,7 +72,7 @@ pub struct AssignmentExpression<'a> {
 }
 
 impl<'a> AssignmentExpression<'a> {
-    pub fn new(lhs: &'a [u8], rhs: LitIR<'a>, operator_fn: Operator) -> Self {
+    pub fn new(lhs: Ident<'a>, rhs: LitIR<'a>, operator_fn: Operator) -> Self {
         Self {
             lhs,
             rhs,

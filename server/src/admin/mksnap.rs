@@ -25,10 +25,7 @@
 */
 
 use {
-    crate::{
-        dbnet::prelude::*, kvengine::encoding,
-        storage::v1::sengine::SnapshotActionResult,
-    },
+    crate::{dbnet::prelude::*, kvengine::encoding, storage::v1::sengine::SnapshotActionResult},
     core::str,
     std::path::{Component, PathBuf},
 };
@@ -36,7 +33,11 @@ use {
 action!(
     /// Create a snapshot
     ///
-    fn mksnap(handle: &crate::corestore::Corestore, con: &mut Connection<C, P>, mut act: ActionIter<'a>) {
+    fn mksnap(
+        handle: &crate::corestore::Corestore,
+        con: &mut Connection<C, P>,
+        mut act: ActionIter<'a>,
+    ) {
         let engine = handle.get_engine();
         if act.is_empty() {
             // traditional mksnap

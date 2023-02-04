@@ -28,8 +28,8 @@
 //! This module provides functions to work with `EXISTS` queries
 
 use crate::{
-    corestore::table::DataModel, dbnet::prelude::*,
-    kvengine::encoding::ENCODING_LUT_ITER, queryengine::ActionIter, util::compiler,
+    corestore::table::DataModel, dbnet::prelude::*, kvengine::encoding::ENCODING_LUT_ITER,
+    queryengine::ActionIter, util::compiler,
 };
 
 action!(

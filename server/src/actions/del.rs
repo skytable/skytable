@@ -28,8 +28,8 @@
 //! This module provides functions to work with `DEL` queries
 
 use crate::{
-    corestore::table::DataModel, dbnet::prelude::*,
-    kvengine::encoding::ENCODING_LUT_ITER, util::compiler,
+    corestore::table::DataModel, dbnet::prelude::*, kvengine::encoding::ENCODING_LUT_ITER,
+    util::compiler,
 };
 
 action!(

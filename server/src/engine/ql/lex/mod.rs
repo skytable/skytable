@@ -33,7 +33,7 @@ use {
     core::{cmp, fmt, ops::BitOr, slice, str},
 };
 
-pub use self::raw::{Keyword, Lit, LitIR, LitIROwned, Symbol, Token};
+pub use self::raw::{Ident, Keyword, Lit, LitIR, LitIROwned, Symbol, Token};
 pub type Slice<'a> = &'a [u8];
 
 /*

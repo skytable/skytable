@@ -26,28 +26,28 @@
 
 use crate::engine::ql::{
     ast::{Entity, QueryData, State, Statement},
-    lex::{Slice, Token},
+    lex::{Ident, Token},
     LangError, LangResult,
 };
 
 #[derive(Debug, PartialEq)]
 /// A generic representation of `drop` query
 pub struct DropSpace<'a> {
-    pub(super) space: Slice<'a>,
+    pub(super) space: Ident<'a>,
     pub(super) force: bool,
 }
 
 impl<'a> DropSpace<'a> {
     #[inline(always)]
     /// Instantiate
-    pub const fn new(space: Slice<'a>, force: bool) -> Self {
+    pub const fn new(space: Ident<'a>, force: bool) -> Self {
         Self { space, force }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<DropSpace<'a>> {
         if state.cursor_is_ident() {
             let ident = state.fw_read();
             // should we force drop?
-            let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+            let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
             state.cursor_ahead_if(force);
             // either `force` or nothing
             if state.exhausted() {
@@ -77,7 +77,7 @@ impl<'a> DropModel<'a> {
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         let e = Entity::attempt_process_entity_result(state)?;
-        let force = state.cursor_rounded_eq(Token::Ident(b"force"));
+        let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
         state.cursor_ahead_if(force);
         if state.exhausted() {
             return Ok(DropModel::new(e, force));

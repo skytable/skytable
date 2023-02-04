@@ -31,7 +31,7 @@ use {
             core::DataType,
             ql::{
                 ast::{Entity, QueryData, State},
-                lex::Token,
+                lex::{Ident, Token},
                 LangError, LangResult,
             },
         },
@@ -115,7 +115,8 @@ fn hashp(key: &[u8]) -> u32 {
         % PRODUCER_G.len() as u32
 }
 #[inline(always)]
-fn ldfunc(func: &[u8]) -> Option<ProducerFn> {
+fn ldfunc(func: Ident<'_>) -> Option<ProducerFn> {
+    let func = func.as_bytes();
     let ph = hashp(func) as usize;
     let min = cmp::min(ph, PRODUCER_F.len() - 1);
     let data = PRODUCER_F[min as usize];
@@ -126,7 +127,7 @@ fn ldfunc(func: &[u8]) -> Option<ProducerFn> {
     }
 }
 #[inline(always)]
-fn ldfunc_exists(func: &[u8]) -> bool {
+fn ldfunc_exists(func: Ident<'_>) -> bool {
     ldfunc(func).is_some()
 }
 #[inline(always)]
@@ -258,7 +259,7 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 /// Panics if tt is empty
 pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> HashMap<&'a [u8], Option<DataType>> {
+) -> HashMap<Ident<'a>, Option<DataType>> {
     let mut stop = state.cursor_eq(Token![close {}]);
     state.cursor_ahead_if(stop);
     let mut data = HashMap::with_capacity(2);
@@ -313,7 +314,7 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 #[derive(Debug, PartialEq)]
 pub enum InsertData<'a> {
     Ordered(Vec<Option<DataType>>),
-    Map(HashMap<&'a [u8], Option<DataType>>),
+    Map(HashMap<Ident<'a>, Option<DataType>>),
 }
 
 impl<'a> From<Vec<Option<DataType>>> for InsertData<'a> {
@@ -322,8 +323,8 @@ impl<'a> From<Vec<Option<DataType>>> for InsertData<'a> {
     }
 }
 
-impl<'a> From<HashMap<&'static [u8], Option<DataType>>> for InsertData<'a> {
-    fn from(m: HashMap<&'static [u8], Option<DataType>>) -> Self {
+impl<'a> From<HashMap<Ident<'static>, Option<DataType>>> for InsertData<'a> {
+    fn from(m: HashMap<Ident<'static>, Option<DataType>>) -> Self {
         Self::Map(m)
     }
 }
@@ -445,12 +446,7 @@ mod impls {
                 let r = parse_data_map_syntax(state);
                 Ok(Self(
                     r.into_iter()
-                        .map(|(ident, val)| {
-                            (
-                                String::from_utf8_lossy(ident).to_string().into_boxed_str(),
-                                val,
-                            )
-                        })
+                        .map(|(ident, val)| (ident.to_string().into_boxed_str(), val))
                         .collect(),
                 ))
             }
