@@ -24,10 +24,12 @@
  *
 */
 
-use crate::engine::ql::{
-    ast::{Entity, QueryData, State, Statement},
-    lex::{Ident, Token},
-    LangError, LangResult,
+use crate::engine::{
+    error::{LangError, LangResult},
+    ql::{
+        ast::{Entity, QueryData, State, Statement},
+        lex::{Ident, Token},
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -60,7 +62,7 @@ impl<'a> DropSpace<'a> {
                 ));
             }
         }
-        Err(LangError::UnexpectedToken)
+        Err(LangError::BadSyntax)
     }
 }
 
@@ -82,7 +84,7 @@ impl<'a> DropModel<'a> {
         if state.exhausted() {
             return Ok(DropModel::new(e, force));
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::BadSyntax)
         }
     }
 }
@@ -95,7 +97,7 @@ pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResul
     match state.fw_read() {
         Token![model] => DropModel::parse(state).map(Statement::DropModel),
         Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
-        _ => Err(LangError::UnexpectedToken),
+        _ => Err(LangError::StmtUnknownDrop),
     }
 }
 
@@ -103,9 +105,9 @@ pub use impls::DropStatementAST;
 mod impls {
     use {
         super::{DropModel, DropSpace},
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State, Statement},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State, Statement},
         },
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {

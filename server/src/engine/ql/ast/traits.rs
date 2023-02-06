@@ -26,9 +26,9 @@
 
 #[cfg(test)]
 use crate::engine::ql::{ast::InplaceData, lex::Token};
-use crate::engine::ql::{
-    ast::{QueryData, State},
-    LangError, LangResult,
+use crate::engine::{
+    error::{LangError, LangResult},
+    ql::ast::{QueryData, State},
 };
 
 /// An AST node
@@ -47,7 +47,7 @@ pub trait ASTNode<'a>: Sized {
             return if state.okay() {
                 r
             } else {
-                Err(LangError::UnexpectedToken)
+                Err(LangError::BadSyntax)
             };
         }
         r
@@ -64,7 +64,7 @@ pub trait ASTNode<'a>: Sized {
             return if state.okay() {
                 r
             } else {
-                Err(LangError::UnexpectedToken)
+                Err(LangError::BadSyntax)
             };
         }
         r
@@ -86,7 +86,7 @@ pub trait ASTNode<'a>: Sized {
         if state.exhausted() && state.okay() {
             r
         } else {
-            Err(super::super::LangError::UnexpectedToken)
+            Err(LangError::BadSyntax)
         }
     }
 }

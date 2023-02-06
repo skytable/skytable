@@ -27,10 +27,12 @@
 use {
     super::syn::{self, Dict, DictFoldState, ExpandedField},
     crate::{
-        engine::ql::{
-            ast::{QueryData, State},
-            lex::{Ident, Token},
-            LangError, LangResult,
+        engine::{
+            error::{LangError, LangResult},
+            ql::{
+                ast::{QueryData, State},
+                lex::{Ident, Token},
+            },
         },
         util::compiler,
     },
@@ -54,7 +56,7 @@ impl<'a> AlterSpace<'a> {
     /// Parse alter space from tokens
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         if compiler::unlikely(state.remaining() <= 3) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         let space_name = state.fw_read();
         state.poison_if_not(state.cursor_eq(Token![with]));
@@ -63,7 +65,7 @@ impl<'a> AlterSpace<'a> {
         state.cursor_ahead(); // ignore errors
 
         if compiler::unlikely(!state.okay()) {
-            return Err(LangError::UnexpectedToken);
+            return Err(LangError::BadSyntax);
         }
 
         let space_name = unsafe { extract!(space_name, Token::Ident(ref space) => space.clone()) };
@@ -75,7 +77,7 @@ impl<'a> AlterSpace<'a> {
                 updated_props: d,
             })
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::SynBadMap)
         }
     }
 }
@@ -107,7 +109,8 @@ impl<'a> AlterModel<'a> {
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         // alter model mymodel remove x
         if state.remaining() <= 2 || !state.cursor_has_ident_rounded() {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::BadSyntax);
+            // FIXME(@ohsayan): bad because no specificity
         }
         let model_name = unsafe { extract!(state.fw_read(), Token::Ident(ref l) => l.clone()) };
         let kind = match state.fw_read() {
@@ -140,7 +143,7 @@ impl<'a> AlterKind<'a> {
             <remove> ::= <ident> | <openparen> (<ident> <comma>)*<closeparen>
         */
         if compiler::unlikely(state.exhausted()) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
 
         let r = match state.fw_read() {
@@ -169,10 +172,10 @@ impl<'a> AlterKind<'a> {
                 if state.okay() {
                     cols.into_boxed_slice()
                 } else {
-                    return Err(LangError::UnexpectedToken);
+                    return Err(LangError::BadSyntax);
                 }
             }
-            _ => return Err(LangError::ExpectedStatement),
+            _ => return Err(LangError::BadSyntax),
         };
         Ok(Self::Remove(r))
     }
@@ -181,9 +184,9 @@ impl<'a> AlterKind<'a> {
 mod impls {
     use {
         super::{AlterModel, AlterSpace},
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for AlterModel<'a> {

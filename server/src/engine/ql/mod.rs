@@ -35,27 +35,3 @@ pub(super) mod dml;
 pub(super) mod lex;
 #[cfg(test)]
 mod tests;
-
-/*
-    Lang errors
-*/
-
-pub type LangResult<T> = Result<T, LangError>;
-
-#[derive(Debug, PartialEq)]
-#[repr(u8)]
-pub enum LangError {
-    InvalidNumericLiteral,
-    InvalidStringLiteral,
-    UnexpectedChar,
-    InvalidTypeExpression,
-    ExpectedStatement,
-    UnexpectedEndofStatement,
-    UnexpectedToken,
-    InvalidDictionaryExpression,
-    InvalidTypeDefinition,
-    InvalidSafeLiteral,
-    BadPframe,
-    UnknownCreateStatement,
-    UnknownAlterStatement,
-}

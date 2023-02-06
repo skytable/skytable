@@ -27,10 +27,12 @@
 use {
     super::syn::{self, Dict, DictFoldState, Field},
     crate::{
-        engine::ql::{
-            ast::{QueryData, State},
-            lex::{Ident, Token},
-            LangError, LangResult,
+        engine::{
+            error::{LangError, LangResult},
+            ql::{
+                ast::{QueryData, State},
+                lex::{Ident, Token},
+            },
         },
         util::compiler,
     },
@@ -51,7 +53,7 @@ impl<'a> CreateSpace<'a> {
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         // smallest declaration: `create space myspace` -> >= 1 token
         if compiler::unlikely(state.remaining() < 1) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
@@ -70,7 +72,7 @@ impl<'a> CreateSpace<'a> {
                 props: d,
             })
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::BadSyntax)
         }
     }
 }
@@ -104,7 +106,7 @@ impl<'a> CreateModel<'a> {
 
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         if compiler::unlikely(state.remaining() < 10) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         // field name; ignore errors
         let field_name = state.fw_read();
@@ -138,7 +140,7 @@ impl<'a> CreateModel<'a> {
                 props,
             })
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::BadSyntax)
         }
     }
 }
@@ -146,9 +148,9 @@ impl<'a> CreateModel<'a> {
 mod impls {
     use {
         super::{CreateModel, CreateSpace},
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for CreateSpace<'a> {

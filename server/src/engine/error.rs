@@ -46,4 +46,29 @@ pub enum LexError {
     UnexpectedByte,
 }
 #[derive(Debug, PartialEq)]
-pub enum LangError {}
+pub enum LangError {
+    // generic
+    /// Unexpected end of syntax
+    UnexpectedEOS,
+    /// Last resort error kind when error specificity is hard to trace
+    BadSyntax,
+    /// Expected a token that defines a statement, found something else
+    ExpectedStatement,
+    // ast nodes: usually parents at heigher hights
+    /// Expected an entity, but found invalid tokens
+    ExpectedEntity,
+    // ast nodes: usually children wrt height
+    /// Bad syn tymeta element
+    SynBadTyMeta,
+    /// Bad syn map element
+    SynBadMap,
+    /// Bad expr: relational
+    ExprBadRel,
+    // ast nodes: usually the root
+    /// Unknown `create` statement
+    StmtUnknownCreate,
+    /// Unknown `alter` statement
+    StmtUnknownAlter,
+    /// unknown `drop` statement
+    StmtUnknownDrop,
+}

@@ -29,10 +29,12 @@ use super::WhereClauseCollection;
 use {
     super::{read_ident, u, WhereClause},
     crate::{
-        engine::ql::{
-            ast::{Entity, QueryData, State},
-            lex::{Ident, LitIR},
-            LangError, LangResult,
+        engine::{
+            error::{LangError, LangResult},
+            ql::{
+                ast::{Entity, QueryData, State},
+                lex::{Ident, LitIR},
+            },
         },
         util::{compiler, MaybeInit},
     },
@@ -167,7 +169,7 @@ impl<'a> UpdateStatement<'a> {
                    ^1    ^2  ^3 ^4 ^5^6    ^7^8^9
         */
         if compiler::unlikely(state.remaining() < 9) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         // parse entity
         let mut entity = MaybeInit::uninit();
@@ -205,7 +207,7 @@ impl<'a> UpdateStatement<'a> {
                 wc: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(LangError::UnexpectedToken)
+            compiler::cold_rerr(LangError::BadSyntax)
         }
     }
 }
@@ -213,9 +215,9 @@ impl<'a> UpdateStatement<'a> {
 mod impls {
     use {
         super::UpdateStatement,
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for UpdateStatement<'a> {

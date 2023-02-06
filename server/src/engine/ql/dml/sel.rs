@@ -27,10 +27,12 @@
 use {
     super::{WhereClause, WhereClauseCollection},
     crate::{
-        engine::ql::{
-            ast::{Entity, QueryData, State},
-            lex::{Ident, Token},
-            LangError, LangResult,
+        engine::{
+            error::{LangError, LangResult},
+            ql::{
+                ast::{Entity, QueryData, State},
+                lex::{Ident, Token},
+            },
         },
         util::{compiler, MaybeInit},
     },
@@ -87,7 +89,7 @@ impl<'a> SelectStatement<'a> {
                    1 2    3
         */
         if compiler::unlikely(state.remaining() < 3) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         let mut select_fields = Vec::new();
         let is_wildcard = state.cursor_eq(Token![*]);
@@ -106,7 +108,7 @@ impl<'a> SelectStatement<'a> {
         state.poison_if_not(is_wildcard | !select_fields.is_empty());
         // we should have from + model
         if compiler::unlikely(state.remaining() < 2 || !state.okay()) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::BadSyntax);
         }
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
@@ -129,7 +131,7 @@ impl<'a> SelectStatement<'a> {
                 clause: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(LangError::UnexpectedToken)
+            compiler::cold_rerr(LangError::BadSyntax)
         }
     }
 }
@@ -137,9 +139,9 @@ impl<'a> SelectStatement<'a> {
 mod impls {
     use {
         super::SelectStatement,
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for SelectStatement<'a> {

@@ -29,10 +29,10 @@ use {
     crate::{
         engine::{
             core::HSData,
+            error::{LangError, LangResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
-                LangError, LangResult,
             },
         },
         util::{compiler, MaybeInit},
@@ -350,7 +350,7 @@ impl<'a> InsertStatement<'a> {
                    ^1    ^2   ^3      ^4 ^5
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         state.poison_if_not(state.cursor_eq(Token![into]));
         state.cursor_ahead(); // ignore errors
@@ -385,7 +385,7 @@ impl<'a> InsertStatement<'a> {
                 data,
             })
         } else {
-            compiler::cold_rerr(LangError::UnexpectedToken)
+            compiler::cold_rerr(LangError::BadSyntax)
         }
     }
 }
@@ -395,9 +395,9 @@ pub use impls::test::{DataMap, DataTuple, List};
 mod impls {
     use {
         super::InsertStatement,
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for InsertStatement<'a> {
@@ -411,9 +411,9 @@ mod impls {
             super::super::{
                 parse_data_map_syntax, parse_data_tuple_syntax, parse_list, HSData, HashMap,
             },
-            crate::engine::ql::{
-                ast::{traits::ASTNode, QueryData, State},
-                LangResult,
+            crate::engine::{
+                error::LangResult,
+                ql::ast::{traits::ASTNode, QueryData, State},
             },
         };
         #[derive(sky_macros::Wrapper, Debug)]

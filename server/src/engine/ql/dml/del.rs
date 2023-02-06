@@ -29,9 +29,9 @@ use super::WhereClauseCollection;
 use {
     super::WhereClause,
     crate::{
-        engine::ql::{
-            ast::{Entity, QueryData, State},
-            LangError, LangResult,
+        engine::{
+            error::{LangError, LangResult},
+            ql::ast::{Entity, QueryData, State},
         },
         util::{compiler, MaybeInit},
     },
@@ -69,7 +69,7 @@ impl<'a> DeleteStatement<'a> {
                    ^1   ^2    ^3    ^4  ^5
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         // from + entity
         state.poison_if_not(state.cursor_eq(Token![from]));
@@ -89,7 +89,7 @@ impl<'a> DeleteStatement<'a> {
                 wc,
             })
         } else {
-            compiler::cold_rerr(LangError::UnexpectedToken)
+            compiler::cold_rerr(LangError::BadSyntax)
         }
     }
 }
@@ -97,9 +97,9 @@ impl<'a> DeleteStatement<'a> {
 mod impls {
     use {
         super::DeleteStatement,
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for DeleteStatement<'a> {

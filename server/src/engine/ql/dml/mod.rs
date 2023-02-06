@@ -161,9 +161,9 @@ impl<'a> WhereClause<'a> {
 mod impls {
     use {
         super::{RelationalExpr, WhereClause},
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangError, LangResult,
+        crate::engine::{
+            error::{LangError, LangResult},
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for WhereClause<'a> {
@@ -176,7 +176,7 @@ mod impls {
     }
     impl<'a> ASTNode<'a> for RelationalExpr<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-            Self::try_parse(state).ok_or(LangError::UnexpectedToken)
+            Self::try_parse(state).ok_or(LangError::ExprBadRel)
         }
     }
 }

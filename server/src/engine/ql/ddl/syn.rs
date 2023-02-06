@@ -48,10 +48,10 @@ use {
     crate::{
         engine::{
             core::HSData,
+            error::{LangError, LangResult},
             ql::{
                 ast::{QueryData, State},
                 lex::{Ident, Lit, LitIR, Token},
-                LangError, LangResult,
             },
         },
         util::{compiler, MaybeInit},
@@ -362,7 +362,7 @@ impl<'a> Field<'a> {
     pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         if compiler::unlikely(state.remaining() < 2) {
             // smallest field: `ident: type`
-            return Err(LangError::UnexpectedEndofStatement);
+            return Err(LangError::UnexpectedEOS);
         }
         // check if primary or null
         let is_primary = state.cursor_eq(Token![primary]);
@@ -374,7 +374,7 @@ impl<'a> Field<'a> {
         // field name
         let field_name = match (state.fw_read(), state.fw_read()) {
             (Token::Ident(id), Token![:]) => id,
-            _ => return Err(LangError::UnexpectedToken),
+            _ => return Err(LangError::BadSyntax),
         };
         // layers
         let mut layers = Vec::new();
@@ -387,7 +387,7 @@ impl<'a> Field<'a> {
                 primary: is_primary,
             })
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::SynBadTyMeta)
         }
     }
 }
@@ -413,7 +413,7 @@ impl<'a> ExpandedField<'a> {
     pub(super) fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
         if compiler::unlikely(state.remaining() < 6) {
             // smallest: fieldname { type: ident }
-            return Err(LangError::UnexpectedEndofStatement);
+            return Err(LangError::UnexpectedEOS);
         }
         let field_name = state.fw_read();
         state.poison_if_not(field_name.is_ident());
@@ -426,7 +426,7 @@ impl<'a> ExpandedField<'a> {
             // this has layers. fold them; but don't forget the colon
             if compiler::unlikely(state.exhausted()) {
                 // we need more tokens
-                return Err(LangError::UnexpectedEndofStatement);
+                return Err(LangError::UnexpectedEOS);
             }
             state.poison_if_not(state.cursor_eq(Token![:]));
             state.cursor_ahead();
@@ -450,7 +450,7 @@ impl<'a> ExpandedField<'a> {
                 layers,
             })
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::BadSyntax)
         }
     }
     #[inline(always)]
@@ -466,7 +466,7 @@ impl<'a> ExpandedField<'a> {
             alter model add myfield { type string }
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEndofStatement);
+            return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         match state.read() {
             Token::Ident(_) => {
@@ -498,7 +498,7 @@ impl<'a> ExpandedField<'a> {
                 if state.okay() {
                     Ok(cols.into_boxed_slice())
                 } else {
-                    Err(LangError::UnexpectedToken)
+                    Err(LangError::BadSyntax)
                 }
             }
             _ => Err(LangError::ExpectedStatement),
@@ -515,9 +515,9 @@ mod impls {
             rfold_dict, rfold_layers, rfold_tymeta, Dict, DictFoldState, ExpandedField, Field,
             Layer, LayerFoldState,
         },
-        crate::engine::ql::{
-            ast::{traits::ASTNode, QueryData, State},
-            LangResult,
+        crate::engine::{
+            error::LangResult,
+            ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for ExpandedField<'a> {

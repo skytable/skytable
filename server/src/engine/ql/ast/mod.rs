@@ -33,10 +33,12 @@ use {
     super::{
         ddl, dml,
         lex::{Ident, LitIR, Token},
-        LangError, LangResult,
     },
     crate::{
-        engine::core::HSData,
+        engine::{
+            core::HSData,
+            error::{LangError, LangResult},
+        },
         util::{compiler, MaybeInit},
     },
     core::cmp,
@@ -451,7 +453,7 @@ impl<'a> Entity<'a> {
                 *c += 2;
                 Self::partial_entity_from_slice(tok)
             },
-            _ => return Err(LangError::UnexpectedToken),
+            _ => return Err(LangError::ExpectedEntity),
         };
         Ok(r)
     }
@@ -467,7 +469,7 @@ impl<'a> Entity<'a> {
                 Ok(e.assume_init())
             }
         } else {
-            Err(LangError::UnexpectedToken)
+            Err(LangError::ExpectedEntity)
         }
     }
     #[inline(always)]
@@ -554,7 +556,7 @@ pub enum Statement<'a> {
 #[inline(always)]
 pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
-        return Err(LangError::UnexpectedEndofStatement);
+        return Err(LangError::UnexpectedEOS);
     }
     let mut state = State::new(tok, d);
     match state.fw_read() {
@@ -563,12 +565,12 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Sta
         Token![create] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
-            _ => compiler::cold_rerr(LangError::UnknownCreateStatement),
+            _ => compiler::cold_rerr(LangError::StmtUnknownCreate),
         },
         Token![alter] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::AlterModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::AlterSpace),
-            _ => compiler::cold_rerr(LangError::UnknownAlterStatement),
+            _ => compiler::cold_rerr(LangError::StmtUnknownAlter),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
         Token::Ident(id) if id.eq_ignore_ascii_case("inspect") => {
