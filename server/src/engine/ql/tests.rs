@@ -25,11 +25,11 @@
 */
 
 use {
-    super::{
-        lex::{InsecureLexer, SafeLexer, Symbol, Token},
-        LangResult,
+    super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
+    crate::{
+        engine::{core::HSData, error::LexResult},
+        util::test_utils,
     },
-    crate::{engine::core::HSData, util::test_utils},
     rand::{self, Rng},
 };
 
@@ -41,12 +41,12 @@ mod structure_syn;
 
 #[inline(always)]
 /// Uses the [`InsecureLexer`] to lex the given input
-pub(super) fn lex_insecure(src: &[u8]) -> LangResult<Vec<Token>> {
+pub(super) fn lex_insecure(src: &[u8]) -> LexResult<Vec<Token>> {
     InsecureLexer::lex(src)
 }
 #[inline(always)]
 /// Uses the [`SafeLexer`] to lex the given input
-pub(super) fn lex_secure(src: &[u8]) -> LangResult<Vec<Token>> {
+pub(super) fn lex_secure(src: &[u8]) -> LexResult<Vec<Token>> {
     SafeLexer::lex(src)
 }
 

@@ -28,8 +28,10 @@ mod raw;
 
 use {
     self::raw::RawLexer,
-    super::{LangError, LangResult},
-    crate::util::compiler,
+    crate::{
+        engine::error::{LexError, LexResult},
+        util::compiler,
+    },
     core::{cmp, fmt, ops::BitOr, slice, str},
 };
 
@@ -54,7 +56,7 @@ impl<'a> InsecureLexer<'a> {
         }
     }
     #[inline(always)]
-    pub fn lex(src: Slice<'a>) -> LangResult<Vec<Token<'a>>> {
+    pub fn lex(src: Slice<'a>) -> LexResult<Vec<Token<'a>>> {
         let mut slf = Self::new(src);
         slf._lex();
         let RawLexer {
@@ -119,7 +121,7 @@ impl<'a> InsecureLexer<'a> {
                     slf.push_token(Lit::SignedInt(num));
                 }
                 _ => {
-                    compiler::cold_val(slf.set_error(LangError::InvalidNumericLiteral));
+                    compiler::cold_val(slf.set_error(LexError::InvalidSignedNumericLit));
                 }
             }
         } else {
@@ -150,7 +152,7 @@ impl<'a> InsecureLexer<'a> {
                 Ok(num) if compiler::likely(wseof) => {
                     slf.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
                 }
-                _ => slf.set_error(LangError::InvalidNumericLiteral),
+                _ => slf.set_error(LexError::InvalidUnsignedLiteral),
             }
         }
     }
@@ -188,7 +190,7 @@ impl<'a> InsecureLexer<'a> {
                 slf.incr_cursor_by(size);
             }
         } else {
-            slf.set_error(LangError::InvalidSafeLiteral);
+            slf.set_error(LexError::InvalidBinaryLiteral);
         }
     }
     #[inline(always)]
@@ -225,7 +227,7 @@ impl<'a> InsecureLexer<'a> {
             let terminated = slf.peek_eq_and_forward(quote_style);
             match String::from_utf8(buf) {
                 Ok(st) if terminated => slf.tokens.push(Token::Lit(st.into_boxed_str().into())),
-                _ => slf.set_error(LangError::InvalidStringLiteral),
+                _ => slf.set_error(LexError::InvalidStringLiteral),
             }
         }
     }
@@ -245,11 +247,11 @@ impl<'a> SafeLexer<'a> {
         }
     }
     #[inline(always)]
-    pub fn lex(src: Slice<'a>) -> LangResult<Vec<Token>> {
+    pub fn lex(src: Slice<'a>) -> LexResult<Vec<Token>> {
         Self::new(src)._lex()
     }
     #[inline(always)]
-    fn _lex(self) -> LangResult<Vec<Token<'a>>> {
+    fn _lex(self) -> LexResult<Vec<Token<'a>>> {
         let Self { base: mut l } = self;
         while l.not_exhausted() && l.no_error() {
             let b = unsafe { l.deref_cursor() };
@@ -402,20 +404,21 @@ impl<'a> SafeQueryData<'a> {
         Self { p, t }
     }
     #[inline(always)]
-    pub fn parse_data(pf: Slice<'a>, pf_sz: usize) -> LangResult<Box<[LitIR<'a>]>> {
+    pub fn parse_data(pf: Slice<'a>, pf_sz: usize) -> LexResult<Box<[LitIR<'a>]>> {
         Self::p_revloop(pf, pf_sz)
     }
     #[inline(always)]
-    pub fn parse(qf: Slice<'a>, pf: Slice<'a>, pf_sz: usize) -> LangResult<Self> {
+    pub fn parse(qf: Slice<'a>, pf: Slice<'a>, pf_sz: usize) -> LexResult<Self> {
         let q = SafeLexer::lex(qf);
         let p = Self::p_revloop(pf, pf_sz);
-        let (Ok(t), Ok(p)) = (q, p) else {
-            return Err(LangError::UnexpectedChar)
-        };
-        Ok(Self { p, t })
+        match (q, p) {
+            (Ok(q), Ok(p)) => Ok(Self { t: q, p }),
+            // first error
+            (Err(e), _) | (_, Err(e)) => Err(e),
+        }
     }
     #[inline]
-    pub(super) fn p_revloop(mut src: Slice<'a>, size: usize) -> LangResult<Box<[LitIR<'a>]>> {
+    pub(super) fn p_revloop(mut src: Slice<'a>, size: usize) -> LexResult<Box<[LitIR<'a>]>> {
         static LITIR_TF: [for<'a> fn(Slice<'a>, &mut usize, &mut Vec<LitIR<'a>>) -> bool; 7] = [
             SafeQueryData::uint,  // tc: 0
             SafeQueryData::sint,  // tc: 1
@@ -441,7 +444,7 @@ impl<'a> SafeQueryData<'a> {
         if compiler::likely(okay) {
             Ok(data.into_boxed_slice())
         } else {
-            Err(LangError::BadPframe)
+            Err(LexError::BadPframe)
         }
     }
 }

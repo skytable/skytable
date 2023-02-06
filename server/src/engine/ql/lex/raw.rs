@@ -26,7 +26,7 @@
 
 use {
     super::Slice,
-    crate::engine::ql::LangError,
+    crate::engine::error::LexError,
     core::{borrow::Borrow, fmt, ops::Deref, slice, str},
 };
 
@@ -424,7 +424,7 @@ pub struct RawLexer<'a> {
     c: *const u8,
     e: *const u8,
     pub(super) tokens: Vec<Token<'a>>,
-    pub(super) last_error: Option<LangError>,
+    pub(super) last_error: Option<LexError>,
 }
 
 // ctor
@@ -523,7 +523,7 @@ impl<'a> RawLexer<'a> {
         while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
     }
     #[inline(always)]
-    pub(super) fn set_error(&mut self, e: LangError) {
+    pub(super) fn set_error(&mut self, e: LexError) {
         self.last_error = Some(e);
     }
     #[inline(always)]
@@ -562,7 +562,7 @@ impl<'a> RawLexer<'a> {
     pub(super) fn scan_byte(&mut self, byte: u8) {
         match symof(byte) {
             Some(tok) => self.push_token(tok),
-            None => return self.set_error(LangError::UnexpectedChar),
+            None => return self.set_error(LexError::UnexpectedByte),
         }
         unsafe {
             self.incr_cursor();

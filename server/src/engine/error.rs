@@ -1,5 +1,5 @@
 /*
- * Created on Mon Sep 12 2022
+ * Created on Sat Feb 04 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,13 +24,26 @@
  *
 */
 
-#![allow(dead_code)]
+pub type LexResult<T> = Result<T, LexError>;
+pub type LangResult<T> = Result<T, LangError>;
 
-#[macro_use]
-mod macros;
-mod core;
-mod error;
-mod idx;
-mod mem;
-mod ql;
-mod sync;
+#[derive(Debug, PartialEq)]
+pub enum LexError {
+    // insecure lex
+    /// Invalid signed numeric literal
+    InvalidSignedNumericLit,
+    /// Invalid unsigned literal
+    InvalidUnsignedLiteral,
+    /// Invaid binary literal
+    InvalidBinaryLiteral,
+    /// Invalid string literal
+    InvalidStringLiteral,
+    // secure lex
+    /// Dataframe params are invalid
+    BadPframe,
+    // generic
+    /// Unrecognized byte in stream   
+    UnexpectedByte,
+}
+#[derive(Debug, PartialEq)]
+pub enum LangError {}
