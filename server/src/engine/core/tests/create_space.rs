@@ -26,10 +26,11 @@
 
 use crate::engine::{
     core::{
-        space::{Procedure, Space, SpaceMeta},
-        HSData,
+        space::{Space, SpaceMeta},
+        GlobalNS, HSData,
     },
     error::DatabaseError,
+    idx::STIndex,
     ql::{
         ast::{compile_test, Statement},
         tests::lex_insecure as lex,
@@ -37,21 +38,24 @@ use crate::engine::{
 };
 
 #[test]
-fn create_space_simple() {
+fn exec_create_space_simple() {
+    let gns = GlobalNS::empty();
     let tok = lex("create space myspace".as_bytes()).unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    let procedure = Space::validate(space).unwrap();
+    Space::validate_apply(&gns, space).unwrap();
     assert_eq!(
-        procedure,
-        Procedure::new(
-            "myspace".into(),
-            Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
-        )
+        gns._spaces()
+            .read()
+            .st_get_cloned("myspace".as_bytes())
+            .unwrap()
+            .as_ref(),
+        &Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
     );
 }
 
 #[test]
-fn create_space_with_env() {
+fn exec_create_space_with_env() {
+    let gns = GlobalNS::empty();
     let tok = lex(br#"
         create space myspace with {
             env: {
@@ -61,39 +65,42 @@ fn create_space_with_env() {
     "#)
     .unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    let procedure = Space::validate(space).unwrap();
+    Space::validate_apply(&gns, space).unwrap();
     assert_eq!(
-        procedure,
-        Procedure::new(
-            "myspace".into(),
-            Space::new(
-                into_dict! {},
-                SpaceMeta::with_env(into_dict! {
-                    "MAX_MODELS" => HSData::UnsignedInt(100)
-                })
-            )
+        gns._spaces()
+            .read()
+            .st_get_cloned("myspace".as_bytes())
+            .unwrap()
+            .as_ref(),
+        &Space::new(
+            into_dict! {},
+            SpaceMeta::with_env(into_dict! {
+                "MAX_MODELS" => HSData::UnsignedInt(100)
+            })
         )
     );
 }
 
 #[test]
-fn create_space_with_bad_env_type() {
+fn exec_create_space_with_bad_env_type() {
+    let gns = GlobalNS::empty();
     let tok = lex(br#"create space myspace with { env: 100 }"#).unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
     assert_eq!(
-        Space::validate(space).unwrap_err(),
+        Space::validate_apply(&gns, space).unwrap_err(),
         DatabaseError::DdlCreateSpaceBadProperty
     );
 }
 
 #[test]
-fn create_space_with_random_property() {
+fn exec_create_space_with_random_property() {
+    let gns = GlobalNS::empty();
     let random_property = "i_am_blue_da_ba_dee";
     let query = format!("create space myspace with {{ {random_property}: 100 }}").into_bytes();
     let tok = lex(&query).unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
     assert_eq!(
-        Space::validate(space).unwrap_err(),
+        Space::validate_apply(&gns, space).unwrap_err(),
         DatabaseError::DdlCreateSpaceBadProperty
     );
 }

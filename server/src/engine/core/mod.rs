@@ -46,12 +46,17 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 
 // FIXME(@ohsayan): Make sure we update what all structures we're making use of here
 
-struct GlobalNS {
+pub struct GlobalNS {
     spaces: RWLIdx<ItemID, Arc<Space>>,
 }
 
 impl GlobalNS {
     pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Arc<Space>> {
         &self.spaces
+    }
+    pub fn empty() -> Self {
+        Self {
+            spaces: RWLIdx::default(),
+        }
     }
 }

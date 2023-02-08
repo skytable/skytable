@@ -41,7 +41,7 @@ use {
 pub use uarray::UArray;
 pub use vinline::VInline;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 #[repr(transparent)]
 pub struct AStr<const N: usize> {
     base: UArray<N, u8>,
@@ -81,30 +81,36 @@ impl<const N: usize> AStr<N> {
         Self::from_len_unchecked(mem::transmute(b))
     }
     #[inline(always)]
-    pub fn as_str(&self) -> &str {
-        unsafe { mem::transmute(self.base.as_slice()) }
+    pub fn _as_str(&self) -> &str {
+        unsafe { mem::transmute(self._as_bytes()) }
     }
     #[inline(always)]
-    pub fn as_mut_str(&mut self) -> &mut str {
-        unsafe { mem::transmute(self.base.as_slice_mut()) }
+    pub fn _as_mut_str(&mut self) -> &mut str {
+        unsafe { mem::transmute(self._as_bytes_mut()) }
+    }
+    pub fn _as_bytes(&self) -> &[u8] {
+        self.base.as_slice()
+    }
+    pub fn _as_bytes_mut(&mut self) -> &mut [u8] {
+        self.base.as_slice_mut()
     }
 }
 impl<const N: usize> fmt::Debug for AStr<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        f.write_str(self._as_str())
     }
 }
 impl<const N: usize> Deref for AStr<N> {
     type Target = str;
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        self.as_str()
+        self._as_str()
     }
 }
 impl<const N: usize> DerefMut for AStr<N> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut_str()
+        self._as_mut_str()
     }
 }
 impl<'a, const N: usize> From<Ident<'a>> for AStr<N> {
@@ -122,19 +128,19 @@ impl<'a, const N: usize> From<&'a str> for AStr<N> {
 impl<const N: usize> PartialEq<str> for AStr<N> {
     #[inline(always)]
     fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
+        self._as_bytes() == other.as_bytes()
     }
 }
 impl<const N: usize> PartialEq<AStr<N>> for str {
     #[inline(always)]
     fn eq(&self, other: &AStr<N>) -> bool {
-        self == other.as_str()
+        other._as_bytes() == self.as_bytes()
     }
 }
 impl<const N: usize> PartialEq<[u8]> for AStr<N> {
     #[inline(always)]
     fn eq(&self, other: &[u8]) -> bool {
-        self.as_bytes() == other
+        self._as_bytes() == other
     }
 }
 impl<const N: usize> PartialEq<AStr<N>> for [u8] {
@@ -146,13 +152,13 @@ impl<const N: usize> PartialEq<AStr<N>> for [u8] {
 impl<const N: usize> AsRef<[u8]> for AStr<N> {
     #[inline(always)]
     fn as_ref(&self) -> &[u8] {
-        self.as_bytes()
+        self._as_bytes()
     }
 }
 impl<const N: usize> AsRef<str> for AStr<N> {
     #[inline(always)]
     fn as_ref(&self) -> &str {
-        self.as_str()
+        self._as_str()
     }
 }
 impl<const N: usize> Default for AStr<N> {
@@ -164,12 +170,6 @@ impl<const N: usize> Default for AStr<N> {
 impl<const N: usize> Borrow<[u8]> for AStr<N> {
     #[inline(always)]
     fn borrow(&self) -> &[u8] {
-        self.as_bytes()
-    }
-}
-impl<const N: usize> Borrow<str> for AStr<N> {
-    #[inline(always)]
-    fn borrow(&self) -> &str {
-        self.as_str()
+        self._as_bytes()
     }
 }

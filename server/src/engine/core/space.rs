@@ -106,7 +106,7 @@ impl Space {
             ),
         })
     }
-    fn validate_and_apply(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
+    pub fn validate_apply(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
         let Procedure { space_name, space } = Self::validate(space)?;
         let mut wl = gns._spaces().write();
         if wl.st_insert(space_name, Arc::new(space)) {

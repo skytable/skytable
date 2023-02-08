@@ -106,11 +106,6 @@ impl<'a> Borrow<[u8]> for Ident<'a> {
         self.0
     }
 }
-impl<'a> Borrow<str> for Ident<'a> {
-    fn borrow(&self) -> &'a str {
-        self.as_str()
-    }
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token<'a> {
