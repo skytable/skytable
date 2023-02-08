@@ -47,8 +47,13 @@ pub struct AStr<const N: usize> {
     base: UArray<N, u8>,
 }
 impl<const N: usize> AStr<N> {
+    #[inline(always)]
+    pub fn check(v: &str) -> bool {
+        v.len() <= N
+    }
+    #[inline(always)]
     pub fn try_new(s: &str) -> Option<Self> {
-        if s.len() <= N {
+        if Self::check(s) {
             Some(unsafe {
                 // UNSAFE(@ohsayan): verified len
                 Self::from_len_unchecked(s)
@@ -57,23 +62,29 @@ impl<const N: usize> AStr<N> {
             None
         }
     }
+    #[inline(always)]
     pub fn new(s: &str) -> Self {
         Self::try_new(s).expect("length overflow")
     }
+    #[inline(always)]
     pub unsafe fn from_len_unchecked_ident(i: Ident<'_>) -> Self {
         Self::from_len_unchecked(i.as_str())
     }
+    #[inline(always)]
     pub unsafe fn from_len_unchecked(s: &str) -> Self {
         Self {
             base: UArray::from_slice(s.as_bytes()),
         }
     }
+    #[inline(always)]
     pub unsafe fn from_len_unchecked_bytes(b: &[u8]) -> Self {
         Self::from_len_unchecked(mem::transmute(b))
     }
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         unsafe { mem::transmute(self.base.as_slice()) }
     }
+    #[inline(always)]
     pub fn as_mut_str(&mut self) -> &mut str {
         unsafe { mem::transmute(self.base.as_slice_mut()) }
     }
@@ -85,66 +96,79 @@ impl<const N: usize> fmt::Debug for AStr<N> {
 }
 impl<const N: usize> Deref for AStr<N> {
     type Target = str;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         self.as_str()
     }
 }
 impl<const N: usize> DerefMut for AStr<N> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut_str()
     }
 }
 impl<'a, const N: usize> From<Ident<'a>> for AStr<N> {
+    #[inline(always)]
     fn from(value: Ident<'a>) -> Self {
         Self::new(value.as_str())
     }
 }
 impl<'a, const N: usize> From<&'a str> for AStr<N> {
+    #[inline(always)]
     fn from(s: &str) -> Self {
         Self::new(s)
     }
 }
 impl<const N: usize> PartialEq<str> for AStr<N> {
+    #[inline(always)]
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 impl<const N: usize> PartialEq<AStr<N>> for str {
+    #[inline(always)]
     fn eq(&self, other: &AStr<N>) -> bool {
         self == other.as_str()
     }
 }
 impl<const N: usize> PartialEq<[u8]> for AStr<N> {
+    #[inline(always)]
     fn eq(&self, other: &[u8]) -> bool {
         self.as_bytes() == other
     }
 }
 impl<const N: usize> PartialEq<AStr<N>> for [u8] {
+    #[inline(always)]
     fn eq(&self, other: &AStr<N>) -> bool {
         self == other.as_bytes()
     }
 }
 impl<const N: usize> AsRef<[u8]> for AStr<N> {
+    #[inline(always)]
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
     }
 }
 impl<const N: usize> AsRef<str> for AStr<N> {
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
 impl<const N: usize> Default for AStr<N> {
+    #[inline(always)]
     fn default() -> Self {
         Self::new("")
     }
 }
 impl<const N: usize> Borrow<[u8]> for AStr<N> {
+    #[inline(always)]
     fn borrow(&self) -> &[u8] {
         self.as_bytes()
     }
 }
 impl<const N: usize> Borrow<str> for AStr<N> {
+    #[inline(always)]
     fn borrow(&self) -> &str {
         self.as_str()
     }

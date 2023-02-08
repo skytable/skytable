@@ -42,9 +42,9 @@ use {
 /// A space
 pub struct CreateSpace<'a> {
     /// the space name
-    pub(super) space_name: Ident<'a>,
+    pub space_name: Ident<'a>,
     /// properties
-    pub(super) props: Dict,
+    pub props: Dict,
 }
 
 impl<'a> CreateSpace<'a> {

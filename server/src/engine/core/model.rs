@@ -1,5 +1,5 @@
 /*
- * Created on Sat Sep 17 2022
+ * Created on Mon Feb 06 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,34 +24,14 @@
  *
 */
 
-use rand::{
-    distributions::{uniform::SampleUniform, Alphanumeric},
-    Rng,
-};
+// FIXME(@ohsayan): update this!
 
-// TODO(@ohsayan): Use my own PRNG algo here. Maybe my quadratic one?
+#[derive(Debug)]
+pub struct ModelNS {}
 
-/// Generates a random boolean based on Bernoulli distributions
-pub fn random_bool(rng: &mut impl Rng) -> bool {
-    rng.gen_bool(0.5)
-}
-/// Generate a random number within the given range
-pub fn random_number<T: SampleUniform + PartialOrd>(max: T, min: T, rng: &mut impl Rng) -> T {
-    rng.gen_range(max..min)
-}
-
-pub fn random_string(rng: &mut impl Rng, l: usize) -> String {
-    rng.sample_iter(Alphanumeric)
-        .take(l)
-        .map(char::from)
-        .collect()
-}
-
-pub fn random_string_checked(rng: &mut impl Rng, l: usize, ck: impl Fn(&str) -> bool) -> String {
-    loop {
-        let r = random_string(rng, l);
-        if ck(&r) {
-            break r;
-        }
+#[cfg(test)]
+impl PartialEq for ModelNS {
+    fn eq(&self, _: &Self) -> bool {
+        true
     }
 }

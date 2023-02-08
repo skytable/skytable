@@ -24,8 +24,9 @@
  *
 */
 
-pub type LexResult<T> = Result<T, LexError>;
 pub type LangResult<T> = Result<T, LangError>;
+pub type LexResult<T> = Result<T, LexError>;
+pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 #[derive(Debug, PartialEq)]
 pub enum LexError {
@@ -71,4 +72,15 @@ pub enum LangError {
     StmtUnknownAlter,
     /// unknown `drop` statement
     StmtUnknownDrop,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DatabaseError {
+    // sys
+    SysBadItemID,
+    // ddl: create space
+    /// unknown property or bad type for property
+    DdlCreateSpaceBadProperty,
+    /// the space already exists
+    DdlCreateSpaceAlreadyExists,
 }

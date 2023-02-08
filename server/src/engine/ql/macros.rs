@@ -256,6 +256,7 @@ macro_rules! Token {
     };
 }
 
+#[cfg(test)]
 macro_rules! dict {
     () => {
         <::std::collections::HashMap<_, _> as ::core::default::Default>::default()

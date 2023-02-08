@@ -35,6 +35,17 @@ macro_rules! extract {
 }
 
 #[cfg(test)]
+macro_rules! extract_safe {
+    ($src:expr, $what:pat => $ret:expr) => {
+        if let $what = $src {
+            $ret
+        } else {
+            panic!("expected one {}, found {:?}", stringify!($what), $src);
+        }
+    };
+}
+
+#[cfg(test)]
 macro_rules! multi_assert_eq {
     ($($lhs:expr),* => $rhs:expr) => {
         $(assert_eq!($lhs, $rhs);)*
@@ -119,4 +130,19 @@ macro_rules! void {
     () => {
         ()
     };
+}
+
+#[cfg(test)]
+/// Convert all the KV pairs into an iterator and then turn it into an appropriate collection
+/// (inferred).
+/// 
+/// **Warning: This is going to be potentially slow due to the iterator creation**
+macro_rules! into_dict {
+    () => { ::core::default::Default::default() };
+    ($($key:expr => $value:expr),+ $(,)?) => {{
+        [$(($key.into(), $value.into())),+]
+        .map(|(k, v)| (k, v))
+        .into_iter()
+        .collect()
+    }};
 }

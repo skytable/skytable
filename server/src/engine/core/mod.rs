@@ -25,9 +25,33 @@
 */
 
 mod data;
+mod model;
+mod space;
+#[cfg(test)]
+mod tests;
 
-use super::mem::AStr;
 pub use data::HSData;
+use {
+    self::space::Space,
+    super::{idx::IndexST, mem::AStr},
+    parking_lot::RwLock,
+    std::sync::Arc,
+};
 
 const IDENT_MX: usize = 64;
 type ItemID = AStr<IDENT_MX>;
+/// Use this for now since it substitutes for a file lock (and those syscalls are expensive),
+/// but something better is in the offing
+type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
+
+// FIXME(@ohsayan): Make sure we update what all structures we're making use of here
+
+struct GlobalNS {
+    spaces: RWLIdx<ItemID, Arc<Space>>,
+}
+
+impl GlobalNS {
+    pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Arc<Space>> {
+        &self.spaces
+    }
+}

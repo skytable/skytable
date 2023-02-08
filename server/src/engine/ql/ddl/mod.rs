@@ -25,8 +25,8 @@
 */
 
 #[macro_use]
-pub(super) mod syn;
-pub(super) mod alt;
-pub(super) mod crt;
-pub(super) mod drop;
-pub(super) mod ins;
+pub(in crate::engine) mod syn;
+pub(in crate::engine) mod alt;
+pub(in crate::engine) mod crt;
+pub(in crate::engine) mod drop;
+pub(in crate::engine) mod ins;

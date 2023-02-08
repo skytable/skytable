@@ -34,4 +34,4 @@ pub(super) mod ddl;
 pub(super) mod dml;
 pub(super) mod lex;
 #[cfg(test)]
-mod tests;
+pub(in crate::engine) mod tests;

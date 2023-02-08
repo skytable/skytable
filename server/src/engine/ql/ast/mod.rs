@@ -553,8 +553,13 @@ pub enum Statement<'a> {
     Delete(dml::del::DeleteStatement<'a>),
 }
 
+#[cfg(test)]
+pub fn compile_test<'a>(tok: &'a [Token<'a>]) -> LangResult<Statement<'a>> {
+    self::compile(tok, InplaceData::new())
+}
+
 #[inline(always)]
-pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token], d: Qd) -> LangResult<Statement<'a>> {
+pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> LangResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
         return Err(LangError::UnexpectedEOS);
     }

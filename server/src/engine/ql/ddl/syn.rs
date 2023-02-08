@@ -78,6 +78,12 @@ impl<'a> From<Lit<'a>> for DictEntry {
     }
 }
 
+impl From<HSData> for DictEntry {
+    fn from(hsd: HSData) -> Self {
+        Self::Lit(hsd)
+    }
+}
+
 impl From<Dict> for DictEntry {
     fn from(d: Dict) -> Self {
         Self::Map(d)
@@ -85,7 +91,7 @@ impl From<Dict> for DictEntry {
 }
 
 /// A metadata dictionary
-pub type Dict = HashMap<String, Option<DictEntry>>;
+pub type Dict = HashMap<Box<str>, Option<DictEntry>>;
 
 /// This macro constructs states for our machine
 ///
@@ -184,7 +190,7 @@ where
                 // found lit
                 unsafe {
                     let v = Some(state.read_lit_unchecked_from(tok).into());
-                    state.poison_if_not(dict.insert(key.take().to_string(), v).is_none());
+                    state.poison_if_not(dict.insert(key.take().as_str().into(), v).is_none());
                 }
                 // after lit we're either done or expect something else
                 mstate = DictFoldState::COMMA_OR_CB;
@@ -192,7 +198,7 @@ where
             (Token![null], DictFoldState::LIT_OR_OB) => {
                 // found a null
                 unsafe {
-                    state.poison_if_not(dict.insert(key.take().to_string(), None).is_none());
+                    state.poison_if_not(dict.insert(key.take().as_str().into(), None).is_none());
                 }
                 // after a null (essentially counts as a lit) we're either done or expect something else
                 mstate = DictFoldState::COMMA_OR_CB;
@@ -203,7 +209,7 @@ where
                 _rfold_dict::<Qd, NoBreakpoint>(DictFoldState::CB_OR_IDENT, state, &mut ndict);
                 unsafe {
                     state.poison_if_not(
-                        dict.insert(key.take().to_string(), Some(ndict.into()))
+                        dict.insert(key.take().as_str().into(), Some(ndict.into()))
                             .is_none(),
                     );
                 }
@@ -278,7 +284,7 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
     layers: &mut Vec<Layer<'a>>,
 ) {
     let mut ty = MaybeInit::uninit();
-    let mut props = dict!();
+    let mut props = Default::default();
     while state.loop_tt() {
         match (state.fw_read(), mstate) {
             (Token::Ident(id), LayerFoldState::BEGIN_IDENT) => {

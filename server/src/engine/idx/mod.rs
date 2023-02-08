@@ -43,6 +43,8 @@ pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::Conserv
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;
 pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
 pub type IndexMTCp<K, V> = mtchm::imp::ChmCopy<K, V, mtchm::meta::DefConfig>;
+pub type IndexST<K, V, S = std::collections::hash_map::RandomState> =
+    std::collections::hash_map::HashMap<K, V, S>;
 
 /// Any type implementing this trait can be used as a key inside memory engine structures
 pub trait AsKey: Hash + Eq {
@@ -232,52 +234,52 @@ pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
     /// violated
     fn st_insert(&mut self, key: K, val: V) -> bool
     where
-        K: AsKeyClone,
+        K: AsKey,
         V: AsValue;
     /// Updates or inserts the given value
     fn st_upsert(&mut self, key: K, val: V)
     where
-        K: AsKeyClone,
+        K: AsKey,
         V: AsValue;
     // read
     fn st_contains<Q>(&self, key: &Q) -> bool
     where
-        K: Borrow<Q> + AsKeyClone,
+        K: Borrow<Q> + AsKey,
         Q: ?Sized + AsKey;
     /// Returns a reference to the value corresponding to the key, if it exists
     fn st_get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey;
     /// Returns a clone of the value corresponding to the key, if it exists
     fn st_get_cloned<Q>(&self, key: &Q) -> Option<V>
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey,
         V: AsValueClone;
     // update
     /// Returns true if the entry is updated
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         V: AsValue,
         Q: ?Sized + AsKey;
     /// Updates the entry and returns the old value, if it exists
     fn st_update_return<Q>(&mut self, key: &Q, val: V) -> Option<V>
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         V: AsValue,
         Q: ?Sized + AsKey;
     // delete
     /// Returns true if the entry was deleted
     fn st_delete<Q>(&mut self, key: &Q) -> bool
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey;
     /// Removes the entry and returns it, if it exists
     fn st_delete_return<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: AsKeyClone + Borrow<Q>,
+        K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey;
     // iter
     /// Returns an iterator over a tuple of keys and values

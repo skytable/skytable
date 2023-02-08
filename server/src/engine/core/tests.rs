@@ -1,5 +1,5 @@
 /*
- * Created on Sat Sep 17 2022
+ * Created on Wed Feb 08 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,34 +24,26 @@
  *
 */
 
-use rand::{
-    distributions::{uniform::SampleUniform, Alphanumeric},
-    Rng,
-};
+mod create_space;
 
-// TODO(@ohsayan): Use my own PRNG algo here. Maybe my quadratic one?
+use {super::ItemID, crate::engine::ql::lex::Ident};
 
-/// Generates a random boolean based on Bernoulli distributions
-pub fn random_bool(rng: &mut impl Rng) -> bool {
-    rng.gen_bool(0.5)
-}
-/// Generate a random number within the given range
-pub fn random_number<T: SampleUniform + PartialOrd>(max: T, min: T, rng: &mut impl Rng) -> T {
-    rng.gen_range(max..min)
+#[test]
+fn item_id_okay() {
+    let _ = ItemID::from(Ident::from("hello"));
 }
 
-pub fn random_string(rng: &mut impl Rng, l: usize) -> String {
-    rng.sample_iter(Alphanumeric)
-        .take(l)
-        .map(char::from)
-        .collect()
+#[test]
+fn test_item_id_exact() {
+    let _ = ItemID::from(Ident::from(
+        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e",
+    ));
 }
 
-pub fn random_string_checked(rng: &mut impl Rng, l: usize, ck: impl Fn(&str) -> bool) -> String {
-    loop {
-        let r = random_string(rng, l);
-        if ck(&r) {
-            break r;
-        }
-    }
+#[test]
+#[should_panic(expected = "length overflow")]
+fn item_id_too_long() {
+    let _ = ItemID::from(Ident::from(
+        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e_",
+    ));
 }

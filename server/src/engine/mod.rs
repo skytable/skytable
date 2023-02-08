@@ -34,3 +34,15 @@ mod idx;
 mod mem;
 mod ql;
 mod sync;
+
+/*
+
+    A word on tests:
+
+    "Nature is not equal. That's the whole problem." - Freeman Dyson
+
+    Well, that applies to us for atleast all test cases since most of them are based on a quiescent
+    state than a chaotic state as in runtime. We do emulate such cases, but remember most assertions
+    that you'll make on most structures are just illusionary, and are only atomically correct at point
+    in time.
+*/
