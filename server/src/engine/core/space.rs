@@ -26,28 +26,33 @@
 
 use {
     crate::engine::{
-        core::{model::ModelNS, ItemID, RWLIdx},
+        core::{
+            data::{md_dict, DictEntryGeneric, MetaDict},
+            model::ModelView,
+            ItemID, RWLIdx,
+        },
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
-        ql::ddl::{crt::CreateSpace, syn::DictEntry},
+        ql::ddl::crt::CreateSpace,
     },
+    parking_lot::RwLock,
     std::sync::Arc,
 };
 
 #[derive(Debug)]
 pub struct Space {
-    mns: RWLIdx<ItemID, Arc<ModelNS>>,
+    mns: RWLIdx<ItemID, Arc<ModelView>>,
     meta: SpaceMeta,
 }
 
 #[derive(Debug, Default)]
 pub struct SpaceMeta {
-    env: RWLIdx<Box<str>, DictEntry>,
+    env: RwLock<MetaDict>,
 }
 
 impl SpaceMeta {
     pub const KEY_ENV: &str = "env";
-    pub fn with_env(env: IndexST<Box<str>, DictEntry>) -> Self {
+    pub fn with_env(env: MetaDict) -> Self {
         Self {
             env: RWLIdx::new(env),
         }
@@ -56,7 +61,7 @@ impl SpaceMeta {
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-pub(super) struct Procedure {
+struct Procedure {
     space_name: ItemID,
     space: Space,
 }
@@ -70,14 +75,14 @@ impl Procedure {
 
 impl Space {
     #[inline(always)]
-    pub fn new(mns: IndexST<ItemID, Arc<ModelNS>>, meta: SpaceMeta) -> Self {
+    pub fn new(mns: IndexST<ItemID, Arc<ModelView>>, meta: SpaceMeta) -> Self {
         Self {
             mns: RWLIdx::new(mns),
             meta,
         }
     }
     #[inline]
-    pub(super) fn validate(
+    fn validate(
         CreateSpace {
             space_name,
             mut props,
@@ -87,7 +92,7 @@ impl Space {
         // check env
         let env;
         match props.remove(SpaceMeta::KEY_ENV) {
-            Some(Some(DictEntry::Map(m))) if props.is_empty() => env = m,
+            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => env = m,
             None | Some(None) if props.is_empty() => env = IndexST::default(),
             _ => {
                 return Err(DatabaseError::DdlCreateSpaceBadProperty);
@@ -99,9 +104,7 @@ impl Space {
                 IndexST::default(),
                 SpaceMeta::with_env(
                     // FIXME(@ohsayan): see this is bad. attempt to do it at AST build time
-                    env.into_iter()
-                        .filter_map(|(k, v)| v.map(move |v| (k, v)))
-                        .collect(),
+                    md_dict::rflatten_metadata(env),
                 ),
             ),
         })

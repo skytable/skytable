@@ -25,9 +25,10 @@
 */
 
 use {
-    super::syn::{self, Dict, DictFoldState, ExpandedField},
+    super::syn::{self, DictFoldState, ExpandedField},
     crate::{
         engine::{
+            core::data::DictGeneric,
             error::{LangError, LangResult},
             ql::{
                 ast::{QueryData, State},
@@ -42,11 +43,11 @@ use {
 /// An alter space query with corresponding data
 pub struct AlterSpace<'a> {
     space_name: Ident<'a>,
-    updated_props: Dict,
+    updated_props: DictGeneric,
 }
 
 impl<'a> AlterSpace<'a> {
-    pub fn new(space_name: Ident<'a>, updated_props: Dict) -> Self {
+    pub fn new(space_name: Ident<'a>, updated_props: DictGeneric) -> Self {
         Self {
             space_name,
             updated_props,
@@ -69,7 +70,7 @@ impl<'a> AlterSpace<'a> {
         }
 
         let space_name = unsafe { extract!(space_name, Token::Ident(ref space) => space.clone()) };
-        let mut d = Dict::new();
+        let mut d = DictGeneric::new();
         syn::rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut d);
         if state.okay() {
             Ok(AlterSpace {

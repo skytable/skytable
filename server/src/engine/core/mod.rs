@@ -24,7 +24,7 @@
  *
 */
 
-mod data;
+pub(in crate::engine) mod data;
 mod model;
 mod space;
 #[cfg(test)]

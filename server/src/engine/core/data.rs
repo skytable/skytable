@@ -24,7 +24,13 @@
  *
 */
 
-use crate::engine::ql::lex::{Lit, LitIR};
+pub mod md_dict;
+
+pub use md_dict::{DictEntryGeneric, DictGeneric, MetaDict};
+use {
+    crate::engine::ql::lex::{Lit, LitIR},
+    std::mem::{self, Discriminant},
+};
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
@@ -90,6 +96,9 @@ impl HSData {
             LitIR::UInt(u) => Self::UnsignedInt(u),
             LitIR::Bool(b) => Self::Boolean(b),
         }
+    }
+    fn kind(&self) -> Discriminant<Self> {
+        mem::discriminant(&self)
     }
 }
 

@@ -25,9 +25,10 @@
 */
 
 use {
-    super::syn::{self, Dict, DictFoldState, Field},
+    super::syn::{self, DictFoldState, Field},
     crate::{
         engine::{
+            core::data::DictGeneric,
             error::{LangError, LangResult},
             ql::{
                 ast::{QueryData, State},
@@ -44,7 +45,7 @@ pub struct CreateSpace<'a> {
     /// the space name
     pub space_name: Ident<'a>,
     /// properties
-    pub props: Dict,
+    pub props: DictGeneric,
 }
 
 impl<'a> CreateSpace<'a> {
@@ -61,7 +62,7 @@ impl<'a> CreateSpace<'a> {
         let has_more_properties = state.cursor_rounded_eq(Token![with]);
         state.poison_if_not(has_more_properties | state.exhausted());
         state.cursor_ahead_if(has_more_properties); // +WITH
-        let mut d = Dict::new();
+        let mut d = DictGeneric::new();
         // properties
         if has_more_properties && state.okay() {
             syn::rfold_dict(DictFoldState::OB, state, &mut d);
@@ -85,7 +86,7 @@ pub struct CreateModel<'a> {
     /// the fields
     fields: Vec<Field<'a>>,
     /// properties
-    props: Dict,
+    props: DictGeneric,
 }
 
 /*
@@ -96,7 +97,7 @@ pub struct CreateModel<'a> {
 */
 
 impl<'a> CreateModel<'a> {
-    pub fn new(model_name: Ident<'a>, fields: Vec<Field<'a>>, props: Dict) -> Self {
+    pub fn new(model_name: Ident<'a>, fields: Vec<Field<'a>>, props: DictGeneric) -> Self {
         Self {
             model_name,
             fields,
@@ -126,7 +127,7 @@ impl<'a> CreateModel<'a> {
         }
         state.poison_if_not(stop);
         // check props
-        let mut props = Dict::new();
+        let mut props = DictGeneric::new();
         if state.cursor_rounded_eq(Token![with]) {
             state.cursor_ahead();
             // parse props

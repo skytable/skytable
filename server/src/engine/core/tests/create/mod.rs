@@ -1,5 +1,5 @@
 /*
- * Created on Wed Feb 08 2023
+ * Created on Thu Feb 09 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,27 +24,4 @@
  *
 */
 
-mod create;
-mod data_tests;
-
-use {super::ItemID, crate::engine::ql::lex::Ident};
-
-#[test]
-fn item_id_okay() {
-    let _ = ItemID::from(Ident::from("hello"));
-}
-
-#[test]
-fn test_item_id_exact() {
-    let _ = ItemID::from(Ident::from(
-        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e",
-    ));
-}
-
-#[test]
-#[should_panic(expected = "length overflow")]
-fn item_id_too_long() {
-    let _ = ItemID::from(Ident::from(
-        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e_",
-    ));
-}
+mod space;

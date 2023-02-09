@@ -1,7 +1,8 @@
 /target
 /.vscode
 *.bin
-data
+/data/
+/server/data
 /server/snapshots
 snapstore.bin
 snapstore.partmap

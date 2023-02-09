@@ -132,10 +132,9 @@ macro_rules! void {
     };
 }
 
-#[cfg(test)]
 /// Convert all the KV pairs into an iterator and then turn it into an appropriate collection
 /// (inferred).
-/// 
+///
 /// **Warning: This is going to be potentially slow due to the iterator creation**
 macro_rules! into_dict {
     () => { ::core::default::Default::default() };

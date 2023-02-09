@@ -26,10 +26,9 @@
 
 use {
     super::*,
-    crate::engine::ql::{
-        ast::parse_ast_node_full,
-        ddl::syn::{Dict, DictBasic},
-        lex::Lit,
+    crate::engine::{
+        core::data::DictGeneric,
+        ql::{ast::parse_ast_node_full, ddl::syn::DictBasic, lex::Lit},
     },
 };
 
@@ -41,7 +40,7 @@ macro_rules! fold_dict {
     }
 }
 
-fn fold_dict(raw: &[u8]) -> Option<Dict> {
+fn fold_dict(raw: &[u8]) -> Option<DictGeneric> {
     let lexed = lex_insecure(raw).unwrap();
     parse_ast_node_full::<DictBasic>(&lexed)
         .map(|v| v.into_inner())

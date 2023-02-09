@@ -76,24 +76,24 @@ fn nullable_datatype(v: impl NullableData<HSData>) -> Option<HSData> {
 }
 
 pub trait NullableDictEntry {
-    fn data(self) -> Option<super::ddl::syn::DictEntry>;
+    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric>;
 }
 
 impl NullableDictEntry for Null {
-    fn data(self) -> Option<super::ddl::syn::DictEntry> {
+    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
         None
     }
 }
 
 impl<'a> NullableDictEntry for super::lex::Lit<'a> {
-    fn data(self) -> Option<super::ddl::syn::DictEntry> {
-        Some(super::ddl::syn::DictEntry::from(self.as_ir()))
+    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
+        Some(crate::engine::core::data::DictEntryGeneric::from(self.as_ir()))
     }
 }
 
-impl NullableDictEntry for super::ddl::syn::Dict {
-    fn data(self) -> Option<super::ddl::syn::DictEntry> {
-        Some(super::ddl::syn::DictEntry::Map(self))
+impl NullableDictEntry for crate::engine::core::data::DictGeneric {
+    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
+        Some(crate::engine::core::data::DictEntryGeneric::Map(self))
     }
 }
 

@@ -27,10 +27,10 @@
 // FIXME(@ohsayan): update this!
 
 #[derive(Debug)]
-pub struct ModelNS {}
+pub struct ModelView {}
 
 #[cfg(test)]
-impl PartialEq for ModelNS {
+impl PartialEq for ModelView {
     fn eq(&self, _: &Self) -> bool {
         true
     }

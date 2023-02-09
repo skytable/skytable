@@ -44,54 +44,17 @@
     Feb. 2, 2023
 */
 
-use {
-    crate::{
-        engine::{
-            core::HSData,
-            error::{LangError, LangResult},
-            ql::{
-                ast::{QueryData, State},
-                lex::{Ident, Lit, LitIR, Token},
-            },
+use crate::{
+    engine::{
+        core::data::DictGeneric,
+        error::{LangError, LangResult},
+        ql::{
+            ast::{QueryData, State},
+            lex::{Ident, Token},
         },
-        util::{compiler, MaybeInit},
     },
-    std::collections::HashMap,
+    util::{compiler, MaybeInit},
 };
-
-#[derive(Debug, PartialEq)]
-/// A dictionary entry type. Either a literal or another dictionary
-pub enum DictEntry {
-    Lit(HSData),
-    Map(Dict),
-}
-
-impl<'a> From<LitIR<'a>> for DictEntry {
-    fn from(l: LitIR<'a>) -> Self {
-        Self::Lit(HSData::from(l))
-    }
-}
-
-impl<'a> From<Lit<'a>> for DictEntry {
-    fn from(value: Lit<'a>) -> Self {
-        Self::Lit(HSData::from(value))
-    }
-}
-
-impl From<HSData> for DictEntry {
-    fn from(hsd: HSData) -> Self {
-        Self::Lit(hsd)
-    }
-}
-
-impl From<Dict> for DictEntry {
-    fn from(d: Dict) -> Self {
-        Self::Map(d)
-    }
-}
-
-/// A metadata dictionary
-pub type Dict = HashMap<Box<str>, Option<DictEntry>>;
 
 /// This macro constructs states for our machine
 ///
@@ -150,7 +113,7 @@ impl<'a> Breakpoint<'a> for TypeBreakpoint {
 fn _rfold_dict<'a, Qd, Bp>(
     mut mstate: DictFoldState,
     state: &mut State<'a, Qd>,
-    dict: &mut Dict,
+    dict: &mut DictGeneric,
 ) -> bool
 where
     Qd: QueryData<'a>,
@@ -205,7 +168,7 @@ where
             }
             (Token![open {}], DictFoldState::LIT_OR_OB) => {
                 // found a nested dict
-                let mut ndict = Dict::new();
+                let mut ndict = DictGeneric::new();
                 _rfold_dict::<Qd, NoBreakpoint>(DictFoldState::CB_OR_IDENT, state, &mut ndict);
                 unsafe {
                     state.poison_if_not(
@@ -240,7 +203,7 @@ where
 pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
     mstate: DictFoldState,
     state: &mut State<'a, Qd>,
-    dict: &mut Dict,
+    dict: &mut DictGeneric,
 ) {
     _rfold_dict::<Qd, NoBreakpoint>(mstate, state, dict);
 }
@@ -248,7 +211,7 @@ pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
 pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>>(
     mstate: DictFoldState,
     state: &mut State<'a, Qd>,
-    dict: &mut Dict,
+    dict: &mut DictGeneric,
 ) -> bool {
     _rfold_dict::<Qd, TypeBreakpoint>(mstate, state, dict)
 }
@@ -257,12 +220,12 @@ pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>>(
 /// A layer contains a type and corresponding metadata
 pub struct Layer<'a> {
     ty: Ident<'a>,
-    props: Dict,
+    props: DictGeneric,
 }
 
 impl<'a> Layer<'a> {
     //// Create a new layer
-    pub const fn new(ty: Ident<'a>, props: Dict) -> Self {
+    pub const fn new(ty: Ident<'a>, props: DictGeneric) -> Self {
         Self { ty, props }
     }
 }
@@ -403,11 +366,11 @@ impl<'a> Field<'a> {
 pub struct ExpandedField<'a> {
     field_name: Ident<'a>,
     layers: Vec<Layer<'a>>,
-    props: Dict,
+    props: DictGeneric,
 }
 
 impl<'a> ExpandedField<'a> {
-    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, props: Dict) -> Self {
+    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, props: DictGeneric) -> Self {
         Self {
             field_name,
             layers,
@@ -426,7 +389,7 @@ impl<'a> ExpandedField<'a> {
         state.poison_if_not(state.cursor_eq(Token![open {}]));
         state.cursor_ahead();
         // ignore errors; now attempt a tymeta-like parse
-        let mut props = Dict::new();
+        let mut props = DictGeneric::new();
         let mut layers = Vec::new();
         if rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut props) {
             // this has layers. fold them; but don't forget the colon
@@ -518,8 +481,8 @@ pub use impls::{DictBasic, DictTypeMeta, DictTypeMetaSplit};
 mod impls {
     use {
         super::{
-            rfold_dict, rfold_layers, rfold_tymeta, Dict, DictFoldState, ExpandedField, Field,
-            Layer, LayerFoldState,
+            rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, ExpandedField, Field, Layer,
+            LayerFoldState, DictGeneric,
         },
         crate::engine::{
             error::LangResult,
@@ -554,34 +517,34 @@ mod impls {
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
-    pub struct DictBasic(Dict);
+    pub struct DictBasic(DictGeneric);
     impl<'a> ASTNode<'a> for DictBasic {
         // important: upstream must verify this
         const VERIFY: bool = true;
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-            let mut dict = Dict::new();
+            let mut dict = DictGeneric::new();
             rfold_dict(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
-    pub struct DictTypeMetaSplit(Dict);
+    pub struct DictTypeMetaSplit(DictGeneric);
     impl<'a> ASTNode<'a> for DictTypeMetaSplit {
         // important: upstream must verify this
         const VERIFY: bool = true;
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-            let mut dict = Dict::new();
+            let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut dict);
             Ok(Self(dict))
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
-    pub struct DictTypeMeta(Dict);
+    pub struct DictTypeMeta(DictGeneric);
     impl<'a> ASTNode<'a> for DictTypeMeta {
         // important: upstream must verify this
         const VERIFY: bool = true;
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-            let mut dict = Dict::new();
+            let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
         }
