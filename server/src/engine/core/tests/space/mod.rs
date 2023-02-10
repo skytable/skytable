@@ -24,6 +24,7 @@
  *
 */
 
+mod alter;
 mod create;
 
 use crate::engine::{
@@ -31,6 +32,7 @@ use crate::engine::{
         space::{Space, SpaceMeta},
         GlobalNS,
     },
+    error::DatabaseResult,
     idx::STIndex,
     ql::{
         ast::{compile_test, Statement},
@@ -38,18 +40,47 @@ use crate::engine::{
     },
 };
 
+fn exec_verify(
+    gns: &GlobalNS,
+    query: &str,
+    exec: impl Fn(&GlobalNS, Statement<'_>) -> (DatabaseResult<()>, Box<str>),
+    verify: impl Fn(DatabaseResult<&Space>),
+) {
+    let tok = lex(query.as_bytes()).unwrap();
+    let ast_node = compile_test(&tok).unwrap();
+    let (res, space_name) = exec(gns, ast_node);
+    let space_arc = gns._spaces().read().st_get_cloned(space_name.as_bytes());
+    let r = res.map(|_| space_arc.as_deref().unwrap());
+    verify(r);
+}
+
 /// Creates a space using the given tokens and allows the caller to verify it
-fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(&Space)) {
-    let tok = lex(tok.as_bytes()).unwrap();
-    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    let space_name = space.space_name;
-    Space::exec_create(&gns, space).unwrap();
-    verify(
-        gns._spaces()
-            .read()
-            .st_get_cloned(space_name.as_bytes())
-            .unwrap()
-            .as_ref(),
+fn exec_alter_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(DatabaseResult<&Space>)) {
+    exec_verify(
+        gns,
+        tok,
+        |gns, stmt| {
+            let space = extract_safe!(stmt, Statement::AlterSpace(s) => s);
+            let space_name = space.space_name;
+            let r = Space::exec_alter(&gns, space);
+            (r, space_name.boxed_str())
+        },
+        verify,
+    );
+}
+
+/// Creates a space using the given tokens and allows the caller to verify it
+fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(DatabaseResult<&Space>)) {
+    exec_verify(
+        gns,
+        tok,
+        |gns, stmt| {
+            let space = extract_safe!(stmt, Statement::CreateSpace(s) => s);
+            let space_name = space.space_name;
+            let r = Space::exec_create(&gns, space);
+            (r, space_name.boxed_str())
+        },
+        verify,
     );
 }
 
@@ -57,7 +88,7 @@ fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(&Space)) {
 fn exec_create_empty_verify(gns: &GlobalNS, tok: &str) {
     self::exec_create_and_verify(gns, tok, |space| {
         assert_eq!(
-            space,
+            space.unwrap(),
             &Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
         );
     });

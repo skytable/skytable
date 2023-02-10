@@ -49,6 +49,9 @@ impl<'a> Ident<'a> {
             str::from_utf8_unchecked(self.0)
         }
     }
+    pub fn boxed_str(&self) -> Box<str> {
+        self.as_str().to_string().into_boxed_str()
+    }
 }
 impl<'a> fmt::Debug for Ident<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

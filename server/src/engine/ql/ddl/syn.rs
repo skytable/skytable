@@ -188,8 +188,7 @@ where
                 // reached custom breakpoint
                 return true;
             }
-            x => {
-                dbg!(x);
+            _ => {
                 state.cursor_back();
                 state.poison();
                 break;

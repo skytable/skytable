@@ -85,7 +85,7 @@ pub enum DatabaseError {
     /// unknown property or bad type for property
     DdlSpaceBadProperty,
     /// the space already exists
-    DdlCreateSpaceAlreadyExists,
+    DdlSpaceAlreadyExists,
     /// the space doesn't exist
-    DdlAlterSpaceNotFound,
+    DdlSpaceNotFound,
 }

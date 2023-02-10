@@ -41,7 +41,7 @@ mod structure_syn;
 
 #[inline(always)]
 /// Uses the [`InsecureLexer`] to lex the given input
-pub fn lex_insecure(src: &[u8]) -> LexResult<Vec<Token>> {
+pub fn lex_insecure<'a>(src: &'a [u8]) -> LexResult<Vec<Token<'a>>> {
     InsecureLexer::lex(src)
 }
 #[inline(always)]

@@ -31,10 +31,6 @@ use crate::engine::{
     },
     data::HSData,
     error::DatabaseError,
-    ql::{
-        ast::{compile_test, Statement},
-        tests::lex_insecure as lex,
-    },
 };
 
 #[test]
@@ -57,7 +53,7 @@ fn exec_create_space_with_env() {
     "#,
         |space| {
             assert_eq!(
-                space,
+                space.unwrap(),
                 &Space::new(
                     into_dict! {},
                     SpaceMeta::with_env(into_dict! {
@@ -72,23 +68,19 @@ fn exec_create_space_with_env() {
 #[test]
 fn exec_create_space_with_bad_env_type() {
     let gns = GlobalNS::empty();
-    let tok = lex(br#"create space myspace with { env: 100 }"#).unwrap();
-    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    assert_eq!(
-        Space::exec_create(&gns, space).unwrap_err(),
-        DatabaseError::DdlSpaceBadProperty
-    );
+    super::exec_create_and_verify(&gns, "create space myspace with { env: 100 }", |space| {
+        assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceBadProperty);
+    });
 }
 
 #[test]
 fn exec_create_space_with_random_property() {
     let gns = GlobalNS::empty();
-    let random_property = "i_am_blue_da_ba_dee";
-    let query = format!("create space myspace with {{ {random_property}: 100 }}").into_bytes();
-    let tok = lex(&query).unwrap();
-    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    assert_eq!(
-        Space::exec_create(&gns, space).unwrap_err(),
-        DatabaseError::DdlSpaceBadProperty
+    super::exec_create_and_verify(
+        &gns,
+        "create space myspace with { i_am_blue_da_ba_dee: 100 }",
+        |space| {
+            assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceBadProperty);
+        },
     );
 }

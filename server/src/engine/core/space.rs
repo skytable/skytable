@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::data::md_dict::DictGeneric;
+
 use {
     crate::engine::{
         core::{model::ModelView, ItemID, RWLIdx},
@@ -40,13 +42,13 @@ use {
 /// A space with the model namespace
 pub struct Space {
     mns: RWLIdx<ItemID, Arc<ModelView>>,
-    meta: SpaceMeta,
+    pub(super) meta: SpaceMeta,
 }
 
 #[derive(Debug, Default)]
 /// Space metadata
 pub struct SpaceMeta {
-    env: RwLock<MetaDict>,
+    pub(super) env: RwLock<MetaDict>,
 }
 
 impl SpaceMeta {
@@ -54,6 +56,15 @@ impl SpaceMeta {
     pub fn with_env(env: MetaDict) -> Self {
         Self {
             env: RWLIdx::new(env),
+        }
+    }
+    fn read_from_props(props: &mut DictGeneric) -> DatabaseResult<DictGeneric> {
+        match props.remove(SpaceMeta::KEY_ENV) {
+            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => Ok(m),
+            None | Some(None) if props.is_empty() => Ok(IndexST::default()),
+            _ => {
+                return Err(DatabaseError::DdlSpaceBadProperty);
+            }
         }
     }
 }
@@ -92,14 +103,7 @@ impl Space {
     ) -> DatabaseResult<ProcedureCreate> {
         let space_name = ItemID::try_new(&space_name).ok_or(DatabaseError::SysBadItemID)?;
         // check env
-        let env;
-        match props.remove(SpaceMeta::KEY_ENV) {
-            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => env = m,
-            None | Some(None) if props.is_empty() => env = IndexST::default(),
-            _ => {
-                return Err(DatabaseError::DdlSpaceBadProperty);
-            }
-        }
+        let env = SpaceMeta::read_from_props(&mut props)?;
         Ok(ProcedureCreate {
             space_name,
             space: Self::new(
@@ -118,7 +122,7 @@ impl Space {
         if wl.st_insert(space_name, Arc::new(space)) {
             Ok(())
         } else {
-            Err(DatabaseError::DdlCreateSpaceAlreadyExists)
+            Err(DatabaseError::DdlSpaceAlreadyExists)
         }
     }
     /// Execute a `alter` stmt
@@ -126,19 +130,20 @@ impl Space {
         gns: &super::GlobalNS,
         AlterSpace {
             space_name,
-            updated_props,
+            mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
+        let env = SpaceMeta::read_from_props(&mut updated_props)?;
         match gns._spaces().read().st_get_cloned(space_name.as_bytes()) {
             Some(space) => {
                 let mut space_meta = space.meta.env.write();
-                if md_dict::rmerge_metadata(&mut space_meta, updated_props) {
+                if md_dict::rmerge_metadata(&mut space_meta, env) {
                     Ok(())
                 } else {
                     Err(DatabaseError::DdlSpaceBadProperty)
                 }
             }
-            None => Err(DatabaseError::DdlAlterSpaceNotFound),
+            None => Err(DatabaseError::DdlSpaceNotFound),
         }
     }
 }
