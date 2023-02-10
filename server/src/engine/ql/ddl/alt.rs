@@ -42,8 +42,8 @@ use {
 #[derive(Debug, PartialEq)]
 /// An alter space query with corresponding data
 pub struct AlterSpace<'a> {
-    space_name: Ident<'a>,
-    updated_props: DictGeneric,
+    pub space_name: Ident<'a>,
+    pub updated_props: DictGeneric,
 }
 
 impl<'a> AlterSpace<'a> {

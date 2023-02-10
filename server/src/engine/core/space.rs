@@ -30,19 +30,21 @@ use {
         data::{md_dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
-        ql::ddl::crt::CreateSpace,
+        ql::ddl::{alt::AlterSpace, crt::CreateSpace},
     },
     parking_lot::RwLock,
     std::sync::Arc,
 };
 
 #[derive(Debug)]
+/// A space with the model namespace
 pub struct Space {
     mns: RWLIdx<ItemID, Arc<ModelView>>,
     meta: SpaceMeta,
 }
 
 #[derive(Debug, Default)]
+/// Space metadata
 pub struct SpaceMeta {
     env: RwLock<MetaDict>,
 }
@@ -58,14 +60,16 @@ impl SpaceMeta {
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-struct Procedure {
+/// Procedure for `create space`
+struct ProcedureCreate {
     space_name: ItemID,
     space: Space,
 }
 
-impl Procedure {
+impl ProcedureCreate {
     #[inline(always)]
-    pub(super) fn new(space_name: ItemID, space: Space) -> Self {
+    /// Define the procedure
+    fn new(space_name: ItemID, space: Space) -> Self {
         Self { space_name, space }
     }
 }
@@ -79,12 +83,13 @@ impl Space {
         }
     }
     #[inline]
-    fn validate(
+    /// Validate a `create` stmt
+    fn validate_create(
         CreateSpace {
             space_name,
             mut props,
         }: CreateSpace,
-    ) -> DatabaseResult<Procedure> {
+    ) -> DatabaseResult<ProcedureCreate> {
         let space_name = ItemID::try_new(&space_name).ok_or(DatabaseError::SysBadItemID)?;
         // check env
         let env;
@@ -92,10 +97,10 @@ impl Space {
             Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => env = m,
             None | Some(None) if props.is_empty() => env = IndexST::default(),
             _ => {
-                return Err(DatabaseError::DdlCreateSpaceBadProperty);
+                return Err(DatabaseError::DdlSpaceBadProperty);
             }
         }
-        Ok(Procedure {
+        Ok(ProcedureCreate {
             space_name,
             space: Self::new(
                 IndexST::default(),
@@ -106,13 +111,34 @@ impl Space {
             ),
         })
     }
-    pub fn validate_apply(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
-        let Procedure { space_name, space } = Self::validate(space)?;
+    /// Execute a `create` stmt
+    pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
+        let ProcedureCreate { space_name, space } = Self::validate_create(space)?;
         let mut wl = gns._spaces().write();
         if wl.st_insert(space_name, Arc::new(space)) {
             Ok(())
         } else {
             Err(DatabaseError::DdlCreateSpaceAlreadyExists)
+        }
+    }
+    /// Execute a `alter` stmt
+    pub fn exec_alter(
+        gns: &super::GlobalNS,
+        AlterSpace {
+            space_name,
+            updated_props,
+        }: AlterSpace,
+    ) -> DatabaseResult<()> {
+        match gns._spaces().read().st_get_cloned(space_name.as_bytes()) {
+            Some(space) => {
+                let mut space_meta = space.meta.env.write();
+                if md_dict::rmerge_metadata(&mut space_meta, updated_props) {
+                    Ok(())
+                } else {
+                    Err(DatabaseError::DdlSpaceBadProperty)
+                }
+            }
+            None => Err(DatabaseError::DdlAlterSpaceNotFound),
         }
     }
 }

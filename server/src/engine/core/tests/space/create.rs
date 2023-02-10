@@ -31,7 +31,6 @@ use crate::engine::{
     },
     data::HSData,
     error::DatabaseError,
-    idx::STIndex,
     ql::{
         ast::{compile_test, Statement},
         tests::lex_insecure as lex,
@@ -41,45 +40,33 @@ use crate::engine::{
 #[test]
 fn exec_create_space_simple() {
     let gns = GlobalNS::empty();
-    let tok = lex("create space myspace".as_bytes()).unwrap();
-    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    Space::validate_apply(&gns, space).unwrap();
-    assert_eq!(
-        gns._spaces()
-            .read()
-            .st_get_cloned("myspace".as_bytes())
-            .unwrap()
-            .as_ref(),
-        &Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
-    );
+    super::exec_create_empty_verify(&gns, "create space myspace");
 }
 
 #[test]
 fn exec_create_space_with_env() {
     let gns = GlobalNS::empty();
-    let tok = lex(br#"
+    super::exec_create_and_verify(
+        &gns,
+        r#"
         create space myspace with {
             env: {
                 MAX_MODELS: 100
             }
         }
-    "#)
-    .unwrap();
-    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
-    Space::validate_apply(&gns, space).unwrap();
-    assert_eq!(
-        gns._spaces()
-            .read()
-            .st_get_cloned("myspace".as_bytes())
-            .unwrap()
-            .as_ref(),
-        &Space::new(
-            into_dict! {},
-            SpaceMeta::with_env(into_dict! {
-                "MAX_MODELS" => HSData::UnsignedInt(100)
-            })
-        )
-    );
+    "#,
+        |space| {
+            assert_eq!(
+                space,
+                &Space::new(
+                    into_dict! {},
+                    SpaceMeta::with_env(into_dict! {
+                        "MAX_MODELS" => HSData::UnsignedInt(100)
+                    })
+                )
+            );
+        },
+    )
 }
 
 #[test]
@@ -88,8 +75,8 @@ fn exec_create_space_with_bad_env_type() {
     let tok = lex(br#"create space myspace with { env: 100 }"#).unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
     assert_eq!(
-        Space::validate_apply(&gns, space).unwrap_err(),
-        DatabaseError::DdlCreateSpaceBadProperty
+        Space::exec_create(&gns, space).unwrap_err(),
+        DatabaseError::DdlSpaceBadProperty
     );
 }
 
@@ -101,7 +88,7 @@ fn exec_create_space_with_random_property() {
     let tok = lex(&query).unwrap();
     let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
     assert_eq!(
-        Space::validate_apply(&gns, space).unwrap_err(),
-        DatabaseError::DdlCreateSpaceBadProperty
+        Space::exec_create(&gns, space).unwrap_err(),
+        DatabaseError::DdlSpaceBadProperty
     );
 }

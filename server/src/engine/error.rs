@@ -29,6 +29,7 @@ pub type LexResult<T> = Result<T, LexError>;
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 #[derive(Debug, PartialEq)]
+/// Lex phase errors
 pub enum LexError {
     // insecure lex
     /// Invalid signed numeric literal
@@ -47,6 +48,7 @@ pub enum LexError {
     UnexpectedByte,
 }
 #[derive(Debug, PartialEq)]
+/// AST errors
 pub enum LangError {
     // generic
     /// Unexpected end of syntax
@@ -75,12 +77,15 @@ pub enum LangError {
 }
 
 #[derive(Debug, PartialEq)]
+/// Executor errors
 pub enum DatabaseError {
     // sys
     SysBadItemID,
     // ddl: create space
     /// unknown property or bad type for property
-    DdlCreateSpaceBadProperty,
+    DdlSpaceBadProperty,
     /// the space already exists
     DdlCreateSpaceAlreadyExists,
+    /// the space doesn't exist
+    DdlAlterSpaceNotFound,
 }

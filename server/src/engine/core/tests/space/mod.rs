@@ -24,4 +24,41 @@
  *
 */
 
-mod space;
+mod create;
+
+use crate::engine::{
+    core::{
+        space::{Space, SpaceMeta},
+        GlobalNS,
+    },
+    idx::STIndex,
+    ql::{
+        ast::{compile_test, Statement},
+        tests::lex_insecure as lex,
+    },
+};
+
+/// Creates a space using the given tokens and allows the caller to verify it
+fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(&Space)) {
+    let tok = lex(tok.as_bytes()).unwrap();
+    let space = extract_safe!(compile_test(&tok).unwrap(), Statement::CreateSpace(s) => s);
+    let space_name = space.space_name;
+    Space::exec_create(&gns, space).unwrap();
+    verify(
+        gns._spaces()
+            .read()
+            .st_get_cloned(space_name.as_bytes())
+            .unwrap()
+            .as_ref(),
+    );
+}
+
+/// Creates an empty space with the given tokens
+fn exec_create_empty_verify(gns: &GlobalNS, tok: &str) {
+    self::exec_create_and_verify(gns, tok, |space| {
+        assert_eq!(
+            space,
+            &Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
+        );
+    });
+}
