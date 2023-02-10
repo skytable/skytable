@@ -36,7 +36,7 @@ use {
     },
     crate::{
         engine::{
-            core::HSData,
+            data::HSData,
             error::{LangError, LangResult},
         },
         util::{compiler, MaybeInit},

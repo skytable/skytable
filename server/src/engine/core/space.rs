@@ -26,11 +26,8 @@
 
 use {
     crate::engine::{
-        core::{
-            data::{md_dict, DictEntryGeneric, MetaDict},
-            model::ModelView,
-            ItemID, RWLIdx,
-        },
+        core::{model::ModelView, ItemID, RWLIdx},
+        data::{md_dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
         ql::ddl::crt::CreateSpace,

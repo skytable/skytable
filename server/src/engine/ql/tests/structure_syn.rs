@@ -27,7 +27,7 @@
 use {
     super::*,
     crate::engine::{
-        core::data::DictGeneric,
+        data::DictGeneric,
         ql::{ast::parse_ast_node_full, ddl::syn::DictBasic, lex::Lit},
     },
 };

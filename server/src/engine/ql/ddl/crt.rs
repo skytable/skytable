@@ -28,7 +28,7 @@ use {
     super::syn::{self, DictFoldState, Field},
     crate::{
         engine::{
-            core::data::DictGeneric,
+            data::DictGeneric,
             error::{LangError, LangResult},
             ql::{
                 ast::{QueryData, State},

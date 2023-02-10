@@ -27,8 +27,9 @@
 use crate::engine::{
     core::{
         space::{Space, SpaceMeta},
-        GlobalNS, HSData,
+        GlobalNS,
     },
+    data::HSData,
     error::DatabaseError,
     idx::STIndex,
     ql::{

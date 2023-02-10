@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        core::data::HSData,
+        data::HSData,
         idx::STIndex,
         ql::lex::{Lit, LitIR},
     },
@@ -60,6 +60,7 @@ pub enum MetaDictEntry {
 /*
     patchsets
 */
+
 #[derive(Debug, PartialEq, Default)]
 struct MetaDictPatch(HashMap<Box<str>, Option<MetaDictPatchEntry>>);
 #[derive(Debug, PartialEq)]

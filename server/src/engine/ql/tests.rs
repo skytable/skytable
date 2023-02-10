@@ -27,7 +27,7 @@
 use {
     super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
     crate::{
-        engine::{core::HSData, error::LexResult},
+        engine::{data::HSData, error::LexResult},
         util::test_utils,
     },
     rand::{self, Rng},
@@ -76,24 +76,24 @@ fn nullable_datatype(v: impl NullableData<HSData>) -> Option<HSData> {
 }
 
 pub trait NullableDictEntry {
-    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric>;
+    fn data(self) -> Option<crate::engine::data::DictEntryGeneric>;
 }
 
 impl NullableDictEntry for Null {
-    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
+    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
         None
     }
 }
 
 impl<'a> NullableDictEntry for super::lex::Lit<'a> {
-    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
-        Some(crate::engine::core::data::DictEntryGeneric::from(self.as_ir()))
+    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
+        Some(crate::engine::data::DictEntryGeneric::from(self.as_ir()))
     }
 }
 
-impl NullableDictEntry for crate::engine::core::data::DictGeneric {
-    fn data(self) -> Option<crate::engine::core::data::DictEntryGeneric> {
-        Some(crate::engine::core::data::DictEntryGeneric::Map(self))
+impl NullableDictEntry for crate::engine::data::DictGeneric {
+    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
+        Some(crate::engine::data::DictEntryGeneric::Map(self))
     }
 }
 

@@ -24,7 +24,7 @@
  *
 */
 
-use crate::engine::core::data::{
+use crate::engine::data::{
     md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict},
     HSData,
 };

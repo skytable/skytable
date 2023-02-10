@@ -29,6 +29,7 @@
 #[macro_use]
 mod macros;
 mod core;
+mod data;
 mod error;
 mod idx;
 mod mem;

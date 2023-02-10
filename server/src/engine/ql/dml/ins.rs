@@ -28,7 +28,7 @@ use {
     super::read_ident,
     crate::{
         engine::{
-            core::HSData,
+            data::HSData,
             error::{LangError, LangResult},
             ql::{
                 ast::{Entity, QueryData, State},

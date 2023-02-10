@@ -25,12 +25,20 @@
 */
 
 pub mod md_dict;
+#[cfg(test)]
+mod tests;
 
 pub use md_dict::{DictEntryGeneric, DictGeneric, MetaDict};
 use {
-    crate::engine::ql::lex::{Lit, LitIR},
+    crate::engine::{
+        mem::AStr,
+        ql::lex::{Lit, LitIR},
+    },
     std::mem::{self, Discriminant},
 };
+
+const IDENT_MX: usize = 64;
+pub type ItemID = AStr<IDENT_MX>;
 
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.

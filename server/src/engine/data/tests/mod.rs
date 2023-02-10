@@ -1,5 +1,5 @@
 /*
- * Created on Wed Oct 12 2022
+ * Created on Thu Feb 09 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,34 +24,26 @@
  *
 */
 
-mod model;
-mod space;
-#[cfg(test)]
-mod tests;
+mod md_dict_tests;
 
-use {
-    crate::engine::{core::space::Space, data::ItemID, idx::IndexST},
-    parking_lot::RwLock,
-    std::sync::Arc,
-};
+use crate::engine::{data::ItemID, ql::lex::Ident};
 
-/// Use this for now since it substitutes for a file lock (and those syscalls are expensive),
-/// but something better is in the offing
-type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
-
-// FIXME(@ohsayan): Make sure we update what all structures we're making use of here
-
-pub struct GlobalNS {
-    spaces: RWLIdx<ItemID, Arc<Space>>,
+#[test]
+fn item_id_okay() {
+    let _ = ItemID::from(Ident::from("hello"));
 }
 
-impl GlobalNS {
-    pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Arc<Space>> {
-        &self.spaces
-    }
-    pub fn empty() -> Self {
-        Self {
-            spaces: RWLIdx::default(),
-        }
-    }
+#[test]
+fn test_item_id_exact() {
+    let _ = ItemID::from(Ident::from(
+        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e",
+    ));
+}
+
+#[test]
+#[should_panic(expected = "length overflow")]
+fn item_id_too_long() {
+    let _ = ItemID::from(Ident::from(
+        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e_",
+    ));
 }

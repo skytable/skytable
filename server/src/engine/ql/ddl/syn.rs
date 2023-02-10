@@ -46,7 +46,7 @@
 
 use crate::{
     engine::{
-        core::data::DictGeneric,
+        data::DictGeneric,
         error::{LangError, LangResult},
         ql::{
             ast::{QueryData, State},
@@ -481,8 +481,8 @@ pub use impls::{DictBasic, DictTypeMeta, DictTypeMetaSplit};
 mod impls {
     use {
         super::{
-            rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, ExpandedField, Field, Layer,
-            LayerFoldState, DictGeneric,
+            rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, DictGeneric, ExpandedField,
+            Field, Layer, LayerFoldState,
         },
         crate::engine::{
             error::LangResult,
