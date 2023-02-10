@@ -34,7 +34,7 @@ use crate::engine::{
 };
 
 #[test]
-fn alter_add_props() {
+fn alter_add_prop_env_var() {
     let gns = GlobalNS::empty();
     super::exec_create_empty_verify(&gns, "create space myspace");
     super::exec_alter_and_verify(
@@ -53,7 +53,7 @@ fn alter_add_props() {
 }
 
 #[test]
-fn alter_update_props() {
+fn alter_update_prop_env_var() {
     let gns = GlobalNS::empty();
     super::exec_create_and_verify(
         &gns,
@@ -81,7 +81,7 @@ fn alter_update_props() {
 }
 
 #[test]
-fn alter_remove_props() {
+fn alter_remove_prop_env_var() {
     let gns = GlobalNS::empty();
     super::exec_create_and_verify(
         &gns,
@@ -113,4 +113,22 @@ fn alter_nx() {
         "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceNotFound),
     )
+}
+
+#[test]
+fn alter_remove_all_env() {
+    let gns = GlobalNS::empty();
+    super::exec_create_and_verify(
+        &gns,
+        "create space myspace with { env: { MY_NEW_PROP: 100 } }",
+        |space| {
+            assert_eq!(
+                space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
+                &(HSData::UnsignedInt(100).into())
+            )
+        },
+    );
+    super::exec_alter_and_verify(&gns, "alter space myspace with { env: null }", |space| {
+        assert_eq!(space.unwrap(), &Space::empty())
+    })
 }

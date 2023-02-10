@@ -25,7 +25,7 @@
 */
 
 use crate::engine::data::{
-    md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict},
+    md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
     HSData,
 };
 
@@ -77,4 +77,27 @@ fn t_bad_patch() {
     };
     assert!(!md_dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, backup);
+}
+
+#[test]
+fn patch_null_out_dict() {
+    let mut current: MetaDict = into_dict! {
+        "a" => HSData::UnsignedInt(2),
+        "b" => HSData::UnsignedInt(3),
+        "z" => MetaDictEntry::Map(into_dict!(
+            "c" => HSData::UnsignedInt(1),
+            "d" => HSData::UnsignedInt(2)
+        )),
+    };
+    let expected: MetaDict = into_dict! {
+        "a" => HSData::UnsignedInt(2),
+        "b" => HSData::UnsignedInt(3),
+    };
+    let new: DictGeneric = into_dict! {
+        "a" => Some(HSData::UnsignedInt(2).into()),
+        "b" => Some(HSData::UnsignedInt(3).into()),
+        "z" => None,
+    };
+    assert!(md_dict::rmerge_metadata(&mut current, new));
+    assert_eq!(current, expected);
 }

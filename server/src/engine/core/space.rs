@@ -24,8 +24,6 @@
  *
 */
 
-use crate::engine::data::md_dict::DictGeneric;
-
 use {
     crate::engine::{
         core::{model::ModelView, ItemID, RWLIdx},
@@ -58,15 +56,6 @@ impl SpaceMeta {
             env: RWLIdx::new(env),
         }
     }
-    fn read_from_props(props: &mut DictGeneric) -> DatabaseResult<DictGeneric> {
-        match props.remove(SpaceMeta::KEY_ENV) {
-            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => Ok(m),
-            None | Some(None) if props.is_empty() => Ok(IndexST::default()),
-            _ => {
-                return Err(DatabaseError::DdlSpaceBadProperty);
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -86,6 +75,9 @@ impl ProcedureCreate {
 }
 
 impl Space {
+    pub fn empty() -> Self {
+        Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
+    }
     #[inline(always)]
     pub fn new(mns: IndexST<ItemID, Arc<ModelView>>, meta: SpaceMeta) -> Self {
         Self {
@@ -103,7 +95,13 @@ impl Space {
     ) -> DatabaseResult<ProcedureCreate> {
         let space_name = ItemID::try_new(&space_name).ok_or(DatabaseError::SysBadItemID)?;
         // check env
-        let env = SpaceMeta::read_from_props(&mut props)?;
+        let env = match props.remove(SpaceMeta::KEY_ENV) {
+            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => m,
+            Some(None) | None if props.is_empty() => IndexST::default(),
+            _ => {
+                return Err(DatabaseError::DdlSpaceBadProperty);
+            }
+        };
         Ok(ProcedureCreate {
             space_name,
             space: Self::new(
@@ -133,15 +131,20 @@ impl Space {
             mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        let env = SpaceMeta::read_from_props(&mut updated_props)?;
         match gns._spaces().read().st_get_cloned(space_name.as_bytes()) {
             Some(space) => {
-                let mut space_meta = space.meta.env.write();
-                if md_dict::rmerge_metadata(&mut space_meta, env) {
-                    Ok(())
-                } else {
-                    Err(DatabaseError::DdlSpaceBadProperty)
+                let mut space_env = space.meta.env.write();
+                match updated_props.remove(SpaceMeta::KEY_ENV) {
+                    Some(Some(DictEntryGeneric::Map(env))) if updated_props.is_empty() => {
+                        if !md_dict::rmerge_metadata(&mut space_env, env) {
+                            return Err(DatabaseError::DdlSpaceBadProperty);
+                        }
+                    }
+                    Some(None) if updated_props.is_empty() => space_env.clear(),
+                    None => {}
+                    _ => return Err(DatabaseError::DdlSpaceBadProperty),
                 }
+                Ok(())
             }
             None => Err(DatabaseError::DdlSpaceNotFound),
         }

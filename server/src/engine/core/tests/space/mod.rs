@@ -28,10 +28,7 @@ mod alter;
 mod create;
 
 use crate::engine::{
-    core::{
-        space::{Space, SpaceMeta},
-        GlobalNS,
-    },
+    core::{space::Space, GlobalNS},
     error::DatabaseResult,
     idx::STIndex,
     ql::{
@@ -87,9 +84,6 @@ fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(DatabaseRes
 /// Creates an empty space with the given tokens
 fn exec_create_empty_verify(gns: &GlobalNS, tok: &str) {
     self::exec_create_and_verify(gns, tok, |space| {
-        assert_eq!(
-            space.unwrap(),
-            &Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
-        );
+        assert_eq!(space.unwrap(), &Space::empty());
     });
 }
