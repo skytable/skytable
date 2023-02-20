@@ -72,7 +72,6 @@ where
 impl<K, V, C> MTIndex<K, V> for ChmArc<K, V, C>
 where
     C: Config,
-
     K: Key,
     V: Value,
 {
@@ -103,11 +102,11 @@ where
     }
 
     fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
-        self.insert(arc(key, val), g)
+        self.patch_insert(key, val, g)
     }
 
     fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.upsert(arc(key, val), g)
+        self.patch_upsert(key, val, g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -137,7 +136,7 @@ where
     }
 
     fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.update(arc(key, val), g)
+        self.patch_update(key, val, g)
     }
 
     fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
@@ -145,7 +144,7 @@ where
         't: 'v,
         'g: 't + 'v,
     {
-        self.update_return(arc(key, val), g)
+        self.patch_update_return(key, val, g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -195,7 +194,6 @@ where
 impl<K, V, C> MTIndex<K, V> for ChmCopy<K, V, C>
 where
     C: Config,
-
     K: Key,
     V: Value,
 {
@@ -226,11 +224,11 @@ where
     }
 
     fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
-        self.insert((key, val), g)
+        self.patch_insert(key, val, g)
     }
 
     fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.upsert((key, val), g)
+        self.patch_upsert(key, val, g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -260,7 +258,7 @@ where
     }
 
     fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.update((key, val), g)
+        self.patch_update(key, val, g)
     }
 
     fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
@@ -268,7 +266,7 @@ where
         't: 'v,
         'g: 't + 'v,
     {
-        self.update_return((key, val), g)
+        self.patch_update_return(key, val, g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -297,7 +295,8 @@ impl<T: TreeElement, C: Config> FromIterator<T> for Tree<T, C> {
             upin()
         };
         let t = Tree::new();
-        iter.into_iter().for_each(|te| assert!(t.insert(te, &g)));
+        iter.into_iter()
+            .for_each(|te| assert!(t.patch_insert(te.key().clone(), te.val().clone(), &g)));
         t
     }
 }

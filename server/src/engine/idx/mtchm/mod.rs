@@ -28,6 +28,7 @@ mod access;
 pub(super) mod imp;
 mod iter;
 pub(super) mod meta;
+mod patch;
 #[cfg(test)]
 mod tests;
 
@@ -35,9 +36,9 @@ mod tests;
 use crate::engine::sync::atm::ORD_ACQ;
 use {
     self::{
-        access::{ReadMode, WriteMode},
         iter::{IterKV, IterKey, IterVal},
         meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
+        patch::{TreeKeyComparable, TreeKeyComparableUpgradeable},
     },
     crate::engine::{
         idx::AsKey,
@@ -47,6 +48,7 @@ use {
     crossbeam_epoch::CompareExchangeError,
     std::{
         borrow::Borrow,
+        hash::Hash,
         hash::{BuildHasher, Hasher},
         marker::PhantomData,
         mem,
@@ -213,7 +215,7 @@ impl<T, C: Config> Tree<T, C> {
 impl<T, C: Config> Tree<T, C> {
     fn hash<Q>(&self, k: &Q) -> u64
     where
-        Q: ?Sized + AsKey,
+        Q: ?Sized + Hash,
     {
         let mut state = self.h.build_hasher();
         k.hash(&mut state);
@@ -240,23 +242,38 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
             let _ = self.remove(k, g);
         });
     }
-    fn insert(&self, elem: T, g: &Guard) -> bool {
-        self._insert::<access::WModeFresh>(elem, g)
+    fn patch_insert<Q: TreeKeyComparableUpgradeable<T>>(
+        &self,
+        key: Q,
+        v: T::Value,
+        g: &Guard,
+    ) -> bool {
+        self.patch(patch::Insert::new(key, v), g)
     }
-    fn update(&self, elem: T, g: &Guard) -> bool {
-        self._insert::<access::WModeUpdate>(elem, g)
+    fn patch_upsert<Q: TreeKeyComparableUpgradeable<T>>(&self, key: Q, v: T::Value, g: &Guard) {
+        self.patch(patch::Upsert::new(key, v), g)
     }
-    fn update_return<'g>(&'g self, elem: T, g: &'g Guard) -> Option<&'g T::Value> {
-        self._insert::<access::WModeUpdateRetRef>(elem, g)
+    fn patch_upsert_return<'g, Q: TreeKeyComparableUpgradeable<T>>(
+        &'g self,
+        key: Q,
+        v: T::Value,
+        g: &'g Guard,
+    ) -> Option<&'g T::Value> {
+        self.patch(patch::UpsertReturn::new(key, v), g)
     }
-    fn upsert(&self, elem: T, g: &Guard) {
-        self._insert::<access::WModeUpsert>(elem, g)
+    fn patch_update<Q: TreeKeyComparable<T>>(&self, key: Q, v: T::Value, g: &Guard) -> bool {
+        self.patch(patch::UpdateReplace::new(key, v), g)
     }
-    fn upsert_return<'g>(&'g self, elem: T, g: &'g Guard) -> Option<&'g T::Value> {
-        self._insert::<access::WModeUpsertRef>(elem, g)
+    fn patch_update_return<'g, Q: TreeKeyComparable<T>>(
+        &'g self,
+        key: Q,
+        v: T::Value,
+        g: &'g Guard,
+    ) -> Option<&'g T::Value> {
+        self.patch(patch::UpdateReplaceRet::new(key, v), g)
     }
-    fn _insert<'g, W: WriteMode<T>>(&'g self, elem: T, g: &'g Guard) -> W::Ret<'g> {
-        let hash = self.hash(elem.key());
+    fn patch<'g, P: patch::Patch<T>>(&'g self, mut patch: P, g: &'g Guard) -> P::Ret<'g> {
+        let hash = self.hash(&patch.target());
         let mut level = C::LEVEL_ZERO;
         let mut current = &self.root;
         let mut parent = None;
@@ -282,17 +299,17 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                 }
                 _ if node.is_null() => {
                     // this is an empty slot
-                    if W::WMODE == access::WRITEMODE_REFRESH {
+                    if P::WMODE == patch::WRITEMODE_REFRESH {
                         // I call that a job well done
-                        return W::nx();
+                        return P::nx_ret();
                     }
-                    if (W::WMODE == access::WRITEMODE_ANY) | (W::WMODE == access::WRITEMODE_FRESH) {
-                        let new = Self::new_data(elem.clone());
+                    if (P::WMODE == patch::WRITEMODE_ANY) | (P::WMODE == patch::WRITEMODE_FRESH) {
+                        let new = Self::new_data(patch.nx_new());
                         match current.cx_rel(node, new, g) {
                             Ok(_) => {
                                 // we're done here
                                 self.incr_len();
-                                return W::nx();
+                                return P::nx_ret();
                             }
                             Err(CompareExchangeError { new, .. }) => unsafe {
                                 /*
@@ -312,15 +329,16 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         Self::read_data(node)
                     };
                     debug_assert!(!data.is_empty(), "logic,empty node not compressed");
-                    if data[0].key() != elem.key() && level < C::MAX_TREE_HEIGHT_UB {
+                    if !patch.target().cmp_eq(&data[0]) && level < C::MAX_TREE_HEIGHT_UB {
                         /*
                             so this is a collision and since we haven't reached the max height, we should always
                             create a new branch so let's do that
                         */
                         self.m.hsplit();
                         debug_assert_eq!(data.len(), 1, "logic,lnode before height ub");
-                        if W::WMODE == access::WRITEMODE_REFRESH {
+                        if P::WMODE == patch::WRITEMODE_REFRESH {
                             // another job well done; an snode with the wrong key; so basically it's missing
+                            return P::nx_ret();
                         }
                         let next_chunk = (self.hash(data[0].key()) >> level) & C::MASK;
                         let mut new_branch = Node::null();
@@ -333,20 +351,20 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
                             to update
                         */
-                        let p = data.iter().position(|e| e.key() == elem.key());
+                        let p = data.iter().position(|e| patch.target().cmp_eq(e));
                         match p {
-                            Some(v) if W::WMODE == access::WRITEMODE_FRESH => {
-                                return W::ex(&data[v])
+                            Some(v) if P::WMODE == patch::WRITEMODE_FRESH => {
+                                return P::ex_ret(&data[v])
                             }
                             Some(i)
-                                if W::WMODE == access::WRITEMODE_REFRESH
-                                    || W::WMODE == access::WRITEMODE_ANY =>
+                                if P::WMODE == patch::WRITEMODE_REFRESH
+                                    || P::WMODE == patch::WRITEMODE_ANY =>
                             {
                                 // update the entry and create a new node
                                 let mut new_ln = LNode::new();
                                 new_ln.extend(data[..i].iter().cloned());
                                 new_ln.extend(data[i + 1..].iter().cloned());
-                                new_ln.push(elem.clone());
+                                new_ln.push(patch.ex_apply(&data[i]));
                                 match current.cx_rel(node, Self::new_lnode(new_ln), g) {
                                     Ok(new) => {
                                         if cfg!(debug_assertions)
@@ -363,7 +381,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                                 node.as_raw() as *const LNode<_>
                                             ))
                                         }
-                                        return W::ex(&data[i]);
+                                        return P::ex_ret(&data[i]);
                                     }
                                     Err(CompareExchangeError { new, .. }) => {
                                         // failed to swap it in
@@ -373,12 +391,12 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                     }
                                 }
                             }
-                            None if W::WMODE == access::WRITEMODE_ANY
-                                || W::WMODE == access::WRITEMODE_FRESH =>
+                            None if P::WMODE == patch::WRITEMODE_ANY
+                                || P::WMODE == patch::WRITEMODE_FRESH =>
                             {
                                 // no funk here
                                 let mut new_node = data.clone();
-                                new_node.push(elem.clone());
+                                new_node.push(patch.nx_new());
                                 match current.cx_rel(node, Self::new_lnode(new_node), g) {
                                     Ok(new) => {
                                         if cfg!(debug_assertions)
@@ -394,7 +412,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                             ));
                                         }
                                         self.incr_len();
-                                        return W::nx();
+                                        return P::nx_ret();
                                     }
                                     Err(CompareExchangeError { new, .. }) => {
                                         // failed to swap it
@@ -405,9 +423,9 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                                     }
                                 }
                             }
-                            None if W::WMODE == access::WRITEMODE_REFRESH => return W::nx(),
+                            None if P::WMODE == patch::WRITEMODE_REFRESH => return P::nx_ret(),
                             _ => {
-                                unreachable!("logic, WMODE mismatch: `{}`", W::WMODE);
+                                unreachable!("logic, WMODE mismatch: `{}`", P::WMODE);
                             }
                         }
                     }
@@ -423,6 +441,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
             }
         }
     }
+
     fn contains_key<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> bool
     where
         T::Key: Borrow<Q>,
@@ -437,7 +456,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
     {
         self._lookup::<Q, access::RModeRef>(k, g)
     }
-    fn _lookup<'g, Q, R: ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> R::Ret<'g>
+    fn _lookup<'g, Q, R: access::ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> R::Ret<'g>
     where
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
@@ -477,16 +496,16 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
     {
-        self._remove::<Q, access::WModeDelete>(k, g)
+        self._remove::<Q, patch::Delete>(k, g)
     }
     fn remove_return<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
     where
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
     {
-        self._remove::<Q, access::WModeDeleteRef>(k, g)
+        self._remove::<Q, patch::DeleteRet>(k, g)
     }
-    fn _remove<'g, Q, W: WriteMode<T>>(&'g self, k: &Q, g: &'g Guard) -> W::Ret<'g>
+    fn _remove<'g, Q, W: patch::PatchDelete<T>>(&'g self, k: &Q, g: &'g Guard) -> W::Ret<'g>
     where
         T::Key: Borrow<Q>,
         Q: AsKey + ?Sized,
