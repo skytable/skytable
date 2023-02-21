@@ -34,6 +34,7 @@ mod stord;
 mod tests;
 
 use {
+    self::meta::{Comparable, ComparableUpgradeable},
     crate::engine::sync::atm::Guard,
     core::{borrow::Borrow, hash::Hash},
 };
@@ -152,9 +153,9 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool
+    fn mt_insert<U>(&self, key: U, val: V, g: &Guard) -> bool
     where
-        K: AsKeyClone,
+        U: ComparableUpgradeable<K>,
         V: AsValue;
     /// Updates or inserts the given value
     fn mt_upsert(&self, key: K, val: V, g: &Guard)
@@ -164,20 +165,17 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     // read
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
     where
-        K: Borrow<Q> + AsKeyClone,
-        Q: ?Sized + AsKey;
+        Q: ?Sized + Comparable<K>;
     /// Returns a reference to the value corresponding to the key, if it exists
     fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
     where
-        K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey,
+        Q: ?Sized + Comparable<K>,
         't: 'v,
         'g: 't + 'v;
     /// Returns a clone of the value corresponding to the key, if it exists
     fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<V>
     where
-        K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey,
+        Q: ?Sized + Comparable<K>,
         V: AsValueClone;
     // update
     /// Returns true if the entry is updated
@@ -196,13 +194,11 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     /// Returns true if the entry was deleted
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
     where
-        K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey;
+        Q: ?Sized + Comparable<K>;
     /// Removes the entry and returns it, if it exists
     fn mt_delete_return<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
     where
-        K: AsKeyClone + Borrow<Q>,
-        Q: ?Sized + AsKey,
+        Q: ?Sized + Comparable<K>,
         't: 'v,
         'g: 't + 'v;
 }

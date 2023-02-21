@@ -41,7 +41,7 @@ pub const WRITEMODE_REFRESH: WriteFlag = 0b10;
 pub const WRITEMODE_ANY: WriteFlag = 0b11;
 
 /// A [`Patch`] is intended to atomically update the state of the tree, which means that all your deltas should be atomic
-pub trait Patch<E: TreeElement> {
+pub trait PatchWrite<E: TreeElement> {
     const WMODE: WriteFlag;
     type Ret<'a>;
     type Target: Hash + Comparable<E::Key>;
@@ -69,7 +69,7 @@ impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Insert<E, U> {
     }
 }
 
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for Insert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for Insert<E, U> {
     const WMODE: WriteFlag = WRITEMODE_FRESH;
     type Ret<'a> = bool;
     type Target = U;
@@ -108,7 +108,7 @@ impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Upsert<E, U> {
     }
 }
 
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for Upsert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for Upsert<E, U> {
     const WMODE: WriteFlag = WRITEMODE_ANY;
     type Ret<'a> = ();
     type Target = U;
@@ -147,7 +147,7 @@ impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> UpsertReturn<E, U> {
     }
 }
 
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for UpsertReturn<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for UpsertReturn<E, U> {
     const WMODE: WriteFlag = WRITEMODE_ANY;
     type Ret<'a> = Option<&'a E::Value>;
     type Target = U;
@@ -186,7 +186,7 @@ impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplace<E, U> {
     }
 }
 
-impl<E: TreeElement, U: Comparable<E::Key>> Patch<E> for UpdateReplace<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> PatchWrite<E> for UpdateReplace<E, U> {
     const WMODE: WriteFlag = WRITEMODE_REFRESH;
 
     type Ret<'a> = bool;
@@ -231,7 +231,7 @@ impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplaceRet<E, U> {
     }
 }
 
-impl<E: TreeElement, U: Comparable<E::Key>> Patch<E> for UpdateReplaceRet<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> PatchWrite<E> for UpdateReplaceRet<E, U> {
     const WMODE: WriteFlag = WRITEMODE_REFRESH;
 
     type Ret<'a> = Option<&'a E::Value>;
@@ -271,7 +271,7 @@ impl<T: TreeElement> InsertDirect<T> {
     }
 }
 
-impl<T: TreeElement> Patch<T> for InsertDirect<T> {
+impl<T: TreeElement> PatchWrite<T> for InsertDirect<T> {
     const WMODE: WriteFlag = WRITEMODE_FRESH;
     type Ret<'a> = bool;
     type Target = T::Key;
@@ -292,15 +292,34 @@ impl<T: TreeElement> Patch<T> for InsertDirect<T> {
     }
 }
 
-pub trait PatchDelete<T>: 'static {
+pub trait PatchDelete<T: TreeElement> {
     type Ret<'a>;
+    type Target: Comparable<T::Key> + ?Sized + Hash;
+    fn target(&self) -> &Self::Target;
     fn ex<'a>(v: &'a T) -> Self::Ret<'a>;
     fn nx<'a>() -> Self::Ret<'a>;
 }
 
-pub struct Delete;
-impl<T: TreeElement> PatchDelete<T> for Delete {
+pub struct Delete<'a, T: TreeElement, U: ?Sized> {
+    target: &'a U,
+    _m: PhantomData<T>,
+}
+
+impl<'a, T: TreeElement, U: ?Sized> Delete<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _m: PhantomData,
+        }
+    }
+}
+
+impl<'d, T: TreeElement, U: Comparable<T::Key> + ?Sized> PatchDelete<T> for Delete<'d, T, U> {
     type Ret<'a> = bool;
+    type Target = U;
+    fn target(&self) -> &Self::Target {
+        &self.target
+    }
     #[inline(always)]
     fn ex<'a>(_: &'a T) -> Self::Ret<'a> {
         true
@@ -311,12 +330,29 @@ impl<T: TreeElement> PatchDelete<T> for Delete {
     }
 }
 
-pub struct DeleteRet;
-impl<T: TreeElement> PatchDelete<T> for DeleteRet {
+pub struct DeleteRet<'a, T: TreeElement, U: ?Sized> {
+    target: &'a U,
+    _m: PhantomData<T>,
+}
+
+impl<'a, T: TreeElement, U: ?Sized> DeleteRet<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _m: PhantomData,
+        }
+    }
+}
+
+impl<'dr, T: TreeElement, U: Comparable<T::Key> + ?Sized> PatchDelete<T> for DeleteRet<'dr, T, U> {
     type Ret<'a> = Option<&'a T::Value>;
+    type Target = U;
+    fn target(&self) -> &Self::Target {
+        &self.target
+    }
     #[inline(always)]
-    fn ex<'a>(v: &'a T) -> Self::Ret<'a> {
-        Some(v.val())
+    fn ex<'a>(c: &'a T) -> Self::Ret<'a> {
+        Some(c.val())
     }
     #[inline(always)]
     fn nx<'a>() -> Self::Ret<'a> {

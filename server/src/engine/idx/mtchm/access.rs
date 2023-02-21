@@ -24,17 +24,39 @@
  *
 */
 
-use super::meta::TreeElement;
+use {
+    super::meta::TreeElement,
+    crate::engine::idx::meta::Comparable,
+    core::{hash::Hash, marker::PhantomData},
+};
 
-pub trait ReadMode<T>: 'static {
+pub trait ReadMode<T: TreeElement> {
     type Ret<'a>;
+    type Target: Comparable<T::Key> + ?Sized + Hash;
+    fn target(&self) -> &Self::Target;
     fn ex<'a>(v: &'a T) -> Self::Ret<'a>;
     fn nx<'a>() -> Self::Ret<'a>;
 }
 
-pub struct RModeExists;
-impl<T> ReadMode<T> for RModeExists {
+pub struct RModeExists<'a, T, U: ?Sized> {
+    target: &'a U,
+    _d: PhantomData<T>,
+}
+
+impl<'a, T, U: ?Sized> RModeExists<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _d: PhantomData,
+        }
+    }
+}
+impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeExists<'re, T, U> {
     type Ret<'a> = bool;
+    type Target = U;
+    fn target(&self) -> &Self::Target {
+        &self.target
+    }
     fn ex<'a>(_: &'a T) -> Self::Ret<'a> {
         true
     }
@@ -43,22 +65,27 @@ impl<T> ReadMode<T> for RModeExists {
     }
 }
 
-pub struct RModeRef;
-impl<T: TreeElement> ReadMode<T> for RModeRef {
-    type Ret<'a> = Option<&'a T::Value>;
-    fn ex<'a>(v: &'a T) -> Self::Ret<'a> {
-        Some(v.val())
-    }
-    fn nx<'a>() -> Self::Ret<'a> {
-        None
-    }
+pub struct RModeRef<'a, T, U: ?Sized> {
+    target: &'a U,
+    _d: PhantomData<T>,
 }
 
-pub struct RModeClone;
-impl<T: TreeElement> ReadMode<T> for RModeClone {
-    type Ret<'a> = Option<T::Value>;
-    fn ex<'a>(v: &'a T) -> Self::Ret<'a> {
-        Some(v.val().clone())
+impl<'a, T, U: ?Sized> RModeRef<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _d: PhantomData,
+        }
+    }
+}
+impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeRef<'re, T, U> {
+    type Ret<'a> = Option<&'a T::Value>;
+    type Target = U;
+    fn target(&self) -> &Self::Target {
+        &self.target
+    }
+    fn ex<'a>(c: &'a T) -> Self::Ret<'a> {
+        Some(c.val())
     }
     fn nx<'a>() -> Self::Ret<'a> {
         None

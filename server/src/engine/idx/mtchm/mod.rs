@@ -40,16 +40,12 @@ use {
         meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
     },
     crate::engine::{
-        idx::{
-            meta::{Comparable, ComparableUpgradeable},
-            AsKey,
-        },
+        idx::meta::{Comparable, ComparableUpgradeable},
         mem::UArray,
         sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACR, ORD_RLX},
     },
     crossbeam_epoch::CompareExchangeError,
     std::{
-        borrow::Borrow,
         hash::Hash,
         hash::{BuildHasher, Hasher},
         marker::PhantomData,
@@ -274,7 +270,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
     ) -> Option<&'g T::Value> {
         self.patch(patch::UpdateReplaceRet::new(key, v), g)
     }
-    fn patch<'g, P: patch::Patch<T>>(&'g self, mut patch: P, g: &'g Guard) -> P::Ret<'g> {
+    fn patch<'g, P: patch::PatchWrite<T>>(&'g self, mut patch: P, g: &'g Guard) -> P::Ret<'g> {
         let hash = self.hash(patch.target());
         let mut level = C::LEVEL_ZERO;
         let mut current = &self.root;
@@ -353,9 +349,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
                             to update
                         */
-                        let p = data
-                            .iter()
-                            .position(|e| patch.target().cmp_eq(e.key()));
+                        let p = data.iter().position(|e| patch.target().cmp_eq(e.key()));
                         match p {
                             Some(v) if P::WMODE == patch::WRITEMODE_FRESH => {
                                 return P::ex_ret(&data[v])
@@ -446,26 +440,18 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
         }
     }
 
-    fn contains_key<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> bool
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        self._lookup::<Q, access::RModeExists>(k, g)
+    fn contains_key<'g, Q: ?Sized + Comparable<T::Key>>(&'g self, k: &Q, g: &'g Guard) -> bool {
+        self._lookup(access::RModeExists::new(k), g)
     }
-    fn get<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        self._lookup::<Q, access::RModeRef>(k, g)
+    fn get<'g, Q: ?Sized + Comparable<T::Key>>(
+        &'g self,
+        k: &Q,
+        g: &'g Guard,
+    ) -> Option<&'g T::Value> {
+        self._lookup(access::RModeRef::new(k), g)
     }
-    fn _lookup<'g, Q, R: access::ReadMode<T>>(&'g self, k: &Q, g: &'g Guard) -> R::Ret<'g>
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        let mut hash = self.hash(k);
+    fn _lookup<'g, R: access::ReadMode<T>>(&'g self, r: R, g: &'g Guard) -> R::Ret<'g> {
+        let mut hash = self.hash(r.target());
         let mut current = &self.root;
         loop {
             let node = current.ld_acq(g);
@@ -479,7 +465,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                     return unsafe {
                         // UNSAFE(@ohsayan): checked flag + nullck
                         Self::read_data(node).iter().find_map(|e| {
-                            e.key().borrow().eq(k).then_some({
+                            r.target().cmp_eq(e.key()).then_some({
                                 ret = R::ex(e);
                                 Some(())
                             })
@@ -495,26 +481,18 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
             }
         }
     }
-    fn remove<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> bool
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        self._remove::<Q, patch::Delete>(k, g)
+    fn remove<'g, Q: Comparable<T::Key> + ?Sized>(&'g self, k: &Q, g: &'g Guard) -> bool {
+        self._remove(patch::Delete::new(k), g)
     }
-    fn remove_return<'g, Q>(&'g self, k: &Q, g: &'g Guard) -> Option<&'g T::Value>
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        self._remove::<Q, patch::DeleteRet>(k, g)
+    fn remove_return<'g, Q: Comparable<T::Key> + ?Sized>(
+        &'g self,
+        k: &Q,
+        g: &'g Guard,
+    ) -> Option<&'g T::Value> {
+        self._remove(patch::DeleteRet::new(k), g)
     }
-    fn _remove<'g, Q, W: patch::PatchDelete<T>>(&'g self, k: &Q, g: &'g Guard) -> W::Ret<'g>
-    where
-        T::Key: Borrow<Q>,
-        Q: AsKey + ?Sized,
-    {
-        let hash = self.hash(k);
+    fn _remove<'g, P: patch::PatchDelete<T>>(&'g self, patch: P, g: &'g Guard) -> P::Ret<'g> {
+        let hash = self.hash(patch.target());
         let mut current = &self.root;
         let mut level = C::LEVEL_ZERO;
         let mut levels = UArray::<{ <DefConfig as Config>::BRANCH_MX }, _>::new();
@@ -523,7 +501,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
             match ldfl(&node) {
                 _ if node.is_null() => {
                     // lol
-                    return W::nx();
+                    return P::nx();
                 }
                 flag if hf(flag, NodeFlag::PENDING_DELETE) => {
                     let (p, c) = levels.pop().unwrap();
@@ -544,7 +522,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         // UNSAFE(@ohsayan): flagck
                         Self::read_data(node)
                     };
-                    let mut ret = W::nx();
+                    let mut ret = P::nx();
                     let mut rem = false;
                     // this node shouldn't be empty
                     debug_assert!(!data.is_empty(), "logic,empty node not collected");
@@ -552,8 +530,8 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                     let r: LNode<T> = data
                         .iter()
                         .filter_map(|this_elem| {
-                            if this_elem.key().borrow() == k {
-                                ret = W::ex(this_elem);
+                            if patch.target().cmp_eq(this_elem.key()) {
+                                ret = P::ex(this_elem);
                                 rem = true;
                                 None
                             } else {
