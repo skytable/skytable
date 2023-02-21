@@ -38,10 +38,12 @@ use {
     self::{
         iter::{IterKV, IterKey, IterVal},
         meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
-        patch::{TreeKeyComparable, TreeKeyComparableUpgradeable},
     },
     crate::engine::{
-        idx::AsKey,
+        idx::{
+            meta::{Comparable, ComparableUpgradeable},
+            AsKey,
+        },
         mem::UArray,
         sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACR, ORD_RLX},
     },
@@ -242,7 +244,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
             let _ = self.remove(k, g);
         });
     }
-    fn patch_insert<Q: TreeKeyComparableUpgradeable<T>>(
+    fn patch_insert<Q: ComparableUpgradeable<T::Key>>(
         &self,
         key: Q,
         v: T::Value,
@@ -250,10 +252,10 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
     ) -> bool {
         self.patch(patch::Insert::new(key, v), g)
     }
-    fn patch_upsert<Q: TreeKeyComparableUpgradeable<T>>(&self, key: Q, v: T::Value, g: &Guard) {
+    fn patch_upsert<Q: ComparableUpgradeable<T::Key>>(&self, key: Q, v: T::Value, g: &Guard) {
         self.patch(patch::Upsert::new(key, v), g)
     }
-    fn patch_upsert_return<'g, Q: TreeKeyComparableUpgradeable<T>>(
+    fn patch_upsert_return<'g, Q: ComparableUpgradeable<T::Key>>(
         &'g self,
         key: Q,
         v: T::Value,
@@ -261,10 +263,10 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
     ) -> Option<&'g T::Value> {
         self.patch(patch::UpsertReturn::new(key, v), g)
     }
-    fn patch_update<Q: TreeKeyComparable<T>>(&self, key: Q, v: T::Value, g: &Guard) -> bool {
+    fn patch_update<Q: Comparable<T::Key>>(&self, key: Q, v: T::Value, g: &Guard) -> bool {
         self.patch(patch::UpdateReplace::new(key, v), g)
     }
-    fn patch_update_return<'g, Q: TreeKeyComparable<T>>(
+    fn patch_update_return<'g, Q: Comparable<T::Key>>(
         &'g self,
         key: Q,
         v: T::Value,
@@ -273,7 +275,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
         self.patch(patch::UpdateReplaceRet::new(key, v), g)
     }
     fn patch<'g, P: patch::Patch<T>>(&'g self, mut patch: P, g: &'g Guard) -> P::Ret<'g> {
-        let hash = self.hash(&patch.target());
+        let hash = self.hash(patch.target());
         let mut level = C::LEVEL_ZERO;
         let mut current = &self.root;
         let mut parent = None;
@@ -329,7 +331,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                         Self::read_data(node)
                     };
                     debug_assert!(!data.is_empty(), "logic,empty node not compressed");
-                    if !patch.target().cmp_eq(&data[0]) && level < C::MAX_TREE_HEIGHT_UB {
+                    if !patch.target().cmp_eq(data[0].key()) && level < C::MAX_TREE_HEIGHT_UB {
                         /*
                             so this is a collision and since we haven't reached the max height, we should always
                             create a new branch so let's do that
@@ -351,7 +353,9 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
                             in this case we either have the same key or we found an lnode. resolve any conflicts and attempt
                             to update
                         */
-                        let p = data.iter().position(|e| patch.target().cmp_eq(e));
+                        let p = data
+                            .iter()
+                            .position(|e| patch.target().cmp_eq(e.key()));
                         match p {
                             Some(v) if P::WMODE == patch::WRITEMODE_FRESH => {
                                 return P::ex_ret(&data[v])

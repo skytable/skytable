@@ -24,7 +24,40 @@
  *
 */
 
-use std::hash::BuildHasher;
+use core::{
+    borrow::Borrow,
+    hash::{BuildHasher, Hash},
+};
 
 pub trait AsHasher: BuildHasher + Default {}
 impl<T> AsHasher for T where T: BuildHasher + Default {}
+
+/// The [`Comparable`] trait is like [`PartialEq`], but is different due to its expectations, and escapes its scandalous relations with [`Eq`] and the consequential
+/// implications across the [`std`].
+///
+/// ☢️ WARNING ☢️: In some cases implementations of the [`Comparable`] set of traits COMPLETELY VIOLATES [`Eq`]'s invariants. BE VERY CAREFUL WHEN USING IN EXPRESSIONS
+/*
+    FIXME(@ohsayan): The gradual idea is to completely move to Comparable, but that means we'll have to go ahead as much as replacing the impls for some items in the
+    standard library. We don't have the time to do that right now, but I hope we can do it soon
+*/
+pub trait Comparable<K: ?Sized>: Hash {
+    fn cmp_eq(&self, key: &K) -> bool;
+}
+
+pub trait ComparableUpgradeable<K>: Comparable<K> {
+    fn upgrade(&self) -> K;
+}
+
+impl<K: Borrow<T>, T: Eq + Hash + ?Sized> Comparable<K> for T {
+    fn cmp_eq(&self, key: &K) -> bool {
+        self == key.borrow()
+    }
+}
+
+impl<K: Hash, T: ToOwned<Owned = K> + Hash + Comparable<K> + ?Sized> ComparableUpgradeable<K>
+    for T
+{
+    fn upgrade(&self) -> K {
+        self.to_owned()
+    }
+}

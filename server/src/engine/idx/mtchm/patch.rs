@@ -24,10 +24,9 @@
  *
 */
 
-use std::borrow::Borrow;
-
 use {
     super::meta::TreeElement,
+    crate::engine::idx::meta::{Comparable, ComparableUpgradeable},
     core::{hash::Hash, marker::PhantomData},
 };
 
@@ -41,38 +40,12 @@ pub const WRITEMODE_REFRESH: WriteFlag = 0b10;
 /// any
 pub const WRITEMODE_ANY: WriteFlag = 0b11;
 
-pub trait TreeKeyComparable<T: TreeElement>: Hash {
-    fn cmp_eq(&self, them: &T) -> bool;
-}
-
-impl<E: TreeElement, T> TreeKeyComparable<E> for T
-where
-    E::Key: core::borrow::Borrow<T>,
-    T: Hash + PartialEq,
-{
-    fn cmp_eq(&self, them: &E) -> bool {
-        self == them.key().borrow()
-    }
-}
-
-pub trait TreeKeyComparableUpgradeable<T: TreeElement>: TreeKeyComparable<T> {
-    fn upgrade_key(&self) -> T::Key;
-}
-
-impl<E: TreeElement> TreeKeyComparableUpgradeable<E> for E::Key {
-    fn upgrade_key(&self) -> E::Key {
-        self.clone()
-    }
-}
-
 /// A [`Patch`] is intended to atomically update the state of the tree, which means that all your deltas should be atomic
 pub trait Patch<E: TreeElement> {
     const WMODE: WriteFlag;
     type Ret<'a>;
-    type Target<'a>: TreeKeyComparable<E>
-    where
-        Self: 'a;
-    fn target<'a>(&'a self) -> &Self::Target<'a>;
+    type Target: Hash + Comparable<E::Key>;
+    fn target<'a>(&'a self) -> &Self::Target;
     fn nx_new(&mut self) -> E;
     fn nx_ret<'a>() -> Self::Ret<'a>;
     fn ex_apply(&mut self, current: &E) -> E;
@@ -80,13 +53,13 @@ pub trait Patch<E: TreeElement> {
 }
 
 /// insert
-pub struct Insert<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> {
+pub struct Insert<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
     target: U,
     new_data: E::Value,
     _m: PhantomData<E>,
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Insert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Insert<E, U> {
     pub fn new(target: U, new_data: E::Value) -> Self {
         Self {
             target,
@@ -96,18 +69,16 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Insert<E, U> {
     }
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for Insert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for Insert<E, U> {
     const WMODE: WriteFlag = WRITEMODE_FRESH;
     type Ret<'a> = bool;
-    type Target<'a> = U
-    where
-        Self: 'a;
+    type Target = U;
 
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    fn target<'a>(&'a self) -> &Self::Target {
         &self.target
     }
     fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade_key(), self.new_data.clone())
+        E::new(self.target.upgrade(), self.new_data.clone())
     }
     fn nx_ret<'a>() -> Self::Ret<'a> {
         true
@@ -121,13 +92,13 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for Insert<E, 
 }
 
 /// upsert
-pub struct Upsert<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> {
+pub struct Upsert<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
     target: U,
     new_data: E::Value,
     _m: PhantomData<E>,
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Upsert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Upsert<E, U> {
     pub fn new(target: U, new_data: E::Value) -> Self {
         Self {
             target,
@@ -137,18 +108,16 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Upsert<E, U> {
     }
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for Upsert<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for Upsert<E, U> {
     const WMODE: WriteFlag = WRITEMODE_ANY;
     type Ret<'a> = ();
-    type Target<'a> = U
-    where
-        Self: 'a;
+    type Target = U;
 
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    fn target<'a>(&'a self) -> &Self::Target {
         &self.target
     }
     fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade_key(), self.new_data.clone())
+        E::new(self.target.upgrade(), self.new_data.clone())
     }
     fn nx_ret<'a>() -> Self::Ret<'a> {
         ()
@@ -162,13 +131,13 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for Upsert<E, 
 }
 
 /// upsert return
-pub struct UpsertReturn<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> {
+pub struct UpsertReturn<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
     target: U,
     new_data: E::Value,
     _m: PhantomData<E>,
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> UpsertReturn<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> UpsertReturn<E, U> {
     pub fn new(target: U, new_data: E::Value) -> Self {
         Self {
             target,
@@ -178,18 +147,16 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> UpsertReturn<E, U> {
     }
 }
 
-impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for UpsertReturn<E, U> {
+impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Patch<E> for UpsertReturn<E, U> {
     const WMODE: WriteFlag = WRITEMODE_ANY;
     type Ret<'a> = Option<&'a E::Value>;
-    type Target<'a> = U
-    where
-        Self: 'a;
+    type Target = U;
 
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    fn target<'a>(&'a self) -> &Self::Target {
         &self.target
     }
     fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade_key(), self.new_data.clone())
+        E::new(self.target.upgrade(), self.new_data.clone())
     }
     fn nx_ret<'a>() -> Self::Ret<'a> {
         None
@@ -203,13 +170,13 @@ impl<E: TreeElement, U: TreeKeyComparableUpgradeable<E>> Patch<E> for UpsertRetu
 }
 
 /// update
-pub struct UpdateReplace<E: TreeElement, U: TreeKeyComparable<E>> {
+pub struct UpdateReplace<E: TreeElement, U: Comparable<E::Key>> {
     target: U,
     new_data: E::Value,
     _m: PhantomData<E>,
 }
 
-impl<E: TreeElement, U: TreeKeyComparable<E>> UpdateReplace<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplace<E, U> {
     pub fn new(target: U, new_data: E::Value) -> Self {
         Self {
             target,
@@ -219,16 +186,14 @@ impl<E: TreeElement, U: TreeKeyComparable<E>> UpdateReplace<E, U> {
     }
 }
 
-impl<E: TreeElement, U: TreeKeyComparable<E>> Patch<E> for UpdateReplace<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> Patch<E> for UpdateReplace<E, U> {
     const WMODE: WriteFlag = WRITEMODE_REFRESH;
 
     type Ret<'a> = bool;
 
-    type Target<'a> = U
-    where
-        Self: 'a;
+    type Target = U;
 
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    fn target<'a>(&'a self) -> &Self::Target {
         &self.target
     }
 
@@ -250,13 +215,13 @@ impl<E: TreeElement, U: TreeKeyComparable<E>> Patch<E> for UpdateReplace<E, U> {
 }
 
 /// update_return
-pub struct UpdateReplaceRet<E: TreeElement, U: TreeKeyComparable<E>> {
+pub struct UpdateReplaceRet<E: TreeElement, U: Comparable<E::Key>> {
     target: U,
     new_data: E::Value,
     _m: PhantomData<E>,
 }
 
-impl<E: TreeElement, U: TreeKeyComparable<E>> UpdateReplaceRet<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplaceRet<E, U> {
     pub fn new(target: U, new_data: E::Value) -> Self {
         Self {
             target,
@@ -266,16 +231,14 @@ impl<E: TreeElement, U: TreeKeyComparable<E>> UpdateReplaceRet<E, U> {
     }
 }
 
-impl<E: TreeElement, U: TreeKeyComparable<E>> Patch<E> for UpdateReplaceRet<E, U> {
+impl<E: TreeElement, U: Comparable<E::Key>> Patch<E> for UpdateReplaceRet<E, U> {
     const WMODE: WriteFlag = WRITEMODE_REFRESH;
 
     type Ret<'a> = Option<&'a E::Value>;
 
-    type Target<'a> = U
-    where
-        Self: 'a;
+    type Target = U;
 
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    fn target<'a>(&'a self) -> &Self::Target {
         &self.target
     }
 
@@ -311,8 +274,8 @@ impl<T: TreeElement> InsertDirect<T> {
 impl<T: TreeElement> Patch<T> for InsertDirect<T> {
     const WMODE: WriteFlag = WRITEMODE_FRESH;
     type Ret<'a> = bool;
-    type Target<'a> = T::Key;
-    fn target<'a>(&'a self) -> &Self::Target<'a> {
+    type Target = T::Key;
+    fn target<'a>(&'a self) -> &Self::Target {
         self.data.key()
     }
     fn nx_ret<'a>() -> Self::Ret<'a> {
