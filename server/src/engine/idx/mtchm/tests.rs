@@ -336,7 +336,7 @@ fn multispam_delete() {
 
 #[test]
 fn multispam_lol() {
-    let idx = Arc::new(super::Tree::<StringTup, super::meta::Config2B<LolState>>::new());
+    let idx = Arc::new(super::RawTree::<StringTup, super::meta::Config2B<LolState>>::new());
     let token = ControlToken::new();
     let mut data = Vec::new();
     prepare_data(&mut data, TUP_INCR);

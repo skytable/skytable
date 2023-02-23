@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        idx::{meta::AsHasher, AsKeyClone},
+        idx::{meta::AsHasher, AsKey, AsKeyClone, AsValue, AsValueClone},
         mem::VInline,
     },
     std::{collections::hash_map::RandomState, sync::Arc},
@@ -69,20 +69,15 @@ impl<T: AsHasher> PreConfig for Config2B<T> {
     type HState = T;
 }
 
-pub trait Key: AsKeyClone + 'static {}
-impl<T> Key for T where T: AsKeyClone + 'static {}
-pub trait Value: Clone + 'static {}
-impl<T> Value for T where T: Clone + 'static {}
-
 pub trait TreeElement: Clone + 'static {
-    type Key: Key;
-    type Value: Value;
+    type Key: AsKey;
+    type Value: AsValue;
     fn key(&self) -> &Self::Key;
     fn val(&self) -> &Self::Value;
     fn new(k: Self::Key, v: Self::Value) -> Self;
 }
 
-impl<K: Key, V: Value> TreeElement for (K, V) {
+impl<K: AsKeyClone, V: AsValueClone> TreeElement for (K, V) {
     type Key = K;
     type Value = V;
     #[inline(always)]
@@ -98,7 +93,7 @@ impl<K: Key, V: Value> TreeElement for (K, V) {
     }
 }
 
-impl<K: Key, V: Value> TreeElement for Arc<(K, V)> {
+impl<K: AsKey, V: AsValue> TreeElement for Arc<(K, V)> {
     type Key = K;
     type Value = V;
     #[inline(always)]

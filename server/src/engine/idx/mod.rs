@@ -34,7 +34,7 @@ mod stord;
 mod tests;
 
 use {
-    self::meta::{Comparable, ComparableUpgradeable},
+    self::meta::Comparable,
     crate::engine::sync::atm::Guard,
     core::{borrow::Borrow, hash::Hash},
 };
@@ -48,12 +48,12 @@ pub type IndexST<K, V, S = std::collections::hash_map::RandomState> =
     std::collections::hash_map::HashMap<K, V, S>;
 
 /// Any type implementing this trait can be used as a key inside memory engine structures
-pub trait AsKey: Hash + Eq {
+pub trait AsKey: Hash + Eq + 'static {
     /// Read the key
     fn read_key(&self) -> &Self;
 }
 
-impl<T: Hash + Eq + ?Sized> AsKey for T {
+impl<T: Hash + Eq + ?Sized + 'static> AsKey for T {
     fn read_key(&self) -> &Self {
         self
     }
@@ -72,10 +72,10 @@ impl<T: AsKey + Clone + ?Sized> AsKeyClone for T {
     }
 }
 
-pub trait AsValue {
+pub trait AsValue: 'static {
     fn read_value(&self) -> &Self;
 }
-impl<T: ?Sized> AsValue for T {
+impl<T: ?Sized + 'static> AsValue for T {
     fn read_value(&self) -> &Self {
         self
     }
@@ -153,14 +153,12 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn mt_insert<U>(&self, key: U, val: V, g: &Guard) -> bool
+    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool
     where
-        U: ComparableUpgradeable<K>,
         V: AsValue;
     /// Updates or inserts the given value
     fn mt_upsert(&self, key: K, val: V, g: &Guard)
     where
-        K: AsKeyClone,
         V: AsValue;
     // read
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool

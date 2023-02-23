@@ -40,7 +40,7 @@ use {
         meta::{CompressState, Config, DefConfig, LNode, NodeFlag, TreeElement},
     },
     crate::engine::{
-        idx::meta::{Comparable, ComparableUpgradeable},
+        idx::meta::Comparable,
         mem::UArray,
         sync::atm::{self, cpin, upin, Atomic, Guard, Owned, Shared, ORD_ACR, ORD_RLX},
     },
@@ -158,18 +158,18 @@ trait CTFlagAlign {
     const FLCK: () = Self::FLCK_A;
 }
 
-impl<T, C: Config> CTFlagAlign for Tree<T, C> {
+impl<T, C: Config> CTFlagAlign for RawTree<T, C> {
     const FL_A: bool = atm::ensure_flag_align::<LNode<T>, { NodeFlag::bits() }>();
     const FL_B: bool = atm::ensure_flag_align::<Node<C>, { NodeFlag::bits() }>();
 }
 
-impl<T, C: Config> Default for Tree<T, C> {
+impl<T, C: Config> Default for RawTree<T, C> {
     fn default() -> Self {
         Self::_new(C::HState::default())
     }
 }
 
-pub struct Tree<T, C: Config = DefConfig> {
+pub struct RawTree<T, C: Config = DefConfig> {
     root: Atomic<Node<C>>,
     h: C::HState,
     l: AtomicUsize,
@@ -177,7 +177,7 @@ pub struct Tree<T, C: Config = DefConfig> {
     _m: PhantomData<T>,
 }
 
-impl<T, C: Config> Tree<T, C> {
+impl<T, C: Config> RawTree<T, C> {
     #[inline(always)]
     const fn _new(h: C::HState) -> Self {
         let _ = Self::FLCK;
@@ -203,14 +203,14 @@ impl<T, C: Config> Tree<T, C> {
     }
 }
 
-impl<T, C: Config> Tree<T, C> {
+impl<T, C: Config> RawTree<T, C> {
     #[inline(always)]
     fn new() -> Self {
         Self::_new(C::HState::default())
     }
 }
 
-impl<T, C: Config> Tree<T, C> {
+impl<T, C: Config> RawTree<T, C> {
     fn hash<Q>(&self, k: &Q) -> u64
     where
         Q: ?Sized + Hash,
@@ -222,7 +222,7 @@ impl<T, C: Config> Tree<T, C> {
 }
 
 // iter
-impl<T: TreeElement, C: Config> Tree<T, C> {
+impl<T: TreeElement, C: Config> RawTree<T, C> {
     fn iter_kv<'t, 'g, 'v>(&'t self, g: &'g Guard) -> IterKV<'t, 'g, 'v, T, C> {
         IterKV::new(self, g)
     }
@@ -234,41 +234,11 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
     }
 }
 
-impl<T: TreeElement, C: Config> Tree<T, C> {
+impl<T: TreeElement, C: Config> RawTree<T, C> {
     fn nontransactional_clear(&self, g: &Guard) {
         self.iter_key(g).for_each(|k| {
             let _ = self.remove(k, g);
         });
-    }
-    fn patch_insert<Q: ComparableUpgradeable<T::Key>>(
-        &self,
-        key: Q,
-        v: T::Value,
-        g: &Guard,
-    ) -> bool {
-        self.patch(patch::Insert::new(key, v), g)
-    }
-    fn patch_upsert<Q: ComparableUpgradeable<T::Key>>(&self, key: Q, v: T::Value, g: &Guard) {
-        self.patch(patch::Upsert::new(key, v), g)
-    }
-    fn patch_upsert_return<'g, Q: ComparableUpgradeable<T::Key>>(
-        &'g self,
-        key: Q,
-        v: T::Value,
-        g: &'g Guard,
-    ) -> Option<&'g T::Value> {
-        self.patch(patch::UpsertReturn::new(key, v), g)
-    }
-    fn patch_update<Q: Comparable<T::Key>>(&self, key: Q, v: T::Value, g: &Guard) -> bool {
-        self.patch(patch::UpdateReplace::new(key, v), g)
-    }
-    fn patch_update_return<'g, Q: Comparable<T::Key>>(
-        &'g self,
-        key: Q,
-        v: T::Value,
-        g: &'g Guard,
-    ) -> Option<&'g T::Value> {
-        self.patch(patch::UpdateReplaceRet::new(key, v), g)
     }
     fn patch<'g, P: patch::PatchWrite<T>>(&'g self, mut patch: P, g: &'g Guard) -> P::Ret<'g> {
         let hash = self.hash(patch.target());
@@ -606,7 +576,7 @@ impl<T: TreeElement, C: Config> Tree<T, C> {
 }
 
 // low-level methods
-impl<T, C: Config> Tree<T, C> {
+impl<T, C: Config> RawTree<T, C> {
     // hilarious enough but true, l doesn't affect safety but only creates an incorrect state
     fn decr_len(&self) {
         self.decr_len_by(1)
@@ -747,7 +717,7 @@ impl<T, C: Config> Tree<T, C> {
     }
 }
 
-impl<T, C: Config> Drop for Tree<T, C> {
+impl<T, C: Config> Drop for RawTree<T, C> {
     fn drop(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): sole live owner

@@ -27,7 +27,7 @@
 use {
     super::{
         meta::{Config, DefConfig, NodeFlag, TreeElement},
-        Node, Tree,
+        Node, RawTree,
     },
     crate::engine::{
         mem::UArray,
@@ -53,7 +53,7 @@ where
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t RawTree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
@@ -91,7 +91,7 @@ where
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t RawTree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
@@ -129,7 +129,7 @@ where
     C: Config,
     T: TreeElement,
 {
-    pub fn new(t: &'t Tree<T, C>, g: &'g Guard) -> Self {
+    pub fn new(t: &'t RawTree<T, C>, g: &'g Guard) -> Self {
         Self {
             i: RawIter::new(t, g),
         }
@@ -195,7 +195,7 @@ where
 {
     g: &'g Guard,
     stack: UArray<{ <DefConfig as Config>::BRANCH_MX + 1 }, DFSCNodeCtx<'g, C>>,
-    _m: PhantomData<(&'v T, C, &'t Tree<T, C>, I)>,
+    _m: PhantomData<(&'v T, C, &'t RawTree<T, C>, I)>,
 }
 
 impl<'t, 'g, 'v, T, C, I> RawIter<'t, 'g, 'v, T, C, I>
@@ -205,7 +205,7 @@ where
     I: IterConfig<T>,
     C: Config,
 {
-    pub(super) fn new(tree: &'t Tree<T, C>, g: &'g Guard) -> Self {
+    pub(super) fn new(tree: &'t RawTree<T, C>, g: &'g Guard) -> Self {
         let mut stack = UArray::new();
         let sptr = tree.root.ld_acq(g);
         stack.push(DFSCNodeCtx { sptr, idx: 0 });
@@ -229,7 +229,7 @@ where
                 flag if super::hf(flag, NodeFlag::DATA) => {
                     let data = unsafe {
                         // UNSAFE(@ohsayan): flagck
-                        Tree::<T, C>::read_data(current.sptr)
+                        RawTree::<T, C>::read_data(current.sptr)
                     };
                     if current.idx < data.len() {
                         let ref ret = data[current.idx];

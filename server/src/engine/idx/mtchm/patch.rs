@@ -26,8 +26,8 @@
 
 use {
     super::meta::TreeElement,
-    crate::engine::idx::meta::{Comparable, ComparableUpgradeable},
-    core::{hash::Hash, marker::PhantomData},
+    crate::engine::idx::meta::Comparable,
+    std::{hash::Hash, marker::PhantomData},
 };
 
 /// write mode flag
@@ -41,256 +41,141 @@ pub const WRITEMODE_REFRESH: WriteFlag = 0b10;
 pub const WRITEMODE_ANY: WriteFlag = 0b11;
 
 /// A [`Patch`] is intended to atomically update the state of the tree, which means that all your deltas should be atomic
+///
+/// Make sure you override the [`unreachable!`] behavior!
 pub trait PatchWrite<E: TreeElement> {
     const WMODE: WriteFlag;
     type Ret<'a>;
     type Target: Hash + Comparable<E::Key>;
     fn target<'a>(&'a self) -> &Self::Target;
-    fn nx_new(&mut self) -> E;
+    fn nx_new(&mut self) -> E {
+        unreachable!()
+    }
     fn nx_ret<'a>() -> Self::Ret<'a>;
-    fn ex_apply(&mut self, current: &E) -> E;
+    fn ex_apply(&mut self, _: &E) -> E {
+        unreachable!()
+    }
     fn ex_ret<'a>(current: &'a E) -> Self::Ret<'a>;
 }
 
-/// insert
-pub struct Insert<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
-    target: U,
-    new_data: E::Value,
-    _m: PhantomData<E>,
-}
+/*
+    vanilla
+*/
 
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Insert<E, U> {
-    pub fn new(target: U, new_data: E::Value) -> Self {
-        Self {
-            target,
-            new_data,
-            _m: PhantomData,
-        }
-    }
-}
-
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for Insert<E, U> {
-    const WMODE: WriteFlag = WRITEMODE_FRESH;
-    type Ret<'a> = bool;
-    type Target = U;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        &self.target
-    }
-    fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade(), self.new_data.clone())
-    }
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        true
-    }
-    fn ex_apply(&mut self, _: &E) -> E {
-        unreachable!()
-    }
-    fn ex_ret<'a>(_: &'a E) -> Self::Ret<'a> {
-        false
-    }
-}
-
-/// upsert
-pub struct Upsert<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
-    target: U,
-    new_data: E::Value,
-    _m: PhantomData<E>,
-}
-
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> Upsert<E, U> {
-    pub fn new(target: U, new_data: E::Value) -> Self {
-        Self {
-            target,
-            new_data,
-            _m: PhantomData,
-        }
-    }
-}
-
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for Upsert<E, U> {
-    const WMODE: WriteFlag = WRITEMODE_ANY;
-    type Ret<'a> = ();
-    type Target = U;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        &self.target
-    }
-    fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade(), self.new_data.clone())
-    }
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        ()
-    }
-    fn ex_apply(&mut self, _: &E) -> E {
-        self.nx_new()
-    }
-    fn ex_ret<'a>(_: &'a E) -> Self::Ret<'a> {
-        ()
-    }
-}
-
-/// upsert return
-pub struct UpsertReturn<E: TreeElement, U: ComparableUpgradeable<E::Key>> {
-    target: U,
-    new_data: E::Value,
-    _m: PhantomData<E>,
-}
-
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> UpsertReturn<E, U> {
-    pub fn new(target: U, new_data: E::Value) -> Self {
-        Self {
-            target,
-            new_data,
-            _m: PhantomData,
-        }
-    }
-}
-
-impl<E: TreeElement, U: ComparableUpgradeable<E::Key>> PatchWrite<E> for UpsertReturn<E, U> {
-    const WMODE: WriteFlag = WRITEMODE_ANY;
-    type Ret<'a> = Option<&'a E::Value>;
-    type Target = U;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        &self.target
-    }
-    fn nx_new(&mut self) -> E {
-        E::new(self.target.upgrade(), self.new_data.clone())
-    }
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        None
-    }
-    fn ex_apply(&mut self, _: &E) -> E {
-        self.nx_new()
-    }
-    fn ex_ret<'a>(e: &'a E) -> Self::Ret<'a> {
-        Some(e.val())
-    }
-}
-
-/// update
-pub struct UpdateReplace<E: TreeElement, U: Comparable<E::Key>> {
-    target: U,
-    new_data: E::Value,
-    _m: PhantomData<E>,
-}
-
-impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplace<E, U> {
-    pub fn new(target: U, new_data: E::Value) -> Self {
-        Self {
-            target,
-            new_data,
-            _m: PhantomData,
-        }
-    }
-}
-
-impl<E: TreeElement, U: Comparable<E::Key>> PatchWrite<E> for UpdateReplace<E, U> {
-    const WMODE: WriteFlag = WRITEMODE_REFRESH;
-
-    type Ret<'a> = bool;
-
-    type Target = U;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        &self.target
-    }
-
-    fn nx_new(&mut self) -> E {
-        unreachable!()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        false
-    }
-
-    fn ex_apply(&mut self, c: &E) -> E {
-        E::new(c.key().clone(), self.new_data.clone())
-    }
-
-    fn ex_ret<'a>(_: &'a E) -> Self::Ret<'a> {
-        true
-    }
-}
-
-/// update_return
-pub struct UpdateReplaceRet<E: TreeElement, U: Comparable<E::Key>> {
-    target: U,
-    new_data: E::Value,
-    _m: PhantomData<E>,
-}
-
-impl<E: TreeElement, U: Comparable<E::Key>> UpdateReplaceRet<E, U> {
-    pub fn new(target: U, new_data: E::Value) -> Self {
-        Self {
-            target,
-            new_data,
-            _m: PhantomData,
-        }
-    }
-}
-
-impl<E: TreeElement, U: Comparable<E::Key>> PatchWrite<E> for UpdateReplaceRet<E, U> {
-    const WMODE: WriteFlag = WRITEMODE_REFRESH;
-
-    type Ret<'a> = Option<&'a E::Value>;
-
-    type Target = U;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        &self.target
-    }
-
-    fn nx_new(&mut self) -> E {
-        unreachable!()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        None
-    }
-
-    fn ex_apply(&mut self, c: &E) -> E {
-        E::new(c.key().clone(), self.new_data.clone())
-    }
-
-    fn ex_ret<'a>(c: &'a E) -> Self::Ret<'a> {
-        Some(c.val())
-    }
-}
-
-pub struct InsertDirect<T: TreeElement> {
-    data: T,
-}
-
-impl<T: TreeElement> InsertDirect<T> {
-    pub fn new(key: T::Key, val: T::Value) -> Self {
-        Self {
-            data: T::new(key, val),
-        }
-    }
-}
-
-impl<T: TreeElement> PatchWrite<T> for InsertDirect<T> {
+pub struct VanillaInsert<T: TreeElement>(pub T);
+impl<T: TreeElement> PatchWrite<T> for VanillaInsert<T> {
     const WMODE: WriteFlag = WRITEMODE_FRESH;
     type Ret<'a> = bool;
     type Target = T::Key;
     fn target<'a>(&'a self) -> &Self::Target {
-        self.data.key()
+        self.0.key()
+    }
+    // nx
+    fn nx_new(&mut self) -> T {
+        self.0.clone()
     }
     fn nx_ret<'a>() -> Self::Ret<'a> {
         true
     }
-    fn nx_new(&mut self) -> T {
-        self.data.clone()
-    }
-    fn ex_apply(&mut self, _: &T) -> T {
-        unreachable!()
-    }
+    // ex
     fn ex_ret<'a>(_: &'a T) -> Self::Ret<'a> {
         false
     }
 }
+
+pub struct VanillaUpsert<T: TreeElement>(pub T);
+impl<T: TreeElement> PatchWrite<T> for VanillaUpsert<T> {
+    const WMODE: WriteFlag = WRITEMODE_ANY;
+    type Ret<'a> = ();
+    type Target = T::Key;
+    fn target<'a>(&'a self) -> &Self::Target {
+        self.0.key()
+    }
+    // nx
+    fn nx_new(&mut self) -> T {
+        self.0.clone()
+    }
+    fn nx_ret<'a>() -> Self::Ret<'a> {
+        ()
+    }
+    // ex
+    fn ex_apply(&mut self, _: &T) -> T {
+        self.0.clone()
+    }
+    fn ex_ret<'a>(_: &'a T) -> Self::Ret<'a> {
+        ()
+    }
+}
+
+pub struct VanillaUpsertRet<T: TreeElement>(pub T);
+impl<T: TreeElement> PatchWrite<T> for VanillaUpsertRet<T> {
+    const WMODE: WriteFlag = WRITEMODE_ANY;
+    type Ret<'a> = Option<&'a T::Value>;
+    type Target = T::Key;
+    fn target<'a>(&'a self) -> &Self::Target {
+        self.0.key()
+    }
+    // nx
+    fn nx_new(&mut self) -> T {
+        self.0.clone()
+    }
+    fn nx_ret<'a>() -> Self::Ret<'a> {
+        None
+    }
+    // ex
+    fn ex_apply(&mut self, _: &T) -> T {
+        self.0.clone()
+    }
+    fn ex_ret<'a>(c: &'a T) -> Self::Ret<'a> {
+        Some(c.val())
+    }
+}
+
+pub struct VanillaUpdate<T: TreeElement>(pub T);
+impl<T: TreeElement> PatchWrite<T> for VanillaUpdate<T> {
+    const WMODE: WriteFlag = WRITEMODE_REFRESH;
+    type Ret<'a> = bool;
+    type Target = T::Key;
+    fn target<'a>(&'a self) -> &Self::Target {
+        self.0.key()
+    }
+    // nx
+    fn nx_ret<'a>() -> Self::Ret<'a> {
+        false
+    }
+    // ex
+    fn ex_apply(&mut self, _: &T) -> T {
+        self.0.clone()
+    }
+    fn ex_ret<'a>(_: &'a T) -> Self::Ret<'a> {
+        true
+    }
+}
+
+pub struct VanillaUpdateRet<T: TreeElement>(pub T);
+impl<T: TreeElement> PatchWrite<T> for VanillaUpdateRet<T> {
+    const WMODE: WriteFlag = WRITEMODE_REFRESH;
+    type Ret<'a> = Option<&'a T::Value>;
+    type Target = T::Key;
+    fn target<'a>(&'a self) -> &Self::Target {
+        self.0.key()
+    }
+    // nx
+    fn nx_ret<'a>() -> Self::Ret<'a> {
+        None
+    }
+    // ex
+    fn ex_apply(&mut self, _: &T) -> T {
+        self.0.clone()
+    }
+    fn ex_ret<'a>(c: &'a T) -> Self::Ret<'a> {
+        Some(c.val())
+    }
+}
+
+/*
+    delete
+*/
 
 pub trait PatchDelete<T: TreeElement> {
     type Ret<'a>;

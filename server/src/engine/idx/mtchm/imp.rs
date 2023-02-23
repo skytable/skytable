@@ -29,15 +29,12 @@ use super::CHTRuntimeLog;
 use {
     super::{
         iter::{IterKV, IterKey, IterVal},
-        meta::{Config, Key, TreeElement, Value},
-        patch::{PatchWrite, WriteFlag, WRITEMODE_ANY, WRITEMODE_FRESH, WRITEMODE_REFRESH},
-        Tree,
+        meta::{Config, TreeElement},
+        patch::{VanillaInsert, VanillaUpdate, VanillaUpdateRet, VanillaUpsert},
+        RawTree,
     },
     crate::engine::{
-        idx::{
-            meta::{Comparable, ComparableUpgradeable},
-            IndexBaseSpec, MTIndex,
-        },
+        idx::{meta::Comparable, AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, MTIndex},
         sync::atm::{upin, Guard},
     },
     std::sync::Arc,
@@ -48,126 +45,7 @@ fn arc<K, V>(k: K, v: V) -> Arc<(K, V)> {
     Arc::new((k, v))
 }
 
-pub type ChmArc<K, V, C> = Tree<Arc<(K, V)>, C>;
-
-pub struct ArcInsert<K, V>(Arc<(K, V)>);
-
-impl<K: Key, V: Value> PatchWrite<Arc<(K, V)>> for ArcInsert<K, V> {
-    const WMODE: WriteFlag = WRITEMODE_FRESH;
-
-    type Ret<'a> = bool;
-
-    type Target = K;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        self.0.key()
-    }
-
-    fn nx_new(&mut self) -> Arc<(K, V)> {
-        self.0.clone()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        true
-    }
-
-    fn ex_apply(&mut self, _: &Arc<(K, V)>) -> Arc<(K, V)> {
-        unreachable!()
-    }
-
-    fn ex_ret<'a>(_: &'a Arc<(K, V)>) -> Self::Ret<'a> {
-        false
-    }
-}
-
-pub struct ArcUpsert<K, V>(Arc<(K, V)>);
-
-impl<K: Key, V: Value> PatchWrite<Arc<(K, V)>> for ArcUpsert<K, V> {
-    const WMODE: WriteFlag = WRITEMODE_ANY;
-
-    type Ret<'a> = ();
-
-    type Target = K;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        self.0.key()
-    }
-
-    fn nx_new(&mut self) -> Arc<(K, V)> {
-        self.0.clone()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        ()
-    }
-
-    fn ex_apply(&mut self, _: &Arc<(K, V)>) -> Arc<(K, V)> {
-        self.0.clone()
-    }
-
-    fn ex_ret<'a>(_: &'a Arc<(K, V)>) -> Self::Ret<'a> {
-        ()
-    }
-}
-
-pub struct ArcUpdate<K, V>(Arc<(K, V)>);
-
-impl<K: Key, V: Value> PatchWrite<Arc<(K, V)>> for ArcUpdate<K, V> {
-    const WMODE: WriteFlag = WRITEMODE_REFRESH;
-
-    type Ret<'a> = bool;
-
-    type Target = K;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        self.0.key()
-    }
-
-    fn nx_new(&mut self) -> Arc<(K, V)> {
-        unreachable!()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        false
-    }
-
-    fn ex_apply(&mut self, _: &Arc<(K, V)>) -> Arc<(K, V)> {
-        self.0.clone()
-    }
-
-    fn ex_ret<'a>(_: &'a Arc<(K, V)>) -> Self::Ret<'a> {
-        true
-    }
-}
-pub struct ArcUpdateRet<K, V>(Arc<(K, V)>);
-
-impl<K: Key, V: Value> PatchWrite<Arc<(K, V)>> for ArcUpdateRet<K, V> {
-    const WMODE: WriteFlag = WRITEMODE_REFRESH;
-
-    type Ret<'a> = Option<&'a V>;
-
-    type Target = K;
-
-    fn target<'a>(&'a self) -> &Self::Target {
-        self.0.key()
-    }
-
-    fn nx_new(&mut self) -> Arc<(K, V)> {
-        unreachable!()
-    }
-
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        None
-    }
-
-    fn ex_apply(&mut self, _: &Arc<(K, V)>) -> Arc<(K, V)> {
-        self.0.clone()
-    }
-
-    fn ex_ret<'a>(c: &'a Arc<(K, V)>) -> Self::Ret<'a> {
-        Some(c.val())
-    }
-}
+pub type ChmArc<K, V, C> = RawTree<Arc<(K, V)>, C>;
 
 impl<K, V, C> IndexBaseSpec<K, V> for ChmArc<K, V, C>
 where
@@ -195,10 +73,10 @@ where
 impl<K, V, C> MTIndex<K, V> for ChmArc<K, V, C>
 where
     C: Config,
-    K: Key,
-    V: Value,
+    K: AsKey,
+    V: AsValue,
 {
-    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), C>
+    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, Arc<(K, V)>, C>
     where
         'g: 't + 'v,
         't: 'v,
@@ -206,14 +84,14 @@ where
         V: 'v,
         Self: 't;
 
-    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), C>
+    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, Arc<(K, V)>, C>
     where
         'g: 't + 'v,
         't: 'v,
         K: 'v,
         Self: 't;
 
-    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), C>
+    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, Arc<(K, V)>, C>
     where
         'g: 't + 'v,
         't: 'v,
@@ -224,15 +102,12 @@ where
         self.nontransactional_clear(g)
     }
 
-    fn mt_insert<U>(&self, key: U, val: V, g: &Guard) -> bool
-    where
-        U: ComparableUpgradeable<K>,
-    {
-        self.patch(ArcInsert(arc(key.upgrade(), val)), g)
+    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
+        self.patch(VanillaInsert(arc(key, val)), g)
     }
 
     fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.patch(ArcUpsert(arc(key.upgrade(), val)), g)
+        self.patch(VanillaUpsert(arc(key, val)), g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -254,12 +129,13 @@ where
     fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<V>
     where
         Q: ?Sized + Comparable<K>,
+        V: AsValueClone,
     {
         self.get(key, g).cloned()
     }
 
     fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch(ArcUpdate(arc(key, val)), g)
+        self.patch(VanillaUpdate(arc(key, val)), g)
     }
 
     fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
@@ -267,7 +143,7 @@ where
         't: 'v,
         'g: 't + 'v,
     {
-        self.patch(ArcUpdateRet(arc(key, val)), g)
+        self.patch(VanillaUpdateRet(arc(key, val)), g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -287,7 +163,7 @@ where
     }
 }
 
-pub type ChmCopy<K, V, C> = Tree<(K, V), C>;
+pub type ChmCopy<K, V, C> = RawTree<(K, V), C>;
 
 impl<K, V, C> IndexBaseSpec<K, V> for ChmCopy<K, V, C>
 where
@@ -315,8 +191,8 @@ where
 impl<K, V, C> MTIndex<K, V> for ChmCopy<K, V, C>
 where
     C: Config,
-    K: Key,
-    V: Value,
+    K: AsKeyClone,
+    V: AsValueClone,
 {
     type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), C>
     where
@@ -344,15 +220,12 @@ where
         self.nontransactional_clear(g)
     }
 
-    fn mt_insert<U>(&self, key: U, val: V, g: &Guard) -> bool
-    where
-        U: ComparableUpgradeable<K>,
-    {
-        self.patch_insert(key, val, g)
+    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
+        self.patch(VanillaInsert((key, val)), g)
     }
 
     fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.patch_upsert(key, val, g)
+        self.patch(VanillaUpsert((key, val)), g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -379,7 +252,7 @@ where
     }
 
     fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch_update(key, val, g)
+        self.patch(VanillaUpdate((key, val)), g)
     }
 
     fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
@@ -387,7 +260,7 @@ where
         't: 'v,
         'g: 't + 'v,
     {
-        self.patch_update_return(key, val, g)
+        self.patch(VanillaUpdateRet((key, val)), g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -407,15 +280,15 @@ where
     }
 }
 
-impl<T: TreeElement, C: Config> FromIterator<T> for Tree<T, C> {
+impl<T: TreeElement, C: Config> FromIterator<T> for RawTree<T, C> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let g = unsafe {
             // UNSAFE(@ohsayan): it's me, hi, I'm the problem, it's me. yeah, Taylor knows it too. it's just us
             upin()
         };
-        let t = Tree::new();
+        let t = RawTree::new();
         iter.into_iter()
-            .for_each(|te| assert!(t.patch_insert(te.key().clone(), te.val().clone(), &g)));
+            .for_each(|te| assert!(t.patch(VanillaInsert(te), &g)));
         t
     }
 }
