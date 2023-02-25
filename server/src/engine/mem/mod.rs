@@ -24,152 +24,118 @@
  *
 */
 
+mod astr;
 #[cfg(test)]
 mod tests;
 mod uarray;
 mod vinline;
 
-use {
-    crate::engine::ql::lex::Ident,
-    std::{
-        borrow::Borrow,
-        fmt, mem,
-        ops::{Deref, DerefMut},
-    },
-};
-
+pub use astr::AStr;
 pub use uarray::UArray;
 pub use vinline::VInline;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
-#[repr(transparent)]
-pub struct AStr<const N: usize> {
-    base: UArray<N, u8>,
+/// Native double pointer width
+pub type NativeDword = [usize; 2];
+/// Native triple pointer width
+pub type NativeTword = [usize; 3];
+
+/// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
+pub trait SystemTword: SystemDword {
+    fn store_full(a: usize, b: usize, c: usize) -> Self;
+    fn load_full(&self) -> [usize; 3];
 }
-impl<const N: usize> AStr<N> {
+
+/// Native double pointer stack
+pub trait SystemDword {
+    fn store_qw(u: u64) -> Self;
+    fn store_fat(a: usize, b: usize) -> Self;
+    fn load_qw(&self) -> u64;
+    fn load_fat(&self) -> [usize; 2];
+}
+
+impl SystemDword for NativeDword {
     #[inline(always)]
-    pub fn check(v: &str) -> bool {
-        v.len() <= N
-    }
-    #[inline(always)]
-    pub fn try_new(s: &str) -> Option<Self> {
-        if Self::check(s) {
-            Some(unsafe {
-                // UNSAFE(@ohsayan): verified len
-                Self::from_len_unchecked(s)
-            })
-        } else {
-            None
+    fn store_qw(u: u64) -> Self {
+        let x;
+        #[cfg(target_pointer_width = "32")]
+        {
+            x = unsafe { core::mem::transmute(u) };
         }
-    }
-    #[inline(always)]
-    pub fn new(s: &str) -> Self {
-        Self::try_new(s).expect("length overflow")
-    }
-    #[inline(always)]
-    pub unsafe fn from_len_unchecked_ident(i: Ident<'_>) -> Self {
-        Self::from_len_unchecked(i.as_str())
-    }
-    #[inline(always)]
-    pub unsafe fn from_len_unchecked(s: &str) -> Self {
-        Self {
-            base: UArray::from_slice(s.as_bytes()),
+        #[cfg(target_pointer_width = "64")]
+        {
+            x = [u as usize, 0]
         }
+        x
     }
     #[inline(always)]
-    pub unsafe fn from_len_unchecked_bytes(b: &[u8]) -> Self {
-        Self::from_len_unchecked(mem::transmute(b))
+    fn store_fat(a: usize, b: usize) -> Self {
+        [a, b]
     }
     #[inline(always)]
-    pub fn _as_str(&self) -> &str {
-        unsafe { mem::transmute(self._as_bytes()) }
+    fn load_qw(&self) -> u64 {
+        let x;
+        #[cfg(target_pointer_width = "32")]
+        {
+            x = unsafe { core::mem::transmute_copy(self) }
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            x = self[0] as _;
+        }
+        x
     }
     #[inline(always)]
-    pub fn _as_mut_str(&mut self) -> &mut str {
-        unsafe { mem::transmute(self._as_bytes_mut()) }
-    }
-    pub fn _as_bytes(&self) -> &[u8] {
-        self.base.as_slice()
-    }
-    pub fn _as_bytes_mut(&mut self) -> &mut [u8] {
-        self.base.as_slice_mut()
+    fn load_fat(&self) -> [usize; 2] {
+        *self
     }
 }
-impl<const N: usize> fmt::Debug for AStr<N> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self._as_str())
+
+impl SystemDword for NativeTword {
+    #[inline(always)]
+    fn store_qw(u: u64) -> Self {
+        let x;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [a, b] = unsafe { core::mem::transmute(u) };
+            x = [a, b, 0];
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            x = [u as _, 0, 0];
+        }
+        x
+    }
+    #[inline(always)]
+    fn store_fat(a: usize, b: usize) -> Self {
+        [a, b, 0]
+    }
+    #[inline(always)]
+    fn load_qw(&self) -> u64 {
+        let x;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let ab = [self[0], self[1]];
+            x = unsafe { core::mem::transmute(ab) };
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            x = self[0] as _;
+        }
+        x
+    }
+    #[inline(always)]
+    fn load_fat(&self) -> [usize; 2] {
+        [self[0], self[1]]
     }
 }
-impl<const N: usize> Deref for AStr<N> {
-    type Target = str;
+
+impl SystemTword for NativeTword {
     #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        self._as_str()
+    fn store_full(a: usize, b: usize, c: usize) -> Self {
+        [a, b, c]
     }
-}
-impl<const N: usize> DerefMut for AStr<N> {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self._as_mut_str()
-    }
-}
-impl<'a, const N: usize> From<Ident<'a>> for AStr<N> {
-    #[inline(always)]
-    fn from(value: Ident<'a>) -> Self {
-        Self::new(value.as_str())
-    }
-}
-impl<'a, const N: usize> From<&'a str> for AStr<N> {
-    #[inline(always)]
-    fn from(s: &str) -> Self {
-        Self::new(s)
-    }
-}
-impl<const N: usize> PartialEq<str> for AStr<N> {
-    #[inline(always)]
-    fn eq(&self, other: &str) -> bool {
-        self._as_bytes() == other.as_bytes()
-    }
-}
-impl<const N: usize> PartialEq<AStr<N>> for str {
-    #[inline(always)]
-    fn eq(&self, other: &AStr<N>) -> bool {
-        other._as_bytes() == self.as_bytes()
-    }
-}
-impl<const N: usize> PartialEq<[u8]> for AStr<N> {
-    #[inline(always)]
-    fn eq(&self, other: &[u8]) -> bool {
-        self._as_bytes() == other
-    }
-}
-impl<const N: usize> PartialEq<AStr<N>> for [u8] {
-    #[inline(always)]
-    fn eq(&self, other: &AStr<N>) -> bool {
-        self == other.as_bytes()
-    }
-}
-impl<const N: usize> AsRef<[u8]> for AStr<N> {
-    #[inline(always)]
-    fn as_ref(&self) -> &[u8] {
-        self._as_bytes()
-    }
-}
-impl<const N: usize> AsRef<str> for AStr<N> {
-    #[inline(always)]
-    fn as_ref(&self) -> &str {
-        self._as_str()
-    }
-}
-impl<const N: usize> Default for AStr<N> {
-    #[inline(always)]
-    fn default() -> Self {
-        Self::new("")
-    }
-}
-impl<const N: usize> Borrow<[u8]> for AStr<N> {
-    #[inline(always)]
-    fn borrow(&self) -> &[u8] {
-        self._as_bytes()
+    fn load_full(&self) -> [usize; 3] {
+        *self
     }
 }

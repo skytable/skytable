@@ -51,6 +51,7 @@ impl<'a, T, U: ?Sized> RModeExists<'a, T, U> {
         }
     }
 }
+
 impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeExists<'re, T, U> {
     type Ret<'a> = bool;
     type Target = U;
@@ -78,6 +79,7 @@ impl<'a, T, U: ?Sized> RModeRef<'a, T, U> {
         }
     }
 }
+
 impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeRef<'re, T, U> {
     type Ret<'a> = Option<&'a T::Value>;
     type Target = U;
