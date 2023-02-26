@@ -44,6 +44,15 @@ pub struct Lit<'a> {
     _lt: PhantomData<&'a [u8]>,
 }
 
+impl<'a> Lit<'a> {
+    fn as_ir(&'a self) -> LitIR<'a> {
+        unsafe {
+            // UNSAFE(@ohsayan): 'tis the lifetime. 'tis the savior
+            mem::transmute_copy(self)
+        }
+    }
+}
+
 impl<'a> DataspecMeta1D for Lit<'a> {
     type Target = NativeDword;
     type StringItem = Box<str>;
@@ -138,6 +147,25 @@ impl<'a> Clone for Lit<'a> {
     }
 }
 
+impl<'a> ToString for Lit<'a> {
+    fn to_string(&self) -> String {
+        <Self as DataspecMethods1D>::to_string_debug(self)
+    }
+}
+
+enum_impls! {
+    Lit<'a> => {
+        bool as Bool,
+        u64 as UnsignedInt,
+        i64 as SignedInt,
+        f64 as Float,
+        &'a str as Str,
+        String as Str,
+        Box<str> as Str,
+        &'a [u8] as Bin,
+    }
+}
+
 /*
     LitIR
 */
@@ -204,6 +232,12 @@ unsafe impl<'a> Dataspec1D for LitIR<'a> {
     }
 }
 
+impl<'a> ToString for LitIR<'a> {
+    fn to_string(&self) -> String {
+        <Self as DataspecMethods1D>::to_string_debug(self)
+    }
+}
+
 /*
     UNSAFE(@ohsayan): Safety:
     - No touches
@@ -234,6 +268,17 @@ impl<'a> Drop for LitIR<'a> {
 impl<'a> Clone for LitIR<'a> {
     fn clone(&self) -> Self {
         self.self_clone()
+    }
+}
+
+enum_impls! {
+    LitIR<'a> => {
+        bool as Bool,
+        u64 as UnsignedInt,
+        i64 as SignedInt,
+        f64 as Float,
+        &'a str as Str,
+        &'a [u8] as Bin,
     }
 }
 

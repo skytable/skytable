@@ -25,7 +25,7 @@
 */
 
 /*
-    So, I woke up and chose violence. God bless me and the stack memory. What I've done here is a sin. Do not follow my footsteps here if you want to write maintainable code.
+    So, I woke up and chose violence. God bless me and the stack memory. What I've done here is a sin. Do not follow my footsteps here if you want to write safe and maintainable code.
     -- @ohsayan
 */
 
@@ -48,7 +48,6 @@ pub enum Dataflag {
     Float,
     Bin,
     Str,
-    List,
 }
 
 /// Information about the type that implements the dataspec traits
@@ -296,12 +295,17 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
                 Dataflag::Float => self.read_float_uck(),
                 Dataflag::Bin => self.read_bin_uck(),
                 Dataflag::Str => self.read_str_uck(),
-                #[allow(unused_variables)]
-                #[allow(unreachable_code)]
-                Dataflag::List => {
-                    panic!("found 2D in 1D data")
-                },
             )
         };
+    }
+    fn to_string_debug(&self) -> String {
+        match self.kind() {
+            Dataflag::Bool => self.bool().to_string(),
+            Dataflag::UnsignedInt => self.uint().to_string(),
+            Dataflag::SignedInt => self.sint().to_string(),
+            Dataflag::Float => self.float().to_string(),
+            Dataflag::Bin => format!("{:?}", self.bin()),
+            Dataflag::Str => format!("{:?}", self.str()),
+        }
     }
 }

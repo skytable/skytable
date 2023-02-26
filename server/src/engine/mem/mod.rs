@@ -96,7 +96,7 @@ impl SystemDword for NativeTword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            let [a, b] = unsafe { core::mem::transmute(u) };
+            let [a, b]: [usize; 2] = unsafe { core::mem::transmute(u) };
             x = [a, b, 0];
         }
         #[cfg(target_pointer_width = "64")]
