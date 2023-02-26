@@ -34,10 +34,10 @@ pub use astr::AStr;
 pub use uarray::UArray;
 pub use vinline::VInline;
 
-/// Native double pointer width
-pub type NativeDword = [usize; 2];
-/// Native triple pointer width
-pub type NativeTword = [usize; 3];
+/// Native double pointer width (note, native != arch native, but host native)
+pub struct NativeDword([usize; 2]);
+/// Native triple pointer width (note, native != arch native, but host native)
+pub struct NativeTword([usize; 3]);
 
 /// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
 pub trait SystemTword: SystemDword {
@@ -65,11 +65,11 @@ impl SystemDword for NativeDword {
         {
             x = [u as usize, 0]
         }
-        x
+        Self(x)
     }
     #[inline(always)]
     fn store_fat(a: usize, b: usize) -> Self {
-        [a, b]
+        Self([a, b])
     }
     #[inline(always)]
     fn load_qw(&self) -> u64 {
@@ -80,13 +80,13 @@ impl SystemDword for NativeDword {
         }
         #[cfg(target_pointer_width = "64")]
         {
-            x = self[0] as _;
+            x = self.0[0] as _;
         }
         x
     }
     #[inline(always)]
     fn load_fat(&self) -> [usize; 2] {
-        *self
+        self.0
     }
 }
 
@@ -103,39 +103,39 @@ impl SystemDword for NativeTword {
         {
             x = [u as _, 0, 0];
         }
-        x
+        Self(x)
     }
     #[inline(always)]
     fn store_fat(a: usize, b: usize) -> Self {
-        [a, b, 0]
+        Self([a, b, 0])
     }
     #[inline(always)]
     fn load_qw(&self) -> u64 {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            let ab = [self[0], self[1]];
+            let ab = [self.0[0], self.0[1]];
             x = unsafe { core::mem::transmute(ab) };
         }
         #[cfg(target_pointer_width = "64")]
         {
-            x = self[0] as _;
+            x = self.0[0] as _;
         }
         x
     }
     #[inline(always)]
     fn load_fat(&self) -> [usize; 2] {
-        [self[0], self[1]]
+        [self.0[0], self.0[1]]
     }
 }
 
 impl SystemTword for NativeTword {
     #[inline(always)]
     fn store_full(a: usize, b: usize, c: usize) -> Self {
-        [a, b, c]
+        Self([a, b, c])
     }
     #[inline(always)]
     fn load_full(&self) -> [usize; 3] {
-        *self
+        self.0
     }
 }

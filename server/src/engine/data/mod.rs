@@ -24,7 +24,9 @@
  *
 */
 
+pub mod lit;
 pub mod md_dict;
+pub mod spec;
 #[cfg(test)]
 mod tests;
 
