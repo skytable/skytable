@@ -29,6 +29,7 @@ mod macros;
 pub mod lit;
 pub mod md_dict;
 pub mod spec;
+pub mod tag;
 #[cfg(test)]
 mod tests;
 
@@ -95,6 +96,7 @@ impl HSData {
             Lit::SignedInt(i) => HSData::SignedInt(i),
             Lit::Float(f) => HSData::Float(f),
             Lit::Bin(l) => HSData::Binary(l.to_vec().into_boxed_slice()),
+            TagClass::List(_) => unreachable!("found 2D data in 1D"),
         })
     }
     #[inline(always)]
@@ -106,6 +108,7 @@ impl HSData {
             LitIR::SignedInt(s) => Self::SignedInt(s),
             LitIR::UnsignedInt(u) => Self::UnsignedInt(u),
             LitIR::Bool(b) => Self::Boolean(b),
+            TagClass::List(_) => unreachable!("found 2D data in 1D"),
         })
     }
     fn kind(&self) -> Discriminant<Self> {

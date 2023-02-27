@@ -25,7 +25,10 @@
 */
 
 use {
-    super::spec::{Dataflag, Dataspec1D, DataspecMeta1D, DataspecMethods1D, DataspecRaw1D},
+    super::{
+        spec::{Dataspec1D, DataspecMeta1D, DataspecMethods1D, DataspecRaw1D},
+        tag::{DataTag, FullTag},
+    },
     crate::engine::mem::{NativeDword, SystemDword},
     core::{
         fmt,
@@ -40,7 +43,7 @@ use {
 
 pub struct Lit<'a> {
     data: NativeDword,
-    tag: Dataflag,
+    tag: FullTag,
     _lt: PhantomData<&'a [u8]>,
 }
 
@@ -54,16 +57,17 @@ impl<'a> Lit<'a> {
 }
 
 impl<'a> DataspecMeta1D for Lit<'a> {
+    type Tag = FullTag;
     type Target = NativeDword;
     type StringItem = Box<str>;
-    fn new(flag: Dataflag, data: Self::Target) -> Self {
+    fn new(flag: Self::Tag, data: Self::Target) -> Self {
         Self {
             data,
             tag: flag,
             _lt: PhantomData,
         }
     }
-    fn kind(&self) -> Dataflag {
+    fn kind(&self) -> Self::Tag {
         self.tag
     }
     fn data(&self) -> Self::Target {
@@ -109,7 +113,7 @@ unsafe impl<'a> Dataspec1D for Lit<'a> {
     fn Str(s: Box<str>) -> Self {
         let md = ManuallyDrop::new(s);
         Self::new(
-            Dataflag::Str,
+            FullTag::STR,
             SystemDword::store_fat(md.as_ptr() as _, md.len()),
         )
     }
@@ -172,7 +176,7 @@ enum_impls! {
 */
 
 pub struct LitIR<'a> {
-    tag: Dataflag,
+    tag: FullTag,
     data: NativeDword,
     _lt: PhantomData<&'a str>,
 }
@@ -180,14 +184,15 @@ pub struct LitIR<'a> {
 impl<'a> DataspecMeta1D for LitIR<'a> {
     type Target = NativeDword;
     type StringItem = &'a str;
-    fn new(flag: Dataflag, data: Self::Target) -> Self {
+    type Tag = FullTag;
+    fn new(flag: Self::Tag, data: Self::Target) -> Self {
         Self {
             tag: flag,
             data,
             _lt: PhantomData,
         }
     }
-    fn kind(&self) -> Dataflag {
+    fn kind(&self) -> Self::Tag {
         self.tag
     }
     fn data(&self) -> Self::Target {
@@ -227,7 +232,7 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
 unsafe impl<'a> Dataspec1D for LitIR<'a> {
     fn Str(s: Self::StringItem) -> Self {
         Self::new(
-            Dataflag::Str,
+            FullTag::STR,
             SystemDword::store_fat(s.as_ptr() as usize, s.len()),
         )
     }

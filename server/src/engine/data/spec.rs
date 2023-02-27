@@ -30,6 +30,7 @@
 */
 
 use {
+    super::tag::{DataTag, TagClass},
     crate::engine::mem::SystemDword,
     core::{fmt, mem, slice},
 };
@@ -39,29 +40,19 @@ fn when_then<T>(cond: bool, then: T) -> Option<T> {
     cond.then_some(then)
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-/// The "reduced" data flag
-pub enum Dataflag {
-    Bool,
-    UnsignedInt,
-    SignedInt,
-    Float,
-    Bin,
-    Str,
-}
-
 /// Information about the type that implements the dataspec traits
 pub trait DataspecMeta1D: Sized {
     // assoc
+    type Tag: DataTag;
     /// The target must be able to store (atleast) a native dword
     type Target: SystemDword;
     /// The string item. This helps us remain correct with the dtors
     type StringItem;
     // fn
     /// Create a new instance. Usually allocates zero memory *directly*
-    fn new(flag: Dataflag, data: Self::Target) -> Self;
+    fn new(tag: Self::Tag, data: Self::Target) -> Self;
     /// Returns the reduced dataflag
-    fn kind(&self) -> Dataflag;
+    fn kind(&self) -> Self::Tag;
     /// Returns the data stack
     fn data(&self) -> Self::Target;
 }
@@ -95,28 +86,28 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// Store a new bool. This function is always safe to call
     #[allow(non_snake_case)]
     fn Bool(b: bool) -> Self {
-        Self::new(Dataflag::Bool, SystemDword::store_qw(b as _))
+        Self::new(Self::Tag::BOOL, SystemDword::store_qw(b as _))
     }
     /// Store a new uint. This function is always safe to call
     #[allow(non_snake_case)]
     fn UnsignedInt(u: u64) -> Self {
-        Self::new(Dataflag::UnsignedInt, SystemDword::store_qw(u as _))
+        Self::new(Self::Tag::UINT, SystemDword::store_qw(u as _))
     }
     /// Store a new sint. This function is always safe to call
     #[allow(non_snake_case)]
     fn SignedInt(s: i64) -> Self {
-        Self::new(Dataflag::SignedInt, SystemDword::store_qw(s as _))
+        Self::new(Self::Tag::SINT, SystemDword::store_qw(s as _))
     }
     /// Store a new float. This function is always safe to call
     #[allow(non_snake_case)]
     fn Float(f: f64) -> Self {
-        Self::new(Dataflag::Float, SystemDword::store_qw(f.to_bits()))
+        Self::new(Self::Tag::FLOAT, SystemDword::store_qw(f.to_bits()))
     }
     /// Store a new binary. This function is always safe to call
     #[allow(non_snake_case)]
     fn Bin(b: &[u8]) -> Self {
         Self::new(
-            Dataflag::Bin,
+            Self::Tag::BIN,
             SystemDword::store_fat(b.as_ptr() as usize, b.len()),
         )
     }
@@ -133,7 +124,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a bool
     fn read_bool_try(&self) -> Option<bool> {
-        when_then(self.kind() == Dataflag::Bool, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Bool, unsafe {
             // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
             self.read_bool_uck()
         })
@@ -151,7 +142,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a uint
     fn read_uint_try(&self) -> Option<u64> {
-        when_then(self.kind() == Dataflag::UnsignedInt, unsafe {
+        when_then(self.kind().tag_class() == TagClass::UnsignedInt, unsafe {
             // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
             self.read_uint_uck()
         })
@@ -169,7 +160,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a sint
     fn read_sint_try(&self) -> Option<i64> {
-        when_then(self.kind() == Dataflag::SignedInt, unsafe {
+        when_then(self.kind().tag_class() == TagClass::SignedInt, unsafe {
             // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
             self.read_sint_uck()
         })
@@ -185,7 +176,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a float
     fn read_float_try(&self) -> Option<f64> {
-        when_then(self.kind() == Dataflag::Float, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Float, unsafe {
             self.read_float_uck()
         })
     }
@@ -204,7 +195,9 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a bin
     fn read_bin_try(&self) -> Option<&[u8]> {
-        when_then(self.kind() == Dataflag::Bin, unsafe { self.read_bin_uck() })
+        when_then(self.kind().tag_class() == TagClass::Bin, unsafe {
+            self.read_bin_uck()
+        })
     }
     /// Load a bin or panic if we aren't one
     fn bin(&self) -> &[u8] {
@@ -220,7 +213,9 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a str
     fn read_str_try(&self) -> Option<&str> {
-        when_then(self.kind() == Dataflag::Str, unsafe { self.read_str_uck() })
+        when_then(self.kind().tag_class() == TagClass::Str, unsafe {
+            self.read_str_uck()
+        })
     }
     /// Load a str and panic if we aren't one
     fn str(&self) -> &str {
@@ -234,12 +229,12 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
 /// - You are not touching your target
 pub unsafe trait DataspecMethods1D: Dataspec1D {
     fn self_drop(&mut self) {
-        match self.kind() {
-            Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
+        match self.kind().tag_class() {
+            TagClass::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::drop_str(self)
             },
-            Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
+            TagClass::Bin if <Self as DataspecRaw1D>::HEAP_BIN => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::drop_bin(self)
             },
@@ -247,12 +242,12 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
         }
     }
     fn self_clone(&self) -> Self {
-        let data = match self.kind() {
-            Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
+        let data = match self.kind().tag_class() {
+            TagClass::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::clone_str(Dataspec1D::read_str_uck(self))
             },
-            Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
+            TagClass::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::clone_bin(Dataspec1D::read_bin_uck(self))
             },
@@ -263,19 +258,19 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
     fn self_eq(&self, other: &impl DataspecMethods1D) -> bool {
         unsafe {
             // UNSAFE(@ohsayan): we are checking our flags
-            match (self.kind(), other.kind()) {
-                (Dataflag::Bool, Dataflag::Bool) => self.read_bool_uck() == other.read_bool_uck(),
-                (Dataflag::UnsignedInt, Dataflag::UnsignedInt) => {
+            match (self.kind().tag_class(), other.kind().tag_class()) {
+                (TagClass::Bool, TagClass::Bool) => self.read_bool_uck() == other.read_bool_uck(),
+                (TagClass::UnsignedInt, TagClass::UnsignedInt) => {
                     self.read_uint_uck() == other.read_uint_uck()
                 }
-                (Dataflag::SignedInt, Dataflag::SignedInt) => {
+                (TagClass::SignedInt, TagClass::SignedInt) => {
                     self.read_sint_uck() == other.read_sint_uck()
                 }
-                (Dataflag::Float, Dataflag::Float) => {
+                (TagClass::Float, TagClass::Float) => {
                     self.read_float_uck() == other.read_float_uck()
                 }
-                (Dataflag::Bin, Dataflag::Bin) => self.read_bin_uck() == other.read_bin_uck(),
-                (Dataflag::Str, Dataflag::Str) => self.read_str_uck() == other.read_str_uck(),
+                (TagClass::Bin, TagClass::Bin) => self.read_bin_uck() == other.read_bin_uck(),
+                (TagClass::Str, TagClass::Str) => self.read_str_uck() == other.read_str_uck(),
                 _ => false,
             }
         }
@@ -283,18 +278,20 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
     fn self_fmt_debug_data(&self, data_field: &str, f: &mut fmt::DebugStruct) {
         macro_rules! fmtdebug {
             ($($(#[$attr:meta])* $match:pat => $ret:expr),* $(,)?) => {
-                match self.kind() {$($(#[$attr])* $match => { let x = $ret; f.field(data_field, &x) },)*}
+                match self.kind().tag_class() {$($(#[$attr])* $match => { let _x = $ret; f.field(data_field, &_x) },)*}
             }
         }
         unsafe {
             // UNSAFE(@ohsayan): we are checking our flags
             fmtdebug!(
-                Dataflag::Bool => self.read_bool_uck(),
-                Dataflag::UnsignedInt => self.read_uint_uck(),
-                Dataflag::SignedInt => self.read_sint_uck(),
-                Dataflag::Float => self.read_float_uck(),
-                Dataflag::Bin => self.read_bin_uck(),
-                Dataflag::Str => self.read_str_uck(),
+                TagClass::Bool => self.read_bool_uck(),
+                TagClass::UnsignedInt => self.read_uint_uck(),
+                TagClass::SignedInt => self.read_sint_uck(),
+                TagClass::Float => self.read_float_uck(),
+                TagClass::Bin => self.read_bin_uck(),
+                TagClass::Str => self.read_str_uck(),
+                #[allow(unreachable_code)]
+                TagClass::List => unreachable!("found 2D data in 1D"),
             )
         };
     }
@@ -307,6 +304,7 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
             Self::Float(f) => f.to_string(),
             Self::Bin(b) => format!("{:?}", b),
             Self::Str(s) => format!("{:?}", s),
+            Self::List(_) => unreachable!("found 2D data in 1D"),
         })
     }
 }

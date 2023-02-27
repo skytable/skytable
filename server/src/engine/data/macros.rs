@@ -27,22 +27,22 @@
 /// This is a pretty complex macro that emulates the behavior of an enumeration by making use of flags and macro hacks. You might literally feel it's like a lang match, but nope,
 /// there's a lot of wizardry beneath. Well, it's important to know that it works and you shouldn't touch it UNLESS YOU ABSOLUTELY KNOW what you're doing
 macro_rules! match_data {
-    (match ref $dataitem:ident $tail:tt) => {match_data!(@branch [ #[deny(unreachable_patterns)] match crate::engine::data::spec::DataspecMeta1D::kind($dataitem)] $dataitem [] $tail)};
-    (match $dataitem:ident $tail:tt) => {match_data!(@branch [ #[deny(unreachable_patterns)] match crate::engine::data::spec::DataspecMeta1D::kind(&$dataitem)] $dataitem [] $tail)};
+    (match ref $dataitem:ident $tail:tt) => {match_data!(@branch [ #[deny(unreachable_patterns)] match crate::engine::data::tag::DataTag::tag_class(&crate::engine::data::spec::DataspecMeta1D::kind($dataitem))] $dataitem [] $tail)};
+    (match $dataitem:ident $tail:tt) => {match_data!(@branch [ #[deny(unreachable_patterns)] match crate::engine::data::tag::DataTag::tag_class(&crate::engine::data::spec::DataspecMeta1D::kind(&$dataitem))] $dataitem [] $tail)};
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] {}) => {match_data!(@defeat0 $decl [$($branch)*])};
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] { $(#[$attr:meta])* $name:ident::$variant:ident($capture:ident) => $ret:expr, $($tail:tt)*}) => {
-        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::spec::Dataflag::$variant => {let $capture = unsafe { /* UNSAFE(@ohsayan): flagck */ match_data!(@extract $name $dataitem $variant) }; $ret},] {$($tail)*})
+        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::tag::TagClass::$variant => {let $capture = unsafe { /* UNSAFE(@ohsayan): flagck */ match_data!(@extract $name $dataitem $variant) }; $ret},] {$($tail)*})
     };
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] { $(#[$attr:meta])* $name:ident::$variant:ident(_) => $ret:expr, $($tail:tt)*}) => {
-        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::spec::Dataflag::$variant => $ret,] {$($tail)*})
+        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::tag::TagClass::$variant => $ret,] {$($tail)*})
     };
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] { $(#[$attr:meta])* $name:ident::$variant:ident($capture:ident) if $guard:expr => $ret:expr, $($tail:tt)*}) => {
-        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::spec::Dataflag::$variant if { let $capture = unsafe { /* UNSAFE(@ohsayan): flagck */ match_data!(@extract $name $dataitem $variant) }; $guard } => {
+        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::tag::TagClass::$variant if { let $capture = unsafe { /* UNSAFE(@ohsayan): flagck */ match_data!(@extract $name $dataitem $variant) }; $guard } => {
             let $capture = unsafe { /* UNSAFE(@ohsayan): flagck */  match_data!(@extract $name $dataitem $variant) }; let _ = &$capture; $ret}, ] {$($tail)*}
         )
     };
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] { $(#[$attr:meta])* $name:ident::$variant:ident(_) if $guard:expr => $ret:expr, $($tail:tt)*}) => {
-        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::spec::Dataflag::$variant if $guard => $ret,] {$($tail)*})
+        match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* crate::engine::data::tag::TagClass::$variant if $guard => $ret,] {$($tail)*})
     };
     (@branch $decl:tt $dataitem:ident [$($branch:tt)*] { $(#[$attr:meta])* _ => $ret:expr, $($tail:tt)*}) => {
         match_data!(@branch $decl $dataitem [$($branch)* $(#[$attr])* _ => $ret,] {$($tail)*})
