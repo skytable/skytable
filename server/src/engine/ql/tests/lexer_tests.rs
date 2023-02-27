@@ -26,10 +26,13 @@
 
 use {
     super::{
-        super::lex::{Ident, Lit, Token},
+        super::lex::{Ident, Token},
         lex_insecure,
     },
-    crate::engine::error::LexError,
+    crate::engine::{
+        data::{lit::Lit, spec::Dataspec1D},
+        error::LexError,
+    },
 };
 
 macro_rules! v(
@@ -130,8 +133,9 @@ fn lex_string_escape_bs() {
         vec![Token::Lit(Lit::Str("windows has c:\\".into()))]
     );
     let lol = v!(r#"'\\\\\\\\\\'"#);
+    let lexed = lex_insecure(&lol).unwrap();
     assert_eq!(
-        lex_insecure(&lol).unwrap(),
+        lexed,
         vec![Token::Lit(Lit::Str("\\".repeat(5).into_boxed_str()))],
         "lol"
     )
@@ -277,9 +281,11 @@ mod num_tests {
 }
 
 mod safequery_params {
+    use crate::engine::{
+        data::{lit::LitIR, spec::Dataspec1D},
+        ql::lex::SafeQueryData,
+    };
     use rand::seq::SliceRandom;
-
-    use crate::engine::ql::lex::{LitIR, SafeQueryData};
     #[test]
     fn param_uint() {
         let src = b"12345\n";
@@ -287,7 +293,7 @@ mod safequery_params {
         let mut i = 0;
         assert!(SafeQueryData::uint(src, &mut i, &mut d));
         assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::UInt(12345)]);
+        assert_eq!(d, vec![LitIR::UnsignedInt(12345)]);
     }
     #[test]
     fn param_sint() {
@@ -296,7 +302,7 @@ mod safequery_params {
         let mut i = 0;
         assert!(SafeQueryData::sint(src, &mut i, &mut d));
         assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::SInt(-12345)]);
+        assert_eq!(d, vec![LitIR::SignedInt(-12345)]);
     }
     #[test]
     fn param_bool_true() {
@@ -347,13 +353,13 @@ mod safequery_params {
     fn param_full_uint() {
         let src = b"\x0012345\n";
         let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::UInt(12345)]);
+        assert_eq!(r.as_ref(), [LitIR::UnsignedInt(12345)]);
     }
     #[test]
     fn param_full_sint() {
         let src = b"\x01-12345\n";
         let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::SInt(-12345)]);
+        assert_eq!(r.as_ref(), [LitIR::SignedInt(-12345)]);
     }
     #[test]
     fn param_full_bool() {
@@ -396,9 +402,9 @@ mod safequery_params {
             b"\x0430\none two three four five binary",
             b"\x0527\none two three four five str",
         ];
-        const RETMAP: [LitIR; 6] = [
-            LitIR::UInt(12345),
-            LitIR::SInt(-12345),
+        let retmap: [LitIR; 6] = [
+            LitIR::UnsignedInt(12345),
+            LitIR::SignedInt(-12345),
             LitIR::Bool(true),
             LitIR::Float(12345.67890),
             LitIR::Bin(b"one two three four five binary"),
@@ -409,7 +415,7 @@ mod safequery_params {
             local_data.shuffle(&mut rng);
             let ret: Vec<LitIR> = local_data
                 .iter()
-                .map(|v| RETMAP[v[0] as usize].clone())
+                .map(|v| retmap[v[0] as usize].clone())
                 .collect();
             let src: Vec<u8> = local_data.into_iter().flat_map(|v| v.to_owned()).collect();
             let r = SafeQueryData::p_revloop(&src, 6).unwrap();
@@ -419,7 +425,10 @@ mod safequery_params {
 }
 
 mod safequery_full_param {
-    use crate::engine::ql::lex::{Ident, LitIR, SafeQueryData, Token};
+    use crate::engine::{
+        data::{lit::LitIR, spec::Dataspec1D},
+        ql::lex::{Ident, SafeQueryData, Token},
+    };
     #[test]
     fn p_mini() {
         let query = b"select * from myapp where username = ?";
@@ -477,7 +486,7 @@ mod safequery_full_param {
             sq,
             SafeQueryData::new_test(
                 vec![
-                    LitIR::UInt(100),
+                    LitIR::UnsignedInt(100),
                     LitIR::Str("sayan"),
                     LitIR::Bin(b"pass1234")
                 ]

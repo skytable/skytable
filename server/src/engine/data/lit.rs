@@ -45,7 +45,7 @@ pub struct Lit<'a> {
 }
 
 impl<'a> Lit<'a> {
-    fn as_ir(&'a self) -> LitIR<'a> {
+    pub fn as_ir(&'a self) -> LitIR<'a> {
         unsafe {
             // UNSAFE(@ohsayan): 'tis the lifetime. 'tis the savior
             mem::transmute_copy(self)
@@ -86,10 +86,11 @@ impl<'a> DataspecMeta1D for Lit<'a> {
 unsafe impl<'a> DataspecRaw1D for Lit<'a> {
     const HEAP_STR: bool = true;
     const HEAP_BIN: bool = false;
-    unsafe fn drop_str(s: &str) {
-        drop(Box::from_raw(s as *const _ as *mut str));
+    unsafe fn drop_str(&mut self) {
+        let [ptr, len] = self.data().load_fat();
+        drop(String::from_raw_parts(ptr as *mut u8, len, len));
     }
-    unsafe fn drop_bin(_: &[u8]) {}
+    unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
         let new_string = ManuallyDrop::new(s.to_owned().into_boxed_str());
         SystemDword::store_fat(new_string.as_ptr() as usize, new_string.len())
@@ -209,8 +210,8 @@ impl<'a> DataspecMeta1D for LitIR<'a> {
 unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
     const HEAP_STR: bool = false;
     const HEAP_BIN: bool = false;
-    unsafe fn drop_str(_: &str) {}
-    unsafe fn drop_bin(_: &[u8]) {}
+    unsafe fn drop_str(&mut self) {}
+    unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
         SystemDword::store_fat(s.as_ptr() as usize, s.len())
     }

@@ -37,9 +37,9 @@ pub mod upd;
 use {
     super::{
         ast::{QueryData, State},
-        lex::{Ident, LitIR, Token},
+        lex::{Ident, Token},
     },
-    crate::util::compiler,
+    crate::{engine::data::lit::LitIR, util::compiler},
     std::collections::HashMap,
 };
 

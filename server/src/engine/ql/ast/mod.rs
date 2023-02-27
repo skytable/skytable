@@ -32,11 +32,11 @@ use {
     self::traits::ASTNode,
     super::{
         ddl, dml,
-        lex::{Ident, LitIR, Token},
+        lex::{Ident, Token},
     },
     crate::{
         engine::{
-            data::HSData,
+            data::{lit::LitIR, HSData},
             error::{LangError, LangResult},
         },
         util::{compiler, MaybeInit},
@@ -332,14 +332,14 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
     #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
         debug_assert!(Token![?].eq(tok));
-        let ret = self.data[0];
+        let ret = self.data[0].clone();
         self.data = &self.data[1..];
         ret
     }
     #[inline(always)]
     unsafe fn read_data_type(&mut self, tok: &'a Token) -> HSData {
         debug_assert!(Token![?].eq(tok));
-        let ret = self.data[0];
+        let ret = self.data[0].clone();
         self.data = &self.data[1..];
         HSData::from(ret)
     }

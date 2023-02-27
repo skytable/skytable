@@ -30,10 +30,11 @@ use {
     super::{read_ident, u, WhereClause},
     crate::{
         engine::{
+            data::lit::LitIR,
             error::{LangError, LangResult},
             ql::{
                 ast::{Entity, QueryData, State},
-                lex::{Ident, LitIR},
+                lex::Ident,
             },
         },
         util::{compiler, MaybeInit},

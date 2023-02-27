@@ -24,6 +24,8 @@
  *
 */
 
+#[macro_use]
+mod macros;
 pub mod lit;
 pub mod md_dict;
 pub mod spec;
@@ -32,10 +34,8 @@ mod tests;
 
 pub use md_dict::{DictEntryGeneric, DictGeneric, MetaDict};
 use {
-    crate::engine::{
-        mem::AStr,
-        ql::lex::{Lit, LitIR},
-    },
+    self::lit::Lit,
+    crate::engine::{data::lit::LitIR, mem::AStr},
     std::mem::{self, Discriminant},
 };
 
@@ -88,24 +88,25 @@ enum_impls! {
 impl HSData {
     #[inline(always)]
     pub(super) fn clone_from_lit(lit: Lit) -> Self {
-        match lit {
-            Lit::Str(s) => HSData::String(s.clone()),
+        match_data!(match lit {
+            Lit::Str(s) => HSData::String(s.to_string().into_boxed_str()),
             Lit::Bool(b) => HSData::Boolean(b),
             Lit::UnsignedInt(u) => HSData::UnsignedInt(u),
             Lit::SignedInt(i) => HSData::SignedInt(i),
+            Lit::Float(f) => HSData::Float(f),
             Lit::Bin(l) => HSData::Binary(l.to_vec().into_boxed_slice()),
-        }
+        })
     }
     #[inline(always)]
     pub(super) fn clone_from_litir<'a>(lit: LitIR<'a>) -> Self {
-        match lit {
+        match_data!(match lit {
             LitIR::Str(s) => Self::String(s.to_owned().into_boxed_str()),
             LitIR::Bin(b) => Self::Binary(b.to_owned().into_boxed_slice()),
             LitIR::Float(f) => Self::Float(f),
-            LitIR::SInt(s) => Self::SignedInt(s),
-            LitIR::UInt(u) => Self::UnsignedInt(u),
+            LitIR::SignedInt(s) => Self::SignedInt(s),
+            LitIR::UnsignedInt(u) => Self::UnsignedInt(u),
             LitIR::Bool(b) => Self::Boolean(b),
-        }
+        })
     }
     fn kind(&self) -> Discriminant<Self> {
         mem::discriminant(&self)

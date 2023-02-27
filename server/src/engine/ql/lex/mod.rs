@@ -29,13 +29,19 @@ mod raw;
 use {
     self::raw::RawLexer,
     crate::{
-        engine::error::{LexError, LexResult},
+        engine::{
+            data::{
+                lit::{Lit, LitIR},
+                spec::Dataspec1D,
+            },
+            error::{LexError, LexResult},
+        },
         util::compiler,
     },
     core::{cmp, fmt, ops::BitOr, slice, str},
 };
 
-pub use self::raw::{Ident, Keyword, Lit, LitIR, Symbol, Token};
+pub use self::raw::{Ident, Keyword, Symbol, Token};
 pub type Slice<'a> = &'a [u8];
 
 /*
@@ -469,14 +475,14 @@ impl<'b> SafeQueryData<'b> {
     pub(super) fn uint<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
         let r = decode_num_ub(src, &mut b, cnt);
-        data.push(LitIR::UInt(r));
+        data.push(LitIR::UnsignedInt(r));
         b
     }
     #[inline(always)]
     pub(super) fn sint<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         let mut b = true;
         let r = decode_num_ub(src, &mut b, cnt);
-        data.push(LitIR::SInt(r));
+        data.push(LitIR::SignedInt(r));
         b
     }
     #[inline(always)]

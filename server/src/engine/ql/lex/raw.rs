@@ -26,7 +26,10 @@
 
 use {
     super::Slice,
-    crate::engine::error::LexError,
+    crate::engine::{
+        data::{lit::Lit, spec::Dataspec1D},
+        error::LexError,
+    },
     core::{borrow::Borrow, fmt, ops::Deref, slice, str},
 };
 
@@ -148,56 +151,6 @@ enum_impls! {
         Keyword as Keyword,
         Symbol as Symbol,
         Lit<'a> as Lit,
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-#[repr(u8)]
-/// A [`Lit`] as represented by an insecure token stream
-pub enum Lit<'a> {
-    Str(Box<str>),
-    Bool(bool),
-    UnsignedInt(u64),
-    SignedInt(i64),
-    Bin(Slice<'a>),
-}
-
-impl<'a> ToString for Lit<'a> {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Str(s) => format!("{:?}", s),
-            Self::Bool(b) => b.to_string(),
-            Self::UnsignedInt(u) => u.to_string(),
-            Self::SignedInt(s) => s.to_string(),
-            Self::Bin(b) => format!("{:?}", b),
-        }
-    }
-}
-
-impl<'a> Lit<'a> {
-    pub fn as_ir(&'a self) -> LitIR<'a> {
-        match self {
-            Self::Str(s) => LitIR::Str(s.as_ref()),
-            Self::Bool(b) => LitIR::Bool(*b),
-            Self::UnsignedInt(u) => LitIR::UInt(*u),
-            Self::SignedInt(s) => LitIR::SInt(*s),
-            Self::Bin(b) => LitIR::Bin(b),
-        }
-    }
-}
-
-impl<'a> From<&'static str> for Lit<'a> {
-    fn from(s: &'static str) -> Self {
-        Self::Str(s.into())
-    }
-}
-
-enum_impls! {
-    Lit<'a> => {
-        Box<str> as Str,
-        String as Str,
-        bool as Bool,
-        u64 as UnsignedInt,
     }
 }
 
@@ -404,17 +357,6 @@ impl<'a> AsRef<Token<'a>> for Token<'a> {
     fn as_ref(&self) -> &Token<'a> {
         self
     }
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-/// Intermediate literal repr
-pub enum LitIR<'a> {
-    Str(&'a str),
-    Bin(Slice<'a>),
-    UInt(u64),
-    SInt(i64),
-    Bool(bool),
-    Float(f64),
 }
 
 #[derive(Debug)]

@@ -24,9 +24,9 @@
  *
 */
 
-use super::{
-    super::lex::{Ident, Lit},
-    lex_insecure, *,
+use {
+    super::{super::lex::Ident, lex_insecure, *},
+    crate::engine::data::{lit::Lit, spec::Dataspec1D},
 };
 mod inspect {
     use {
@@ -70,7 +70,10 @@ mod inspect {
 mod alter_space {
     use {
         super::*,
-        crate::engine::ql::{ast::parse_ast_node_full, ddl::alt::AlterSpace, lex::Lit},
+        crate::engine::{
+            data::{lit::Lit, spec::Dataspec1D},
+            ql::{ast::parse_ast_node_full, ddl::alt::AlterSpace},
+        },
     };
     #[test]
     fn alter_space_mini() {

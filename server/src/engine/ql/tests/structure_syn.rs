@@ -27,8 +27,8 @@
 use {
     super::*,
     crate::engine::{
-        data::DictGeneric,
-        ql::{ast::parse_ast_node_full, ddl::syn::DictBasic, lex::Lit},
+        data::{lit::Lit, spec::Dataspec1D, DictGeneric},
+        ql::{ast::parse_ast_node_full, ddl::syn::DictBasic},
     },
 };
 
@@ -232,7 +232,7 @@ mod dict {
 mod null_dict_tests {
     use super::*;
     mod dict {
-        use {super::*, crate::engine::ql::lex::Lit};
+        use super::*;
 
         #[test]
         fn null_mini() {

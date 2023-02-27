@@ -77,9 +77,9 @@ pub unsafe trait DataspecRaw1D: DataspecMeta1D {
     /// Is the binary heap allocated...anywhere down the line?
     const HEAP_BIN: bool;
     /// Drop the string, if you need a dtor
-    unsafe fn drop_str(s: &str);
+    unsafe fn drop_str(&mut self);
     /// Drop the binary, if you need a dtor
-    unsafe fn drop_bin(b: &[u8]);
+    unsafe fn drop_bin(&mut self);
     /// Clone the string object. Note, we literally HAVE NO IDEA about what you're doing here
     unsafe fn clone_str(s: &str) -> Self::Target;
     /// Clone the binary object. Again, NOT A DAMN CLUE about whay you're doing down there
@@ -237,11 +237,11 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
         match self.kind() {
             Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
-                <Self as DataspecRaw1D>::drop_str(Dataspec1D::read_str_uck(self))
+                <Self as DataspecRaw1D>::drop_str(self)
             },
             Dataflag::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
-                <Self as DataspecRaw1D>::drop_bin(Dataspec1D::read_bin_uck(self))
+                <Self as DataspecRaw1D>::drop_bin(self)
             },
             _ => {}
         }
@@ -264,7 +264,7 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
         unsafe {
             // UNSAFE(@ohsayan): we are checking our flags
             match (self.kind(), other.kind()) {
-                (Dataflag::Bool, Dataflag::Bool) => self.read_bool_uck() & other.read_bool_uck(),
+                (Dataflag::Bool, Dataflag::Bool) => self.read_bool_uck() == other.read_bool_uck(),
                 (Dataflag::UnsignedInt, Dataflag::UnsignedInt) => {
                     self.read_uint_uck() == other.read_uint_uck()
                 }
@@ -298,14 +298,15 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
             )
         };
     }
+    #[rustfmt::skip]
     fn to_string_debug(&self) -> String {
-        match self.kind() {
-            Dataflag::Bool => self.bool().to_string(),
-            Dataflag::UnsignedInt => self.uint().to_string(),
-            Dataflag::SignedInt => self.sint().to_string(),
-            Dataflag::Float => self.float().to_string(),
-            Dataflag::Bin => format!("{:?}", self.bin()),
-            Dataflag::Str => format!("{:?}", self.str()),
-        }
+        match_data!(match ref self {
+            Self::Bool(b) => b.to_string(),
+            Self::UnsignedInt(u) => u.to_string(),
+            Self::SignedInt(s) => s.to_string(),
+            Self::Float(f) => f.to_string(),
+            Self::Bin(b) => format!("{:?}", b),
+            Self::Str(s) => format!("{:?}", s),
+        })
     }
 }

@@ -45,12 +45,15 @@ use {
 mod lexer {
     use {
         super::*,
-        crate::engine::ql::lex::{Lit, Token},
+        crate::engine::{
+            data::{lit::Lit, spec::Dataspec1D},
+            ql::lex::Token,
+        },
     };
     #[bench]
     fn lex_number(b: &mut Bencher) {
         let src = b"1234567890";
-        let expected = vec![Token::Lit(1234567890.into())];
+        let expected = vec![Token::Lit(1234567890_u64.into())];
         b.iter(|| assert_eq!(lex_insecure(src).unwrap(), expected));
     }
     #[bench]

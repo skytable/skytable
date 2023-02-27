@@ -85,7 +85,7 @@ impl NullableDictEntry for Null {
     }
 }
 
-impl<'a> NullableDictEntry for super::lex::Lit<'a> {
+impl<'a> NullableDictEntry for crate::engine::data::lit::Lit<'a> {
     fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
         Some(crate::engine::data::DictEntryGeneric::from(self.as_ir()))
     }

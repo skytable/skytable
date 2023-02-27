@@ -26,9 +26,11 @@
 
 use {
     crate::engine::{
-        data::HSData,
+        data::{
+            lit::{Lit, LitIR},
+            HSData,
+        },
         idx::STIndex,
-        ql::lex::{Lit, LitIR},
     },
     std::collections::HashMap,
 };
