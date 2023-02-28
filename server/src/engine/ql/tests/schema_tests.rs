@@ -273,6 +273,7 @@ mod layer {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn fuzz_layer() {
         let tok = b"
             list {

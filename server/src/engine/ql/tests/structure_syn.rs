@@ -188,6 +188,7 @@ mod dict {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn fuzz_dict() {
         let tok = b"
             {
