@@ -38,6 +38,14 @@ pub use vinline::VInline;
 pub struct NativeDword([usize; 2]);
 /// Native triple pointer width (note, native != arch native, but host native)
 pub struct NativeTword([usize; 3]);
+/// Native quad pointer width (note, native != arch native, but host native)
+pub struct NativeQword([usize; 4]);
+
+/// Native quad pointer stack (must also be usable as a double and triple pointer stack. see [`SystemTword`] and [`SystemDword`])
+pub trait SystemQword: SystemTword {
+    fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self;
+    fn load_full(&self) -> [usize; 4];
+}
 
 /// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
 pub trait SystemTword: SystemDword {
@@ -90,6 +98,17 @@ impl SystemDword for NativeDword {
     }
 }
 
+impl SystemTword for NativeTword {
+    #[inline(always)]
+    fn store_full(a: usize, b: usize, c: usize) -> Self {
+        Self([a, b, c])
+    }
+    #[inline(always)]
+    fn load_full(&self) -> [usize; 3] {
+        self.0
+    }
+}
+
 impl SystemDword for NativeTword {
     #[inline(always)]
     fn store_qw(u: u64) -> Self {
@@ -129,13 +148,54 @@ impl SystemDword for NativeTword {
     }
 }
 
-impl SystemTword for NativeTword {
-    #[inline(always)]
-    fn store_full(a: usize, b: usize, c: usize) -> Self {
-        Self([a, b, c])
+impl SystemQword for NativeQword {
+    fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self {
+        Self([a, b, c, d])
     }
-    #[inline(always)]
-    fn load_full(&self) -> [usize; 3] {
+    fn load_full(&self) -> [usize; 4] {
         self.0
+    }
+}
+
+impl SystemTword for NativeQword {
+    fn store_full(a: usize, b: usize, c: usize) -> Self {
+        Self([a, b, c, 0])
+    }
+    fn load_full(&self) -> [usize; 3] {
+        [self.0[0], self.0[1], self.0[2]]
+    }
+}
+
+impl SystemDword for NativeQword {
+    fn store_qw(u: u64) -> Self {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [a, b]: [usize; 2] = unsafe { core::mem::transmute(u) };
+            ret = <Self as SystemQword>::store_full(a, b, 0, 0);
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = <Self as SystemQword>::store_full(u as _, 0, 0, 0);
+        }
+        ret
+    }
+    fn store_fat(a: usize, b: usize) -> Self {
+        <Self as SystemQword>::store_full(a, b, 0, 0)
+    }
+    fn load_qw(&self) -> u64 {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            ret = unsafe { core::mem::transmute([self.0[0], self.0[1]]) };
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = self.0[0] as _;
+        }
+        ret
+    }
+    fn load_fat(&self) -> [usize; 2] {
+        [self.0[0], self.0[1]]
     }
 }
