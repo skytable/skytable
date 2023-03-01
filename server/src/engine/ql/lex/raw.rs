@@ -146,7 +146,7 @@ impl<'a> PartialEq<Symbol> for Token<'a> {
     }
 }
 
-enum_impls! {
+direct_from! {
     Token<'a> => {
         Keyword as Keyword,
         Symbol as Symbol,

@@ -46,7 +46,8 @@ pub type ItemID = AStr<IDENT_MX>;
 /// A [`DataType`] represents the underlying data-type, although this enumeration when used in a collection will always
 /// be of one type.
 // TODO(@ohsayan): Change the underlying structures, there are just rudimentary ones used during integration with the QL
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(test, derive(Clone))]
 #[repr(u8)]
 pub enum HSData {
     /// An UTF-8 string
@@ -75,7 +76,7 @@ pub enum HSData {
     List(Vec<Self>) = DataKind::LIST.d(),
 }
 
-enum_impls! {
+direct_from! {
     HSData => {
         String as String,
         Vec<u8> as Binary,

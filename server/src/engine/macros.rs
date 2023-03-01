@@ -52,7 +52,7 @@ macro_rules! multi_assert_eq {
     };
 }
 
-macro_rules! enum_impls {
+macro_rules! direct_from {
     ($for:ident<$lt:lifetime> => {$($other:ty as $me:ident),*$(,)?}) => {
         $(impl<$lt> ::core::convert::From<$other> for $for<$lt> {fn from(v: $other) -> Self {Self::$me(v.into())}})*
     };

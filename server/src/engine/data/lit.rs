@@ -97,10 +97,10 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
         let new_string = ManuallyDrop::new(s.to_owned().into_boxed_str());
-        SystemDword::store_fat(new_string.as_ptr() as usize, new_string.len())
+        SystemDword::store((new_string.as_ptr(), new_string.len()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store_fat(b.as_ptr() as usize, b.len())
+        SystemDword::store((b.as_ptr(), b.len()))
     }
 }
 
@@ -112,10 +112,7 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
 unsafe impl<'a> Dataspec1D for Lit<'a> {
     fn Str(s: Box<str>) -> Self {
         let md = ManuallyDrop::new(s);
-        Self::new(
-            FullTag::STR,
-            SystemDword::store_fat(md.as_ptr() as _, md.len()),
-        )
+        Self::new(FullTag::STR, SystemDword::store((md.as_ptr(), md.len())))
     }
 }
 
@@ -158,7 +155,7 @@ impl<'a> ToString for Lit<'a> {
     }
 }
 
-enum_impls! {
+direct_from! {
     Lit<'a> => {
         bool as Bool,
         u64 as UnsignedInt,
@@ -218,10 +215,10 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
     unsafe fn drop_str(&mut self) {}
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
-        SystemDword::store_fat(s.as_ptr() as usize, s.len())
+        SystemDword::store((s.as_ptr(), s.len()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store_fat(b.as_ptr() as usize, b.len())
+        SystemDword::store((b.as_ptr(), b.len()))
     }
 }
 
@@ -231,10 +228,7 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
 */
 unsafe impl<'a> Dataspec1D for LitIR<'a> {
     fn Str(s: Self::StringItem) -> Self {
-        Self::new(
-            FullTag::STR,
-            SystemDword::store_fat(s.as_ptr() as usize, s.len()),
-        )
+        Self::new(FullTag::STR, SystemDword::store((s.as_ptr(), s.len())))
     }
 }
 
@@ -277,7 +271,7 @@ impl<'a> Clone for LitIR<'a> {
     }
 }
 
-enum_impls! {
+direct_from! {
     LitIR<'a> => {
         bool as Bool,
         u64 as UnsignedInt,

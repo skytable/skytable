@@ -24,6 +24,8 @@
  *
 */
 
+mod cell;
+
 // FIXME(@ohsayan): update this!
 
 #[derive(Debug)]

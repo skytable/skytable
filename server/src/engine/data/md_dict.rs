@@ -218,14 +218,14 @@ impl<'a> From<Lit<'a>> for DictEntryGeneric {
     }
 }
 
-enum_impls! {
+direct_from! {
     DictEntryGeneric => {
         HSData as Lit,
         DictGeneric as Map,
     }
 }
 
-enum_impls! {
+direct_from! {
     MetaDictEntry => {
         HSData as Data,
         MetaDict as Map,
