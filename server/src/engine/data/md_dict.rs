@@ -26,10 +26,8 @@
 
 use {
     crate::engine::{
-        data::{
-            lit::{Lit, LitIR},
-            HSData,
-        },
+        core::Datacell,
+        data::lit::{Lit, LitIR},
         idx::STIndex,
     },
     std::collections::HashMap,
@@ -47,7 +45,7 @@ pub type DictGeneric = HashMap<Box<str>, Option<DictEntryGeneric>>;
 #[derive(Debug, PartialEq)]
 /// A generic dict entry: either a literal or a recursive dictionary
 pub enum DictEntryGeneric {
-    Lit(HSData),
+    Lit(Datacell),
     Map(DictGeneric),
 }
 
@@ -55,7 +53,7 @@ pub enum DictEntryGeneric {
 #[cfg_attr(test, derive(Clone))]
 /// A metadata dictionary
 pub enum MetaDictEntry {
-    Data(HSData),
+    Data(Datacell),
     Map(MetaDict),
 }
 
@@ -67,7 +65,7 @@ pub enum MetaDictEntry {
 struct MetaDictPatch(HashMap<Box<str>, Option<MetaDictPatchEntry>>);
 #[derive(Debug, PartialEq)]
 enum MetaDictPatchEntry {
-    Data(HSData),
+    Data(Datacell),
     Map(MetaDictPatch),
 }
 
@@ -208,26 +206,26 @@ fn rmerge_metadata_prepare_patch(
 
 impl<'a> From<LitIR<'a>> for DictEntryGeneric {
     fn from(l: LitIR<'a>) -> Self {
-        Self::Lit(HSData::from(l))
+        Self::Lit(Datacell::from(l))
     }
 }
 
 impl<'a> From<Lit<'a>> for DictEntryGeneric {
     fn from(value: Lit<'a>) -> Self {
-        Self::Lit(HSData::from(value))
+        Self::Lit(Datacell::from(value))
     }
 }
 
 direct_from! {
     DictEntryGeneric => {
-        HSData as Lit,
+        Datacell as Lit,
         DictGeneric as Map,
     }
 }
 
 direct_from! {
     MetaDictEntry => {
-        HSData as Data,
+        Datacell as Data,
         MetaDict as Map,
     }
 }

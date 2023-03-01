@@ -26,10 +26,10 @@
 
 use crate::engine::{
     core::{
+        model::cell::Datacell,
         space::{Space, SpaceMeta},
         GlobalNS,
     },
-    data::HSData,
     error::DatabaseError,
 };
 
@@ -57,7 +57,7 @@ fn exec_create_space_with_env() {
                 &Space::new(
                     into_dict! {},
                     SpaceMeta::with_env(into_dict! {
-                        "MAX_MODELS" => HSData::UnsignedInt(100)
+                        "MAX_MODELS" => Datacell::new_uint(100)
                     })
                 )
             );

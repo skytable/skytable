@@ -28,7 +28,7 @@ use {
     super::read_ident,
     crate::{
         engine::{
-            data::HSData,
+            core::Datacell,
             error::{LangError, LangResult},
             ql::{
                 ast::{Entity, QueryData, State},
@@ -37,10 +37,7 @@ use {
         },
         util::{compiler, MaybeInit},
     },
-    core::{
-        cmp,
-        mem::{discriminant, Discriminant},
-    },
+    core::cmp,
     std::{
         collections::HashMap,
         time::{Duration, SystemTime, UNIX_EPOCH},
@@ -56,7 +53,7 @@ pub const T_UUIDSTR: &str = "4593264b-0231-43e9-b0aa-50784f14e204";
 pub const T_UUIDBIN: &[u8] = T_UUIDSTR.as_bytes();
 pub const T_TIMESEC: u64 = 1673187839_u64;
 
-type ProducerFn = fn() -> HSData;
+type ProducerFn = fn() -> Datacell;
 
 // base
 #[inline(always)]
@@ -77,16 +74,16 @@ fn pfnbase_uuid() -> Uuid {
 }
 // impl
 #[inline(always)]
-fn pfn_timesec() -> HSData {
-    HSData::UnsignedInt(pfnbase_time().as_secs())
+fn pfn_timesec() -> Datacell {
+    Datacell::new_uint(pfnbase_time().as_secs())
 }
 #[inline(always)]
-fn pfn_uuidstr() -> HSData {
-    HSData::String(pfnbase_uuid().to_string().into_boxed_str())
+fn pfn_uuidstr() -> Datacell {
+    Datacell::new_str(pfnbase_uuid().to_string().into_boxed_str())
 }
 #[inline(always)]
-fn pfn_uuidbin() -> HSData {
-    HSData::Binary(pfnbase_uuid().as_bytes().to_vec().into_boxed_slice())
+fn pfn_uuidbin() -> Datacell {
+    Datacell::new_bin(pfnbase_uuid().as_bytes().to_vec().into_boxed_slice())
 }
 
 static PRODUCER_G: [u8; 4] = [0, 2, 3, 0];
@@ -141,8 +138,8 @@ unsafe fn ldfunc_unchecked(func: &[u8]) -> ProducerFn {
 /// - If tt length is less than 1
 pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-    list: &mut Vec<HSData>,
-) -> Option<Discriminant<HSData>> {
+    list: &mut Vec<Datacell>,
+) -> Option<TagClass> {
     let mut stop = state.cursor_eq(Token![close []]);
     state.cursor_ahead_if(stop);
     let mut overall_dscr = None;
@@ -169,7 +166,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
                 if prev_nlist_dscr.is_none() && nlist_dscr.is_some() {
                     prev_nlist_dscr = nlist_dscr;
                 }
-                HSData::List(nested_list)
+                Datacell::new_list(nested_list)
             }
             Token![@] if state.cursor_signature_match_fn_arity0_rounded() => match unsafe {
                 // UNSAFE(@ohsayan): Just verified at guard
@@ -187,8 +184,8 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
                 break;
             }
         };
-        state.poison_if_not(list.is_empty() || discriminant(&d) == discriminant(&list[0]));
-        overall_dscr = Some(discriminant(&d));
+        state.poison_if_not(list.is_empty() || d.kind() == list[0].kind());
+        overall_dscr = Some(d.kind());
         list.push(d);
         let nx_comma = state.cursor_rounded_eq(Token![,]);
         let nx_csqrb = state.cursor_rounded_eq(Token![close []]);
@@ -202,7 +199,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
 #[inline(always)]
 /// ## Safety
 /// - Cursor must match arity(0) function signature
-unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<HSData> {
+unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<Datacell> {
     let func = read_ident(state.fw_read());
     state.cursor_ahead_by(2); // skip tt:paren
     ldfunc(func).map(move |f| f())
@@ -212,7 +209,7 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
 /// - If tt is empty
 pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> Vec<Option<HSData>> {
+) -> Vec<Option<Datacell>> {
     let mut stop = state.cursor_eq(Token![() close]);
     state.cursor_ahead_if(stop);
     let mut data = Vec::new();
@@ -259,7 +256,7 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 /// Panics if tt is empty
 pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> HashMap<Ident<'a>, Option<HSData>> {
+) -> HashMap<Ident<'a>, Option<Datacell>> {
     let mut stop = state.cursor_eq(Token![close {}]);
     state.cursor_ahead_if(stop);
     let mut data = HashMap::with_capacity(2);
@@ -313,18 +310,18 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 
 #[derive(Debug, PartialEq)]
 pub enum InsertData<'a> {
-    Ordered(Vec<Option<HSData>>),
-    Map(HashMap<Ident<'a>, Option<HSData>>),
+    Ordered(Vec<Option<Datacell>>),
+    Map(HashMap<Ident<'a>, Option<Datacell>>),
 }
 
-impl<'a> From<Vec<Option<HSData>>> for InsertData<'a> {
-    fn from(v: Vec<Option<HSData>>) -> Self {
+impl<'a> From<Vec<Option<Datacell>>> for InsertData<'a> {
+    fn from(v: Vec<Option<Datacell>>) -> Self {
         Self::Ordered(v)
     }
 }
 
-impl<'a> From<HashMap<Ident<'static>, Option<HSData>>> for InsertData<'a> {
-    fn from(m: HashMap<Ident<'static>, Option<HSData>>) -> Self {
+impl<'a> From<HashMap<Ident<'static>, Option<Datacell>>> for InsertData<'a> {
+    fn from(m: HashMap<Ident<'static>, Option<Datacell>>) -> Self {
         Self::Map(m)
     }
 }
@@ -392,6 +389,8 @@ impl<'a> InsertStatement<'a> {
 
 #[cfg(test)]
 pub use impls::test::{DataMap, DataTuple, List};
+
+use crate::engine::data::tag::TagClass;
 mod impls {
     use {
         super::InsertStatement,
@@ -409,7 +408,7 @@ mod impls {
     pub mod test {
         use {
             super::super::{
-                parse_data_map_syntax, parse_data_tuple_syntax, parse_list, HSData, HashMap,
+                parse_data_map_syntax, parse_data_tuple_syntax, parse_list, Datacell, HashMap,
             },
             crate::engine::{
                 error::LangResult,
@@ -417,7 +416,7 @@ mod impls {
             },
         };
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct List(Vec<HSData>);
+        pub struct List(Vec<Datacell>);
         impl<'a> ASTNode<'a> for List {
             // important: upstream must verify this
             const VERIFY: bool = true;
@@ -428,7 +427,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataTuple(Vec<Option<HSData>>);
+        pub struct DataTuple(Vec<Option<Datacell>>);
         impl<'a> ASTNode<'a> for DataTuple {
             // important: upstream must verify this
             const VERIFY: bool = true;
@@ -438,7 +437,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataMap(HashMap<Box<str>, Option<HSData>>);
+        pub struct DataMap(HashMap<Box<str>, Option<Datacell>>);
         impl<'a> ASTNode<'a> for DataMap {
             // important: upstream must verify this
             const VERIFY: bool = true;

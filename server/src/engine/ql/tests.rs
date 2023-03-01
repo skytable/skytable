@@ -27,7 +27,7 @@
 use {
     super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
     crate::{
-        engine::{data::HSData, error::LexResult},
+        engine::{core::Datacell, error::LexResult},
         util::test_utils,
     },
     rand::{self, Rng},
@@ -54,24 +54,24 @@ pub trait NullableData<T> {
     fn data(self) -> Option<T>;
 }
 
-impl<T> NullableData<HSData> for T
+impl<T> NullableData<Datacell> for T
 where
-    T: Into<HSData>,
+    T: Into<Datacell>,
 {
-    fn data(self) -> Option<HSData> {
+    fn data(self) -> Option<Datacell> {
         Some(self.into())
     }
 }
 
 struct Null;
 
-impl NullableData<HSData> for Null {
-    fn data(self) -> Option<HSData> {
+impl NullableData<Datacell> for Null {
+    fn data(self) -> Option<Datacell> {
         None
     }
 }
 
-fn nullable_datatype(v: impl NullableData<HSData>) -> Option<HSData> {
+fn nullable_datatype(v: impl NullableData<Datacell>) -> Option<Datacell> {
     v.data()
 }
 

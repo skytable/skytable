@@ -29,7 +29,11 @@ use core::mem;
 use {
     crate::engine::{
         self,
-        data::tag::TagClass,
+        data::{
+            lit::{Lit, LitIR},
+            spec::{Dataspec1D, DataspecMeta1D},
+            tag::{DataTag, TagClass},
+        },
         mem::{NativeQword, SystemDword},
     },
     core::{fmt, mem::ManuallyDrop, slice, str},
@@ -182,12 +186,60 @@ direct_from! {
     }
 }
 
+impl<'a> From<LitIR<'a>> for Datacell {
+    fn from(l: LitIR<'a>) -> Self {
+        match l.kind().tag_class() {
+            tag if tag < TagClass::Bin => unsafe {
+                let [a, b] = l.data().load_fat();
+                Datacell::new(
+                    l.kind().tag_class(),
+                    DataRaw::word(SystemDword::store_fat(a, b)),
+                )
+            },
+            tag @ (TagClass::Bin | TagClass::Str) => unsafe {
+                let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
+                Datacell::new(
+                    tag,
+                    DataRaw::word(SystemDword::store((bin.as_mut_ptr(), bin.len()))),
+                )
+            },
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl From<i32> for Datacell {
+    fn from(i: i32) -> Self {
+        if i.is_negative() {
+            Self::new_sint(i as _)
+        } else {
+            Self::new_uint(i as _)
+        }
+    }
+}
+
+impl<'a> From<Lit<'a>> for Datacell {
+    fn from(l: Lit<'a>) -> Self {
+        Self::from(l.as_ir())
+    }
+}
+
+impl<const N: usize> From<[Datacell; N]> for Datacell {
+    fn from(l: [Datacell; N]) -> Self {
+        Self::new_list(l.into())
+    }
+}
+
 impl Datacell {
     unsafe fn new(tag: TagClass, data: DataRaw) -> Self {
         Self { tag, data }
     }
     fn checked_tag<T>(&self, tag: TagClass, f: impl FnOnce() -> T) -> Option<T> {
         (self.tag == tag).then_some(f())
+    }
+    pub fn kind(&self) -> TagClass {
+        self.tag
     }
 }
 

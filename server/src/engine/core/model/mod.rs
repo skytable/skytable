@@ -24,7 +24,7 @@
  *
 */
 
-mod cell;
+pub mod cell;
 
 // FIXME(@ohsayan): update this!
 

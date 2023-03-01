@@ -26,10 +26,10 @@
 
 use crate::engine::{
     core::{
+        model::cell::Datacell,
         space::{Space, SpaceMeta},
         GlobalNS,
     },
-    data::HSData,
     error::DatabaseError,
 };
 
@@ -45,7 +45,7 @@ fn alter_add_prop_env_var() {
                 space.unwrap(),
                 &Space::new(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => HSData::UnsignedInt(100)))
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(100)))
                 )
             )
         },
@@ -61,7 +61,7 @@ fn alter_update_prop_env_var() {
         |space| {
             assert_eq!(
                 space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
-                &(HSData::UnsignedInt(100).into())
+                &(Datacell::new_uint(100).into())
             )
         },
     );
@@ -73,7 +73,7 @@ fn alter_update_prop_env_var() {
                 space.unwrap(),
                 &Space::new(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => HSData::UnsignedInt(200)))
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(200)))
                 )
             )
         },
@@ -89,7 +89,7 @@ fn alter_remove_prop_env_var() {
         |space| {
             assert_eq!(
                 space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
-                &(HSData::UnsignedInt(100).into())
+                &(Datacell::new_uint(100).into())
             )
         },
     );
@@ -124,7 +124,7 @@ fn alter_remove_all_env() {
         |space| {
             assert_eq!(
                 space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
-                &(HSData::UnsignedInt(100).into())
+                &(Datacell::new_uint(100).into())
             )
         },
     );

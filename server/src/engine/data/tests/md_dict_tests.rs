@@ -24,19 +24,19 @@
  *
 */
 
-use crate::engine::data::{
-    md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
-    HSData,
+use crate::engine::{
+    core::Datacell,
+    data::md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
 };
 
 #[test]
 fn t_simple_flatten() {
     let generic_dict: DictGeneric = into_dict! {
-        "a_valid_key" => Some(DictEntryGeneric::Lit(100.into())),
+        "a_valid_key" => Some(DictEntryGeneric::Lit(100u64.into())),
         "a_null_key" => None,
     };
     let expected: MetaDict = into_dict!(
-        "a_valid_key" => HSData::UnsignedInt(100)
+        "a_valid_key" => Datacell::new_uint(100)
     );
     let ret = md_dict::rflatten_metadata(generic_dict);
     assert_eq!(ret, expected);
@@ -45,18 +45,18 @@ fn t_simple_flatten() {
 #[test]
 fn t_simple_patch() {
     let mut current: MetaDict = into_dict! {
-        "a" => HSData::UnsignedInt(2),
-        "b" => HSData::UnsignedInt(3),
-        "z" => HSData::SignedInt(-100),
+        "a" => Datacell::new_uint(2),
+        "b" => Datacell::new_uint(3),
+        "z" => Datacell::new_sint(-100),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Some(HSData::UnsignedInt(1).into()),
-        "b" => Some(HSData::UnsignedInt(2).into()),
+        "a" => Some(Datacell::new_uint(1).into()),
+        "b" => Some(Datacell::new_uint(2).into()),
         "z" => None,
     };
     let expected: MetaDict = into_dict! {
-        "a" => HSData::UnsignedInt(1),
-        "b" => HSData::UnsignedInt(2),
+        "a" => Datacell::new_uint(1),
+        "b" => Datacell::new_uint(2),
     };
     assert!(md_dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, expected);
@@ -65,15 +65,15 @@ fn t_simple_patch() {
 #[test]
 fn t_bad_patch() {
     let mut current: MetaDict = into_dict! {
-        "a" => HSData::UnsignedInt(2),
-        "b" => HSData::UnsignedInt(3),
-        "z" => HSData::SignedInt(-100),
+        "a" => Datacell::new_uint(2),
+        "b" => Datacell::new_uint(3),
+        "z" => Datacell::new_sint(-100),
     };
     let backup = current.clone();
     let new: DictGeneric = into_dict! {
-        "a" => Some(HSData::UnsignedInt(1).into()),
-        "b" => Some(HSData::UnsignedInt(2).into()),
-        "z" => Some(HSData::String("omg".into()).into()),
+        "a" => Some(Datacell::new_uint(1).into()),
+        "b" => Some(Datacell::new_uint(2).into()),
+        "z" => Some(Datacell::new_str("omg".into()).into()),
     };
     assert!(!md_dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, backup);
@@ -82,20 +82,20 @@ fn t_bad_patch() {
 #[test]
 fn patch_null_out_dict() {
     let mut current: MetaDict = into_dict! {
-        "a" => HSData::UnsignedInt(2),
-        "b" => HSData::UnsignedInt(3),
+        "a" => Datacell::new_uint(2),
+        "b" => Datacell::new_uint(3),
         "z" => MetaDictEntry::Map(into_dict!(
-            "c" => HSData::UnsignedInt(1),
-            "d" => HSData::UnsignedInt(2)
+            "c" => Datacell::new_uint(1),
+            "d" => Datacell::new_uint(2)
         )),
     };
     let expected: MetaDict = into_dict! {
-        "a" => HSData::UnsignedInt(2),
-        "b" => HSData::UnsignedInt(3),
+        "a" => Datacell::new_uint(2),
+        "b" => Datacell::new_uint(3),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Some(HSData::UnsignedInt(2).into()),
-        "b" => Some(HSData::UnsignedInt(3).into()),
+        "a" => Some(Datacell::new_uint(2).into()),
+        "b" => Some(Datacell::new_uint(3).into()),
         "z" => None,
     };
     assert!(md_dict::rmerge_metadata(&mut current, new));

@@ -436,9 +436,16 @@ mod stmt_insert {
         let r = parse_ast_node_full::<InsertStatement>(&x[1..]).unwrap();
         let e = InsertStatement::new(
             Entity::Full(Ident::from("twitter"), Ident::from("users")),
-            into_array_nullable!["sayan", "Sayan", "sayan@example.com", true, 12345, 67890]
-                .to_vec()
-                .into(),
+            into_array_nullable![
+                "sayan",
+                "Sayan",
+                "sayan@example.com",
+                true,
+                12345,
+                67890
+            ]
+            .to_vec()
+            .into(),
         );
         assert_eq!(e, r);
     }
