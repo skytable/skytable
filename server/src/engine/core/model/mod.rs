@@ -27,10 +27,14 @@
 pub mod cell;
 
 use crate::engine::{
-    data::tag::{DataTag, FullTag, TagSelector},
+    core::model::cell::Datacell,
+    data::tag::{DataTag, FullTag, TagClass, TagSelector},
     error::{DatabaseError, DatabaseResult},
+    mem::VInline,
     ql::ddl::syn::LayerSpec,
 };
+#[cfg(test)]
+use std::cell::RefCell;
 
 // FIXME(@ohsayan): update this!
 
@@ -70,7 +74,7 @@ static LUT: [(&str, FullTag); 14] = [
 ];
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LayerView(Box<[Layer]>);
+pub struct LayerView(VInline<1, Layer>);
 
 impl LayerView {
     pub fn layers(&self) -> &[Layer] {
@@ -80,7 +84,7 @@ impl LayerView {
         let mut layers = spec.into_iter().rev();
         let mut okay = true;
         let mut fin = false;
-        let mut layerview = Vec::with_capacity(layers.len());
+        let mut layerview = VInline::new();
         while (layers.len() != 0) & okay & !fin {
             let LayerSpec { ty, props } = layers.next().unwrap();
             okay &= props.is_empty(); // FIXME(@ohsayan): you know what to do here
@@ -94,9 +98,39 @@ impl LayerView {
         }
         okay &= fin & (layers.len() == 0);
         if okay {
-            Ok(Self(layerview.into_boxed_slice()))
+            Ok(Self(layerview))
         } else {
             Err(DatabaseError::DdlModelInvalidTypeDefinition)
+        }
+    }
+    pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
+        if (self.layers().len() == 0) & (self.layers()[0].tag.tag_class() == data.kind()) {
+            // if someone sends a PR with an added check, I'll come home and throw a brick on your head
+            let l = self.layers()[0];
+            unsafe { LVERIFY[l.tag.tag_selector().word()](l, data) }
+        } else {
+            Self::rverify_layers(self.layers(), data)
+        }
+    }
+    // TODO(@ohsayan): improve algo with dfs
+    fn rverify_layers(layers: &[Layer], data: &Datacell) -> bool {
+        let layer = layers[0];
+        let layers = &layers[1..];
+        match (layer.tag.tag_class(), data.kind()) {
+            (layer_tag, data_tag) if (layer_tag == data_tag) & (layer_tag < TagClass::List) => {
+                // time to go home
+                (unsafe { LVERIFY[layer.tag.tag_class().word()](layer, data) } & layers.is_empty())
+            }
+            (TagClass::List, TagClass::List) => unsafe {
+                let mut okay = !layers.is_empty() & LVERIFY[TagClass::List.word()](layer, data);
+                let list = data.read_list().read();
+                let mut it = list.iter();
+                while (it.len() != 0) & okay {
+                    okay &= Self::rverify_layers(layers, it.next().unwrap());
+                }
+                okay
+            },
+            _ => false,
         }
     }
 }
@@ -179,4 +213,76 @@ impl Layer {
             None
         }
     }
+}
+
+static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 7] = [
+    lverify_bool,
+    lverify_uint,
+    lverify_sint,
+    lverify_float,
+    lverify_bin,
+    lverify_str,
+    lverify_list,
+];
+
+#[cfg(test)]
+thread_local! {
+    pub static LAYER_TRACE: RefCell<Vec<Box<str>>> = RefCell::new(Vec::new());
+}
+
+#[inline(always)]
+fn layertrace(_layer: impl ToString) {
+    #[cfg(test)]
+    {
+        LAYER_TRACE.with(|v| v.borrow_mut().push(_layer.to_string().into()));
+    }
+}
+
+#[cfg(test)]
+/// Obtain a layer trace and clear older traces
+pub(super) fn layer_traces() -> Box<[Box<str>]> {
+    LAYER_TRACE.with(|x| {
+        let ret = x.borrow().iter().cloned().collect();
+        x.borrow_mut().clear();
+        ret
+    })
+}
+
+unsafe fn lverify_bool(_: Layer, _: &Datacell) -> bool {
+    layertrace("bool");
+    true
+}
+unsafe fn lverify_uint(l: Layer, d: &Datacell) -> bool {
+    layertrace("uint");
+    const MX: [u64; 4] = [u8::MAX as _, u16::MAX as _, u32::MAX as _, u64::MAX];
+    d.read_uint() <= MX[l.tag.tag_selector().word() - 1]
+}
+unsafe fn lverify_sint(l: Layer, d: &Datacell) -> bool {
+    layertrace("sint");
+    const MN_MX: [(i64, i64); 4] = [
+        (i8::MIN as _, i8::MAX as _),
+        (i16::MIN as _, i16::MAX as _),
+        (i32::MIN as _, i32::MAX as _),
+        (i64::MIN, i64::MAX),
+    ];
+    let (mn, mx) = MN_MX[l.tag.tag_selector().word() - 5];
+    (d.read_sint() >= mn) & (d.read_sint() <= mx)
+}
+unsafe fn lverify_float(l: Layer, d: &Datacell) -> bool {
+    layertrace("float");
+    const MN_MX: [(f64, f64); 2] = [(f32::MIN as _, f32::MAX as _), (f64::MIN, f64::MAX)];
+    let (mn, mx) = MN_MX[l.tag.tag_selector().word() - 9];
+    (d.read_float() >= mn) & (d.read_float() <= mx)
+}
+unsafe fn lverify_bin(_: Layer, _: &Datacell) -> bool {
+    layertrace("binary");
+    true
+}
+unsafe fn lverify_str(_: Layer, _: &Datacell) -> bool {
+    layertrace("string");
+    true
+}
+unsafe fn lverify_list(_: Layer, _: &Datacell) -> bool {
+    layertrace("list");
+    true
 }

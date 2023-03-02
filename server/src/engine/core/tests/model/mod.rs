@@ -24,46 +24,4 @@
  *
 */
 
-mod layer_validation {
-    use crate::engine::{
-        core::model::{Layer, LayerView},
-        error::DatabaseError,
-        ql::{ast::parse_ast_node_multiple_full, tests::lex_insecure as lex},
-    };
-
-    #[test]
-    fn string() {
-        let tok = lex(b"string").unwrap();
-        let spec = parse_ast_node_multiple_full(&tok).unwrap();
-        let view = LayerView::parse_layers(spec).unwrap();
-        assert_eq!(view.layers(), [Layer::str()]);
-    }
-
-    #[test]
-    fn nested_list() {
-        let tok = lex(b"list { type: list { type: string } }").unwrap();
-        let spec = parse_ast_node_multiple_full(&tok).unwrap();
-        let view = LayerView::parse_layers(spec).unwrap();
-        assert_eq!(view.layers(), [Layer::list(), Layer::list(), Layer::str()]);
-    }
-
-    #[test]
-    fn invalid_list() {
-        let tok = lex(b"list").unwrap();
-        let spec = parse_ast_node_multiple_full(&tok).unwrap();
-        assert_eq!(
-            LayerView::parse_layers(spec).unwrap_err(),
-            DatabaseError::DdlModelInvalidTypeDefinition
-        );
-    }
-
-    #[test]
-    fn invalid_flat() {
-        let tok = lex(b"string { type: string }").unwrap();
-        let spec = parse_ast_node_multiple_full(&tok).unwrap();
-        assert_eq!(
-            LayerView::parse_layers(spec).unwrap_err(),
-            DatabaseError::DdlModelInvalidTypeDefinition
-        );
-    }
-}
+mod layer;

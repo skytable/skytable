@@ -78,16 +78,38 @@ macro_rules! cfg_test {
 
 #[macro_export]
 /// Compare two vectors irrespective of their elements' position
-macro_rules! veceq {
+macro_rules! veceq_transposed {
     ($v1:expr, $v2:expr) => {
         $v1.len() == $v2.len() && $v1.iter().all(|v| $v2.contains(v))
     };
 }
 
 #[macro_export]
-macro_rules! assert_veceq {
+macro_rules! assert_veceq_transposed {
     ($v1:expr, $v2:expr) => {
-        assert!(veceq!($v1, $v2))
+        assert!(veceq_transposed!($v1, $v2))
+    };
+}
+
+#[cfg(test)]
+macro_rules! vecstreq_exact {
+    ($v1:expr, $v2:expr) => {
+        $v1.iter()
+            .zip($v2.iter())
+            .all(|(a, b)| a.as_bytes() == b.as_bytes())
+    };
+}
+
+#[cfg(test)]
+macro_rules! assert_vecstreq_exact {
+    ($v1:expr, $v2:expr) => {
+        if !vecstreq_exact!($v1, $v2) {
+            ::core::panic!(
+                "failed to assert vector data equality. lhs: {:?}, rhs: {:?}",
+                $v1,
+                $v2
+            );
+        }
     };
 }
 

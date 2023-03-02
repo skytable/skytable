@@ -209,7 +209,7 @@ mod preload_tests {
             .into_iter()
             .map(|each| unsafe { each.as_str().to_owned() })
             .collect();
-        assert_veceq!(de, vec!["default".to_owned(), "system".to_owned()]);
+        assert_veceq_transposed!(de, vec!["default".to_owned(), "system".to_owned()]);
     }
 }
 

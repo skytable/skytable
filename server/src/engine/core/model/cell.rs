@@ -26,8 +26,6 @@
 
 #[cfg(test)]
 use core::mem;
-
-use crate::engine::mem::WordRW;
 use {
     crate::engine::{
         self,
@@ -36,7 +34,7 @@ use {
             spec::{Dataspec1D, DataspecMeta1D},
             tag::{DataTag, TagClass},
         },
-        mem::{NativeQword, SystemDword},
+        mem::{NativeQword, SystemDword, WordRW},
     },
     core::{fmt, mem::ManuallyDrop, slice, str},
     parking_lot::RwLock,
@@ -102,11 +100,11 @@ impl Datacell {
     }
     // bin
     pub fn new_bin(s: Box<[u8]>) -> Self {
-        let md = ManuallyDrop::new(s);
+        let mut md = ManuallyDrop::new(s);
         unsafe {
             Self::new(
                 TagClass::Bin,
-                DataRaw::word(SystemDword::store((md.as_ptr(), md.len()))),
+                DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
             )
         }
     }
@@ -122,11 +120,11 @@ impl Datacell {
     }
     // str
     pub fn new_str(s: Box<str>) -> Self {
-        let md = ManuallyDrop::new(s.into_boxed_bytes());
+        let mut md = ManuallyDrop::new(s.into_boxed_bytes());
         unsafe {
             Self::new(
                 TagClass::Str,
-                DataRaw::word(SystemDword::store((md.as_ptr(), md.len()))),
+                DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
             )
         }
     }

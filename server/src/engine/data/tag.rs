@@ -66,7 +66,7 @@ pub enum TagUnique {
 }
 
 macro_rules! d {
-    ($($ty:ty),*) => {$(impl $ty { fn d(&self) -> u8 { unsafe { ::core::mem::transmute_copy(self) } } } )*}
+    ($($ty:ty),*) => {$(impl $ty { pub fn d(&self) -> u8 {unsafe{::core::mem::transmute_copy(self)}} pub fn word(&self) -> usize {Self::d(self) as usize} } )*}
 }
 
 d!(TagClass, TagSelector, TagUnique);
@@ -115,7 +115,7 @@ macro_rules! fulltag {
         FullTag::new(TagClass::$class, TagSelector::$selector, TagUnique::$unique)
     };
     ($class:ident, $selector:ident) => {
-        FullTag::new(TagClass::$class, TagSelector::$selector, TagUnique::Illegal)
+        fulltag!($class, $selector, Illegal)
     };
 }
 

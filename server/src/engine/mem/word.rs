@@ -292,11 +292,11 @@ impl_wordrw! {
         |word| SystemDword::load_qw(word) as i64;
     }
     f32 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| f64::from_bits(SystemDword::load_qw(word)) as _;
+        |self| SystemDword::store_qw(self.to_bits() as u64);
+        |word| f32::from_bits(SystemDword::load_qw(word) as u32);
     }
     f64 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
+        |self| SystemDword::store_qw(self.to_bits());
         |word| f64::from_bits(SystemDword::load_qw(word));
     }
     [usize; 2] as SystemDword => {
