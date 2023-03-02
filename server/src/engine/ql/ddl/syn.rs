@@ -217,12 +217,12 @@ pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>>(
 
 #[derive(Debug, PartialEq)]
 /// A layer contains a type and corresponding metadata
-pub struct Layer<'a> {
-    ty: Ident<'a>,
-    props: DictGeneric,
+pub struct LayerSpec<'a> {
+    pub(in crate::engine) ty: Ident<'a>,
+    pub(in crate::engine) props: DictGeneric,
 }
 
-impl<'a> Layer<'a> {
+impl<'a> LayerSpec<'a> {
     //// Create a new layer
     pub const fn new(ty: Ident<'a>, props: DictGeneric) -> Self {
         Self { ty, props }
@@ -243,7 +243,7 @@ states! {
 fn rfold_layers<'a, Qd: QueryData<'a>>(
     mut mstate: LayerFoldState,
     state: &mut State<'a, Qd>,
-    layers: &mut Vec<Layer<'a>>,
+    layers: &mut Vec<LayerSpec<'a>>,
 ) {
     let mut ty = MaybeInit::uninit();
     let mut props = Default::default();
@@ -296,7 +296,7 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
     }
     if ((mstate == LayerFoldState::FINAL) | (mstate == LayerFoldState::FINAL_OR_OB)) & state.okay()
     {
-        layers.push(Layer {
+        layers.push(LayerSpec {
             ty: unsafe { ty.take() },
             props,
         });
@@ -311,7 +311,7 @@ pub struct Field<'a> {
     /// the field name
     field_name: Ident<'a>,
     /// layers
-    layers: Vec<Layer<'a>>,
+    layers: Vec<LayerSpec<'a>>,
     /// is null
     null: bool,
     /// is primary
@@ -319,7 +319,12 @@ pub struct Field<'a> {
 }
 
 impl<'a> Field<'a> {
-    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, null: bool, primary: bool) -> Self {
+    pub fn new(
+        field_name: Ident<'a>,
+        layers: Vec<LayerSpec<'a>>,
+        null: bool,
+        primary: bool,
+    ) -> Self {
         Self {
             field_name,
             layers,
@@ -364,12 +369,12 @@ impl<'a> Field<'a> {
 /// An [`ExpandedField`] is a full field definition with advanced metadata
 pub struct ExpandedField<'a> {
     field_name: Ident<'a>,
-    layers: Vec<Layer<'a>>,
+    layers: Vec<LayerSpec<'a>>,
     props: DictGeneric,
 }
 
 impl<'a> ExpandedField<'a> {
-    pub fn new(field_name: Ident<'a>, layers: Vec<Layer<'a>>, props: DictGeneric) -> Self {
+    pub fn new(field_name: Ident<'a>, layers: Vec<LayerSpec<'a>>, props: DictGeneric) -> Self {
         Self {
             field_name,
             layers,
@@ -481,7 +486,7 @@ mod impls {
     use {
         super::{
             rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, DictGeneric, ExpandedField,
-            Field, Layer, LayerFoldState,
+            Field, LayerFoldState, LayerSpec,
         },
         crate::engine::{
             error::LangResult,
@@ -498,7 +503,7 @@ mod impls {
             Self::parse_multiple(state).map(Vec::from)
         }
     }
-    impl<'a> ASTNode<'a> for Layer<'a> {
+    impl<'a> ASTNode<'a> for LayerSpec<'a> {
         // important: upstream must verify this
         const VERIFY: bool = true;
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {

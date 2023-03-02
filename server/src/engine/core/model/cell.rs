@@ -26,6 +26,8 @@
 
 #[cfg(test)]
 use core::mem;
+
+use crate::engine::mem::WordRW;
 use {
     crate::engine::{
         self,
@@ -48,10 +50,10 @@ pub struct Datacell {
 impl Datacell {
     // bool
     pub fn new_bool(b: bool) -> Self {
-        unsafe { Self::new(TagClass::Bool, DataRaw::word(SystemDword::store_qw(b as _))) }
+        unsafe { Self::new(TagClass::Bool, DataRaw::word(SystemDword::store(b))) }
     }
     pub unsafe fn read_bool(&self) -> bool {
-        self.data.word.load_qw() == 1
+        self.load_word()
     }
     pub fn try_bool(&self) -> Option<bool> {
         self.checked_tag(TagClass::Bool, || unsafe { self.read_bool() })
@@ -61,15 +63,10 @@ impl Datacell {
     }
     // uint
     pub fn new_uint(u: u64) -> Self {
-        unsafe {
-            Self::new(
-                TagClass::UnsignedInt,
-                DataRaw::word(SystemDword::store_qw(u)),
-            )
-        }
+        unsafe { Self::new(TagClass::UnsignedInt, DataRaw::word(SystemDword::store(u))) }
     }
     pub unsafe fn read_uint(&self) -> u64 {
-        self.data.word.load_qw()
+        self.load_word()
     }
     pub fn try_uint(&self) -> Option<u64> {
         self.checked_tag(TagClass::UnsignedInt, || unsafe { self.read_uint() })
@@ -79,15 +76,10 @@ impl Datacell {
     }
     // sint
     pub fn new_sint(u: i64) -> Self {
-        unsafe {
-            Self::new(
-                TagClass::SignedInt,
-                DataRaw::word(SystemDword::store_qw(u as _)),
-            )
-        }
+        unsafe { Self::new(TagClass::SignedInt, DataRaw::word(SystemDword::store(u))) }
     }
     pub unsafe fn read_sint(&self) -> i64 {
-        self.data.word.load_qw() as _
+        self.load_word()
     }
     pub fn try_sint(&self) -> Option<i64> {
         self.checked_tag(TagClass::SignedInt, || unsafe { self.read_sint() })
@@ -97,15 +89,10 @@ impl Datacell {
     }
     // float
     pub fn new_float(f: f64) -> Self {
-        unsafe {
-            Self::new(
-                TagClass::Float,
-                DataRaw::word(SystemDword::store_qw(f.to_bits())),
-            )
-        }
+        unsafe { Self::new(TagClass::Float, DataRaw::word(SystemDword::store(f))) }
     }
     pub unsafe fn read_float(&self) -> f64 {
-        f64::from_bits(self.data.word.load_qw())
+        self.load_word()
     }
     pub fn try_float(&self) -> Option<f64> {
         self.checked_tag(TagClass::Float, || unsafe { self.read_float() })
@@ -119,13 +106,13 @@ impl Datacell {
         unsafe {
             Self::new(
                 TagClass::Bin,
-                DataRaw::word(SystemDword::store_fat(md.as_ptr() as usize, md.len())),
+                DataRaw::word(SystemDword::store((md.as_ptr(), md.len()))),
             )
         }
     }
     pub unsafe fn read_bin(&self) -> &[u8] {
-        let [p, l] = self.data.word.load_fat();
-        slice::from_raw_parts(p as *mut u8, l)
+        let (p, l) = self.load_word();
+        slice::from_raw_parts::<u8>(p, l)
     }
     pub fn try_bin(&self) -> Option<&[u8]> {
         self.checked_tag(TagClass::Bin, || unsafe { self.read_bin() })
@@ -139,13 +126,13 @@ impl Datacell {
         unsafe {
             Self::new(
                 TagClass::Str,
-                DataRaw::word(SystemDword::store_fat(md.as_ptr() as usize, md.len())),
+                DataRaw::word(SystemDword::store((md.as_ptr(), md.len()))),
             )
         }
     }
     pub unsafe fn read_str(&self) -> &str {
-        let [p, l] = self.data.word.load_fat();
-        str::from_utf8_unchecked(slice::from_raw_parts(p as *mut u8, l))
+        let (p, l) = self.load_word();
+        str::from_utf8_unchecked(slice::from_raw_parts(p, l))
     }
     pub fn try_str(&self) -> Option<&str> {
         self.checked_tag(TagClass::Str, || unsafe { self.read_str() })
@@ -241,6 +228,9 @@ impl Datacell {
     pub fn kind(&self) -> TagClass {
         self.tag
     }
+    unsafe fn load_word<'a, T: WordRW<NativeQword, Target<'a> = T>>(&'a self) -> T {
+        self.data.word.ld()
+    }
 }
 
 impl fmt::Debug for Datacell {
@@ -314,8 +304,8 @@ impl Drop for Datacell {
     fn drop(&mut self) {
         match self.tag {
             TagClass::Str | TagClass::Bin => unsafe {
-                let [p, l] = self.data.word.load_fat();
-                engine::mem::dealloc_array(p as *mut u8, l)
+                let (p, l) = self.load_word();
+                engine::mem::dealloc_array::<u8>(p, l)
             },
             TagClass::List => unsafe { ManuallyDrop::drop(&mut self.data.rwl) },
             _ => {}

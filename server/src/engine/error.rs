@@ -88,4 +88,6 @@ pub enum DatabaseError {
     DdlSpaceAlreadyExists,
     /// the space doesn't exist
     DdlSpaceNotFound,
+    /// bad definition for some typedef in a model
+    DdlModelInvalidTypeDefinition,
 }

@@ -190,23 +190,23 @@ mod tymeta {
 }
 mod layer {
     use super::*;
-    use crate::engine::ql::{ast::parse_ast_node_multiple_full, ddl::syn::Layer};
+    use crate::engine::ql::{ast::parse_ast_node_multiple_full, ddl::syn::LayerSpec};
     #[test]
     fn layer_mini() {
         let tok = lex_insecure(b"string").unwrap();
-        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
         assert_eq!(
             layers,
-            vec![Layer::new(Ident::from("string"), null_dict! {})]
+            vec![LayerSpec::new(Ident::from("string"), null_dict! {})]
         );
     }
     #[test]
     fn layer() {
         let tok = lex_insecure(b"string { maxlen: 100 }").unwrap();
-        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
         assert_eq!(
             layers,
-            vec![Layer::new(
+            vec![LayerSpec::new(
                 Ident::from("string"),
                 null_dict! {
                     "maxlen" => Lit::UnsignedInt(100)
@@ -217,24 +217,24 @@ mod layer {
     #[test]
     fn layer_plus() {
         let tok = lex_insecure(b"list { type: string }").unwrap();
-        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new(Ident::from("string"), null_dict! {}),
-                Layer::new(Ident::from("list"), null_dict! {})
+                LayerSpec::new(Ident::from("string"), null_dict! {}),
+                LayerSpec::new(Ident::from("list"), null_dict! {})
             ]
         );
     }
     #[test]
     fn layer_pro() {
         let tok = lex_insecure(b"list { unique: true, type: string, maxlen: 10 }").unwrap();
-        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new(Ident::from("string"), null_dict! {}),
-                Layer::new(
+                LayerSpec::new(Ident::from("string"), null_dict! {}),
+                LayerSpec::new(
                     Ident::from("list"),
                     null_dict! {
                         "unique" => Lit::Bool(true),
@@ -250,18 +250,18 @@ mod layer {
             b"list { unique: true, type: string { ascii_only: true, maxlen: 255 }, maxlen: 10 }",
         )
         .unwrap();
-        let layers = parse_ast_node_multiple_full::<Layer>(&tok).unwrap();
+        let layers = parse_ast_node_multiple_full::<LayerSpec>(&tok).unwrap();
         assert_eq!(
             layers,
             vec![
-                Layer::new(
+                LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
                         "ascii_only" => Lit::Bool(true),
                         "maxlen" => Lit::UnsignedInt(255)
                     }
                 ),
-                Layer::new(
+                LayerSpec::new(
                     Ident::from("list"),
                     null_dict! {
                         "unique" => Lit::Bool(true),
@@ -285,17 +285,17 @@ mod layer {
             }
         ";
         let expected = vec![
-            Layer::new(Ident::from("string"), null_dict!()),
-            Layer::new(
+            LayerSpec::new(Ident::from("string"), null_dict!()),
+            LayerSpec::new(
                 Ident::from("list"),
                 null_dict! {
                     "maxlen" => Lit::UnsignedInt(100),
                 },
             ),
-            Layer::new(Ident::from("list"), null_dict!("unique" => Lit::Bool(true))),
+            LayerSpec::new(Ident::from("list"), null_dict!("unique" => Lit::Bool(true))),
         ];
         fuzz_tokens(tok.as_slice(), |should_pass, new_tok| {
-            let layers = parse_ast_node_multiple_full::<Layer>(&new_tok);
+            let layers = parse_ast_node_multiple_full::<LayerSpec>(&new_tok);
             let ok = layers.is_ok();
             if should_pass {
                 assert_eq!(layers.unwrap(), expected);
@@ -309,7 +309,7 @@ mod fields {
         super::*,
         crate::engine::ql::{
             ast::parse_ast_node_full,
-            ddl::syn::{Field, Layer},
+            ddl::syn::{Field, LayerSpec},
             lex::Ident,
         },
     };
@@ -321,7 +321,7 @@ mod fields {
             f,
             Field::new(
                 Ident::from("username"),
-                [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                 false,
                 false
             )
@@ -335,7 +335,7 @@ mod fields {
             f,
             Field::new(
                 Ident::from("username"),
-                [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                 false,
                 true
             )
@@ -357,7 +357,7 @@ mod fields {
             f,
             Field::new(
                 Ident::from("username"),
-                [Layer::new(
+                [LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
                         "maxlen" => Lit::UnsignedInt(10),
@@ -390,14 +390,14 @@ mod fields {
             Field::new(
                 Ident::from("notes"),
                 [
-                    Layer::new(
+                    LayerSpec::new(
                         Ident::from("string"),
                         null_dict! {
                             "maxlen" => Lit::UnsignedInt(255),
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
-                    Layer::new(
+                    LayerSpec::new(
                         Ident::from("list"),
                         null_dict! {
                             "unique" => Lit::Bool(true)
@@ -417,7 +417,7 @@ mod schemas {
         ast::parse_ast_node_full,
         ddl::{
             crt::CreateModel,
-            syn::{Field, Layer},
+            syn::{Field, LayerSpec},
         },
     };
     #[test]
@@ -443,13 +443,13 @@ mod schemas {
                 vec![
                     Field::new(
                         Ident::from("username"),
-                        vec![Layer::new(Ident::from("string"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true,
                     ),
                     Field::new(
                         Ident::from("password"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false,
                     )
@@ -482,19 +482,19 @@ mod schemas {
                 vec![
                     Field::new(
                         Ident::from("username"),
-                        vec![Layer::new(Ident::from("string"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true,
                     ),
                     Field::new(
                         Ident::from("password"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false,
                     ),
                     Field::new(
                         Ident::from("profile_pic"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
                         false,
                     )
@@ -532,27 +532,27 @@ mod schemas {
                 vec![
                     Field::new(
                         Ident::from("username"),
-                        vec![Layer::new(Ident::from("string"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true
                     ),
                     Field::new(
                         Ident::from("password"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false
                     ),
                     Field::new(
                         Ident::from("profile_pic"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
                         false
                     ),
                     Field::new(
                         Ident::from("notes"),
                         vec![
-                            Layer::new(Ident::from("string"), null_dict! {}),
-                            Layer::new(
+                            LayerSpec::new(Ident::from("string"), null_dict! {}),
+                            LayerSpec::new(
                                 Ident::from("list"),
                                 null_dict! {
                                     "unique" => Lit::Bool(true)
@@ -601,27 +601,27 @@ mod schemas {
                 vec![
                     Field::new(
                         Ident::from("username"),
-                        vec![Layer::new(Ident::from("string"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true
                     ),
                     Field::new(
                         Ident::from("password"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false
                     ),
                     Field::new(
                         Ident::from("profile_pic"),
-                        vec![Layer::new(Ident::from("binary"), null_dict! {})],
+                        vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
                         false
                     ),
                     Field::new(
                         Ident::from("notes"),
                         vec![
-                            Layer::new(Ident::from("string"), null_dict! {}),
-                            Layer::new(
+                            LayerSpec::new(Ident::from("string"), null_dict! {}),
+                            LayerSpec::new(
                                 Ident::from("list"),
                                 null_dict! {
                                     "unique" => Lit::Bool(true)
@@ -646,7 +646,7 @@ mod dict_field_syntax {
     use super::*;
     use crate::engine::ql::{
         ast::parse_ast_node_full,
-        ddl::syn::{ExpandedField, Layer},
+        ddl::syn::{ExpandedField, LayerSpec},
     };
     #[test]
     fn field_syn_mini() {
@@ -656,7 +656,7 @@ mod dict_field_syntax {
             ef,
             ExpandedField::new(
                 Ident::from("username"),
-                vec![Layer::new(Ident::from("string"), null_dict! {})],
+                vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                 null_dict! {}
             )
         )
@@ -677,7 +677,7 @@ mod dict_field_syntax {
             ef,
             ExpandedField::new(
                 Ident::from("username"),
-                vec![Layer::new(Ident::from("string"), null_dict! {})],
+                vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                 null_dict! {
                     "nullable" => Lit::Bool(false),
                 },
@@ -704,7 +704,7 @@ mod dict_field_syntax {
             ef,
             ExpandedField::new(
                 Ident::from("username"),
-                vec![Layer::new(
+                vec![LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
                         "minlen" => Lit::UnsignedInt(6),
@@ -741,13 +741,13 @@ mod dict_field_syntax {
             ExpandedField::new(
                 Ident::from("notes"),
                 vec![
-                    Layer::new(
+                    LayerSpec::new(
                         Ident::from("string"),
                         null_dict! {
                             "ascii_only" => Lit::Bool(true),
                         }
                     ),
-                    Layer::new(
+                    LayerSpec::new(
                         Ident::from("list"),
                         null_dict! {
                             "unique" => Lit::Bool(true),
@@ -819,7 +819,7 @@ mod alter_model_add {
         ast::parse_ast_node_full,
         ddl::{
             alt::{AlterKind, AlterModel},
-            syn::{ExpandedField, Layer},
+            syn::{ExpandedField, LayerSpec},
         },
     };
     #[test]
@@ -837,7 +837,7 @@ mod alter_model_add {
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {},
                     )]
                     .into()
@@ -861,7 +861,7 @@ mod alter_model_add {
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
                             "nullable" => Lit::Bool(true)
                         },
@@ -887,7 +887,7 @@ mod alter_model_add {
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
                             "nullable" => Lit::Bool(true)
                         },
@@ -928,7 +928,7 @@ mod alter_model_add {
                     [
                         ExpandedField::new(
                             Ident::from("myfield"),
-                            [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                            [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
                                 "nullable" => Lit::Bool(true)
                             },
@@ -936,13 +936,13 @@ mod alter_model_add {
                         ExpandedField::new(
                             Ident::from("another"),
                             [
-                                Layer::new(
+                                LayerSpec::new(
                                     Ident::from("string"),
                                     null_dict! {
                                         "maxlen" => Lit::UnsignedInt(255)
                                     }
                                 ),
-                                Layer::new(
+                                LayerSpec::new(
                                     Ident::from("list"),
                                     null_dict! {
                                        "unique" => Lit::Bool(true)
@@ -967,7 +967,7 @@ mod alter_model_update {
         ast::parse_ast_node_full,
         ddl::{
             alt::{AlterKind, AlterModel},
-            syn::{ExpandedField, Layer},
+            syn::{ExpandedField, LayerSpec},
         },
     };
 
@@ -987,7 +987,7 @@ mod alter_model_update {
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {},
                     )]
                     .into()
@@ -1011,7 +1011,7 @@ mod alter_model_update {
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {},
                     )]
                     .into()
@@ -1040,7 +1040,7 @@ mod alter_model_update {
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
-                        [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                        [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
                             "nullable" => Lit::Bool(true)
                         },
@@ -1075,14 +1075,14 @@ mod alter_model_update {
                     [
                         ExpandedField::new(
                             Ident::from("myfield"),
-                            [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                            [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
                                 "nullable" => Lit::Bool(true)
                             },
                         ),
                         ExpandedField::new(
                             Ident::from("myfield2"),
-                            [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                            [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {},
                         )
                     ]
@@ -1118,14 +1118,14 @@ mod alter_model_update {
                     [
                         ExpandedField::new(
                             Ident::from("myfield"),
-                            [Layer::new(Ident::from("string"), null_dict! {})].into(),
+                            [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
                                 "nullable" => Lit::Bool(true)
                             },
                         ),
                         ExpandedField::new(
                             Ident::from("myfield2"),
-                            [Layer::new(
+                            [LayerSpec::new(
                                 Ident::from("string"),
                                 null_dict! {"maxlen" => Lit::UnsignedInt(255)}
                             )]

@@ -36,9 +36,15 @@ pub trait SystemQword: SystemTword {
     {
         WordRW::store(v)
     }
-    fn load<'a, T>(&'a self) -> T::Target<'a>
+    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
     where
         T: WordRW<Self>,
+    {
+        <T>::load(self)
+    }
+    fn ld<'a, T>(&'a self) -> T
+    where
+        T: WordRW<Self, Target<'a> = T>,
     {
         <T>::load(self)
     }
@@ -54,9 +60,15 @@ pub trait SystemTword: SystemDword {
     {
         WordRW::store(v)
     }
-    fn load<'a, T>(&'a self) -> T::Target<'a>
+    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
     where
         T: WordRW<Self>,
+    {
+        <T>::load(self)
+    }
+    fn ld<'a, T>(&'a self) -> T
+    where
+        T: WordRW<Self, Target<'a> = T>,
     {
         <T>::load(self)
     }
@@ -74,9 +86,15 @@ pub trait SystemDword: Sized {
     {
         WordRW::store(v)
     }
-    fn load<'a, T>(&'a self) -> T::Target<'a>
+    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
     where
         T: WordRW<Self>,
+    {
+        <T>::load(self)
+    }
+    fn ld<'a, T>(&'a self) -> T
+    where
+        T: WordRW<Self, Target<'a> = T>,
     {
         <T>::load(self)
     }

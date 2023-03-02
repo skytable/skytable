@@ -99,6 +99,15 @@ impl FullTag {
             unique,
         }
     }
+    pub const fn new_uint(selector: TagSelector) -> Self {
+        Self::new(TagClass::UnsignedInt, selector, TagUnique::UnsignedInt)
+    }
+    pub const fn new_sint(selector: TagSelector) -> Self {
+        Self::new(TagClass::SignedInt, selector, TagUnique::SignedInt)
+    }
+    pub const fn new_float(selector: TagSelector) -> Self {
+        Self::new(TagClass::Float, selector, TagUnique::Illegal)
+    }
 }
 
 macro_rules! fulltag {
