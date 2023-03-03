@@ -84,7 +84,7 @@ mod layer_data_validation {
         let dc = Datacell::new_bool(true);
         let layer = layerview("bool").unwrap();
         assert!(layer.validate_data_fpath(&dc));
-        assert_vecstreq_exact!(model::layer_traces(), ["bool"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "bool"]);
     }
     #[test]
     fn uint() {
@@ -101,16 +101,16 @@ mod layer_data_validation {
                 let this_layer = layerview(layer).unwrap();
                 let dc = Datacell::new_uint(max);
                 assert!(this_layer.validate_data_fpath(&dc), "{:?}", this_layer);
-                assert_vecstreq_exact!(model::layer_traces(), ["uint"]);
+                assert_vecstreq_exact!(model::layer_traces(), ["fpath", "uint"]);
                 for (lower, _) in targets[..i].iter() {
                     let layer = layerview(lower).unwrap();
                     assert!(!layer.validate_data_fpath(&dc), "{:?}", layer);
-                    assert_vecstreq_exact!(model::layer_traces(), ["uint"]);
+                    assert_vecstreq_exact!(model::layer_traces(), ["fpath", "uint"]);
                 }
                 for (higher, _) in targets[i + 1..].iter() {
                     let layer = layerview(higher).unwrap();
                     assert!(layer.validate_data_fpath(&dc), "{:?}", layer);
-                    assert_vecstreq_exact!(model::layer_traces(), ["uint"]);
+                    assert_vecstreq_exact!(model::layer_traces(), ["fpath", "uint"]);
                 }
             });
     }
@@ -131,18 +131,24 @@ mod layer_data_validation {
                 let dc_max = Datacell::new_sint(max);
                 assert!(this_layer.validate_data_fpath(&dc_min), "{:?}", this_layer);
                 assert!(this_layer.validate_data_fpath(&dc_max), "{:?}", this_layer);
-                assert_vecstreq_exact!(model::layer_traces(), ["sint", "sint"]);
+                assert_vecstreq_exact!(model::layer_traces(), ["fpath", "sint", "fpath", "sint"]);
                 for (lower, _) in targets[..i].iter() {
                     let layer = layerview(lower).unwrap();
                     assert!(!layer.validate_data_fpath(&dc_min), "{:?}", layer);
                     assert!(!layer.validate_data_fpath(&dc_max), "{:?}", layer);
-                    assert_vecstreq_exact!(model::layer_traces(), ["sint", "sint"]);
+                    assert_vecstreq_exact!(
+                        model::layer_traces(),
+                        ["fpath", "sint", "fpath", "sint"]
+                    );
                 }
                 for (higher, _) in targets[i + 1..].iter() {
                     let layer = layerview(higher).unwrap();
                     assert!(layer.validate_data_fpath(&dc_min), "{:?}", layer);
                     assert!(layer.validate_data_fpath(&dc_max), "{:?}", layer);
-                    assert_vecstreq_exact!(model::layer_traces(), ["sint", "sint"]);
+                    assert_vecstreq_exact!(
+                        model::layer_traces(),
+                        ["fpath", "sint", "fpath", "sint"]
+                    );
                 }
             });
     }
@@ -159,29 +165,29 @@ mod layer_data_validation {
         // check (32)
         assert!(f32_l.validate_data_fpath(&f32_dc_min));
         assert!(f32_l.validate_data_fpath(&f32_dc_max));
-        assert_vecstreq_exact!(model::layer_traces(), ["float", "float"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "float", "fpath", "float"]);
         assert!(f64_l.validate_data_fpath(&f32_dc_min));
         assert!(f64_l.validate_data_fpath(&f32_dc_max));
-        assert_vecstreq_exact!(model::layer_traces(), ["float", "float"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "float", "fpath", "float"]);
         // check (64)
         assert!(!f32_l.validate_data_fpath(&f64_dc_min));
         assert!(!f32_l.validate_data_fpath(&f64_dc_max));
-        assert_vecstreq_exact!(model::layer_traces(), ["float", "float"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "float", "fpath", "float"]);
         assert!(f64_l.validate_data_fpath(&f64_dc_min));
         assert!(f64_l.validate_data_fpath(&f64_dc_max));
-        assert_vecstreq_exact!(model::layer_traces(), ["float", "float"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "float", "fpath", "float"]);
     }
     #[test]
     fn bin() {
         let layer = layerview("binary").unwrap();
         assert!(layer.validate_data_fpath(&Datacell::from("hello".as_bytes())));
-        assert_vecstreq_exact!(model::layer_traces(), ["binary"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "binary"]);
     }
     #[test]
     fn str() {
         let layer = layerview("string").unwrap();
         assert!(layer.validate_data_fpath(&Datacell::from("hello")));
-        assert_vecstreq_exact!(model::layer_traces(), ["string"]);
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "string"]);
     }
     #[test]
     fn list_simple() {

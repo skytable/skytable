@@ -104,10 +104,11 @@ impl LayerView {
         }
     }
     pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
-        if (self.layers().len() == 0) & (self.layers()[0].tag.tag_class() == data.kind()) {
+        if (self.layers().len() == 1) & (self.layers()[0].tag.tag_class() == data.kind()) {
             // if someone sends a PR with an added check, I'll come home and throw a brick on your head
+            layertrace("fpath");
             let l = self.layers()[0];
-            unsafe { LVERIFY[l.tag.tag_selector().word()](l, data) }
+            unsafe { LVERIFY[l.tag.tag_class().word()](l, data) }
         } else {
             Self::rverify_layers(self.layers(), data)
         }
