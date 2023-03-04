@@ -41,6 +41,7 @@ use {
 };
 
 pub struct Datacell {
+    init: bool,
     tag: TagClass,
     data: DataRaw,
 }
@@ -217,17 +218,42 @@ impl<const N: usize> From<[Datacell; N]> for Datacell {
 }
 
 impl Datacell {
-    unsafe fn new(tag: TagClass, data: DataRaw) -> Self {
-        Self { tag, data }
-    }
-    fn checked_tag<T>(&self, tag: TagClass, f: impl FnOnce() -> T) -> Option<T> {
-        (self.tag == tag).then_some(f())
-    }
     pub fn kind(&self) -> TagClass {
         self.tag
     }
+    pub fn null() -> Self {
+        unsafe {
+            Self::_new(
+                TagClass::Bool,
+                DataRaw::word(NativeQword::store_qw(0)),
+                false,
+            )
+        }
+    }
+    pub fn is_null(&self) -> bool {
+        !self.init
+    }
+    pub fn is_init(&self) -> bool {
+        self.init
+    }
+    pub fn as_option(&self) -> Option<&Datacell> {
+        if self.init {
+            Some(self)
+        } else {
+            None
+        }
+    }
     unsafe fn load_word<'a, T: WordRW<NativeQword, Target<'a> = T>>(&'a self) -> T {
         self.data.word.ld()
+    }
+    unsafe fn _new(tag: TagClass, data: DataRaw, init: bool) -> Self {
+        Self { init, tag, data }
+    }
+    unsafe fn new(tag: TagClass, data: DataRaw) -> Self {
+        Self::_new(tag, data, true)
+    }
+    fn checked_tag<T>(&self, tag: TagClass, f: impl FnOnce() -> T) -> Option<T> {
+        ((self.tag == tag) & (self.is_init())).then_some(f())
     }
 }
 
@@ -238,7 +264,9 @@ impl fmt::Debug for Datacell {
         macro_rules! fmtdbg {
             ($($match:ident => $ret:expr),* $(,)?) => {
                 match self.tag {
-                    $(TagClass::$match => f.field("data", &$ret),)*
+                    $(TagClass::$match if self.is_init() => { f.field("data", &Some($ret));},)*
+                    TagClass::Bool if self.is_null() => {f.field("data", &Option::<u8>::None);},
+                    _ => unreachable!("incorrect state"),
                 }
             }
         }
@@ -257,6 +285,9 @@ impl fmt::Debug for Datacell {
 
 impl PartialEq for Datacell {
     fn eq(&self, other: &Datacell) -> bool {
+        if self.is_null() {
+            return other.is_null();
+        }
         match (self.tag, other.tag) {
             (TagClass::Bool, TagClass::Bool) => self.bool() == other.bool(),
             (TagClass::UnsignedInt, TagClass::UnsignedInt) => self.uint() == other.uint(),
@@ -333,6 +364,6 @@ impl Clone for Datacell {
                 }
             },
         };
-        unsafe { Self::new(self.tag, data) }
+        unsafe { Self::_new(self.tag, data, self.init) }
     }
 }

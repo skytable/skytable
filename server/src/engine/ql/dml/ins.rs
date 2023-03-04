@@ -209,7 +209,7 @@ unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> O
 /// - If tt is empty
 pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> Vec<Option<Datacell>> {
+) -> Vec<Datacell> {
     let mut stop = state.cursor_eq(Token![() close]);
     state.cursor_ahead_if(stop);
     let mut data = Vec::new();
@@ -217,21 +217,19 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
         match state.fw_read() {
             tok if state.can_read_lit_from(tok) => unsafe {
                 // UNSAFE(@ohsayan): if guard guarantees correctness
-                data.push(Some(state.read_lit_into_data_type_unchecked_from(tok)));
+                data.push(state.read_lit_into_data_type_unchecked_from(tok));
             },
             Token![open []] if state.not_exhausted() => {
                 let mut l = Vec::new();
                 let _ = parse_list(state, &mut l);
-                data.push(Some(l.into()));
+                data.push(l.into());
             }
-            Token![null] => {
-                data.push(None);
-            }
+            Token![null] => data.push(Datacell::null()),
             Token![@] if state.cursor_signature_match_fn_arity0_rounded() => match unsafe {
                 // UNSAFE(@ohsayan): Just verified at guard
                 handle_func_sub(state)
             } {
-                Some(value) => data.push(Some(value)),
+                Some(value) => data.push(value),
                 None => {
                     state.poison();
                     break;
@@ -256,7 +254,7 @@ pub(super) fn parse_data_tuple_syntax<'a, Qd: QueryData<'a>>(
 /// Panics if tt is empty
 pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> HashMap<Ident<'a>, Option<Datacell>> {
+) -> HashMap<Ident<'a>, Datacell> {
     let mut stop = state.cursor_eq(Token![close {}]);
     state.cursor_ahead_if(stop);
     let mut data = HashMap::with_capacity(2);
@@ -267,26 +265,26 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
         state.poison_if_not(Token![:].eq(colon));
         match (field, expr) {
             (Token::Ident(id), tok) if state.can_read_lit_from(tok) => {
-                let ldata = Some(unsafe {
+                let ldata = unsafe {
                     // UNSAFE(@ohsayan): The if guard guarantees correctness
                     state.read_lit_into_data_type_unchecked_from(tok)
-                });
+                };
                 state.poison_if_not(data.insert(*id, ldata).is_none());
             }
             (Token::Ident(id), Token![null]) => {
-                state.poison_if_not(data.insert(*id, None).is_none());
+                state.poison_if_not(data.insert(*id, Datacell::null()).is_none());
             }
             (Token::Ident(id), Token![open []]) if state.not_exhausted() => {
                 let mut l = Vec::new();
                 let _ = parse_list(state, &mut l);
-                state.poison_if_not(data.insert(*id, Some(l.into())).is_none());
+                state.poison_if_not(data.insert(*id, l.into()).is_none());
             }
             (Token::Ident(id), Token![@]) if state.cursor_signature_match_fn_arity0_rounded() => {
                 match unsafe {
                     // UNSAFE(@ohsayan): Just verified at guard
                     handle_func_sub(state)
                 } {
-                    Some(value) => state.poison_if_not(data.insert(*id, Some(value)).is_none()),
+                    Some(value) => state.poison_if_not(data.insert(*id, value).is_none()),
                     None => {
                         state.poison();
                         break;
@@ -310,18 +308,18 @@ pub(super) fn parse_data_map_syntax<'a, Qd: QueryData<'a>>(
 
 #[derive(Debug, PartialEq)]
 pub enum InsertData<'a> {
-    Ordered(Vec<Option<Datacell>>),
-    Map(HashMap<Ident<'a>, Option<Datacell>>),
+    Ordered(Vec<Datacell>),
+    Map(HashMap<Ident<'a>, Datacell>),
 }
 
-impl<'a> From<Vec<Option<Datacell>>> for InsertData<'a> {
-    fn from(v: Vec<Option<Datacell>>) -> Self {
+impl<'a> From<Vec<Datacell>> for InsertData<'a> {
+    fn from(v: Vec<Datacell>) -> Self {
         Self::Ordered(v)
     }
 }
 
-impl<'a> From<HashMap<Ident<'static>, Option<Datacell>>> for InsertData<'a> {
-    fn from(m: HashMap<Ident<'static>, Option<Datacell>>) -> Self {
+impl<'a> From<HashMap<Ident<'static>, Datacell>> for InsertData<'a> {
+    fn from(m: HashMap<Ident<'static>, Datacell>) -> Self {
         Self::Map(m)
     }
 }
@@ -427,7 +425,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataTuple(Vec<Option<Datacell>>);
+        pub struct DataTuple(Vec<Datacell>);
         impl<'a> ASTNode<'a> for DataTuple {
             // important: upstream must verify this
             const VERIFY: bool = true;
@@ -437,7 +435,7 @@ mod impls {
             }
         }
         #[derive(sky_macros::Wrapper, Debug)]
-        pub struct DataMap(HashMap<Box<str>, Option<Datacell>>);
+        pub struct DataMap(HashMap<Box<str>, Datacell>);
         impl<'a> ASTNode<'a> for DataMap {
             // important: upstream must verify this
             const VERIFY: bool = true;

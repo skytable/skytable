@@ -51,27 +51,27 @@ pub fn lex_secure(src: &[u8]) -> LexResult<Vec<Token>> {
 }
 
 pub trait NullableData<T> {
-    fn data(self) -> Option<T>;
+    fn data(self) -> T;
 }
 
 impl<T> NullableData<Datacell> for T
 where
     T: Into<Datacell>,
 {
-    fn data(self) -> Option<Datacell> {
-        Some(self.into())
+    fn data(self) -> Datacell {
+        self.into()
     }
 }
 
 struct Null;
 
 impl NullableData<Datacell> for Null {
-    fn data(self) -> Option<Datacell> {
-        None
+    fn data(self) -> Datacell {
+        Datacell::null()
     }
 }
 
-fn nullable_datatype(v: impl NullableData<Datacell>) -> Option<Datacell> {
+fn nullable_datatype(v: impl NullableData<Datacell>) -> Datacell {
     v.data()
 }
 
