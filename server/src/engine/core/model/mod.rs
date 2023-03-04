@@ -74,13 +74,16 @@ static LUT: [(&str, FullTag); 14] = [
 ];
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LayerView(VInline<1, Layer>);
+pub struct LayerView {
+    layers: VInline<1, Layer>,
+    nullable: bool,
+}
 
 impl LayerView {
     pub fn layers(&self) -> &[Layer] {
-        &self.0
+        &self.layers
     }
-    pub fn parse_layers(spec: Vec<LayerSpec>) -> DatabaseResult<Self> {
+    pub fn parse_layers(spec: Vec<LayerSpec>, nullable: bool) -> DatabaseResult<Self> {
         let mut layers = spec.into_iter().rev();
         let mut okay = true;
         let mut fin = false;
@@ -98,17 +101,29 @@ impl LayerView {
         }
         okay &= fin & (layers.len() == 0);
         if okay {
-            Ok(Self(layerview))
+            Ok(Self {
+                layers: layerview,
+                nullable,
+            })
         } else {
             Err(DatabaseError::DdlModelInvalidTypeDefinition)
         }
     }
+    #[inline(always)]
+    fn single_pass_for(&self, dc: &Datacell) -> bool {
+        ((self.layers().len() == 1) & (self.layers()[0].tag.tag_class() == dc.kind()))
+            | (self.nullable & dc.is_null())
+    }
+    #[inline(always)]
+    fn compute_index(&self, dc: &Datacell) -> usize {
+        // escape check if it makes sense to
+        !(self.nullable & dc.is_null()) as usize * self.layers()[0].tag.tag_class().word()
+    }
     pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
-        if (self.layers().len() == 1) & (self.layers()[0].tag.tag_class() == data.kind()) {
-            // if someone sends a PR with an added check, I'll come home and throw a brick on your head
+        // if someone sends a PR with an added check, I'll personally come to your house and throw a brick on your head
+        if self.single_pass_for(data) {
             layertrace("fpath");
-            let l = self.layers()[0];
-            unsafe { LVERIFY[l.tag.tag_class().word()](l, data) }
+            unsafe { LVERIFY[self.compute_index(data)](self.layers()[0], data) }
         } else {
             Self::rverify_layers(self.layers(), data)
         }
@@ -188,6 +203,10 @@ impl Layer {
 }
 
 impl Layer {
+    #[inline(always)]
+    fn compute_index(&self, dc: &Datacell) -> usize {
+        self.tag.tag_class().word() * (dc.is_null() as usize)
+    }
     const fn new(tag: FullTag, config: [usize; 2]) -> Self {
         Self { tag, config }
     }
@@ -228,7 +247,7 @@ static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 7] = [
 
 #[cfg(test)]
 thread_local! {
-    pub static LAYER_TRACE: RefCell<Vec<Box<str>>> = RefCell::new(Vec::new());
+    static LAYER_TRACE: RefCell<Vec<Box<str>>> = RefCell::new(Vec::new());
 }
 
 #[inline(always)]

@@ -30,10 +30,13 @@ use crate::engine::{
     ql::{ast::parse_ast_node_multiple_full, tests::lex_insecure},
 };
 
-fn layerview(layer_def: &str) -> DatabaseResult<LayerView> {
+fn layerview_nullable(layer_def: &str, nullable: bool) -> DatabaseResult<LayerView> {
     let tok = lex_insecure(layer_def.as_bytes()).unwrap();
     let spec = parse_ast_node_multiple_full(&tok).unwrap();
-    LayerView::parse_layers(spec)
+    LayerView::parse_layers(spec, nullable)
+}
+fn layerview(layer_def: &str) -> DatabaseResult<LayerView> {
+    layerview_nullable(layer_def, false)
 }
 
 mod layer_spec_validation {
@@ -76,7 +79,7 @@ mod layer_spec_validation {
 
 mod layer_data_validation {
     use {
-        super::layerview,
+        super::{layerview, layerview_nullable},
         crate::engine::core::model::{self, cell::Datacell},
     };
     #[test]
@@ -202,5 +205,17 @@ mod layer_data_validation {
             model::layer_traces(),
             ["list", "string", "string", "string"]
         );
+    }
+    #[test]
+    fn nullval_fpath() {
+        let layer = layerview_nullable("string", true).unwrap();
+        assert!(layer.validate_data_fpath(&Datacell::null()));
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "bool"]);
+    }
+    #[test]
+    fn nullval_nested_but_fpath() {
+        let layer = layerview_nullable("list { type: string }", true).unwrap();
+        assert!(layer.validate_data_fpath(&Datacell::null()));
+        assert_vecstreq_exact!(model::layer_traces(), ["fpath", "bool"]);
     }
 }
