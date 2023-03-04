@@ -25,17 +25,17 @@
 */
 
 use crate::engine::{
-    core::model::LayerView,
+    core::model::Field,
     error::DatabaseResult,
     ql::{ast::parse_ast_node_multiple_full, tests::lex_insecure},
 };
 
-fn layerview_nullable(layer_def: &str, nullable: bool) -> DatabaseResult<LayerView> {
+fn layerview_nullable(layer_def: &str, nullable: bool) -> DatabaseResult<Field> {
     let tok = lex_insecure(layer_def.as_bytes()).unwrap();
     let spec = parse_ast_node_multiple_full(&tok).unwrap();
-    LayerView::parse_layers(spec, nullable)
+    Field::parse_layers(spec, nullable)
 }
-fn layerview(layer_def: &str) -> DatabaseResult<LayerView> {
+fn layerview(layer_def: &str) -> DatabaseResult<Field> {
     layerview_nullable(layer_def, false)
 }
 

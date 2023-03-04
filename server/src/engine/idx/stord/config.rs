@@ -30,6 +30,7 @@ use {
     std::{collections::hash_map::RandomState, marker::PhantomData, ptr},
 };
 
+#[derive(Debug)]
 pub struct LiberalStrategy<K, V> {
     f: *mut IndexSTSeqDllNode<K, V>,
 }
@@ -76,6 +77,7 @@ impl<K, V> AllocStrategy<K, V> for LiberalStrategy<K, V> {
     }
 }
 
+#[derive(Debug)]
 pub struct ConservativeStrategy<K, V> {
     _d: PhantomData<IndexSTSeqDllNodePtr<K, V>>,
 }
@@ -113,6 +115,7 @@ pub trait Config<K, V> {
     type AllocStrategy: AllocStrategy<K, V>;
 }
 
+#[derive(Debug)]
 pub struct ConservativeConfig<K, V>(PhantomData<super::IndexSTSeqDll<K, V, Self>>);
 
 impl<K, V> Config<K, V> for ConservativeConfig<K, V> {
@@ -120,6 +123,7 @@ impl<K, V> Config<K, V> for ConservativeConfig<K, V> {
     type AllocStrategy = ConservativeStrategy<K, V>;
 }
 
+#[derive(Debug)]
 pub struct LiberalConfig<K, V>(PhantomData<super::IndexSTSeqDll<K, V, Self>>);
 
 impl<K, V> Config<K, V> for LiberalConfig<K, V> {

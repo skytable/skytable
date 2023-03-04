@@ -25,7 +25,7 @@
 */
 
 use {
-    super::syn::{self, DictFoldState, Field},
+    super::syn::{self, DictFoldState, FieldSpec},
     crate::{
         engine::{
             data::DictGeneric,
@@ -82,11 +82,11 @@ impl<'a> CreateSpace<'a> {
 /// A model definition
 pub struct CreateModel<'a> {
     /// the model name
-    model_name: Ident<'a>,
+    pub(in crate::engine) model_name: Ident<'a>,
     /// the fields
-    fields: Vec<Field<'a>>,
+    pub(in crate::engine) fields: Vec<FieldSpec<'a>>,
     /// properties
-    props: DictGeneric,
+    pub(in crate::engine) props: DictGeneric,
 }
 
 /*
@@ -97,7 +97,7 @@ pub struct CreateModel<'a> {
 */
 
 impl<'a> CreateModel<'a> {
-    pub fn new(model_name: Ident<'a>, fields: Vec<Field<'a>>, props: DictGeneric) -> Self {
+    pub fn new(model_name: Ident<'a>, fields: Vec<FieldSpec<'a>>, props: DictGeneric) -> Self {
         Self {
             model_name,
             fields,
@@ -118,7 +118,7 @@ impl<'a> CreateModel<'a> {
         let mut stop = false;
         let mut fields = Vec::with_capacity(2);
         while state.loop_tt() && !stop {
-            fields.push(Field::parse(state)?);
+            fields.push(FieldSpec::parse(state)?);
             let nx_close = state.cursor_rounded_eq(Token![() close]);
             let nx_comma = state.cursor_rounded_eq(Token![,]);
             state.poison_if_not(nx_close | nx_comma);

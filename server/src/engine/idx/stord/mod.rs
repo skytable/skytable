@@ -40,7 +40,7 @@ use {
         alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
         borrow::Borrow,
         collections::HashMap as StdMap,
-        fmt::Debug,
+        fmt::{self, Debug},
         hash::{Hash, Hasher},
         mem,
         ptr::{self, NonNull},
@@ -272,6 +272,15 @@ impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
         {
             self.metrics.stat_f = 0;
         }
+    }
+}
+
+impl<K, V, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
+    pub fn new() -> Self {
+        Self::with_hasher(C::Hasher::default())
+    }
+    pub fn with_capacity(cap: usize) -> Self {
+        Self::with_capacity_and_hasher(cap, C::Hasher::default())
     }
 }
 
@@ -709,3 +718,20 @@ impl<K: AsKeyClone, V: AsValueClone, C: Config<K, V>> Clone for IndexSTSeqDll<K,
 
 unsafe impl<K: Send, V: Send, C: Config<K, V> + Send> Send for IndexSTSeqDll<K, V, C> {}
 unsafe impl<K: Sync, V: Sync, C: Config<K, V> + Sync> Sync for IndexSTSeqDll<K, V, C> {}
+
+impl<K: fmt::Debug, V: fmt::Debug, C: Config<K, V> + fmt::Debug> fmt::Debug
+    for IndexSTSeqDll<K, V, C>
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_map().entries(self._iter_ord_kv()).finish()
+    }
+}
+
+impl<K: AsKey, V: AsValue + PartialEq, C: Config<K, V>> PartialEq for IndexSTSeqDll<K, V, C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len()
+            && self
+                ._iter_unord_kv()
+                .all(|(k, v)| other._get(k).unwrap().eq(v))
+    }
+}

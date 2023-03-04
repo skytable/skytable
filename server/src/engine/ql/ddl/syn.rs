@@ -307,18 +307,18 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
 
 #[derive(Debug, PartialEq)]
 /// A field definition
-pub struct Field<'a> {
+pub struct FieldSpec<'a> {
     /// the field name
-    field_name: Ident<'a>,
+    pub(in crate::engine) field_name: Ident<'a>,
     /// layers
-    layers: Vec<LayerSpec<'a>>,
+    pub(in crate::engine) layers: Vec<LayerSpec<'a>>,
     /// is null
-    null: bool,
+    pub(in crate::engine) null: bool,
     /// is primary
-    primary: bool,
+    pub(in crate::engine) primary: bool,
 }
 
-impl<'a> Field<'a> {
+impl<'a> FieldSpec<'a> {
     pub fn new(
         field_name: Ident<'a>,
         layers: Vec<LayerSpec<'a>>,
@@ -353,7 +353,7 @@ impl<'a> Field<'a> {
         let mut layers = Vec::new();
         rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut layers);
         if state.okay() {
-            Ok(Field {
+            Ok(FieldSpec {
                 field_name: field_name.clone(),
                 layers,
                 null: is_null,
@@ -486,7 +486,7 @@ mod impls {
     use {
         super::{
             rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, DictGeneric, ExpandedField,
-            Field, LayerFoldState, LayerSpec,
+            FieldSpec, LayerFoldState, LayerSpec,
         },
         crate::engine::{
             error::LangResult,
@@ -553,7 +553,7 @@ mod impls {
             Ok(Self(dict))
         }
     }
-    impl<'a> ASTNode<'a> for Field<'a> {
+    impl<'a> ASTNode<'a> for FieldSpec<'a> {
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             Self::parse(state)
         }

@@ -90,4 +90,6 @@ pub enum DatabaseError {
     DdlSpaceNotFound,
     /// bad definition for some typedef in a model
     DdlModelInvalidTypeDefinition,
+    /// bad model definition; most likely an illegal primary key
+    DdlModelBadDefinition,
 }

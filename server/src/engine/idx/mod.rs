@@ -100,7 +100,7 @@ pub struct DummyMetrics;
 
 /// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
 /// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
-pub trait IndexBaseSpec<K, V>: Sized {
+pub trait IndexBaseSpec<K: ?Sized, V: ?Sized>: Sized {
     /// Index supports prealloc?
     const PREALLOC: bool;
     #[cfg(debug_assertions)]
@@ -202,7 +202,7 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
 }
 
 /// An unordered STIndex
-pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
+pub trait STIndex<K: ?Sized, V>: IndexBaseSpec<K, V> {
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where
@@ -284,7 +284,7 @@ pub trait STIndex<K, V>: IndexBaseSpec<K, V> {
     fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a>;
 }
 
-pub trait STIndexSeq<K, V>: STIndex<K, V> {
+pub trait STIndexSeq<K: ?Sized, V>: STIndex<K, V> {
     /// An ordered iterator over the keys and values
     type IterOrdKV<'a>: Iterator<Item = (&'a K, &'a V)> + DoubleEndedIterator<Item = (&'a K, &'a V)>
     where

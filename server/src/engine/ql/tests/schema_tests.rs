@@ -309,17 +309,17 @@ mod fields {
         super::*,
         crate::engine::ql::{
             ast::parse_ast_node_full,
-            ddl::syn::{Field, LayerSpec},
+            ddl::syn::{FieldSpec, LayerSpec},
             lex::Ident,
         },
     };
     #[test]
     fn field_mini() {
         let tok = lex_insecure(b"username: string").unwrap();
-        let f = parse_ast_node_full::<Field>(&tok).unwrap();
+        let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
         assert_eq!(
             f,
-            Field::new(
+            FieldSpec::new(
                 Ident::from("username"),
                 [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                 false,
@@ -330,10 +330,10 @@ mod fields {
     #[test]
     fn field() {
         let tok = lex_insecure(b"primary username: string").unwrap();
-        let f = parse_ast_node_full::<Field>(&tok).unwrap();
+        let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
         assert_eq!(
             f,
-            Field::new(
+            FieldSpec::new(
                 Ident::from("username"),
                 [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                 false,
@@ -352,10 +352,10 @@ mod fields {
             ",
         )
         .unwrap();
-        let f = parse_ast_node_full::<Field>(&tok).unwrap();
+        let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
         assert_eq!(
             f,
-            Field::new(
+            FieldSpec::new(
                 Ident::from("username"),
                 [LayerSpec::new(
                     Ident::from("string"),
@@ -384,10 +384,10 @@ mod fields {
             ",
         )
         .unwrap();
-        let f = parse_ast_node_full::<Field>(&tok).unwrap();
+        let f = parse_ast_node_full::<FieldSpec>(&tok).unwrap();
         assert_eq!(
             f,
-            Field::new(
+            FieldSpec::new(
                 Ident::from("notes"),
                 [
                     LayerSpec::new(
@@ -417,7 +417,7 @@ mod schemas {
         ast::parse_ast_node_full,
         ddl::{
             crt::CreateModel,
-            syn::{Field, LayerSpec},
+            syn::{FieldSpec, LayerSpec},
         },
     };
     #[test]
@@ -441,13 +441,13 @@ mod schemas {
             CreateModel::new(
                 Ident::from("mymodel"),
                 vec![
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("username"),
                         vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true,
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("password"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
@@ -480,19 +480,19 @@ mod schemas {
             CreateModel::new(
                 Ident::from("mymodel"),
                 vec![
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("username"),
                         vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true,
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("password"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false,
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("profile_pic"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
@@ -530,25 +530,25 @@ mod schemas {
             CreateModel::new(
                 Ident::from("mymodel"),
                 vec![
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("username"),
                         vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("password"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("profile_pic"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
                         false
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("notes"),
                         vec![
                             LayerSpec::new(Ident::from("string"), null_dict! {}),
@@ -599,25 +599,25 @@ mod schemas {
             CreateModel::new(
                 Ident::from("mymodel"),
                 vec![
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("username"),
                         vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                         false,
                         true
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("password"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         false,
                         false
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("profile_pic"),
                         vec![LayerSpec::new(Ident::from("binary"), null_dict! {})],
                         true,
                         false
                     ),
-                    Field::new(
+                    FieldSpec::new(
                         Ident::from("notes"),
                         vec![
                             LayerSpec::new(Ident::from("string"), null_dict! {}),

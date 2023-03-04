@@ -30,21 +30,61 @@ use crate::engine::{
     core::model::cell::Datacell,
     data::tag::{DataTag, FullTag, TagClass, TagSelector},
     error::{DatabaseError, DatabaseResult},
+    idx::{IndexSTSeqCns, STIndex, STIndexSeq},
     mem::VInline,
-    ql::ddl::syn::LayerSpec,
+    ql::ddl::{
+        crt::CreateModel,
+        syn::{FieldSpec, LayerSpec},
+    },
 };
 #[cfg(test)]
 use std::cell::RefCell;
 
 // FIXME(@ohsayan): update this!
 
-#[derive(Debug)]
-pub struct ModelView {}
+#[derive(Debug, PartialEq)]
+pub struct ModelView {
+    pub(super) p_key: Box<str>,
+    pub(super) p_tag: FullTag,
+    pub(super) fields: IndexSTSeqCns<Box<str>, Field>,
+}
 
-#[cfg(test)]
-impl PartialEq for ModelView {
-    fn eq(&self, _: &Self) -> bool {
-        true
+impl ModelView {
+    pub fn create(CreateModel { fields, props, .. }: CreateModel) -> DatabaseResult<Self> {
+        let mut okay = props.is_empty() & !fields.is_empty();
+        // validate fields
+        let mut field_spec = fields.into_iter();
+        let mut fields = IndexSTSeqCns::with_capacity(field_spec.len());
+        let mut last_pk = None;
+        let mut pk_cnt = 0;
+        while (field_spec.len() != 0) & okay {
+            let FieldSpec {
+                field_name,
+                layers,
+                null,
+                primary,
+            } = field_spec.next().unwrap();
+            if primary {
+                pk_cnt += 1usize;
+                last_pk = Some(field_name.as_str());
+                okay &= !null;
+            }
+            let layer = Field::parse_layers(layers, null)?;
+            okay &= fields.st_insert(field_name.as_str().to_string().into_boxed_str(), layer);
+        }
+        okay &= pk_cnt <= 1;
+        if okay {
+            let last_pk = last_pk.unwrap_or(fields.stseq_ord_key().next().unwrap());
+            let tag = fields.st_get(last_pk).unwrap().layers()[0].tag;
+            if tag.tag_unique().is_unique() {
+                return Ok(Self {
+                    p_key: last_pk.into(),
+                    p_tag: tag,
+                    fields,
+                });
+            }
+        }
+        Err(DatabaseError::DdlModelBadDefinition)
     }
 }
 
@@ -74,12 +114,16 @@ static LUT: [(&str, FullTag); 14] = [
 ];
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LayerView {
+pub struct Field {
     layers: VInline<1, Layer>,
     nullable: bool,
 }
 
-impl LayerView {
+impl Field {
+    #[cfg(test)]
+    pub fn new_test(layers: VInline<1, Layer>, nullable: bool) -> Self {
+        Self { layers, nullable }
+    }
     pub fn layers(&self) -> &[Layer] {
         &self.layers
     }
@@ -203,6 +247,10 @@ impl Layer {
 }
 
 impl Layer {
+    #[cfg(test)]
+    pub fn new_test(tag: FullTag, config: [usize; 2]) -> Self {
+        Self::new(tag, config)
+    }
     #[inline(always)]
     fn compute_index(&self, dc: &Datacell) -> usize {
         self.tag.tag_class().word() * (dc.is_null() as usize)

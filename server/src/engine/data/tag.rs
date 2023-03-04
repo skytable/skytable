@@ -65,8 +65,14 @@ pub enum TagUnique {
     Illegal = 0xFF,
 }
 
+impl TagUnique {
+    pub const fn is_unique(&self) -> bool {
+        self.d() != 0xFF
+    }
+}
+
 macro_rules! d {
-    ($($ty:ty),*) => {$(impl $ty { pub fn d(&self) -> u8 {unsafe{::core::mem::transmute_copy(self)}} pub fn word(&self) -> usize {Self::d(self) as usize} } )*}
+    ($($ty:ty),*) => {$(impl $ty { pub const fn d(&self) -> u8 {unsafe{::core::mem::transmute(*self)}} pub const fn word(&self) -> usize {Self::d(self) as usize} } )*}
 }
 
 d!(TagClass, TagSelector, TagUnique);
