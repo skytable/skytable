@@ -28,7 +28,10 @@ pub mod cell;
 
 use crate::engine::{
     core::model::cell::Datacell,
-    data::tag::{DataTag, FullTag, TagClass, TagSelector},
+    data::{
+        tag::{DataTag, FullTag, TagClass, TagSelector},
+        ItemID,
+    },
     error::{DatabaseError, DatabaseResult},
     idx::{IndexSTSeqCns, STIndex, STIndexSeq},
     mem::VInline,
@@ -50,8 +53,20 @@ pub struct ModelView {
 }
 
 impl ModelView {
-    pub fn create_process(CreateModel { fields, props, .. }: CreateModel) -> DatabaseResult<Self> {
-        let mut okay = props.is_empty() & !fields.is_empty();
+    pub fn fields(&self) -> &IndexSTSeqCns<Box<str>, Field> {
+        &self.fields
+    }
+}
+
+impl ModelView {
+    pub fn process_create(
+        CreateModel {
+            model_name,
+            fields,
+            props,
+        }: CreateModel,
+    ) -> DatabaseResult<Self> {
+        let mut okay = props.is_empty() & !fields.is_empty() & ItemID::check(&model_name);
         // validate fields
         let mut field_spec = fields.into_iter();
         let mut fields = IndexSTSeqCns::with_capacity(field_spec.len());
@@ -85,6 +100,19 @@ impl ModelView {
             }
         }
         Err(DatabaseError::DdlModelBadDefinition)
+    }
+    pub fn exec_create(
+        gns: &super::GlobalNS,
+        space: &[u8],
+        stmt: CreateModel,
+    ) -> DatabaseResult<()> {
+        let name = stmt.model_name;
+        let model = Self::process_create(stmt)?;
+        let space_rl = gns.spaces().read();
+        let Some(space) = space_rl.get(space) else {
+            return Err(DatabaseError::DdlSpaceNotFound)
+        };
+        space.create_model(ItemID::new(&name), model)
     }
 }
 

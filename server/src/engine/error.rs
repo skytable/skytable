@@ -94,4 +94,6 @@ pub enum DatabaseError {
     DdlModelInvalidTypeDefinition,
     /// bad model definition; most likely an illegal primary key
     DdlModelBadDefinition,
+    /// the model already exists
+    DdlModelAlreadyExists,
 }

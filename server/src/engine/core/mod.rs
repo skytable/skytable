@@ -28,12 +28,12 @@ mod model;
 mod space;
 #[cfg(test)]
 mod tests;
-
+// imports
 use {
     crate::engine::{core::space::Space, data::ItemID, idx::IndexST},
     parking_lot::RwLock,
 };
-
+// re-exports
 pub use model::cell::Datacell;
 
 /// Use this for now since it substitutes for a file lock (and those syscalls are expensive),
@@ -43,16 +43,23 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 // FIXME(@ohsayan): Make sure we update what all structures we're making use of here
 
 pub struct GlobalNS {
-    spaces: RWLIdx<ItemID, Space>,
+    index_space: RWLIdx<ItemID, Space>,
 }
 
 impl GlobalNS {
-    pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Space> {
-        &self.spaces
+    pub(self) fn spaces(&self) -> &RWLIdx<ItemID, Space> {
+        &self.index_space
     }
     pub fn empty() -> Self {
         Self {
-            spaces: RWLIdx::default(),
+            index_space: RWLIdx::default(),
         }
+    }
+    #[cfg(test)]
+    pub(self) fn test_new_empty_space(&self, space_id: &str) -> bool {
+        use super::idx::STIndex;
+        self.index_space
+            .write()
+            .st_insert(space_id.into(), Space::empty())
     }
 }

@@ -74,6 +74,19 @@ impl ProcedureCreate {
 }
 
 impl Space {
+    pub fn create_model(&self, name: ItemID, model: ModelView) -> DatabaseResult<()> {
+        if self.mns.write().st_insert(name, model) {
+            Ok(())
+        } else {
+            Err(DatabaseError::DdlModelAlreadyExists)
+        }
+    }
+    pub(super) fn models(&self) -> &RWLIdx<ItemID, ModelView> {
+        &self.mns
+    }
+}
+
+impl Space {
     pub fn empty() -> Self {
         Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
@@ -86,7 +99,7 @@ impl Space {
     }
     #[inline]
     /// Validate a `create` stmt
-    fn validate_create(
+    fn process_create(
         CreateSpace {
             space_name,
             mut props,
@@ -114,8 +127,8 @@ impl Space {
     }
     /// Execute a `create` stmt
     pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
-        let ProcedureCreate { space_name, space } = Self::validate_create(space)?;
-        let mut wl = gns._spaces().write();
+        let ProcedureCreate { space_name, space } = Self::process_create(space)?;
+        let mut wl = gns.spaces().write();
         if wl.st_insert(space_name, space) {
             Ok(())
         } else {
@@ -130,7 +143,7 @@ impl Space {
             mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        match gns._spaces().read().st_get(space_name.as_bytes()) {
+        match gns.spaces().read().st_get(space_name.as_bytes()) {
             Some(space) => {
                 let mut space_env = space.meta.env.write();
                 match updated_props.remove(SpaceMeta::KEY_ENV) {
@@ -155,7 +168,7 @@ impl Space {
         // TODO(@ohsayan): force remove option
         // TODO(@ohsayan): should a drop space block the entire global table?
         match gns
-            ._spaces()
+            .spaces()
             .write()
             .st_delete_if(space.as_bytes(), |space| space.mns.read().len() == 0)
         {
