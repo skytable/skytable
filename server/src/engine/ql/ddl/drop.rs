@@ -35,8 +35,8 @@ use crate::engine::{
 #[derive(Debug, PartialEq)]
 /// A generic representation of `drop` query
 pub struct DropSpace<'a> {
-    pub(super) space: Ident<'a>,
-    pub(super) force: bool,
+    pub(in crate::engine) space: Ident<'a>,
+    pub(in crate::engine) force: bool,
 }
 
 impl<'a> DropSpace<'a> {

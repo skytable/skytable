@@ -275,6 +275,10 @@ pub trait STIndex<K: ?Sized, V>: IndexBaseSpec<K, V> {
     where
         K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey;
+    fn st_delete_if<Q>(&mut self, key: &Q, iff: impl Fn(&V) -> bool) -> Option<bool>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey;
     // iter
     /// Returns an iterator over a tuple of keys and values
     fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a>;

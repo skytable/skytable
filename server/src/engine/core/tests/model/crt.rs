@@ -35,7 +35,7 @@ use crate::engine::{
 fn create(s: &str) -> DatabaseResult<ModelView> {
     let tok = lex_insecure(s.as_bytes()).unwrap();
     let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-    ModelView::create(create_model)
+    ModelView::create_process(create_model)
 }
 
 #[test]

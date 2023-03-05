@@ -46,8 +46,9 @@ fn exec_verify(
     let tok = lex(query.as_bytes()).unwrap();
     let ast_node = compile_test(&tok).unwrap();
     let (res, space_name) = exec(gns, ast_node);
-    let space_arc = gns._spaces().read().st_get_cloned(space_name.as_bytes());
-    let r = res.map(|_| space_arc.as_deref().unwrap());
+    let rl = gns._spaces().read();
+    let space_ref = rl.st_get(space_name.as_bytes());
+    let r = res.map(|_| space_ref.unwrap());
     verify(r);
 }
 

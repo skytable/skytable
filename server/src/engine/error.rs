@@ -88,6 +88,8 @@ pub enum DatabaseError {
     DdlSpaceAlreadyExists,
     /// the space doesn't exist
     DdlSpaceNotFound,
+    /// the space that we attempted to remove is non-empty
+    DdlSpaceRemoveNonEmpty,
     /// bad definition for some typedef in a model
     DdlModelInvalidTypeDefinition,
     /// bad model definition; most likely an illegal primary key

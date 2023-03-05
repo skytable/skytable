@@ -32,7 +32,6 @@ mod tests;
 use {
     crate::engine::{core::space::Space, data::ItemID, idx::IndexST},
     parking_lot::RwLock,
-    std::sync::Arc,
 };
 
 pub use model::cell::Datacell;
@@ -44,11 +43,11 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 // FIXME(@ohsayan): Make sure we update what all structures we're making use of here
 
 pub struct GlobalNS {
-    spaces: RWLIdx<ItemID, Arc<Space>>,
+    spaces: RWLIdx<ItemID, Space>,
 }
 
 impl GlobalNS {
-    pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Arc<Space>> {
+    pub(self) fn _spaces(&self) -> &RWLIdx<ItemID, Space> {
         &self.spaces
     }
     pub fn empty() -> Self {

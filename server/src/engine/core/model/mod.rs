@@ -50,7 +50,7 @@ pub struct ModelView {
 }
 
 impl ModelView {
-    pub fn create(CreateModel { fields, props, .. }: CreateModel) -> DatabaseResult<Self> {
+    pub fn create_process(CreateModel { fields, props, .. }: CreateModel) -> DatabaseResult<Self> {
         let mut okay = props.is_empty() & !fields.is_empty();
         // validate fields
         let mut field_spec = fields.into_iter();

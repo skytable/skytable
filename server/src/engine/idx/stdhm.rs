@@ -173,6 +173,24 @@ where
         self.remove(key)
     }
 
+    fn st_delete_if<Q>(&mut self, key: &Q, iff: impl Fn(&V) -> bool) -> Option<bool>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey,
+    {
+        match self.get(key) {
+            Some(v) => {
+                if iff(v) {
+                    self.remove(key);
+                    Some(true)
+                } else {
+                    Some(false)
+                }
+            }
+            None => None,
+        }
+    }
+
     fn st_iter_kv<'a>(&'a self) -> Self::IterKV<'a> {
         self.iter()
     }

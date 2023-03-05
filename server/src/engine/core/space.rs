@@ -30,16 +30,15 @@ use {
         data::{md_dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
-        ql::ddl::{alt::AlterSpace, crt::CreateSpace},
+        ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
     },
     parking_lot::RwLock,
-    std::sync::Arc,
 };
 
 #[derive(Debug)]
 /// A space with the model namespace
 pub struct Space {
-    mns: RWLIdx<ItemID, Arc<ModelView>>,
+    mns: RWLIdx<ItemID, ModelView>,
     pub(super) meta: SpaceMeta,
 }
 
@@ -79,7 +78,7 @@ impl Space {
         Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
     #[inline(always)]
-    pub fn new(mns: IndexST<ItemID, Arc<ModelView>>, meta: SpaceMeta) -> Self {
+    pub fn new(mns: IndexST<ItemID, ModelView>, meta: SpaceMeta) -> Self {
         Self {
             mns: RWLIdx::new(mns),
             meta,
@@ -117,7 +116,7 @@ impl Space {
     pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
         let ProcedureCreate { space_name, space } = Self::validate_create(space)?;
         let mut wl = gns._spaces().write();
-        if wl.st_insert(space_name, Arc::new(space)) {
+        if wl.st_insert(space_name, space) {
             Ok(())
         } else {
             Err(DatabaseError::DdlSpaceAlreadyExists)
@@ -131,7 +130,7 @@ impl Space {
             mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        match gns._spaces().read().st_get_cloned(space_name.as_bytes()) {
+        match gns._spaces().read().st_get(space_name.as_bytes()) {
             Some(space) => {
                 let mut space_env = space.meta.env.write();
                 match updated_props.remove(SpaceMeta::KEY_ENV) {
@@ -146,6 +145,22 @@ impl Space {
                 }
                 Ok(())
             }
+            None => Err(DatabaseError::DdlSpaceNotFound),
+        }
+    }
+    pub fn exec_drop(
+        gns: &super::GlobalNS,
+        DropSpace { space, force: _ }: DropSpace,
+    ) -> DatabaseResult<()> {
+        // TODO(@ohsayan): force remove option
+        // TODO(@ohsayan): should a drop space block the entire global table?
+        match gns
+            ._spaces()
+            .write()
+            .st_delete_if(space.as_bytes(), |space| space.mns.read().len() == 0)
+        {
+            Some(true) => Ok(()),
+            Some(false) => Err(DatabaseError::DdlSpaceRemoveNonEmpty),
             None => Err(DatabaseError::DdlSpaceNotFound),
         }
     }
