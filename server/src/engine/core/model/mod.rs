@@ -24,6 +24,7 @@
  *
 */
 
+pub(super) mod alt;
 pub mod cell;
 
 use crate::engine::{
@@ -148,9 +149,11 @@ pub struct Field {
 }
 
 impl Field {
-    #[cfg(test)]
-    pub fn new_test(layers: VInline<1, Layer>, nullable: bool) -> Self {
+    pub fn new(layers: VInline<1, Layer>, nullable: bool) -> Self {
         Self { layers, nullable }
+    }
+    pub fn is_nullable(&self) -> bool {
+        self.nullable
     }
     pub fn layers(&self) -> &[Layer] {
         &self.layers

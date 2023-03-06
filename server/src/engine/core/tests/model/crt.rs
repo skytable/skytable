@@ -25,19 +25,16 @@
 */
 
 mod validation {
-    use crate::engine::{
-        core::model::{Field, Layer, ModelView},
-        data::tag::{DataTag, FullTag},
-        error::{DatabaseError, DatabaseResult},
-        idx::STIndexSeq,
-        ql::{ast::parse_ast_node_full, tests::lex_insecure},
+    use {
+        super::super::create,
+        crate::engine::{
+            core::model::{Field, Layer, ModelView},
+            data::tag::{DataTag, FullTag},
+            error::DatabaseError,
+            idx::STIndexSeq,
+        },
     };
 
-    fn create(s: &str) -> DatabaseResult<ModelView> {
-        let tok = lex_insecure(s.as_bytes()).unwrap();
-        let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-        ModelView::process_create(create_model)
-    }
     #[test]
     fn simple() {
         let ModelView {
@@ -50,8 +47,8 @@ mod validation {
         assert_eq!(
             fields.stseq_ord_value().cloned().collect::<Vec<Field>>(),
             [
-                Field::new_test([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
-                Field::new_test([Layer::new_test(FullTag::BIN, [0; 2])].into(), false)
+                Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
+                Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false)
             ]
         );
     }
@@ -68,8 +65,8 @@ mod validation {
         assert_eq!(
             fields.stseq_ord_value().cloned().collect::<Vec<Field>>(),
             [
-                Field::new_test([Layer::new_test(FullTag::BIN, [0; 2])].into(), false),
-                Field::new_test([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
+                Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false),
+                Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
             ]
         );
     }
@@ -125,61 +122,15 @@ mod validation {
 mod exec {
     use crate::engine::{
         core::{
-            model::{Field, Layer, ModelView},
-            space::Space,
+            model::{Field, Layer},
+            tests::model::{exec_create_new_space, with_model},
             GlobalNS,
         },
         data::tag::{DataTag, FullTag},
-        error::DatabaseResult,
-        idx::{STIndex, STIndexSeq},
-        ql::{ast::parse_ast_node_full, tests::lex_insecure},
+        idx::STIndexSeq,
     };
 
     const SPACE: &str = "myspace";
-
-    pub fn exec_create(
-        gns: &GlobalNS,
-        create_stmt: &str,
-        space_id: &str,
-        create_new_space: bool,
-    ) -> DatabaseResult<()> {
-        if create_new_space {
-            assert!(gns.test_new_empty_space(space_id));
-        }
-        let tok = lex_insecure(create_stmt.as_bytes()).unwrap();
-        let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-        ModelView::exec_create(gns, space_id.as_bytes(), create_model)
-    }
-
-    pub fn exec_create_new_space(
-        gns: &GlobalNS,
-        create_stmt: &str,
-        space_id: &str,
-    ) -> DatabaseResult<()> {
-        exec_create(gns, create_stmt, space_id, true)
-    }
-
-    pub fn exec_create_no_create(
-        gns: &GlobalNS,
-        create_stmt: &str,
-        space_id: &str,
-    ) -> DatabaseResult<()> {
-        exec_create(gns, create_stmt, space_id, false)
-    }
-
-    fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {
-        let rl = gns.spaces().read();
-        let space = rl.st_get(space_name.as_bytes()).unwrap();
-        f(space);
-    }
-
-    fn with_model(gns: &GlobalNS, space_id: &str, model_name: &str, f: impl Fn(&ModelView)) {
-        with_space(gns, space_id, |space| {
-            let space_rl = space.models().read();
-            let model = space_rl.st_get(model_name.as_bytes()).unwrap();
-            f(model)
-        })
-    }
 
     #[test]
     fn simple() {
@@ -203,11 +154,11 @@ mod exec {
                 [
                     (
                         "username".to_string(),
-                        Field::new_test([Layer::str()].into(), false)
+                        Field::new([Layer::str()].into(), false)
                     ),
                     (
                         "password".to_string(),
-                        Field::new_test([Layer::bin()].into(), false)
+                        Field::new([Layer::bin()].into(), false)
                     )
                 ]
             );

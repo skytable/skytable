@@ -96,4 +96,14 @@ pub enum DatabaseError {
     DdlModelBadDefinition,
     /// the model already exists
     DdlModelAlreadyExists,
+    /// an alter attempted to remove a protected field (usually the primary key)
+    DdlModelAlterProtectedField,
+    /// an alter model attempted to modify an invalid property/a property with an illegal value
+    DdlModelAlterBadProperty,
+    /// the alter model statement is "wrong"
+    DdlModelAlterBad,
+    /// an alter attempted to update an nx field
+    DdlModelAlterFieldNotFound,
+    /// bad type definition to alter
+    DdlModelAlterBadTypedef,
 }

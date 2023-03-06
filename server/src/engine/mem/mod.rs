@@ -49,3 +49,58 @@ pub struct NativeDword([usize; 2]);
 pub struct NativeTword([usize; 3]);
 /// Native quad pointer width (note, native != arch native, but host native)
 pub struct NativeQword([usize; 4]);
+
+pub trait StatelessLen {
+    fn stateless_len(&self) -> usize;
+    fn stateless_empty(&self) -> bool {
+        self.stateless_len() == 0
+    }
+}
+
+impl<T> StatelessLen for Vec<T> {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> StatelessLen for Box<[T]> {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl StatelessLen for String {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl StatelessLen for str {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> StatelessLen for [T] {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<const N: usize, T> StatelessLen for VInline<N, T> {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<const N: usize> StatelessLen for AStr<N> {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<const N: usize, T> StatelessLen for UArray<N, T> {
+    fn stateless_len(&self) -> usize {
+        self.len()
+    }
+}

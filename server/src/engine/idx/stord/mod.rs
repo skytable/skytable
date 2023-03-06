@@ -36,6 +36,7 @@ use {
         },
     },
     super::{AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, STIndex, STIndexSeq},
+    crate::engine::mem::StatelessLen,
     std::{
         alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout},
         borrow::Borrow,
@@ -748,5 +749,11 @@ impl<K: AsKey, V: AsValue + PartialEq, C: Config<K, V>> PartialEq for IndexSTSeq
             && self
                 ._iter_unord_kv()
                 .all(|(k, v)| other._get(k).unwrap().eq(v))
+    }
+}
+
+impl<K, V, C: Config<K, V>> StatelessLen for IndexSTSeqDll<K, V, C> {
+    fn stateless_len(&self) -> usize {
+        self.len()
     }
 }

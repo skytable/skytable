@@ -51,6 +51,13 @@ pub const IS_ON_CI: bool = option_env!("CI").is_some();
 
 const EXITCODE_ONE: i32 = 0x01;
 
+pub fn bx_to_vec<T>(mut bx: Box<[T]>) -> Vec<T> {
+    let ptr = bx.as_mut_ptr();
+    let len = bx.len();
+    mem::forget(bx);
+    unsafe { Vec::from_raw_parts(ptr, len, len) }
+}
+
 /// # Unsafe unwrapping
 ///
 /// This trait provides a method `unsafe_unwrap` that is potentially unsafe and has

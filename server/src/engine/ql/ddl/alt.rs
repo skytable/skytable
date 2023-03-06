@@ -85,8 +85,8 @@ impl<'a> AlterSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct AlterModel<'a> {
-    model: Ident<'a>,
-    kind: AlterKind<'a>,
+    pub(in crate::engine) model: Ident<'a>,
+    pub(in crate::engine) kind: AlterKind<'a>,
 }
 
 impl<'a> AlterModel<'a> {

@@ -368,9 +368,9 @@ impl<'a> FieldSpec<'a> {
 #[derive(Debug, PartialEq)]
 /// An [`ExpandedField`] is a full field definition with advanced metadata
 pub struct ExpandedField<'a> {
-    field_name: Ident<'a>,
-    layers: Vec<LayerSpec<'a>>,
-    props: DictGeneric,
+    pub(in crate::engine) field_name: Ident<'a>,
+    pub(in crate::engine) layers: Vec<LayerSpec<'a>>,
+    pub(in crate::engine) props: DictGeneric,
 }
 
 impl<'a> ExpandedField<'a> {

@@ -28,6 +28,7 @@
 use super::DummyMetrics;
 use {
     super::{AsKey, AsValue, AsValueClone, IndexBaseSpec, STIndex},
+    crate::engine::mem::StatelessLen,
     std::{
         borrow::Borrow,
         collections::{
@@ -201,5 +202,11 @@ where
 
     fn st_iter_value<'a>(&'a self) -> Self::IterValue<'a> {
         self.values()
+    }
+}
+
+impl<K, V, S> StatelessLen for StdMap<K, V, S> {
+    fn stateless_len(&self) -> usize {
+        self.len()
     }
 }
