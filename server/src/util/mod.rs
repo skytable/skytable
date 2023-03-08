@@ -24,7 +24,7 @@
  *
 */
 
-use std::mem;
+use std::mem::{self, ManuallyDrop};
 
 #[macro_use]
 mod macros;
@@ -51,10 +51,11 @@ pub const IS_ON_CI: bool = option_env!("CI").is_some();
 
 const EXITCODE_ONE: i32 = 0x01;
 
-pub fn bx_to_vec<T>(mut bx: Box<[T]>) -> Vec<T> {
-    let ptr = bx.as_mut_ptr();
-    let len = bx.len();
-    mem::forget(bx);
+pub fn bx_to_vec<T>(bx: Box<[T]>) -> Vec<T> {
+    let mut md = ManuallyDrop::new(bx);
+    // damn you, miri
+    let ptr = md.as_mut_ptr() as usize as *mut T;
+    let len = md.len();
     unsafe { Vec::from_raw_parts(ptr, len, len) }
 }
 

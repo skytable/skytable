@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{Field, Layer, ModelView},
+    super::{Field, IWModel, Layer, ModelView},
     crate::{
         engine::{
             data::{
@@ -72,23 +72,9 @@ macro_rules! can_ignore {
     };
 }
 
-impl ModelView {
-    fn no_field(&self, new: &str) -> bool {
-        !self.fields().st_contains(new)
-    }
-    fn is_pk(&self, new: &str) -> bool {
-        self.p_key.as_bytes() == new.as_bytes()
-    }
-    fn not_pk(&self, new: &str) -> bool {
-        !self.is_pk(new)
-    }
-    fn guard_pk(&self, new: &str) -> DatabaseResult<()> {
-        if self.is_pk(new) {
-            Err(DatabaseError::DdlModelAlterProtectedField)
-        } else {
-            Ok(())
-        }
-    }
+#[inline(always)]
+fn no_field(mr: &IWModel, new: &str) -> bool {
+    !mr.fields().st_contains(new)
 }
 
 fn check_nullable(props: &mut HashMap<Box<str>, Option<DictEntryGeneric>>) -> DatabaseResult<bool> {
@@ -102,6 +88,7 @@ fn check_nullable(props: &mut HashMap<Box<str>, Option<DictEntryGeneric>>) -> Da
 impl<'a> AlterPlan<'a> {
     pub fn fdeltas(
         mv: &ModelView,
+        wm: &IWModel,
         AlterModel { model, kind }: AlterModel<'a>,
     ) -> DatabaseResult<AlterPlan<'a>> {
         let mut no_lock = true;
@@ -115,7 +102,7 @@ impl<'a> AlterPlan<'a> {
                 let mut not_found = false;
                 if r.iter().all(|id| {
                     let not_pk = mv.not_pk(id);
-                    let exists = mv.fields().st_contains(id.as_str());
+                    let exists = !no_field(wm, id.as_str());
                     not_found = !exists;
                     not_pk & exists
                 }) {
@@ -137,8 +124,7 @@ impl<'a> AlterPlan<'a> {
                         layers,
                         mut props,
                     } = fields.next().unwrap();
-                    okay &= mv.not_pk(&field_name);
-                    okay &= mv.no_field(&field_name);
+                    okay &= no_field(wm, &field_name) & mv.not_pk(&field_name);
                     let is_nullable = check_nullable(&mut props)?;
                     let layers = Field::parse_layers(layers, is_nullable)?;
                     okay &= add.st_insert(field_name.to_string().into_boxed_str(), layers);
@@ -159,7 +145,7 @@ impl<'a> AlterPlan<'a> {
                     // enforce pk
                     mv.guard_pk(&field_name)?;
                     // get the current field
-                    let Some(current_field) = mv.fields().st_get(field_name.as_str()) else {
+                    let Some(current_field) = wm.fields().st_get(field_name.as_str()) else {
                         return Err(DatabaseError::DdlModelAlterFieldNotFound);
                     };
                     // check props

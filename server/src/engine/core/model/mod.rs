@@ -27,35 +27,76 @@
 pub(super) mod alt;
 pub mod cell;
 
-use crate::engine::{
-    core::model::cell::Datacell,
-    data::{
-        tag::{DataTag, FullTag, TagClass, TagSelector},
-        ItemID,
-    },
-    error::{DatabaseError, DatabaseResult},
-    idx::{IndexSTSeqCns, STIndex, STIndexSeq},
-    mem::VInline,
-    ql::ddl::{
-        crt::CreateModel,
-        syn::{FieldSpec, LayerSpec},
-    },
-};
 #[cfg(test)]
 use std::cell::RefCell;
+use {
+    crate::engine::{
+        core::model::cell::Datacell,
+        data::{
+            tag::{DataTag, FullTag, TagClass, TagSelector},
+            ItemID,
+        },
+        error::{DatabaseError, DatabaseResult},
+        idx::{IndexSTSeqCns, STIndex, STIndexSeq},
+        mem::VInline,
+        ql::ddl::{
+            crt::CreateModel,
+            syn::{FieldSpec, LayerSpec},
+        },
+    },
+    core::cell::UnsafeCell,
+    parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
+
+type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 // FIXME(@ohsayan): update this!
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct ModelView {
     pub(super) p_key: Box<str>,
     pub(super) p_tag: FullTag,
-    pub(super) fields: IndexSTSeqCns<Box<str>, Field>,
+    fields: UnsafeCell<Fields>,
+    sync_matrix: ISyncMatrix,
+}
+
+#[cfg(test)]
+impl PartialEq for ModelView {
+    fn eq(&self, m: &Self) -> bool {
+        let mdl1 = self.intent_read_model();
+        let mdl2 = m.intent_read_model();
+        self.p_key == m.p_key && self.p_tag == m.p_tag && mdl1.fields() == mdl2.fields()
+    }
 }
 
 impl ModelView {
-    pub fn fields(&self) -> &IndexSTSeqCns<Box<str>, Field> {
-        &self.fields
+    pub fn sync_matrix(&self) -> &ISyncMatrix {
+        &self.sync_matrix
+    }
+    unsafe fn _read_fields<'a>(&'a self) -> &'a Fields {
+        &*self.fields.get().cast_const()
+    }
+    unsafe fn _read_fields_mut<'a>(&'a self) -> &'a mut Fields {
+        &mut *self.fields.get()
+    }
+    pub fn intent_read_model<'a>(&'a self) -> IRModel<'a> {
+        IRModel::new(self)
+    }
+    pub fn intent_write_model<'a>(&'a self) -> IWModel<'a> {
+        IWModel::new(self)
+    }
+    fn is_pk(&self, new: &str) -> bool {
+        self.p_key.as_bytes() == new.as_bytes()
+    }
+    fn not_pk(&self, new: &str) -> bool {
+        !self.is_pk(new)
+    }
+    fn guard_pk(&self, new: &str) -> DatabaseResult<()> {
+        if self.is_pk(new) {
+            Err(DatabaseError::DdlModelAlterProtectedField)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -96,7 +137,8 @@ impl ModelView {
                 return Ok(Self {
                     p_key: last_pk.into(),
                     p_tag: tag,
-                    fields,
+                    fields: UnsafeCell::new(fields),
+                    sync_matrix: ISyncMatrix::new(),
                 });
             }
         }
@@ -384,4 +426,99 @@ unsafe fn lverify_str(_: Layer, _: &Datacell) -> bool {
 unsafe fn lverify_list(_: Layer, _: &Datacell) -> bool {
     layertrace("list");
     true
+}
+
+// FIXME(@ohsayan): This an inefficient repr of the matrix; replace it with my other design
+#[derive(Debug)]
+pub struct ISyncMatrix {
+    // virtual privileges
+    v_priv_model_alter: RwLock<()>,
+    v_priv_data_new_or_revise: RwLock<()>,
+}
+
+#[cfg(test)]
+impl PartialEq for ISyncMatrix {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug)]
+pub struct IRModelSMData<'a> {
+    rmodel: RwLockReadGuard<'a, ()>,
+    mdata: RwLockReadGuard<'a, ()>,
+    fields: &'a Fields,
+}
+
+impl<'a> IRModelSMData<'a> {
+    pub fn new(m: &'a ModelView) -> Self {
+        let rmodel = m.sync_matrix().v_priv_model_alter.read();
+        let mdata = m.sync_matrix().v_priv_data_new_or_revise.read();
+        Self {
+            rmodel,
+            mdata,
+            fields: unsafe {
+                // UNSAFE(@ohsayan): we already have acquired this resource
+                m._read_fields()
+            },
+        }
+    }
+    pub fn fields(&'a self) -> &'a Fields {
+        self.fields
+    }
+}
+
+#[derive(Debug)]
+pub struct IRModel<'a> {
+    rmodel: RwLockReadGuard<'a, ()>,
+    fields: &'a Fields,
+}
+
+impl<'a> IRModel<'a> {
+    pub fn new(m: &'a ModelView) -> Self {
+        Self {
+            rmodel: m.sync_matrix().v_priv_model_alter.read(),
+            fields: unsafe {
+                // UNSAFE(@ohsayan): we already have acquired this resource
+                m._read_fields()
+            },
+        }
+    }
+    pub fn fields(&'a self) -> &'a Fields {
+        self.fields
+    }
+}
+
+#[derive(Debug)]
+pub struct IWModel<'a> {
+    wmodel: RwLockWriteGuard<'a, ()>,
+    fields: &'a mut Fields,
+}
+
+impl<'a> IWModel<'a> {
+    pub fn new(m: &'a ModelView) -> Self {
+        Self {
+            wmodel: m.sync_matrix().v_priv_model_alter.write(),
+            fields: unsafe {
+                // UNSAFE(@ohsayan): we have exclusive access to this resource
+                m._read_fields_mut()
+            },
+        }
+    }
+    pub fn fields(&'a self) -> &'a Fields {
+        self.fields
+    }
+    // ALIASING
+    pub fn fields_mut(&'a mut self) -> &'a mut Fields {
+        self.fields
+    }
+}
+
+impl ISyncMatrix {
+    pub const fn new() -> Self {
+        Self {
+            v_priv_model_alter: RwLock::new(()),
+            v_priv_data_new_or_revise: RwLock::new(()),
+        }
+    }
 }

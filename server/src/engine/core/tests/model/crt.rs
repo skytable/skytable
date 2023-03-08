@@ -28,7 +28,7 @@ mod validation {
     use {
         super::super::create,
         crate::engine::{
-            core::model::{Field, Layer, ModelView},
+            core::model::{Field, Layer},
             data::tag::{DataTag, FullTag},
             error::DatabaseError,
             idx::STIndexSeq,
@@ -37,15 +37,16 @@ mod validation {
 
     #[test]
     fn simple() {
-        let ModelView {
-            p_key,
-            p_tag,
-            fields,
-        } = create("create model mymodel(username: string, password: binary)").unwrap();
-        assert_eq!(p_key.as_ref(), "username");
-        assert_eq!(p_tag, FullTag::STR);
+        let model = create("create model mymodel(username: string, password: binary)").unwrap();
+        assert_eq!(model.p_key.as_ref(), "username");
+        assert_eq!(model.p_tag, FullTag::STR);
         assert_eq!(
-            fields.stseq_ord_value().cloned().collect::<Vec<Field>>(),
+            model
+                .intent_read_model()
+                .fields()
+                .stseq_ord_value()
+                .cloned()
+                .collect::<Vec<Field>>(),
             [
                 Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
                 Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false)
@@ -55,15 +56,17 @@ mod validation {
 
     #[test]
     fn idiotic_order() {
-        let ModelView {
-            p_key,
-            p_tag,
-            fields,
-        } = create("create model mymodel(password: binary, primary username: string)").unwrap();
-        assert_eq!(p_key.as_ref(), "username");
-        assert_eq!(p_tag, FullTag::STR);
+        let model =
+            create("create model mymodel(password: binary, primary username: string)").unwrap();
+        assert_eq!(model.p_key.as_ref(), "username");
+        assert_eq!(model.p_tag, FullTag::STR);
         assert_eq!(
-            fields.stseq_ord_value().cloned().collect::<Vec<Field>>(),
+            model
+                .intent_read_model()
+                .fields()
+                .stseq_ord_value()
+                .cloned()
+                .collect::<Vec<Field>>(),
             [
                 Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false),
                 Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
@@ -143,6 +146,7 @@ mod exec {
         .unwrap();
         with_model(&gns, SPACE, "mymodel", |model| {
             let models: Vec<(String, Field)> = model
+                .intent_read_model()
                 .fields()
                 .stseq_ord_kv()
                 .map(|(k, v)| (k.to_string(), v.clone()))

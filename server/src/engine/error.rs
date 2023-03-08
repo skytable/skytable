@@ -28,7 +28,8 @@ pub type LangResult<T> = Result<T, LangError>;
 pub type LexResult<T> = Result<T, LexError>;
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
 /// Lex phase errors
 pub enum LexError {
     // insecure lex
@@ -47,7 +48,9 @@ pub enum LexError {
     /// Unrecognized byte in stream   
     UnexpectedByte,
 }
-#[derive(Debug, PartialEq)]
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
 /// AST errors
 pub enum LangError {
     // generic
@@ -76,7 +79,8 @@ pub enum LangError {
     StmtUnknownDrop,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
 /// Executor errors
 pub enum DatabaseError {
     // sys

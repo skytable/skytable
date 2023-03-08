@@ -40,7 +40,8 @@ mod plan {
         let model = create(model)?;
         let tok = lex_insecure(plan.as_bytes()).unwrap();
         let alter = parse_ast_node_full(&tok[2..]).unwrap();
-        let mv = AlterPlan::fdeltas(&model, alter)?;
+        let model_write = model.intent_write_model();
+        let mv = AlterPlan::fdeltas(&model, &model_write, alter)?;
         Ok(f(mv))
     }
     fn plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) {
