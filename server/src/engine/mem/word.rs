@@ -24,7 +24,9 @@
  *
 */
 
-use super::{NativeDword, NativeQword, NativeTword};
+use super::{NativeDword, NativeQword, NativeTword, SpecialPaddedWord};
+
+static ZERO_BLOCK: [u8; 0] = [];
 
 /// Native quad pointer stack (must also be usable as a double and triple pointer stack. see [`SystemTword`] and [`SystemDword`])
 pub trait SystemQword: SystemTword {
@@ -35,12 +37,6 @@ pub trait SystemQword: SystemTword {
         T: WordRW<Self>,
     {
         WordRW::store(v)
-    }
-    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
-    where
-        T: WordRW<Self>,
-    {
-        <T>::load(self)
     }
     fn ld<'a, T>(&'a self) -> T
     where
@@ -59,12 +55,6 @@ pub trait SystemTword: SystemDword {
         T: WordRW<Self>,
     {
         WordRW::store(v)
-    }
-    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
-    where
-        T: WordRW<Self>,
-    {
-        <T>::load(self)
     }
     fn ld<'a, T>(&'a self) -> T
     where
@@ -86,17 +76,26 @@ pub trait SystemDword: Sized {
     {
         WordRW::store(v)
     }
-    fn ld_special<'a, T>(&'a self) -> T::Target<'a>
-    where
-        T: WordRW<Self>,
-    {
-        <T>::load(self)
-    }
     fn ld<'a, T>(&'a self) -> T
     where
         T: WordRW<Self, Target<'a> = T>,
     {
         <T>::load(self)
+    }
+}
+
+impl SystemDword for SpecialPaddedWord {
+    fn store_qw(u: u64) -> Self {
+        Self::new(u, ZERO_BLOCK.as_ptr() as usize)
+    }
+    fn store_fat(a: usize, b: usize) -> Self {
+        Self::new(a as u64, b)
+    }
+    fn load_qw(&self) -> u64 {
+        self.a
+    }
+    fn load_fat(&self) -> [usize; 2] {
+        [self.a as usize, self.b]
     }
 }
 

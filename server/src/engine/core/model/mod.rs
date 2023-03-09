@@ -54,8 +54,8 @@ type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
 pub struct ModelView {
-    pub(super) p_key: Box<str>,
-    pub(super) p_tag: FullTag,
+    p_key: Box<str>,
+    p_tag: FullTag,
     fields: UnsafeCell<Fields>,
     sync_matrix: ISyncMatrix,
 }
@@ -70,6 +70,12 @@ impl PartialEq for ModelView {
 }
 
 impl ModelView {
+    pub fn p_key(&self) -> &str {
+        &self.p_key
+    }
+    pub fn p_tag(&self) -> FullTag {
+        self.p_tag
+    }
     pub fn sync_matrix(&self) -> &ISyncMatrix {
         &self.sync_matrix
     }

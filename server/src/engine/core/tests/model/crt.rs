@@ -38,8 +38,8 @@ mod validation {
     #[test]
     fn simple() {
         let model = create("create model mymodel(username: string, password: binary)").unwrap();
-        assert_eq!(model.p_key.as_ref(), "username");
-        assert_eq!(model.p_tag, FullTag::STR);
+        assert_eq!(model.p_key(), "username");
+        assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
             model
                 .intent_read_model()
@@ -58,8 +58,8 @@ mod validation {
     fn idiotic_order() {
         let model =
             create("create model mymodel(password: binary, primary username: string)").unwrap();
-        assert_eq!(model.p_key.as_ref(), "username");
-        assert_eq!(model.p_tag, FullTag::STR);
+        assert_eq!(model.p_key(), "username");
+        assert_eq!(model.p_tag(), FullTag::STR);
         assert_eq!(
             model
                 .intent_read_model()
@@ -151,8 +151,8 @@ mod exec {
                 .stseq_ord_kv()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect();
-            assert_eq!(model.p_key.as_ref(), "username");
-            assert_eq!(model.p_tag, FullTag::STR);
+            assert_eq!(model.p_key(), "username");
+            assert_eq!(model.p_tag(), FullTag::STR);
             assert_eq!(
                 models,
                 [

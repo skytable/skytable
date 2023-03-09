@@ -49,6 +49,18 @@ pub struct NativeDword([usize; 2]);
 pub struct NativeTword([usize; 3]);
 /// Native quad pointer width (note, native != arch native, but host native)
 pub struct NativeQword([usize; 4]);
+/// A special word with a special bit pattern padded (with a quad)
+///
+/// **WARNING**: DO NOT EXPECT this to have the same bit pattern as that of native word sizes. It's called "special" FOR A REASON
+pub struct SpecialPaddedWord {
+    a: u64,
+    b: usize,
+}
+impl SpecialPaddedWord {
+    const fn new(a: u64, b: usize) -> Self {
+        Self { a, b }
+    }
+}
 
 pub trait StatelessLen {
     fn stateless_len(&self) -> usize;

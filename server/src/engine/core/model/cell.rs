@@ -176,10 +176,10 @@ impl<'a> From<LitIR<'a>> for Datacell {
     fn from(l: LitIR<'a>) -> Self {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
-                let [a, b] = l.data().load_fat();
+                // DO NOT RELY ON the payload's bit pattern; it's padded
                 Datacell::new(
                     l.kind().tag_class(),
-                    DataRaw::word(SystemDword::store_fat(a, b)),
+                    DataRaw::word(SystemDword::store_qw(l.data().load_qw())),
                 )
             },
             tag @ (TagClass::Bin | TagClass::Str) => unsafe {

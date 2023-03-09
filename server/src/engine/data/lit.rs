@@ -29,7 +29,7 @@ use {
         spec::{Dataspec1D, DataspecMeta1D, DataspecMethods1D, DataspecRaw1D},
         tag::{DataTag, FullTag},
     },
-    crate::engine::mem::{NativeDword, SystemDword},
+    crate::engine::mem::{SpecialPaddedWord, SystemDword},
     core::{
         fmt,
         marker::PhantomData,
@@ -42,7 +42,7 @@ use {
 */
 
 pub struct Lit<'a> {
-    data: NativeDword,
+    data: SpecialPaddedWord,
     tag: FullTag,
     _lt: PhantomData<&'a [u8]>,
 }
@@ -58,7 +58,7 @@ impl<'a> Lit<'a> {
 
 impl<'a> DataspecMeta1D for Lit<'a> {
     type Tag = FullTag;
-    type Target = NativeDword;
+    type Target = SpecialPaddedWord;
     type StringItem = Box<str>;
     fn new(flag: Self::Tag, data: Self::Target) -> Self {
         Self {
@@ -174,12 +174,12 @@ direct_from! {
 
 pub struct LitIR<'a> {
     tag: FullTag,
-    data: NativeDword,
+    data: SpecialPaddedWord,
     _lt: PhantomData<&'a str>,
 }
 
 impl<'a> DataspecMeta1D for LitIR<'a> {
-    type Target = NativeDword;
+    type Target = SpecialPaddedWord;
     type StringItem = &'a str;
     type Tag = FullTag;
     fn new(flag: Self::Tag, data: Self::Target) -> Self {
