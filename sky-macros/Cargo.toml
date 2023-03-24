@@ -2,7 +2,7 @@
 authors = ["Sayan Nandan <ohsayan@outlook.com>"]
 edition = "2021"
 name = "sky_macros"
-version = "0.7.6"
+version = "0.7.7"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
