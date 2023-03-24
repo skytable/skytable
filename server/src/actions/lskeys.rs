@@ -24,12 +24,22 @@
  *
 */
 
-use crate::corestore::table::DataModel;
-use crate::corestore::Data;
-use crate::dbnet::connection::prelude::*;
-use crate::resp::writer::TypedArrayWriter;
+use crate::{
+    actions::ActionResult,
+    corestore::{table::DataModel, Data},
+    dbnet::connection::prelude::*,
+    resp::writer::TypedArrayWriter,
+};
 
 const DEFAULT_COUNT: usize = 10;
+
+fn size(size: &[u8]) -> ActionResult<usize> {
+    Ok(match String::from_utf8_lossy(size).parse() {
+        _ if size.eq_ignore_ascii_case(b"all") => usize::MAX,
+        Ok(cnt) => cnt,
+        _ => return util::err(groups::WRONGTYPE_ERR),
+    })
+}
 
 action!(
     /// Run an `LSKEYS` query
@@ -42,11 +52,7 @@ action!(
             let nextret = unsafe { act.next_unchecked() };
             if unsafe { ucidx!(nextret, 0) }.is_ascii_digit() {
                 // noice, this is a number; let's try to parse it
-                let count = if let Ok(cnt) = String::from_utf8_lossy(nextret).parse::<usize>() {
-                    cnt
-                } else {
-                    return util::err(groups::WRONGTYPE_ERR);
-                };
+                let count = size(nextret)?;
                 (get_tbl!(handle, con), count)
             } else {
                 // sigh, an entity
@@ -58,11 +64,7 @@ action!(
             let entity_ret = unsafe { act.next().unsafe_unwrap() };
             let count_ret = unsafe { act.next().unsafe_unwrap() };
             let entity = handle_entity!(con, entity_ret);
-            let count = if let Ok(cnt) = String::from_utf8_lossy(count_ret).parse::<usize>() {
-                cnt
-            } else {
-                return util::err(groups::WRONGTYPE_ERR);
-            };
+            let count = size(count_ret)?;
             (get_tbl!(entity, handle, con), count)
         };
         let tsymbol = match table.get_model_ref() {

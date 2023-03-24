@@ -4,6 +4,10 @@ All changes in this project will be noted in this file.
 
 ## Version 0.7.7
 
+### Additions
+
+- Added `LSKEYS <entity> all` to return all the keys from a given table
+
 ### Fixes
 
 - Fixed LSKEYS crashing the server when requested for 2^64 keys

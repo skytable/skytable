@@ -176,7 +176,7 @@ keyvalue:
     - name: LSKEYS
       complexity: O(n)
       accept: [AnyArray]
-      syntax: [LSKEYS <limit>, LSKEYS <entity>, LSKEYS <entity> <limit>]
+      syntax: [LSKEYS <limit>, LSKEYS <entity>, LSKEYS <entity> ALL, LSKEYS <entity> <limit>]
       desc: |
         Returns a flat string array of keys present in the current table or in the provided entity.
         If no `<limit>` is given, then a maximum of 10 keys are returned. If a limit is specified,
