@@ -62,8 +62,11 @@ impl ToString for LinuxPackageType {
     }
 }
 
+const CARGO_HOME: &str = env!("CARGO_HOME");
+
 /// Creates a Linux package for the provided Linux package type
 pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
+    let cargo_deb_path = format!("{CARGO_HOME}/bin/cargo-deb");
     info!("Building binaries for Linux package");
     let _ = build::build(BuildMode::Release)?;
     info!("Creating Linux package");
@@ -73,7 +76,7 @@ pub fn create_linuxpkg(package_type: LinuxPackageType) -> HarnessResult<()> {
             // install cargo-deb
             util::handle_child("install cargo-deb", cmd!("cargo", "install", "cargo-deb"))?;
             // assemble the command
-            let mut build_args = vec!["deb".to_owned()];
+            let mut build_args = vec![cargo_deb_path];
             if let Some(t) = util::get_var(util::VAR_TARGET) {
                 build_args.push("--target".to_string());
                 build_args.push(t);
