@@ -822,7 +822,7 @@ mod modeset_de {
         let e = toml::from_str::<Example>(toml).unwrap_err();
         assert_eq!(
             e.to_string(),
-            "Bad value `superuser` for modeset for key `mode` at line 1 column 6"
+            "TOML parse error at line 1, column 6\n  |\n1 | mode=\"superuser\"\n  |      ^^^^^^^^^^^\nBad value `superuser` for modeset\n"
         );
     }
 }
