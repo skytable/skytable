@@ -31,7 +31,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use libsky::{URL, VERSION};
-use readline::{config::Configurer, error::ReadlineError, Editor};
+use readline::{config::Configurer, error::ReadlineError, history::FileHistory, Editor};
 use rustyline as readline;
 use skytable::{Pipeline, Query};
 use std::{io::stdout, process};
@@ -109,9 +109,12 @@ pub async fn start_repl() {
         },
         None => 2003,
     };
-    let mut editor = Editor::<()>::new().unwrap_or_else(|_| fatal!("failed to init terminal"));
+    let mut editor =
+        Editor::<(), FileHistory>::new().unwrap_or_else(|_| fatal!("failed to init terminal"));
     editor.set_auto_add_history(true);
-    editor.set_history_ignore_dups(true);
+    editor
+        .set_history_ignore_dups(true)
+        .unwrap_or_else(|_| fatal!("failed to configure shell"));
     editor.bind_sequence(
         rustyline::KeyEvent(
             rustyline::KeyCode::BracketedPasteStart,

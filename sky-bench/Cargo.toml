@@ -9,12 +9,12 @@ version = "0.7.6"
 [dependencies]
 # internal deps
 libstress = { path = "../libstress" }
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
+skytable = { git = "https://github.com/skytable/client-rust", branch = "0.7-maintenance", features = [
     "dbg",
 ] }
 # external deps
 clap = { version = "2", features = ["yaml"] }
 devtimer = "4.0.1"
 rand = "0.8.5"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_json = "1.0.91"
+serde = { version = "1.0.158", features = ["derive"] }
+serde_json = "1.0.94"

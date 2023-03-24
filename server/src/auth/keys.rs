@@ -26,6 +26,7 @@
 
 use super::provider::{Authkey, AUTHKEY_SIZE};
 use crate::corestore::array::Array;
+use base64::{alphabet::BCRYPT, engine::GeneralPurpose, Engine};
 type AuthkeyArray = Array<u8, { AUTHKEY_SIZE }>;
 const RAN_BYTES_SIZE: usize = 40;
 
@@ -38,7 +39,7 @@ const RAN_BYTES_SIZE: usize = 40;
 pub fn generate_full() -> (String, Authkey) {
     let mut bytes: [u8; RAN_BYTES_SIZE] = [0u8; RAN_BYTES_SIZE];
     openssl::rand::rand_bytes(&mut bytes).unwrap();
-    let ret = base64::encode_config(&bytes, base64::BCRYPT);
+    let ret = GeneralPurpose::new(&BCRYPT, Default::default()).encode(bytes);
     let hash = rcrypt::hash(&ret, rcrypt::DEFAULT_COST).unwrap();
     let store_in_db = unsafe {
         let mut array = AuthkeyArray::new();

@@ -9,12 +9,12 @@ edition = "2021"
 [dependencies]
 # internal deps
 libsky = { path = "../libsky" }
-skytable = { git = "https://github.com/skytable/client-rust", branch = "next", features = [
+skytable = { git = "https://github.com/skytable/client-rust", branch = "0.7-maintenance", features = [
     "aio",
     "aio-sslv",
 ], default-features = false }
 # external deps
-tokio = { version = "1.24.2", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
 clap = { version = "2", features = ["yaml"] }
-rustyline = "10.1.1"
-crossterm = "0.25.0"
+rustyline = "11.0.0"
+crossterm = "0.26.1"
