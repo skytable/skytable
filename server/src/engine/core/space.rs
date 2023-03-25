@@ -74,7 +74,7 @@ impl ProcedureCreate {
 }
 
 impl Space {
-    pub fn create_model(&self, name: ItemID, model: ModelView) -> DatabaseResult<()> {
+    pub fn _create_model(&self, name: ItemID, model: ModelView) -> DatabaseResult<()> {
         if self.mns.write().st_insert(name, model) {
             Ok(())
         } else {
@@ -125,6 +125,9 @@ impl Space {
             ),
         })
     }
+}
+
+impl Space {
     /// Execute a `create` stmt
     pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
         let ProcedureCreate { space_name, space } = Self::process_create(space)?;

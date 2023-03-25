@@ -85,6 +85,9 @@ pub enum LangError {
 pub enum DatabaseError {
     // sys
     SysBadItemID,
+    // query generic
+    /// this needs an explicit lock
+    NeedLock,
     // ddl: create space
     /// unknown property or bad type for property
     DdlSpaceBadProperty,
@@ -110,4 +113,6 @@ pub enum DatabaseError {
     DdlModelAlterFieldNotFound,
     /// bad type definition to alter
     DdlModelAlterBadTypedef,
+    /// didn't find the model
+    DdlModelNotFound,
 }

@@ -67,7 +67,7 @@ pub enum TagUnique {
 
 impl TagUnique {
     pub const fn is_unique(&self) -> bool {
-        self.d() != 0xFF
+        self.d() != Self::Illegal.d()
     }
 }
 

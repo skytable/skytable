@@ -150,6 +150,9 @@ impl ModelView {
         }
         Err(DatabaseError::DdlModelBadDefinition)
     }
+}
+
+impl ModelView {
     pub fn exec_create(
         gns: &super::GlobalNS,
         space: &[u8],
@@ -161,7 +164,7 @@ impl ModelView {
         let Some(space) = space_rl.get(space) else {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
-        space.create_model(ItemID::new(&name), model)
+        space._create_model(ItemID::new(&name), model)
     }
 }
 
@@ -515,7 +518,7 @@ impl<'a> IWModel<'a> {
         self.fields
     }
     // ALIASING
-    pub fn fields_mut(&'a mut self) -> &'a mut Fields {
+    pub fn fields_mut(&mut self) -> &mut Fields {
         self.fields
     }
 }
