@@ -193,6 +193,14 @@ static LUT: [(&str, FullTag); 14] = [
     ("list", FullTag::LIST),
 ];
 
+pub static TY_BOOL: &str = LUT[0].0;
+pub static TY_UINT: [&str; 4] = [LUT[1].0, LUT[2].0, LUT[3].0, LUT[4].0];
+pub static TY_SINT: [&str; 4] = [LUT[5].0, LUT[6].0, LUT[7].0, LUT[8].0];
+pub static TY_FLOAT: [&str; 2] = [LUT[9].0, LUT[10].0];
+pub static TY_BINARY: &str = LUT[11].0;
+pub static TY_STRING: &str = LUT[12].0;
+pub static TY_LIST: &str = LUT[13].0;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
     layers: VInline<1, Layer>,

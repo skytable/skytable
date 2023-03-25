@@ -55,3 +55,34 @@ pub fn random_string_checked(rng: &mut impl Rng, l: usize, ck: impl Fn(&str) -> 
         }
     }
 }
+
+pub trait VecFuse<T> {
+    fn fuse_append(self, arr: &mut Vec<T>);
+}
+
+impl<T> VecFuse<T> for T {
+    fn fuse_append(self, arr: &mut Vec<T>) {
+        arr.push(self);
+    }
+}
+
+impl<T, const N: usize> VecFuse<T> for [T; N] {
+    fn fuse_append(self, arr: &mut Vec<T>) {
+        arr.extend(self)
+    }
+}
+
+impl<T> VecFuse<T> for Vec<T> {
+    fn fuse_append(self, arr: &mut Vec<T>) {
+        arr.extend(self)
+    }
+}
+
+#[macro_export]
+macro_rules! vecfuse {
+    ($($expr:expr),* $(,)?) => {{
+        let mut v = Vec::new();
+        $(<_ as crate::util::test_utils::VecFuse<_>>::fuse_append($expr, &mut v);)*
+        v
+    }};
+}

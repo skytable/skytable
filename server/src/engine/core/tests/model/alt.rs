@@ -25,16 +25,20 @@
 */
 
 mod plan {
-    use crate::engine::{
-        core::{
-            model::{
-                alt::{AlterAction, AlterPlan},
-                Field, Layer,
+    use crate::{
+        engine::{
+            core::{
+                model::{
+                    self,
+                    alt::{AlterAction, AlterPlan},
+                    Field, Layer,
+                },
+                tests::model::create,
             },
-            tests::model::create,
+            error::{DatabaseError, DatabaseResult},
+            ql::{ast::parse_ast_node_full, tests::lex_insecure},
         },
-        error::{DatabaseError, DatabaseResult},
-        ql::{ast::parse_ast_node_full, tests::lex_insecure},
+        vecfuse,
     };
     fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> DatabaseResult<()> {
         let model = create(model)?;
@@ -173,6 +177,126 @@ mod plan {
             )
             .unwrap_err(),
             DatabaseError::DdlModelAlterFieldNotFound
+        );
+    }
+    fn bad_type_cast(orig_ty: &str, new_ty: &str) {
+        let create = format!("create model mymodel(username: string, silly_field: {orig_ty})");
+        let alter = format!("alter model mymodel update silly_field {{ type: {new_ty} }}");
+        assert_eq!(
+            with_plan(&create, &alter, |_| {}).expect_err(&format!(
+                "found no error in transformation: {orig_ty} -> {new_ty}"
+            )),
+            DatabaseError::DdlModelAlterBadTypedef,
+            "failed to match error in transformation: {orig_ty} -> {new_ty}",
+        )
+    }
+    fn enumerated_bad_type_casts<O, N>(orig_ty: O, new_ty: N)
+    where
+        O: IntoIterator<Item = &'static str>,
+        N: IntoIterator<Item = &'static str> + Clone,
+    {
+        for orig in orig_ty {
+            let new_ty = new_ty.clone();
+            for new in new_ty {
+                bad_type_cast(orig, new);
+            }
+        }
+    }
+    #[test]
+    fn illegal_bool_direct_cast() {
+        enumerated_bad_type_casts(
+            ["bool"],
+            vecfuse![
+                model::TY_UINT,
+                model::TY_SINT,
+                model::TY_BINARY,
+                model::TY_STRING,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_uint_direct_cast() {
+        enumerated_bad_type_casts(
+            model::TY_UINT,
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_SINT,
+                model::TY_FLOAT,
+                model::TY_BINARY,
+                model::TY_STRING,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_sint_direct_cast() {
+        enumerated_bad_type_casts(
+            model::TY_SINT,
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_UINT,
+                model::TY_FLOAT,
+                model::TY_BINARY,
+                model::TY_STRING,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_float_direct_cast() {
+        enumerated_bad_type_casts(
+            model::TY_FLOAT,
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_UINT,
+                model::TY_SINT,
+                model::TY_BINARY,
+                model::TY_STRING,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_binary_direct_cast() {
+        enumerated_bad_type_casts(
+            [model::TY_BINARY],
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_UINT,
+                model::TY_SINT,
+                model::TY_FLOAT,
+                model::TY_STRING,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_string_direct_cast() {
+        enumerated_bad_type_casts(
+            [model::TY_STRING],
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_UINT,
+                model::TY_SINT,
+                model::TY_FLOAT,
+                model::TY_BINARY,
+                model::TY_LIST
+            ],
+        );
+    }
+    #[test]
+    fn illegal_list_direct_cast() {
+        enumerated_bad_type_casts(
+            ["list { type: string }"],
+            vecfuse![
+                model::TY_BOOL,
+                model::TY_UINT,
+                model::TY_SINT,
+                model::TY_FLOAT,
+                model::TY_BINARY,
+                model::TY_STRING
+            ],
         );
     }
 }
