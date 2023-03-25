@@ -18,7 +18,7 @@ clap = { version = "2", features = ["yaml"] }
 env_logger = "0.10.0"
 hashbrown = { version = "0.13.1", features = ["raw"] }
 log = "0.4.17"
-openssl = { version = "0.10.45", features = ["vendored"] }
+openssl = { version = "0.10.48", features = ["vendored"] }
 parking_lot = "0.12.1"
 regex = "1.7.1"
 serde = { version = "1.0.152", features = ["derive"] }

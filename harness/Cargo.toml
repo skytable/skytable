@@ -16,4 +16,4 @@ env_logger = "0.10.0"
 log = "0.4.17"
 zip = { version = "0.6.3", features = ["deflate"] }
 powershell_script = "1.0.4"
-openssl = { version = "0.10.45", features = ["vendored"] }
+openssl = { version = "0.10.48", features = ["vendored"] }
