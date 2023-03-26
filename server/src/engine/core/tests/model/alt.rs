@@ -24,39 +24,61 @@
  *
 */
 
+use crate::engine::{
+    core::{
+        model::{alt::AlterPlan, ModelView},
+        tests::model::{create, exec_create},
+        GlobalNS,
+    },
+    error::DatabaseResult,
+    idx::STIndex,
+    ql::{ast::parse_ast_node_full, ddl::alt::AlterModel, tests::lex_insecure},
+};
+
+fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> DatabaseResult<()> {
+    let model = create(model)?;
+    let tok = lex_insecure(plan.as_bytes()).unwrap();
+    let alter = parse_ast_node_full(&tok[2..]).unwrap();
+    let model_write = model.intent_write_model();
+    let mv = AlterPlan::fdeltas(&model, &model_write, alter)?;
+    Ok(f(mv))
+}
+fn plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) {
+    with_plan(model, plan, f).unwrap()
+}
+fn exec_plan(
+    gns: &GlobalNS,
+    new_space: bool,
+    model: &str,
+    plan: &str,
+    f: impl Fn(&ModelView),
+) -> DatabaseResult<()> {
+    exec_create(gns, model, "myspace", new_space)?;
+    let tok = lex_insecure(plan.as_bytes()).unwrap();
+    let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
+    let model_name = alter.model;
+    ModelView::exec_alter(gns, "myspace".as_bytes(), alter)?;
+    let gns_read = gns.spaces().read();
+    let space = gns_read.st_get("myspace".as_bytes()).unwrap();
+    let model = space.models().read();
+    f(model.st_get(model_name.as_bytes()).unwrap());
+    Ok(())
+}
+
 mod plan {
     use crate::{
         engine::{
-            core::{
-                model::{
-                    self,
-                    alt::{AlterAction, AlterPlan},
-                    Field, Layer,
-                },
-                tests::model::create,
-            },
-            error::{DatabaseError, DatabaseResult},
-            ql::{ast::parse_ast_node_full, tests::lex_insecure},
+            core::model::{self, alt::AlterAction, Field, Layer},
+            error::DatabaseError,
         },
         vecfuse,
     };
-    fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> DatabaseResult<()> {
-        let model = create(model)?;
-        let tok = lex_insecure(plan.as_bytes()).unwrap();
-        let alter = parse_ast_node_full(&tok[2..]).unwrap();
-        let model_write = model.intent_write_model();
-        let mv = AlterPlan::fdeltas(&model, &model_write, alter)?;
-        Ok(f(mv))
-    }
-    fn plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) {
-        with_plan(model, plan, f).unwrap()
-    }
     /*
         Simple
     */
     #[test]
     fn simple_add() {
-        plan(
+        super::plan(
             "create model mymodel(username: string, password: binary)",
             "alter model mymodel add myfield { type: string, nullable: true }",
             |plan| {
@@ -73,7 +95,7 @@ mod plan {
     }
     #[test]
     fn simple_remove() {
-        plan(
+        super::plan(
             "create model mymodel(username: string, password: binary, useless_field: uint8)",
             "alter model mymodel remove useless_field",
             |plan| {
@@ -89,7 +111,7 @@ mod plan {
     #[test]
     fn simple_update() {
         // FREEDOM! DAMN THE PASSWORD!
-        plan(
+        super::plan(
             "create model mymodel(username: string, password: binary)",
             "alter model mymodel update password { nullable: true }",
             |plan| {
@@ -104,13 +126,31 @@ mod plan {
             },
         );
     }
+    #[test]
+    fn update_need_lock() {
+        // FIGHT THE NULL
+        super::plan(
+            "create model mymodel(username: string, null password: binary)",
+            "alter model mymodel update password { nullable: false }",
+            |plan| {
+                assert_eq!(plan.model.as_str(), "mymodel");
+                assert!(!plan.no_lock);
+                assert_eq!(
+                    plan.action,
+                    AlterAction::Update(into_dict! {
+                        "password" => Field::new([Layer::bin()].into(), false)
+                    })
+                );
+            },
+        );
+    }
     /*
         Illegal
     */
     #[test]
     fn illegal_remove_nx() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel remove password_e2e",
                 |_| {}
@@ -122,7 +162,7 @@ mod plan {
     #[test]
     fn illegal_remove_pk() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel remove username",
                 |_| {}
@@ -134,7 +174,7 @@ mod plan {
     #[test]
     fn illegal_add_pk() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel add username { type: string }",
                 |_| {}
@@ -146,7 +186,7 @@ mod plan {
     #[test]
     fn illegal_add_ex() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel add password { type: string }",
                 |_| {}
@@ -158,7 +198,7 @@ mod plan {
     #[test]
     fn illegal_update_pk() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel update username { type: string }",
                 |_| {}
@@ -170,7 +210,7 @@ mod plan {
     #[test]
     fn illegal_update_nx() {
         assert_eq!(
-            with_plan(
+            super::with_plan(
                 "create model mymodel(username: string, password: binary)",
                 "alter model mymodel update username_secret { type: string }",
                 |_| {}
@@ -183,7 +223,7 @@ mod plan {
         let create = format!("create model mymodel(username: string, silly_field: {orig_ty})");
         let alter = format!("alter model mymodel update silly_field {{ type: {new_ty} }}");
         assert_eq!(
-            with_plan(&create, &alter, |_| {}).expect_err(&format!(
+            super::with_plan(&create, &alter, |_| {}).expect_err(&format!(
                 "found no error in transformation: {orig_ty} -> {new_ty}"
             )),
             DatabaseError::DdlModelAlterBadTypedef,
@@ -298,5 +338,24 @@ mod plan {
                 model::TY_STRING
             ],
         );
+    }
+}
+
+mod exec {
+    use crate::engine::{core::GlobalNS, idx::STIndex};
+    #[test]
+    fn exec_simple_alter() {
+        let gns = GlobalNS::empty();
+        super::exec_plan(
+            &gns,
+            true,
+            "create model mymodel(username: string, password: binary)",
+            "alter model mymodel update password { nullable: true }",
+            |model| {
+                let schema = model.intent_read_model();
+                assert!(schema.fields().st_get("password").unwrap().is_nullable());
+            },
+        )
+        .unwrap();
     }
 }
