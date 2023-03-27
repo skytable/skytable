@@ -111,16 +111,6 @@ mod ast {
             assert!(state.exhausted());
         })
     }
-    #[bench]
-    fn parse_entity_partial(b: &mut Bencher) {
-        let e = Entity::Partial(Ident::from("user"));
-        b.iter(|| {
-            let src = lex_insecure(b":user").unwrap();
-            let mut i = 0;
-            assert_eq!(Entity::parse_from_tokens(&src, &mut i).unwrap(), e);
-            assert_eq!(i, src.len());
-        });
-    }
 }
 
 mod ddl_queries {

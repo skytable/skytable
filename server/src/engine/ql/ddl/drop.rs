@@ -68,8 +68,8 @@ impl<'a> DropSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct DropModel<'a> {
-    pub(super) entity: Entity<'a>,
-    pub(super) force: bool,
+    pub(in crate::engine) entity: Entity<'a>,
+    pub(in crate::engine) force: bool,
 }
 
 impl<'a> DropModel<'a> {

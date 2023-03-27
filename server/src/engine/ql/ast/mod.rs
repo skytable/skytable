@@ -357,14 +357,6 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
 #[derive(Debug, PartialEq)]
 /// An [`Entity`] represents the location for a specific structure, such as a model
 pub enum Entity<'a> {
-    /// A partial entity is used when switching to a model wrt the currently set space (commonly used
-    /// when running `use` queries)
-    ///
-    /// syntax:
-    /// ```sql
-    /// :model
-    /// ```
-    Partial(Ident<'a>),
     /// A single entity is used when switching to a model wrt the currently set space (commonly used
     /// when running DML queries)
     ///
@@ -408,21 +400,6 @@ impl<'a> Entity<'a> {
         Entity::Single(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
     }
     #[inline(always)]
-    /// Parse a partial entity from the given slice
-    ///
-    /// ## Safety
-    ///
-    /// Caller guarantees that the token stream matches the exact stream of tokens
-    /// expected for a partial entity
-    pub(super) unsafe fn partial_entity_from_slice(sl: &'a [Token]) -> Self {
-        Entity::Partial(extract!(&sl[1], Token::Ident(sl) => sl.clone()))
-    }
-    #[inline(always)]
-    /// Returns true if the given token stream matches the signature of partial entity syntax
-    pub(super) fn tokens_with_partial(tok: &[Token]) -> bool {
-        tok.len() > 1 && tok[0] == Token![:] && tok[1].is_ident()
-    }
-    #[inline(always)]
     /// Returns true if the given token stream matches the signature of single entity syntax
     ///
     /// ⚠ WARNING: This will pass for full and single
@@ -438,7 +415,6 @@ impl<'a> Entity<'a> {
     /// Attempt to parse an entity using the given token stream. It also accepts a counter
     /// argument to forward the cursor
     pub fn parse_from_tokens(tok: &'a [Token], c: &mut usize) -> LangResult<Self> {
-        let is_partial = Self::tokens_with_partial(tok);
         let is_current = Self::tokens_with_single(tok);
         let is_full = Self::tokens_with_full(tok);
         let r = match () {
@@ -449,10 +425,6 @@ impl<'a> Entity<'a> {
             _ if is_current => unsafe {
                 *c += 1;
                 Self::single_entity_from_slice(tok)
-            },
-            _ if is_partial => unsafe {
-                *c += 2;
-                Self::partial_entity_from_slice(tok)
             },
             _ => return Err(LangError::ExpectedEntity),
         };

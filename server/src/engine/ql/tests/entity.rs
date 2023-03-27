@@ -32,12 +32,7 @@ fn entity_current() {
     let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
     assert_eq!(r, Entity::Single(Ident::from("hello")))
 }
-#[test]
-fn entity_partial() {
-    let t = lex_insecure(b":hello").unwrap();
-    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
-    assert_eq!(r, Entity::Partial(Ident::from("hello")))
-}
+
 #[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();

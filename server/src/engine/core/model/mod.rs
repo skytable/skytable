@@ -29,6 +29,7 @@ pub mod cell;
 
 #[cfg(test)]
 use std::cell::RefCell;
+
 use {
     crate::engine::{
         core::model::cell::Datacell,
