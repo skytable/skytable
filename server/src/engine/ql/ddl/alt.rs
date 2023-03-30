@@ -60,6 +60,7 @@ impl<'a> AlterSpace<'a> {
             return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         let space_name = state.fw_read();
+        state.poison_if_not(space_name.is_ident());
         state.poison_if_not(state.cursor_eq(Token![with]));
         state.cursor_ahead(); // ignore errors
         state.poison_if_not(state.cursor_eq(Token![open {}]));
@@ -69,7 +70,10 @@ impl<'a> AlterSpace<'a> {
             return Err(LangError::BadSyntax);
         }
 
-        let space_name = unsafe { extract!(space_name, Token::Ident(ref space) => space.clone()) };
+        let space_name = unsafe {
+            // UNSAFE(@ohsayan): We just verified that `space_name` is an ident
+            space_name.uck_read_ident()
+        };
         let mut d = DictGeneric::new();
         syn::rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut d);
         if state.okay() {
@@ -113,7 +117,7 @@ impl<'a> AlterModel<'a> {
             return compiler::cold_rerr(LangError::BadSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
-        let model_name = unsafe { extract!(state.fw_read(), Token::Ident(ref l) => l.clone()) };
+        let model_name = unsafe { state.fw_read().uck_read_ident() };
         let kind = match state.fw_read() {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),

@@ -56,7 +56,7 @@ impl<'a> DropSpace<'a> {
                 return Ok(DropSpace::new(
                     unsafe {
                         // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
-                        extract!(ident, Token::Ident(ref space) => *space)
+                        ident.uck_read_ident()
                     },
                     force,
                 ));

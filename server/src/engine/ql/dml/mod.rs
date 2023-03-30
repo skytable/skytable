@@ -37,16 +37,11 @@ pub mod upd;
 use {
     super::{
         ast::{QueryData, State},
-        lex::{Ident, Token},
+        lex::Ident,
     },
     crate::{engine::data::lit::LitIR, util::compiler},
     std::collections::HashMap,
 };
-
-#[inline(always)]
-unsafe fn read_ident<'a>(tok: &'a Token<'a>) -> Ident<'a> {
-    extract!(tok, Token::Ident(ref tok) => *tok)
-}
 
 #[inline(always)]
 fn u(b: bool) -> u8 {
@@ -108,9 +103,11 @@ impl<'a> RelationalExpr<'a> {
         state.poison_if_not(state.can_read_lit_rounded());
         if compiler::likely(state.okay()) {
             unsafe {
+                // UNSAFE(@ohsayan): we verified this above
                 let lit = state.read_cursor_lit_unchecked();
                 state.cursor_ahead();
-                Some(Self::new(read_ident(ident), lit, operator))
+                // UNSAFE(@ohsayan): we checked if `ident` returns `is_ident` and updated state
+                Some(Self::new(ident.uck_read_ident(), lit, operator))
             }
         } else {
             None

@@ -27,7 +27,7 @@
 #[cfg(test)]
 use super::WhereClauseCollection;
 use {
-    super::{read_ident, u, WhereClause},
+    super::{u, WhereClause},
     crate::{
         engine::{
             data::lit::LitIR,
@@ -123,7 +123,8 @@ impl<'a> AssignmentExpression<'a> {
                 let rhs = state.read_cursor_lit_unchecked();
                 state.cursor_ahead();
                 expressions.push(AssignmentExpression::new(
-                    read_ident(lhs),
+                    // UNSAFE(@ohsayan): we verified if `lhs` returns `is_ident`
+                    lhs.uck_read_ident(),
                     rhs,
                     OPERATOR[operator_code as usize],
                 ))

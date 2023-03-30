@@ -418,7 +418,10 @@ impl<'a> ExpandedField<'a> {
         }
         if state.okay() {
             Ok(Self {
-                field_name: unsafe { extract!(field_name, Token::Ident(id) => *id) },
+                field_name: unsafe {
+                    // UNSAFE(@ohsayan): We just verified if `field_name` returns `is_ident`
+                    field_name.uck_read_ident()
+                },
                 props,
                 layers,
             })

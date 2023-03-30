@@ -302,11 +302,11 @@ impl<'a> QueryData<'a> for InplaceData {
     }
     #[inline(always)]
     unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
-        extract!(tok, Token::Lit(l) => l.as_ir())
+        tok.uck_read_lit().as_ir()
     }
     #[inline(always)]
     unsafe fn read_data_type(&mut self, tok: &'a Token) -> Datacell {
-        Datacell::from(extract!(tok, Token::Lit(ref l) => l.to_owned()))
+        Datacell::from(<Self as QueryData>::read_lit(self, tok))
     }
     #[inline(always)]
     fn nonzero(&self) -> bool {
@@ -384,10 +384,7 @@ impl<'a> Entity<'a> {
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a full entity
     pub(super) unsafe fn full_entity_from_slice(sl: &'a [Token]) -> Self {
-        Entity::Full(
-            extract!(&sl[0], Token::Ident(sl) => sl.clone()),
-            extract!(&sl[2], Token::Ident(sl) => sl.clone()),
-        )
+        Entity::Full(sl[0].uck_read_ident(), sl[1].uck_read_ident())
     }
     #[inline(always)]
     /// Parse a single entity from the given slice
@@ -397,7 +394,7 @@ impl<'a> Entity<'a> {
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a single entity
     pub(super) unsafe fn single_entity_from_slice(sl: &'a [Token]) -> Self {
-        Entity::Single(extract!(&sl[0], Token::Ident(sl) => sl.clone()))
+        Entity::Single(sl[0].uck_read_ident())
     }
     #[inline(always)]
     /// Returns true if the given token stream matches the signature of single entity syntax

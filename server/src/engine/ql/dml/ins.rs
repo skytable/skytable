@@ -25,7 +25,6 @@
 */
 
 use {
-    super::read_ident,
     crate::{
         engine::{
             core::Datacell,
@@ -200,7 +199,7 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
 /// ## Safety
 /// - Cursor must match arity(0) function signature
 unsafe fn handle_func_sub<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<Datacell> {
-    let func = read_ident(state.fw_read());
+    let func = state.fw_read().uck_read_ident();
     state.cursor_ahead_by(2); // skip tt:paren
     ldfunc(func).map(move |f| f())
 }

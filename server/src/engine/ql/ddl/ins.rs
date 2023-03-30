@@ -55,7 +55,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
         Token![space] if state.cursor_has_ident_rounded() => {
             Ok(Statement::InspectSpace(unsafe {
                 // UNSAFE(@ohsayan): Safe because of the match predicate
-                extract!(state.fw_read(), Token::Ident(ref space) => *space)
+                state.fw_read().uck_read_ident()
             }))
         }
         Token::Ident(id) if id.eq_ignore_ascii_case("spaces") && state.exhausted() => {

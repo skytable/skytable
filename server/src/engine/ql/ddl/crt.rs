@@ -32,7 +32,7 @@ use {
             error::{LangError, LangResult},
             ql::{
                 ast::{QueryData, State},
-                lex::{Ident, Token},
+                lex::Ident,
             },
         },
         util::compiler,
@@ -69,7 +69,10 @@ impl<'a> CreateSpace<'a> {
         }
         if state.okay() {
             Ok(CreateSpace {
-                space_name: unsafe { extract!(space_name, Token::Ident(ref id) => id.clone()) },
+                space_name: unsafe {
+                    // UNSAFE(@ohsayan): we checked if `space_name` with `is_ident` above
+                    space_name.uck_read_ident()
+                },
                 props: d,
             })
         } else {
@@ -109,9 +112,9 @@ impl<'a> CreateModel<'a> {
         if compiler::unlikely(state.remaining() < 10) {
             return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
-        // field name; ignore errors
-        let field_name = state.fw_read();
-        state.poison_if_not(field_name.is_ident());
+        // model name; ignore errors
+        let model_name = state.fw_read();
+        state.poison_if_not(model_name.is_ident());
         state.poison_if_not(state.cursor_eq(Token![() open]));
         state.cursor_ahead();
         // fields
@@ -136,7 +139,10 @@ impl<'a> CreateModel<'a> {
         // we're done
         if state.okay() {
             Ok(Self {
-                model_name: unsafe { extract!(field_name, Token::Ident(id) => *id) },
+                model_name: unsafe {
+                    // UNSAFE(@ohsayan): we verified if `model_name` returns `is_ident`
+                    model_name.uck_read_ident()
+                },
                 fields,
                 props,
             })
