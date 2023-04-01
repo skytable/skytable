@@ -77,7 +77,10 @@ impl<'a> InsecureLexer<'a> {
     fn _lex(&mut self) {
         let ref mut slf = self.base;
         while slf.not_exhausted() && slf.no_error() {
-            match unsafe { slf.deref_cursor() } {
+            match unsafe {
+                // UNSAFE(@ohsayan): Verified non-null from pre
+                slf.deref_cursor()
+            } {
                 byte if byte.is_ascii_alphabetic() => slf.scan_ident_or_keyword(),
                 #[cfg(test)]
                 byte if byte == b'\x01' => {
@@ -104,6 +107,7 @@ impl<'a> InsecureLexer<'a> {
     #[inline(always)]
     fn scan_signed_integer(slf: &mut RawLexer<'a>) {
         unsafe {
+            // UNSAFE(@ohsayan): We hit an integer hence this was called
             slf.incr_cursor();
         }
         if slf.peek_is(|b| b.is_ascii_digit()) {
@@ -116,8 +120,10 @@ impl<'a> InsecureLexer<'a> {
             while slf.peek_is_and_forward(|b| b.is_ascii_digit()) {}
             let wseof = slf.peek_is(|char| !char.is_ascii_alphabetic()) || slf.exhausted();
             match unsafe {
+                // UNSAFE(@ohsayan): a sequence of ASCII bytes in the integer range will always be correct unicode
                 str::from_utf8_unchecked(slice::from_raw_parts(
                     start,
+                    // UNSAFE(@ohsayan): valid cursor and start pointers
                     slf.cursor().offset_from(start) as usize,
                 ))
             }
@@ -137,47 +143,66 @@ impl<'a> InsecureLexer<'a> {
     #[inline(always)]
     fn scan_unsigned_integer(slf: &mut RawLexer<'a>) {
         let s = slf.cursor();
-        unsafe {
-            while slf.peek_is(|b| b.is_ascii_digit()) {
+
+        while slf.peek_is(|b| b.is_ascii_digit()) {
+            unsafe {
+                // UNSAFE(@ohsayan): since we're going ahead, this is correct (until EOA)
                 slf.incr_cursor();
             }
+        }
+        /*
+            1234; // valid
+            1234} // valid
+            1234{ // invalid
+            1234, // valid
+            1234a // invalid
+        */
+        let wseof = slf.peek_is(|char| !char.is_ascii_alphabetic()) || slf.exhausted();
+        match unsafe {
             /*
-                1234; // valid
-                1234} // valid
-                1234{ // invalid
-                1234, // valid
-                1234a // invalid
+                UNSAFE(@ohsayan):
+                (1) Valid cursor and start pointer (since we copy it from the cursor which is correct)
+                (2) All ASCII alphabetic bytes are captured, hence this will always be a correct unicode string
             */
-            let wseof = slf.peek_is(|char| !char.is_ascii_alphabetic()) || slf.exhausted();
-            match str::from_utf8_unchecked(slice::from_raw_parts(
+            str::from_utf8_unchecked(slice::from_raw_parts(
                 s,
                 slf.cursor().offset_from(s) as usize,
             ))
-            .parse()
-            {
-                Ok(num) if compiler::likely(wseof) => {
-                    slf.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
-                }
-                _ => slf.set_error(LexError::InvalidUnsignedLiteral),
+        }
+        .parse()
+        {
+            Ok(num) if compiler::likely(wseof) => {
+                slf.tokens.push(Token::Lit(Lit::UnsignedInt(num)))
             }
+            _ => slf.set_error(LexError::InvalidUnsignedLiteral),
         }
     }
 
     #[inline(always)]
     fn scan_binary_literal(slf: &mut RawLexer<'a>) {
         unsafe {
+            // UNSAFE(@ohsayan): cursor increment since we hit the marker byte (CR)
             slf.incr_cursor();
         }
         let mut size = 0usize;
         let mut okay = true;
-        while slf.not_exhausted() && unsafe { slf.deref_cursor() != b'\n' } && okay {
+        while slf.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): verified non-exhaustion
+                slf.deref_cursor() != b'\n'
+            }
+            && okay
+        {
             /*
                 Don't ask me how stupid this is. Like, I was probably in some "mood" when I wrote this
                 and it works duh, but isn't the most elegant of things (could I have just used a parse?
                 nah, I'm just a hardcore numeric normie)
                 -- Sayan
             */
-            let byte = unsafe { slf.deref_cursor() };
+            let byte = unsafe {
+                // UNSAFE(@ohsayan): The pre invariant guarantees that this is correct
+                slf.deref_cursor()
+            };
             okay &= byte.is_ascii_digit();
             let (prod, of_flag) = size.overflowing_mul(10);
             okay &= !of_flag;
@@ -185,6 +210,7 @@ impl<'a> InsecureLexer<'a> {
             size = sum;
             okay &= !of_flag;
             unsafe {
+                // UNSAFE(@ohsayan): We just read something, so this is fine (until EOA)
                 slf.incr_cursor();
             }
         }
@@ -192,7 +218,9 @@ impl<'a> InsecureLexer<'a> {
         okay &= slf.remaining() >= size;
         if compiler::likely(okay) {
             unsafe {
+                // UNSAFE(@ohsayan): Correct cursor and length (from above we know that we have enough bytes)
                 slf.push_token(Lit::Bin(slice::from_raw_parts(slf.cursor(), size)));
+                // UNSAFE(@ohsayan): Correct length increment
                 slf.incr_cursor_by(size);
             }
         } else {
@@ -202,22 +230,31 @@ impl<'a> InsecureLexer<'a> {
     #[inline(always)]
     fn scan_quoted_string(slf: &mut RawLexer<'a>, quote_style: u8) {
         debug_assert!(
-            unsafe { slf.deref_cursor() } == quote_style,
+            unsafe {
+                // UNSAFE(@ohsayan): yessir, we just hit this byte. if called elsewhere, this function will crash and burn (or simply, segfault)
+                slf.deref_cursor()
+            } == quote_style,
             "illegal call to scan_quoted_string"
         );
-        unsafe { slf.incr_cursor() }
+        unsafe {
+            // UNSAFE(@ohsayan): Increment this cursor (this is correct since we just hit the quote)
+            slf.incr_cursor()
+        }
         let mut buf = Vec::new();
         unsafe {
             while slf.peek_neq(quote_style) {
+                // UNSAFE(@ohsayan): deref is good since peek passed
                 match slf.deref_cursor() {
                     b if b != b'\\' => {
                         buf.push(b);
                     }
                     _ => {
+                        // UNSAFE(@ohsayan): we read one byte, so this should work
                         slf.incr_cursor();
                         if slf.exhausted() {
                             break;
                         }
+                        // UNSAFE(@ohsayan): correct because of the above branch
                         let b = slf.deref_cursor();
                         let quote = b == quote_style;
                         let bs = b == b'\\';
@@ -228,6 +265,11 @@ impl<'a> InsecureLexer<'a> {
                         }
                     }
                 }
+                /*
+                    UNSAFE(@ohsayan): This is correct because:
+                    (a) If we are in arm 1: we move the cursor ahead from the `\` byte (the branch doesn't do it)
+                    (b) If we are in arm 2: we don't skip the second quote byte in the branch, hence this is correct
+                */
                 slf.incr_cursor();
             }
             let terminated = slf.peek_eq_and_forward(quote_style);
@@ -260,7 +302,10 @@ impl<'a> SafeLexer<'a> {
     fn _lex(self) -> LexResult<Vec<Token<'a>>> {
         let Self { base: mut l } = self;
         while l.not_exhausted() && l.no_error() {
-            let b = unsafe { l.deref_cursor() };
+            let b = unsafe {
+                // UNSAFE(@ohsayan): This is correct because of the pre invariant
+                l.deref_cursor()
+            };
             match b {
                 // ident or kw
                 b if b.is_ascii_alphabetic() => l.scan_ident_or_keyword(),
@@ -469,7 +514,10 @@ impl<'b> SafeQueryData<'b> {
         // incr cursor
         i += mx_extract;
         *cnt += i;
-        unsafe { slice::from_raw_parts(src.as_ptr(), mx_extract) }
+        unsafe {
+            // UNSAFE(@ohsayan): src is correct (guaranteed). even if the decoded length returns an error we still remain within bounds of the EOA
+            slice::from_raw_parts(src.as_ptr(), mx_extract)
+        }
     }
     #[inline(always)]
     pub(super) fn uint<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {

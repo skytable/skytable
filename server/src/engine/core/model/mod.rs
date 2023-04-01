@@ -245,20 +245,22 @@ impl Field {
         }
     }
     #[inline(always)]
-    fn single_pass_for(&self, dc: &Datacell) -> bool {
-        ((self.layers().len() == 1) & (self.layers()[0].tag.tag_class() == dc.kind()))
-            | (self.nullable & dc.is_null())
-    }
-    #[inline(always)]
     fn compute_index(&self, dc: &Datacell) -> usize {
-        // escape check if it makes sense to
-        !(self.nullable & dc.is_null()) as usize * self.layers()[0].tag.tag_class().word()
+        if ((!self.is_nullable()) & dc.is_null()) | (self.layers[0].tag.tag_class() != dc.kind()) {
+            // illegal states: (1) bad null (2) tags don't match
+            7
+        } else {
+            self.layers()[0].tag.tag_class().word()
+        }
     }
     pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
         // if someone sends a PR with an added check, I'll personally come to your house and throw a brick on your head
-        if self.single_pass_for(data) {
+        if self.layers.len() == 1 {
             layertrace("fpath");
-            unsafe { LVERIFY[self.compute_index(data)](self.layers()[0], data) }
+            unsafe {
+                // UNSAFE(@ohsayan): checked for non-null, and used correct class
+                LVERIFY[self.compute_index(data)](self.layers()[0], data)
+            }
         } else {
             Self::rverify_layers(self.layers(), data)
         }
@@ -268,19 +270,29 @@ impl Field {
         let layer = layers[0];
         let layers = &layers[1..];
         match (layer.tag.tag_class(), data.kind()) {
-            (layer_tag, data_tag) if (layer_tag == data_tag) & (layer_tag < TagClass::List) => {
-                // time to go home
-                (unsafe { LVERIFY[layer.tag.tag_class().word()](layer, data) } & layers.is_empty())
-            }
-            (TagClass::List, TagClass::List) => unsafe {
-                let mut okay = !layers.is_empty() & LVERIFY[TagClass::List.word()](layer, data);
-                let list = data.read_list().read();
-                let mut it = list.iter();
-                while (it.len() != 0) & okay {
-                    okay &= Self::rverify_layers(layers, it.next().unwrap());
+            (TagClass::List, TagClass::List) if !layers.is_empty() => {
+                let mut okay = unsafe {
+                    // UNSAFE(@ohsayan): we've verified this
+                    LVERIFY[TagClass::List.word()](layer, data)
+                };
+                let list = unsafe {
+                    // UNSAFE(@ohsayan): we verified tags
+                    data.read_list()
+                };
+                let lread = list.read();
+                let mut i = 0;
+                while (i < lread.len()) & okay {
+                    okay &= Self::rverify_layers(layers, &lread[i]);
+                    i += 1;
                 }
                 okay
-            },
+            }
+            (tag_a, tag_b) if tag_a == tag_b => {
+                unsafe {
+                    // UNSAFE(@ohsayan): same tags; not-null for now so no extra handling required here
+                    LVERIFY[tag_a.word()](layer, data)
+                }
+            }
             _ => false,
         }
     }
@@ -374,7 +386,7 @@ impl Layer {
     }
 }
 
-static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 7] = [
+static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 8] = [
     lverify_bool,
     lverify_uint,
     lverify_sint,
@@ -382,6 +394,7 @@ static LVERIFY: [unsafe fn(Layer, &Datacell) -> bool; 7] = [
     lverify_bin,
     lverify_str,
     lverify_list,
+    |_, _| false,
 ];
 
 #[cfg(test)]

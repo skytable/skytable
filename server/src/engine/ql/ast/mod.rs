@@ -416,10 +416,12 @@ impl<'a> Entity<'a> {
         let is_full = Self::tokens_with_full(tok);
         let r = match () {
             _ if is_full => unsafe {
+                // UNSAFE(@ohsayan): just verified signature
                 *c += 3;
                 Self::full_entity_from_slice(tok)
             },
             _ if is_current => unsafe {
+                // UNSAFE(@ohsayan): just verified signature
                 *c += 1;
                 Self::single_entity_from_slice(tok)
             },
@@ -451,6 +453,7 @@ impl<'a> Entity<'a> {
         let is_full = state.cursor_signature_match_entity_full_rounded();
         let is_single = state.cursor_has_ident_rounded();
         unsafe {
+            // UNSAFE(@ohsayan): verified signatures
             if is_full {
                 state.cursor_ahead_by(3);
                 *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
@@ -469,6 +472,7 @@ impl<'a> Entity<'a> {
         let is_full = tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident();
         let is_single = tok[0].is_ident();
         unsafe {
+            // UNSAFE(@ohsayan): verified signatures
             if is_full {
                 state.cursor_ahead_by(3);
                 *d = MaybeInit::new(Entity::full_entity_from_slice(tok));

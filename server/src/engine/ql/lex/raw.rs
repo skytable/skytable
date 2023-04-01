@@ -412,7 +412,10 @@ impl<'a> RawLexer<'a> {
     }
     #[inline(always)]
     pub(super) fn remaining(&self) -> usize {
-        unsafe { self.e.offset_from(self.c) as usize }
+        unsafe {
+            // UNSAFE(@ohsayan): valid ptrs
+            self.e.offset_from(self.c) as usize
+        }
     }
     #[inline(always)]
     pub(super) unsafe fn deref_cursor(&self) -> u8 {
@@ -437,12 +440,21 @@ impl<'a> RawLexer<'a> {
     }
     #[inline(always)]
     pub(super) fn peek_is(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
-        self.not_exhausted() && unsafe { f(self.deref_cursor()) }
+        self.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): verified cursor is nonnull
+                f(self.deref_cursor())
+            }
     }
     #[inline(always)]
     pub(super) fn peek_is_and_forward(&mut self, f: impl FnOnce(u8) -> bool) -> bool {
-        let did_fw = self.not_exhausted() && unsafe { f(self.deref_cursor()) };
+        let did_fw = self.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): verified ptr
+                f(self.deref_cursor())
+            };
         unsafe {
+            // UNSAFE(@ohsayan): increment cursor
             self.incr_cursor_if(did_fw);
         }
         did_fw
@@ -450,18 +462,25 @@ impl<'a> RawLexer<'a> {
     #[inline(always)]
     fn peek_eq_and_forward_or_eof(&mut self, eq: u8) -> bool {
         unsafe {
+            // UNSAFE(@ohsayan): verified cursor
             let eq = self.not_exhausted() && self.deref_cursor() == eq;
+            // UNSAFE(@ohsayan): incr cursor if matched
             self.incr_cursor_if(eq);
             eq | self.exhausted()
         }
     }
     #[inline(always)]
     pub(super) fn peek_neq(&self, b: u8) -> bool {
-        self.not_exhausted() && unsafe { self.deref_cursor() != b }
+        self.not_exhausted()
+            && unsafe {
+                // UNSAFE(@ohsayan): verified cursor
+                self.deref_cursor() != b
+            }
     }
     #[inline(always)]
     pub(super) fn peek_eq_and_forward(&mut self, b: u8) -> bool {
         unsafe {
+            // UNSAFE(@ohsayan): verified cursor
             let r = self.not_exhausted() && self.deref_cursor() == b;
             self.incr_cursor_if(r);
             r
@@ -488,8 +507,10 @@ impl<'a> RawLexer<'a> {
         let s = self.cursor();
         unsafe {
             while self.peek_is(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                // UNSAFE(@ohsayan): increment cursor, this is valid
                 self.incr_cursor();
             }
+            // UNSAFE(@ohsayan): valid slice and ptrs
             slice::from_raw_parts(s, self.cursor().offset_from(s) as usize)
         }
     }
@@ -514,6 +535,7 @@ impl<'a> RawLexer<'a> {
             None => return self.set_error(LexError::UnexpectedByte),
         }
         unsafe {
+            // UNSAFE(@ohsayan): we are sent a byte, so fw cursor
             self.incr_cursor();
         }
     }

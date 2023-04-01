@@ -151,18 +151,35 @@ where
             }
             (tok, DictFoldState::LIT_OR_OB) if state.can_read_lit_from(tok) => {
                 // found lit
-                unsafe {
-                    let v = Some(state.read_lit_unchecked_from(tok).into());
-                    state.poison_if_not(dict.insert(key.take().as_str().into(), v).is_none());
-                }
+                let v = Some(unsafe {
+                    // UNSAFE(@ohsayan): verified at guard
+                    state.read_lit_unchecked_from(tok).into()
+                });
+                state.poison_if_not(
+                    dict.insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): we switch to this state only when we are in the LIT_OR_OB state. this means that we've already read in a key
+                            key.take().as_str().into()
+                        },
+                        v,
+                    )
+                    .is_none(),
+                );
                 // after lit we're either done or expect something else
                 mstate = DictFoldState::COMMA_OR_CB;
             }
             (Token![null], DictFoldState::LIT_OR_OB) => {
                 // found a null
-                unsafe {
-                    state.poison_if_not(dict.insert(key.take().as_str().into(), None).is_none());
-                }
+                state.poison_if_not(
+                    dict.insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): we only switch to this when we've already read in a key
+                            key.take().as_str().into()
+                        },
+                        None,
+                    )
+                    .is_none(),
+                );
                 // after a null (essentially counts as a lit) we're either done or expect something else
                 mstate = DictFoldState::COMMA_OR_CB;
             }
@@ -170,12 +187,16 @@ where
                 // found a nested dict
                 let mut ndict = DictGeneric::new();
                 _rfold_dict::<Qd, NoBreakpoint>(DictFoldState::CB_OR_IDENT, state, &mut ndict);
-                unsafe {
-                    state.poison_if_not(
-                        dict.insert(key.take().as_str().into(), Some(ndict.into()))
-                            .is_none(),
-                    );
-                }
+                state.poison_if_not(
+                    dict.insert(
+                        unsafe {
+                            // UNSAFE(@ohsayan): correct again because whenever we hit an expression position, we've already read in a key (ident)
+                            key.take().as_str().into()
+                        },
+                        Some(ndict.into()),
+                    )
+                    .is_none(),
+                );
                 mstate = DictFoldState::COMMA_OR_CB;
             }
             (Token![,], DictFoldState::COMMA_OR_CB) => {
@@ -240,11 +261,8 @@ states! {
     }
 }
 
-fn rfold_layers<'a, Qd: QueryData<'a>>(
-    mut mstate: LayerFoldState,
-    state: &mut State<'a, Qd>,
-    layers: &mut Vec<LayerSpec<'a>>,
-) {
+fn rfold_layers<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>, layers: &mut Vec<LayerSpec<'a>>) {
+    let mut mstate = LayerFoldState::BEGIN_IDENT;
     let mut ty = MaybeInit::uninit();
     let mut props = Default::default();
     while state.loop_tt() {
@@ -260,7 +278,7 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
                     // but we first need a colon
                     state.poison_if_not(state.cursor_rounded_eq(Token![:]));
                     state.cursor_ahead_if(state.okay());
-                    rfold_layers(LayerFoldState::BEGIN_IDENT, state, layers);
+                    rfold_layers(state, layers);
                     // we are yet to parse the remaining props
                     mstate = LayerFoldState::FOLD_INCOMPLETE;
                 } else {
@@ -297,7 +315,10 @@ fn rfold_layers<'a, Qd: QueryData<'a>>(
     if ((mstate == LayerFoldState::FINAL) | (mstate == LayerFoldState::FINAL_OR_OB)) & state.okay()
     {
         layers.push(LayerSpec {
-            ty: unsafe { ty.take() },
+            ty: unsafe {
+                // UNSAFE(@ohsayan): our start state always looks for an ident
+                ty.take()
+            },
             props,
         });
     } else {
@@ -351,7 +372,7 @@ impl<'a> FieldSpec<'a> {
         };
         // layers
         let mut layers = Vec::new();
-        rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut layers);
+        rfold_layers(state, &mut layers);
         if state.okay() {
             Ok(FieldSpec {
                 field_name: field_name.clone(),
@@ -403,7 +424,7 @@ impl<'a> ExpandedField<'a> {
             }
             state.poison_if_not(state.cursor_eq(Token![:]));
             state.cursor_ahead();
-            rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut layers);
+            rfold_layers(state, &mut layers);
             match state.fw_read() {
                 Token![,] => {
                     rfold_dict(DictFoldState::CB_OR_IDENT, state, &mut props);
@@ -489,7 +510,7 @@ mod impls {
     use {
         super::{
             rfold_dict, rfold_layers, rfold_tymeta, DictFoldState, DictGeneric, ExpandedField,
-            FieldSpec, LayerFoldState, LayerSpec,
+            FieldSpec, LayerSpec,
         },
         crate::engine::{
             error::LangResult,
@@ -511,7 +532,7 @@ mod impls {
         const VERIFY: bool = true;
         fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
             let mut layers = Vec::new();
-            rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut layers);
+            rfold_layers(state, &mut layers);
             assert!(layers.len() == 1);
             Ok(layers.swap_remove(0))
         }
@@ -519,7 +540,7 @@ mod impls {
             state: &mut State<'a, Qd>,
         ) -> LangResult<Vec<Self>> {
             let mut l = Vec::new();
-            rfold_layers(LayerFoldState::BEGIN_IDENT, state, &mut l);
+            rfold_layers(state, &mut l);
             Ok(l)
         }
     }

@@ -105,7 +105,10 @@ impl SystemDword for NativeDword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            x = unsafe { core::mem::transmute(u) };
+            x = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute(u)
+            };
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -122,7 +125,10 @@ impl SystemDword for NativeDword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            x = unsafe { core::mem::transmute_copy(self) }
+            x = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute_copy(self)
+            }
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -153,7 +159,10 @@ impl SystemDword for NativeTword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            let [a, b]: [usize; 2] = unsafe { core::mem::transmute(u) };
+            let [a, b]: [usize; 2] = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute(u)
+            };
             x = [a, b, 0];
         }
         #[cfg(target_pointer_width = "64")]
@@ -172,7 +181,10 @@ impl SystemDword for NativeTword {
         #[cfg(target_pointer_width = "32")]
         {
             let ab = [self.0[0], self.0[1]];
-            x = unsafe { core::mem::transmute(ab) };
+            x = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute(ab)
+            };
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -209,7 +221,10 @@ impl SystemDword for NativeQword {
         let ret;
         #[cfg(target_pointer_width = "32")]
         {
-            let [a, b]: [usize; 2] = unsafe { core::mem::transmute(u) };
+            let [a, b]: [usize; 2] = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute(u)
+            };
             ret = <Self as SystemQword>::store_full(a, b, 0, 0);
         }
         #[cfg(target_pointer_width = "64")]
@@ -225,7 +240,10 @@ impl SystemDword for NativeQword {
         let ret;
         #[cfg(target_pointer_width = "32")]
         {
-            ret = unsafe { core::mem::transmute([self.0[0], self.0[1]]) };
+            ret = unsafe {
+                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
+                core::mem::transmute([self.0[0], self.0[1]])
+            };
         }
         #[cfg(target_pointer_width = "64")]
         {

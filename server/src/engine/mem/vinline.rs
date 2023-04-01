@@ -82,7 +82,7 @@ impl<const N: usize, T> VInline<N, T> {
     }
     #[inline(always)]
     pub fn remove(&mut self, idx: usize) -> T {
-        if idx >= self.len() {
+        if !(idx < self.len()) {
             panic!("index out of range");
         }
         unsafe {
@@ -190,11 +190,13 @@ impl<const N: usize, T> VInline<N, T> {
             return;
         }
         if self.l <= N {
+            // the current can be fit into the stack, and we aren't on the stack. so copy data from heap and move it to the stack
             unsafe {
                 // UNSAFE(@ohsayan): non-null heap
                 self.mv_to_stack();
             }
         } else {
+            // in this case, we can't move to stack but can optimize the heap size. so create a new heap, memcpy old heap and destroy old heap (NO dtor)
             let nb = Self::alloc_block(self.len());
             unsafe {
                 // UNSAFE(@ohsayan): nonov; non-null
@@ -217,28 +219,27 @@ impl<const N: usize, T> VInline<N, T> {
     }
     #[inline]
     fn grow(&mut self) {
-        if !(self.l == self.capacity()) {
-            return;
-        }
-        // allocate new block
-        let nc = self.ncap();
-        let nb = Self::alloc_block(nc);
-        if self.on_stack() {
-            // stack -> heap
-            unsafe {
-                // UNSAFE(@ohsayan): non-null; valid len
-                ptr::copy_nonoverlapping(self.d.s.as_ptr() as *const T, nb, self.l);
+        if self.l == self.capacity() {
+            // allocate new block because we've run out of capacity
+            let nc = self.ncap();
+            let nb = Self::alloc_block(nc);
+            if self.on_stack() {
+                // stack -> heap
+                unsafe {
+                    // UNSAFE(@ohsayan): non-null; valid len
+                    ptr::copy_nonoverlapping(self.d.s.as_ptr() as *const T, nb, self.l);
+                }
+            } else {
+                unsafe {
+                    // UNSAFE(@ohsayan): non-null; valid len
+                    ptr::copy_nonoverlapping(self.d.h.cast_const(), nb, self.l);
+                    // UNSAFE(@ohsayan): non-null heap
+                    self.dealloc_heap(self.d.h);
+                }
             }
-        } else {
-            unsafe {
-                // UNSAFE(@ohsayan): non-null; valid len
-                ptr::copy_nonoverlapping(self.d.h.cast_const(), nb, self.l);
-                // UNSAFE(@ohsayan): non-null heap
-                self.dealloc_heap(self.d.h);
-            }
+            self.d.h = nb;
+            self.c = nc;
         }
-        self.d.h = nb;
-        self.c = nc;
     }
     #[inline(always)]
     unsafe fn dealloc_heap(&mut self, heap: *mut T) {
@@ -338,6 +339,7 @@ impl<const N: usize, T> IntoIter<N, T> {
             return None;
         }
         unsafe {
+            // UNSAFE(@ohsayan): we get the back pointer and move back; always behind EOA so we're chill
             self.l -= 1;
             ptr::read(self.v._as_ptr().add(self.l).cast())
         }

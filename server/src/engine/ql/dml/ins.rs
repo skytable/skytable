@@ -368,12 +368,12 @@ impl<'a> InsertStatement<'a> {
         }
         if state.okay() {
             let data = unsafe {
-                // UNSAFE(@ohsayan): state's flag guarantees correctness
+                // UNSAFE(@ohsayan): state's flag guarantees correctness (see wildcard branch)
                 data.unwrap_unchecked()
             };
             Ok(InsertStatement {
                 entity: unsafe {
-                    // UNSAFE(@ohsayan): state's flag ensures correctness
+                    // UNSAFE(@ohsayan): state's flag ensures correctness (see Entity::parse_entity)
                     entity.assume_init()
                 },
                 data,

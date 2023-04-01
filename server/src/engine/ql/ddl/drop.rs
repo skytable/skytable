@@ -55,7 +55,7 @@ impl<'a> DropSpace<'a> {
             if state.exhausted() {
                 return Ok(DropSpace::new(
                     unsafe {
-                        // UNSAFE(@ohsayan): Safe because the match predicate ensures that tok[1] is indeed an ident
+                        // UNSAFE(@ohsayan): Safe because the if predicate ensures that tok[0] (relative) is indeed an ident
                         ident.uck_read_ident()
                     },
                     force,

@@ -151,7 +151,9 @@ impl<const N: usize, T: Copy> UArray<N, T> {
         debug_assert!(s.len() <= N);
         let mut new = Self::new();
         unsafe {
+            // UNSAFE(@ohsayan): the src pointer *will* be correct and the dst is us, and we own our stack here
             ptr::copy_nonoverlapping(s.as_ptr(), new.a.as_mut_ptr() as *mut T, s.len());
+            // UNSAFE(@ohsayan): and here goes the call; same length as the origin buffer
             new.set_len(s.len());
         }
         new

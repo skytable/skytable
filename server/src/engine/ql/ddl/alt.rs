@@ -117,7 +117,10 @@ impl<'a> AlterModel<'a> {
             return compiler::cold_rerr(LangError::BadSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
-        let model_name = unsafe { state.fw_read().uck_read_ident() };
+        let model_name = unsafe {
+            // UNSAFE(@ohsayan): did rounded check for ident in the above branch
+            state.fw_read().uck_read_ident()
+        };
         let kind = match state.fw_read() {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),

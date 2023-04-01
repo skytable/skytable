@@ -244,7 +244,7 @@ pub unsafe trait DataspecMethods1D: Dataspec1D {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::clone_str(Dataspec1D::read_str_uck(self))
             },
-            TagClass::Str if <Self as DataspecRaw1D>::HEAP_STR => unsafe {
+            TagClass::Bin if <Self as DataspecRaw1D>::HEAP_BIN => unsafe {
                 // UNSAFE(@ohsayan): we are heap allocated, and we're calling the implementor's definition
                 <Self as DataspecRaw1D>::clone_bin(Dataspec1D::read_bin_uck(self))
             },

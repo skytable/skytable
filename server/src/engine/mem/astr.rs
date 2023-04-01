@@ -75,11 +75,17 @@ impl<const N: usize> AStr<N> {
     }
     #[inline(always)]
     pub fn _as_str(&self) -> &str {
-        unsafe { mem::transmute(self._as_bytes()) }
+        unsafe {
+            // UNSAFE(@ohsayan): same layout
+            mem::transmute(self._as_bytes())
+        }
     }
     #[inline(always)]
     pub fn _as_mut_str(&mut self) -> &mut str {
-        unsafe { mem::transmute(self._as_bytes_mut()) }
+        unsafe {
+            // UNSAFE(@ohsayan): same layout
+            mem::transmute(self._as_bytes_mut())
+        }
     }
     pub fn _as_bytes(&self) -> &[u8] {
         self.base.as_slice()

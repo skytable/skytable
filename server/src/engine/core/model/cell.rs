@@ -49,52 +49,76 @@ pub struct Datacell {
 impl Datacell {
     // bool
     pub fn new_bool(b: bool) -> Self {
-        unsafe { Self::new(TagClass::Bool, DataRaw::word(SystemDword::store(b))) }
+        unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
+            Self::new(TagClass::Bool, DataRaw::word(SystemDword::store(b)))
+        }
     }
     pub unsafe fn read_bool(&self) -> bool {
         self.load_word()
     }
     pub fn try_bool(&self) -> Option<bool> {
-        self.checked_tag(TagClass::Bool, || unsafe { self.read_bool() })
+        self.checked_tag(TagClass::Bool, || unsafe {
+            // UNSAFE(@ohsayan): correct because we just verified the tag
+            self.read_bool()
+        })
     }
     pub fn bool(&self) -> bool {
         self.try_bool().unwrap()
     }
     // uint
     pub fn new_uint(u: u64) -> Self {
-        unsafe { Self::new(TagClass::UnsignedInt, DataRaw::word(SystemDword::store(u))) }
+        unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
+            Self::new(TagClass::UnsignedInt, DataRaw::word(SystemDword::store(u)))
+        }
     }
     pub unsafe fn read_uint(&self) -> u64 {
         self.load_word()
     }
     pub fn try_uint(&self) -> Option<u64> {
-        self.checked_tag(TagClass::UnsignedInt, || unsafe { self.read_uint() })
+        self.checked_tag(TagClass::UnsignedInt, || unsafe {
+            // UNSAFE(@ohsayan): correct because we just verified the tag
+            self.read_uint()
+        })
     }
     pub fn uint(&self) -> u64 {
         self.try_uint().unwrap()
     }
     // sint
     pub fn new_sint(u: i64) -> Self {
-        unsafe { Self::new(TagClass::SignedInt, DataRaw::word(SystemDword::store(u))) }
+        unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
+            Self::new(TagClass::SignedInt, DataRaw::word(SystemDword::store(u)))
+        }
     }
     pub unsafe fn read_sint(&self) -> i64 {
         self.load_word()
     }
     pub fn try_sint(&self) -> Option<i64> {
-        self.checked_tag(TagClass::SignedInt, || unsafe { self.read_sint() })
+        self.checked_tag(TagClass::SignedInt, || unsafe {
+            // UNSAFE(@ohsayan): Correct because we just verified the tag
+            self.read_sint()
+        })
     }
     pub fn sint(&self) -> i64 {
         self.try_sint().unwrap()
     }
     // float
     pub fn new_float(f: f64) -> Self {
-        unsafe { Self::new(TagClass::Float, DataRaw::word(SystemDword::store(f))) }
+        unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
+            Self::new(TagClass::Float, DataRaw::word(SystemDword::store(f)))
+        }
     }
     pub unsafe fn read_float(&self) -> f64 {
         self.load_word()
     }
     pub fn try_float(&self) -> Option<f64> {
-        self.checked_tag(TagClass::Float, || unsafe { self.read_float() })
+        self.checked_tag(TagClass::Float, || unsafe {
+            // UNSAFE(@ohsayan): Correcrt because we just verified the tag
+            self.read_float()
+        })
     }
     pub fn float(&self) -> f64 {
         self.try_float().unwrap()
@@ -103,6 +127,7 @@ impl Datacell {
     pub fn new_bin(s: Box<[u8]>) -> Self {
         let mut md = ManuallyDrop::new(s);
         unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 TagClass::Bin,
                 DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
@@ -114,7 +139,10 @@ impl Datacell {
         slice::from_raw_parts::<u8>(p, l)
     }
     pub fn try_bin(&self) -> Option<&[u8]> {
-        self.checked_tag(TagClass::Bin, || unsafe { self.read_bin() })
+        self.checked_tag(TagClass::Bin, || unsafe {
+            // UNSAFE(@ohsayan): Correct because we just verified the tag
+            self.read_bin()
+        })
     }
     pub fn bin(&self) -> &[u8] {
         self.try_bin().unwrap()
@@ -123,6 +151,7 @@ impl Datacell {
     pub fn new_str(s: Box<str>) -> Self {
         let mut md = ManuallyDrop::new(s.into_boxed_bytes());
         unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 TagClass::Str,
                 DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
@@ -134,20 +163,29 @@ impl Datacell {
         str::from_utf8_unchecked(slice::from_raw_parts(p, l))
     }
     pub fn try_str(&self) -> Option<&str> {
-        self.checked_tag(TagClass::Str, || unsafe { self.read_str() })
+        self.checked_tag(TagClass::Str, || unsafe {
+            // UNSAFE(@ohsayan): Correct because we just verified the tag
+            self.read_str()
+        })
     }
     pub fn str(&self) -> &str {
         self.try_str().unwrap()
     }
     // list
     pub fn new_list(l: Vec<Self>) -> Self {
-        unsafe { Self::new(TagClass::List, DataRaw::rwl(RwLock::new(l))) }
+        unsafe {
+            // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
+            Self::new(TagClass::List, DataRaw::rwl(RwLock::new(l)))
+        }
     }
     pub unsafe fn read_list(&self) -> &RwLock<Vec<Self>> {
         &self.data.rwl
     }
     pub fn try_list(&self) -> Option<&RwLock<Vec<Self>>> {
-        self.checked_tag(TagClass::List, || unsafe { self.read_list() })
+        self.checked_tag(TagClass::List, || unsafe {
+            // UNSAFE(@ohsayan): Correct because we just verified the tag
+            self.read_list()
+        })
     }
     pub fn list(&self) -> &RwLock<Vec<Self>> {
         self.try_list().unwrap()
@@ -176,20 +214,25 @@ impl<'a> From<LitIR<'a>> for Datacell {
     fn from(l: LitIR<'a>) -> Self {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
-                // DO NOT RELY ON the payload's bit pattern; it's padded
+                // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type doesn't need any advanced construction
                 Datacell::new(
                     l.kind().tag_class(),
+                    // DO NOT RELY ON the payload's bit pattern; it's padded
                     DataRaw::word(SystemDword::store_qw(l.data().load_qw())),
                 )
             },
             tag @ (TagClass::Bin | TagClass::Str) => unsafe {
+                // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type requires a new heap for construction
                 let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
                 Datacell::new(
                     tag,
                     DataRaw::word(SystemDword::store((bin.as_mut_ptr(), bin.len()))),
                 )
             },
-            _ => unreachable!(),
+            _ => unsafe {
+                // UNSAFE(@ohsayan): a Lit will never be higher than a string
+                impossible!()
+            },
         }
     }
 }
@@ -223,6 +266,7 @@ impl Datacell {
     }
     pub fn null() -> Self {
         unsafe {
+            // UNSAFE(@ohsayan): This is a hack. It's safe because we set init to false
             Self::_new(
                 TagClass::Bool,
                 DataRaw::word(NativeQword::store_qw(0)),
@@ -333,10 +377,14 @@ impl Drop for Datacell {
     fn drop(&mut self) {
         match self.tag {
             TagClass::Str | TagClass::Bin => unsafe {
+                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let (p, l) = self.load_word();
                 engine::mem::dealloc_array::<u8>(p, l)
             },
-            TagClass::List => unsafe { ManuallyDrop::drop(&mut self.data.rwl) },
+            TagClass::List => unsafe {
+                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
+                ManuallyDrop::drop(&mut self.data.rwl)
+            },
             _ => {}
         }
     }
@@ -347,23 +395,29 @@ impl Clone for Datacell {
     fn clone(&self) -> Self {
         let data = match self.tag {
             TagClass::Str | TagClass::Bin => unsafe {
-                let block = ManuallyDrop::new(self.read_bin().to_owned().into_boxed_slice());
+                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
+                let mut block = ManuallyDrop::new(self.read_bin().to_owned().into_boxed_slice());
                 DataRaw {
-                    word: ManuallyDrop::new(SystemDword::store((block.as_ptr(), block.len()))),
+                    word: ManuallyDrop::new(SystemDword::store((block.as_mut_ptr(), block.len()))),
                 }
             },
             TagClass::List => unsafe {
+                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let data = self.read_list().read().iter().cloned().collect();
                 DataRaw {
                     rwl: ManuallyDrop::new(RwLock::new(data)),
                 }
             },
             _ => unsafe {
+                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 DataRaw {
                     word: ManuallyDrop::new(mem::transmute_copy(&self.data.word)),
                 }
             },
         };
-        unsafe { Self::_new(self.tag, data, self.init) }
+        unsafe {
+            // UNSAFE(@ohsayan): same tag, we correctly init data and also return the same init state
+            Self::_new(self.tag, data, self.init)
+        }
     }
 }
