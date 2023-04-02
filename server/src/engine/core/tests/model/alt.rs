@@ -343,9 +343,9 @@ mod plan {
 }
 
 mod exec {
-    use crate::engine::{core::GlobalNS, idx::STIndex};
+    use crate::engine::{core::GlobalNS, error::DatabaseError, idx::STIndex};
     #[test]
-    fn exec_simple_alter() {
+    fn simple_alter() {
         let gns = GlobalNS::empty();
         super::exec_plan(
             &gns,
@@ -358,5 +358,20 @@ mod exec {
             },
         )
         .unwrap();
+    }
+    #[test]
+    fn failing_alter_nullable_switch_need_lock() {
+        let gns = GlobalNS::empty();
+        assert_eq!(
+            super::exec_plan(
+                &gns,
+                true,
+                "create model myspace.mymodel(username: string, null gh_handle: string)",
+                "alter model myspace.mymodel update gh_handle { nullable: false }",
+                |_| {},
+            )
+            .unwrap_err(),
+            DatabaseError::NeedLock
+        );
     }
 }

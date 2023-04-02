@@ -42,6 +42,7 @@ use {
         mem::VInline,
         ql::ddl::{
             crt::CreateModel,
+            drop::DropModel,
             syn::{FieldSpec, LayerSpec},
         },
     },
@@ -105,6 +106,10 @@ impl ModelView {
             Ok(())
         }
     }
+    pub fn is_empty_atomic(&self) -> bool {
+        // TODO(@ohsayan): change this!
+        true
+    }
 }
 
 impl ModelView {
@@ -166,6 +171,21 @@ impl ModelView {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
         space._create_model(ItemID::new(model_name.as_str()), model)
+    }
+    pub fn exec_drop(gns: &super::GlobalNS, stmt: DropModel) -> DatabaseResult<()> {
+        let Some((space, model)) = stmt.entity.into_full() else {
+            return Err(DatabaseError::ExpectedEntity);
+        };
+        let spaces = gns.spaces().read();
+        let Some(space) =  spaces.st_get(space.as_bytes()) else {
+            return Err(DatabaseError::DdlSpaceNotFound);
+        };
+        let mut w_space = space.models().write();
+        match w_space.st_delete_if(model.as_bytes(), |mdl| !mdl.is_empty_atomic()) {
+            Some(true) => Ok(()),
+            Some(false) => Err(DatabaseError::DdlModelViewNotEmpty),
+            None => Err(DatabaseError::DdlModelNotFound),
+        }
     }
 }
 

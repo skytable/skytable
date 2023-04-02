@@ -117,4 +117,6 @@ pub enum DatabaseError {
     DdlModelAlterBadTypedef,
     /// didn't find the model
     DdlModelNotFound,
+    /// attempted a remove, but the model view is nonempty
+    DdlModelViewNotEmpty,
 }
