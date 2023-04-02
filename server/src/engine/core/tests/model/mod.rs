@@ -32,7 +32,7 @@ use crate::engine::{
     core::{model::ModelView, space::Space, GlobalNS},
     error::DatabaseResult,
     idx::STIndex,
-    ql::{ast::parse_ast_node_full, tests::lex_insecure},
+    ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
 };
 
 fn create(s: &str) -> DatabaseResult<ModelView> {
@@ -44,31 +44,22 @@ fn create(s: &str) -> DatabaseResult<ModelView> {
 pub fn exec_create(
     gns: &GlobalNS,
     create_stmt: &str,
-    space_id: &str,
     create_new_space: bool,
 ) -> DatabaseResult<()> {
-    if create_new_space {
-        assert!(gns.test_new_empty_space(space_id));
-    }
     let tok = lex_insecure(create_stmt.as_bytes()).unwrap();
-    let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-    ModelView::exec_create(gns, space_id.as_bytes(), create_model)
+    let create_model = parse_ast_node_full::<CreateModel>(&tok[2..]).unwrap();
+    if create_new_space {
+        gns.test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
+    }
+    ModelView::exec_create(gns, create_model)
 }
 
-pub fn exec_create_new_space(
-    gns: &GlobalNS,
-    create_stmt: &str,
-    space_id: &str,
-) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, space_id, true)
+pub fn exec_create_new_space(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
+    exec_create(gns, create_stmt, true)
 }
 
-pub fn exec_create_no_create(
-    gns: &GlobalNS,
-    create_stmt: &str,
-    space_id: &str,
-) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, space_id, false)
+pub fn exec_create_no_create(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
+    exec_create(gns, create_stmt, false)
 }
 
 fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {

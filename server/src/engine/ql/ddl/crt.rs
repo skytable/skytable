@@ -31,11 +31,11 @@ use {
             data::DictGeneric,
             error::{LangError, LangResult},
             ql::{
-                ast::{QueryData, State},
+                ast::{Entity, QueryData, State},
                 lex::Ident,
             },
         },
-        util::compiler,
+        util::{compiler, MaybeInit},
     },
 };
 
@@ -85,7 +85,7 @@ impl<'a> CreateSpace<'a> {
 /// A model definition
 pub struct CreateModel<'a> {
     /// the model name
-    pub(in crate::engine) model_name: Ident<'a>,
+    pub(in crate::engine) model_name: Entity<'a>,
     /// the fields
     pub(in crate::engine) fields: Vec<FieldSpec<'a>>,
     /// properties
@@ -100,7 +100,7 @@ pub struct CreateModel<'a> {
 */
 
 impl<'a> CreateModel<'a> {
-    pub fn new(model_name: Ident<'a>, fields: Vec<FieldSpec<'a>>, props: DictGeneric) -> Self {
+    pub fn new(model_name: Entity<'a>, fields: Vec<FieldSpec<'a>>, props: DictGeneric) -> Self {
         Self {
             model_name,
             fields,
@@ -113,8 +113,8 @@ impl<'a> CreateModel<'a> {
             return compiler::cold_rerr(LangError::UnexpectedEOS);
         }
         // model name; ignore errors
-        let model_name = state.fw_read();
-        state.poison_if_not(model_name.is_ident());
+        let mut model_uninit = MaybeInit::uninit();
+        Entity::parse_from_state_len_unchecked(state, &mut model_uninit);
         state.poison_if_not(state.cursor_eq(Token![() open]));
         state.cursor_ahead();
         // fields
@@ -140,8 +140,8 @@ impl<'a> CreateModel<'a> {
         if state.okay() {
             Ok(Self {
                 model_name: unsafe {
-                    // UNSAFE(@ohsayan): we verified if `model_name` returns `is_ident`
-                    model_name.uck_read_ident()
+                    // UNSAFE(@ohsayan): we verified if `model_name` is initialized through the state
+                    model_uninit.assume_init()
                 },
                 fields,
                 props,

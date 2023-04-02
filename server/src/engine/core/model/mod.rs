@@ -115,7 +115,8 @@ impl ModelView {
             props,
         }: CreateModel,
     ) -> DatabaseResult<Self> {
-        let mut okay = props.is_empty() & !fields.is_empty() & ItemID::check(&model_name);
+        let mut okay =
+            props.is_empty() & !fields.is_empty() & ItemID::check(model_name.any_single().as_str());
         // validate fields
         let mut field_spec = fields.into_iter();
         let mut fields = IndexSTSeqCns::with_capacity(field_spec.len());
@@ -154,18 +155,17 @@ impl ModelView {
 }
 
 impl ModelView {
-    pub fn exec_create(
-        gns: &super::GlobalNS,
-        space: &[u8],
-        stmt: CreateModel,
-    ) -> DatabaseResult<()> {
+    pub fn exec_create(gns: &super::GlobalNS, stmt: CreateModel) -> DatabaseResult<()> {
         let name = stmt.model_name;
         let model = Self::process_create(stmt)?;
         let space_rl = gns.spaces().read();
-        let Some(space) = space_rl.get(space) else {
+        let Some((space_name, model_name)) = name.into_full() else {
+            return Err(DatabaseError::ExpectedEntity);
+        };
+        let Some(space) = space_rl.get(space_name.as_bytes()) else {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
-        space._create_model(ItemID::new(&name), model)
+        space._create_model(ItemID::new(model_name.as_str()), model)
     }
 }
 

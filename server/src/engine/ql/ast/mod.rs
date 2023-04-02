@@ -376,6 +376,12 @@ pub enum Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
+    pub fn any_single(self) -> Ident<'a> {
+        match self {
+            Self::Full(_, e) => e,
+            Self::Single(e) => e,
+        }
+    }
     pub fn into_full(self) -> Option<(Ident<'a>, Ident<'a>)> {
         if let Self::Full(a, b) = self {
             Some((a, b))

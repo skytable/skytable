@@ -140,8 +140,7 @@ mod exec {
         let gns = GlobalNS::empty();
         exec_create_new_space(
             &gns,
-            "create model mymodel(username: string, password: binary)",
-            SPACE,
+            "create model myspace.mymodel(username: string, password: binary)",
         )
         .unwrap();
         with_model(&gns, SPACE, "mymodel", |model| {

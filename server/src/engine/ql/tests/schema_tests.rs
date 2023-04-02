@@ -414,7 +414,7 @@ mod fields {
 mod schemas {
     use super::*;
     use crate::engine::ql::{
-        ast::parse_ast_node_full,
+        ast::{parse_ast_node_full, Entity},
         ddl::{
             crt::CreateModel,
             syn::{FieldSpec, LayerSpec},
@@ -439,7 +439,7 @@ mod schemas {
         assert_eq!(
             model,
             CreateModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -478,7 +478,7 @@ mod schemas {
         assert_eq!(
             model,
             CreateModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -528,7 +528,7 @@ mod schemas {
         assert_eq!(
             model,
             CreateModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
@@ -597,7 +597,7 @@ mod schemas {
         assert_eq!(
             model,
             CreateModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 vec![
                     FieldSpec::new(
                         Ident::from("username"),
