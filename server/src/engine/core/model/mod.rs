@@ -246,16 +246,19 @@ impl Field {
     }
     #[inline(always)]
     fn compute_index(&self, dc: &Datacell) -> usize {
-        if ((!self.is_nullable()) & dc.is_null()) | (self.layers[0].tag.tag_class() != dc.kind()) {
+        if {
+            ((!self.is_nullable()) & dc.is_null())
+                | ((self.layers[0].tag.tag_class() != dc.kind()) & !dc.is_null())
+        } {
             // illegal states: (1) bad null (2) tags don't match
             7
         } else {
-            self.layers()[0].tag.tag_class().word()
+            dc.kind().word()
         }
     }
     pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
         // if someone sends a PR with an added check, I'll personally come to your house and throw a brick on your head
-        if self.layers.len() == 1 {
+        if (self.layers.len() == 1) | data.is_null() {
             layertrace("fpath");
             unsafe {
                 // UNSAFE(@ohsayan): checked for non-null, and used correct class

@@ -384,7 +384,7 @@ impl<'a> Entity<'a> {
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a full entity
     pub(super) unsafe fn full_entity_from_slice(sl: &'a [Token]) -> Self {
-        Entity::Full(sl[0].uck_read_ident(), sl[1].uck_read_ident())
+        Entity::Full(sl[0].uck_read_ident(), sl[2].uck_read_ident())
     }
     #[inline(always)]
     /// Parse a single entity from the given slice
