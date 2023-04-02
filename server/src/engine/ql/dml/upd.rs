@@ -96,7 +96,7 @@ impl<'a> AssignmentExpression<'a> {
         }
         let lhs = state.fw_read();
         state.poison_if_not(lhs.is_ident());
-        let op_ass = u(state.cursor_eq(Token![=])) * 1;
+        let op_ass = u(state.cursor_eq(Token![=]));
         let op_add = u(state.cursor_eq(Token![+])) * 2;
         let op_sub = u(state.cursor_eq(Token![-])) * 3;
         let op_mul = u(state.cursor_eq(Token![*])) * 4;
@@ -175,7 +175,7 @@ impl<'a> UpdateStatement<'a> {
         }
         // parse entity
         let mut entity = MaybeInit::uninit();
-        Entity::parse_entity(state, &mut entity);
+        Entity::parse_from_state_len_unchecked(state, &mut entity);
         if !(state.has_remaining(6)) {
             unsafe {
                 // UNSAFE(@ohsayan): Obvious from above, max 3 fw

@@ -75,7 +75,7 @@ impl<'a> InsecureLexer<'a> {
     }
     #[inline(always)]
     fn _lex(&mut self) {
-        let ref mut slf = self.base;
+        let slf = &mut self.base;
         while slf.not_exhausted() && slf.no_error() {
             match unsafe {
                 // UNSAFE(@ohsayan): Verified non-null from pre
@@ -133,7 +133,7 @@ impl<'a> InsecureLexer<'a> {
                     slf.push_token(Lit::SignedInt(num));
                 }
                 _ => {
-                    compiler::cold_val(slf.set_error(LexError::InvalidSignedNumericLit));
+                    compiler::cold_call(|| slf.set_error(LexError::InvalidSignedNumericLit));
                 }
             }
         } else {
@@ -399,15 +399,14 @@ where
     let mut number = N::zero();
     let mut nx_stop = false;
 
-    let is_signed;
-    if N::ALLOW_SIGNED {
+    let is_signed = if N::ALLOW_SIGNED {
         let loc_s = i < l && src[i] == b'-';
         i += loc_s as usize;
         okay &= (i + 2) <= l; // [-][digit][LF]
-        is_signed = loc_s;
+        loc_s
     } else {
-        is_signed = false;
-    }
+        false
+    };
 
     while i < l && okay && !nx_stop {
         // potential exit
@@ -416,16 +415,15 @@ where
         let mut local_ok = src[i].is_ascii_digit();
         let (p, p_of) = number.mul_of(10);
         local_ok &= !p_of;
-        let lfret;
-        if N::ALLOW_SIGNED && is_signed {
+        let lfret = if N::ALLOW_SIGNED && is_signed {
             let (d, d_of) = p.sub_of(src[i] & 0x0f);
             local_ok &= !d_of;
-            lfret = d;
+            d
         } else {
             let (s, s_of) = p.add_of(src[i] & 0x0f);
             local_ok &= !s_of;
-            lfret = s;
-        }
+            s
+        };
         // reassign or assign
         let reassign = number.b(nx_stop);
         let assign = lfret.b(!nx_stop);

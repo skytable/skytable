@@ -79,7 +79,7 @@ macro_rules! flags {
             const LEN: usize = { let mut i = 0; $(let _ = $expr; i += 1;)+{i} };
             const A: [$ty; $group::LEN] = [$($expr,)+];
             const SANITY: () = {
-                let ref a = Self::A; let l = a.len(); let mut i = 0;
+                let a = &Self::A; let l = a.len(); let mut i = 0;
                 while i < l { let mut j = i + 1; while j < l { if a[i] == a[j] { panic!("conflict"); } j += 1; } i += 1; }
             };
             const ALL: $ty = { let mut r: $ty = 0; $( r |= $expr;)+ r };

@@ -95,16 +95,12 @@ impl<T: TreeElement> PatchWrite<T> for VanillaUpsert<T> {
     fn nx_new(&mut self) -> T {
         self.0.clone()
     }
-    fn nx_ret<'a>() -> Self::Ret<'a> {
-        ()
-    }
+    fn nx_ret<'a>() -> Self::Ret<'a> {}
     // ex
     fn ex_apply(&mut self, _: &T) -> T {
         self.0.clone()
     }
-    fn ex_ret<'a>(_: &'a T) -> Self::Ret<'a> {
-        ()
-    }
+    fn ex_ret<'a>(_: &'a T) -> Self::Ret<'a> {}
 }
 
 pub struct VanillaUpsertRet<T: TreeElement>(pub T);

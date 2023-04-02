@@ -68,7 +68,7 @@ impl<T> Drop for TMCell<T> {
         unsafe {
             // UNSAFE(@ohsayan): Sole owner with mutable access
             let g = upin();
-            let shptr = self.a.ld_rlx(&g);
+            let shptr = self.a.ld_rlx(g);
             g.defer_destroy(shptr);
         }
     }

@@ -45,7 +45,7 @@ mod vinline {
         F: Clone + FnMut(usize) -> T,
     {
         let map2 = map.clone();
-        let r: VInline<CAP, _> = (0..upto).into_iter().map(map).collect();
+        let r: VInline<CAP, _> = (0..upto).map(map).collect();
         assert_eq!(r.len(), upto);
         if upto <= CAP {
             assert_eq!(r.capacity(), CAP);
@@ -53,11 +53,7 @@ mod vinline {
         } else {
             assert!(r.on_heap());
         }
-        assert!((0..upto)
-            .into_iter()
-            .map(map2)
-            .zip(r.iter())
-            .all(|(x, y)| { x == *y }));
+        assert!((0..upto).map(map2).zip(r.iter()).all(|(x, y)| { x == *y }));
         r
     }
     fn mkvi(upto: usize) -> VInline<CAP, usize> {
@@ -103,7 +99,7 @@ mod vinline {
     fn optimize_capacity_none_on_heap() {
         let mut vi = mkvi(CAP + 1);
         assert_eq!(vi.capacity(), CAP * 2);
-        vi.extend((CAP + 1..CAP * 2).into_iter());
+        vi.extend(CAP + 1..CAP * 2);
         assert_eq!(vi.capacity(), CAP * 2);
         vi.optimize_capacity();
         assert_eq!(vi.capacity(), CAP * 2);
@@ -155,8 +151,7 @@ mod vinline {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().collect();
         (0..CAP)
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
@@ -164,8 +159,7 @@ mod vinline {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
         (0..CAP / 2)
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
@@ -173,8 +167,7 @@ mod vinline {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().collect();
         (0..CAP)
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
@@ -182,8 +175,7 @@ mod vinline {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().take(CAP / 2).collect();
         (0..CAP / 2)
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
@@ -192,17 +184,15 @@ mod vinline {
         let v: Vec<String> = v1.into_iter().rev().collect();
         (0..CAP)
             .rev()
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_rev_stack_partial() {
         let v1 = mkvi_str(CAP);
         let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
-        (CAP..CAP / 2)
+        (CAP / 2..CAP)
             .rev()
-            .into_iter()
             .zip(v.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
@@ -212,19 +202,16 @@ mod vinline {
         let v: Vec<String> = v1.into_iter().rev().collect();
         (0..CAP + 2)
             .rev()
-            .into_iter()
-            .zip(v.into_iter())
+            .zip(v)
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_rev_heap_partial() {
         let v1 = mkvi_str(CAP + 2);
         let v: Vec<String> = v1.into_iter().rev().take(CAP / 2).collect();
-        (CAP..CAP / 2)
-            .rev()
-            .into_iter()
-            .zip(v.into_iter())
-            .for_each(|(x, y)| assert_eq!(x.to_string(), y));
+        (0..CAP + 2).rev().zip(v).for_each(|(x, y)| {
+            assert_eq!(x.to_string(), y);
+        })
     }
 }
 
@@ -260,12 +247,12 @@ mod uarray {
     }
     #[test]
     fn slice() {
-        let a: UArray<CAP, _> = (1u8..=8).into_iter().collect();
+        let a: UArray<CAP, _> = (1u8..=8).collect();
         assert_eq!(a.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8]);
     }
     #[test]
     fn slice_mut() {
-        let mut a: UArray<CAP, _> = (0u8..8).into_iter().collect();
+        let mut a: UArray<CAP, _> = (0u8..8).collect();
         a.iter_mut().for_each(|v| *v += 1);
         assert_eq!(a.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8])
     }
@@ -277,60 +264,53 @@ mod uarray {
     }
     #[test]
     fn into_iter() {
-        let a: UArray<CAP, _> = (0u8..8).into_iter().collect();
+        let a: UArray<CAP, _> = (0u8..8).collect();
         let r: Vec<u8> = a.into_iter().collect();
         (0..8)
-            .into_iter()
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x, y));
     }
     #[test]
     fn into_iter_partial() {
-        let a: UArray<CAP, String> = (0u8..8)
-            .into_iter()
-            .map(|v| ToString::to_string(&v))
-            .collect();
+        let a: UArray<CAP, String> = (0u8..8).map(|v| ToString::to_string(&v)).collect();
         let r: Vec<String> = a.into_iter().take(4).collect();
         (0..4)
-            .into_iter()
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn clone() {
-        let a: UArray<CAP, u8> = (0u8..CAP as _).into_iter().collect();
+        let a: UArray<CAP, u8> = (0u8..CAP as _).collect();
         let b = a.clone();
         assert_eq!(a, b);
     }
     #[test]
     fn into_iter_rev() {
-        let a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         let r: Vec<String> = a.into_iter().rev().collect();
         (0..8)
             .rev()
-            .into_iter()
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn into_iter_rev_partial() {
-        let a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         let r: Vec<String> = a.into_iter().rev().take(4).collect();
         (4..8)
             .rev()
-            .into_iter()
             .zip(r.into_iter())
             .for_each(|(x, y)| assert_eq!(x.to_string(), y));
     }
     #[test]
     fn pop_array() {
-        let mut a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let mut a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         assert_eq!(a.pop().unwrap(), "7");
         assert_eq!(a.len(), CAP - 1);
     }
     #[test]
     fn clear_array() {
-        let mut a: UArray<CAP, String> = (0u8..8).into_iter().map(|v| v.to_string()).collect();
+        let mut a: UArray<CAP, String> = (0u8..8).map(|v| v.to_string()).collect();
         a.clear();
         assert!(a.is_empty());
     }

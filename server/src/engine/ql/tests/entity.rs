@@ -29,13 +29,13 @@ use crate::engine::ql::{ast::Entity, lex::Ident};
 #[test]
 fn entity_current() {
     let t = lex_insecure(b"hello").unwrap();
-    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
+    let r = Entity::parse_from_tokens_len_checked(&t, &mut 0).unwrap();
     assert_eq!(r, Entity::Single(Ident::from("hello")))
 }
 
 #[test]
 fn entity_full() {
     let t = lex_insecure(b"hello.world").unwrap();
-    let r = Entity::parse_from_tokens(&t, &mut 0).unwrap();
+    let r = Entity::parse_from_tokens_len_checked(&t, &mut 0).unwrap();
     assert_eq!(r, Entity::Full(Ident::from("hello"), Ident::from("world")))
 }

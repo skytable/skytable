@@ -288,7 +288,7 @@ impl<T: TreeElement, C: Config> FromIterator<T> for RawTree<T, C> {
         };
         let t = RawTree::new();
         iter.into_iter()
-            .for_each(|te| assert!(t.patch(VanillaInsert(te), &g)));
+            .for_each(|te| assert!(t.patch(VanillaInsert(te), g)));
         t
     }
 }

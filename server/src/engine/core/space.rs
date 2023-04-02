@@ -187,7 +187,7 @@ impl PartialEq for SpaceMeta {
     fn eq(&self, other: &Self) -> bool {
         let x = self.env.read();
         let y = other.env.read();
-        &*x == &*y
+        *x == *y
     }
 }
 
@@ -196,6 +196,6 @@ impl PartialEq for Space {
     fn eq(&self, other: &Self) -> bool {
         let self_mns = self.mns.read();
         let other_mns = other.mns.read();
-        self.meta == other.meta && &*self_mns == &*other_mns
+        self.meta == other.meta && *self_mns == *other_mns
     }
 }

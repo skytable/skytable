@@ -155,14 +155,14 @@ impl<'a> AlterKind<'a> {
         }
 
         let r = match state.fw_read() {
-            Token::Ident(id) => Box::new([id.clone()]),
+            Token::Ident(id) => Box::new([*id]),
             Token![() open] => {
                 let mut stop = false;
                 let mut cols = Vec::with_capacity(DEFAULT_REMOVE_COL_CNT);
                 while state.loop_tt() && !stop {
                     match state.fw_read() {
                         Token::Ident(ref ident) => {
-                            cols.push(ident.clone());
+                            cols.push(*ident);
                             let nx_comma = state.cursor_rounded_eq(Token![,]);
                             let nx_close = state.cursor_rounded_eq(Token![() close]);
                             state.poison_if_not(nx_comma | nx_close);

@@ -329,7 +329,7 @@ fn kwhf(k: &[u8], mg: &[u8]) -> u32 {
     let mut i = 0;
     let mut s = 0;
     while i < k.len() {
-        s += mg[(i % KWMG_S) as usize] as u32 * k[i] as u32;
+        s += mg[i % KWMG_S] as u32 * k[i] as u32;
         i += 1;
     }
     s % KWG.len() as u32

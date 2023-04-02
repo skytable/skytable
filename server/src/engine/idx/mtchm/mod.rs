@@ -655,7 +655,7 @@ impl<T, C: Config> RawTree<T, C> {
 
         let mut i = 0;
         while i < C::BRANCH_MX {
-            let ref child_ref = branch.branch[i];
+            let child_ref = &branch.branch[i];
             let this_child = child_ref.fetch_or(NodeFlag::PENDING_DELETE.d(), ORD_ACR, g);
             let this_child = this_child.with_tag(cf(ldfl(&this_child), NodeFlag::PENDING_DELETE));
             match ldfl(&this_child) {

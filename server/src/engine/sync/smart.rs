@@ -42,7 +42,7 @@ use {
 
 pub type BytesRC = SliceRC<u8>;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct StrRC {
     base: SliceRC<u8>,
 }

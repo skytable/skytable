@@ -56,9 +56,9 @@ impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeE
     type Ret<'a> = bool;
     type Target = U;
     fn target(&self) -> &Self::Target {
-        &self.target
+        self.target
     }
-    fn ex<'a>(_: &'a T) -> Self::Ret<'a> {
+    fn ex(_: &T) -> Self::Ret<'_> {
         true
     }
     fn nx<'a>() -> Self::Ret<'a> {
@@ -84,9 +84,9 @@ impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeR
     type Ret<'a> = Option<&'a T::Value>;
     type Target = U;
     fn target(&self) -> &Self::Target {
-        &self.target
+        self.target
     }
-    fn ex<'a>(c: &'a T) -> Self::Ret<'a> {
+    fn ex(c: &T) -> Self::Ret<'_> {
         Some(c.val())
     }
     fn nx<'a>() -> Self::Ret<'a> {

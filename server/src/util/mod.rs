@@ -319,7 +319,7 @@ impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
         let dat_fmt = if self.is_init {
             unsafe { format!("{:?}", self.base.assume_init_ref()) }
         } else {
-            format!("MaybeUninit {{...}}")
+            "MaybeUninit {..}".to_string()
         };
         f.debug_struct("MaybeInit")
             .field("is_init", &self.is_init)

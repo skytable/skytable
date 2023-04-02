@@ -128,7 +128,7 @@ impl<'a, K, V> Iterator for IndexSTSeqDllIterUnordKey<'a, K, V> {
         self.k.next().map(|k| {
             unsafe {
                 // UNSAFE(@ohsayan): nullck
-                &*(*k).p
+                &*k.p
             }
         })
     }

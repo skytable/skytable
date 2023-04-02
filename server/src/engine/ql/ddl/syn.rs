@@ -375,7 +375,7 @@ impl<'a> FieldSpec<'a> {
         rfold_layers(state, &mut layers);
         if state.okay() {
             Ok(FieldSpec {
-                field_name: field_name.clone(),
+                field_name: *field_name,
                 layers,
                 null: is_null,
                 primary: is_primary,

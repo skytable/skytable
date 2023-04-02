@@ -78,7 +78,7 @@ impl<'a> DropModel<'a> {
         Self { entity, force }
     }
     fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-        let e = Entity::attempt_process_entity_result(state)?;
+        let e = Entity::parse_from_state_rounded_result(state)?;
         let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
         state.cursor_ahead_if(force);
         if state.exhausted() {

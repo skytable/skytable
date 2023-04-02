@@ -51,7 +51,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     }
 
     match state.fw_read() {
-        Token![model] => Entity::attempt_process_entity_result(state).map(Statement::InspectModel),
+        Token![model] => Entity::parse_from_state_rounded_result(state).map(Statement::InspectModel),
         Token![space] if state.cursor_has_ident_rounded() => {
             Ok(Statement::InspectSpace(unsafe {
                 // UNSAFE(@ohsayan): Safe because of the match predicate

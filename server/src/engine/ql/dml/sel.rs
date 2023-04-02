@@ -113,7 +113,7 @@ impl<'a> SelectStatement<'a> {
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
         let mut entity = MaybeInit::uninit();
-        Entity::attempt_process_entity(state, &mut entity);
+        Entity::parse_from_state_rounded(state, &mut entity);
         let mut clauses = <_ as Default>::default();
         if state.cursor_rounded_eq(Token![where]) {
             state.cursor_ahead();

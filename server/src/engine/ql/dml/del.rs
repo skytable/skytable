@@ -75,7 +75,7 @@ impl<'a> DeleteStatement<'a> {
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors (if any)
         let mut entity = MaybeInit::uninit();
-        Entity::parse_entity(state, &mut entity);
+        Entity::parse_from_state_len_unchecked(state, &mut entity);
         // where + clauses
         state.poison_if_not(state.cursor_eq(Token![where]));
         state.cursor_ahead(); // ignore errors

@@ -95,7 +95,7 @@ mod ast {
         b.iter(|| {
             let src = lex_insecure(b"user").unwrap();
             let mut state = State::new(&src, InplaceData::new());
-            let re = Entity::attempt_process_entity_result(&mut state).unwrap();
+            let re = Entity::parse_from_state_rounded_result(&mut state).unwrap();
             assert_eq!(e, re);
             assert!(state.exhausted());
         })
@@ -106,7 +106,7 @@ mod ast {
         b.iter(|| {
             let src = lex_insecure(b"tweeter.user").unwrap();
             let mut state = State::new(&src, InplaceData::new());
-            let re = Entity::attempt_process_entity_result(&mut state).unwrap();
+            let re = Entity::parse_from_state_rounded_result(&mut state).unwrap();
             assert_eq!(e, re);
             assert!(state.exhausted());
         })

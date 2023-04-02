@@ -56,7 +56,7 @@ mod idx_st_seq_dll {
     }
 
     #[inline(always)]
-    fn s<'a>(s: &'a str) -> String {
+    fn s(s: &str) -> String {
         s.to_owned()
     }
     fn ranstr(rand: &mut impl Rng) -> String {

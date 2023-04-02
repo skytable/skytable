@@ -41,7 +41,7 @@ mod structure_syn;
 
 #[inline(always)]
 /// Uses the [`InsecureLexer`] to lex the given input
-pub fn lex_insecure<'a>(src: &'a [u8]) -> LexResult<Vec<Token<'a>>> {
+pub fn lex_insecure(src: &[u8]) -> LexResult<Vec<Token<'_>>> {
     InsecureLexer::lex(src)
 }
 #[inline(always)]
@@ -132,8 +132,7 @@ fn fuzz_tokens(src: &[u8], fuzzverify: impl Fn(bool, &[Token]) -> bool) {
                 "expected failure for `{}`, but it passed",
                 new_src
                     .iter()
-                    .map(|tok| format!("{} ", tok.to_string()).into_bytes())
-                    .flatten()
+                    .flat_map(|tok| format!("{} ", tok.to_string()).into_bytes())
                     .map(char::from)
                     .collect::<String>()
             )

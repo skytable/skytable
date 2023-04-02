@@ -108,12 +108,10 @@ impl<'a> AlterPlan<'a> {
                     not_pk & exists
                 }) {
                     can_ignore!(AlterAction::Remove(r))
+                } else if not_found {
+                    return Err(DatabaseError::DdlModelAlterFieldNotFound);
                 } else {
-                    if not_found {
-                        return Err(DatabaseError::DdlModelAlterFieldNotFound);
-                    } else {
-                        return Err(DatabaseError::DdlModelAlterProtectedField);
-                    }
+                    return Err(DatabaseError::DdlModelAlterProtectedField);
                 }
             }
             AlterKind::Add(new_fields) => {
@@ -280,7 +278,7 @@ impl ModelView {
                     });
             }
             AlterAction::Remove(remove) => {
-                remove.into_iter().for_each(|field_id| {
+                remove.iter().for_each(|field_id| {
                     iwm.fields_mut().st_delete(field_id.as_str());
                 });
             }

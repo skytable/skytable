@@ -78,8 +78,8 @@ pub fn rflatten_metadata(new: DictGeneric) -> MetaDict {
 
 fn _rflatten_metadata(new: DictGeneric, empty: &mut MetaDict) {
     for (key, val) in new {
-        match val {
-            Some(v) => match v {
+        if let Some(v) = val {
+            match v {
                 DictEntryGeneric::Lit(l) => {
                     empty.insert(key, MetaDictEntry::Data(l));
                 }
@@ -88,8 +88,7 @@ fn _rflatten_metadata(new: DictGeneric, empty: &mut MetaDict) {
                     _rflatten_metadata(m, &mut rnew);
                     empty.insert(key, MetaDictEntry::Map(rnew));
                 }
-            },
-            _ => {}
+            }
         }
     }
 }

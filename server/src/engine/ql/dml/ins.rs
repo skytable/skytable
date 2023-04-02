@@ -100,7 +100,7 @@ fn hashf(key: &[u8], m: &[u8]) -> u32 {
     let mut i = 0;
     let mut s = 0;
     while i < key.len() {
-        s += m[(i % MAGIC_L) as usize] as u32 * key[i] as u32;
+        s += m[i % MAGIC_L] as u32 * key[i] as u32;
         i += 1;
     }
     s % PRODUCER_G.len() as u32
@@ -115,7 +115,7 @@ fn ldfunc(func: Ident<'_>) -> Option<ProducerFn> {
     let func = func.as_bytes();
     let ph = hashp(func) as usize;
     let min = cmp::min(ph, PRODUCER_F.len() - 1);
-    let data = PRODUCER_F[min as usize];
+    let data = PRODUCER_F[min];
     if data.0 == func {
         Some(data.1)
     } else {
@@ -129,8 +129,8 @@ fn ldfunc_exists(func: Ident<'_>) -> bool {
 #[inline(always)]
 unsafe fn ldfunc_unchecked(func: &[u8]) -> ProducerFn {
     let ph = hashp(func) as usize;
-    debug_assert_eq!(PRODUCER_F[ph as usize].0, func);
-    PRODUCER_F[ph as usize].1
+    debug_assert_eq!(PRODUCER_F[ph].0, func);
+    PRODUCER_F[ph].1
 }
 
 /// ## Panics
@@ -146,11 +146,10 @@ pub(super) fn parse_list<'a, Qd: QueryData<'a>>(
     while state.not_exhausted() && state.okay() && !stop {
         let d = match state.fw_read() {
             tok if state.can_read_lit_from(tok) => {
-                let r = unsafe {
+                unsafe {
                     // UNSAFE(@ohsayan): the if guard guarantees correctness
                     state.read_lit_into_data_type_unchecked_from(tok)
-                };
-                r
+                }
             }
             Token![open []] => {
                 // a nested list
@@ -351,7 +350,7 @@ impl<'a> InsertStatement<'a> {
 
         // entity
         let mut entity = MaybeInit::uninit();
-        Entity::parse_entity(state, &mut entity);
+        Entity::parse_from_state_len_unchecked(state, &mut entity);
         let mut data = None;
         match state.fw_read() {
             Token![() open] if state.not_exhausted() => {

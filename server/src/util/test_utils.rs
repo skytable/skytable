@@ -82,7 +82,7 @@ impl<T> VecFuse<T> for Vec<T> {
 macro_rules! vecfuse {
     ($($expr:expr),* $(,)?) => {{
         let mut v = Vec::new();
-        $(<_ as crate::util::test_utils::VecFuse<_>>::fuse_append($expr, &mut v);)*
+        $(<_ as $crate::util::test_utils::VecFuse<_>>::fuse_append($expr, &mut v);)*
         v
     }};
 }

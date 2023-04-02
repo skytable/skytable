@@ -413,7 +413,7 @@ impl<K: AsKey, V: AsValue, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
                 // UNSAFE(@ohsayan): Impl guarantees that entry presence == nullck head
                 self.__update(*e, v)
             },
-            None => return None,
+            None => None,
         }
     }
     #[inline(always)]
@@ -547,7 +547,7 @@ impl<K, V, C: Config<K, V>> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, C> {
     }
 
     fn idx_init_with(s: Self) -> Self {
-        Self::from(s)
+        s
     }
 
     fn idx_init_cap(cap: usize) -> Self {

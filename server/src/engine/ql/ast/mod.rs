@@ -383,7 +383,7 @@ impl<'a> Entity<'a> {
     ///
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a full entity
-    pub(super) unsafe fn full_entity_from_slice(sl: &'a [Token]) -> Self {
+    pub(super) unsafe fn parse_uck_tokens_full(sl: &'a [Token]) -> Self {
         Entity::Full(sl[0].uck_read_ident(), sl[2].uck_read_ident())
     }
     #[inline(always)]
@@ -393,48 +393,48 @@ impl<'a> Entity<'a> {
     ///
     /// Caller guarantees that the token stream matches the exact stream of tokens
     /// expected for a single entity
-    pub(super) unsafe fn single_entity_from_slice(sl: &'a [Token]) -> Self {
+    pub(super) unsafe fn parse_uck_tokens_single(sl: &'a [Token]) -> Self {
         Entity::Single(sl[0].uck_read_ident())
     }
     #[inline(always)]
     /// Returns true if the given token stream matches the signature of single entity syntax
     ///
     /// ⚠ WARNING: This will pass for full and single
-    pub(super) fn tokens_with_single(tok: &[Token]) -> bool {
+    pub(super) fn signature_matches_single_len_checked(tok: &[Token]) -> bool {
         !tok.is_empty() && tok[0].is_ident()
     }
     #[inline(always)]
     /// Returns true if the given token stream matches the signature of full entity syntax
-    pub(super) fn tokens_with_full(tok: &[Token]) -> bool {
+    pub(super) fn signature_matches_full_len_checked(tok: &[Token]) -> bool {
         tok.len() > 2 && tok[0].is_ident() && tok[1] == Token![.] && tok[2].is_ident()
     }
     #[inline(always)]
     /// Attempt to parse an entity using the given token stream. It also accepts a counter
     /// argument to forward the cursor
-    pub fn parse_from_tokens(tok: &'a [Token], c: &mut usize) -> LangResult<Self> {
-        let is_current = Self::tokens_with_single(tok);
-        let is_full = Self::tokens_with_full(tok);
+    pub fn parse_from_tokens_len_checked(tok: &'a [Token], c: &mut usize) -> LangResult<Self> {
+        let is_current = Self::signature_matches_single_len_checked(tok);
+        let is_full = Self::signature_matches_full_len_checked(tok);
         let r = match () {
             _ if is_full => unsafe {
                 // UNSAFE(@ohsayan): just verified signature
                 *c += 3;
-                Self::full_entity_from_slice(tok)
+                Self::parse_uck_tokens_full(tok)
             },
             _ if is_current => unsafe {
                 // UNSAFE(@ohsayan): just verified signature
                 *c += 1;
-                Self::single_entity_from_slice(tok)
+                Self::parse_uck_tokens_single(tok)
             },
             _ => return Err(LangError::ExpectedEntity),
         };
         Ok(r)
     }
     #[inline(always)]
-    pub fn attempt_process_entity_result<Qd: QueryData<'a>>(
+    pub fn parse_from_state_rounded_result<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
     ) -> LangResult<Self> {
         let mut e = MaybeInit::uninit();
-        Self::attempt_process_entity(state, &mut e);
+        Self::parse_from_state_rounded(state, &mut e);
         if compiler::likely(state.okay()) {
             unsafe {
                 // UNSAFE(@ohsayan): just checked if okay
@@ -445,7 +445,7 @@ impl<'a> Entity<'a> {
         }
     }
     #[inline(always)]
-    pub fn attempt_process_entity<Qd: QueryData<'a>>(
+    pub fn parse_from_state_rounded<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
         d: &mut MaybeInit<Entity<'a>>,
     ) {
@@ -456,15 +456,15 @@ impl<'a> Entity<'a> {
             // UNSAFE(@ohsayan): verified signatures
             if is_full {
                 state.cursor_ahead_by(3);
-                *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+                *d = MaybeInit::new(Entity::parse_uck_tokens_full(tok));
             } else if is_single {
                 state.cursor_ahead();
-                *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+                *d = MaybeInit::new(Entity::parse_uck_tokens_single(tok));
             }
         }
         state.poison_if_not(is_full | is_single);
     }
-    pub fn parse_entity<Qd: QueryData<'a>>(
+    pub fn parse_from_state_len_unchecked<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
         d: &mut MaybeInit<Entity<'a>>,
     ) {
@@ -475,10 +475,10 @@ impl<'a> Entity<'a> {
             // UNSAFE(@ohsayan): verified signatures
             if is_full {
                 state.cursor_ahead_by(3);
-                *d = MaybeInit::new(Entity::full_entity_from_slice(tok));
+                *d = MaybeInit::new(Entity::parse_uck_tokens_full(tok));
             } else if is_single {
                 state.cursor_ahead();
-                *d = MaybeInit::new(Entity::single_entity_from_slice(tok));
+                *d = MaybeInit::new(Entity::parse_uck_tokens_single(tok));
             }
         }
         state.poison_if_not(is_full | is_single);
@@ -540,7 +540,7 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> LangResult
     let mut state = State::new(tok, d);
     match state.fw_read() {
         // DDL
-        Token![use] => Entity::attempt_process_entity_result(&mut state).map(Statement::Use),
+        Token![use] => Entity::parse_from_state_rounded_result(&mut state).map(Statement::Use),
         Token![create] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
