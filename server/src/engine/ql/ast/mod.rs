@@ -354,7 +354,7 @@ impl<'a> QueryData<'a> for SubstitutedData<'a> {
     AST
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 /// An [`Entity`] represents the location for a specific structure, such as a model
 pub enum Entity<'a> {
     /// A single entity is used when switching to a model wrt the currently set space (commonly used
@@ -376,6 +376,20 @@ pub enum Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
+    pub fn into_full(self) -> Option<(Ident<'a>, Ident<'a>)> {
+        if let Self::Full(a, b) = self {
+            Some((a, b))
+        } else {
+            None
+        }
+    }
+    pub fn into_single(self) -> Option<Ident<'a>> {
+        if let Self::Single(a) = self {
+            Some(a)
+        } else {
+            None
+        }
+    }
     #[inline(always)]
     /// Parse a full entity from the given slice
     ///

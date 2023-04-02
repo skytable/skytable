@@ -765,7 +765,7 @@ mod dict_field_syntax {
 mod alter_model_remove {
     use super::*;
     use crate::engine::ql::{
-        ast::parse_ast_node_full,
+        ast::{parse_ast_node_full, Entity},
         ddl::alt::{AlterKind, AlterModel},
         lex::Ident,
     };
@@ -776,7 +776,7 @@ mod alter_model_remove {
         assert_eq!(
             remove,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Remove(Box::from([Ident::from("myfield")]))
             )
         );
@@ -788,7 +788,7 @@ mod alter_model_remove {
         assert_eq!(
             remove,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Remove(Box::from([Ident::from("myfield")]))
             )
         );
@@ -802,7 +802,7 @@ mod alter_model_remove {
         assert_eq!(
             remove,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Remove(Box::from([
                     Ident::from("myfield1"),
                     Ident::from("myfield2"),
@@ -816,7 +816,7 @@ mod alter_model_remove {
 mod alter_model_add {
     use super::*;
     use crate::engine::ql::{
-        ast::parse_ast_node_full,
+        ast::{parse_ast_node_full, Entity},
         ddl::{
             alt::{AlterKind, AlterModel},
             syn::{ExpandedField, LayerSpec},
@@ -833,7 +833,7 @@ mod alter_model_add {
         assert_eq!(
             parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap(),
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -857,7 +857,7 @@ mod alter_model_add {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -883,7 +883,7 @@ mod alter_model_add {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Add(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -923,7 +923,7 @@ mod alter_model_add {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Add(
                     [
                         ExpandedField::new(
@@ -964,7 +964,7 @@ mod alter_model_add {
 mod alter_model_update {
     use super::*;
     use crate::engine::ql::{
-        ast::parse_ast_node_full,
+        ast::{parse_ast_node_full, Entity},
         ddl::{
             alt::{AlterKind, AlterModel},
             syn::{ExpandedField, LayerSpec},
@@ -983,7 +983,7 @@ mod alter_model_update {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1007,7 +1007,7 @@ mod alter_model_update {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1036,7 +1036,7 @@ mod alter_model_update {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Update(
                     [ExpandedField::new(
                         Ident::from("myfield"),
@@ -1070,7 +1070,7 @@ mod alter_model_update {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Update(
                     [
                         ExpandedField::new(
@@ -1113,7 +1113,7 @@ mod alter_model_update {
         assert_eq!(
             r,
             AlterModel::new(
-                Ident::from("mymodel"),
+                Entity::Single(Ident::from("mymodel")),
                 AlterKind::Update(
                     [
                         ExpandedField::new(

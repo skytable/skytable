@@ -56,8 +56,8 @@ fn exec_plan(
     exec_create(gns, model, "myspace", new_space)?;
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
-    let model_name = alter.model;
-    ModelView::exec_alter(gns, "myspace".as_bytes(), alter)?;
+    let (_space, model_name) = alter.model.into_full().unwrap();
+    ModelView::exec_alter(gns, alter)?;
     let gns_read = gns.spaces().read();
     let space = gns_read.st_get("myspace".as_bytes()).unwrap();
     let model = space.models().read();
@@ -80,9 +80,9 @@ mod plan {
     fn simple_add() {
         super::plan(
             "create model mymodel(username: string, password: binary)",
-            "alter model mymodel add myfield { type: string, nullable: true }",
+            "alter model myspace.mymodel add myfield { type: string, nullable: true }",
             |plan| {
-                assert_eq!(plan.model.as_str(), "mymodel");
+                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -97,9 +97,9 @@ mod plan {
     fn simple_remove() {
         super::plan(
             "create model mymodel(username: string, password: binary, useless_field: uint8)",
-            "alter model mymodel remove useless_field",
+            "alter model myspace.mymodel remove useless_field",
             |plan| {
-                assert_eq!(plan.model.as_str(), "mymodel");
+                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -113,9 +113,9 @@ mod plan {
         // FREEDOM! DAMN THE PASSWORD!
         super::plan(
             "create model mymodel(username: string, password: binary)",
-            "alter model mymodel update password { nullable: true }",
+            "alter model myspace.mymodel update password { nullable: true }",
             |plan| {
-                assert_eq!(plan.model.as_str(), "mymodel");
+                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
                 assert!(plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -131,9 +131,9 @@ mod plan {
         // FIGHT THE NULL
         super::plan(
             "create model mymodel(username: string, null password: binary)",
-            "alter model mymodel update password { nullable: false }",
+            "alter model myspace.mymodel update password { nullable: false }",
             |plan| {
-                assert_eq!(plan.model.as_str(), "mymodel");
+                assert_eq!(plan.model.into_full().unwrap().1.as_str(), "mymodel");
                 assert!(!plan.no_lock);
                 assert_eq!(
                     plan.action,
@@ -152,7 +152,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel remove password_e2e",
+                "alter model myspace.mymodel remove password_e2e",
                 |_| {}
             )
             .unwrap_err(),
@@ -164,7 +164,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel remove username",
+                "alter model myspace.mymodel remove username",
                 |_| {}
             )
             .unwrap_err(),
@@ -176,7 +176,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel add username { type: string }",
+                "alter model myspace.mymodel add username { type: string }",
                 |_| {}
             )
             .unwrap_err(),
@@ -188,7 +188,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel add password { type: string }",
+                "alter model myspace.mymodel add password { type: string }",
                 |_| {}
             )
             .unwrap_err(),
@@ -200,7 +200,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel update username { type: string }",
+                "alter model myspace.mymodel update username { type: string }",
                 |_| {}
             )
             .unwrap_err(),
@@ -212,7 +212,7 @@ mod plan {
         assert_eq!(
             super::with_plan(
                 "create model mymodel(username: string, password: binary)",
-                "alter model mymodel update username_secret { type: string }",
+                "alter model myspace.mymodel update username_secret { type: string }",
                 |_| {}
             )
             .unwrap_err(),
@@ -221,7 +221,7 @@ mod plan {
     }
     fn bad_type_cast(orig_ty: &str, new_ty: &str) {
         let create = format!("create model mymodel(username: string, silly_field: {orig_ty})");
-        let alter = format!("alter model mymodel update silly_field {{ type: {new_ty} }}");
+        let alter = format!("alter model myspace.mymodel update silly_field {{ type: {new_ty} }}");
         assert_eq!(
             super::with_plan(&create, &alter, |_| {}).expect_err(&format!(
                 "found no error in transformation: {orig_ty} -> {new_ty}"
@@ -350,7 +350,7 @@ mod exec {
             &gns,
             true,
             "create model mymodel(username: string, password: binary)",
-            "alter model mymodel update password { nullable: true }",
+            "alter model myspace.mymodel update password { nullable: true }",
             |model| {
                 let schema = model.intent_read_model();
                 assert!(schema.fields().st_get("password").unwrap().is_nullable());

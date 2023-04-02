@@ -36,6 +36,7 @@ use {
             error::{DatabaseError, DatabaseResult},
             idx::{IndexST, IndexSTSeqCns, STIndex},
             ql::{
+                ast::Entity,
                 ddl::{
                     alt::{AlterKind, AlterModel},
                     syn::{ExpandedField, LayerSpec},
@@ -50,7 +51,7 @@ use {
 
 #[derive(Debug, PartialEq)]
 pub(in crate::engine::core) struct AlterPlan<'a> {
-    pub(in crate::engine::core) model: Ident<'a>,
+    pub(in crate::engine::core) model: Entity<'a>,
     pub(in crate::engine::core) no_lock: bool,
     pub(in crate::engine::core) action: AlterAction<'a>,
 }
@@ -246,13 +247,16 @@ impl<'a> AlterPlan<'a> {
 }
 
 impl ModelView {
-    pub fn exec_alter(gns: &GlobalNS, space: &[u8], alter: AlterModel) -> DatabaseResult<()> {
+    pub fn exec_alter(gns: &GlobalNS, alter: AlterModel) -> DatabaseResult<()> {
+        let Some((space, model)) = alter.model.into_full() else {
+            return Err(DatabaseError::ExpectedEntity);
+        };
         let gns = gns.spaces().read();
-        let Some(space) = gns.st_get(space) else {
+        let Some(space) = gns.st_get(space.as_bytes()) else {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
         let space = space.models().read();
-        let Some(model) = space.st_get(alter.model.as_bytes()) else {
+        let Some(model) = space.st_get(model.as_bytes()) else {
             return Err(DatabaseError::DdlModelNotFound);
         };
         // make intent

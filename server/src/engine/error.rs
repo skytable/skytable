@@ -88,6 +88,8 @@ pub enum DatabaseError {
     // query generic
     /// this needs an explicit lock
     NeedLock,
+    /// expected a full entity, but found a single implicit entity
+    ExpectedEntity,
     // ddl: create space
     /// unknown property or bad type for property
     DdlSpaceBadProperty,

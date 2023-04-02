@@ -31,7 +31,7 @@ use {
             data::DictGeneric,
             error::{LangError, LangResult},
             ql::{
-                ast::{QueryData, State},
+                ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
             },
         },
@@ -89,13 +89,13 @@ impl<'a> AlterSpace<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct AlterModel<'a> {
-    pub(in crate::engine) model: Ident<'a>,
+    pub(in crate::engine) model: Entity<'a>,
     pub(in crate::engine) kind: AlterKind<'a>,
 }
 
 impl<'a> AlterModel<'a> {
     #[inline(always)]
-    pub fn new(model: Ident<'a>, kind: AlterKind<'a>) -> Self {
+    pub fn new(model: Entity<'a>, kind: AlterKind<'a>) -> Self {
         Self { model, kind }
     }
 }
@@ -117,10 +117,7 @@ impl<'a> AlterModel<'a> {
             return compiler::cold_rerr(LangError::BadSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
-        let model_name = unsafe {
-            // UNSAFE(@ohsayan): did rounded check for ident in the above branch
-            state.fw_read().uck_read_ident()
-        };
+        let model_name = Entity::parse_from_state_rounded_result(state)?;
         let kind = match state.fw_read() {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),
