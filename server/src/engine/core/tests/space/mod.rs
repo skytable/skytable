@@ -47,7 +47,7 @@ fn exec_verify(
     let ast_node = compile_test(&tok).unwrap();
     let (res, space_name) = exec(gns, ast_node);
     let rl = gns.spaces().read();
-    let space_ref = rl.st_get(space_name.as_bytes());
+    let space_ref = rl.st_get(&space_name);
     let r = res.map(|_| space_ref.unwrap());
     verify(r);
 }

@@ -64,14 +64,14 @@ pub fn exec_create_no_create(gns: &GlobalNS, create_stmt: &str) -> DatabaseResul
 
 fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {
     let rl = gns.spaces().read();
-    let space = rl.st_get(space_name.as_bytes()).unwrap();
+    let space = rl.st_get(space_name).unwrap();
     f(space);
 }
 
 fn with_model(gns: &GlobalNS, space_id: &str, model_name: &str, f: impl Fn(&ModelView)) {
     with_space(gns, space_id, |space| {
         let space_rl = space.models().read();
-        let model = space_rl.st_get(model_name.as_bytes()).unwrap();
+        let model = space_rl.st_get(model_name).unwrap();
         f(model)
     })
 }

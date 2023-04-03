@@ -252,11 +252,11 @@ impl ModelView {
             return Err(DatabaseError::ExpectedEntity);
         };
         let gns = gns.spaces().read();
-        let Some(space) = gns.st_get(space.as_bytes()) else {
+        let Some(space) = gns.st_get(space.as_str()) else {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
         let space = space.models().read();
-        let Some(model) = space.st_get(model.as_bytes()) else {
+        let Some(model) = space.st_get(model.as_str()) else {
             return Err(DatabaseError::DdlModelNotFound);
         };
         // make intent

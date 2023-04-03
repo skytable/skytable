@@ -25,25 +25,3 @@
 */
 
 mod md_dict_tests;
-
-use crate::engine::{data::ItemID, ql::lex::Ident};
-
-#[test]
-fn item_id_okay() {
-    let _ = ItemID::from(Ident::from("hello"));
-}
-
-#[test]
-fn test_item_id_exact() {
-    let _ = ItemID::from(Ident::from(
-        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e",
-    ));
-}
-
-#[test]
-#[should_panic(expected = "length overflow")]
-fn item_id_too_long() {
-    let _ = ItemID::from(Ident::from(
-        "Abe76d912c6e205aa05edf974cd21cd48061d86d12d92ac1028e5b90f3132f4e_",
-    ));
-}

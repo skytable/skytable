@@ -33,10 +33,7 @@ use std::cell::RefCell;
 use {
     crate::engine::{
         core::model::cell::Datacell,
-        data::{
-            tag::{DataTag, FullTag, TagClass, TagSelector},
-            ItemID,
-        },
+        data::tag::{DataTag, FullTag, TagClass, TagSelector},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
@@ -115,13 +112,12 @@ impl ModelView {
 impl ModelView {
     pub fn process_create(
         CreateModel {
-            model_name,
+            model_name: _,
             fields,
             props,
         }: CreateModel,
     ) -> DatabaseResult<Self> {
-        let mut okay =
-            props.is_empty() & !fields.is_empty() & ItemID::check(model_name.any_single().as_str());
+        let mut okay = props.is_empty() & !fields.is_empty();
         // validate fields
         let mut field_spec = fields.into_iter();
         let mut fields = IndexSTSeqCns::with_capacity(field_spec.len());
@@ -167,21 +163,21 @@ impl ModelView {
         let Some((space_name, model_name)) = name.into_full() else {
             return Err(DatabaseError::ExpectedEntity);
         };
-        let Some(space) = space_rl.get(space_name.as_bytes()) else {
+        let Some(space) = space_rl.get(space_name.as_str()) else {
             return Err(DatabaseError::DdlSpaceNotFound)
         };
-        space._create_model(ItemID::new(model_name.as_str()), model)
+        space._create_model(model_name.as_str(), model)
     }
     pub fn exec_drop(gns: &super::GlobalNS, stmt: DropModel) -> DatabaseResult<()> {
         let Some((space, model)) = stmt.entity.into_full() else {
             return Err(DatabaseError::ExpectedEntity);
         };
         let spaces = gns.spaces().read();
-        let Some(space) =  spaces.st_get(space.as_bytes()) else {
+        let Some(space) =  spaces.st_get(space.as_str()) else {
             return Err(DatabaseError::DdlSpaceNotFound);
         };
         let mut w_space = space.models().write();
-        match w_space.st_delete_if(model.as_bytes(), |mdl| !mdl.is_empty_atomic()) {
+        match w_space.st_delete_if(model.as_str(), |mdl| !mdl.is_empty_atomic()) {
             Some(true) => Ok(()),
             Some(false) => Err(DatabaseError::DdlModelViewNotEmpty),
             None => Err(DatabaseError::DdlModelNotFound),

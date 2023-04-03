@@ -59,9 +59,9 @@ fn exec_plan(
     let (_space, model_name) = alter.model.into_full().unwrap();
     ModelView::exec_alter(gns, alter)?;
     let gns_read = gns.spaces().read();
-    let space = gns_read.st_get("myspace".as_bytes()).unwrap();
+    let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();
-    f(model.st_get(model_name.as_bytes()).unwrap());
+    f(model.st_get(model_name.as_str()).unwrap());
     Ok(())
 }
 

@@ -33,8 +33,4 @@ pub mod tag;
 #[cfg(test)]
 mod tests;
 
-use crate::engine::mem::AStr;
 pub use md_dict::{DictEntryGeneric, DictGeneric, MetaDict};
-
-const IDENT_MX: usize = 64;
-pub type ItemID = AStr<IDENT_MX>;

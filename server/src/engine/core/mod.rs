@@ -30,7 +30,7 @@ mod space;
 mod tests;
 // imports
 use {
-    crate::engine::{core::space::Space, data::ItemID, idx::IndexST},
+    crate::engine::{core::space::Space, idx::IndexST},
     parking_lot::RwLock,
 };
 // re-exports
@@ -43,11 +43,11 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 // FIXME(@ohsayan): Make sure we update what all structures we're making use of here
 
 pub struct GlobalNS {
-    index_space: RWLIdx<ItemID, Space>,
+    index_space: RWLIdx<Box<str>, Space>,
 }
 
 impl GlobalNS {
-    pub(self) fn spaces(&self) -> &RWLIdx<ItemID, Space> {
+    pub(self) fn spaces(&self) -> &RWLIdx<Box<str>, Space> {
         &self.index_space
     }
     pub fn empty() -> Self {

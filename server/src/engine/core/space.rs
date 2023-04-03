@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        core::{model::ModelView, ItemID, RWLIdx},
+        core::{model::ModelView, RWLIdx},
         data::{md_dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
@@ -38,7 +38,7 @@ use {
 #[derive(Debug)]
 /// A space with the model namespace
 pub struct Space {
-    mns: RWLIdx<ItemID, ModelView>,
+    mns: RWLIdx<Box<str>, ModelView>,
     pub(super) meta: SpaceMeta,
 }
 
@@ -61,27 +61,31 @@ impl SpaceMeta {
 #[cfg_attr(test, derive(PartialEq))]
 /// Procedure for `create space`
 struct ProcedureCreate {
-    space_name: ItemID,
+    space_name: Box<str>,
     space: Space,
 }
 
 impl ProcedureCreate {
     #[inline(always)]
     /// Define the procedure
-    fn new(space_name: ItemID, space: Space) -> Self {
+    fn new(space_name: Box<str>, space: Space) -> Self {
         Self { space_name, space }
     }
 }
 
 impl Space {
-    pub fn _create_model(&self, name: ItemID, model: ModelView) -> DatabaseResult<()> {
-        if self.mns.write().st_insert(name, model) {
+    pub fn _create_model(&self, name: &str, model: ModelView) -> DatabaseResult<()> {
+        if self
+            .mns
+            .write()
+            .st_insert(name.to_string().into_boxed_str(), model)
+        {
             Ok(())
         } else {
             Err(DatabaseError::DdlModelAlreadyExists)
         }
     }
-    pub(super) fn models(&self) -> &RWLIdx<ItemID, ModelView> {
+    pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelView> {
         &self.mns
     }
 }
@@ -91,7 +95,7 @@ impl Space {
         Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
     #[inline(always)]
-    pub fn new(mns: IndexST<ItemID, ModelView>, meta: SpaceMeta) -> Self {
+    pub fn new(mns: IndexST<Box<str>, ModelView>, meta: SpaceMeta) -> Self {
         Self {
             mns: RWLIdx::new(mns),
             meta,
@@ -105,7 +109,7 @@ impl Space {
             mut props,
         }: CreateSpace,
     ) -> DatabaseResult<ProcedureCreate> {
-        let space_name = ItemID::try_new(&space_name).ok_or(DatabaseError::SysBadItemID)?;
+        let space_name = space_name.to_string().into_boxed_str();
         // check env
         let env = match props.remove(SpaceMeta::KEY_ENV) {
             Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => m,
@@ -146,7 +150,7 @@ impl Space {
             mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        match gns.spaces().read().st_get(space_name.as_bytes()) {
+        match gns.spaces().read().st_get(space_name.as_str()) {
             Some(space) => {
                 let mut space_env = space.meta.env.write();
                 match updated_props.remove(SpaceMeta::KEY_ENV) {
@@ -173,7 +177,7 @@ impl Space {
         match gns
             .spaces()
             .write()
-            .st_delete_if(space.as_bytes(), |space| space.mns.read().len() == 0)
+            .st_delete_if(space.as_str(), |space| space.mns.read().len() == 0)
         {
             Some(true) => Ok(()),
             Some(false) => Err(DatabaseError::DdlSpaceRemoveNonEmpty),
