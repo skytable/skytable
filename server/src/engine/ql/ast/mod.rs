@@ -389,9 +389,23 @@ impl<'a> Entity<'a> {
             None
         }
     }
+    pub fn into_full_str(self) -> Option<(&'a str, &'a str)> {
+        if let Self::Full(a, b) = self {
+            Some((a.as_str(), b.as_str()))
+        } else {
+            None
+        }
+    }
     pub fn into_single(self) -> Option<Ident<'a>> {
         if let Self::Single(a) = self {
             Some(a)
+        } else {
+            None
+        }
+    }
+    pub fn into_single_str(self) -> Option<&'a str> {
+        if let Self::Single(a) = self {
+            Some(a.as_str())
         } else {
             None
         }

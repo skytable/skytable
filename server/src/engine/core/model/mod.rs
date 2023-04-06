@@ -30,6 +30,8 @@ pub mod cell;
 #[cfg(test)]
 use std::cell::RefCell;
 
+use super::util::EntityLocator;
+
 use {
     crate::engine::{
         core::model::cell::Datacell,
@@ -47,7 +49,7 @@ use {
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
-type Fields = IndexSTSeqCns<Box<str>, Field>;
+pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 // FIXME(@ohsayan): update this!
 
@@ -157,31 +159,20 @@ impl ModelView {
 
 impl ModelView {
     pub fn exec_create(gns: &super::GlobalNS, stmt: CreateModel) -> DatabaseResult<()> {
-        let name = stmt.model_name;
+        let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;
-        let space_rl = gns.spaces().read();
-        let Some((space_name, model_name)) = name.into_full() else {
-            return Err(DatabaseError::ExpectedEntity);
-        };
-        let Some(space) = space_rl.get(space_name.as_str()) else {
-            return Err(DatabaseError::DdlSpaceNotFound)
-        };
-        space._create_model(model_name.as_str(), model)
+        gns.with_space(space_name, |space| space._create_model(model_name, model))
     }
     pub fn exec_drop(gns: &super::GlobalNS, stmt: DropModel) -> DatabaseResult<()> {
-        let Some((space, model)) = stmt.entity.into_full() else {
-            return Err(DatabaseError::ExpectedEntity);
-        };
-        let spaces = gns.spaces().read();
-        let Some(space) =  spaces.st_get(space.as_str()) else {
-            return Err(DatabaseError::DdlSpaceNotFound);
-        };
-        let mut w_space = space.models().write();
-        match w_space.st_delete_if(model.as_str(), |mdl| !mdl.is_empty_atomic()) {
-            Some(true) => Ok(()),
-            Some(false) => Err(DatabaseError::DdlModelViewNotEmpty),
-            None => Err(DatabaseError::DdlModelNotFound),
-        }
+        let (space, model) = stmt.entity.parse_entity()?;
+        gns.with_space(space, |space| {
+            let mut w_space = space.models().write();
+            match w_space.st_delete_if(model, |mdl| !mdl.is_empty_atomic()) {
+                Some(true) => Ok(()),
+                Some(false) => Err(DatabaseError::DdlModelViewNotEmpty),
+                None => Err(DatabaseError::DdlModelNotFound),
+            }
+        })
     }
 }
 

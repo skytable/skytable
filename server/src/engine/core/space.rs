@@ -88,6 +88,17 @@ impl Space {
     pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelView> {
         &self.mns
     }
+    pub fn with_model<T>(
+        &self,
+        model: &str,
+        f: impl FnOnce(&ModelView) -> DatabaseResult<T>,
+    ) -> DatabaseResult<T> {
+        let mread = self.mns.read();
+        let Some(model) = mread.st_get(model) else {
+            return Err(DatabaseError::DdlModelNotFound);
+        };
+        f(model)
+    }
 }
 
 impl Space {
@@ -150,23 +161,20 @@ impl Space {
             mut updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        match gns.spaces().read().st_get(space_name.as_str()) {
-            Some(space) => {
-                let mut space_env = space.meta.env.write();
-                match updated_props.remove(SpaceMeta::KEY_ENV) {
-                    Some(Some(DictEntryGeneric::Map(env))) if updated_props.is_empty() => {
-                        if !md_dict::rmerge_metadata(&mut space_env, env) {
-                            return Err(DatabaseError::DdlSpaceBadProperty);
-                        }
+        gns.with_space(&space_name, |space| {
+            let mut space_env = space.meta.env.write();
+            match updated_props.remove(SpaceMeta::KEY_ENV) {
+                Some(Some(DictEntryGeneric::Map(env))) if updated_props.is_empty() => {
+                    if !md_dict::rmerge_metadata(&mut space_env, env) {
+                        return Err(DatabaseError::DdlSpaceBadProperty);
                     }
-                    Some(None) if updated_props.is_empty() => space_env.clear(),
-                    None => {}
-                    _ => return Err(DatabaseError::DdlSpaceBadProperty),
                 }
-                Ok(())
+                Some(None) if updated_props.is_empty() => space_env.clear(),
+                None => {}
+                _ => return Err(DatabaseError::DdlSpaceBadProperty),
             }
-            None => Err(DatabaseError::DdlSpaceNotFound),
-        }
+            Ok(())
+        })
     }
     pub fn exec_drop(
         gns: &super::GlobalNS,

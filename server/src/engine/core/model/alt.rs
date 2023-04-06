@@ -248,50 +248,41 @@ impl<'a> AlterPlan<'a> {
 
 impl ModelView {
     pub fn exec_alter(gns: &GlobalNS, alter: AlterModel) -> DatabaseResult<()> {
-        let Some((space, model)) = alter.model.into_full() else {
-            return Err(DatabaseError::ExpectedEntity);
-        };
-        let gns = gns.spaces().read();
-        let Some(space) = gns.st_get(space.as_str()) else {
-            return Err(DatabaseError::DdlSpaceNotFound)
-        };
-        let space = space.models().read();
-        let Some(model) = space.st_get(model.as_str()) else {
-            return Err(DatabaseError::DdlModelNotFound);
-        };
-        // make intent
-        let iwm = model.intent_write_model();
-        // prepare plan
-        let plan = AlterPlan::fdeltas(model, &iwm, alter)?;
-        // we have a legal plan; acquire exclusive if we need it
-        if !plan.no_lock {
-            // TODO(@ohsayan): allow this later on, once we define the syntax
-            return Err(DatabaseError::NeedLock);
-        }
-        // fine, we're good
-        let mut iwm = iwm;
-        match plan.action {
-            AlterAction::Ignore => drop(iwm),
-            AlterAction::Add(new_fields) => {
-                // TODO(@ohsayan): this impacts lockdown duration; fix it
-                new_fields
-                    .st_iter_kv()
-                    .map(|(x, y)| (x.clone(), y.clone()))
-                    .for_each(|(field_id, field)| {
-                        iwm.fields_mut().st_insert(field_id, field);
+        gns.with_model(alter.model, |model| {
+            // make intent
+            let iwm = model.intent_write_model();
+            // prepare plan
+            let plan = AlterPlan::fdeltas(model, &iwm, alter)?;
+            // we have a legal plan; acquire exclusive if we need it
+            if !plan.no_lock {
+                // TODO(@ohsayan): allow this later on, once we define the syntax
+                return Err(DatabaseError::NeedLock);
+            }
+            // fine, we're good
+            let mut iwm = iwm;
+            match plan.action {
+                AlterAction::Ignore => drop(iwm),
+                AlterAction::Add(new_fields) => {
+                    // TODO(@ohsayan): this impacts lockdown duration; fix it
+                    new_fields
+                        .st_iter_kv()
+                        .map(|(x, y)| (x.clone(), y.clone()))
+                        .for_each(|(field_id, field)| {
+                            iwm.fields_mut().st_insert(field_id, field);
+                        });
+                }
+                AlterAction::Remove(remove) => {
+                    remove.iter().for_each(|field_id| {
+                        iwm.fields_mut().st_delete(field_id.as_str());
                     });
+                }
+                AlterAction::Update(u) => {
+                    u.into_iter().for_each(|(field_id, field)| {
+                        iwm.fields_mut().st_update(&field_id, field);
+                    });
+                }
             }
-            AlterAction::Remove(remove) => {
-                remove.iter().for_each(|field_id| {
-                    iwm.fields_mut().st_delete(field_id.as_str());
-                });
-            }
-            AlterAction::Update(u) => {
-                u.into_iter().for_each(|(field_id, field)| {
-                    iwm.fields_mut().st_update(&field_id, field);
-                });
-            }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 }

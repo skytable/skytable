@@ -26,11 +26,18 @@
 
 mod model;
 mod space;
+mod util;
+// test
 #[cfg(test)]
 mod tests;
 // imports
 use {
-    crate::engine::{core::space::Space, idx::IndexST},
+    self::{model::ModelView, util::EntityLocator},
+    crate::engine::{
+        core::space::Space,
+        error::{DatabaseError, DatabaseResult},
+        idx::{IndexST, STIndex},
+    },
     parking_lot::RwLock,
 };
 // re-exports
@@ -57,9 +64,28 @@ impl GlobalNS {
     }
     #[cfg(test)]
     pub(self) fn test_new_empty_space(&self, space_id: &str) -> bool {
-        use super::idx::STIndex;
         self.index_space
             .write()
             .st_insert(space_id.into(), Space::empty())
+    }
+    pub fn with_space<T>(
+        &self,
+        space: &str,
+        f: impl FnOnce(&Space) -> DatabaseResult<T>,
+    ) -> DatabaseResult<T> {
+        let sread = self.index_space.read();
+        let Some(space) = sread.st_get(space) else {
+            return Err(DatabaseError::DdlSpaceNotFound);
+        };
+        f(space)
+    }
+    pub fn with_model<'a, T, E, F>(&self, entity: E, f: F) -> DatabaseResult<T>
+    where
+        F: FnOnce(&ModelView) -> DatabaseResult<T>,
+        E: 'a + EntityLocator<'a>,
+    {
+        entity
+            .parse_entity()
+            .and_then(|(space, model)| self.with_space(space, |space| space.with_model(model, f)))
     }
 }
