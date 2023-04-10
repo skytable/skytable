@@ -143,3 +143,58 @@ impl DataTag for FullTag {
         self.unique
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct CUTag {
+    class: TagClass,
+    unique: TagUnique,
+}
+
+impl PartialEq for CUTag {
+    fn eq(&self, other: &Self) -> bool {
+        self.class == other.class
+    }
+}
+
+macro_rules! cutag {
+    ($class:ident, $unique:ident) => {
+        CUTag::new(TagClass::$class, TagUnique::$unique)
+    };
+    ($class:ident) => {
+        CUTag::new(TagClass::$class, TagUnique::Illegal)
+    };
+}
+
+impl CUTag {
+    const fn new(class: TagClass, unique: TagUnique) -> Self {
+        Self { class, unique }
+    }
+}
+
+impl DataTag for CUTag {
+    const BOOL: Self = cutag!(Bool);
+    const UINT: Self = cutag!(UnsignedInt, UnsignedInt);
+    const SINT: Self = cutag!(SignedInt, SignedInt);
+    const FLOAT: Self = cutag!(Float);
+    const BIN: Self = cutag!(Bin, Bin);
+    const STR: Self = cutag!(Str, Str);
+    const LIST: Self = cutag!(List);
+
+    fn tag_class(&self) -> TagClass {
+        self.class
+    }
+
+    fn tag_selector(&self) -> TagSelector {
+        unimplemented!()
+    }
+
+    fn tag_unique(&self) -> TagUnique {
+        self.unique
+    }
+}
+
+impl From<FullTag> for CUTag {
+    fn from(f: FullTag) -> Self {
+        Self::new(f.tag_class(), f.tag_unique())
+    }
+}

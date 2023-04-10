@@ -27,13 +27,15 @@
 use {
     super::{
         spec::{Dataspec1D, DataspecMeta1D, DataspecMethods1D, DataspecRaw1D},
-        tag::{DataTag, FullTag},
+        tag::{DataTag, FullTag, TagUnique},
     },
     crate::engine::mem::{SpecialPaddedWord, SystemDword},
     core::{
         fmt,
+        hash::{Hash, Hasher},
         marker::PhantomData,
         mem::{self, ManuallyDrop},
+        slice,
     },
 };
 
@@ -91,16 +93,16 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
     const HEAP_STR: bool = true;
     const HEAP_BIN: bool = false;
     unsafe fn drop_str(&mut self) {
-        let [ptr, len] = self.data().load_fat();
+        let [len, ptr] = self.data().load_double();
         drop(String::from_raw_parts(ptr as *mut u8, len, len));
     }
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
         let new_string = ManuallyDrop::new(s.to_owned().into_boxed_str());
-        SystemDword::store((new_string.as_ptr(), new_string.len()))
+        SystemDword::store((new_string.len(), new_string.as_ptr()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store((b.as_ptr(), b.len()))
+        SystemDword::store((b.len(), b.as_ptr()))
     }
 }
 
@@ -112,7 +114,7 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
 unsafe impl<'a> Dataspec1D for Lit<'a> {
     fn Str(s: Box<str>) -> Self {
         let md = ManuallyDrop::new(s);
-        Self::new(FullTag::STR, SystemDword::store((md.as_ptr(), md.len())))
+        Self::new(FullTag::STR, SystemDword::store((md.len(), md.as_ptr())))
     }
 }
 
@@ -172,10 +174,30 @@ direct_from! {
     LitIR
 */
 
+/// ☢️TRAIT WARNING☢️: The [`Hash`] implementation is strictly intended for usage with [`crate::engine::core`] components ONLY. This will FAIL and PRODUCE INCORRECT results
+/// when used elsewhere
 pub struct LitIR<'a> {
     tag: FullTag,
     data: SpecialPaddedWord,
     _lt: PhantomData<&'a str>,
+}
+
+impl<'a> LitIR<'a> {
+    pub fn __vdata(&self) -> &[u8] {
+        let [vlen, data] = self.data().load_double();
+        let len = vlen * (self.kind().tag_unique() >= TagUnique::Bin) as usize;
+        unsafe {
+            // UNSAFE(@ohsayan): either because of static or lt
+            slice::from_raw_parts(data as *const u8, len)
+        }
+    }
+}
+
+impl<'a> Hash for LitIR<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.tag.tag_unique().hash(state);
+        self.__vdata().hash(state);
+    }
 }
 
 impl<'a> DataspecMeta1D for LitIR<'a> {
@@ -215,10 +237,10 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
     unsafe fn drop_str(&mut self) {}
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
-        SystemDword::store((s.as_ptr(), s.len()))
+        SystemDword::store((s.len(), s.as_ptr()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store((b.as_ptr(), b.len()))
+        SystemDword::store((b.len(), b.as_ptr()))
     }
 }
 
@@ -228,7 +250,7 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
 */
 unsafe impl<'a> Dataspec1D for LitIR<'a> {
     fn Str(s: Self::StringItem) -> Self {
-        Self::new(FullTag::STR, SystemDword::store((s.as_ptr(), s.len())))
+        Self::new(FullTag::STR, SystemDword::store((s.len(), s.as_ptr())))
     }
 }
 

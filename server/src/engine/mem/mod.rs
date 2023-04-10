@@ -56,6 +56,7 @@ pub struct SpecialPaddedWord {
     a: u64,
     b: usize,
 }
+
 impl SpecialPaddedWord {
     const fn new(a: u64, b: usize) -> Self {
         Self { a, b }

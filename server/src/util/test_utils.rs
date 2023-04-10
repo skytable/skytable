@@ -24,9 +24,15 @@
  *
 */
 
-use rand::{
-    distributions::{uniform::SampleUniform, Alphanumeric},
-    Rng,
+use {
+    rand::{
+        distributions::{uniform::SampleUniform, Alphanumeric},
+        Rng,
+    },
+    std::{
+        collections::hash_map::RandomState,
+        hash::{BuildHasher, Hash, Hasher},
+    },
 };
 
 // TODO(@ohsayan): Use my own PRNG algo here. Maybe my quadratic one?
@@ -85,4 +91,14 @@ macro_rules! vecfuse {
         $(<_ as $crate::util::test_utils::VecFuse<_>>::fuse_append($expr, &mut v);)*
         v
     }};
+}
+
+pub fn randomstate() -> RandomState {
+    RandomState::default()
+}
+
+pub fn hash_rs<T: Hash + ?Sized>(rs: &RandomState, item: &T) -> u64 {
+    let mut hasher = rs.build_hasher();
+    item.hash(&mut hasher);
+    hasher.finish()
 }

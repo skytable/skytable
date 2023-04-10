@@ -31,7 +31,7 @@ static ZERO_BLOCK: [u8; 0] = [];
 /// Native quad pointer stack (must also be usable as a double and triple pointer stack. see [`SystemTword`] and [`SystemDword`])
 pub trait SystemQword: SystemTword {
     fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self;
-    fn load_full(&self) -> [usize; 4];
+    fn load_quad(&self) -> [usize; 4];
     fn store<'a, T>(v: T) -> Self
     where
         T: WordRW<Self>,
@@ -49,7 +49,7 @@ pub trait SystemQword: SystemTword {
 /// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
 pub trait SystemTword: SystemDword {
     fn store_full(a: usize, b: usize, c: usize) -> Self;
-    fn load_full(&self) -> [usize; 3];
+    fn load_triple(&self) -> [usize; 3];
     fn store<'a, T>(v: T) -> Self
     where
         T: WordRW<Self>,
@@ -69,7 +69,7 @@ pub trait SystemDword: Sized {
     fn store_qw(u: u64) -> Self;
     fn store_fat(a: usize, b: usize) -> Self;
     fn load_qw(&self) -> u64;
-    fn load_fat(&self) -> [usize; 2];
+    fn load_double(&self) -> [usize; 2];
     fn store<'a, T>(v: T) -> Self
     where
         T: WordRW<Self>,
@@ -94,7 +94,7 @@ impl SystemDword for SpecialPaddedWord {
     fn load_qw(&self) -> u64 {
         self.a
     }
-    fn load_fat(&self) -> [usize; 2] {
+    fn load_double(&self) -> [usize; 2] {
         [self.a as usize, self.b]
     }
 }
@@ -137,7 +137,7 @@ impl SystemDword for NativeDword {
         x
     }
     #[inline(always)]
-    fn load_fat(&self) -> [usize; 2] {
+    fn load_double(&self) -> [usize; 2] {
         self.0
     }
 }
@@ -148,7 +148,7 @@ impl SystemTword for NativeTword {
         Self([a, b, c])
     }
     #[inline(always)]
-    fn load_full(&self) -> [usize; 3] {
+    fn load_triple(&self) -> [usize; 3] {
         self.0
     }
 }
@@ -193,7 +193,7 @@ impl SystemDword for NativeTword {
         x
     }
     #[inline(always)]
-    fn load_fat(&self) -> [usize; 2] {
+    fn load_double(&self) -> [usize; 2] {
         [self.0[0], self.0[1]]
     }
 }
@@ -202,7 +202,7 @@ impl SystemQword for NativeQword {
     fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self {
         Self([a, b, c, d])
     }
-    fn load_full(&self) -> [usize; 4] {
+    fn load_quad(&self) -> [usize; 4] {
         self.0
     }
 }
@@ -211,7 +211,7 @@ impl SystemTword for NativeQword {
     fn store_full(a: usize, b: usize, c: usize) -> Self {
         Self([a, b, c, 0])
     }
-    fn load_full(&self) -> [usize; 3] {
+    fn load_triple(&self) -> [usize; 3] {
         [self.0[0], self.0[1], self.0[2]]
     }
 }
@@ -251,7 +251,7 @@ impl SystemDword for NativeQword {
         }
         ret
     }
-    fn load_fat(&self) -> [usize; 2] {
+    fn load_double(&self) -> [usize; 2] {
         [self.0[0], self.0[1]]
     }
 }
@@ -318,20 +318,20 @@ impl_wordrw! {
     }
     [usize; 2] as SystemDword => {
         |self| SystemDword::store_fat(self[0], self[1]);
-        |word| SystemDword::load_fat(word);
+        |word| SystemDword::load_double(word);
     }
-    (*mut u8, usize) as SystemDword => {
-        |self| SystemDword::store_fat(self.0 as usize, self.1);
+    (usize, *mut u8) as SystemDword => {
+        |self| SystemDword::store_fat(self.0, self.1 as usize);
         |word| {
-            let [a, b] = word.load_fat();
-            (a as *mut u8, b)
+            let [a, b] = word.load_double();
+            (a, b as *mut u8)
         };
     }
-    (*const u8, usize) as SystemDword => {
-        |self| SystemDword::store_fat(self.0 as usize, self.1);
+    (usize, *const u8) as SystemDword => {
+        |self| SystemDword::store_fat(self.0, self.1 as usize);
         |word| {
-            let [a, b] = word.load_fat();
-            (a as *const u8, b)
+            let [a, b] = word.load_double();
+            (a, b as *const u8)
         };
     }
 }

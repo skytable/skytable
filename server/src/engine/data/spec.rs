@@ -36,8 +36,8 @@ use {
 };
 
 #[inline(always)]
-fn when_then<T>(cond: bool, then: T) -> Option<T> {
-    cond.then_some(then)
+fn when_then<T, F: FnOnce() -> T>(cond: bool, then: F) -> Option<T> {
+    cond.then(then)
 }
 
 /// Information about the type that implements the dataspec traits
@@ -106,7 +106,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// Store a new binary. This function is always safe to call
     #[allow(non_snake_case)]
     fn Bin(b: &[u8]) -> Self {
-        Self::new(Self::Tag::BIN, SystemDword::store((b.as_ptr(), b.len())))
+        Self::new(Self::Tag::BIN, SystemDword::store((b.len(), b.as_ptr())))
     }
 
     /// Store a new string. Now, I won't talk about this one's safety because it depends on the implementor
@@ -121,7 +121,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a bool
     fn read_bool_try(&self) -> Option<bool> {
-        when_then(self.kind().tag_class() == TagClass::Bool, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Bool, || unsafe {
             // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
             self.read_bool_uck()
         })
@@ -139,10 +139,13 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a uint
     fn read_uint_try(&self) -> Option<u64> {
-        when_then(self.kind().tag_class() == TagClass::UnsignedInt, unsafe {
-            // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
-            self.read_uint_uck()
-        })
+        when_then(
+            self.kind().tag_class() == TagClass::UnsignedInt,
+            || unsafe {
+                // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
+                self.read_uint_uck()
+            },
+        )
     }
     /// Load a uint
     /// ## Panics
@@ -157,7 +160,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a sint
     fn read_sint_try(&self) -> Option<i64> {
-        when_then(self.kind().tag_class() == TagClass::SignedInt, unsafe {
+        when_then(self.kind().tag_class() == TagClass::SignedInt, || unsafe {
             // UNSAFE(@ohsayan): we've verified the flag. but lol because this isn't actually unsafe
             self.read_sint_uck()
         })
@@ -173,7 +176,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a float
     fn read_float_try(&self) -> Option<f64> {
-        when_then(self.kind().tag_class() == TagClass::Float, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Float, || unsafe {
             self.read_float_uck()
         })
     }
@@ -187,12 +190,12 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// ## Safety
     /// Are you a binary? Did you store it correctly? Are you a victim of segfaults?
     unsafe fn read_bin_uck(&self) -> &[u8] {
-        let (p, l) = self.data().ld();
+        let (l, p) = self.data().ld();
         slice::from_raw_parts(p, l)
     }
     /// Load a bin
     fn read_bin_try(&self) -> Option<&[u8]> {
-        when_then(self.kind().tag_class() == TagClass::Bin, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Bin, || unsafe {
             self.read_bin_uck()
         })
     }
@@ -210,7 +213,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     }
     /// Load a str
     fn read_str_try(&self) -> Option<&str> {
-        when_then(self.kind().tag_class() == TagClass::Str, unsafe {
+        when_then(self.kind().tag_class() == TagClass::Str, || unsafe {
             self.read_str_uck()
         })
     }

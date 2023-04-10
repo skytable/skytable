@@ -24,6 +24,7 @@
  *
 */
 
+mod index;
 mod model;
 mod space;
 mod util;

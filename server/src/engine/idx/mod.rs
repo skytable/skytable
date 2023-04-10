@@ -26,7 +26,7 @@
 
 #![deny(unreachable_patterns)]
 
-mod meta;
+pub mod meta;
 mod mtchm;
 mod stdhm;
 mod stord;

@@ -24,25 +24,23 @@
  *
 */
 
-#[cfg(test)]
-use core::mem;
 use {
     crate::engine::{
         self,
         data::{
             lit::{Lit, LitIR},
             spec::{Dataspec1D, DataspecMeta1D},
-            tag::{DataTag, TagClass},
+            tag::{CUTag, DataTag, TagClass},
         },
         mem::{NativeQword, SystemDword, WordRW},
     },
-    core::{fmt, mem::ManuallyDrop, slice, str},
+    core::{fmt, mem, mem::ManuallyDrop, slice, str},
     parking_lot::RwLock,
 };
 
 pub struct Datacell {
     init: bool,
-    tag: TagClass,
+    tag: CUTag,
     data: DataRaw,
 }
 
@@ -51,7 +49,7 @@ impl Datacell {
     pub fn new_bool(b: bool) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(TagClass::Bool, DataRaw::word(SystemDword::store(b)))
+            Self::new(CUTag::BOOL, DataRaw::word(SystemDword::store(b)))
         }
     }
     pub unsafe fn read_bool(&self) -> bool {
@@ -70,7 +68,7 @@ impl Datacell {
     pub fn new_uint(u: u64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(TagClass::UnsignedInt, DataRaw::word(SystemDword::store(u)))
+            Self::new(CUTag::UINT, DataRaw::word(SystemDword::store(u)))
         }
     }
     pub unsafe fn read_uint(&self) -> u64 {
@@ -89,7 +87,7 @@ impl Datacell {
     pub fn new_sint(u: i64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(TagClass::SignedInt, DataRaw::word(SystemDword::store(u)))
+            Self::new(CUTag::SINT, DataRaw::word(SystemDword::store(u)))
         }
     }
     pub unsafe fn read_sint(&self) -> i64 {
@@ -108,7 +106,7 @@ impl Datacell {
     pub fn new_float(f: f64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(TagClass::Float, DataRaw::word(SystemDword::store(f)))
+            Self::new(CUTag::FLOAT, DataRaw::word(SystemDword::store(f)))
         }
     }
     pub unsafe fn read_float(&self) -> f64 {
@@ -129,13 +127,13 @@ impl Datacell {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
-                TagClass::Bin,
-                DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
+                CUTag::BIN,
+                DataRaw::word(SystemDword::store((md.len(), md.as_mut_ptr()))),
             )
         }
     }
     pub unsafe fn read_bin(&self) -> &[u8] {
-        let (p, l) = self.load_word();
+        let (l, p) = self.load_word();
         slice::from_raw_parts::<u8>(p, l)
     }
     pub fn try_bin(&self) -> Option<&[u8]> {
@@ -153,13 +151,13 @@ impl Datacell {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
-                TagClass::Str,
-                DataRaw::word(SystemDword::store((md.as_mut_ptr(), md.len()))),
+                CUTag::STR,
+                DataRaw::word(SystemDword::store((md.len(), md.as_mut_ptr()))),
             )
         }
     }
     pub unsafe fn read_str(&self) -> &str {
-        let (p, l) = self.load_word();
+        let (l, p) = self.load_word();
         str::from_utf8_unchecked(slice::from_raw_parts(p, l))
     }
     pub fn try_str(&self) -> Option<&str> {
@@ -175,7 +173,7 @@ impl Datacell {
     pub fn new_list(l: Vec<Self>) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(TagClass::List, DataRaw::rwl(RwLock::new(l)))
+            Self::new(CUTag::LIST, DataRaw::rwl(RwLock::new(l)))
         }
     }
     pub unsafe fn read_list(&self) -> &RwLock<Vec<Self>> {
@@ -215,18 +213,19 @@ impl<'a> From<LitIR<'a>> for Datacell {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type doesn't need any advanced construction
+                let [a, b] = l.data().load_double();
                 Datacell::new(
-                    l.kind().tag_class(),
+                    CUTag::from(l.kind()),
                     // DO NOT RELY ON the payload's bit pattern; it's padded
-                    DataRaw::word(SystemDword::store_qw(l.data().load_qw())),
+                    DataRaw::word(SystemDword::store_fat(a, b)),
                 )
             },
-            tag @ (TagClass::Bin | TagClass::Str) => unsafe {
+            TagClass::Bin | TagClass::Str => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type requires a new heap for construction
                 let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
                 Datacell::new(
-                    tag,
-                    DataRaw::word(SystemDword::store((bin.as_mut_ptr(), bin.len()))),
+                    CUTag::from(l.kind()),
+                    DataRaw::word(SystemDword::store((bin.len(), bin.as_mut_ptr()))),
                 )
             },
             _ => unsafe {
@@ -261,17 +260,16 @@ impl<const N: usize> From<[Datacell; N]> for Datacell {
 }
 
 impl Datacell {
-    pub fn kind(&self) -> TagClass {
+    pub fn tag(&self) -> CUTag {
         self.tag
+    }
+    pub fn kind(&self) -> TagClass {
+        self.tag.tag_class()
     }
     pub fn null() -> Self {
         unsafe {
             // UNSAFE(@ohsayan): This is a hack. It's safe because we set init to false
-            Self::_new(
-                TagClass::Bool,
-                DataRaw::word(NativeQword::store_qw(0)),
-                false,
-            )
+            Self::_new(CUTag::BOOL, DataRaw::word(NativeQword::store_qw(0)), false)
         }
     }
     pub fn is_null(&self) -> bool {
@@ -290,14 +288,17 @@ impl Datacell {
     unsafe fn load_word<'a, T: WordRW<NativeQword, Target<'a> = T>>(&'a self) -> T {
         self.data.word.ld()
     }
-    unsafe fn _new(tag: TagClass, data: DataRaw, init: bool) -> Self {
+    unsafe fn _new(tag: CUTag, data: DataRaw, init: bool) -> Self {
         Self { init, tag, data }
     }
-    unsafe fn new(tag: TagClass, data: DataRaw) -> Self {
+    unsafe fn new(tag: CUTag, data: DataRaw) -> Self {
         Self::_new(tag, data, true)
     }
     fn checked_tag<T>(&self, tag: TagClass, f: impl FnOnce() -> T) -> Option<T> {
-        ((self.tag == tag) & (self.is_init())).then_some(f())
+        ((self.kind() == tag) & (self.is_init())).then(f)
+    }
+    pub unsafe fn as_raw(&self) -> NativeQword {
+        mem::transmute_copy(&self.data.word)
     }
 }
 
@@ -307,7 +308,7 @@ impl fmt::Debug for Datacell {
         f.field("tag", &self.tag);
         macro_rules! fmtdbg {
             ($($match:ident => $ret:expr),* $(,)?) => {
-                match self.tag {
+                match self.kind() {
                     $(TagClass::$match if self.is_init() => { f.field("data", &Some($ret));},)*
                     TagClass::Bool if self.is_null() => {f.field("data", &Option::<u8>::None);},
                     _ => unreachable!("incorrect state"),
@@ -332,7 +333,7 @@ impl PartialEq for Datacell {
         if self.is_null() {
             return other.is_null();
         }
-        match (self.tag, other.tag) {
+        match (self.kind(), other.kind()) {
             (TagClass::Bool, TagClass::Bool) => self.bool() == other.bool(),
             (TagClass::UnsignedInt, TagClass::UnsignedInt) => self.uint() == other.uint(),
             (TagClass::SignedInt, TagClass::SignedInt) => self.sint() == other.sint(),
@@ -375,10 +376,10 @@ impl DataRaw {
 
 impl Drop for Datacell {
     fn drop(&mut self) {
-        match self.tag {
+        match self.kind() {
             TagClass::Str | TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
-                let (p, l) = self.load_word();
+                let (l, p) = self.load_word();
                 engine::mem::dealloc_array::<u8>(p, l)
             },
             TagClass::List => unsafe {
@@ -393,12 +394,12 @@ impl Drop for Datacell {
 #[cfg(test)]
 impl Clone for Datacell {
     fn clone(&self) -> Self {
-        let data = match self.tag {
+        let data = match self.kind() {
             TagClass::Str | TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let mut block = ManuallyDrop::new(self.read_bin().to_owned().into_boxed_slice());
                 DataRaw {
-                    word: ManuallyDrop::new(SystemDword::store((block.as_mut_ptr(), block.len()))),
+                    word: ManuallyDrop::new(SystemDword::store((block.len(), block.as_mut_ptr()))),
                 }
             },
             TagClass::List => unsafe {
