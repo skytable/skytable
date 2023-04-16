@@ -117,7 +117,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // bool
     /// Load a bool (this is unsafe for logical verity)
     unsafe fn read_bool_uck(&self) -> bool {
-        self.data().ld()
+        self.data().dword_ld()
     }
     /// Load a bool
     fn read_bool_try(&self) -> Option<bool> {
@@ -135,7 +135,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // uint
     /// Load a uint (this is unsafe for logical verity)
     unsafe fn read_uint_uck(&self) -> u64 {
-        self.data().ld()
+        self.data().dword_ld()
     }
     /// Load a uint
     fn read_uint_try(&self) -> Option<u64> {
@@ -156,7 +156,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // sint
     /// Load a sint (unsafe for logical verity)
     unsafe fn read_sint_uck(&self) -> i64 {
-        self.data().ld()
+        self.data().dword_ld()
     }
     /// Load a sint
     fn read_sint_try(&self) -> Option<i64> {
@@ -172,7 +172,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // float
     /// Load a float (unsafe for logical verity)
     unsafe fn read_float_uck(&self) -> f64 {
-        self.data().ld()
+        self.data().dword_ld()
     }
     /// Load a float
     fn read_float_try(&self) -> Option<f64> {
@@ -190,7 +190,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// ## Safety
     /// Are you a binary? Did you store it correctly? Are you a victim of segfaults?
     unsafe fn read_bin_uck(&self) -> &[u8] {
-        let (l, p) = self.data().ld();
+        let (l, p) = self.data().dword_ld();
         slice::from_raw_parts(p, l)
     }
     /// Load a bin

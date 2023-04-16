@@ -28,6 +28,21 @@ use super::{NativeDword, NativeQword, NativeTword, SpecialPaddedWord};
 
 static ZERO_BLOCK: [u8; 0] = [];
 
+#[cfg(target_pointer_width = "32")]
+fn quadsplit(q: u64) -> [usize; 2] {
+    unsafe {
+        // UNSAFE(@ohsayan): simple numeric ops
+        core::mem::transmute(q)
+    }
+}
+#[cfg(target_pointer_width = "32")]
+fn quadmerge(v: [usize; 2]) -> u64 {
+    unsafe {
+        // UNSAFE(@ohsayan): simple numeric ops
+        core::mem::transmute(v)
+    }
+}
+
 /// Native quad pointer stack (must also be usable as a double and triple pointer stack. see [`SystemTword`] and [`SystemDword`])
 pub trait SystemQword: SystemTword {
     fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self;
@@ -38,7 +53,7 @@ pub trait SystemQword: SystemTword {
     {
         WordRW::store(v)
     }
-    fn ld<'a, T>(&'a self) -> T
+    fn qword_ld<'a, T>(&'a self) -> T
     where
         T: WordRW<Self, Target<'a> = T>,
     {
@@ -48,6 +63,10 @@ pub trait SystemQword: SystemTword {
 
 /// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
 pub trait SystemTword: SystemDword {
+    /// Store a quad and a native word
+    fn store_qw_nw(a: u64, b: usize) -> Self;
+    /// Load a quad and a native word
+    fn load_qw_nw(&self) -> (u64, usize);
     fn store_full(a: usize, b: usize, c: usize) -> Self;
     fn load_triple(&self) -> [usize; 3];
     fn store<'a, T>(v: T) -> Self
@@ -56,7 +75,7 @@ pub trait SystemTword: SystemDword {
     {
         WordRW::store(v)
     }
-    fn ld<'a, T>(&'a self) -> T
+    fn tword_ld<'a, T>(&'a self) -> T
     where
         T: WordRW<Self, Target<'a> = T>,
     {
@@ -76,7 +95,7 @@ pub trait SystemDword: Sized {
     {
         WordRW::store(v)
     }
-    fn ld<'a, T>(&'a self) -> T
+    fn dword_ld<'a, T>(&'a self) -> T
     where
         T: WordRW<Self, Target<'a> = T>,
     {
@@ -105,10 +124,7 @@ impl SystemDword for NativeDword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            x = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute(u)
-            };
+            x = quadsplit(u);
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -125,10 +141,7 @@ impl SystemDword for NativeDword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            x = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute_copy(self)
-            }
+            x = quadmerge(self.0);
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -151,6 +164,35 @@ impl SystemTword for NativeTword {
     fn load_triple(&self) -> [usize; 3] {
         self.0
     }
+    #[inline(always)]
+    fn store_qw_nw(a: u64, b: usize) -> Self {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [qw_1, qw_2] = quadsplit(a);
+            ret = [qw_1, qw_2, b];
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = [a as usize, b, 0];
+        }
+        Self(ret)
+    }
+    #[inline(always)]
+    fn load_qw_nw(&self) -> (u64, usize) {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let qw = quadmerge([self.0[0], self.0[1]]);
+            let nw = self.0[2];
+            ret = (qw, nw);
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = (self.0[0] as u64, self.0[1]);
+        }
+        ret
+    }
 }
 
 impl SystemDword for NativeTword {
@@ -159,10 +201,7 @@ impl SystemDword for NativeTword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            let [a, b]: [usize; 2] = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute(u)
-            };
+            let [a, b]: [usize; 2] = quadsplit(u);
             x = [a, b, 0];
         }
         #[cfg(target_pointer_width = "64")]
@@ -180,11 +219,7 @@ impl SystemDword for NativeTword {
         let x;
         #[cfg(target_pointer_width = "32")]
         {
-            let ab = [self.0[0], self.0[1]];
-            x = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute(ab)
-            };
+            x = quadmerge([self.0[0], self.0[1]]);
         }
         #[cfg(target_pointer_width = "64")]
         {
@@ -214,6 +249,35 @@ impl SystemTword for NativeQword {
     fn load_triple(&self) -> [usize; 3] {
         [self.0[0], self.0[1], self.0[2]]
     }
+    /// Store a quadword and a native word
+    fn store_qw_nw(a: u64, b: usize) -> Self {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [qw_1, qw_2] = quadsplit(a);
+            ret = [qw_1, qw_2, b, 0];
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = [a as usize, b, 0, 0];
+        }
+        Self(ret)
+    }
+    #[inline(always)]
+    fn load_qw_nw(&self) -> (u64, usize) {
+        let ret;
+        #[cfg(target_pointer_width = "32")]
+        {
+            let qw = quadmerge([self.0[0], self.0[1]]);
+            let nw = self.0[2];
+            ret = (qw, nw);
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            ret = (self.0[0] as u64, self.0[1]);
+        }
+        ret
+    }
 }
 
 impl SystemDword for NativeQword {
@@ -221,10 +285,7 @@ impl SystemDword for NativeQword {
         let ret;
         #[cfg(target_pointer_width = "32")]
         {
-            let [a, b]: [usize; 2] = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute(u)
-            };
+            let [a, b] = quadsplit(u);
             ret = <Self as SystemQword>::store_full(a, b, 0, 0);
         }
         #[cfg(target_pointer_width = "64")]
@@ -240,10 +301,7 @@ impl SystemDword for NativeQword {
         let ret;
         #[cfg(target_pointer_width = "32")]
         {
-            ret = unsafe {
-                // UNSAFE(@ohsayan): same layout and this is a stupidly simple cast and it's wild that the rust std doesn't have a simpler way to do it
-                core::mem::transmute([self.0[0], self.0[1]])
-            };
+            ret = quadmerge([self.0[0], self.0[1]]);
         }
         #[cfg(target_pointer_width = "64")]
         {

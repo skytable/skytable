@@ -32,7 +32,7 @@ use {
             spec::{Dataspec1D, DataspecMeta1D},
             tag::{CUTag, DataTag, TagClass},
         },
-        mem::{NativeQword, SystemDword, WordRW},
+        mem::{NativeQword, SystemDword, SystemTword, WordRW},
     },
     core::{fmt, mem, mem::ManuallyDrop, slice, str},
     parking_lot::RwLock,
@@ -213,11 +213,12 @@ impl<'a> From<LitIR<'a>> for Datacell {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type doesn't need any advanced construction
-                let [a, b] = l.data().load_double();
+                let data = l.data().load_qw();
+                let ptr = l.data().load_double()[1];
                 Datacell::new(
                     CUTag::from(l.kind()),
                     // DO NOT RELY ON the payload's bit pattern; it's padded
-                    DataRaw::word(SystemDword::store_fat(a, b)),
+                    DataRaw::word(SystemTword::store_qw_nw(data, ptr as usize)),
                 )
             },
             TagClass::Bin | TagClass::Str => unsafe {
@@ -286,7 +287,7 @@ impl Datacell {
         }
     }
     unsafe fn load_word<'a, T: WordRW<NativeQword, Target<'a> = T>>(&'a self) -> T {
-        self.data.word.ld()
+        self.data.word.dword_ld()
     }
     unsafe fn _new(tag: CUTag, data: DataRaw, init: bool) -> Self {
         Self { init, tag, data }
