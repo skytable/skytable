@@ -93,7 +93,7 @@ impl Eq for StrRC {}
 pub struct SliceRC<T> {
     ptr: NonNull<T>,
     len: usize,
-    rc: NonNull<AtomicUsize>,
+    rc: EArc,
 }
 
 impl<T> SliceRC<T> {
@@ -103,8 +103,8 @@ impl<T> SliceRC<T> {
             ptr,
             len,
             rc: unsafe {
-                // UNSAFE(@ohsayan): box would either fail or return a collect alloc
-                NonNull::new_unchecked(Box::into_raw(Box::new(AtomicUsize::new(0))))
+                // UNSAFE(@ohsayan): we will eventually deallocate this
+                EArc::new()
             },
         }
     }
@@ -123,42 +123,24 @@ impl<T> SliceRC<T> {
             slice::from_raw_parts(self.ptr.as_ptr(), self.len)
         }
     }
-    #[inline(always)]
-    fn _rc(&self) -> &AtomicUsize {
-        unsafe {
-            // UNSAFE(@ohsayan): rc + ctor
-            self.rc.as_ref()
-        }
-    }
-    /// SAFETY: Synchronize last man alive
-    #[inline(never)]
-    unsafe fn drop_slow(&self) {
-        // dtor
-        if mem::needs_drop::<T>() {
-            // UNSAFE(@ohsayan): dtor through, the ctor guarantees correct alignment and len
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), self.len));
-        }
-        // dealloc
-        // UNSAFE(@ohsayan): we allocated it
-        let layout = Layout::array::<T>(self.len).unwrap_unchecked();
-        // UNSAFE(@ohsayan): layout structure guaranteed by ctor
-        dealloc(self.ptr.as_ptr() as *mut u8, layout);
-        // UNSAFE(@ohsayan): well cmon, look for yourself
-        drop(Box::from_raw(self.rc.as_ptr()));
-    }
 }
 
 impl<T> Drop for SliceRC<T> {
     fn drop(&mut self) {
-        if self._rc().fetch_sub(1, ORD_REL) != 1 {
-            // not the last man alive
-            return;
-        }
-        // emit a fence for sync with stores
-        atomic::fence(ORD_ACQ);
         unsafe {
-            // UNSAFE(@ohsayan): Confirmed, we're the last one alive
-            self.drop_slow();
+            // UNSAFE(@ohsayan): Calling this within the dtor itself
+            self.rc.rc_drop(|| {
+                // dtor
+                if mem::needs_drop::<T>() {
+                    // UNSAFE(@ohsayan): dtor through, the ctor guarantees correct alignment and len
+                    ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), self.len));
+                }
+                // dealloc
+                // UNSAFE(@ohsayan): we allocated it
+                let layout = Layout::array::<T>(self.len).unwrap_unchecked();
+                // UNSAFE(@ohsayan): layout structure guaranteed by ctor
+                dealloc(self.ptr.as_ptr() as *mut u8, layout);
+            })
         }
     }
 }
@@ -166,12 +148,14 @@ impl<T> Drop for SliceRC<T> {
 impl<T> Clone for SliceRC<T> {
     #[inline(always)]
     fn clone(&self) -> Self {
-        let new_rc = self._rc().fetch_add(1, ORD_RLX);
-        if new_rc > (isize::MAX) as usize {
-            // some incredibly degenerate case; this won't ever happen but who knows if some fella decided to have atomic overflow fun?
-            process::abort();
+        let new_rc = unsafe {
+            // UNSAFE(@ohsayan): calling this within the clone routine
+            self.rc.rc_clone()
+        };
+        Self {
+            rc: new_rc,
+            ..*self
         }
-        Self { ..*self }
     }
 }
 
@@ -215,3 +199,62 @@ impl<T> Deref for SliceRC<T> {
 
 unsafe impl<T: Send> Send for SliceRC<T> {}
 unsafe impl<T: Sync> Sync for SliceRC<T> {}
+
+/// The core atomic reference counter implementation. All smart pointers use this inside
+pub struct EArc {
+    rc: NonNull<AtomicUsize>,
+}
+
+impl EArc {
+    /// Create a new [`EArc`] instance
+    ///
+    /// ## Safety
+    ///
+    /// While this is **not unsafe** in the eyes of the language specification for safety, it still does violate a very common
+    /// bug: memory leaks and we don't want that. So, it is upto the caller to clean this up
+    unsafe fn new() -> Self {
+        Self {
+            rc: NonNull::new_unchecked(Box::into_raw(Box::new(AtomicUsize::new(0)))),
+        }
+    }
+}
+
+impl EArc {
+    /// ## Safety
+    ///
+    /// Only call when you follow the appropriate ground rules for safety
+    unsafe fn _rc(&self) -> &AtomicUsize {
+        self.rc.as_ref()
+    }
+    /// ## Safety
+    ///
+    /// Only call in an actual [`Clone`] context
+    unsafe fn rc_clone(&self) -> Self {
+        let new_rc = self._rc().fetch_add(1, ORD_RLX);
+        if new_rc > (isize::MAX) as usize {
+            // some incredibly degenerate case; this won't ever happen but who knows if some fella decided to have atomic overflow fun?
+            process::abort();
+        }
+        Self { ..*self }
+    }
+    #[cold]
+    #[inline(never)]
+    unsafe fn rc_drop_slow(&mut self, mut dropfn: impl FnMut()) {
+        // deallocate object
+        dropfn();
+        // deallocate rc
+        drop(Box::from_raw(self.rc.as_ptr()));
+    }
+    /// ## Safety
+    ///
+    /// Only call in dtor context
+    unsafe fn rc_drop(&mut self, dropfn: impl FnMut()) {
+        if self._rc().fetch_sub(1, ORD_REL) != 1 {
+            // not the last man alive
+            return;
+        }
+        // emit a fence for sync with stores
+        atomic::fence(ORD_ACQ);
+        self.rc_drop_slow(dropfn);
+    }
+}
