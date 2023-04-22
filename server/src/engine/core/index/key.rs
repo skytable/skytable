@@ -70,7 +70,7 @@ impl PrimaryIndexKey {
         })
     }
     pub unsafe fn read_bin(&self) -> &[u8] {
-        self.vdata()
+        self.virtual_block()
     }
     pub fn bin(&self) -> Option<&[u8]> {
         (self.tag == TagUnique::Bin).then(|| unsafe {
@@ -79,7 +79,7 @@ impl PrimaryIndexKey {
         })
     }
     pub unsafe fn read_str(&self) -> &str {
-        str::from_utf8_unchecked(self.vdata())
+        str::from_utf8_unchecked(self.virtual_block())
     }
     pub fn str(&self) -> Option<&str> {
         (self.tag == TagUnique::Str).then(|| unsafe {
@@ -134,14 +134,14 @@ impl PrimaryIndexKey {
         let actual_len = len * (self.tag >= TagUnique::Bin) as usize;
         [data, actual_len]
     }
-    fn vdata(&self) -> &[u8] {
+    fn virtual_block(&self) -> &[u8] {
         let [data, actual_len] = self.__compute_vdata_offset();
         unsafe {
             // UNSAFE(@ohsayan): Safe, due to construction
             slice::from_raw_parts(data as *const u8, actual_len)
         }
     }
-    fn vdata_mut(&mut self) -> &mut [u8] {
+    fn virtual_block_mut(&mut self) -> &mut [u8] {
         let [data, actual_len] = self.__compute_vdata_offset();
         unsafe {
             // UNSAFE(@ohsayan): safe due to construction
@@ -155,7 +155,7 @@ impl Drop for PrimaryIndexKey {
         if let TagUnique::Bin | TagUnique::Str = self.tag {
             unsafe {
                 // UNSAFE(@ohsayan): Aliasing, sole owner and correct initialization
-                let vdata = self.vdata_mut();
+                let vdata = self.virtual_block_mut();
                 mem::dealloc_array(vdata.as_mut_ptr(), vdata.len());
             }
         }
@@ -165,7 +165,8 @@ impl Drop for PrimaryIndexKey {
 impl PartialEq for PrimaryIndexKey {
     fn eq(&self, other: &Self) -> bool {
         let [data_1, data_2] = [self.data.load_double()[0], other.data.load_double()[0]];
-        ((self.tag == other.tag) & (data_1 == data_2)) && self.vdata() == other.vdata()
+        ((self.tag == other.tag) & (data_1 == data_2))
+            && self.virtual_block() == other.virtual_block()
     }
 }
 
@@ -174,14 +175,14 @@ impl Eq for PrimaryIndexKey {}
 impl Hash for PrimaryIndexKey {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.tag.hash(hasher);
-        self.vdata().hash(hasher);
+        self.virtual_block().hash(hasher);
     }
 }
 
 impl<'a> PartialEq<LitIR<'a>> for PrimaryIndexKey {
     fn eq(&self, key: &LitIR<'a>) -> bool {
         debug_assert!(key.kind().tag_unique().is_unique());
-        self.tag == key.kind().tag_unique() && self.vdata() == key.__vdata()
+        self.tag == key.kind().tag_unique() && self.virtual_block() == key.__vdata()
     }
 }
 
@@ -273,4 +274,19 @@ fn check_pk_lit_eq_hash() {
             test_utils::hash_rs(&state, &pk)
         );
     }
+}
+
+#[test]
+fn check_pk_extremes() {
+    let state = test_utils::randomstate();
+    let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint(u64::MAX)).unwrap();
+    let d2 = PrimaryIndexKey::try_from_dc(Datacell::from(LitIR::UnsignedInt(u64::MAX))).unwrap();
+    assert_eq!(d1, d2);
+    assert_eq!(
+        test_utils::hash_rs(&state, &d1),
+        test_utils::hash_rs(&state, &d2)
+    );
+    assert_eq!(d1, LitIR::UnsignedInt(u64::MAX));
+    assert_eq!(d2, LitIR::UnsignedInt(u64::MAX));
+    assert_eq!(d1.uint().unwrap(), u64::MAX);
 }

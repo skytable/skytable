@@ -25,3 +25,21 @@
 */
 
 mod md_dict_tests;
+use super::{
+    lit::{Lit, LitIR},
+    spec::Dataspec1D,
+};
+
+#[test]
+fn t_largest_int_litir() {
+    let x = LitIR::UnsignedInt(u64::MAX);
+    let y = LitIR::UnsignedInt(u64::MAX);
+    assert_eq!(x, y);
+}
+
+#[test]
+fn t_largest_int_lit() {
+    let x = Lit::UnsignedInt(u64::MAX);
+    let y = Lit::UnsignedInt(u64::MAX);
+    assert_eq!(x, y);
+}
