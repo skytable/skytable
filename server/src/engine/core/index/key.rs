@@ -110,6 +110,9 @@ impl PrimaryIndexKey {
             dc.as_raw()
         }
         .dwordqn_load_qw_nw();
+        if cfg!(debug_assertions) && tag < TagUnique::Bin {
+            assert_eq!(b, mem::ZERO_BLOCK.as_ptr() as usize);
+        }
         Self {
             tag,
             data: unsafe {
@@ -131,6 +134,9 @@ impl PrimaryIndexKey {
     }
     fn __compute_vdata_offset(&self) -> [usize; 2] {
         let (len, data) = self.data.dwordqn_load_qw_nw();
+        if cfg!(debug_assertions) && self.tag < TagUnique::Bin {
+            assert_eq!(data, mem::ZERO_BLOCK.as_ptr() as usize);
+        }
         let actual_len = (len as usize) * (self.tag >= TagUnique::Bin) as usize;
         [data, actual_len]
     }

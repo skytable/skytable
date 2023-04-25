@@ -35,7 +35,7 @@ mod tests;
 pub use astr::AStr;
 pub use uarray::UArray;
 pub use vinline::VInline;
-pub use word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO};
+pub use word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO, ZERO_BLOCK};
 // imports
 use std::alloc::{self, Layout};
 

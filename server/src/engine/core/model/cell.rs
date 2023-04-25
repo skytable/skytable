@@ -32,7 +32,7 @@ use {
             spec::{Dataspec1D, DataspecMeta1D},
             tag::{CUTag, DataTag, TagClass},
         },
-        mem::{DwordNN, DwordQN, NativeQword, WordIO},
+        mem::{DwordNN, DwordQN, NativeQword, SpecialPaddedWord, WordIO},
     },
     core::{fmt, mem, mem::ManuallyDrop, slice, str},
     parking_lot::RwLock,
@@ -49,7 +49,10 @@ impl Datacell {
     pub fn new_bool(b: bool) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::BOOL, DataRaw::word(WordIO::store(b)))
+            Self::new(
+                CUTag::BOOL,
+                DataRaw::word(SpecialPaddedWord::store(b).dword_promote()),
+            )
         }
     }
     pub unsafe fn read_bool(&self) -> bool {
@@ -68,7 +71,10 @@ impl Datacell {
     pub fn new_uint(u: u64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::UINT, DataRaw::word(WordIO::store(u)))
+            Self::new(
+                CUTag::UINT,
+                DataRaw::word(SpecialPaddedWord::store(u).dword_promote()),
+            )
         }
     }
     pub unsafe fn read_uint(&self) -> u64 {
@@ -84,10 +90,13 @@ impl Datacell {
         self.try_uint().unwrap()
     }
     // sint
-    pub fn new_sint(u: i64) -> Self {
+    pub fn new_sint(i: i64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::SINT, DataRaw::word(WordIO::store(u)))
+            Self::new(
+                CUTag::SINT,
+                DataRaw::word(SpecialPaddedWord::store(i).dword_promote()),
+            )
         }
     }
     pub unsafe fn read_sint(&self) -> i64 {
@@ -106,7 +115,10 @@ impl Datacell {
     pub fn new_float(f: f64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::FLOAT, DataRaw::word(WordIO::store(f)))
+            Self::new(
+                CUTag::FLOAT,
+                DataRaw::word(SpecialPaddedWord::store(f).dword_promote()),
+            )
         }
     }
     pub unsafe fn read_float(&self) -> f64 {
