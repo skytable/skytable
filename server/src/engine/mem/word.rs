@@ -24,9 +24,12 @@
  *
 */
 
-use super::{NativeDword, NativeQword, NativeTword, SpecialPaddedWord};
+use {
+    super::{NativeDword, NativeQword, NativeTword, SpecialPaddedWord},
+    core::mem::size_of,
+};
 
-static ZERO_BLOCK: [u8; 0] = [];
+pub static ZERO_BLOCK: [u8; 0] = [];
 
 #[cfg(target_pointer_width = "32")]
 fn quadsplit(q: u64) -> [usize; 2] {
@@ -43,353 +46,333 @@ fn quadmerge(v: [usize; 2]) -> u64 {
     }
 }
 
-/// Native quad pointer stack (must also be usable as a double and triple pointer stack. see [`SystemTword`] and [`SystemDword`])
-pub trait SystemQword: SystemTword {
-    fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self;
-    fn load_quad(&self) -> [usize; 4];
-    fn store<'a, T>(v: T) -> Self
-    where
-        T: WordRW<Self>,
-    {
-        WordRW::store(v)
-    }
-    fn qword_ld<'a, T>(&'a self) -> T
-    where
-        T: WordRW<Self, Target<'a> = T>,
-    {
-        <T>::load(self)
-    }
+pub trait WordIO<T> {
+    fn store(v: T) -> Self;
+    fn load(&self) -> T;
 }
 
-/// Native tripe pointer stack (must also be usable as a double pointer stack, see [`SystemDword`])
-pub trait SystemTword: SystemDword {
-    /// Store a quad and a native word
-    fn store_qw_nw(a: u64, b: usize) -> Self;
-    /// Load a quad and a native word
-    fn load_qw_nw(&self) -> (u64, usize);
-    fn store_full(a: usize, b: usize, c: usize) -> Self;
-    fn load_triple(&self) -> [usize; 3];
-    fn store<'a, T>(v: T) -> Self
-    where
-        T: WordRW<Self>,
-    {
-        WordRW::store(v)
-    }
-    fn tword_ld<'a, T>(&'a self) -> T
-    where
-        T: WordRW<Self, Target<'a> = T>,
-    {
-        <T>::load(self)
-    }
-}
+/*
+    dword
+    ---
+    kinds: NN (word * 2), QN (qword, word)
+    promotions: QN -> NNN
+*/
 
-/// Native double pointer stack
-pub trait SystemDword: Sized {
-    fn store_qw(u: u64) -> Self;
-    fn store_fat(a: usize, b: usize) -> Self;
-    fn load_qw(&self) -> u64;
-    fn load_double(&self) -> [usize; 2];
-    fn store<'a, T>(v: T) -> Self
-    where
-        T: WordRW<Self>,
-    {
-        WordRW::store(v)
-    }
-    fn dword_ld<'a, T>(&'a self) -> T
-    where
-        T: WordRW<Self, Target<'a> = T>,
-    {
-        <T>::load(self)
-    }
-}
-
-impl SystemDword for SpecialPaddedWord {
-    fn store_qw(u: u64) -> Self {
-        Self::new(u, ZERO_BLOCK.as_ptr() as usize)
-    }
-    fn store_fat(a: usize, b: usize) -> Self {
-        Self::new(a as u64, b)
-    }
-    fn load_qw(&self) -> u64 {
-        self.a
-    }
-    fn load_double(&self) -> [usize; 2] {
-        [self.a as usize, self.b]
-    }
-}
-
-impl SystemDword for NativeDword {
-    #[inline(always)]
-    fn store_qw(u: u64) -> Self {
-        let x;
+pub trait DwordNN: Sized {
+    const DWORDNN_FROM_UPPER: bool = size_of::<Self>() > size_of::<[usize; 2]>();
+    fn dwordnn_store_native_full(a: usize, b: usize) -> Self;
+    fn dwordnn_store_qw(a: u64) -> Self {
+        debug_assert!(!Self::DWORDNN_FROM_UPPER, "NEED TO OVERRIDE STORE");
         #[cfg(target_pointer_width = "32")]
         {
-            x = quadsplit(u);
+            let [a, b] = quadsplit(a);
+            Self::dwordnn_store_native_full(a, b)
         }
         #[cfg(target_pointer_width = "64")]
         {
-            x = [u as usize, 0]
+            Self::dwordnn_store_native_full(a as usize, 0)
         }
-        Self(x)
     }
-    #[inline(always)]
-    fn store_fat(a: usize, b: usize) -> Self {
+    fn dwordnn_load_native_full(&self) -> [usize; 2];
+    fn dwordnn_load_qw(&self) -> u64 {
+        debug_assert!(!Self::DWORDNN_FROM_UPPER, "NEED TO OVERRIDE LOAD");
+        #[cfg(target_pointer_width = "32")]
+        {
+            quadmerge(self.dwordnn_load_native_full())
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            self.dwordnn_load_native_full()[0] as u64
+        }
+    }
+}
+
+pub trait DwordQN: Sized {
+    const DWORDQN_FROM_UPPER: bool = size_of::<Self>() > size_of::<(u64, usize)>();
+    fn dwordqn_store_qw_nw(a: u64, b: usize) -> Self;
+    fn dwordqn_load_qw_nw(&self) -> (u64, usize);
+    // overrides
+    fn overridable_dwordnn_store_qw(a: u64) -> Self {
+        Self::dwordqn_store_qw_nw(a, 0)
+    }
+    // promotions
+    fn dword_promote<W: DwordQN>(&self) -> W {
+        let (a, b) = self.dwordqn_load_qw_nw();
+        <W as DwordQN>::dwordqn_store_qw_nw(a, b)
+    }
+}
+
+/*
+    dword: blanket impls
+*/
+
+impl<T: DwordQN> DwordNN for T {
+    fn dwordnn_store_native_full(a: usize, b: usize) -> Self {
+        Self::dwordqn_store_qw_nw(a as u64, b)
+    }
+    fn dwordnn_store_qw(a: u64) -> Self {
+        Self::overridable_dwordnn_store_qw(a)
+    }
+    fn dwordnn_load_native_full(&self) -> [usize; 2] {
+        let (a, b) = self.dwordqn_load_qw_nw();
+        debug_assert!(a <= usize::MAX as u64, "overflowed with: `{}`", a);
+        [a as usize, b]
+    }
+    fn dwordnn_load_qw(&self) -> u64 {
+        DwordQN::dwordqn_load_qw_nw(self).0
+    }
+}
+
+/*
+    dword: impls
+*/
+
+impl DwordNN for NativeDword {
+    fn dwordnn_store_native_full(a: usize, b: usize) -> Self {
         Self([a, b])
     }
-    #[inline(always)]
-    fn load_qw(&self) -> u64 {
-        let x;
-        #[cfg(target_pointer_width = "32")]
-        {
-            x = quadmerge(self.0);
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            x = self.0[0] as _;
-        }
-        x
-    }
-    #[inline(always)]
-    fn load_double(&self) -> [usize; 2] {
+    fn dwordnn_load_native_full(&self) -> [usize; 2] {
         self.0
     }
 }
 
-impl SystemTword for NativeTword {
-    #[inline(always)]
-    fn store_full(a: usize, b: usize, c: usize) -> Self {
+impl DwordQN for SpecialPaddedWord {
+    fn dwordqn_store_qw_nw(a: u64, b: usize) -> Self {
+        unsafe {
+            // UNSAFE(@ohsayan): valid construction
+            Self::new(a, b)
+        }
+    }
+    fn dwordqn_load_qw_nw(&self) -> (u64, usize) {
+        (self.a, self.b)
+    }
+    // overrides
+    fn overridable_dwordnn_store_qw(a: u64) -> Self {
+        unsafe {
+            // UNSAFE(@ohsayan): valid construction
+            Self::new(a, ZERO_BLOCK.as_ptr() as usize)
+        }
+    }
+}
+
+/*
+    tword
+    ---
+    kinds: NNN (word * 3)
+    promotions: NNN -> NNNN
+*/
+
+pub trait TwordNNN: Sized {
+    const TWORDNNN_FROM_UPPER: bool = size_of::<Self>() > size_of::<[usize; 3]>();
+    fn twordnnn_store_native_full(a: usize, b: usize, c: usize) -> Self;
+    fn twordnnn_load_native_full(&self) -> [usize; 3];
+    // promotions
+    fn tword_promote<W: TwordNNN>(&self) -> W {
+        let [a, b, c] = self.twordnnn_load_native_full();
+        <W as TwordNNN>::twordnnn_store_native_full(a, b, c)
+    }
+}
+
+/*
+    tword: blanket impls
+*/
+
+impl<T: TwordNNN> DwordQN for T {
+    fn dwordqn_store_qw_nw(a: u64, b: usize) -> Self {
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [qw_1, qw_2] = quadsplit(a);
+            Self::twordnnn_store_native_full(qw_1, qw_2, b)
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            Self::twordnnn_store_native_full(a as usize, b, 0)
+        }
+    }
+    fn dwordqn_load_qw_nw(&self) -> (u64, usize) {
+        #[cfg(target_pointer_width = "32")]
+        {
+            let [w1, w2, b] = self.twordnnn_load_native_full();
+            (quadmerge([w1, w2]), b)
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            let [a, b, _] = self.twordnnn_load_native_full();
+            (a as u64, b)
+        }
+    }
+}
+
+/*
+    tword: impls
+*/
+
+impl TwordNNN for NativeTword {
+    fn twordnnn_store_native_full(a: usize, b: usize, c: usize) -> Self {
         Self([a, b, c])
     }
-    #[inline(always)]
-    fn load_triple(&self) -> [usize; 3] {
+    fn twordnnn_load_native_full(&self) -> [usize; 3] {
         self.0
     }
-    #[inline(always)]
-    fn store_qw_nw(a: u64, b: usize) -> Self {
-        let ret;
+}
+
+/*
+    qword
+    ---
+    kinds: NNNN (word * 4)
+    promotions: N/A
+*/
+
+pub trait QwordNNNN: Sized {
+    const QWORDNNNN_FROM_UPPER: bool = size_of::<Self>() > size_of::<[usize; 4]>();
+    fn qwordnnnn_store_native_full(a: usize, b: usize, c: usize, d: usize) -> Self;
+    fn qwordnnnn_store_qw_qw(a: u64, b: u64) -> Self {
         #[cfg(target_pointer_width = "32")]
         {
-            let [qw_1, qw_2] = quadsplit(a);
-            ret = [qw_1, qw_2, b];
+            let [qw1_a, qw1_b] = quadsplit(a);
+            let [qw2_a, qw2_b] = quadsplit(b);
+            Self::qwordnnnn_store_native_full(qw1_a, qw1_b, qw2_a, qw2_b)
         }
         #[cfg(target_pointer_width = "64")]
         {
-            ret = [a as usize, b, 0];
+            Self::qwordnnnn_store_native_full(a as usize, b as usize, 0, 0)
         }
-        Self(ret)
     }
-    #[inline(always)]
-    fn load_qw_nw(&self) -> (u64, usize) {
-        let ret;
+    fn qwordnnnn_store_qw_nw_nw(a: u64, b: usize, c: usize) -> Self {
         #[cfg(target_pointer_width = "32")]
         {
-            let qw = quadmerge([self.0[0], self.0[1]]);
-            let nw = self.0[2];
-            ret = (qw, nw);
+            let [qw_a, qw_b] = quadsplit(a);
+            Self::qwordnnnn_store_native_full(qw_a, qw_b, b, c)
         }
         #[cfg(target_pointer_width = "64")]
         {
-            ret = (self.0[0] as u64, self.0[1]);
+            Self::qwordnnnn_store_native_full(a as usize, b, c, 0)
         }
-        ret
+    }
+    fn qwordnnnn_load_native_full(&self) -> [usize; 4];
+    fn qwordnnnn_load_qw_qw(&self) -> [u64; 2] {
+        let [a, b, c, d] = self.qwordnnnn_load_native_full();
+        #[cfg(target_pointer_width = "32")]
+        {
+            [quadmerge([a, b]), quadmerge([c, d])]
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            let _ = (c, d);
+            [a as u64, b as u64]
+        }
+    }
+    fn qwordnnnn_load_qw_nw_nw(&self) -> (u64, usize, usize) {
+        let [a, b, c, d] = self.qwordnnnn_load_native_full();
+        #[cfg(target_pointer_width = "32")]
+        {
+            (quadmerge([a, b]), c, d)
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            let _ = d;
+            (a as u64, b, c)
+        }
     }
 }
 
-impl SystemDword for NativeTword {
-    #[inline(always)]
-    fn store_qw(u: u64) -> Self {
-        let x;
-        #[cfg(target_pointer_width = "32")]
-        {
-            let [a, b]: [usize; 2] = quadsplit(u);
-            x = [a, b, 0];
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            x = [u as _, 0, 0];
-        }
-        Self(x)
+/*
+    qword: blanket impls
+*/
+
+impl<T: QwordNNNN> TwordNNN for T {
+    fn twordnnn_store_native_full(a: usize, b: usize, c: usize) -> Self {
+        Self::qwordnnnn_store_native_full(a, b, c, 0)
     }
-    #[inline(always)]
-    fn store_fat(a: usize, b: usize) -> Self {
-        Self([a, b, 0])
-    }
-    #[inline(always)]
-    fn load_qw(&self) -> u64 {
-        let x;
-        #[cfg(target_pointer_width = "32")]
-        {
-            x = quadmerge([self.0[0], self.0[1]]);
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            x = self.0[0] as _;
-        }
-        x
-    }
-    #[inline(always)]
-    fn load_double(&self) -> [usize; 2] {
-        [self.0[0], self.0[1]]
+    fn twordnnn_load_native_full(&self) -> [usize; 3] {
+        let [a, b, c, _] = self.qwordnnnn_load_native_full();
+        [a, b, c]
     }
 }
 
-impl SystemQword for NativeQword {
-    fn store_full(a: usize, b: usize, c: usize, d: usize) -> Self {
+/*
+    qword: impls
+*/
+
+impl QwordNNNN for NativeQword {
+    fn qwordnnnn_store_native_full(a: usize, b: usize, c: usize, d: usize) -> Self {
         Self([a, b, c, d])
     }
-    fn load_quad(&self) -> [usize; 4] {
+    fn qwordnnnn_load_native_full(&self) -> [usize; 4] {
         self.0
     }
 }
 
-impl SystemTword for NativeQword {
-    fn store_full(a: usize, b: usize, c: usize) -> Self {
-        Self([a, b, c, 0])
-    }
-    fn load_triple(&self) -> [usize; 3] {
-        [self.0[0], self.0[1], self.0[2]]
-    }
-    /// Store a quadword and a native word
-    fn store_qw_nw(a: u64, b: usize) -> Self {
-        let ret;
-        #[cfg(target_pointer_width = "32")]
-        {
-            let [qw_1, qw_2] = quadsplit(a);
-            ret = [qw_1, qw_2, b, 0];
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            ret = [a as usize, b, 0, 0];
-        }
-        Self(ret)
-    }
-    #[inline(always)]
-    fn load_qw_nw(&self) -> (u64, usize) {
-        let ret;
-        #[cfg(target_pointer_width = "32")]
-        {
-            let qw = quadmerge([self.0[0], self.0[1]]);
-            let nw = self.0[2];
-            ret = (qw, nw);
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            ret = (self.0[0] as u64, self.0[1]);
-        }
-        ret
+/*
+    impls: WordIO
+*/
+
+macro_rules! impl_numeric_io {
+    ($trait:ident => { $($ty:ty),* $(,)? }) => {
+        $(impl<T: $trait> WordIO<$ty> for T {
+            fn store(v: $ty) -> Self { Self::dwordnn_store_qw(v as _) }
+            fn load(&self) -> $ty { self.dwordnn_load_qw() as _ }
+        })*
     }
 }
 
-impl SystemDword for NativeQword {
-    fn store_qw(u: u64) -> Self {
-        let ret;
-        #[cfg(target_pointer_width = "32")]
-        {
-            let [a, b] = quadsplit(u);
-            ret = <Self as SystemQword>::store_full(a, b, 0, 0);
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            ret = <Self as SystemQword>::store_full(u as _, 0, 0, 0);
-        }
-        ret
+impl_numeric_io!(DwordNN => { u8, u16, u32, u64, i8, i16, i32, i64 });
+
+impl<T: DwordNN> WordIO<bool> for T {
+    fn store(v: bool) -> Self {
+        Self::dwordnn_store_qw(v as _)
     }
-    fn store_fat(a: usize, b: usize) -> Self {
-        <Self as SystemQword>::store_full(a, b, 0, 0)
-    }
-    fn load_qw(&self) -> u64 {
-        let ret;
-        #[cfg(target_pointer_width = "32")]
-        {
-            ret = quadmerge([self.0[0], self.0[1]]);
-        }
-        #[cfg(target_pointer_width = "64")]
-        {
-            ret = self.0[0] as _;
-        }
-        ret
-    }
-    fn load_double(&self) -> [usize; 2] {
-        [self.0[0], self.0[1]]
+    fn load(&self) -> bool {
+        self.dwordnn_load_qw() == 1
     }
 }
 
-pub trait WordRW<W> {
-    type Target<'a>
-    where
-        W: 'a;
-    fn store(self) -> W;
-    fn load<'a>(word: &'a W) -> Self::Target<'a>;
+macro_rules! impl_float_io {
+    ($($float:ty),* $(,)?) => {
+        $(impl<T: DwordNN> WordIO<$float> for T {
+            fn store(v: $float) -> Self { Self::dwordnn_store_qw(v.to_bits() as u64) }
+            fn load(&self) -> $float { <$float>::from_bits(self.dwordnn_load_qw() as _) }
+        })*
+    }
 }
 
-macro_rules! impl_wordrw {
-	($($ty:ty as $minword:ident => { type Target<'a> = $target:ty; |$selfname:ident| $store:expr; |$wordarg:ident| $load:expr;})*) => {
-		$(impl<W: $minword> WordRW<W> for $ty { type Target<'a> = $target where W: 'a; fn store($selfname: Self) -> W { $store } fn load<'a>($wordarg: &'a W) -> Self::Target<'a> { $load } })*
-	};
-	($($ty:ty as $minword:ident => { |$selfname:ident| $store:expr; |$wordarg:ident| $load:expr;})*) => { impl_wordrw!($($ty as $minword => { type Target<'a> = $ty; |$selfname| $store; |$wordarg| $load;})*); };
+impl_float_io!(f32, f64);
+
+impl<T: DwordNN> WordIO<(usize, usize)> for T {
+    fn store((a, b): (usize, usize)) -> Self {
+        Self::dwordnn_store_native_full(a, b)
+    }
+    fn load(&self) -> (usize, usize) {
+        let [a, b] = self.dwordnn_load_native_full();
+        (a, b)
+    }
 }
 
-impl_wordrw! {
-    bool as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) == 1;
+impl<T: DwordNN> WordIO<[usize; 2]> for T {
+    fn store([a, b]: [usize; 2]) -> Self {
+        Self::dwordnn_store_native_full(a, b)
     }
-    u8 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as u8;
+    fn load(&self) -> [usize; 2] {
+        self.dwordnn_load_native_full()
     }
-    u16 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as u16;
+}
+
+impl<T: DwordNN> WordIO<(usize, *mut u8)> for T {
+    fn store((a, b): (usize, *mut u8)) -> Self {
+        Self::dwordnn_store_native_full(a, b as usize)
     }
-    u32 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as u32;
+    fn load(&self) -> (usize, *mut u8) {
+        let [a, b] = self.dwordnn_load_native_full();
+        (a, b as *mut u8)
     }
-    u64 as SystemDword => {
-        |self| SystemDword::store_qw(self);
-        |word| SystemDword::load_qw(word);
+}
+
+impl<T: DwordNN> WordIO<(usize, *const u8)> for T {
+    fn store((a, b): (usize, *const u8)) -> Self {
+        Self::dwordnn_store_native_full(a, b as usize)
     }
-    i8 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as i8;
-    }
-    i16 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as i16;
-    }
-    i32 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as i32;
-    }
-    i64 as SystemDword => {
-        |self| SystemDword::store_qw(self as _);
-        |word| SystemDword::load_qw(word) as i64;
-    }
-    f32 as SystemDword => {
-        |self| SystemDword::store_qw(self.to_bits() as u64);
-        |word| f32::from_bits(SystemDword::load_qw(word) as u32);
-    }
-    f64 as SystemDword => {
-        |self| SystemDword::store_qw(self.to_bits());
-        |word| f64::from_bits(SystemDword::load_qw(word));
-    }
-    [usize; 2] as SystemDword => {
-        |self| SystemDword::store_fat(self[0], self[1]);
-        |word| SystemDword::load_double(word);
-    }
-    (usize, *mut u8) as SystemDword => {
-        |self| SystemDword::store_fat(self.0, self.1 as usize);
-        |word| {
-            let [a, b] = word.load_double();
-            (a, b as *mut u8)
-        };
-    }
-    (usize, *const u8) as SystemDword => {
-        |self| SystemDword::store_fat(self.0, self.1 as usize);
-        |word| {
-            let [a, b] = word.load_double();
-            (a, b as *const u8)
-        };
+    fn load(&self) -> (usize, *const u8) {
+        let [a, b] = self.dwordnn_load_native_full();
+        (a, b as *const u8)
     }
 }

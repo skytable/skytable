@@ -25,6 +25,7 @@
 */
 
 use super::*;
+mod word;
 
 mod vinline {
     use super::VInline;

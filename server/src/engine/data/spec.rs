@@ -31,7 +31,7 @@
 
 use {
     super::tag::{DataTag, TagClass},
-    crate::engine::mem::SystemDword,
+    crate::engine::mem::{DwordQN, WordIO},
     core::{fmt, mem, slice},
 };
 
@@ -45,7 +45,7 @@ pub trait DataspecMeta1D: Sized {
     // assoc
     type Tag: DataTag;
     /// The target must be able to store (atleast) a native dword
-    type Target: SystemDword;
+    type Target: DwordQN;
     /// The string item. This helps us remain correct with the dtors
     type StringItem;
     // fn
@@ -86,27 +86,27 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// Store a new bool. This function is always safe to call
     #[allow(non_snake_case)]
     fn Bool(b: bool) -> Self {
-        Self::new(Self::Tag::BOOL, SystemDword::store(b))
+        Self::new(Self::Tag::BOOL, WordIO::store(b))
     }
     /// Store a new uint. This function is always safe to call
     #[allow(non_snake_case)]
     fn UnsignedInt(u: u64) -> Self {
-        Self::new(Self::Tag::UINT, SystemDword::store(u))
+        Self::new(Self::Tag::UINT, WordIO::store(u))
     }
     /// Store a new sint. This function is always safe to call
     #[allow(non_snake_case)]
     fn SignedInt(s: i64) -> Self {
-        Self::new(Self::Tag::SINT, SystemDword::store(s))
+        Self::new(Self::Tag::SINT, WordIO::store(s))
     }
     /// Store a new float. This function is always safe to call
     #[allow(non_snake_case)]
     fn Float(f: f64) -> Self {
-        Self::new(Self::Tag::FLOAT, SystemDword::store(f.to_bits()))
+        Self::new(Self::Tag::FLOAT, WordIO::store(f.to_bits()))
     }
     /// Store a new binary. This function is always safe to call
     #[allow(non_snake_case)]
     fn Bin(b: &[u8]) -> Self {
-        Self::new(Self::Tag::BIN, SystemDword::store((b.len(), b.as_ptr())))
+        Self::new(Self::Tag::BIN, WordIO::store((b.len(), b.as_ptr())))
     }
 
     /// Store a new string. Now, I won't talk about this one's safety because it depends on the implementor
@@ -117,7 +117,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // bool
     /// Load a bool (this is unsafe for logical verity)
     unsafe fn read_bool_uck(&self) -> bool {
-        self.data().dword_ld()
+        self.data().load()
     }
     /// Load a bool
     fn read_bool_try(&self) -> Option<bool> {
@@ -135,7 +135,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // uint
     /// Load a uint (this is unsafe for logical verity)
     unsafe fn read_uint_uck(&self) -> u64 {
-        self.data().dword_ld()
+        self.data().load()
     }
     /// Load a uint
     fn read_uint_try(&self) -> Option<u64> {
@@ -156,7 +156,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // sint
     /// Load a sint (unsafe for logical verity)
     unsafe fn read_sint_uck(&self) -> i64 {
-        self.data().dword_ld()
+        self.data().load()
     }
     /// Load a sint
     fn read_sint_try(&self) -> Option<i64> {
@@ -172,7 +172,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     // float
     /// Load a float (unsafe for logical verity)
     unsafe fn read_float_uck(&self) -> f64 {
-        self.data().dword_ld()
+        self.data().load()
     }
     /// Load a float
     fn read_float_try(&self) -> Option<f64> {
@@ -190,7 +190,7 @@ pub unsafe trait Dataspec1D: DataspecMeta1D + DataspecRaw1D {
     /// ## Safety
     /// Are you a binary? Did you store it correctly? Are you a victim of segfaults?
     unsafe fn read_bin_uck(&self) -> &[u8] {
-        let (l, p) = self.data().dword_ld();
+        let (l, p) = self.data().load();
         slice::from_raw_parts(p, l)
     }
     /// Load a bin

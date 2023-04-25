@@ -35,7 +35,7 @@ use {
             tag::{DataTag, TagUnique},
         },
         idx::meta::Comparable,
-        mem::{self, NativeDword, SystemDword},
+        mem::{self, DwordQN, SpecialPaddedWord, WordIO},
     },
     core::{
         fmt,
@@ -47,12 +47,12 @@ use {
 
 pub struct PrimaryIndexKey {
     tag: TagUnique,
-    data: NativeDword,
+    data: SpecialPaddedWord,
 }
 
 impl PrimaryIndexKey {
     pub unsafe fn read_uint(&self) -> u64 {
-        self.data.load_qw()
+        self.data.load()
     }
     pub fn uint(&self) -> Option<u64> {
         (self.tag == TagUnique::UnsignedInt).then_some(unsafe {
@@ -61,7 +61,7 @@ impl PrimaryIndexKey {
         })
     }
     pub unsafe fn read_sint(&self) -> i64 {
-        self.data.load_qw() as _
+        self.data.load()
     }
     pub fn sint(&self) -> Option<i64> {
         (self.tag == TagUnique::SignedInt).then_some(unsafe {
@@ -105,16 +105,16 @@ impl PrimaryIndexKey {
         debug_assert!(Self::check(&dc));
         let tag = dc.tag().tag_unique();
         let dc = ManuallyDrop::new(dc);
-        let dword = unsafe {
+        let (a, b) = unsafe {
             // UNSAFE(@ohsayan): this doesn't do anything "bad" by itself. needs the construction to be broken for it to do something silly
             dc.as_raw()
         }
-        .load_double();
+        .dwordqn_load_qw_nw();
         Self {
             tag,
             data: unsafe {
-                // UNSAFE(@ohsayan): Perfectly safe since we're tranforming it and THIS will not by itself crash anything
-                core::mem::transmute(dword)
+                // UNSAFE(@ohsayan): loaded above, writing here
+                SpecialPaddedWord::new(a, b)
             },
         }
     }
@@ -126,12 +126,12 @@ impl PrimaryIndexKey {
     }
     /// ## Safety
     /// If you mess up construction, everything will fall apart
-    pub unsafe fn new(tag: TagUnique, data: NativeDword) -> Self {
+    pub unsafe fn new(tag: TagUnique, data: SpecialPaddedWord) -> Self {
         Self { tag, data }
     }
     fn __compute_vdata_offset(&self) -> [usize; 2] {
-        let [len, data] = self.data.load_double();
-        let actual_len = len * (self.tag >= TagUnique::Bin) as usize;
+        let (len, data) = self.data.dwordqn_load_qw_nw();
+        let actual_len = (len as usize) * (self.tag >= TagUnique::Bin) as usize;
         [data, actual_len]
     }
     fn virtual_block(&self) -> &[u8] {
@@ -164,7 +164,7 @@ impl Drop for PrimaryIndexKey {
 
 impl PartialEq for PrimaryIndexKey {
     fn eq(&self, other: &Self) -> bool {
-        let [data_1, data_2] = [self.data.load_double()[0], other.data.load_double()[0]];
+        let [data_1, data_2]: [u64; 2] = [self.data.load(), other.data.load()];
         ((self.tag == other.tag) & (data_1 == data_2))
             && self.virtual_block() == other.virtual_block()
     }
@@ -282,6 +282,8 @@ fn check_pk_extremes() {
     let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint(u64::MAX)).unwrap();
     let d2 = PrimaryIndexKey::try_from_dc(Datacell::from(LitIR::UnsignedInt(u64::MAX))).unwrap();
     assert_eq!(d1, d2);
+    assert_eq!(d1.uint().unwrap(), u64::MAX);
+    assert_eq!(d2.uint().unwrap(), u64::MAX);
     assert_eq!(
         test_utils::hash_rs(&state, &d1),
         test_utils::hash_rs(&state, &d2)

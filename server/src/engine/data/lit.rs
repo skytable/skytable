@@ -29,7 +29,7 @@ use {
         spec::{Dataspec1D, DataspecMeta1D, DataspecMethods1D, DataspecRaw1D},
         tag::{DataTag, FullTag, TagUnique},
     },
-    crate::engine::mem::{SpecialPaddedWord, SystemDword},
+    crate::engine::mem::{DwordQN, SpecialPaddedWord, WordIO},
     core::{
         fmt,
         hash::{Hash, Hasher},
@@ -93,16 +93,16 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
     const HEAP_STR: bool = true;
     const HEAP_BIN: bool = false;
     unsafe fn drop_str(&mut self) {
-        let [len, ptr] = self.data().load_double();
-        drop(String::from_raw_parts(ptr as *mut u8, len, len));
+        let (len, ptr) = self.data().load();
+        drop(String::from_raw_parts(ptr, len, len));
     }
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
         let new_string = ManuallyDrop::new(s.to_owned().into_boxed_str());
-        SystemDword::store((new_string.len(), new_string.as_ptr()))
+        WordIO::store((new_string.len(), new_string.as_ptr()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store((b.len(), b.as_ptr()))
+        WordIO::store((b.len(), b.as_ptr()))
     }
 }
 
@@ -114,7 +114,7 @@ unsafe impl<'a> DataspecRaw1D for Lit<'a> {
 unsafe impl<'a> Dataspec1D for Lit<'a> {
     fn Str(s: Box<str>) -> Self {
         let md = ManuallyDrop::new(s);
-        Self::new(FullTag::STR, SystemDword::store((md.len(), md.as_ptr())))
+        Self::new(FullTag::STR, WordIO::store((md.len(), md.as_ptr())))
     }
 }
 
@@ -184,8 +184,8 @@ pub struct LitIR<'a> {
 
 impl<'a> LitIR<'a> {
     pub fn __vdata(&self) -> &[u8] {
-        let [vlen, data] = self.data().load_double();
-        let len = vlen * (self.kind().tag_unique() >= TagUnique::Bin) as usize;
+        let (vlen, data) = self.data().dwordqn_load_qw_nw();
+        let len = vlen as usize * (self.kind().tag_unique() >= TagUnique::Bin) as usize;
         unsafe {
             // UNSAFE(@ohsayan): either because of static or lt
             slice::from_raw_parts(data as *const u8, len)
@@ -237,10 +237,10 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
     unsafe fn drop_str(&mut self) {}
     unsafe fn drop_bin(&mut self) {}
     unsafe fn clone_str(s: &str) -> Self::Target {
-        SystemDword::store((s.len(), s.as_ptr()))
+        WordIO::store((s.len(), s.as_ptr()))
     }
     unsafe fn clone_bin(b: &[u8]) -> Self::Target {
-        SystemDword::store((b.len(), b.as_ptr()))
+        WordIO::store((b.len(), b.as_ptr()))
     }
 }
 
@@ -250,7 +250,7 @@ unsafe impl<'a> DataspecRaw1D for LitIR<'a> {
 */
 unsafe impl<'a> Dataspec1D for LitIR<'a> {
     fn Str(s: Self::StringItem) -> Self {
-        Self::new(FullTag::STR, SystemDword::store((s.len(), s.as_ptr())))
+        Self::new(FullTag::STR, WordIO::store((s.len(), s.as_ptr())))
     }
 }
 

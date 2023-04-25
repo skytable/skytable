@@ -35,7 +35,7 @@ mod tests;
 pub use astr::AStr;
 pub use uarray::UArray;
 pub use vinline::VInline;
-pub use word::{SystemDword, SystemQword, SystemTword, WordRW};
+pub use word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO};
 // imports
 use std::alloc::{self, Layout};
 
@@ -58,7 +58,7 @@ pub struct SpecialPaddedWord {
 }
 
 impl SpecialPaddedWord {
-    const fn new(a: u64, b: usize) -> Self {
+    pub const unsafe fn new(a: u64, b: usize) -> Self {
         Self { a, b }
     }
 }

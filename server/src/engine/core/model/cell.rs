@@ -32,7 +32,7 @@ use {
             spec::{Dataspec1D, DataspecMeta1D},
             tag::{CUTag, DataTag, TagClass},
         },
-        mem::{NativeQword, SystemDword, SystemTword, WordRW},
+        mem::{DwordNN, DwordQN, NativeQword, WordIO},
     },
     core::{fmt, mem, mem::ManuallyDrop, slice, str},
     parking_lot::RwLock,
@@ -49,7 +49,7 @@ impl Datacell {
     pub fn new_bool(b: bool) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::BOOL, DataRaw::word(SystemDword::store(b)))
+            Self::new(CUTag::BOOL, DataRaw::word(WordIO::store(b)))
         }
     }
     pub unsafe fn read_bool(&self) -> bool {
@@ -68,7 +68,7 @@ impl Datacell {
     pub fn new_uint(u: u64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::UINT, DataRaw::word(SystemDword::store(u)))
+            Self::new(CUTag::UINT, DataRaw::word(WordIO::store(u)))
         }
     }
     pub unsafe fn read_uint(&self) -> u64 {
@@ -87,7 +87,7 @@ impl Datacell {
     pub fn new_sint(u: i64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::SINT, DataRaw::word(SystemDword::store(u)))
+            Self::new(CUTag::SINT, DataRaw::word(WordIO::store(u)))
         }
     }
     pub unsafe fn read_sint(&self) -> i64 {
@@ -106,7 +106,7 @@ impl Datacell {
     pub fn new_float(f: f64) -> Self {
         unsafe {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
-            Self::new(CUTag::FLOAT, DataRaw::word(SystemDword::store(f)))
+            Self::new(CUTag::FLOAT, DataRaw::word(WordIO::store(f)))
         }
     }
     pub unsafe fn read_float(&self) -> f64 {
@@ -128,7 +128,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::BIN,
-                DataRaw::word(SystemDword::store((md.len(), md.as_mut_ptr()))),
+                DataRaw::word(WordIO::store((md.len(), md.as_mut_ptr()))),
             )
         }
     }
@@ -152,7 +152,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::STR,
-                DataRaw::word(SystemDword::store((md.len(), md.as_mut_ptr()))),
+                DataRaw::word(WordIO::store((md.len(), md.as_mut_ptr()))),
             )
         }
     }
@@ -213,12 +213,10 @@ impl<'a> From<LitIR<'a>> for Datacell {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type doesn't need any advanced construction
-                let data = l.data().load_qw();
-                let ptr = l.data().load_double()[1];
                 Datacell::new(
                     CUTag::from(l.kind()),
                     // DO NOT RELY ON the payload's bit pattern; it's padded
-                    DataRaw::word(SystemTword::store_qw_nw(data, ptr as usize)),
+                    DataRaw::word(l.data().dword_promote()),
                 )
             },
             TagClass::Bin | TagClass::Str => unsafe {
@@ -226,7 +224,7 @@ impl<'a> From<LitIR<'a>> for Datacell {
                 let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
                 Datacell::new(
                     CUTag::from(l.kind()),
-                    DataRaw::word(SystemDword::store((bin.len(), bin.as_mut_ptr()))),
+                    DataRaw::word(WordIO::store((bin.len(), bin.as_mut_ptr()))),
                 )
             },
             _ => unsafe {
@@ -270,7 +268,11 @@ impl Datacell {
     pub fn null() -> Self {
         unsafe {
             // UNSAFE(@ohsayan): This is a hack. It's safe because we set init to false
-            Self::_new(CUTag::BOOL, DataRaw::word(NativeQword::store_qw(0)), false)
+            Self::_new(
+                CUTag::BOOL,
+                DataRaw::word(NativeQword::dwordnn_store_qw(0)),
+                false,
+            )
         }
     }
     pub fn is_null(&self) -> bool {
@@ -286,8 +288,11 @@ impl Datacell {
             None
         }
     }
-    unsafe fn load_word<'a, T: WordRW<NativeQword, Target<'a> = T>>(&'a self) -> T {
-        self.data.word.dword_ld()
+    unsafe fn load_word<'a, T>(&'a self) -> T
+    where
+        NativeQword: WordIO<T>,
+    {
+        self.data.word.load()
     }
     unsafe fn _new(tag: CUTag, data: DataRaw, init: bool) -> Self {
         Self { init, tag, data }
@@ -400,7 +405,7 @@ impl Clone for Datacell {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let mut block = ManuallyDrop::new(self.read_bin().to_owned().into_boxed_slice());
                 DataRaw {
-                    word: ManuallyDrop::new(SystemDword::store((block.len(), block.as_mut_ptr()))),
+                    word: ManuallyDrop::new(WordIO::store((block.len(), block.as_mut_ptr()))),
                 }
             },
             TagClass::List => unsafe {
@@ -411,7 +416,7 @@ impl Clone for Datacell {
                 }
             },
             _ => unsafe {
-                // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
+                // UNSAFE(@ohsayan): we have checked that the cell is a stack class
                 DataRaw {
                     word: ManuallyDrop::new(mem::transmute_copy(&self.data.word)),
                 }
