@@ -96,7 +96,7 @@ pub trait DwordQN: Sized {
         Self::dwordqn_store_qw_nw(a, 0)
     }
     // promotions
-    fn dword_promote<W: DwordQN>(&self) -> W {
+    fn dwordqn_promote<W: DwordQN>(&self) -> W {
         let (a, b) = self.dwordqn_load_qw_nw();
         <W as DwordQN>::dwordqn_store_qw_nw(a, b)
     }

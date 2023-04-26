@@ -51,7 +51,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::BOOL,
-                DataRaw::word(SpecialPaddedWord::store(b).dword_promote()),
+                DataRaw::word(SpecialPaddedWord::store(b).dwordqn_promote()),
             )
         }
     }
@@ -73,7 +73,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::UINT,
-                DataRaw::word(SpecialPaddedWord::store(u).dword_promote()),
+                DataRaw::word(SpecialPaddedWord::store(u).dwordqn_promote()),
             )
         }
     }
@@ -95,7 +95,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::SINT,
-                DataRaw::word(SpecialPaddedWord::store(i).dword_promote()),
+                DataRaw::word(SpecialPaddedWord::store(i).dwordqn_promote()),
             )
         }
     }
@@ -117,7 +117,7 @@ impl Datacell {
             // UNSAFE(@ohsayan): Correct because we are initializing Self with the correct tag
             Self::new(
                 CUTag::FLOAT,
-                DataRaw::word(SpecialPaddedWord::store(f).dword_promote()),
+                DataRaw::word(SpecialPaddedWord::store(f).dwordqn_promote()),
             )
         }
     }
@@ -228,7 +228,7 @@ impl<'a> From<LitIR<'a>> for Datacell {
                 Datacell::new(
                     CUTag::from(l.kind()),
                     // DO NOT RELY ON the payload's bit pattern; it's padded
-                    DataRaw::word(l.data().dword_promote()),
+                    DataRaw::word(l.data().dwordqn_promote()),
                 )
             },
             TagClass::Bin | TagClass::Str => unsafe {

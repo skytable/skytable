@@ -133,7 +133,7 @@ fn qwordnnn_all() {
 #[test]
 fn dwordqn_promotions() {
     let x = SpecialPaddedWord::store(u64::MAX);
-    let y: NativeTword = x.dword_promote();
+    let y: NativeTword = x.dwordqn_promote();
     let (uint, usize) = y.dwordqn_load_qw_nw();
     assert_eq!(uint, u64::MAX);
     assert_eq!(usize, ZERO_BLOCK.as_ptr() as usize);
@@ -142,4 +142,29 @@ fn dwordqn_promotions() {
     assert_eq!(uint, u64::MAX);
     assert_eq!(usize_1, ZERO_BLOCK.as_ptr() as usize);
     assert_eq!(usize_2, 0);
+}
+
+fn eval_special_case(x: SpecialPaddedWord, qw: u64, nw: usize) {
+    let y: NativeQword = x.dwordqn_promote();
+    assert_eq!(y.dwordqn_load_qw_nw(), (qw, nw));
+    let z: SpecialPaddedWord = unsafe {
+        let (a, b) = y.dwordqn_load_qw_nw();
+        SpecialPaddedWord::new(a, b)
+    };
+    assert_eq!(z.dwordqn_load_qw_nw(), (qw, nw));
+}
+
+#[test]
+fn dwordqn_special_case_ldpk() {
+    let hello = "hello, world";
+    eval_special_case(
+        SpecialPaddedWord::store((hello.len(), hello.as_ptr())),
+        hello.len() as u64,
+        hello.as_ptr() as usize,
+    );
+    eval_special_case(
+        SpecialPaddedWord::store(u64::MAX),
+        u64::MAX,
+        ZERO_BLOCK.as_ptr() as usize,
+    );
 }
