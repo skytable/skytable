@@ -28,8 +28,8 @@
 use crate::{engine::data::spec::Dataspec1D, util::test_utils};
 use {
     crate::engine::{
-        core::model::cell::Datacell,
         data::{
+            cell::Datacell,
             lit::LitIR,
             spec::DataspecMeta1D,
             tag::{DataTag, TagUnique},

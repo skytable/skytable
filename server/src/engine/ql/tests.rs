@@ -27,7 +27,7 @@
 use {
     super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
     crate::{
-        engine::{core::Datacell, error::LexResult},
+        engine::{data::cell::Datacell, error::LexResult},
         util::test_utils,
     },
     rand::{self, Rng},

@@ -26,6 +26,7 @@
 
 #[macro_use]
 mod macros;
+pub mod cell;
 pub mod lit;
 pub mod md_dict;
 pub mod spec;

@@ -36,8 +36,7 @@ use {
     },
     crate::{
         engine::{
-            core::Datacell,
-            data::lit::LitIR,
+            data::{cell::Datacell, lit::LitIR},
             error::{LangError, LangResult},
         },
         util::{compiler, MaybeInit},

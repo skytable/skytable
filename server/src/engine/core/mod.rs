@@ -41,8 +41,6 @@ use {
     },
     parking_lot::RwLock,
 };
-// re-exports
-pub use model::cell::Datacell;
 
 /// Use this for now since it substitutes for a file lock (and those syscalls are expensive),
 /// but something better is in the offing

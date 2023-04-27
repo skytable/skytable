@@ -27,7 +27,7 @@
 use {
     crate::{
         engine::{
-            core::Datacell,
+            data::cell::Datacell,
             error::{LangError, LangResult},
             ql::{
                 ast::{Entity, QueryData, State},

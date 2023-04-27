@@ -24,9 +24,9 @@
  *
 */
 
-use crate::engine::{
-    core::Datacell,
-    data::md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
+use crate::engine::data::{
+    cell::Datacell,
+    md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
 };
 
 #[test]

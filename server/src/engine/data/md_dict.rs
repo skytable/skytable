@@ -26,8 +26,10 @@
 
 use {
     crate::engine::{
-        core::Datacell,
-        data::lit::{Lit, LitIR},
+        data::{
+            cell::Datacell,
+            lit::{Lit, LitIR},
+        },
         idx::STIndex,
     },
     std::collections::HashMap,

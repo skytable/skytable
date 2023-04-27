@@ -26,10 +26,10 @@
 
 use crate::engine::{
     core::{
-        model::cell::Datacell,
         space::{Space, SpaceMeta},
         GlobalNS,
     },
+    data::cell::Datacell,
     error::DatabaseError,
 };
 

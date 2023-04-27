@@ -25,7 +25,6 @@
 */
 
 pub(super) mod alt;
-pub mod cell;
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -34,8 +33,10 @@ use super::util::EntityLocator;
 
 use {
     crate::engine::{
-        core::model::cell::Datacell,
-        data::tag::{DataTag, FullTag, TagClass, TagSelector},
+        data::{
+            cell::Datacell,
+            tag::{DataTag, FullTag, TagClass, TagSelector},
+        },
         error::{DatabaseError, DatabaseResult},
         idx::{IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,

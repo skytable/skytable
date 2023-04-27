@@ -80,7 +80,7 @@ mod layer_spec_validation {
 mod layer_data_validation {
     use {
         super::{layerview, layerview_nullable},
-        crate::engine::core::model::{self, cell::Datacell},
+        crate::engine::{core::model, data::cell::Datacell},
     };
     #[test]
     fn bool() {
