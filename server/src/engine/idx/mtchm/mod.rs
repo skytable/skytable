@@ -25,9 +25,9 @@
 */
 
 mod access;
-pub(super) mod imp;
+pub mod imp;
 mod iter;
-pub(super) mod meta;
+pub mod meta;
 mod patch;
 #[cfg(test)]
 mod tests;

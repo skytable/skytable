@@ -27,7 +27,7 @@
 #![deny(unreachable_patterns)]
 
 pub mod meta;
-mod mtchm;
+pub mod mtchm;
 mod stdhm;
 mod stord;
 #[cfg(test)]

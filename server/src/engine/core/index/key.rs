@@ -121,6 +121,15 @@ impl PrimaryIndexKey {
             },
         }
     }
+    pub unsafe fn raw_clone(&self) -> Self {
+        Self {
+            tag: self.tag,
+            data: {
+                let (qw, nw) = self.data.dwordqn_load_qw_nw();
+                SpecialPaddedWord::new(qw, nw)
+            },
+        }
+    }
     pub fn check(dc: &Datacell) -> bool {
         dc.tag().tag_unique().is_unique()
     }

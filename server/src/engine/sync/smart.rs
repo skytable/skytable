@@ -200,21 +200,18 @@ impl<T> Deref for SliceRC<T> {
 unsafe impl<T: Send> Send for SliceRC<T> {}
 unsafe impl<T: Sync> Sync for SliceRC<T> {}
 
-/// The core atomic reference counter implementation. All smart pointers use this inside
+/// A simple rc
 pub struct EArc {
-    rc: NonNull<AtomicUsize>,
+    base: RawRC<()>,
 }
 
 impl EArc {
-    /// Create a new [`EArc`] instance
-    ///
     /// ## Safety
     ///
-    /// While this is **not unsafe** in the eyes of the language specification for safety, it still does violate a very common
-    /// bug: memory leaks and we don't want that. So, it is upto the caller to clean this up
-    unsafe fn new() -> Self {
+    /// Clean up your own memory, sir
+    pub unsafe fn new() -> Self {
         Self {
-            rc: NonNull::new_unchecked(Box::into_raw(Box::new(AtomicUsize::new(0)))),
+            base: RawRC::new(()),
         }
     }
 }
@@ -222,14 +219,61 @@ impl EArc {
 impl EArc {
     /// ## Safety
     ///
-    /// Only call when you follow the appropriate ground rules for safety
-    unsafe fn _rc(&self) -> &AtomicUsize {
-        self.rc.as_ref()
+    /// Only call in an actual [`Clone`] context
+    pub unsafe fn rc_clone(&self) -> Self {
+        Self {
+            base: self.base.rc_clone(),
+        }
+    }
+    /// ## Safety
+    ///
+    /// Only call in dtor context
+    pub unsafe fn rc_drop(&mut self, dropfn: impl FnMut()) {
+        self.base.rc_drop(dropfn)
+    }
+}
+
+/// The core atomic reference counter implementation. All smart pointers use this inside
+pub struct RawRC<T> {
+    hptr: NonNull<RawRCData<T>>,
+}
+
+struct RawRCData<T> {
+    rc: AtomicUsize,
+    data: T,
+}
+
+impl<T> RawRC<T> {
+    /// Create a new [`RawRC`] instance
+    ///
+    /// ## Safety
+    ///
+    /// While this is **not unsafe** in the eyes of the language specification for safety, it still does violate a very common
+    /// bug: memory leaks and we don't want that. So, it is upto the caller to clean this up
+    pub unsafe fn new(data: T) -> Self {
+        Self {
+            hptr: NonNull::new_unchecked(Box::leak(Box::new(RawRCData {
+                rc: AtomicUsize::new(1),
+                data,
+            }))),
+        }
+    }
+    pub fn data(&self) -> &T {
+        unsafe {
+            // UNSAFE(@ohsayan): we believe in the power of barriers!
+            &(*self.hptr.as_ptr()).data
+        }
+    }
+    fn _rc(&self) -> &AtomicUsize {
+        unsafe {
+            // UNSAFE(@ohsayan): we believe in the power of barriers!
+            &(*self.hptr.as_ptr()).rc
+        }
     }
     /// ## Safety
     ///
     /// Only call in an actual [`Clone`] context
-    unsafe fn rc_clone(&self) -> Self {
+    pub unsafe fn rc_clone(&self) -> Self {
         let new_rc = self._rc().fetch_add(1, ORD_RLX);
         if new_rc > (isize::MAX) as usize {
             // some incredibly degenerate case; this won't ever happen but who knows if some fella decided to have atomic overflow fun?
@@ -237,18 +281,10 @@ impl EArc {
         }
         Self { ..*self }
     }
-    #[cold]
-    #[inline(never)]
-    unsafe fn rc_drop_slow(&mut self, mut dropfn: impl FnMut()) {
-        // deallocate object
-        dropfn();
-        // deallocate rc
-        drop(Box::from_raw(self.rc.as_ptr()));
-    }
     /// ## Safety
     ///
     /// Only call in dtor context
-    unsafe fn rc_drop(&mut self, dropfn: impl FnMut()) {
+    pub unsafe fn rc_drop(&mut self, dropfn: impl FnMut()) {
         if self._rc().fetch_sub(1, ORD_REL) != 1 {
             // not the last man alive
             return;
@@ -256,5 +292,13 @@ impl EArc {
         // emit a fence for sync with stores
         atomic::fence(ORD_ACQ);
         self.rc_drop_slow(dropfn);
+    }
+    #[cold]
+    #[inline(never)]
+    unsafe fn rc_drop_slow(&mut self, mut dropfn: impl FnMut()) {
+        // deallocate object
+        dropfn();
+        // deallocate rc
+        drop(Box::from_raw(self.hptr.as_ptr()));
     }
 }

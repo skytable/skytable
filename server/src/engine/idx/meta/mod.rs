@@ -24,6 +24,8 @@
  *
 */
 
+pub mod hash;
+
 use core::{
     borrow::Borrow,
     hash::{BuildHasher, Hash},
