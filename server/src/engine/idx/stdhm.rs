@@ -42,7 +42,7 @@ use {
     },
 };
 
-impl<K, V, S> IndexBaseSpec<K, V> for StdMap<K, V, S>
+impl<K, V, S> IndexBaseSpec for StdMap<K, V, S>
 where
     S: BuildHasher + Default,
 {

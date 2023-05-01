@@ -34,261 +34,135 @@ use {
         RawTree,
     },
     crate::engine::{
-        idx::{meta::Comparable, AsKey, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, MTIndex},
-        sync::atm::{upin, Guard},
+        idx::{meta::Comparable, AsKeyClone, AsValue, AsValueClone, IndexBaseSpec, MTIndex},
+        sync::atm::Guard,
     },
     std::sync::Arc,
 };
 
-#[inline(always)]
-fn arc<K, V>(k: K, v: V) -> Arc<(K, V)> {
-    Arc::new((k, v))
-}
+pub type Raw<E, C> = RawTree<E, C>;
+pub type ChmArc<K, V, C> = Raw<Arc<(K, V)>, C>;
+pub type ChmCopy<K, V, C> = Raw<(K, V), C>;
 
-pub type ChmArc<K, V, C> = RawTree<Arc<(K, V)>, C>;
-
-impl<K, V, C> IndexBaseSpec<K, V> for ChmArc<K, V, C>
-where
-    C: Config,
-{
+impl<E, C: Config> IndexBaseSpec for Raw<E, C> {
     const PREALLOC: bool = false;
 
-    #[cfg(debug_assertions)]
     type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {
-        ChmArc::new()
+        Self::new()
     }
 
     fn idx_init_with(s: Self) -> Self {
         s
     }
 
-    #[cfg(debug_assertions)]
     fn idx_metrics(&self) -> &Self::Metrics {
         &self.m
     }
 }
 
-impl<K, V, C> MTIndex<K, V> for ChmArc<K, V, C>
-where
-    C: Config,
-    K: AsKey,
-    V: AsValue,
-{
-    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, Arc<(K, V)>, C>
+impl<E: TreeElement, C: Config> MTIndex<E::Key, E::Value> for Raw<E, C> {
+    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, E, C>
     where
         'g: 't + 'v,
         't: 'v,
-        K: 'v,
-        V: 'v,
+        E::Key: 'v,
+        E::Value: 'v,
         Self: 't;
 
-    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, Arc<(K, V)>, C>
+    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, E, C>
     where
         'g: 't + 'v,
         't: 'v,
-        K: 'v,
+        E::Key: 'v,
         Self: 't;
 
-    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, Arc<(K, V)>, C>
+    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, E, C>
     where
         'g: 't + 'v,
         't: 'v,
-        V: 'v,
+        E::Value: 'v,
         Self: 't;
 
     fn mt_clear(&self, g: &Guard) {
         self.nontransactional_clear(g)
     }
 
-    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch(VanillaInsert(arc(key, val)), g)
+    fn mt_insert(&self, key: E::Key, val: E::Value, g: &Guard) -> bool
+    where
+        E::Value: AsValue,
+    {
+        self.patch(VanillaInsert(E::new(key, val)), g)
     }
 
-    fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.patch(VanillaUpsert(arc(key, val)), g)
+    fn mt_upsert(&self, key: E::Key, val: E::Value, g: &Guard)
+    where
+        E::Value: AsValue,
+    {
+        self.patch(VanillaUpsert(E::new(key, val)), g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
     where
-        Q: ?Sized + Comparable<K>,
+        Q: ?Sized + Comparable<E::Key>,
     {
         self.contains_key(key, g)
     }
 
-    fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
+    fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E::Value>
     where
-        Q: ?Sized + Comparable<K>,
+        Q: ?Sized + Comparable<E::Key>,
         't: 'v,
         'g: 't + 'v,
     {
         self.get(key, g)
     }
 
-    fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<V>
+    fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<E::Value>
     where
-        Q: ?Sized + Comparable<K>,
-        V: AsValueClone,
+        Q: ?Sized + Comparable<E::Key>,
+        E::Value: AsValueClone,
     {
         self.get(key, g).cloned()
     }
 
-    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch(VanillaUpdate(arc(key, val)), g)
+    fn mt_update(&self, key: E::Key, val: E::Value, g: &Guard) -> bool
+    where
+        E::Key: AsKeyClone,
+        E::Value: AsValue,
+    {
+        self.patch(VanillaUpdate(E::new(key, val)), g)
     }
 
-    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
+    fn mt_update_return<'t, 'g, 'v>(
+        &'t self,
+        key: E::Key,
+        val: E::Value,
+        g: &'g Guard,
+    ) -> Option<&'v E::Value>
     where
+        E::Key: AsKeyClone,
+        E::Value: AsValue,
         't: 'v,
         'g: 't + 'v,
     {
-        self.patch(VanillaUpdateRet(arc(key, val)), g)
+        self.patch(VanillaUpdateRet(E::new(key, val)), g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
     where
-        Q: ?Sized + Comparable<K>,
+        Q: ?Sized + Comparable<E::Key>,
     {
         self.remove(key, g)
     }
 
-    fn mt_delete_return<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
+    fn mt_delete_return<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E::Value>
     where
-        Q: ?Sized + Comparable<K>,
+        Q: ?Sized + Comparable<E::Key>,
         't: 'v,
         'g: 't + 'v,
     {
         self.remove_return(key, g)
-    }
-}
-
-pub type ChmCopy<K, V, C> = RawTree<(K, V), C>;
-
-impl<K, V, C> IndexBaseSpec<K, V> for ChmCopy<K, V, C>
-where
-    C: Config,
-{
-    const PREALLOC: bool = false;
-
-    #[cfg(debug_assertions)]
-    type Metrics = CHTRuntimeLog;
-
-    fn idx_init() -> Self {
-        ChmCopy::new()
-    }
-
-    fn idx_init_with(s: Self) -> Self {
-        s
-    }
-
-    #[cfg(debug_assertions)]
-    fn idx_metrics(&self) -> &Self::Metrics {
-        &self.m
-    }
-}
-
-impl<K, V, C> MTIndex<K, V> for ChmCopy<K, V, C>
-where
-    C: Config,
-    K: AsKeyClone,
-    V: AsValueClone,
-{
-    type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, (K, V), C>
-    where
-        'g: 't + 'v,
-        't: 'v,
-        K: 'v,
-        V: 'v,
-        Self: 't;
-
-    type IterKey<'t, 'g, 'v> = IterKey<'t, 'g, 'v, (K, V), C>
-    where
-        'g: 't + 'v,
-        't: 'v,
-        K: 'v,
-        Self: 't;
-
-    type IterVal<'t, 'g, 'v> = IterVal<'t, 'g, 'v, (K, V), C>
-    where
-        'g: 't + 'v,
-        't: 'v,
-        V: 'v,
-        Self: 't;
-
-    fn mt_clear(&self, g: &Guard) {
-        self.nontransactional_clear(g)
-    }
-
-    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch(VanillaInsert((key, val)), g)
-    }
-
-    fn mt_upsert(&self, key: K, val: V, g: &Guard) {
-        self.patch(VanillaUpsert((key, val)), g)
-    }
-
-    fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
-    where
-        Q: ?Sized + Comparable<K>,
-    {
-        self.contains_key(key, g)
-    }
-
-    fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
-    where
-        Q: ?Sized + Comparable<K>,
-        't: 'v,
-        'g: 't + 'v,
-    {
-        self.get(key, g)
-    }
-
-    fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<V>
-    where
-        Q: ?Sized + Comparable<K>,
-    {
-        self.get(key, g).cloned()
-    }
-
-    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool {
-        self.patch(VanillaUpdate((key, val)), g)
-    }
-
-    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
-    where
-        't: 'v,
-        'g: 't + 'v,
-    {
-        self.patch(VanillaUpdateRet((key, val)), g)
-    }
-
-    fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool
-    where
-        Q: ?Sized + Comparable<K>,
-    {
-        self.remove(key, g)
-    }
-
-    fn mt_delete_return<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
-    where
-        Q: ?Sized + Comparable<K>,
-        't: 'v,
-        'g: 't + 'v,
-    {
-        self.remove_return(key, g)
-    }
-}
-
-impl<T: TreeElement, C: Config> FromIterator<T> for RawTree<T, C> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let g = unsafe {
-            // UNSAFE(@ohsayan): it's me, hi, I'm the problem, it's me. yeah, Taylor knows it too. it's just us
-            upin()
-        };
-        let t = RawTree::new();
-        iter.into_iter()
-            .for_each(|te| assert!(t.patch(VanillaInsert(te), g)));
-        t
     }
 }

@@ -43,6 +43,7 @@ use {
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;
 pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
+pub type IndexMTRaw<E> = mtchm::RawTree<E, mtchm::meta::DefConfig>;
 pub type IndexMTCp<K, V> = mtchm::imp::ChmCopy<K, V, mtchm::meta::DefConfig>;
 pub type IndexST<K, V, S = std::collections::hash_map::RandomState> =
     std::collections::hash_map::HashMap<K, V, S>;
@@ -100,7 +101,7 @@ pub struct DummyMetrics;
 
 /// The base spec for any index. Iterators have meaningless order, and that is intentional and oftentimes
 /// consequential. For more specialized impls, use the [`STIndex`], [`MTIndex`] or [`STIndexSeq`] traits
-pub trait IndexBaseSpec<K: ?Sized, V: ?Sized>: Sized {
+pub trait IndexBaseSpec: Sized {
     /// Index supports prealloc?
     const PREALLOC: bool;
     #[cfg(debug_assertions)]
@@ -126,7 +127,7 @@ pub trait IndexBaseSpec<K: ?Sized, V: ?Sized>: Sized {
 }
 
 /// An unordered MTIndex
-pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
+pub trait MTIndex<K, V>: IndexBaseSpec {
     type IterKV<'t, 'g, 'v>: Iterator<Item = (&'v K, &'v V)>
     where
         'g: 't + 'v,
@@ -202,7 +203,7 @@ pub trait MTIndex<K, V>: IndexBaseSpec<K, V> {
 }
 
 /// An unordered STIndex
-pub trait STIndex<K: ?Sized, V>: IndexBaseSpec<K, V> {
+pub trait STIndex<K: ?Sized, V>: IndexBaseSpec {
     /// An iterator over the keys and values
     type IterKV<'a>: Iterator<Item = (&'a K, &'a V)>
     where

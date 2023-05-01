@@ -90,7 +90,7 @@ pub enum DatabaseError {
     NeedLock,
     /// expected a full entity, but found a single implicit entity
     ExpectedEntity,
-    // ddl: create space
+    // ddl
     /// unknown property or bad type for property
     DdlSpaceBadProperty,
     /// the space already exists

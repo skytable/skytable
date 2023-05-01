@@ -536,7 +536,7 @@ impl<K: AsKey, V: AsValue, C: Config<K, V>> FromIterator<(K, V)> for IndexSTSeqD
     }
 }
 
-impl<K, V, C: Config<K, V>> IndexBaseSpec<K, V> for IndexSTSeqDll<K, V, C> {
+impl<K, V, C: Config<K, V>> IndexBaseSpec for IndexSTSeqDll<K, V, C> {
     const PREALLOC: bool = true;
 
     #[cfg(debug_assertions)]
