@@ -310,6 +310,15 @@ pub enum InsertData<'a> {
     Map(HashMap<Ident<'a>, Datacell>),
 }
 
+impl<'a> InsertData<'a> {
+    pub fn column_count(&self) -> usize {
+        match self {
+            Self::Ordered(ord) => ord.len(),
+            Self::Map(m) => m.len(),
+        }
+    }
+}
+
 impl<'a> From<Vec<Datacell>> for InsertData<'a> {
     fn from(v: Vec<Datacell>) -> Self {
         Self::Ordered(v)
@@ -332,6 +341,12 @@ impl<'a> InsertStatement<'a> {
     #[inline(always)]
     pub fn new(entity: Entity<'a>, data: InsertData<'a>) -> Self {
         Self { entity, data }
+    }
+    pub fn entity(&self) -> Entity<'a> {
+        self.entity
+    }
+    pub fn data(self) -> InsertData<'a> {
+        self.data
     }
 }
 

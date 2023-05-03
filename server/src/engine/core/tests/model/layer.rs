@@ -207,6 +207,25 @@ mod layer_data_validation {
         );
     }
     #[test]
+    fn list_nested_l1() {
+        let layer = layerview("list { type: list { type: string } }").unwrap();
+        let dc = Datacell::new_list(vec![
+            Datacell::new_list(vec![Datacell::from("hello_11"), Datacell::from("hello_12")]),
+            Datacell::new_list(vec![Datacell::from("hello_21"), Datacell::from("hello_22")]),
+            Datacell::new_list(vec![Datacell::from("hello_31"), Datacell::from("hello_32")]),
+        ]);
+        assert!(layer.validate_data_fpath(&dc));
+        assert_vecstreq_exact!(
+            model::layer_traces(),
+            [
+                "list", // low
+                "list", "string", "string", // cs: 1
+                "list", "string", "string", // cs: 2
+                "list", "string", "string", // cs: 3
+            ]
+        );
+    }
+    #[test]
     fn nullval_fpath() {
         let layer = layerview_nullable("string", true).unwrap();
         assert!(layer.validate_data_fpath(&Datacell::null()));

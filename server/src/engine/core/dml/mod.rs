@@ -1,5 +1,5 @@
 /*
- * Created on Sat Apr 08 2023
+ * Created on Mon May 01 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,34 +24,6 @@
  *
 */
 
-mod key;
-mod row;
-
-use {
-    crate::engine::{
-        idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
-        sync::atm::Guard,
-    },
-    parking_lot::RwLock,
-};
-
-pub use {
-    key::PrimaryIndexKey,
-    row::{DcFieldIndex, Row},
-};
-
-#[derive(Debug)]
-pub struct PrimaryIndex {
-    data: IndexMTRaw<row::Row>,
-}
-
-impl PrimaryIndex {
-    pub fn new_empty() -> Self {
-        Self {
-            data: IndexMTRaw::idx_init(),
-        }
-    }
-    pub fn insert(&self, key: PrimaryIndexKey, data: row::DcFieldIndex, g: &Guard) -> bool {
-        self.data.mt_insert(key, RwLock::new(data), g)
-    }
-}
+mod ins;
+// result
+mod result_set;

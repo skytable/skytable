@@ -119,4 +119,9 @@ pub enum DatabaseError {
     DdlModelNotFound,
     /// attempted a remove, but the model view is nonempty
     DdlModelViewNotEmpty,
+    // dml
+    /// Duplicate
+    DmlConstraintViolationDuplicate,
+    /// data validation error
+    DmlDataValidationError,
 }

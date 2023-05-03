@@ -29,9 +29,8 @@ pub(super) mod alt;
 #[cfg(test)]
 use std::cell::RefCell;
 
-use super::util::EntityLocator;
-
 use {
+    super::{index::PrimaryIndex, util::EntityLocator},
     crate::engine::{
         data::{
             cell::Datacell,
@@ -52,14 +51,13 @@ use {
 
 pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
-// FIXME(@ohsayan): update this!
-
 #[derive(Debug)]
 pub struct ModelView {
     p_key: Box<str>,
     p_tag: FullTag,
     fields: UnsafeCell<Fields>,
     sync_matrix: ISyncMatrix,
+    data: PrimaryIndex,
 }
 
 #[cfg(test)]
@@ -93,6 +91,9 @@ impl ModelView {
     pub fn intent_write_model<'a>(&'a self) -> IWModel<'a> {
         IWModel::new(self)
     }
+    pub fn intent_write_new_data<'a>(&'a self) -> IRModelSMData<'a> {
+        IRModelSMData::new(self)
+    }
     fn is_pk(&self, new: &str) -> bool {
         self.p_key.as_bytes() == new.as_bytes()
     }
@@ -109,6 +110,9 @@ impl ModelView {
     pub fn is_empty_atomic(&self) -> bool {
         // TODO(@ohsayan): change this!
         true
+    }
+    pub fn primary_index(&self) -> &PrimaryIndex {
+        &self.data
     }
 }
 
@@ -151,6 +155,7 @@ impl ModelView {
                     p_tag: tag,
                     fields: UnsafeCell::new(fields),
                     sync_matrix: ISyncMatrix::new(),
+                    data: PrimaryIndex::new_empty(),
                 });
             }
         }
@@ -474,7 +479,9 @@ unsafe fn lverify_list(_: Layer, _: &Datacell) -> bool {
 #[derive(Debug)]
 pub struct ISyncMatrix {
     // virtual privileges
+    /// read/write model
     v_priv_model_alter: RwLock<()>,
+    /// RW data/block all
     v_priv_data_new_or_revise: RwLock<()>,
 }
 

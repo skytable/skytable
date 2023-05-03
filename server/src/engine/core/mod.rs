@@ -24,6 +24,7 @@
  *
 */
 
+mod dml;
 mod index;
 mod model;
 mod space;

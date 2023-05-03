@@ -35,8 +35,9 @@ use {
     std::mem::ManuallyDrop,
 };
 
-type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
+pub type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
 
+#[derive(Debug)]
 pub struct Row {
     pk: ManuallyDrop<PrimaryIndexKey>,
     rc: RawRC<RwLock<DcFieldIndex>>,
@@ -73,6 +74,12 @@ impl Row {
     pub fn with_data_write<T>(&self, f: impl Fn(&mut DcFieldIndex) -> T) -> T {
         let mut data = self.rc.data().write();
         f(&mut data)
+    }
+    pub fn d_key(&self) -> &PrimaryIndexKey {
+        &self.pk
+    }
+    pub fn d_data(&self) -> &RwLock<DcFieldIndex> {
+        self.rc.data()
     }
 }
 

@@ -46,6 +46,7 @@ use {
     },
     crossbeam_epoch::CompareExchangeError,
     std::{
+        fmt,
         hash::Hash,
         hash::{BuildHasher, Hasher},
         marker::PhantomData,
@@ -724,5 +725,16 @@ impl<T, C: Config> Drop for RawTree<T, C> {
             Self::rdrop(&self.root);
         }
         gc(&cpin())
+    }
+}
+
+impl<T: TreeElement, C: Config> fmt::Debug for RawTree<T, C>
+where
+    T::Key: fmt::Debug,
+    T::Value: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let g = cpin();
+        f.debug_map().entries(self.iter_kv(&g)).finish()
     }
 }

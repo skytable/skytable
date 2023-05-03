@@ -1,5 +1,5 @@
 /*
- * Created on Sat Apr 08 2023
+ * Created on Tue May 02 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,34 +24,44 @@
  *
 */
 
-mod key;
-mod row;
+/*
+    ☢ ISOLATION WARNING ☢
+    ----------------
+    I went with a rather suboptimal solution for v1. Once we have CC
+    we can do much better (at the cost of more complexity, ofcourse).
+
+    We'll roll that out in 0.8.1, I think.
+
+    FIXME(@ohsayan): Fix this
+*/
 
 use {
-    crate::engine::{
-        idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
-        sync::atm::Guard,
-    },
-    parking_lot::RwLock,
+    crate::engine::core::index::{DcFieldIndex, PrimaryIndexKey, Row},
+    parking_lot::RwLockReadGuard,
 };
 
-pub use {
-    key::PrimaryIndexKey,
-    row::{DcFieldIndex, Row},
-};
-
-#[derive(Debug)]
-pub struct PrimaryIndex {
-    data: IndexMTRaw<row::Row>,
+pub struct RowSnapshot<'a> {
+    key: &'a PrimaryIndexKey,
+    data: RwLockReadGuard<'a, DcFieldIndex>,
 }
 
-impl PrimaryIndex {
-    pub fn new_empty() -> Self {
+impl<'a> RowSnapshot<'a> {
+    /// The moment you take a snapshot, you essentially "freeze" the row and prevent any changes from happening.
+    ///
+    /// HOWEVER: This is very inefficient subject to isolation level scrutiny
+    #[inline(always)]
+    pub fn snapshot(row: &'a Row) -> RowSnapshot<'a> {
         Self {
-            data: IndexMTRaw::idx_init(),
+            key: row.d_key(),
+            data: row.d_data().read(),
         }
     }
-    pub fn insert(&self, key: PrimaryIndexKey, data: row::DcFieldIndex, g: &Guard) -> bool {
-        self.data.mt_insert(key, RwLock::new(data), g)
+    #[inline(always)]
+    pub fn row_key(&self) -> &'a PrimaryIndexKey {
+        self.key
+    }
+    #[inline(always)]
+    pub fn row_data(&self) -> &DcFieldIndex {
+        &self.data
     }
 }

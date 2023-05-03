@@ -235,9 +235,10 @@ impl EArc {
 
 /// The core atomic reference counter implementation. All smart pointers use this inside
 pub struct RawRC<T> {
-    hptr: NonNull<RawRCData<T>>,
+    rc_data: NonNull<RawRCData<T>>,
 }
 
+#[derive(Debug)]
 struct RawRCData<T> {
     rc: AtomicUsize,
     data: T,
@@ -252,7 +253,7 @@ impl<T> RawRC<T> {
     /// bug: memory leaks and we don't want that. So, it is upto the caller to clean this up
     pub unsafe fn new(data: T) -> Self {
         Self {
-            hptr: NonNull::new_unchecked(Box::leak(Box::new(RawRCData {
+            rc_data: NonNull::new_unchecked(Box::leak(Box::new(RawRCData {
                 rc: AtomicUsize::new(1),
                 data,
             }))),
@@ -261,13 +262,13 @@ impl<T> RawRC<T> {
     pub fn data(&self) -> &T {
         unsafe {
             // UNSAFE(@ohsayan): we believe in the power of barriers!
-            &(*self.hptr.as_ptr()).data
+            &(*self.rc_data.as_ptr()).data
         }
     }
     fn _rc(&self) -> &AtomicUsize {
         unsafe {
             // UNSAFE(@ohsayan): we believe in the power of barriers!
-            &(*self.hptr.as_ptr()).rc
+            &(*self.rc_data.as_ptr()).rc
         }
     }
     /// ## Safety
@@ -299,6 +300,17 @@ impl<T> RawRC<T> {
         // deallocate object
         dropfn();
         // deallocate rc
-        drop(Box::from_raw(self.hptr.as_ptr()));
+        drop(Box::from_raw(self.rc_data.as_ptr()));
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for RawRC<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawRC")
+            .field("rc_data", unsafe {
+                // UNSAFE(@ohsayan): rc guard
+                self.rc_data.as_ref()
+            })
+            .finish()
     }
 }
