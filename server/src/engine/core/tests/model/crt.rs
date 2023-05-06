@@ -28,7 +28,7 @@ mod validation {
     use {
         super::super::create,
         crate::engine::{
-            core::model::{Field, Layer},
+            core::model::{DeltaVersion, Field, Layer},
             data::tag::{DataTag, FullTag},
             error::DatabaseError,
             idx::STIndexSeq,
@@ -52,6 +52,10 @@ mod validation {
                 Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false)
             ]
         );
+        assert_eq!(
+            model.delta_state().current_version(),
+            DeltaVersion::genesis()
+        );
     }
 
     #[test]
@@ -71,6 +75,10 @@ mod validation {
                 Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false),
                 Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
             ]
+        );
+        assert_eq!(
+            model.delta_state().current_version(),
+            DeltaVersion::genesis()
         );
     }
 
@@ -125,7 +133,7 @@ mod validation {
 mod exec {
     use crate::engine::{
         core::{
-            model::{Field, Layer},
+            model::{DeltaVersion, Field, Layer},
             tests::model::{exec_create_new_space, with_model},
             GlobalNS,
         },
@@ -164,6 +172,10 @@ mod exec {
                         Field::new([Layer::bin()].into(), false)
                     )
                 ]
+            );
+            assert_eq!(
+                model.delta_state().current_version(),
+                DeltaVersion::genesis()
             );
         });
     }

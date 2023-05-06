@@ -25,5 +25,3 @@
 */
 
 mod ins;
-// result
-mod result_set;

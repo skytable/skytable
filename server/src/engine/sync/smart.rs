@@ -81,6 +81,24 @@ impl PartialEq<str> for StrRC {
     }
 }
 
+impl From<String> for StrRC {
+    fn from(s: String) -> Self {
+        Self::from_bx(s.into_boxed_str())
+    }
+}
+
+impl From<Box<str>> for StrRC {
+    fn from(bx: Box<str>) -> Self {
+        Self::from_bx(bx)
+    }
+}
+
+impl<'a> From<&'a str> for StrRC {
+    fn from(str: &'a str) -> Self {
+        Self::from_bx(str.to_string().into_boxed_str())
+    }
+}
+
 impl Deref for StrRC {
     type Target = str;
     fn deref(&self) -> &Self::Target {

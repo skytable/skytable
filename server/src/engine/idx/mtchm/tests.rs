@@ -106,7 +106,7 @@ fn get_empty() {
 #[test]
 fn update_empty() {
     let idx = ChmU8::idx_init();
-    assert!(!idx.mt_update(10, 20, &cpin()));
+    assert!(!idx.mt_update((10, 20), &cpin()));
 }
 
 const SPAM_QCOUNT: usize = if crate::util::IS_ON_CI {
@@ -234,7 +234,7 @@ fn _action_put<C: Config>(
     let _token = token.acquire_permit();
     let g = cpin();
     data.into_iter().for_each(|(k, v)| {
-        assert!(idx.mt_insert(k, v, &g));
+        assert!(idx.mt_insert((k, v), &g));
     });
 }
 fn _verify_eq<C: Config>(
@@ -283,7 +283,7 @@ fn multispam_update() {
             let _permit = tok.acquire_permit();
             chunk.into_iter().for_each(|(k, v)| {
                 let ret = idx
-                    .mt_update_return(k.clone(), v, &g)
+                    .mt_update_return((k.clone(), v), &g)
                     .expect(&format!("couldn't find key: {}", k));
                 assert_eq!(
                     ret.as_str().parse::<usize>().unwrap(),

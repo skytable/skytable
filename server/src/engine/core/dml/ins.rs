@@ -41,7 +41,10 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
         let irmwd = mdl.intent_write_new_data();
         let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
         let g = cpin();
-        if mdl.primary_index().insert(pk, data, &g) {
+        if mdl
+            .primary_index()
+            .insert(pk, data, mdl.delta_state().current_version(), &g)
+        {
             Ok(())
         } else {
             Err(DatabaseError::DmlConstraintViolationDuplicate)

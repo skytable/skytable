@@ -25,11 +25,13 @@
 */
 
 pub(super) mod alt;
+mod delta;
 
 #[cfg(test)]
 use std::cell::RefCell;
 
 use {
+    self::delta::{IRModel, IRModelSMData, ISyncMatrix, IWModel},
     super::{index::PrimaryIndex, util::EntityLocator},
     crate::engine::{
         data::{
@@ -45,10 +47,10 @@ use {
             syn::{FieldSpec, LayerSpec},
         },
     },
-    core::cell::UnsafeCell,
-    parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+    std::cell::UnsafeCell,
 };
 
+pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersion};
 pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
@@ -58,6 +60,7 @@ pub struct ModelView {
     fields: UnsafeCell<Fields>,
     sync_matrix: ISyncMatrix,
     data: PrimaryIndex,
+    delta: DeltaState,
 }
 
 #[cfg(test)]
@@ -114,6 +117,9 @@ impl ModelView {
     pub fn primary_index(&self) -> &PrimaryIndex {
         &self.data
     }
+    pub fn delta_state(&self) -> &DeltaState {
+        &self.delta
+    }
 }
 
 impl ModelView {
@@ -156,6 +162,7 @@ impl ModelView {
                     fields: UnsafeCell::new(fields),
                     sync_matrix: ISyncMatrix::new(),
                     data: PrimaryIndex::new_empty(),
+                    delta: DeltaState::new_resolved(),
                 });
             }
         }
@@ -473,101 +480,4 @@ unsafe fn lverify_str(_: Layer, _: &Datacell) -> bool {
 unsafe fn lverify_list(_: Layer, _: &Datacell) -> bool {
     layertrace("list");
     true
-}
-
-// FIXME(@ohsayan): This an inefficient repr of the matrix; replace it with my other design
-#[derive(Debug)]
-pub struct ISyncMatrix {
-    // virtual privileges
-    /// read/write model
-    v_priv_model_alter: RwLock<()>,
-    /// RW data/block all
-    v_priv_data_new_or_revise: RwLock<()>,
-}
-
-#[cfg(test)]
-impl PartialEq for ISyncMatrix {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-#[derive(Debug)]
-pub struct IRModelSMData<'a> {
-    rmodel: RwLockReadGuard<'a, ()>,
-    mdata: RwLockReadGuard<'a, ()>,
-    fields: &'a Fields,
-}
-
-impl<'a> IRModelSMData<'a> {
-    pub fn new(m: &'a ModelView) -> Self {
-        let rmodel = m.sync_matrix().v_priv_model_alter.read();
-        let mdata = m.sync_matrix().v_priv_data_new_or_revise.read();
-        Self {
-            rmodel,
-            mdata,
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we already have acquired this resource
-                m._read_fields()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-}
-
-#[derive(Debug)]
-pub struct IRModel<'a> {
-    rmodel: RwLockReadGuard<'a, ()>,
-    fields: &'a Fields,
-}
-
-impl<'a> IRModel<'a> {
-    pub fn new(m: &'a ModelView) -> Self {
-        Self {
-            rmodel: m.sync_matrix().v_priv_model_alter.read(),
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we already have acquired this resource
-                m._read_fields()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-}
-
-#[derive(Debug)]
-pub struct IWModel<'a> {
-    wmodel: RwLockWriteGuard<'a, ()>,
-    fields: &'a mut Fields,
-}
-
-impl<'a> IWModel<'a> {
-    pub fn new(m: &'a ModelView) -> Self {
-        Self {
-            wmodel: m.sync_matrix().v_priv_model_alter.write(),
-            fields: unsafe {
-                // UNSAFE(@ohsayan): we have exclusive access to this resource
-                m._read_fields_mut()
-            },
-        }
-    }
-    pub fn fields(&'a self) -> &'a Fields {
-        self.fields
-    }
-    // ALIASING
-    pub fn fields_mut(&mut self) -> &mut Fields {
-        self.fields
-    }
-}
-
-impl ISyncMatrix {
-    pub const fn new() -> Self {
-        Self {
-            v_priv_model_alter: RwLock::new(()),
-            v_priv_data_new_or_revise: RwLock::new(()),
-        }
-    }
 }

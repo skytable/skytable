@@ -36,13 +36,13 @@
 */
 
 use {
-    crate::engine::core::index::{DcFieldIndex, PrimaryIndexKey, Row},
+    crate::engine::core::index::{DcFieldIndex, PrimaryIndexKey, Row, RowData},
     parking_lot::RwLockReadGuard,
 };
 
 pub struct RowSnapshot<'a> {
     key: &'a PrimaryIndexKey,
-    data: RwLockReadGuard<'a, DcFieldIndex>,
+    data: RwLockReadGuard<'a, RowData>,
 }
 
 impl<'a> RowSnapshot<'a> {
@@ -51,10 +51,10 @@ impl<'a> RowSnapshot<'a> {
     /// HOWEVER: This is very inefficient subject to isolation level scrutiny
     #[inline(always)]
     pub fn snapshot(row: &'a Row) -> RowSnapshot<'a> {
-        Self {
-            key: row.d_key(),
-            data: row.d_data().read(),
-        }
+        Self::new_manual(row.d_key(), row.d_data().read())
+    }
+    pub fn new_manual(key: &'a PrimaryIndexKey, data: RwLockReadGuard<'a, RowData>) -> Self {
+        Self { key, data }
     }
     #[inline(always)]
     pub fn row_key(&self) -> &'a PrimaryIndexKey {
@@ -62,6 +62,6 @@ impl<'a> RowSnapshot<'a> {
     }
     #[inline(always)]
     pub fn row_data(&self) -> &DcFieldIndex {
-        &self.data
+        &self.data.fields()
     }
 }

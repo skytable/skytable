@@ -127,7 +127,7 @@ pub trait IndexBaseSpec: Sized {
 }
 
 /// An unordered MTIndex
-pub trait MTIndex<K, V>: IndexBaseSpec {
+pub trait MTIndex<E, K, V>: IndexBaseSpec {
     type IterKV<'t, 'g, 'v>: Iterator<Item = (&'v K, &'v V)>
     where
         'g: 't + 'v,
@@ -154,11 +154,11 @@ pub trait MTIndex<K, V>: IndexBaseSpec {
     // write
     /// Returns true if the entry was inserted successfully; returns false if the uniqueness constraint is
     /// violated
-    fn mt_insert(&self, key: K, val: V, g: &Guard) -> bool
+    fn mt_insert(&self, e: E, g: &Guard) -> bool
     where
         V: AsValue;
     /// Updates or inserts the given value
-    fn mt_upsert(&self, key: K, val: V, g: &Guard)
+    fn mt_upsert(&self, e: E, g: &Guard)
     where
         V: AsValue;
     // read
@@ -178,12 +178,12 @@ pub trait MTIndex<K, V>: IndexBaseSpec {
         V: AsValueClone;
     // update
     /// Returns true if the entry is updated
-    fn mt_update(&self, key: K, val: V, g: &Guard) -> bool
+    fn mt_update(&self, e: E, g: &Guard) -> bool
     where
         K: AsKeyClone,
         V: AsValue;
     /// Updates the entry and returns the old value, if it exists
-    fn mt_update_return<'t, 'g, 'v>(&'t self, key: K, val: V, g: &'g Guard) -> Option<&'v V>
+    fn mt_update_return<'t, 'g, 'v>(&'t self, e: E, g: &'g Guard) -> Option<&'v V>
     where
         K: AsKeyClone,
         V: AsValue,

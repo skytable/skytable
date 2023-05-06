@@ -34,7 +34,7 @@ use {
                 DictEntryGeneric,
             },
             error::{DatabaseError, DatabaseResult},
-            idx::{IndexST, IndexSTSeqCns, STIndex},
+            idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             ql::{
                 ast::Entity,
                 ddl::{
@@ -263,16 +263,24 @@ impl ModelView {
             match plan.action {
                 AlterAction::Ignore => drop(iwm),
                 AlterAction::Add(new_fields) => {
+                    let mut guard = model.delta_state().wguard();
                     // TODO(@ohsayan): this impacts lockdown duration; fix it
                     new_fields
-                        .st_iter_kv()
+                        .stseq_ord_kv()
                         .map(|(x, y)| (x.clone(), y.clone()))
                         .for_each(|(field_id, field)| {
+                            model
+                                .delta_state()
+                                .append_unresolved_wl_field_add(&mut guard, &field_id);
                             iwm.fields_mut().st_insert(field_id, field);
                         });
                 }
                 AlterAction::Remove(remove) => {
+                    let mut guard = model.delta_state().wguard();
                     remove.iter().for_each(|field_id| {
+                        model
+                            .delta_state()
+                            .append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
                         iwm.fields_mut().st_delete(field_id.as_str());
                     });
                 }

@@ -47,6 +47,7 @@ pub type ChmCopy<K, V, C> = Raw<(K, V), C>;
 impl<E, C: Config> IndexBaseSpec for Raw<E, C> {
     const PREALLOC: bool = false;
 
+    #[cfg(debug_assertions)]
     type Metrics = CHTRuntimeLog;
 
     fn idx_init() -> Self {
@@ -57,12 +58,13 @@ impl<E, C: Config> IndexBaseSpec for Raw<E, C> {
         s
     }
 
+    #[cfg(debug_assertions)]
     fn idx_metrics(&self) -> &Self::Metrics {
         &self.m
     }
 }
 
-impl<E: TreeElement, C: Config> MTIndex<E::Key, E::Value> for Raw<E, C> {
+impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
     type IterKV<'t, 'g, 'v> = IterKV<'t, 'g, 'v, E, C>
     where
         'g: 't + 'v,
@@ -89,18 +91,18 @@ impl<E: TreeElement, C: Config> MTIndex<E::Key, E::Value> for Raw<E, C> {
         self.nontransactional_clear(g)
     }
 
-    fn mt_insert(&self, key: E::Key, val: E::Value, g: &Guard) -> bool
+    fn mt_insert(&self, e: E, g: &Guard) -> bool
     where
         E::Value: AsValue,
     {
-        self.patch(VanillaInsert(E::new(key, val)), g)
+        self.patch(VanillaInsert(e), g)
     }
 
-    fn mt_upsert(&self, key: E::Key, val: E::Value, g: &Guard)
+    fn mt_upsert(&self, e: E, g: &Guard)
     where
         E::Value: AsValue,
     {
-        self.patch(VanillaUpsert(E::new(key, val)), g)
+        self.patch(VanillaUpsert(e), g)
     }
 
     fn mt_contains<Q>(&self, key: &Q, g: &Guard) -> bool
@@ -127,27 +129,22 @@ impl<E: TreeElement, C: Config> MTIndex<E::Key, E::Value> for Raw<E, C> {
         self.get(key, g).cloned()
     }
 
-    fn mt_update(&self, key: E::Key, val: E::Value, g: &Guard) -> bool
+    fn mt_update(&self, e: E, g: &Guard) -> bool
     where
         E::Key: AsKeyClone,
         E::Value: AsValue,
     {
-        self.patch(VanillaUpdate(E::new(key, val)), g)
+        self.patch(VanillaUpdate(e), g)
     }
 
-    fn mt_update_return<'t, 'g, 'v>(
-        &'t self,
-        key: E::Key,
-        val: E::Value,
-        g: &'g Guard,
-    ) -> Option<&'v E::Value>
+    fn mt_update_return<'t, 'g, 'v>(&'t self, e: E, g: &'g Guard) -> Option<&'v E::Value>
     where
         E::Key: AsKeyClone,
         E::Value: AsValue,
         't: 'v,
         'g: 't + 'v,
     {
-        self.patch(VanillaUpdateRet(E::new(key, val)), g)
+        self.patch(VanillaUpdateRet(e), g)
     }
 
     fn mt_delete<Q>(&self, key: &Q, g: &Guard) -> bool

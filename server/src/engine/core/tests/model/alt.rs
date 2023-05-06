@@ -343,9 +343,73 @@ mod plan {
 }
 
 mod exec {
-    use crate::engine::{core::GlobalNS, error::DatabaseError, idx::STIndex};
+    use crate::engine::{
+        core::{
+            model::{DeltaVersion, Field, Layer},
+            GlobalNS,
+        },
+        error::DatabaseError,
+        idx::{STIndex, STIndexSeq},
+    };
     #[test]
-    fn simple_alter() {
+    fn simple_add() {
+        let gns = GlobalNS::empty();
+        super::exec_plan(
+            &gns,
+            true,
+            "create model myspace.mymodel(username: string, col1: uint64)",
+            "alter model myspace.mymodel add (col2 { type: uint32, nullable: true }, col3 { type: uint16, nullable: true })",
+            |model| {
+                let schema = model.intent_read_model();
+                assert_eq!(
+                    schema
+                        .fields()
+                        .stseq_ord_kv()
+                        .rev()
+                        .take(2)
+                        .map(|(id, f)| (id.clone(), f.clone()))
+                        .collect::<Vec<_>>(),
+                    [
+                        ("col3".into(), Field::new([Layer::uint16()].into(), true)),
+                        ("col2".into(), Field::new([Layer::uint32()].into(), true))
+                    ]
+                );
+                assert_eq!(
+                    model.delta_state().current_version(),
+                    DeltaVersion::test_new(2)
+                );
+            },
+        )
+        .unwrap();
+    }
+    #[test]
+    fn simple_remove() {
+        let gns = GlobalNS::empty();
+        super::exec_plan(
+            &gns,
+            true,
+            "create model myspace.mymodel(username: string, col1: uint64, col2: uint32, col3: uint16, col4: uint8)",
+            "alter model myspace.mymodel remove (col1, col2, col3, col4)",
+            |mdl| {
+                let schema = mdl.intent_read_model();
+                assert_eq!(
+                    schema
+                        .fields()
+                        .stseq_ord_kv()
+                        .rev()
+                        .map(|(a, b)| (a.clone(), b.clone()))
+                        .collect::<Vec<_>>(),
+                    [("username".into(), Field::new([Layer::str()].into(), false))]
+                );
+                assert_eq!(
+                    mdl.delta_state().current_version(),
+                    DeltaVersion::test_new(4)
+                );
+            }
+        ).unwrap();
+    }
+    #[test]
+    fn simple_update() {
         let gns = GlobalNS::empty();
         super::exec_plan(
             &gns,
@@ -355,6 +419,10 @@ mod exec {
             |model| {
                 let schema = model.intent_read_model();
                 assert!(schema.fields().st_get("password").unwrap().is_nullable());
+                assert_eq!(
+                    model.delta_state().current_version(),
+                    DeltaVersion::genesis()
+                );
             },
         )
         .unwrap();

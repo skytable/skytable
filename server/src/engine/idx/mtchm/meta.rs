@@ -71,15 +71,23 @@ impl<T: AsHasher> PreConfig for Config2B<T> {
 
 pub trait TreeElement: Clone + 'static {
     type Key: AsKey;
+    type IKey;
     type Value: AsValue;
+    type IValue;
+    type VEx1;
+    type VEx2;
     fn key(&self) -> &Self::Key;
     fn val(&self) -> &Self::Value;
-    fn new(k: Self::Key, v: Self::Value) -> Self;
+    fn new(k: Self::IKey, v: Self::IValue, vex1: Self::VEx1, vex2: Self::VEx2) -> Self;
 }
 
 impl<K: AsKeyClone, V: AsValueClone> TreeElement for (K, V) {
+    type IKey = K;
     type Key = K;
+    type IValue = V;
     type Value = V;
+    type VEx1 = ();
+    type VEx2 = ();
     #[inline(always)]
     fn key(&self) -> &K {
         &self.0
@@ -88,14 +96,18 @@ impl<K: AsKeyClone, V: AsValueClone> TreeElement for (K, V) {
     fn val(&self) -> &V {
         &self.1
     }
-    fn new(k: Self::Key, v: Self::Value) -> Self {
+    fn new(k: Self::Key, v: Self::Value, _: (), _: ()) -> Self {
         (k, v)
     }
 }
 
 impl<K: AsKey, V: AsValue> TreeElement for Arc<(K, V)> {
+    type IKey = K;
     type Key = K;
+    type IValue = V;
     type Value = V;
+    type VEx1 = ();
+    type VEx2 = ();
     #[inline(always)]
     fn key(&self) -> &K {
         &self.0
@@ -104,7 +116,7 @@ impl<K: AsKey, V: AsValue> TreeElement for Arc<(K, V)> {
     fn val(&self) -> &V {
         &self.1
     }
-    fn new(k: Self::Key, v: Self::Value) -> Self {
+    fn new(k: Self::Key, v: Self::Value, _: (), _: ()) -> Self {
         Arc::new((k, v))
     }
 }

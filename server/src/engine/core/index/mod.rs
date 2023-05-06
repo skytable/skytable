@@ -25,19 +25,18 @@
 */
 
 mod key;
+mod result_set;
 mod row;
 
-use {
-    crate::engine::{
-        idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
-        sync::atm::Guard,
-    },
-    parking_lot::RwLock,
+use crate::engine::{
+    core::model::DeltaVersion,
+    idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
+    sync::atm::Guard,
 };
 
 pub use {
     key::PrimaryIndexKey,
-    row::{DcFieldIndex, Row},
+    row::{DcFieldIndex, Row, RowData},
 };
 
 #[derive(Debug)]
@@ -51,7 +50,14 @@ impl PrimaryIndex {
             data: IndexMTRaw::idx_init(),
         }
     }
-    pub fn insert(&self, key: PrimaryIndexKey, data: row::DcFieldIndex, g: &Guard) -> bool {
-        self.data.mt_insert(key, RwLock::new(data), g)
+    pub fn insert(
+        &self,
+        key: PrimaryIndexKey,
+        data: row::DcFieldIndex,
+        delta_version: DeltaVersion,
+        g: &Guard,
+    ) -> bool {
+        self.data
+            .mt_insert(Row::new(key, data, delta_version, delta_version), g)
     }
 }
