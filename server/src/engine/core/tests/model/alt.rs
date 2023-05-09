@@ -26,7 +26,7 @@
 
 use crate::engine::{
     core::{
-        model::{alt::AlterPlan, ModelView},
+        model::{alt::AlterPlan, ModelData},
         tests::model::{create, exec_create},
         GlobalNS,
     },
@@ -51,13 +51,13 @@ fn exec_plan(
     new_space: bool,
     model: &str,
     plan: &str,
-    f: impl Fn(&ModelView),
+    f: impl Fn(&ModelData),
 ) -> DatabaseResult<()> {
     exec_create(gns, model, new_space)?;
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     let (_space, model_name) = alter.model.into_full().unwrap();
-    ModelView::exec_alter(gns, alter)?;
+    ModelData::exec_alter(gns, alter)?;
     let gns_read = gns.spaces().read();
     let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();

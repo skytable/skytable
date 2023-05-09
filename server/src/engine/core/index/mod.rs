@@ -25,11 +25,11 @@
 */
 
 mod key;
-mod result_set;
 mod row;
 
 use crate::engine::{
     core::model::DeltaVersion,
+    data::lit::LitIR,
     idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
     sync::atm::Guard,
 };
@@ -59,5 +59,15 @@ impl PrimaryIndex {
     ) -> bool {
         self.data
             .mt_insert(Row::new(key, data, delta_version, delta_version), g)
+    }
+    pub fn remove<'a>(&self, key: LitIR<'a>, g: &Guard) -> bool {
+        self.data.mt_delete(&key, g)
+    }
+    pub fn select<'a, 'v, 't: 'v, 'g: 't>(
+        &'t self,
+        key: LitIR<'a>,
+        g: &'g Guard,
+    ) -> Option<&'v Row> {
+        self.data.mt_get_element(&key, g)
     }
 }

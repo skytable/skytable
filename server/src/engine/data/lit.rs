@@ -271,6 +271,7 @@ impl<'a, T: DataspecMethods1D> PartialEq<T> for LitIR<'a> {
         <Self as DataspecMethods1D>::self_eq(self, other)
     }
 }
+
 impl<'a> fmt::Debug for LitIR<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("LitIR");

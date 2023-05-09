@@ -34,7 +34,7 @@ mod util;
 mod tests;
 // imports
 use {
-    self::{model::ModelView, util::EntityLocator},
+    self::{model::ModelData, util::EntityLocator},
     crate::engine::{
         core::space::Space,
         error::{DatabaseError, DatabaseResult},
@@ -81,7 +81,7 @@ impl GlobalNS {
     }
     pub fn with_model<'a, T, E, F>(&self, entity: E, f: F) -> DatabaseResult<T>
     where
-        F: FnOnce(&ModelView) -> DatabaseResult<T>,
+        F: FnOnce(&ModelData) -> DatabaseResult<T>,
         E: 'a + EntityLocator<'a>,
     {
         entity

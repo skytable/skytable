@@ -29,16 +29,16 @@ mod crt;
 mod layer;
 
 use crate::engine::{
-    core::{model::ModelView, space::Space, GlobalNS},
+    core::{model::ModelData, space::Space, GlobalNS},
     error::DatabaseResult,
     idx::STIndex,
     ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
 };
 
-fn create(s: &str) -> DatabaseResult<ModelView> {
+fn create(s: &str) -> DatabaseResult<ModelData> {
     let tok = lex_insecure(s.as_bytes()).unwrap();
     let create_model = parse_ast_node_full(&tok[2..]).unwrap();
-    ModelView::process_create(create_model)
+    ModelData::process_create(create_model)
 }
 
 pub fn exec_create(
@@ -51,7 +51,7 @@ pub fn exec_create(
     if create_new_space {
         gns.test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
     }
-    ModelView::exec_create(gns, create_model)
+    ModelData::exec_create(gns, create_model)
 }
 
 pub fn exec_create_new_space(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
@@ -68,7 +68,7 @@ fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {
     f(space);
 }
 
-fn with_model(gns: &GlobalNS, space_id: &str, model_name: &str, f: impl Fn(&ModelView)) {
+fn with_model(gns: &GlobalNS, space_id: &str, model_name: &str, f: impl Fn(&ModelData)) {
     with_space(gns, space_id, |space| {
         let space_rl = space.models().read();
         let model = space_rl.st_get(model_name).unwrap();

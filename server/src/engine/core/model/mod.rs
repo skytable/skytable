@@ -39,7 +39,7 @@ use {
             tag::{DataTag, FullTag, TagClass, TagSelector},
         },
         error::{DatabaseError, DatabaseResult},
-        idx::{IndexSTSeqCns, STIndex, STIndexSeq},
+        idx::{IndexBaseSpec, IndexSTCOrdRC, STIndex, STIndexSeq},
         mem::VInline,
         ql::ddl::{
             crt::CreateModel,
@@ -51,10 +51,10 @@ use {
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersion};
-pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
+pub(in crate::engine::core) type Fields = IndexSTCOrdRC<Box<str>, Field>;
 
 #[derive(Debug)]
-pub struct ModelView {
+pub struct ModelData {
     p_key: Box<str>,
     p_tag: FullTag,
     fields: UnsafeCell<Fields>,
@@ -64,7 +64,7 @@ pub struct ModelView {
 }
 
 #[cfg(test)]
-impl PartialEq for ModelView {
+impl PartialEq for ModelData {
     fn eq(&self, m: &Self) -> bool {
         let mdl1 = self.intent_read_model();
         let mdl2 = m.intent_read_model();
@@ -72,7 +72,7 @@ impl PartialEq for ModelView {
     }
 }
 
-impl ModelView {
+impl ModelData {
     pub fn p_key(&self) -> &str {
         &self.p_key
     }
@@ -122,7 +122,7 @@ impl ModelView {
     }
 }
 
-impl ModelView {
+impl ModelData {
     pub fn process_create(
         CreateModel {
             model_name: _,
@@ -133,7 +133,7 @@ impl ModelView {
         let mut okay = props.is_empty() & !fields.is_empty();
         // validate fields
         let mut field_spec = fields.into_iter();
-        let mut fields = IndexSTSeqCns::with_capacity(field_spec.len());
+        let mut fields = Fields::idx_init_cap(field_spec.len());
         let mut last_pk = None;
         let mut pk_cnt = 0;
         while (field_spec.len() != 0) & okay {
@@ -170,7 +170,7 @@ impl ModelView {
     }
 }
 
-impl ModelView {
+impl ModelData {
     pub fn exec_create(gns: &super::GlobalNS, stmt: CreateModel) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;

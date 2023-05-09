@@ -74,8 +74,11 @@ impl<'a> RelationalExpr<'a> {
     pub(super) const OP_GE: u8 = 4;
     pub(super) const OP_LT: u8 = 5;
     pub(super) const OP_LE: u8 = 6;
-    fn filter_hint_none(&self) -> bool {
+    pub fn filter_hint_none(&self) -> bool {
         self.opc == Self::OP_EQ
+    }
+    pub fn rhs(&self) -> LitIR<'a> {
+        self.rhs.clone()
     }
     #[inline(always)]
     fn parse_operator<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> u8 {
@@ -127,6 +130,9 @@ impl<'a> WhereClause<'a> {
     pub(super) fn new(c: WhereClauseCollection<'a>) -> Self {
         Self { c }
     }
+    pub fn clauses_mut(&mut self) -> &mut WhereClauseCollection<'a> {
+        &mut self.c
+    }
     #[inline(always)]
     fn parse_where_and_append_to<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
@@ -151,6 +157,9 @@ impl<'a> WhereClause<'a> {
         Self::parse_where_and_append_to(state, &mut c);
         state.poison_if(c.is_empty());
         Self { c }
+    }
+    pub fn clauses(&self) -> &WhereClauseCollection {
+        &self.c
     }
 }
 

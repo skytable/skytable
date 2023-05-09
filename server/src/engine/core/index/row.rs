@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{key::PrimaryIndexKey, result_set::RowSnapshot},
+    super::key::PrimaryIndexKey,
     crate::{
         engine::{
             core::model::{DeltaKind, DeltaState, DeltaVersion},
@@ -35,7 +35,7 @@ use {
         },
         util::compiler,
     },
-    parking_lot::{RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard},
+    parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard},
     std::mem::ManuallyDrop,
 };
 
@@ -48,7 +48,7 @@ pub struct Row {
     rc: RawRC<RwLock<RowData>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RowData {
     fields: DcFieldIndex,
     txn_revised: DeltaVersion,
@@ -119,14 +119,14 @@ impl Row {
 }
 
 impl Row {
-    pub fn resolve_deltas_and_freeze<'g>(&'g self, delta_state: &DeltaState) -> RowSnapshot<'g> {
+    pub fn resolve_deltas_and_freeze<'g>(
+        &'g self,
+        delta_state: &DeltaState,
+    ) -> RwLockReadGuard<'g, RowData> {
         let rwl_ug = self.d_data().upgradable_read();
         let current_version = delta_state.current_version();
         if compiler::likely(current_version <= rwl_ug.txn_revised) {
-            return RowSnapshot::new_manual(
-                self.d_key(),
-                RwLockUpgradableReadGuard::downgrade(rwl_ug),
-            );
+            return RwLockUpgradableReadGuard::downgrade(rwl_ug);
         }
         // we have deltas to apply
         let mut wl = RwLockUpgradableReadGuard::upgrade(rwl_ug);
@@ -144,7 +144,7 @@ impl Row {
             max_delta = *delta_id;
         }
         wl.txn_revised = max_delta;
-        return RowSnapshot::new_manual(self.d_key(), RwLockWriteGuard::downgrade(wl));
+        return RwLockWriteGuard::downgrade(wl);
     }
 }
 

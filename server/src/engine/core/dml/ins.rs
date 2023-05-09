@@ -27,7 +27,7 @@
 use crate::engine::{
     core::{
         index::{DcFieldIndex, PrimaryIndexKey},
-        model::{Fields, ModelView},
+        model::{Fields, ModelData},
         GlobalNS,
     },
     error::{DatabaseError, DatabaseResult},
@@ -53,7 +53,7 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
 }
 
 fn prepare_insert(
-    model: &ModelView,
+    model: &ModelData,
     fields: &Fields,
     insert: InsertData,
 ) -> DatabaseResult<(PrimaryIndexKey, DcFieldIndex)> {

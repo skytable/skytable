@@ -124,4 +124,8 @@ pub enum DatabaseError {
     DmlConstraintViolationDuplicate,
     /// data validation error
     DmlDataValidationError,
+    /// The expression in a where clause is not indexed (in the way the expression expects it to be)
+    DmlWhereClauseUnindexedExpr,
+    /// The entry was not found
+    DmlEntryNotFound,
 }

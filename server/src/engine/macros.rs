@@ -145,3 +145,9 @@ macro_rules! into_dict {
         .collect()
     }};
 }
+
+#[cfg(test)]
+#[allow(unused_macros)]
+macro_rules! into_vec {
+    ($($val:expr),* $(,)?) => { vec![$(::core::convert::From::from($val),)*]};
+}

@@ -219,6 +219,7 @@ unsafe impl<T: Send> Send for SliceRC<T> {}
 unsafe impl<T: Sync> Sync for SliceRC<T> {}
 
 /// A simple rc
+#[derive(Debug)]
 pub struct EArc {
     base: RawRC<()>,
 }

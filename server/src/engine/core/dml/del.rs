@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 01 2023
+ * Created on Sat May 06 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,31 +24,23 @@
  *
 */
 
-mod del;
-mod ins;
-
 use crate::engine::{
-    core::model::ModelData,
-    data::{lit::LitIR, spec::DataspecMeta1D, tag::DataTag},
+    core::GlobalNS,
     error::{DatabaseError, DatabaseResult},
-    ql::dml::WhereClause,
+    ql::dml::del::DeleteStatement,
+    sync,
 };
 
-pub use {del::delete, ins::insert};
-
-impl ModelData {
-    pub(self) fn resolve_where<'a>(
-        &self,
-        where_clause: &mut WhereClause<'a>,
-    ) -> DatabaseResult<LitIR<'a>> {
-        match where_clause.clauses_mut().remove(self.p_key().as_bytes()) {
-            Some(clause)
-                if clause.filter_hint_none()
-                    & (clause.rhs().kind().tag_unique() == self.p_tag().tag_unique()) =>
-            {
-                Ok(clause.rhs())
-            }
-            _ => Err(DatabaseError::DmlWhereClauseUnindexedExpr),
+pub fn delete(gns: &GlobalNS, mut delete: DeleteStatement) -> DatabaseResult<()> {
+    gns.with_model(delete.entity(), |model| {
+        let g = sync::atm::cpin();
+        if model
+            .primary_index()
+            .remove(model.resolve_where(delete.clauses_mut())?, &g)
+        {
+            Ok(())
+        } else {
+            Err(DatabaseError::DmlEntryNotFound)
         }
-    }
+    })
 }

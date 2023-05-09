@@ -421,6 +421,13 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
     ) -> Option<&'g T::Value> {
         self._lookup(access::RModeRef::new(k), g)
     }
+    fn get_full<'g, Q: ?Sized + Comparable<T::Key>>(
+        &'g self,
+        k: &Q,
+        g: &'g Guard,
+    ) -> Option<&'g T> {
+        self._lookup(access::RModeElementRef::new(k), g)
+    }
     fn _lookup<'g, R: access::ReadMode<T>>(&'g self, r: R, g: &'g Guard) -> R::Ret<'g> {
         let mut hash = self.hash(r.target());
         let mut current = &self.root;

@@ -41,6 +41,8 @@ use {
 
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
+pub type IndexSTCOrdRC<K, V> =
+    stord::shared::OrderedIdxRC<K, V, stord::config::ConservativeConfig<K, V>>;
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;
 pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
 pub type IndexMTRaw<E> = mtchm::imp::Raw<E, mtchm::meta::DefConfig>;
@@ -167,6 +169,11 @@ pub trait MTIndex<E, K, V>: IndexBaseSpec {
         Q: ?Sized + Comparable<K>;
     /// Returns a reference to the value corresponding to the key, if it exists
     fn mt_get<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v V>
+    where
+        Q: ?Sized + Comparable<K>,
+        't: 'v,
+        'g: 't + 'v;
+    fn mt_get_element<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E>
     where
         Q: ?Sized + Comparable<K>,
         't: 'v,

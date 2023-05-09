@@ -93,3 +93,33 @@ impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T> for RModeR
         None
     }
 }
+
+pub struct RModeElementRef<'a, T, U: ?Sized> {
+    target: &'a U,
+    _d: PhantomData<T>,
+}
+
+impl<'a, T, U: ?Sized> RModeElementRef<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _d: PhantomData,
+        }
+    }
+}
+
+impl<'re, T: TreeElement, U: Comparable<T::Key> + ?Sized> ReadMode<T>
+    for RModeElementRef<'re, T, U>
+{
+    type Ret<'a> = Option<&'a T>;
+    type Target = U;
+    fn target(&self) -> &Self::Target {
+        self.target
+    }
+    fn ex(c: &T) -> Self::Ret<'_> {
+        Some(c)
+    }
+    fn nx<'a>() -> Self::Ret<'a> {
+        None
+    }
+}

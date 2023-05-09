@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{Field, IWModel, Layer, ModelView},
+    super::{Field, IWModel, Layer, ModelData},
     crate::{
         engine::{
             core::GlobalNS,
@@ -89,7 +89,7 @@ fn check_nullable(props: &mut HashMap<Box<str>, Option<DictEntryGeneric>>) -> Da
 
 impl<'a> AlterPlan<'a> {
     pub fn fdeltas(
-        mv: &ModelView,
+        mv: &ModelData,
         wm: &IWModel,
         AlterModel { model, kind }: AlterModel<'a>,
     ) -> DatabaseResult<AlterPlan<'a>> {
@@ -246,7 +246,7 @@ impl<'a> AlterPlan<'a> {
     }
 }
 
-impl ModelView {
+impl ModelData {
     pub fn exec_alter(gns: &GlobalNS, alter: AlterModel) -> DatabaseResult<()> {
         gns.with_model(alter.model, |model| {
             // make intent

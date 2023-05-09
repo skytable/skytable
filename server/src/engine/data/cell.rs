@@ -24,6 +24,8 @@
  *
 */
 
+use std::{marker::PhantomData, ops::Deref};
+
 use {
     crate::engine::{
         self,
@@ -236,7 +238,10 @@ impl<'a> From<LitIR<'a>> for Datacell {
                 let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
                 Datacell::new(
                     CUTag::from(l.kind()),
-                    DataRaw::word(WordIO::store((bin.len(), bin.as_mut_ptr()))),
+                    DataRaw::word(DwordQN::dwordqn_store_qw_nw(
+                        bin.len() as u64,
+                        bin.as_mut_ptr() as usize,
+                    )),
                 )
             },
             _ => unsafe {
@@ -308,6 +313,13 @@ impl Datacell {
     }
     unsafe fn _new(tag: CUTag, data: DataRaw, init: bool) -> Self {
         Self { init, tag, data }
+    }
+    pub unsafe fn upgrade_from(a: u64, b: usize, tag: CUTag) -> Self {
+        Self {
+            init: true,
+            tag,
+            data: DataRaw::word(DwordQN::dwordqn_store_qw_nw(a, b)),
+        }
     }
     unsafe fn new(tag: CUTag, data: DataRaw) -> Self {
         Self::_new(tag, data, true)
@@ -416,22 +428,19 @@ impl Clone for Datacell {
             TagClass::Str | TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let mut block = ManuallyDrop::new(self.read_bin().to_owned().into_boxed_slice());
-                DataRaw {
-                    word: ManuallyDrop::new(WordIO::store((block.len(), block.as_mut_ptr()))),
-                }
+                DataRaw::word(DwordQN::dwordqn_store_qw_nw(
+                    block.len() as u64,
+                    block.as_mut_ptr() as usize,
+                ))
             },
             TagClass::List => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is initialized (uninit will not satisfy this class), and we have checked its class
                 let data = self.read_list().read().iter().cloned().collect();
-                DataRaw {
-                    rwl: ManuallyDrop::new(RwLock::new(data)),
-                }
+                DataRaw::rwl(RwLock::new(data))
             },
             _ => unsafe {
                 // UNSAFE(@ohsayan): we have checked that the cell is a stack class
-                DataRaw {
-                    word: ManuallyDrop::new(mem::transmute_copy(&self.data.word)),
-                }
+                DataRaw::word(mem::transmute_copy(&self.data.word))
             },
         };
         unsafe {
@@ -439,4 +448,56 @@ impl Clone for Datacell {
             Self::_new(self.tag, data, self.init)
         }
     }
+}
+
+#[derive(Debug)]
+pub struct VirtualDatacell<'a> {
+    dc: ManuallyDrop<Datacell>,
+    _lt: PhantomData<LitIR<'a>>,
+}
+
+impl<'a> VirtualDatacell<'a> {
+    pub fn new(litir: LitIR<'a>) -> Self {
+        Self {
+            dc: ManuallyDrop::new(unsafe {
+                // UNSAFE(@ohsayan): this is a "reference" to a "virtual" aka fake DC. this just works because of memory layouts
+                Datacell::new(
+                    CUTag::from(litir.kind()),
+                    DataRaw::word(litir.data().dwordqn_promote()),
+                )
+            }),
+            _lt: PhantomData,
+        }
+    }
+}
+
+impl<'a> From<LitIR<'a>> for VirtualDatacell<'a> {
+    fn from(l: LitIR<'a>) -> Self {
+        Self::new(l)
+    }
+}
+
+impl<'a> Deref for VirtualDatacell<'a> {
+    type Target = Datacell;
+    fn deref(&self) -> &Self::Target {
+        &self.dc
+    }
+}
+
+impl<'a> PartialEq<Datacell> for VirtualDatacell<'a> {
+    fn eq(&self, other: &Datacell) -> bool {
+        self.dc.deref() == other
+    }
+}
+
+impl<'a> Clone for VirtualDatacell<'a> {
+    fn clone(&self) -> Self {
+        unsafe { core::mem::transmute_copy(self) }
+    }
+}
+
+#[test]
+fn virtual_dc_damn() {
+    let dc = LitIR::Str("hello, world");
+    assert_eq!(VirtualDatacell::from(dc), Datacell::from("hello, world"));
 }

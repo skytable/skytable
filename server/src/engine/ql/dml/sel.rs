@@ -78,6 +78,21 @@ impl<'a> SelectStatement<'a> {
             clause: WhereClause::new(clauses),
         }
     }
+    pub fn entity(&self) -> Entity<'a> {
+        self.entity
+    }
+    pub fn clauses(&self) -> &WhereClause<'a> {
+        &self.clause
+    }
+    pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
+        &mut self.clause
+    }
+    pub fn is_wildcard(&self) -> bool {
+        self.wildcard
+    }
+    pub fn into_fields(self) -> Vec<Ident<'a>> {
+        self.fields
+    }
 }
 
 impl<'a> SelectStatement<'a> {

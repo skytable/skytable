@@ -121,6 +121,15 @@ impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
         self.get(key, g)
     }
 
+    fn mt_get_element<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E>
+    where
+        Q: ?Sized + Comparable<E::Key>,
+        't: 'v,
+        'g: 't + 'v,
+    {
+        self.get_full(key, g)
+    }
+
     fn mt_get_cloned<Q>(&self, key: &Q, g: &Guard) -> Option<E::Value>
     where
         Q: ?Sized + Comparable<E::Key>,

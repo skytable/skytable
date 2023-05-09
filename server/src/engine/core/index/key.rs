@@ -207,6 +207,12 @@ impl<'a> Comparable<LitIR<'a>> for PrimaryIndexKey {
     }
 }
 
+impl<'a> Comparable<PrimaryIndexKey> for LitIR<'a> {
+    fn cmp_eq(&self, key: &PrimaryIndexKey) -> bool {
+        key == self
+    }
+}
+
 impl fmt::Debug for PrimaryIndexKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut dbg_struct = f.debug_struct("PrimaryIndexKey");

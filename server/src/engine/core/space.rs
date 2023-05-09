@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        core::{model::ModelView, RWLIdx},
+        core::{model::ModelData, RWLIdx},
         data::{md_dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
@@ -38,7 +38,7 @@ use {
 #[derive(Debug)]
 /// A space with the model namespace
 pub struct Space {
-    mns: RWLIdx<Box<str>, ModelView>,
+    mns: RWLIdx<Box<str>, ModelData>,
     pub(super) meta: SpaceMeta,
 }
 
@@ -74,7 +74,7 @@ impl ProcedureCreate {
 }
 
 impl Space {
-    pub fn _create_model(&self, name: &str, model: ModelView) -> DatabaseResult<()> {
+    pub fn _create_model(&self, name: &str, model: ModelData) -> DatabaseResult<()> {
         if self
             .mns
             .write()
@@ -85,13 +85,13 @@ impl Space {
             Err(DatabaseError::DdlModelAlreadyExists)
         }
     }
-    pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelView> {
+    pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelData> {
         &self.mns
     }
     pub fn with_model<T>(
         &self,
         model: &str,
-        f: impl FnOnce(&ModelView) -> DatabaseResult<T>,
+        f: impl FnOnce(&ModelData) -> DatabaseResult<T>,
     ) -> DatabaseResult<T> {
         let mread = self.mns.read();
         let Some(model) = mread.st_get(model) else {
@@ -106,7 +106,7 @@ impl Space {
         Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
     #[inline(always)]
-    pub fn new(mns: IndexST<Box<str>, ModelView>, meta: SpaceMeta) -> Self {
+    pub fn new(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta) -> Self {
         Self {
             mns: RWLIdx::new(mns),
             meta,
