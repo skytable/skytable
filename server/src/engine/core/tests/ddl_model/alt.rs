@@ -27,7 +27,7 @@
 use crate::engine::{
     core::{
         model::{alt::AlterPlan, ModelData},
-        tests::model::{create, exec_create},
+        tests::ddl_model::{create, exec_create},
         GlobalNS,
     },
     error::DatabaseResult,

@@ -116,6 +116,15 @@ impl Row {
     pub fn d_data(&self) -> &RwLock<RowData> {
         self.rc.data()
     }
+    #[cfg(test)]
+    pub fn cloned_data(&self) -> Vec<(Box<str>, Datacell)> {
+        self.d_data()
+            .read()
+            .fields()
+            .st_iter_kv()
+            .map(|(id, data)| (id.clone(), data.clone()))
+            .collect()
+    }
 }
 
 impl Row {

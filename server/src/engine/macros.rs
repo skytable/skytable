@@ -147,7 +147,6 @@ macro_rules! into_dict {
 }
 
 #[cfg(test)]
-#[allow(unused_macros)]
-macro_rules! into_vec {
-    ($($val:expr),* $(,)?) => { vec![$(::core::convert::From::from($val),)*]};
+macro_rules! pairvec {
+    ($($x:expr),*) => {{ let mut v = Vec::new(); $( let (a, b) = $x; v.push((a.into(), b.into())); )* v }};
 }

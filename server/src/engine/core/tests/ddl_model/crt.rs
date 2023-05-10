@@ -134,7 +134,7 @@ mod exec {
     use crate::engine::{
         core::{
             model::{DeltaVersion, Field, Layer},
-            tests::model::{exec_create_new_space, with_model},
+            tests::ddl_model::{exec_create_new_space, with_model},
             GlobalNS,
         },
         data::tag::{DataTag, FullTag},

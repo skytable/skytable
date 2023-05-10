@@ -52,6 +52,7 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
     })
 }
 
+// TODO(@ohsayan): optimize null case
 fn prepare_insert(
     model: &ModelData,
     fields: &Fields,
