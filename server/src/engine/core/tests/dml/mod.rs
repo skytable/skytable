@@ -24,33 +24,49 @@
  *
 */
 
+mod delete;
 mod insert;
 
 use crate::engine::{
     core::{dml, index::Row, model::ModelData, GlobalNS},
     data::lit::LitIR,
     error::DatabaseResult,
-    ql::{ast::parse_ast_node_full, dml::ins::InsertStatement, tests::lex_insecure},
+    ql::{
+        ast::{parse_ast_node_full, Entity},
+        dml::{del::DeleteStatement, ins::InsertStatement},
+        tests::lex_insecure,
+    },
     sync,
 };
 
-pub(self) fn exec_insert<T>(
-    gns: &GlobalNS,
-    model: &str,
-    insert: &str,
-    key_name: &str,
-    f: impl Fn(Row) -> T,
-) -> DatabaseResult<T> {
+fn _exec_only_create_space_model(gns: &GlobalNS, model: &str) -> DatabaseResult<()> {
     if !gns.spaces().read().contains_key("myspace") {
         gns.test_new_empty_space("myspace");
     }
     let lex_create_model = lex_insecure(model.as_bytes()).unwrap();
     let stmt_create_model = parse_ast_node_full(&lex_create_model[2..]).unwrap();
-    ModelData::exec_create(gns, stmt_create_model)?;
+    ModelData::exec_create(gns, stmt_create_model)
+}
+
+fn _exec_only_insert_only<T>(
+    gns: &GlobalNS,
+    insert: &str,
+    and_then: impl Fn(Entity) -> T,
+) -> DatabaseResult<T> {
     let lex_insert = lex_insecure(insert.as_bytes()).unwrap();
     let stmt_insert = parse_ast_node_full::<InsertStatement>(&lex_insert[1..]).unwrap();
     let entity = stmt_insert.entity();
     dml::insert(gns, stmt_insert)?;
+    let r = and_then(entity);
+    Ok(r)
+}
+
+fn _exec_only_read_key_and_then<T>(
+    gns: &GlobalNS,
+    entity: Entity,
+    key_name: &str,
+    and_then: impl Fn(Row) -> T,
+) -> DatabaseResult<T> {
     let guard = sync::atm::cpin();
     gns.with_model(entity, |mdl| {
         let _irm = mdl.intent_read_model();
@@ -60,6 +76,53 @@ pub(self) fn exec_insert<T>(
             .unwrap()
             .clone();
         drop(guard);
-        Ok(f(row))
+        Ok(and_then(row))
     })
+}
+
+fn _exec_delete_only(gns: &GlobalNS, delete: &str, key: &str) -> DatabaseResult<()> {
+    let lex_del = lex_insecure(delete.as_bytes()).unwrap();
+    let delete = parse_ast_node_full::<DeleteStatement>(&lex_del[1..]).unwrap();
+    let entity = delete.entity();
+    dml::delete(gns, delete)?;
+    assert_eq!(
+        gns.with_model(entity, |model| {
+            let _ = model.intent_read_model();
+            let g = sync::atm::cpin();
+            Ok(model.primary_index().select(key.into(), &g).is_none())
+        }),
+        Ok(true)
+    );
+    Ok(())
+}
+
+pub(self) fn exec_insert<T: Default>(
+    gns: &GlobalNS,
+    model: &str,
+    insert: &str,
+    key_name: &str,
+    f: impl Fn(Row) -> T,
+) -> DatabaseResult<T> {
+    _exec_only_create_space_model(gns, model)?;
+    _exec_only_insert_only(gns, insert, |entity| {
+        _exec_only_read_key_and_then(gns, entity, key_name, |row| f(row))
+    })?
+}
+
+pub(self) fn exec_insert_only(gns: &GlobalNS, insert: &str) -> DatabaseResult<()> {
+    _exec_only_insert_only(gns, insert, |_| {})
+}
+
+pub(self) fn exec_delete(
+    gns: &GlobalNS,
+    model: &str,
+    insert: Option<&str>,
+    delete: &str,
+    key: &str,
+) -> DatabaseResult<()> {
+    _exec_only_create_space_model(gns, model)?;
+    if let Some(insert) = insert {
+        _exec_only_insert_only(gns, insert, |_| {})?;
+    }
+    _exec_delete_only(gns, delete, key)
 }

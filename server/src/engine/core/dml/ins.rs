@@ -31,7 +31,7 @@ use crate::engine::{
         GlobalNS,
     },
     error::{DatabaseError, DatabaseResult},
-    idx::{IndexBaseSpec, STIndex},
+    idx::{IndexBaseSpec, STIndex, STIndexSeq},
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
 };
@@ -62,7 +62,7 @@ fn prepare_insert(
     let mut prepared_data = DcFieldIndex::idx_init_cap(fields.len());
     match insert {
         InsertData::Ordered(tuple) => {
-            let mut fields = fields.st_iter_kv();
+            let mut fields = fields.stseq_ord_kv();
             let mut tuple = tuple.into_iter();
             while (tuple.len() != 0) & okay {
                 let data;

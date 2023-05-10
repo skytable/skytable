@@ -24,9 +24,9 @@
  *
 */
 
-use crate::engine::{core::GlobalNS, data::cell::Datacell};
+use crate::engine::{core::GlobalNS, data::cell::Datacell, error::DatabaseError};
 
-#[derive(sky_macros::Wrapper)]
+#[derive(sky_macros::Wrapper, Debug)]
 struct Tuple(Vec<(Box<str>, Datacell)>);
 
 #[test]
@@ -65,4 +65,24 @@ fn insert_with_null() {
             )
         }
     ).unwrap();
+}
+
+#[test]
+fn insert_duplicate() {
+    let gns = GlobalNS::empty();
+    super::exec_insert(
+        &gns,
+        "create model myspace.mymodel(username: string, password: string)",
+        "insert into myspace.mymodel('sayan', 'pass123')",
+        "sayan",
+        |row| {
+            assert_veceq_transposed!(row.cloned_data(), Tuple(pairvec!(("password", "pass123"))));
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        super::exec_insert_only(&gns, "insert into myspace.mymodel('sayan', 'pass123')")
+            .unwrap_err(),
+        DatabaseError::DmlConstraintViolationDuplicate
+    );
 }

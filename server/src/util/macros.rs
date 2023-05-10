@@ -86,9 +86,14 @@ macro_rules! veceq_transposed {
 
 #[macro_export]
 macro_rules! assert_veceq_transposed {
-    ($v1:expr, $v2:expr) => {
-        assert!(veceq_transposed!($v1, $v2))
-    };
+    ($v1:expr, $v2:expr) => {{
+        if !veceq_transposed!($v1, $v2) {
+            panic!(
+                "failed to assert transposed veceq. v1: `{:#?}`, v2: `{:#?}`",
+                $v1, $v2
+            )
+        }
+    }};
 }
 
 #[cfg(test)]
