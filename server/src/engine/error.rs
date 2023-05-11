@@ -112,7 +112,7 @@ pub enum DatabaseError {
     /// the alter model statement is "wrong"
     DdlModelAlterBad,
     /// an alter attempted to update an nx field
-    DdlModelAlterFieldNotFound,
+    FieldNotFound,
     /// bad type definition to alter
     DdlModelAlterBadTypedef,
     /// didn't find the model

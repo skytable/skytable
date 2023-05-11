@@ -26,10 +26,11 @@
 
 mod delete;
 mod insert;
+mod select;
 
 use crate::engine::{
     core::{dml, index::Row, model::ModelData, GlobalNS},
-    data::lit::LitIR,
+    data::{cell::Datacell, lit::LitIR},
     error::DatabaseResult,
     ql::{
         ast::{parse_ast_node_full, Entity},
@@ -48,7 +49,7 @@ fn _exec_only_create_space_model(gns: &GlobalNS, model: &str) -> DatabaseResult<
     ModelData::exec_create(gns, stmt_create_model)
 }
 
-fn _exec_only_insert_only<T>(
+fn _exec_only_insert<T>(
     gns: &GlobalNS,
     insert: &str,
     and_then: impl Fn(Entity) -> T,
@@ -96,6 +97,14 @@ fn _exec_delete_only(gns: &GlobalNS, delete: &str, key: &str) -> DatabaseResult<
     Ok(())
 }
 
+fn _exec_only_select(gns: &GlobalNS, select: &str) -> DatabaseResult<Vec<Datacell>> {
+    let lex_sel = lex_insecure(select.as_bytes()).unwrap();
+    let select = parse_ast_node_full(&lex_sel[1..]).unwrap();
+    let mut r = Vec::new();
+    dml::select_custom(gns, select, |cell| r.push(cell.clone()))?;
+    Ok(r)
+}
+
 pub(self) fn exec_insert<T: Default>(
     gns: &GlobalNS,
     model: &str,
@@ -104,13 +113,13 @@ pub(self) fn exec_insert<T: Default>(
     f: impl Fn(Row) -> T,
 ) -> DatabaseResult<T> {
     _exec_only_create_space_model(gns, model)?;
-    _exec_only_insert_only(gns, insert, |entity| {
+    _exec_only_insert(gns, insert, |entity| {
         _exec_only_read_key_and_then(gns, entity, key_name, |row| f(row))
     })?
 }
 
 pub(self) fn exec_insert_only(gns: &GlobalNS, insert: &str) -> DatabaseResult<()> {
-    _exec_only_insert_only(gns, insert, |_| {})
+    _exec_only_insert(gns, insert, |_| {})
 }
 
 pub(self) fn exec_delete(
@@ -122,7 +131,22 @@ pub(self) fn exec_delete(
 ) -> DatabaseResult<()> {
     _exec_only_create_space_model(gns, model)?;
     if let Some(insert) = insert {
-        _exec_only_insert_only(gns, insert, |_| {})?;
+        _exec_only_insert(gns, insert, |_| {})?;
     }
     _exec_delete_only(gns, delete, key)
+}
+
+pub(self) fn exec_select(
+    gns: &GlobalNS,
+    model: &str,
+    insert: &str,
+    select: &str,
+) -> DatabaseResult<Vec<Datacell>> {
+    _exec_only_create_space_model(gns, model)?;
+    _exec_only_insert(gns, insert, |_| {})?;
+    _exec_only_select(gns, select)
+}
+
+pub(self) fn exec_select_only(gns: &GlobalNS, select: &str) -> DatabaseResult<Vec<Datacell>> {
+    _exec_only_select(gns, select)
 }

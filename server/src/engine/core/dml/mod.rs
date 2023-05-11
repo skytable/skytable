@@ -26,6 +26,7 @@
 
 mod del;
 mod ins;
+mod sel;
 
 use crate::engine::{
     core::model::ModelData,
@@ -34,7 +35,7 @@ use crate::engine::{
     ql::dml::WhereClause,
 };
 
-pub use {del::delete, ins::insert};
+pub use {del::delete, ins::insert, sel::select_custom};
 
 impl ModelData {
     pub(self) fn resolve_where<'a>(

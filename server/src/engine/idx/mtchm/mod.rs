@@ -428,8 +428,8 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
     ) -> Option<&'g T> {
         self._lookup(access::RModeElementRef::new(k), g)
     }
-    fn _lookup<'g, R: access::ReadMode<T>>(&'g self, r: R, g: &'g Guard) -> R::Ret<'g> {
-        let mut hash = self.hash(r.target());
+    fn _lookup<'g, R: access::ReadMode<T>>(&'g self, read_spec: R, g: &'g Guard) -> R::Ret<'g> {
+        let mut hash = self.hash(read_spec.target());
         let mut current = &self.root;
         loop {
             let node = current.ld_acq(g);
@@ -442,10 +442,9 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
                     let mut ret = R::nx();
                     return unsafe {
                         // UNSAFE(@ohsayan): checked flag + nullck
-                        Self::read_data(node).iter().find_map(|e| {
-                            r.target().cmp_eq(e.key()).then_some({
-                                ret = R::ex(e);
-                                Some(())
+                        Self::read_data(node).iter().find_map(|e_current| {
+                            read_spec.target().cmp_eq(e_current.key()).then(|| {
+                                ret = R::ex(e_current);
                             })
                         });
                         ret

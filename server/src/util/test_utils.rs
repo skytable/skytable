@@ -27,6 +27,7 @@
 use {
     rand::{
         distributions::{uniform::SampleUniform, Alphanumeric},
+        rngs::ThreadRng,
         Rng,
     },
     std::{
@@ -101,4 +102,8 @@ pub fn hash_rs<T: Hash + ?Sized>(rs: &RandomState, item: &T) -> u64 {
     let mut hasher = rs.build_hasher();
     item.hash(&mut hasher);
     hasher.finish()
+}
+
+pub fn randomizer() -> ThreadRng {
+    rand::thread_rng()
 }

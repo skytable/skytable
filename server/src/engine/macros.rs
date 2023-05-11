@@ -150,3 +150,8 @@ macro_rules! into_dict {
 macro_rules! pairvec {
     ($($x:expr),*) => {{ let mut v = Vec::new(); $( let (a, b) = $x; v.push((a.into(), b.into())); )* v }};
 }
+
+#[cfg(test)]
+macro_rules! intovec {
+    ($($x:expr),* $(,)?) => { vec![$(core::convert::From::from($x),)*] };
+}

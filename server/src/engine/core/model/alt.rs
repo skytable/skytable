@@ -110,7 +110,7 @@ impl<'a> AlterPlan<'a> {
                 }) {
                     can_ignore!(AlterAction::Remove(r))
                 } else if not_found {
-                    return Err(DatabaseError::DdlModelAlterFieldNotFound);
+                    return Err(DatabaseError::FieldNotFound);
                 } else {
                     return Err(DatabaseError::DdlModelAlterProtectedField);
                 }
@@ -146,7 +146,7 @@ impl<'a> AlterPlan<'a> {
                     mv.guard_pk(&field_name)?;
                     // get the current field
                     let Some(current_field) = wm.fields().st_get(field_name.as_str()) else {
-                        return Err(DatabaseError::DdlModelAlterFieldNotFound);
+                        return Err(DatabaseError::FieldNotFound);
                     };
                     // check props
                     let is_nullable = check_nullable(&mut props)?;

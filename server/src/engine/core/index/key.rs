@@ -203,13 +203,13 @@ impl<'a> PartialEq<LitIR<'a>> for PrimaryIndexKey {
 
 impl<'a> Comparable<LitIR<'a>> for PrimaryIndexKey {
     fn cmp_eq(&self, key: &LitIR<'a>) -> bool {
-        self == key
+        <PrimaryIndexKey as PartialEq<LitIR>>::eq(self, key)
     }
 }
 
 impl<'a> Comparable<PrimaryIndexKey> for LitIR<'a> {
     fn cmp_eq(&self, key: &PrimaryIndexKey) -> bool {
-        key == self
+        <PrimaryIndexKey as PartialEq<LitIR>>::eq(key, self)
     }
 }
 

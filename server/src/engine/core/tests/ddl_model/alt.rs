@@ -156,7 +156,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterFieldNotFound
+            DatabaseError::FieldNotFound
         );
     }
     #[test]
@@ -216,7 +216,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterFieldNotFound
+            DatabaseError::FieldNotFound
         );
     }
     fn bad_type_cast(orig_ty: &str, new_ty: &str) {
