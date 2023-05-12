@@ -26,7 +26,6 @@
 
 pub(super) mod config;
 mod iter;
-pub(super) mod shared;
 
 use {
     self::{

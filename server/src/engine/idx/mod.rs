@@ -41,8 +41,6 @@ use {
 
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
-pub type IndexSTCOrdRC<K, V> =
-    stord::shared::OrderedIdxRC<K, V, stord::config::ConservativeConfig<K, V>>;
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;
 pub type IndexMTRC<K, V> = mtchm::imp::ChmArc<K, V, mtchm::meta::DefConfig>;
 pub type IndexMTRaw<E> = mtchm::imp::Raw<E, mtchm::meta::DefConfig>;

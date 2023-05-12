@@ -39,7 +39,7 @@ use {
             tag::{DataTag, FullTag, TagClass, TagSelector},
         },
         error::{DatabaseError, DatabaseResult},
-        idx::{IndexBaseSpec, IndexSTCOrdRC, STIndex, STIndexSeq},
+        idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
         ql::ddl::{
             crt::CreateModel,
@@ -51,7 +51,7 @@ use {
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersion};
-pub(in crate::engine::core) type Fields = IndexSTCOrdRC<Box<str>, Field>;
+pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
 pub struct ModelData {
