@@ -625,6 +625,14 @@ where
         self._get(key).cloned()
     }
 
+    fn st_get_mut<Q>(&mut self, _: &Q) -> Option<&mut V>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey,
+    {
+        todo!()
+    }
+
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool
     where
         K: Borrow<Q>,

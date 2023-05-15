@@ -43,9 +43,9 @@ pub type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
 
 #[derive(Debug)]
 pub struct Row {
-    txn_genesis: DeltaVersion,
-    pk: ManuallyDrop<PrimaryIndexKey>,
-    rc: RawRC<RwLock<RowData>>,
+    __txn_genesis: DeltaVersion,
+    __pk: ManuallyDrop<PrimaryIndexKey>,
+    __rc: RawRC<RwLock<RowData>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -57,6 +57,9 @@ pub struct RowData {
 impl RowData {
     pub fn fields(&self) -> &DcFieldIndex {
         &self.fields
+    }
+    pub fn fields_mut(&mut self) -> &mut DcFieldIndex {
+        &mut self.fields
     }
 }
 
@@ -91,9 +94,9 @@ impl Row {
         txn_revised: DeltaVersion,
     ) -> Self {
         Self {
-            txn_genesis,
-            pk: ManuallyDrop::new(pk),
-            rc: unsafe {
+            __txn_genesis: txn_genesis,
+            __pk: ManuallyDrop::new(pk),
+            __rc: unsafe {
                 // UNSAFE(@ohsayan): we free this up later
                 RawRC::new(RwLock::new(RowData {
                     fields: data,
@@ -103,18 +106,18 @@ impl Row {
         }
     }
     pub fn with_data_read<T>(&self, f: impl Fn(&DcFieldIndex) -> T) -> T {
-        let data = self.rc.data().read();
+        let data = self.__rc.data().read();
         f(&data.fields)
     }
     pub fn with_data_write<T>(&self, f: impl Fn(&mut DcFieldIndex) -> T) -> T {
-        let mut data = self.rc.data().write();
+        let mut data = self.__rc.data().write();
         f(&mut data.fields)
     }
     pub fn d_key(&self) -> &PrimaryIndexKey {
-        &self.pk
+        &self.__pk
     }
     pub fn d_data(&self) -> &RwLock<RowData> {
-        self.rc.data()
+        self.__rc.data()
     }
     #[cfg(test)]
     pub fn cloned_data(&self) -> Vec<(Box<str>, Datacell)> {
@@ -161,14 +164,14 @@ impl Clone for Row {
     fn clone(&self) -> Self {
         let rc = unsafe {
             // UNSAFE(@ohsayan): we're calling this in the clone implementation
-            self.rc.rc_clone()
+            self.__rc.rc_clone()
         };
         Self {
-            pk: unsafe {
+            __pk: unsafe {
                 // UNSAFE(@ohsayan): this is safe because of the refcount
-                ManuallyDrop::new(self.pk.raw_clone())
+                ManuallyDrop::new(self.__pk.raw_clone())
             },
-            rc,
+            __rc: rc,
             ..*self
         }
     }
@@ -178,9 +181,9 @@ impl Drop for Row {
     fn drop(&mut self) {
         unsafe {
             // UNSAFE(@ohsayan): we call in this the dtor itself
-            self.rc.rc_drop(|| {
+            self.__rc.rc_drop(|| {
                 // UNSAFE(@ohsayan): we rely on the correctness of the rc
-                ManuallyDrop::drop(&mut self.pk);
+                ManuallyDrop::drop(&mut self.__pk);
             });
         }
     }

@@ -373,6 +373,9 @@ impl Layer {
 }
 
 impl Layer {
+    pub fn tag(&self) -> FullTag {
+        self.tag
+    }
     #[cfg(test)]
     pub fn new_test(tag: FullTag, config: [usize; 2]) -> Self {
         Self::new(tag, config)

@@ -30,6 +30,7 @@ use {
     super::{u, WhereClause},
     crate::{
         engine::{
+            core::query_meta::AssignmentOperator,
             data::lit::LitIR,
             error::{LangError, LangResult},
             ql::{
@@ -45,37 +46,27 @@ use {
     Impls for update
 */
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-/// TODO(@ohsayan): This only helps with the parser test for now. Replace this with actual operator expressions
-pub enum Operator {
-    Assign,
-    AddAssign,
-    SubAssign,
-    MulAssign,
-    DivAssign,
-}
-
-static OPERATOR: [Operator; 6] = [
-    Operator::Assign,
-    Operator::Assign,
-    Operator::AddAssign,
-    Operator::SubAssign,
-    Operator::MulAssign,
-    Operator::DivAssign,
+static OPERATOR: [AssignmentOperator; 6] = [
+    AssignmentOperator::Assign,
+    AssignmentOperator::Assign,
+    AssignmentOperator::AddAssign,
+    AssignmentOperator::SubAssign,
+    AssignmentOperator::MulAssign,
+    AssignmentOperator::DivAssign,
 ];
 
 #[derive(Debug, PartialEq)]
 pub struct AssignmentExpression<'a> {
     /// the LHS ident
-    pub(super) lhs: Ident<'a>,
+    pub lhs: Ident<'a>,
     /// the RHS lit
-    pub(super) rhs: LitIR<'a>,
+    pub rhs: LitIR<'a>,
     /// operator
-    pub(super) operator_fn: Operator,
+    pub operator_fn: AssignmentOperator,
 }
 
 impl<'a> AssignmentExpression<'a> {
-    pub fn new(lhs: Ident<'a>, rhs: LitIR<'a>, operator_fn: Operator) -> Self {
+    pub fn new(lhs: Ident<'a>, rhs: LitIR<'a>, operator_fn: AssignmentOperator) -> Self {
         Self {
             lhs,
             rhs,
@@ -138,6 +129,24 @@ pub struct UpdateStatement<'a> {
     pub(super) entity: Entity<'a>,
     pub(super) expressions: Vec<AssignmentExpression<'a>>,
     pub(super) wc: WhereClause<'a>,
+}
+
+impl<'a> UpdateStatement<'a> {
+    pub fn entity(&self) -> Entity<'a> {
+        self.entity
+    }
+    pub fn expressions(&self) -> &[AssignmentExpression<'a>] {
+        &self.expressions
+    }
+    pub fn clauses(&self) -> &WhereClause<'a> {
+        &self.wc
+    }
+    pub fn clauses_mut(&mut self) -> &mut WhereClause<'a> {
+        &mut self.wc
+    }
+    pub fn into_expressions(self) -> Vec<AssignmentExpression<'a>> {
+        self.expressions
+    }
 }
 
 impl<'a> UpdateStatement<'a> {

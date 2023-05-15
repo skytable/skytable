@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 01 2023
+ * Created on Fri May 12 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,36 +24,32 @@
  *
 */
 
-mod del;
-mod ins;
-mod sel;
-mod upd;
+use std::mem;
 
-use crate::{
-    engine::{
-        core::model::ModelData,
-        data::{lit::LitIR, spec::DataspecMeta1D, tag::DataTag},
-        error::{DatabaseError, DatabaseResult},
-        ql::dml::WhereClause,
-    },
-    util::compiler,
-};
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[repr(u8)]
+pub enum AssignmentOperator {
+    Assign = 0,
+    AddAssign = 1,
+    SubAssign = 2,
+    MulAssign = 3,
+    DivAssign = 4,
+}
 
-pub use {del::delete, ins::insert, sel::select_custom, upd::update};
-
-impl ModelData {
-    pub(self) fn resolve_where<'a>(
-        &self,
-        where_clause: &mut WhereClause<'a>,
-    ) -> DatabaseResult<LitIR<'a>> {
-        match where_clause.clauses_mut().remove(self.p_key().as_bytes()) {
-            Some(clause)
-                if clause.filter_hint_none()
-                    & (clause.rhs().kind().tag_unique() == self.p_tag().tag_unique()) =>
-            {
-                Ok(clause.rhs())
-            }
-            _ => compiler::cold_rerr(DatabaseError::DmlWhereClauseUnindexedExpr),
+impl AssignmentOperator {
+    pub const fn disc(&self) -> u8 {
+        unsafe {
+            // UNSAFE(@ohsayan): just go back to school already; dscr
+            mem::transmute(*self)
         }
+    }
+    pub const fn max() -> usize {
+        Self::DivAssign.disc() as _
+    }
+    pub const fn word(&self) -> usize {
+        self.disc() as _
+    }
+    pub const fn count() -> usize {
+        5
     }
 }

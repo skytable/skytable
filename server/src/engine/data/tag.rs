@@ -36,6 +36,13 @@ pub enum TagClass {
     List = 6,
 }
 
+impl TagClass {
+    /// ☢WARNING☢: Don't forget offset
+    pub const fn max() -> usize {
+        Self::List.d() as _
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum TagSelector {

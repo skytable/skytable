@@ -257,6 +257,10 @@ pub trait STIndex<K: ?Sized, V>: IndexBaseSpec {
         K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey,
         V: AsValueClone;
+    fn st_get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
+    where
+        K: AsKey + Borrow<Q>,
+        Q: ?Sized + AsKey;
     // update
     /// Returns true if the entry is updated
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool

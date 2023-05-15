@@ -27,6 +27,7 @@
 mod delete;
 mod insert;
 mod select;
+mod update;
 
 use crate::engine::{
     core::{dml, index::Row, model::ModelData, GlobalNS},
@@ -105,6 +106,12 @@ fn _exec_only_select(gns: &GlobalNS, select: &str) -> DatabaseResult<Vec<Datacel
     Ok(r)
 }
 
+fn _exec_only_update(gns: &GlobalNS, update: &str) -> DatabaseResult<()> {
+    let lex_upd = lex_insecure(update.as_bytes()).unwrap();
+    let update = parse_ast_node_full(&lex_upd[1..]).unwrap();
+    dml::update(gns, update)
+}
+
 pub(self) fn exec_insert<T: Default>(
     gns: &GlobalNS,
     model: &str,
@@ -148,5 +155,18 @@ pub(self) fn exec_select(
 }
 
 pub(self) fn exec_select_only(gns: &GlobalNS, select: &str) -> DatabaseResult<Vec<Datacell>> {
+    _exec_only_select(gns, select)
+}
+
+pub(self) fn exec_update(
+    gns: &GlobalNS,
+    model: &str,
+    insert: &str,
+    update: &str,
+    select: &str,
+) -> DatabaseResult<Vec<Datacell>> {
+    _exec_only_create_space_model(gns, model)?;
+    _exec_only_insert(gns, insert, |_| {})?;
+    _exec_only_update(gns, update)?;
     _exec_only_select(gns, select)
 }

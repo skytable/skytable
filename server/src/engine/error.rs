@@ -128,4 +128,9 @@ pub enum DatabaseError {
     DmlWhereClauseUnindexedExpr,
     /// The entry was not found
     DmlEntryNotFound,
+    /// illegal data
+    DmlIllegalData,
+    /// field definition violation
+    DmlConstraintViolationFieldTypedef,
+    ServerError,
 }

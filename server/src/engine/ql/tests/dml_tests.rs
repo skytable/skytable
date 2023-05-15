@@ -696,12 +696,9 @@ mod expression_tests {
     use {
         super::*,
         crate::engine::{
+            core::query_meta::AssignmentOperator,
             data::{lit::LitIR, spec::Dataspec1D},
-            ql::{
-                ast::parse_ast_node_full,
-                dml::upd::{AssignmentExpression, Operator},
-                lex::Ident,
-            },
+            ql::{ast::parse_ast_node_full, dml::upd::AssignmentExpression, lex::Ident},
         },
     };
     #[test]
@@ -713,7 +710,7 @@ mod expression_tests {
             AssignmentExpression::new(
                 Ident::from("username"),
                 LitIR::Str("sayan"),
-                Operator::Assign
+                AssignmentOperator::Assign
             )
         );
     }
@@ -726,7 +723,7 @@ mod expression_tests {
             AssignmentExpression::new(
                 Ident::from("followers"),
                 LitIR::UnsignedInt(100),
-                Operator::AddAssign
+                AssignmentOperator::AddAssign
             )
         );
     }
@@ -739,7 +736,7 @@ mod expression_tests {
             AssignmentExpression::new(
                 Ident::from("following"),
                 LitIR::UnsignedInt(150),
-                Operator::SubAssign
+                AssignmentOperator::SubAssign
             )
         );
     }
@@ -752,7 +749,7 @@ mod expression_tests {
             AssignmentExpression::new(
                 Ident::from("product_qty"),
                 LitIR::UnsignedInt(2),
-                Operator::MulAssign
+                AssignmentOperator::MulAssign
             )
         );
     }
@@ -765,7 +762,7 @@ mod expression_tests {
             AssignmentExpression::new(
                 Ident::from("image_crop_factor"),
                 LitIR::UnsignedInt(2),
-                Operator::DivAssign
+                AssignmentOperator::DivAssign
             )
         );
     }
@@ -774,11 +771,12 @@ mod update_statement {
     use {
         super::*,
         crate::engine::{
+            core::query_meta::AssignmentOperator,
             data::{lit::LitIR, spec::Dataspec1D},
             ql::{
                 ast::{parse_ast_node_full, Entity},
                 dml::{
-                    upd::{AssignmentExpression, Operator, UpdateStatement},
+                    upd::{AssignmentExpression, UpdateStatement},
                     RelationalExpr, WhereClause,
                 },
                 lex::Ident,
@@ -799,7 +797,7 @@ mod update_statement {
             vec![AssignmentExpression::new(
                 Ident::from("notes"),
                 LitIR::Str("this is my new note"),
-                Operator::AddAssign,
+                AssignmentOperator::AddAssign,
             )],
             WhereClause::new(dict! {
                 Ident::from("username") => RelationalExpr::new(
@@ -832,12 +830,12 @@ mod update_statement {
                 AssignmentExpression::new(
                     Ident::from("notes"),
                     LitIR::Str("this is my new note"),
-                    Operator::AddAssign,
+                    AssignmentOperator::AddAssign,
                 ),
                 AssignmentExpression::new(
                     Ident::from("email"),
                     LitIR::Str("sayan@example.com"),
-                    Operator::Assign,
+                    AssignmentOperator::Assign,
                 ),
             ],
             WhereClause::new(dict! {
