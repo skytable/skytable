@@ -24,6 +24,8 @@
  *
 */
 
+#[cfg(test)]
+use std::cell::RefCell;
 use {
     crate::{
         engine::{
@@ -211,6 +213,24 @@ const fn opc(opr: TagClass, ope: AssignmentOperator) -> usize {
     (AssignmentOperator::count() * opr.word()) + ope.word()
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(super) static ROUTE_TRACE: RefCell<Vec<&'static str>> = RefCell::new(Vec::new());
+}
+
+#[inline(always)]
+fn input_trace(v: &'static str) {
+    #[cfg(test)]
+    {
+        ROUTE_TRACE.with(|rcv| rcv.borrow_mut().push(v))
+    }
+    let _ = v;
+}
+#[cfg(test)]
+pub fn collect_trace_path() -> Vec<&'static str> {
+    ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
+}
+
 pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()> {
     gns.with_model(update.entity(), |mdl| {
         let mut ret = Ok(());
@@ -247,6 +267,7 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                     field_data = fdata;
                 }
                 _ => {
+                    input_trace("fieldnotfound");
                     rollback_now = true;
                     ret = Err(DatabaseError::FieldNotFound);
                     break;
@@ -262,6 +283,7 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                     let (okay, new) = unsafe { OPERATOR[opc(tag_a, operator_fn)](field_data, rhs) };
                     rollback_now &= !okay;
                     rollback_data.push((lhs.as_str(), mem::replace(field_data, new)));
+                    input_trace("sametag;nonnull");
                 }
                 (tag_a, tag_b)
                     if (tag_a == tag_b)
@@ -269,13 +291,15 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                         & (operator_fn == AssignmentOperator::Assign) =>
                 {
                     rollback_data.push((lhs.as_str(), mem::replace(field_data, rhs.into())));
+                    input_trace("sametag;orignull");
                 }
-                (TagClass::List, tag_b) => {
+                (TagClass::List, tag_b) if operator_fn == AssignmentOperator::AddAssign => {
                     if field_definition.layers()[1].tag().tag_class() == tag_b {
                         unsafe {
                             // UNSAFE(@ohsayan): matched tags
                             let mut list = field_data.read_list().write();
                             if list.try_reserve(1).is_ok() {
+                                input_trace("list;sametag");
                                 list.push(rhs.into());
                             } else {
                                 rollback_now = true;
@@ -284,12 +308,14 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                             }
                         }
                     } else {
+                        input_trace("list;badtag");
                         rollback_now = true;
                         ret = Err(DatabaseError::DmlConstraintViolationFieldTypedef);
                         break;
                     }
                 }
                 _ => {
+                    input_trace("unknown_reason;exitmainloop");
                     ret = Err(DatabaseError::DmlConstraintViolationFieldTypedef);
                     rollback_now = true;
                     break;
@@ -297,6 +323,7 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
             }
         }
         if compiler::unlikely(rollback_now) {
+            input_trace("rollback");
             rollback_data
                 .into_iter()
                 .for_each(|(field_id, restored_data)| {

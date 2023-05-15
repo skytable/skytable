@@ -24,7 +24,11 @@
  *
 */
 
-use crate::engine::{core::GlobalNS, data::cell::Datacell, error::DatabaseError};
+use crate::engine::{
+    core::{dml, GlobalNS},
+    data::cell::Datacell,
+    error::DatabaseError,
+};
 
 #[test]
 fn simple() {
@@ -38,6 +42,10 @@ fn simple() {
             "select * from myspace.mymodel where username = 'sayan'"
         ).unwrap(),
         intovec!["sayan", "sn@example.com", 200_000_u64, 85_u64],
+    );
+    assert_eq!(
+        dml::update_flow_trace(),
+        ["sametag;nonnull", "sametag;nonnull", "sametag;nonnull"]
     );
 }
 
@@ -55,6 +63,47 @@ fn with_null() {
         .unwrap(),
         intovec!["sayan", "pass123", "sayan@example.com"]
     );
+    assert_eq!(dml::update_flow_trace(), ["sametag;orignull"]);
+}
+
+#[test]
+fn with_list() {
+    let gns = GlobalNS::empty();
+    assert_eq!(
+        super::exec_update(
+            &gns,
+            "create model myspace.mymodel(link: string, click_ids: list { type: string })",
+            "insert into myspace.mymodel('example.com', [])",
+            "update myspace.mymodel set click_ids += 'ios_client_uuid' where link = 'example.com'",
+            "select * from myspace.mymodel where link = 'example.com'"
+        )
+        .unwrap(),
+        intovec![
+            "example.com",
+            Datacell::new_list(intovec!["ios_client_uuid"])
+        ]
+    );
+    assert_eq!(dml::update_flow_trace(), ["list;sametag"]);
+}
+
+#[test]
+fn fail_operation_on_null() {
+    let gns = GlobalNS::empty();
+    assert_eq!(
+        super::exec_update(
+            &gns,
+            "create model myspace.mymodel(username: string, password: string, null email: string)",
+            "insert into myspace.mymodel('sayan', 'pass123', null)",
+            "update myspace.mymodel set email += '.com' where username = 'sayan'",
+            "select * from myspace.mymodel where username='sayan'"
+        )
+        .unwrap_err(),
+        DatabaseError::DmlConstraintViolationFieldTypedef
+    );
+    assert_eq!(
+        dml::update_flow_trace(),
+        ["unknown_reason;exitmainloop", "rollback"]
+    );
 }
 
 #[test]
@@ -71,6 +120,7 @@ fn fail_unknown_fields() {
         .unwrap_err(),
         DatabaseError::FieldNotFound
     );
+    assert_eq!(dml::update_flow_trace(), ["fieldnotfound", "rollback"]);
     // verify integrity
     assert_eq!(
         super::exec_select_only(&gns, "select * from myspace.mymodel where username='sayan'")
@@ -92,6 +142,10 @@ fn fail_typedef_violation() {
         )
         .unwrap_err(),
         DatabaseError::DmlConstraintViolationFieldTypedef
+    );
+    assert_eq!(
+        dml::update_flow_trace(),
+        ["sametag;nonnull", "unknown_reason;exitmainloop", "rollback"]
     );
     // verify integrity
     assert_eq!(

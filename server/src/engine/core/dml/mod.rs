@@ -39,6 +39,8 @@ use crate::{
     util::compiler,
 };
 
+#[cfg(test)]
+pub use upd::collect_trace_path as update_flow_trace;
 pub use {del::delete, ins::insert, sel::select_custom, upd::update};
 
 impl ModelData {
