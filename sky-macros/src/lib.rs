@@ -47,7 +47,7 @@ use {
     proc_macro::TokenStream,
     proc_macro2::TokenStream as TokenStream2,
     quote::quote,
-    syn::{Data, DataStruct, DeriveInput, Fields, Lit},
+    syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Lit, Meta, NestedMeta},
 };
 
 mod dbtest_fn;
@@ -225,4 +225,52 @@ fn wrapper(item: DeriveInput) -> TokenStream2 {
             fn eq(&self, other: &#st_name #ty_generics) -> bool { ::core::cmp::PartialEq::eq(self, &other.0) }
         }
     }
+}
+
+#[proc_macro_derive(EnumMethods)]
+pub fn derive_value_methods(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let enum_name = &ast.ident;
+    let mut repr_type = None;
+    // Get repr attribute
+    for attr in &ast.attrs {
+        if attr.path.is_ident("repr") {
+            if let Meta::List(list) = attr.parse_meta().unwrap() {
+                if let Some(NestedMeta::Meta(Meta::Path(path))) = list.nested.first() {
+                    repr_type = Some(path.get_ident().unwrap().to_string());
+                }
+            }
+        }
+    }
+    let repr_type = repr_type.expect("Must have repr(u8) or repr(u16) etc.");
+    // Ensure all variants have explicit discriminants
+    if let Data::Enum(data) = &ast.data {
+        for variant in &data.variants {
+            match &variant.fields {
+                Fields::Unit => {
+                    if variant.discriminant.as_ref().is_none() {
+                        panic!("All enum variants must have explicit discriminants");
+                    }
+                }
+                _ => panic!("All enum variants must be unit variants"),
+            }
+        }
+    } else {
+        panic!("This derive macro only works on enums");
+    }
+
+    let repr_type_ident = syn::Ident::new(&repr_type, proc_macro2::Span::call_site());
+    let repr_type_ident_func = syn::Ident::new(
+        &format!("value_{repr_type}"),
+        proc_macro2::Span::call_site(),
+    );
+
+    let gen = quote! {
+        impl #enum_name {
+            pub const fn #repr_type_ident_func(&self) -> #repr_type_ident { unsafe { core::mem::transmute(*self) } }
+            pub const fn value_word(&self) -> usize { self.#repr_type_ident_func() as usize }
+            pub const fn value_qword(&self) -> u64 { self.#repr_type_ident_func() as u64 }
+        }
+    };
+    gen.into()
 }

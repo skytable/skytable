@@ -155,3 +155,12 @@ macro_rules! pairvec {
 macro_rules! intovec {
     ($($x:expr),* $(,)?) => { vec![$(core::convert::From::from($x),)*] };
 }
+
+macro_rules! sizeof {
+    ($ty:ty) => {
+        ::core::mem::size_of::<$ty>()
+    };
+    ($ty:ty, $by:literal) => {
+        ::core::mem::size_of::<$ty>() * $by
+    };
+}
