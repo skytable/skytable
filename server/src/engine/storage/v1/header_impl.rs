@@ -36,7 +36,7 @@
  * |                                                              |
  * |                                                              |
  * |                       DYNAMIC RECORD                         |
- * |                          (256+?)B                            |
+ * |                         (256+56+?)B                          |
  * |        +--------------------------------------------+        |
  * |        |                                            |        |
  * |        |              METADATA RECORD               |        |
@@ -45,10 +45,11 @@
  * |        +--------------------------------------------+        |
  * |        |                                            |        |
  * |        |            VARIABLE HOST RECORD            |        |
- * |        |                    ?B                      |        |
+ * |        |                  >56B                      |        |
  * |        +--------------------------------------------+        |
  * +--------------------------------------------------------------+
  *
+ * Note: The entire part of the header is little endian encoded
 */
 
 use crate::engine::storage::{
@@ -117,13 +118,13 @@ impl MetadataRecord {
         let mut ret = [0u8; 32];
         let mut i = 0;
         // read buf
-        let server_version = versions::v1::V1_SERVER_VERSION.native_endian();
-        let driver_version = versions::v1::V1_DRIVER_VERSION.native_endian();
-        let file_scope = scope.value_qword().to_ne_bytes();
+        let server_version = versions::v1::V1_SERVER_VERSION.little_endian();
+        let driver_version = versions::v1::V1_DRIVER_VERSION.little_endian();
+        let file_scope = scope.value_qword().to_le_bytes();
         // specifier + specifier ID
         let file_specifier_and_id: u64 =
             unsafe { core::mem::transmute([specifier.value_u8() as u32, specifier_id.0]) };
-        let file_specifier_and_id = file_specifier_and_id.to_ne_bytes();
+        let file_specifier_and_id = file_specifier_and_id.to_le_bytes();
         while i < sizeof!(u64) {
             ret[i] = server_version[i];
             ret[i + sizeof!(u64, 1)] = driver_version[i];
@@ -181,10 +182,12 @@ impl HostRunMode {
     }
 }
 
+type VHRConstSection = [u8; 56];
+
 impl_stack_read_primitives!(unsafe impl for VariableHostRecord {});
 
 pub struct VariableHostRecord {
-    data: [u8; 56],
+    data: VHRConstSection,
     host_name: Box<[u8]>,
 }
 
@@ -199,17 +202,34 @@ impl VariableHostRecord {
     ) -> Self {
         let p4_host_name_length = p5_host_name.len();
         let mut variable_record_fl = [0u8; 56];
-        variable_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_ne_bytes());
-        variable_record_fl[16..32].copy_from_slice(&p1_host_uptime.to_ne_bytes());
-        variable_record_fl[32..36].copy_from_slice(&p2a_host_setting_version_id.to_ne_bytes());
+        variable_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_le_bytes());
+        variable_record_fl[16..32].copy_from_slice(&p1_host_uptime.to_le_bytes());
+        variable_record_fl[32..36].copy_from_slice(&p2a_host_setting_version_id.to_le_bytes());
         variable_record_fl[36..40]
-            .copy_from_slice(&(p2b_host_run_mode.value_u8() as u32).to_ne_bytes());
-        variable_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_ne_bytes());
-        variable_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_ne_bytes());
+            .copy_from_slice(&(p2b_host_run_mode.value_u8() as u32).to_le_bytes());
+        variable_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_le_bytes());
+        variable_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
         Self {
             data: variable_record_fl,
             host_name: p5_host_name,
         }
+    }
+    pub fn new_auto(
+        p2a_host_setting_version_id: u32,
+        p2b_host_run_mode: HostRunMode,
+        p3_host_startup_counter: u64,
+        p5_host_name: Box<[u8]>,
+    ) -> Self {
+        let p0_host_epoch_time = crate::util::os::get_epoch_time();
+        let p1_host_uptime = crate::util::os::get_uptime();
+        Self::new(
+            p0_host_epoch_time,
+            p1_host_uptime,
+            p2a_host_setting_version_id,
+            p2b_host_run_mode,
+            p3_host_startup_counter,
+            p5_host_name,
+        )
     }
     pub const fn read_p0_epoch_time(&self) -> u128 {
         self.read_xmmword(0)
@@ -231,6 +251,60 @@ impl VariableHostRecord {
     }
     pub fn read_p5_host_name(&self) -> &[u8] {
         &self.host_name
+    }
+}
+
+pub struct SDSSHeader {
+    sr: StaticRecord,
+    dr_0_mdr: MetadataRecord,
+    dr_1_vhr: VariableHostRecord,
+}
+
+impl SDSSHeader {
+    pub fn new(
+        sr: StaticRecord,
+        dr_0_mdr: MetadataRecord,
+        dr_1_vhr_const_section: VHRConstSection,
+        dr_1_vhr_host_name: Box<[u8]>,
+    ) -> Self {
+        Self {
+            sr,
+            dr_0_mdr,
+            dr_1_vhr: VariableHostRecord {
+                data: dr_1_vhr_const_section,
+                host_name: dr_1_vhr_host_name,
+            },
+        }
+    }
+    pub fn init(
+        mdr_file_scope: FileScope,
+        mdr_file_specifier: FileSpecifier,
+        mdr_file_specifier_id: FileSpecifierVersion,
+        vhr_host_setting_id: u32,
+        vhr_host_run_mode: HostRunMode,
+        vhr_host_startup_counter: u64,
+        vhr_host_name: Box<[u8]>,
+    ) -> Self {
+        Self {
+            sr: StaticRecord::new(),
+            dr_0_mdr: MetadataRecord::new(
+                mdr_file_scope,
+                mdr_file_specifier,
+                mdr_file_specifier_id,
+            ),
+            dr_1_vhr: VariableHostRecord::new_auto(
+                vhr_host_setting_id,
+                vhr_host_run_mode,
+                vhr_host_startup_counter,
+                vhr_host_name,
+            ),
+        }
+    }
+    pub fn calculate_header_size(&self) -> usize {
+        sizeof!(StaticRecord)
+            + sizeof!(MetadataRecord)
+            + sizeof!(VHRConstSection)
+            + self.dr_1_vhr.host_name.len()
     }
 }
 

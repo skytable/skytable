@@ -31,7 +31,12 @@ pub use windows::*;
 
 use {
     crate::IoResult,
-    std::{ffi::OsStr, fs, path::Path},
+    std::{
+        ffi::OsStr,
+        fs,
+        path::Path,
+        time::{SystemTime, UNIX_EPOCH},
+    },
 };
 
 #[cfg(unix)]
@@ -296,4 +301,33 @@ fn dir_size_inner(dir: fs::ReadDir) -> IoResult<u64> {
 /// Returns the size of a directory by recursively scanning it
 pub fn dirsize(path: impl AsRef<Path>) -> IoResult<u64> {
     dir_size_inner(fs::read_dir(path.as_ref())?)
+}
+
+/// Returns the current system uptime in milliseconds
+pub fn get_uptime() -> u128 {
+    uptime().unwrap() as u128 * if cfg!(unix) { 1000 } else { 1 }
+}
+
+/// Returns the current epoch time in nanoseconds
+pub fn get_epoch_time() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
+#[cfg(unix)]
+fn uptime() -> std::io::Result<u64> {
+    let mut sysinfo: libc::sysinfo = unsafe { std::mem::zeroed() };
+    let res = unsafe { libc::sysinfo(&mut sysinfo) };
+    if res == 0 {
+        Ok(sysinfo.uptime as _)
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(windows)]
+fn uptime() -> std::io::Result<u64> {
+    unsafe { Ok(winapi::um::sysinfoapi::GetTickCount64()) }
 }

@@ -51,8 +51,8 @@ impl ServerVersion {
     pub const fn __new(v: u64) -> Self {
         Self(v)
     }
-    pub const fn native_endian(&self) -> [u8; 8] {
-        self.0.to_ne_bytes()
+    pub const fn little_endian(&self) -> [u8; 8] {
+        self.0.to_le_bytes()
     }
 }
 
@@ -64,8 +64,8 @@ impl DriverVersion {
     pub const fn __new(v: u64) -> Self {
         Self(v)
     }
-    pub const fn native_endian(&self) -> [u8; 8] {
-        self.0.to_ne_bytes()
+    pub const fn little_endian(&self) -> [u8; 8] {
+        self.0.to_le_bytes()
     }
 }
 
