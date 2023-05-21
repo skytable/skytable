@@ -300,6 +300,18 @@ impl SDSSHeader {
             ),
         }
     }
+    pub fn get0_sr(&self) -> &[u8] {
+        self.sr.base.get_ref()
+    }
+    pub fn get1_dr_0_mdr(&self) -> &[u8] {
+        &self.dr_0_mdr.data
+    }
+    pub fn get1_dr_1_vhr_0(&self) -> &[u8] {
+        &self.dr_1_vhr.data
+    }
+    pub fn get1_dr_1_vhr_1(&self) -> &[u8] {
+        self.dr_1_vhr.host_name.as_ref()
+    }
     pub fn calculate_header_size(&self) -> usize {
         sizeof!(StaticRecord)
             + sizeof!(MetadataRecord)

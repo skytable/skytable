@@ -182,47 +182,6 @@ pub fn recursive_copy(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> IoResult<
     Ok(())
 }
 
-#[test]
-fn rcopy_okay() {
-    let dir_paths = [
-        "testdata/backups",
-        "testdata/ks/default",
-        "testdata/ks/system",
-        "testdata/rsnaps",
-        "testdata/snaps",
-    ];
-    let file_paths = [
-        "testdata/ks/default/default",
-        "testdata/ks/default/PARTMAP",
-        "testdata/ks/PRELOAD",
-        "testdata/ks/system/PARTMAP",
-    ];
-    let new_file_paths = [
-        "my-backups/ks/default/default",
-        "my-backups/ks/default/PARTMAP",
-        "my-backups/ks/PRELOAD",
-        "my-backups/ks/system/PARTMAP",
-    ];
-    let x = move || -> IoResult<()> {
-        for dir in dir_paths {
-            fs::create_dir_all(dir)?;
-        }
-        for file in file_paths {
-            fs::File::create(file)?;
-        }
-        Ok(())
-    };
-    x().unwrap();
-    // now copy all files inside testdata/* to my-backups/*
-    recursive_copy("testdata", "my-backups").unwrap();
-    new_file_paths
-        .iter()
-        .for_each(|path| assert!(Path::new(path).exists()));
-    // now remove the directories
-    fs::remove_dir_all("testdata").unwrap();
-    fs::remove_dir_all("my-backups").unwrap();
-}
-
 #[derive(Debug, PartialEq)]
 pub enum EntryKind {
     Directory(String),
@@ -305,7 +264,7 @@ pub fn dirsize(path: impl AsRef<Path>) -> IoResult<u64> {
 
 /// Returns the current system uptime in milliseconds
 pub fn get_uptime() -> u128 {
-    uptime().unwrap() as u128 * if cfg!(unix) { 1000 } else { 1 }
+    uptime().unwrap()
 }
 
 /// Returns the current epoch time in nanoseconds
@@ -316,18 +275,110 @@ pub fn get_epoch_time() -> u128 {
         .as_nanos()
 }
 
-#[cfg(unix)]
-fn uptime() -> std::io::Result<u64> {
+#[cfg(target_os = "linux")]
+fn uptime() -> std::io::Result<u128> {
     let mut sysinfo: libc::sysinfo = unsafe { std::mem::zeroed() };
     let res = unsafe { libc::sysinfo(&mut sysinfo) };
     if res == 0 {
-        Ok(sysinfo.uptime as _)
+        Ok(sysinfo.uptime as u128 * 1_000)
     } else {
         Err(std::io::Error::last_os_error())
     }
 }
 
-#[cfg(windows)]
-fn uptime() -> std::io::Result<u64> {
-    unsafe { Ok(winapi::um::sysinfoapi::GetTickCount64()) }
+#[cfg(any(
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+fn uptime() -> std::io::Result<u128> {
+    use libc::{c_void, size_t, sysctl, timeval};
+    use std::ptr;
+
+    let mib = [libc::CTL_KERN, libc::KERN_BOOTTIME];
+    let mut boottime = timeval {
+        tv_sec: 0,
+        tv_usec: 0,
+    };
+    let mut size = std::mem::size_of::<libc::timeval>() as size_t;
+
+    let result = unsafe {
+        sysctl(
+            // this cast is fine. sysctl only needs to access the ptr to array base (read)
+            &mib as *const _ as *mut _,
+            2,
+            &mut boottime as *mut timeval as *mut c_void,
+            &mut size,
+            ptr::null_mut(),
+            0,
+        )
+    };
+
+    if result == 0 {
+        let current_time = unsafe { libc::time(ptr::null_mut()) };
+        let uptime_secs = current_time - boottime.tv_sec;
+        Ok((uptime_secs as u128) * 1_000)
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn uptime() -> std::io::Result<u128> {
+    Ok(unsafe { winapi::um::sysinfoapi::GetTickCount64() } as u128)
+}
+
+#[test]
+fn rcopy_okay() {
+    let dir_paths = [
+        "testdata/backups",
+        "testdata/ks/default",
+        "testdata/ks/system",
+        "testdata/rsnaps",
+        "testdata/snaps",
+    ];
+    let file_paths = [
+        "testdata/ks/default/default",
+        "testdata/ks/default/PARTMAP",
+        "testdata/ks/PRELOAD",
+        "testdata/ks/system/PARTMAP",
+    ];
+    let new_file_paths = [
+        "my-backups/ks/default/default",
+        "my-backups/ks/default/PARTMAP",
+        "my-backups/ks/PRELOAD",
+        "my-backups/ks/system/PARTMAP",
+    ];
+    let x = move || -> IoResult<()> {
+        for dir in dir_paths {
+            fs::create_dir_all(dir)?;
+        }
+        for file in file_paths {
+            fs::File::create(file)?;
+        }
+        Ok(())
+    };
+    x().unwrap();
+    // now copy all files inside testdata/* to my-backups/*
+    recursive_copy("testdata", "my-backups").unwrap();
+    new_file_paths
+        .iter()
+        .for_each(|path| assert!(Path::new(path).exists()));
+    // now remove the directories
+    fs::remove_dir_all("testdata").unwrap();
+    fs::remove_dir_all("my-backups").unwrap();
+}
+
+#[test]
+fn t_uptime() {
+    use std::{thread, time::Duration};
+    let uptime_1 = get_uptime();
+    thread::sleep(Duration::from_secs(1));
+    let uptime_2 = get_uptime();
+    // we're putting a 10s tolerance
+    assert!(
+        Duration::from_millis(uptime_2.try_into().unwrap())
+            <= (Duration::from_millis(uptime_1.try_into().unwrap()) + Duration::from_secs(10))
+    )
 }

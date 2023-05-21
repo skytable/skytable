@@ -253,6 +253,9 @@ impl StaticRecordUV {
         data[sizeof!(u64, 2) - 1] = SR5_OS;
         Self { data }
     }
+    pub const fn get_ref(&self) -> &[u8] {
+        &self.data
+    }
     pub const fn read_p0_magic(&self) -> u64 {
         self.read_qword(0)
     }
