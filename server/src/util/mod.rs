@@ -41,6 +41,7 @@ use {
         marker::PhantomData,
         mem::{self, MaybeUninit},
         ops::Deref,
+        slice,
     },
     std::process,
 };
@@ -330,3 +331,34 @@ impl<T: fmt::Debug> fmt::Debug for MaybeInit<T> {
             .finish()
     }
 }
+
+pub unsafe trait ByteRepr {
+    fn repr(&self) -> &[u8];
+}
+
+unsafe impl ByteRepr for [u8] {
+    fn repr(&self) -> &[u8] {
+        self
+    }
+}
+unsafe impl ByteRepr for str {
+    fn repr(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+pub trait NumericRepr: ByteRepr {
+    fn be(&self) -> Self;
+    fn le(&self) -> Self;
+}
+
+macro_rules! byte_repr_impls {
+    ($($ty:ty),*) => {
+        $(
+            unsafe impl ByteRepr for $ty { fn repr(&self) -> &[u8] { unsafe { slice::from_raw_parts(self as *const $ty as *const u8, mem::size_of::<Self>()) } } }
+            impl NumericRepr for $ty { fn be(&self) -> $ty { <$ty>::to_be(*self) } fn le(&self) -> $ty { <$ty>::to_le(*self) } }
+        )*
+    };
+}
+
+byte_repr_impls!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
