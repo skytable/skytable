@@ -31,24 +31,38 @@ use {
         IoResult,
     },
     std::{
-        fs::{File, OpenOptions},
-        io::Write,
+        fs::{self, File, OpenOptions},
+        io::{Error as IoError, ErrorKind, Read, Seek, SeekFrom, Write},
     },
 };
+
+#[derive(Debug)]
+pub enum SDSSError {
+    SRVersionMismatch,
+    IoError(IoError),
+}
+
+impl From<IoError> for SDSSError {
+    fn from(e: IoError) -> Self {
+        Self::IoError(e)
+    }
+}
+
+pub type SDSSResult<T> = Result<T, SDSSError>;
 
 /*
     Writer interface
 */
 
 pub trait RawWriterInterface: Sized {
-    fn open_truncated(fname: &str) -> IoResult<Self>;
-    fn open_create(fname: &str) -> IoResult<Self>;
+    fn fopen_truncated(fname: &str) -> IoResult<Self>;
+    fn fopen_create(fname: &str) -> IoResult<Self>;
     fn fwrite_all(&mut self, bytes: &[u8]) -> IoResult<()>;
     fn fsync_all(&mut self) -> IoResult<()>;
 }
 
 impl RawWriterInterface for File {
-    fn open_truncated(fname: &str) -> IoResult<Self> {
+    fn fopen_truncated(fname: &str) -> IoResult<Self> {
         OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -56,7 +70,7 @@ impl RawWriterInterface for File {
             .open(fname)
     }
 
-    fn open_create(fname: &str) -> IoResult<Self> {
+    fn fopen_create(fname: &str) -> IoResult<Self> {
         File::create(fname)
     }
 
@@ -80,7 +94,7 @@ pub struct SDSSWriter<W> {
 
 impl<W: RawWriterInterface> SDSSWriter<W> {
     pub fn open_create_with_header(file: &str, header: SDSSHeader) -> IoResult<Self> {
-        let mut w = W::open_create(file)?;
+        let mut w = W::fopen_create(file)?;
         w.fwrite_all(header.get0_sr())?;
         w.fwrite_all(header.get1_dr_0_mdr())?;
         w.fwrite_all(header.get1_dr_1_vhr_0())?;
@@ -100,5 +114,59 @@ impl<W: RawWriterInterface> SDSSWriter<W> {
     }
     pub fn bewrite_numeric(&mut self, num: impl NumericRepr) -> IoResult<()> {
         self.fsync_write(num.be().repr())
+    }
+}
+
+/*
+    Read interface
+*/
+
+pub trait RawReaderInterface: Sized {
+    fn fopen(fname: &str) -> IoResult<Self>;
+    fn fread_exact_seek(&mut self, buf: &mut [u8]) -> IoResult<()>;
+    fn fread_to_end(&mut self, buf: &mut Vec<u8>) -> IoResult<()>;
+}
+
+impl RawReaderInterface for File {
+    fn fopen(fname: &str) -> IoResult<Self> {
+        File::open(fname)
+    }
+    fn fread_exact_seek(&mut self, buf: &mut [u8]) -> IoResult<()> {
+        self.read_exact(buf)?;
+        let _ = self.seek(SeekFrom::Start(buf.len() as _))?;
+        Ok(())
+    }
+    fn fread_to_end(&mut self, buf: &mut Vec<u8>) -> IoResult<()> {
+        match self.read_to_end(buf) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+pub struct FileBuffered {
+    cursor: usize,
+    base: Vec<u8>,
+}
+
+impl RawReaderInterface for FileBuffered {
+    fn fopen(name: &str) -> IoResult<Self> {
+        Ok(Self {
+            base: fs::read(name)?,
+            cursor: 0,
+        })
+    }
+    fn fread_exact_seek(&mut self, buf: &mut [u8]) -> IoResult<()> {
+        let l = self.base[self.cursor..].len();
+        if l >= buf.len() {
+            self.cursor += buf.len();
+            Ok(buf.copy_from_slice(&self.base[self.cursor..]))
+        } else {
+            Err(ErrorKind::UnexpectedEof.into())
+        }
+    }
+    fn fread_to_end(&mut self, buf: &mut Vec<u8>) -> IoResult<()> {
+        buf.extend_from_slice(&self.base[self.cursor..]);
+        Ok(())
     }
 }

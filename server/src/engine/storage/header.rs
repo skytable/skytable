@@ -58,14 +58,20 @@
 
 use super::versions::HeaderVersion;
 
+/// magic
 const SR0_MAGIC: u64 = 0x4F48534159414E21;
-const SR2_PTR_WIDTH: u8 = HostPointerWidth::new().value_u8();
-const SR3_ENDIAN: u8 = HostEndian::new().value_u8();
-const SR4_ARCH: u8 = HostArch::new().value_u8();
-const SR5_OS: u8 = HostOS::new().value_u8();
+/// host ptr width
+const SR2_PTR_WIDTH: HostPointerWidth = HostPointerWidth::new();
+/// host endian
+const SR3_ENDIAN: HostEndian = HostEndian::new();
+/// host arch
+const SR4_ARCH: HostArch = HostArch::new();
+/// host os
+const SR5_OS: HostOS = HostOS::new();
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host architecture enumeration for common platforms
 pub enum HostArch {
     X86 = 0,
     X86_64 = 1,
@@ -93,21 +99,28 @@ impl HostArch {
             panic!("Unsupported target architecture")
         }
     }
-    pub const fn new_with_val(v: u8) -> Self {
-        match v {
+    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+        Some(match v {
             0 => HostArch::X86,
             1 => HostArch::X86_64,
             2 => HostArch::ARM,
             3 => HostArch::ARM64,
             4 => HostArch::MIPS,
             5 => HostArch::PowerPC,
-            _ => panic!("unknown arch"),
+            _ => return None,
+        })
+    }
+    pub const fn new_with_val(v: u8) -> Self {
+        match Self::try_new_with_val(v) {
+            Some(v) => v,
+            None => panic!("unknown arch"),
         }
     }
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host OS enumeration for common operating systems
 pub enum HostOS {
     // T1
     Linux = 0,
@@ -162,8 +175,8 @@ impl HostOS {
             panic!("unknown os")
         }
     }
-    pub const fn new_with_val(v: u8) -> Self {
-        match v {
+    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+        Some(match v {
             0 => HostOS::Linux,
             1 => HostOS::Windows,
             2 => HostOS::MacOS,
@@ -178,13 +191,20 @@ impl HostOS {
             11 => HostOS::Fuchsia,
             12 => HostOS::Redox,
             13 => HostOS::DragonFly,
-            _ => panic!("unknown OS"),
+            _ => return None,
+        })
+    }
+    pub const fn new_with_val(v: u8) -> Self {
+        match Self::try_new_with_val(v) {
+            Some(v) => v,
+            None => panic!("unknown OS"),
         }
     }
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+/// Host endian enumeration
 pub enum HostEndian {
     Big = 0,
     Little = 1,
@@ -198,17 +218,24 @@ impl HostEndian {
             Self::Big
         }
     }
-    pub const fn new_with_val(v: u8) -> Self {
-        match v {
+    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+        Some(match v {
             0 => HostEndian::Big,
             1 => HostEndian::Little,
-            _ => panic!("Unknown endian"),
+            _ => return None,
+        })
+    }
+    pub const fn new_with_val(v: u8) -> Self {
+        match Self::try_new_with_val(v) {
+            Some(v) => v,
+            None => panic!("Unknown endian"),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
 #[repr(u8)]
+/// Host pointer width enumeration
 pub enum HostPointerWidth {
     P32 = 0,
     P64 = 1,
@@ -222,22 +249,43 @@ impl HostPointerWidth {
             _ => panic!("unknown pointer width"),
         }
     }
-    pub const fn new_with_val(v: u8) -> Self {
-        match v {
+    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+        Some(match v {
             0 => HostPointerWidth::P32,
             1 => HostPointerWidth::P64,
-            _ => panic!("Unknown pointer width"),
+            _ => return None,
+        })
+    }
+    pub const fn new_with_val(v: u8) -> Self {
+        match Self::try_new_with_val(v) {
+            Some(v) => v,
+            None => panic!("Unknown pointer width"),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+/// The static record
 pub struct StaticRecordUV {
     data: [u8; 16],
 }
 
 impl StaticRecordUV {
-    pub const fn create(sr1_version: HeaderVersion) -> Self {
+    const OFFSET_P0: usize = 0;
+    const OFFSET_P1: usize = sizeof!(u64);
+    const OFFSET_P2: usize = Self::OFFSET_P1 + sizeof!(u32);
+    const OFFSET_P3: usize = Self::OFFSET_P2 + 1;
+    const OFFSET_P4: usize = Self::OFFSET_P3 + 1;
+    const OFFSET_P5: usize = Self::OFFSET_P4 + 1;
+    const _ENSURE: () = assert!(Self::OFFSET_P5 == (sizeof!(Self) - 1));
+    #[inline(always)]
+    pub const fn new(
+        sr1_version: HeaderVersion,
+        sr2_ptr_width: HostPointerWidth,
+        sr3_endian: HostEndian,
+        sr4_arch: HostArch,
+        sr5_os: HostOS,
+    ) -> Self {
         let mut data = [0u8; 16];
         let magic_buf = SR0_MAGIC.to_le_bytes();
         let version_buf = sr1_version.little_endian_u64();
@@ -247,61 +295,68 @@ impl StaticRecordUV {
             data[i + sizeof!(u64)] = version_buf[i];
             i += 1;
         }
-        data[sizeof!(u64, 2) - 4] = SR2_PTR_WIDTH;
-        data[sizeof!(u64, 2) - 3] = SR3_ENDIAN;
-        data[sizeof!(u64, 2) - 2] = SR4_ARCH;
-        data[sizeof!(u64, 2) - 1] = SR5_OS;
+        data[sizeof!(u64, 2) - 4] = sr2_ptr_width.value_u8();
+        data[sizeof!(u64, 2) - 3] = sr3_endian.value_u8();
+        data[sizeof!(u64, 2) - 2] = sr4_arch.value_u8();
+        data[sizeof!(u64, 2) - 1] = sr5_os.value_u8();
         Self { data }
     }
+    #[inline(always)]
+    pub const fn create(sr1_version: HeaderVersion) -> Self {
+        Self::new(sr1_version, SR2_PTR_WIDTH, SR3_ENDIAN, SR4_ARCH, SR5_OS)
+    }
+    /// Decode and validate a SR
+    ///
+    /// WARNING: NOT CONTEXTUAL! VALIDATE YOUR OWN STUFF!
+    pub fn decode(data: [u8; 16]) -> Option<Self> {
+        let _ = Self::_ENSURE;
+        let slf = Self { data };
+        // p0: magic; the magic HAS to be the same
+        if u64::from_le(slf.read_qword(Self::OFFSET_P0)) != SR0_MAGIC {
+            return None;
+        }
+        let sr2_ptr = HostPointerWidth::try_new_with_val(slf.read_byte(Self::OFFSET_P2))?; // p2: ptr width
+        let sr3_endian = HostEndian::try_new_with_val(slf.read_byte(Self::OFFSET_P3))?; // p3: endian
+        let sr4_arch = HostArch::try_new_with_val(slf.read_byte(Self::OFFSET_P4))?; // p4: arch
+        let sr5_os = HostOS::try_new_with_val(slf.read_byte(Self::OFFSET_P5))?; // p5: os
+        Some(Self::new(
+            HeaderVersion::__new(u32::from_le(slf.read_dword(Self::OFFSET_P1))),
+            sr2_ptr,
+            sr3_endian,
+            sr4_arch,
+            sr5_os,
+        ))
+    }
+}
+
+impl StaticRecordUV {
     pub const fn get_ref(&self) -> &[u8] {
         &self.data
     }
     pub const fn read_p0_magic(&self) -> u64 {
-        self.read_qword(0)
+        self.read_qword(Self::OFFSET_P0)
     }
     pub const fn read_p1_header_version(&self) -> HeaderVersion {
-        HeaderVersion::__new(self.read_dword(sizeof!(u64)))
+        HeaderVersion::__new(self.read_dword(Self::OFFSET_P1))
     }
     pub const fn read_p2_ptr_width(&self) -> HostPointerWidth {
-        HostPointerWidth::new_with_val(self.read_byte(12))
+        HostPointerWidth::new_with_val(self.read_byte(Self::OFFSET_P2))
     }
     pub const fn read_p3_endian(&self) -> HostEndian {
-        HostEndian::new_with_val(self.read_byte(13))
+        HostEndian::new_with_val(self.read_byte(Self::OFFSET_P3))
     }
     pub const fn read_p4_arch(&self) -> HostArch {
-        HostArch::new_with_val(self.read_byte(14))
+        HostArch::new_with_val(self.read_byte(Self::OFFSET_P4))
     }
     pub const fn read_p5_os(&self) -> HostOS {
-        HostOS::new_with_val(self.read_byte(15))
+        HostOS::new_with_val(self.read_byte(Self::OFFSET_P5))
     }
 }
 
 impl_stack_read_primitives!(unsafe impl for StaticRecordUV {});
 
-/*
-    File identity
-*/
-
-/// The file scope
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-pub enum FileScope {
-    TransactionLog = 0,
-    TransactionLogCompacted = 1,
-}
-
-impl FileScope {
-    pub const fn new(id: u32) -> Self {
-        match id {
-            0 => Self::TransactionLog,
-            1 => Self::TransactionLogCompacted,
-            _ => panic!("unknown filescope"),
-        }
-    }
-}
-
 #[test]
-fn test_static_record_encode_decode() {
+fn test_static_record() {
     let static_record = StaticRecordUV::create(super::versions::v1::V1_HEADER_VERSION);
     assert_eq!(static_record.read_p0_magic(), SR0_MAGIC);
     assert_eq!(
@@ -312,4 +367,11 @@ fn test_static_record_encode_decode() {
     assert_eq!(static_record.read_p3_endian(), HostEndian::new());
     assert_eq!(static_record.read_p4_arch(), HostArch::new());
     assert_eq!(static_record.read_p5_os(), HostOS::new());
+}
+
+#[test]
+fn test_static_record_encode_decode() {
+    let static_record = StaticRecordUV::create(super::versions::v1::V1_HEADER_VERSION);
+    let static_record_decoded = StaticRecordUV::decode(static_record.data).unwrap();
+    assert_eq!(static_record, static_record_decoded);
 }

@@ -53,7 +53,7 @@
 */
 
 use crate::engine::storage::{
-    header::{FileScope, StaticRecordUV},
+    header::StaticRecordUV,
     versions::{self, DriverVersion, ServerVersion},
 };
 
@@ -78,7 +78,32 @@ impl StaticRecord {
     |  Server  |  Driver  |   File   |File|Spec|
     |  version |  Version |   Scope  |Spec|ID  |
     +----------+----------+----------+---------+
+    0, 63
 */
+
+/// The file scope
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
+pub enum FileScope {
+    TransactionLog = 0,
+    TransactionLogCompacted = 1,
+}
+
+impl FileScope {
+    pub const fn try_new(id: u64) -> Option<Self> {
+        Some(match id {
+            0 => Self::TransactionLog,
+            1 => Self::TransactionLogCompacted,
+            _ => return None,
+        })
+    }
+    pub const fn new(id: u64) -> Self {
+        match Self::try_new(id) {
+            Some(v) => v,
+            None => panic!("unknown filescope"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
 #[repr(u8)]
@@ -87,9 +112,15 @@ pub enum FileSpecifier {
 }
 
 impl FileSpecifier {
-    pub const fn new(v: u32) -> Self {
-        match v {
+    pub const fn try_new(v: u32) -> Option<Self> {
+        Some(match v {
             0 => Self::GNSTxnLog,
+            _ => return None,
+        })
+    }
+    pub const fn new(v: u32) -> Self {
+        match Self::try_new(v) {
+            Some(v) => v,
             _ => panic!("unknown filespecifier"),
         }
     }
@@ -110,16 +141,49 @@ pub struct MetadataRecord {
 impl_stack_read_primitives!(unsafe impl for MetadataRecord {});
 
 impl MetadataRecord {
-    pub const fn new(
+    /// Decodes a given metadata record, validating all data for correctness.
+    ///
+    /// WARNING: That means you need to do contextual validation! This function is not aware of any context
+    pub fn decode(data: [u8; 32]) -> Option<Self> {
+        let slf = Self { data };
+        let server_version =
+            ServerVersion::__new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P0)));
+        let driver_version =
+            DriverVersion::__new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P1)));
+        let file_scope = FileScope::try_new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P2)))?;
+        let file_spec = FileSpecifier::try_new(u32::from_le(slf.read_dword(Self::MDR_OFFSET_P3)))?;
+        let file_spec_id =
+            FileSpecifierVersion::__new(u32::from_le(slf.read_dword(Self::MDR_OFFSET_P4)));
+        Some(Self::new_full(
+            server_version,
+            driver_version,
+            file_scope,
+            file_spec,
+            file_spec_id,
+        ))
+    }
+}
+
+impl MetadataRecord {
+    const MDR_OFFSET_P0: usize = 0;
+    const MDR_OFFSET_P1: usize = sizeof!(u64);
+    const MDR_OFFSET_P2: usize = Self::MDR_OFFSET_P1 + sizeof!(u64);
+    const MDR_OFFSET_P3: usize = Self::MDR_OFFSET_P2 + sizeof!(u64);
+    const MDR_OFFSET_P4: usize = Self::MDR_OFFSET_P3 + sizeof!(u32);
+    const _ENSURE: () = assert!(Self::MDR_OFFSET_P4 == (sizeof!(Self) - sizeof!(u32)));
+    pub const fn new_full(
+        server_version: ServerVersion,
+        driver_version: DriverVersion,
         scope: FileScope,
         specifier: FileSpecifier,
         specifier_id: FileSpecifierVersion,
     ) -> Self {
+        let _ = Self::_ENSURE;
         let mut ret = [0u8; 32];
         let mut i = 0;
         // read buf
-        let server_version = versions::v1::V1_SERVER_VERSION.little_endian();
-        let driver_version = versions::v1::V1_DRIVER_VERSION.little_endian();
+        let server_version = server_version.little_endian();
+        let driver_version = driver_version.little_endian();
         let file_scope = scope.value_qword().to_le_bytes();
         // specifier + specifier ID
         let file_specifier_and_id: u64 =
@@ -134,20 +198,36 @@ impl MetadataRecord {
         }
         Self { data: ret }
     }
+    pub const fn new(
+        scope: FileScope,
+        specifier: FileSpecifier,
+        specifier_id: FileSpecifierVersion,
+    ) -> Self {
+        Self::new_full(
+            versions::v1::V1_SERVER_VERSION,
+            versions::v1::V1_DRIVER_VERSION,
+            scope,
+            specifier,
+            specifier_id,
+        )
+    }
+}
+
+impl MetadataRecord {
     pub const fn read_p0_server_version(&self) -> ServerVersion {
-        ServerVersion::__new(self.read_qword(0))
+        ServerVersion::__new(self.read_qword(Self::MDR_OFFSET_P0))
     }
     pub const fn read_p1_driver_version(&self) -> DriverVersion {
-        DriverVersion::__new(self.read_qword(sizeof!(u64)))
+        DriverVersion::__new(self.read_qword(Self::MDR_OFFSET_P1))
     }
     pub const fn read_p2_file_scope(&self) -> FileScope {
-        FileScope::new(self.read_qword(sizeof!(u128)) as u32)
+        FileScope::new(self.read_qword(Self::MDR_OFFSET_P2))
     }
     pub const fn read_p3_file_spec(&self) -> FileSpecifier {
-        FileSpecifier::new(self.read_dword(sizeof!(u64, 3)))
+        FileSpecifier::new(self.read_dword(Self::MDR_OFFSET_P3))
     }
     pub const fn read_p4_file_spec_version(&self) -> FileSpecifierVersion {
-        FileSpecifierVersion(self.read_dword(sizeof!(u64, 3) + sizeof!(u32)))
+        FileSpecifierVersion(self.read_dword(Self::MDR_OFFSET_P4))
     }
 }
 
@@ -173,11 +253,17 @@ pub enum HostRunMode {
 }
 
 impl HostRunMode {
-    pub const fn new_with_val(v: u8) -> Self {
-        match v {
+    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+        Some(match v {
             0 => Self::Dev,
             1 => Self::Prod,
-            _ => panic!("unknown hostrunmode"),
+            _ => return None,
+        })
+    }
+    pub const fn new_with_val(v: u8) -> Self {
+        match Self::try_new_with_val(v) {
+            Some(v) => v,
+            None => panic!("unknown hostrunmode"),
         }
     }
 }
@@ -192,6 +278,13 @@ pub struct VariableHostRecord {
 }
 
 impl VariableHostRecord {
+    const VHR_OFFSET_P0: usize = 0;
+    const VHR_OFFSET_P1: usize = sizeof!(u128);
+    const VHR_OFFSET_P2A: usize = Self::VHR_OFFSET_P1 + sizeof!(u128);
+    const VHR_OFFSET_P2B: usize = Self::VHR_OFFSET_P2A + sizeof!(u32);
+    const VHR_OFFSET_P3: usize = Self::VHR_OFFSET_P2B + sizeof!(u32);
+    const VHR_OFFSET_P4: usize = Self::VHR_OFFSET_P3 + sizeof!(u64);
+    const _ENSURE: () = assert!(Self::VHR_OFFSET_P4 == sizeof!(VHRConstSection) - sizeof!(u64));
     pub fn new(
         p0_host_epoch_time: u128,
         p1_host_uptime: u128,
@@ -200,6 +293,7 @@ impl VariableHostRecord {
         p3_host_startup_counter: u64,
         p5_host_name: Box<[u8]>,
     ) -> Self {
+        let _ = Self::_ENSURE;
         let p4_host_name_length = p5_host_name.len();
         let mut variable_record_fl = [0u8; 56];
         variable_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_le_bytes());
@@ -231,23 +325,26 @@ impl VariableHostRecord {
             p5_host_name,
         )
     }
+}
+
+impl VariableHostRecord {
     pub const fn read_p0_epoch_time(&self) -> u128 {
-        self.read_xmmword(0)
+        self.read_xmmword(Self::VHR_OFFSET_P0)
     }
     pub const fn read_p1_uptime(&self) -> u128 {
-        self.read_xmmword(sizeof!(u128))
+        self.read_xmmword(Self::VHR_OFFSET_P1)
     }
     pub const fn read_p2a_setting_version_id(&self) -> u32 {
-        self.read_dword(sizeof!(u128, 2))
+        self.read_dword(Self::VHR_OFFSET_P2A)
     }
     pub const fn read_p2b_run_mode(&self) -> HostRunMode {
-        HostRunMode::new_with_val(self.read_dword(sizeof!(u128, 2) + sizeof!(u32)) as u8)
+        HostRunMode::new_with_val(self.read_dword(Self::VHR_OFFSET_P2B) as u8)
     }
     pub const fn read_p3_startup_counter(&self) -> u64 {
-        self.read_qword(sizeof!(u128, 2) + sizeof!(u32, 2))
+        self.read_qword(Self::VHR_OFFSET_P3)
     }
     pub const fn read_p4_host_name_length(&self) -> u64 {
-        self.read_qword(sizeof!(u128, 2) + sizeof!(u32, 2) + sizeof!(u64))
+        self.read_qword(Self::VHR_OFFSET_P4)
     }
     pub fn read_p5_host_name(&self) -> &[u8] {
         &self.host_name
@@ -313,10 +410,10 @@ impl SDSSHeader {
         self.dr_1_vhr.host_name.as_ref()
     }
     pub fn calculate_header_size(&self) -> usize {
-        sizeof!(StaticRecord)
-            + sizeof!(MetadataRecord)
-            + sizeof!(VHRConstSection)
-            + self.dr_1_vhr.host_name.len()
+        Self::calculate_fixed_header_size() + self.dr_1_vhr.host_name.len()
+    }
+    pub const fn calculate_fixed_header_size() -> usize {
+        sizeof!(StaticRecord) + sizeof!(MetadataRecord) + sizeof!(VHRConstSection)
     }
 }
 
