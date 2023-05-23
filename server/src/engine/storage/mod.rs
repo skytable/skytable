@@ -26,8 +26,6 @@
 
 //! Implementations of the Skytable Disk Storage Subsystem (SDSS)
 
-#[macro_use]
-mod macros;
 mod header;
 mod versions;
 // impls

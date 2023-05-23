@@ -25,6 +25,7 @@
 */
 
 mod astr;
+mod stackop;
 mod uarray;
 mod vinline;
 mod word;
@@ -32,10 +33,13 @@ mod word;
 #[cfg(test)]
 mod tests;
 // re-exports
-pub use astr::AStr;
-pub use uarray::UArray;
-pub use vinline::VInline;
-pub use word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO, ZERO_BLOCK};
+pub use {
+    astr::AStr,
+    stackop::ByteStack,
+    uarray::UArray,
+    vinline::VInline,
+    word::{DwordNN, DwordQN, QwordNNNN, TwordNNN, WordIO, ZERO_BLOCK},
+};
 // imports
 use std::alloc::{self, Layout};
 

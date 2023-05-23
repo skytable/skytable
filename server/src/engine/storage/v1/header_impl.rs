@@ -52,9 +52,12 @@
  * Note: The entire part of the header is little endian encoded
 */
 
-use crate::engine::storage::{
-    header::StaticRecordUV,
-    versions::{self, DriverVersion, ServerVersion},
+use crate::engine::{
+    mem::ByteStack,
+    storage::{
+        header::StaticRecordUV,
+        versions::{self, DriverVersion, ServerVersion},
+    },
 };
 
 /// Static record
@@ -135,25 +138,27 @@ impl FileSpecifierVersion {
 }
 
 pub struct MetadataRecord {
-    data: [u8; 32],
+    data: ByteStack<32>,
 }
-
-impl_stack_read_primitives!(unsafe impl for MetadataRecord {});
 
 impl MetadataRecord {
     /// Decodes a given metadata record, validating all data for correctness.
     ///
     /// WARNING: That means you need to do contextual validation! This function is not aware of any context
     pub fn decode(data: [u8; 32]) -> Option<Self> {
-        let slf = Self { data };
+        let slf = Self {
+            data: ByteStack::new(data),
+        };
         let server_version =
-            ServerVersion::__new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P0)));
+            ServerVersion::__new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P0)));
         let driver_version =
-            DriverVersion::__new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P1)));
-        let file_scope = FileScope::try_new(u64::from_le(slf.read_qword(Self::MDR_OFFSET_P2)))?;
-        let file_spec = FileSpecifier::try_new(u32::from_le(slf.read_dword(Self::MDR_OFFSET_P3)))?;
+            DriverVersion::__new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P1)));
+        let file_scope =
+            FileScope::try_new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P2)))?;
+        let file_spec =
+            FileSpecifier::try_new(u32::from_le(slf.data.read_dword(Self::MDR_OFFSET_P3)))?;
         let file_spec_id =
-            FileSpecifierVersion::__new(u32::from_le(slf.read_dword(Self::MDR_OFFSET_P4)));
+            FileSpecifierVersion::__new(u32::from_le(slf.data.read_dword(Self::MDR_OFFSET_P4)));
         Some(Self::new_full(
             server_version,
             driver_version,
@@ -186,8 +191,12 @@ impl MetadataRecord {
         let driver_version = driver_version.little_endian();
         let file_scope = scope.value_qword().to_le_bytes();
         // specifier + specifier ID
-        let file_specifier_and_id: u64 =
-            unsafe { core::mem::transmute([specifier.value_u8() as u32, specifier_id.0]) };
+        let file_specifier_and_id: u64 = unsafe {
+            core::mem::transmute([
+                (specifier.value_u8() as u32).to_le(),
+                specifier_id.0.to_le(),
+            ])
+        };
         let file_specifier_and_id = file_specifier_and_id.to_le_bytes();
         while i < sizeof!(u64) {
             ret[i] = server_version[i];
@@ -196,7 +205,9 @@ impl MetadataRecord {
             ret[i + sizeof!(u64, 3)] = file_specifier_and_id[i];
             i += 1;
         }
-        Self { data: ret }
+        Self {
+            data: ByteStack::new(ret),
+        }
     }
     pub const fn new(
         scope: FileScope,
@@ -215,19 +226,19 @@ impl MetadataRecord {
 
 impl MetadataRecord {
     pub const fn read_p0_server_version(&self) -> ServerVersion {
-        ServerVersion::__new(self.read_qword(Self::MDR_OFFSET_P0))
+        ServerVersion::__new(self.data.read_qword(Self::MDR_OFFSET_P0))
     }
     pub const fn read_p1_driver_version(&self) -> DriverVersion {
-        DriverVersion::__new(self.read_qword(Self::MDR_OFFSET_P1))
+        DriverVersion::__new(self.data.read_qword(Self::MDR_OFFSET_P1))
     }
     pub const fn read_p2_file_scope(&self) -> FileScope {
-        FileScope::new(self.read_qword(Self::MDR_OFFSET_P2))
+        FileScope::new(self.data.read_qword(Self::MDR_OFFSET_P2))
     }
     pub const fn read_p3_file_spec(&self) -> FileSpecifier {
-        FileSpecifier::new(self.read_dword(Self::MDR_OFFSET_P3))
+        FileSpecifier::new(self.data.read_dword(Self::MDR_OFFSET_P3))
     }
     pub const fn read_p4_file_spec_version(&self) -> FileSpecifierVersion {
-        FileSpecifierVersion(self.read_dword(Self::MDR_OFFSET_P4))
+        FileSpecifierVersion(self.data.read_dword(Self::MDR_OFFSET_P4))
     }
 }
 
@@ -270,11 +281,33 @@ impl HostRunMode {
 
 type VHRConstSection = [u8; 56];
 
-impl_stack_read_primitives!(unsafe impl for VariableHostRecord {});
-
 pub struct VariableHostRecord {
-    data: VHRConstSection,
+    data: ByteStack<{ sizeof!(VHRConstSection) }>,
     host_name: Box<[u8]>,
+}
+
+impl VariableHostRecord {
+    /// Decodes and validates the [`VHRConstSection`] of a [`VariableHostRecord`]. Use the returned result to construct this
+    pub fn decode(
+        data: VHRConstSection,
+    ) -> Option<(ByteStack<{ sizeof!(VHRConstSection) }>, usize)> {
+        let s = ByteStack::new(data);
+        let host_epoch_time = s.read_xmmword(Self::VHR_OFFSET_P0);
+        if host_epoch_time > crate::util::os::get_epoch_time() {
+            // and what? we have a file from the future. Einstein says hi. (ok, maybe the host time is incorrect)
+            return None;
+        }
+        let _host_uptime = s.read_xmmword(Self::VHR_OFFSET_P1);
+        let _host_setting_version_id = s.read_dword(Self::VHR_OFFSET_P2A);
+        let _host_setting_run_mode = s.read_dword(Self::VHR_OFFSET_P2B);
+        let _host_startup_counter = s.read_qword(Self::VHR_OFFSET_P3);
+        let host_name_length = s.read_qword(Self::VHR_OFFSET_P4);
+        if host_name_length as usize > usize::MAX {
+            // too large for us to load. per DNS standards this shouldn't be more than 255 but who knows, some people like it wild
+            return None;
+        }
+        Some((s, host_name_length as usize))
+    }
 }
 
 impl VariableHostRecord {
@@ -304,7 +337,7 @@ impl VariableHostRecord {
         variable_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_le_bytes());
         variable_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
         Self {
-            data: variable_record_fl,
+            data: ByteStack::new(variable_record_fl),
             host_name: p5_host_name,
         }
     }
@@ -329,22 +362,22 @@ impl VariableHostRecord {
 
 impl VariableHostRecord {
     pub const fn read_p0_epoch_time(&self) -> u128 {
-        self.read_xmmword(Self::VHR_OFFSET_P0)
+        self.data.read_xmmword(Self::VHR_OFFSET_P0)
     }
     pub const fn read_p1_uptime(&self) -> u128 {
-        self.read_xmmword(Self::VHR_OFFSET_P1)
+        self.data.read_xmmword(Self::VHR_OFFSET_P1)
     }
     pub const fn read_p2a_setting_version_id(&self) -> u32 {
-        self.read_dword(Self::VHR_OFFSET_P2A)
+        self.data.read_dword(Self::VHR_OFFSET_P2A)
     }
     pub const fn read_p2b_run_mode(&self) -> HostRunMode {
-        HostRunMode::new_with_val(self.read_dword(Self::VHR_OFFSET_P2B) as u8)
+        HostRunMode::new_with_val(self.data.read_dword(Self::VHR_OFFSET_P2B) as u8)
     }
     pub const fn read_p3_startup_counter(&self) -> u64 {
-        self.read_qword(Self::VHR_OFFSET_P3)
+        self.data.read_qword(Self::VHR_OFFSET_P3)
     }
     pub const fn read_p4_host_name_length(&self) -> u64 {
-        self.read_qword(Self::VHR_OFFSET_P4)
+        self.data.read_qword(Self::VHR_OFFSET_P4)
     }
     pub fn read_p5_host_name(&self) -> &[u8] {
         &self.host_name
@@ -368,7 +401,7 @@ impl SDSSHeader {
             sr,
             dr_0_mdr,
             dr_1_vhr: VariableHostRecord {
-                data: dr_1_vhr_const_section,
+                data: ByteStack::new(dr_1_vhr_const_section),
                 host_name: dr_1_vhr_host_name,
             },
         }
@@ -401,10 +434,10 @@ impl SDSSHeader {
         self.sr.base.get_ref()
     }
     pub fn get1_dr_0_mdr(&self) -> &[u8] {
-        &self.dr_0_mdr.data
+        self.dr_0_mdr.data.slice()
     }
     pub fn get1_dr_1_vhr_0(&self) -> &[u8] {
-        &self.dr_1_vhr.data
+        self.dr_1_vhr.data.slice()
     }
     pub fn get1_dr_1_vhr_1(&self) -> &[u8] {
         self.dr_1_vhr.host_name.as_ref()

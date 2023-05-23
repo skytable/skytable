@@ -56,7 +56,7 @@
     ☢ HEADS UP: Static record is always little endian ☢
 */
 
-use super::versions::HeaderVersion;
+use {super::versions::HeaderVersion, crate::engine::mem::ByteStack};
 
 /// magic
 const SR0_MAGIC: u64 = 0x4F48534159414E21;
@@ -265,9 +265,51 @@ impl HostPointerWidth {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct StaticRecordUVDecoded {
+    header_version: HeaderVersion,
+    ptr_width: HostPointerWidth,
+    endian: HostEndian,
+    arch: HostArch,
+    os: HostOS,
+}
+
+impl StaticRecordUVDecoded {
+    pub const fn new(
+        header_version: HeaderVersion,
+        ptr_width: HostPointerWidth,
+        endian: HostEndian,
+        arch: HostArch,
+        os: HostOS,
+    ) -> Self {
+        Self {
+            header_version,
+            ptr_width,
+            endian,
+            arch,
+            os,
+        }
+    }
+    pub fn header_version(&self) -> HeaderVersion {
+        self.header_version
+    }
+    pub fn ptr_width(&self) -> HostPointerWidth {
+        self.ptr_width
+    }
+    pub fn endian(&self) -> HostEndian {
+        self.endian
+    }
+    pub fn arch(&self) -> HostArch {
+        self.arch
+    }
+    pub fn os(&self) -> HostOS {
+        self.os
+    }
+}
+
+#[derive(Debug, PartialEq)]
 /// The static record
 pub struct StaticRecordUV {
-    data: [u8; 16],
+    data: ByteStack<16>,
 }
 
 impl StaticRecordUV {
@@ -299,7 +341,9 @@ impl StaticRecordUV {
         data[sizeof!(u64, 2) - 3] = sr3_endian.value_u8();
         data[sizeof!(u64, 2) - 2] = sr4_arch.value_u8();
         data[sizeof!(u64, 2) - 1] = sr5_os.value_u8();
-        Self { data }
+        Self {
+            data: ByteStack::new(data),
+        }
     }
     #[inline(always)]
     pub const fn create(sr1_version: HeaderVersion) -> Self {
@@ -308,19 +352,22 @@ impl StaticRecordUV {
     /// Decode and validate a SR
     ///
     /// WARNING: NOT CONTEXTUAL! VALIDATE YOUR OWN STUFF!
-    pub fn decode(data: [u8; 16]) -> Option<Self> {
+    pub fn decode(data: [u8; 16]) -> Option<StaticRecordUVDecoded> {
         let _ = Self::_ENSURE;
-        let slf = Self { data };
+        let slf = Self {
+            data: ByteStack::new(data),
+        };
         // p0: magic; the magic HAS to be the same
-        if u64::from_le(slf.read_qword(Self::OFFSET_P0)) != SR0_MAGIC {
+        if u64::from_le(slf.data.read_qword(Self::OFFSET_P0)) != SR0_MAGIC {
             return None;
         }
-        let sr2_ptr = HostPointerWidth::try_new_with_val(slf.read_byte(Self::OFFSET_P2))?; // p2: ptr width
-        let sr3_endian = HostEndian::try_new_with_val(slf.read_byte(Self::OFFSET_P3))?; // p3: endian
-        let sr4_arch = HostArch::try_new_with_val(slf.read_byte(Self::OFFSET_P4))?; // p4: arch
-        let sr5_os = HostOS::try_new_with_val(slf.read_byte(Self::OFFSET_P5))?; // p5: os
-        Some(Self::new(
-            HeaderVersion::__new(u32::from_le(slf.read_dword(Self::OFFSET_P1))),
+        let sr1_header_version = HeaderVersion::__new(slf.data.read_dword(Self::OFFSET_P1));
+        let sr2_ptr = HostPointerWidth::try_new_with_val(slf.data.read_byte(Self::OFFSET_P2))?; // p2: ptr width
+        let sr3_endian = HostEndian::try_new_with_val(slf.data.read_byte(Self::OFFSET_P3))?; // p3: endian
+        let sr4_arch = HostArch::try_new_with_val(slf.data.read_byte(Self::OFFSET_P4))?; // p4: arch
+        let sr5_os = HostOS::try_new_with_val(slf.data.read_byte(Self::OFFSET_P5))?; // p5: os
+        Some(StaticRecordUVDecoded::new(
+            sr1_header_version,
             sr2_ptr,
             sr3_endian,
             sr4_arch,
@@ -331,29 +378,36 @@ impl StaticRecordUV {
 
 impl StaticRecordUV {
     pub const fn get_ref(&self) -> &[u8] {
-        &self.data
+        self.data.slice()
     }
     pub const fn read_p0_magic(&self) -> u64 {
-        self.read_qword(Self::OFFSET_P0)
+        self.data.read_qword(Self::OFFSET_P0)
     }
     pub const fn read_p1_header_version(&self) -> HeaderVersion {
-        HeaderVersion::__new(self.read_dword(Self::OFFSET_P1))
+        HeaderVersion::__new(self.data.read_dword(Self::OFFSET_P1))
     }
     pub const fn read_p2_ptr_width(&self) -> HostPointerWidth {
-        HostPointerWidth::new_with_val(self.read_byte(Self::OFFSET_P2))
+        HostPointerWidth::new_with_val(self.data.read_byte(Self::OFFSET_P2))
     }
     pub const fn read_p3_endian(&self) -> HostEndian {
-        HostEndian::new_with_val(self.read_byte(Self::OFFSET_P3))
+        HostEndian::new_with_val(self.data.read_byte(Self::OFFSET_P3))
     }
     pub const fn read_p4_arch(&self) -> HostArch {
-        HostArch::new_with_val(self.read_byte(Self::OFFSET_P4))
+        HostArch::new_with_val(self.data.read_byte(Self::OFFSET_P4))
     }
     pub const fn read_p5_os(&self) -> HostOS {
-        HostOS::new_with_val(self.read_byte(Self::OFFSET_P5))
+        HostOS::new_with_val(self.data.read_byte(Self::OFFSET_P5))
+    }
+    pub const fn decoded(&self) -> StaticRecordUVDecoded {
+        StaticRecordUVDecoded::new(
+            self.read_p1_header_version(),
+            self.read_p2_ptr_width(),
+            self.read_p3_endian(),
+            self.read_p4_arch(),
+            self.read_p5_os(),
+        )
     }
 }
-
-impl_stack_read_primitives!(unsafe impl for StaticRecordUV {});
 
 #[test]
 fn test_static_record() {
@@ -372,6 +426,6 @@ fn test_static_record() {
 #[test]
 fn test_static_record_encode_decode() {
     let static_record = StaticRecordUV::create(super::versions::v1::V1_HEADER_VERSION);
-    let static_record_decoded = StaticRecordUV::decode(static_record.data).unwrap();
-    assert_eq!(static_record, static_record_decoded);
+    let static_record_decoded = StaticRecordUV::decode(static_record.data.data_copy()).unwrap();
+    assert_eq!(static_record.decoded(), static_record_decoded);
 }
