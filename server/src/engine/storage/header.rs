@@ -265,7 +265,7 @@ impl HostPointerWidth {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct StaticRecordUVDecoded {
+pub struct StaticRecordUV {
     header_version: HeaderVersion,
     ptr_width: HostPointerWidth,
     endian: HostEndian,
@@ -273,7 +273,7 @@ pub struct StaticRecordUVDecoded {
     os: HostOS,
 }
 
-impl StaticRecordUVDecoded {
+impl StaticRecordUV {
     pub const fn new(
         header_version: HeaderVersion,
         ptr_width: HostPointerWidth,
@@ -289,30 +289,39 @@ impl StaticRecordUVDecoded {
             os,
         }
     }
-    pub fn header_version(&self) -> HeaderVersion {
+    pub const fn header_version(&self) -> HeaderVersion {
         self.header_version
     }
-    pub fn ptr_width(&self) -> HostPointerWidth {
+    pub const fn ptr_width(&self) -> HostPointerWidth {
         self.ptr_width
     }
-    pub fn endian(&self) -> HostEndian {
+    pub const fn endian(&self) -> HostEndian {
         self.endian
     }
-    pub fn arch(&self) -> HostArch {
+    pub const fn arch(&self) -> HostArch {
         self.arch
     }
-    pub fn os(&self) -> HostOS {
+    pub const fn os(&self) -> HostOS {
         self.os
+    }
+    pub const fn encode(&self) -> StaticRecordUVRaw {
+        StaticRecordUVRaw::new(
+            self.header_version(),
+            self.ptr_width(),
+            self.endian(),
+            self.arch(),
+            self.os(),
+        )
     }
 }
 
 #[derive(Debug, PartialEq)]
 /// The static record
-pub struct StaticRecordUV {
+pub struct StaticRecordUVRaw {
     data: ByteStack<16>,
 }
 
-impl StaticRecordUV {
+impl StaticRecordUVRaw {
     const OFFSET_P0: usize = 0;
     const OFFSET_P1: usize = sizeof!(u64);
     const OFFSET_P2: usize = Self::OFFSET_P1 + sizeof!(u32);
@@ -352,7 +361,7 @@ impl StaticRecordUV {
     /// Decode and validate a SR
     ///
     /// WARNING: NOT CONTEXTUAL! VALIDATE YOUR OWN STUFF!
-    pub fn decode(data: [u8; 16]) -> Option<StaticRecordUVDecoded> {
+    pub fn decode_from_bytes(data: [u8; 16]) -> Option<StaticRecordUV> {
         let _ = Self::_ENSURE;
         let slf = Self {
             data: ByteStack::new(data),
@@ -366,7 +375,7 @@ impl StaticRecordUV {
         let sr3_endian = HostEndian::try_new_with_val(slf.data.read_byte(Self::OFFSET_P3))?; // p3: endian
         let sr4_arch = HostArch::try_new_with_val(slf.data.read_byte(Self::OFFSET_P4))?; // p4: arch
         let sr5_os = HostOS::try_new_with_val(slf.data.read_byte(Self::OFFSET_P5))?; // p5: os
-        Some(StaticRecordUVDecoded::new(
+        Some(StaticRecordUV::new(
             sr1_header_version,
             sr2_ptr,
             sr3_endian,
@@ -376,7 +385,7 @@ impl StaticRecordUV {
     }
 }
 
-impl StaticRecordUV {
+impl StaticRecordUVRaw {
     pub const fn get_ref(&self) -> &[u8] {
         self.data.slice()
     }
@@ -398,8 +407,8 @@ impl StaticRecordUV {
     pub const fn read_p5_os(&self) -> HostOS {
         HostOS::new_with_val(self.data.read_byte(Self::OFFSET_P5))
     }
-    pub const fn decoded(&self) -> StaticRecordUVDecoded {
-        StaticRecordUVDecoded::new(
+    pub const fn decoded(&self) -> StaticRecordUV {
+        StaticRecordUV::new(
             self.read_p1_header_version(),
             self.read_p2_ptr_width(),
             self.read_p3_endian(),
@@ -411,7 +420,7 @@ impl StaticRecordUV {
 
 #[test]
 fn test_static_record() {
-    let static_record = StaticRecordUV::create(super::versions::v1::V1_HEADER_VERSION);
+    let static_record = StaticRecordUVRaw::create(super::versions::v1::V1_HEADER_VERSION);
     assert_eq!(static_record.read_p0_magic(), SR0_MAGIC);
     assert_eq!(
         static_record.read_p1_header_version(),
@@ -425,7 +434,8 @@ fn test_static_record() {
 
 #[test]
 fn test_static_record_encode_decode() {
-    let static_record = StaticRecordUV::create(super::versions::v1::V1_HEADER_VERSION);
-    let static_record_decoded = StaticRecordUV::decode(static_record.data.data_copy()).unwrap();
+    let static_record = StaticRecordUVRaw::create(super::versions::v1::V1_HEADER_VERSION);
+    let static_record_decoded =
+        StaticRecordUVRaw::decode_from_bytes(static_record.data.data_copy()).unwrap();
     assert_eq!(static_record.decoded(), static_record_decoded);
 }

@@ -24,9 +24,14 @@
  *
 */
 
+use crate::engine::storage::versions;
+
 use {
-    super::header_impl::SDSSHeader,
+    super::header_impl::SDSSHeaderRaw,
     crate::{
+        engine::storage::v1::header_impl::{
+            HostRecord, HostRecordRaw, MetadataRecordRaw, SDSSHeader, StaticRecordRaw,
+        },
         util::{ByteRepr, NumericRepr},
         IoResult,
     },
@@ -40,6 +45,9 @@ use {
 pub enum SDSSError {
     SRVersionMismatch,
     IoError(IoError),
+    CorruptedHeaderSR,
+    CorruptedHeaderMDR,
+    CorruptedHeaderHR,
 }
 
 impl From<IoError> for SDSSError {
@@ -93,12 +101,12 @@ pub struct SDSSWriter<W> {
 }
 
 impl<W: RawWriterInterface> SDSSWriter<W> {
-    pub fn open_create_with_header(file: &str, header: SDSSHeader) -> IoResult<Self> {
+    pub fn open_create_with_header(file: &str, header: SDSSHeaderRaw) -> IoResult<Self> {
         let mut w = W::fopen_create(file)?;
         w.fwrite_all(header.get0_sr())?;
         w.fwrite_all(header.get1_dr_0_mdr())?;
-        w.fwrite_all(header.get1_dr_1_vhr_0())?;
-        w.fwrite_all(header.get1_dr_1_vhr_1())?;
+        w.fwrite_all(header.get1_dr_1_hr_0())?;
+        w.fwrite_all(header.get1_dr_1_hr_1())?;
         w.fsync_all()?;
         Ok(Self { writer: w })
     }
@@ -168,5 +176,38 @@ impl RawReaderInterface for FileBuffered {
     fn fread_to_end(&mut self, buf: &mut Vec<u8>) -> IoResult<()> {
         buf.extend_from_slice(&self.base[self.cursor..]);
         Ok(())
+    }
+}
+
+pub struct SDSSReader<R> {
+    reader: R,
+    header: SDSSHeader,
+}
+
+impl<R: RawReaderInterface> SDSSReader<R> {
+    pub fn open(f: &str) -> SDSSResult<Self> {
+        let mut r = R::fopen(f)?;
+        let mut sr = StaticRecordRaw::empty_buffer();
+        let mut mdr = MetadataRecordRaw::empty_buffer();
+        let mut hr_0_const = HostRecordRaw::empty_buffer_const_section();
+        r.fread_exact_seek(&mut sr)?;
+        r.fread_exact_seek(&mut mdr)?;
+        r.fread_exact_seek(&mut hr_0_const)?;
+        let sr = StaticRecordRaw::decode_from_bytes(sr).ok_or(SDSSError::CorruptedHeaderSR)?;
+        let mdr = MetadataRecordRaw::decode_from_bytes(mdr).ok_or(SDSSError::CorruptedHeaderMDR)?;
+        let (hr_const, hostname_len) = HostRecordRaw::decode_from_bytes_const_sec(hr_0_const)
+            .ok_or(SDSSError::CorruptedHeaderHR)?;
+        let mut host_name = vec![0u8; hostname_len].into_boxed_slice();
+        r.fread_exact_seek(&mut host_name)?;
+        if (sr.sr().header_version() != versions::v1::V1_HEADER_VERSION)
+            || (mdr.driver_version() != versions::v1::V1_DRIVER_VERSION)
+            || (mdr.server_version() != versions::v1::V1_SERVER_VERSION)
+        {
+            return Err(SDSSError::SRVersionMismatch);
+        }
+        Ok(Self {
+            reader: r,
+            header: SDSSHeader::new(sr, mdr, HostRecord::new(hr_const, host_name)),
+        })
     }
 }

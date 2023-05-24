@@ -44,32 +44,60 @@
  * |        +--------------------------------------------+        |
  * |        +--------------------------------------------+        |
  * |        |                                            |        |
- * |        |            VARIABLE HOST RECORD            |        |
+ * |        |             GENESIS HOST RECORD            |        |
  * |        |                  >56B                      |        |
  * |        +--------------------------------------------+        |
+ * |                                                              |
  * +--------------------------------------------------------------+
- *
+ * +--------------------------------------------------------------+
+ * |                     RUNTIME HOST RECORD                      |
+ * |                           >56B                               |
+ * +--------------------------------------------------------------+
  * Note: The entire part of the header is little endian encoded
 */
 
 use crate::engine::{
     mem::ByteStack,
     storage::{
-        header::StaticRecordUV,
+        header::{StaticRecordUV, StaticRecordUVRaw},
         versions::{self, DriverVersion, ServerVersion},
     },
 };
 
-/// Static record
 pub struct StaticRecord {
-    base: StaticRecordUV,
+    sr: StaticRecordUV,
 }
 
 impl StaticRecord {
+    pub const fn new(sr: StaticRecordUV) -> Self {
+        Self { sr }
+    }
+    pub const fn encode(&self) -> StaticRecordRaw {
+        StaticRecordRaw {
+            base: self.sr.encode(),
+        }
+    }
+    pub const fn sr(&self) -> &StaticRecordUV {
+        &self.sr
+    }
+}
+
+/// Static record
+pub struct StaticRecordRaw {
+    base: StaticRecordUVRaw,
+}
+
+impl StaticRecordRaw {
     pub const fn new() -> Self {
         Self {
-            base: StaticRecordUV::create(versions::v1::V1_HEADER_VERSION),
+            base: StaticRecordUVRaw::create(versions::v1::V1_HEADER_VERSION),
         }
+    }
+    pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
+        [0u8; sizeof!(Self)]
+    }
+    pub fn decode_from_bytes(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
+        StaticRecordUVRaw::decode_from_bytes(buf).map(StaticRecord::new)
     }
 }
 
@@ -138,28 +166,74 @@ impl FileSpecifierVersion {
 }
 
 pub struct MetadataRecord {
-    data: ByteStack<32>,
+    server_version: ServerVersion,
+    driver_version: DriverVersion,
+    file_scope: FileScope,
+    file_spec: FileSpecifier,
+    file_spec_id: FileSpecifierVersion,
 }
 
 impl MetadataRecord {
+    pub const fn new(
+        server_version: ServerVersion,
+        driver_version: DriverVersion,
+        file_scope: FileScope,
+        file_spec: FileSpecifier,
+        file_spec_id: FileSpecifierVersion,
+    ) -> Self {
+        Self {
+            server_version,
+            driver_version,
+            file_scope,
+            file_spec,
+            file_spec_id,
+        }
+    }
+    pub const fn server_version(&self) -> ServerVersion {
+        self.server_version
+    }
+    pub const fn driver_version(&self) -> DriverVersion {
+        self.driver_version
+    }
+    pub const fn file_scope(&self) -> FileScope {
+        self.file_scope
+    }
+    pub const fn file_spec(&self) -> FileSpecifier {
+        self.file_spec
+    }
+    pub const fn file_spec_id(&self) -> FileSpecifierVersion {
+        self.file_spec_id
+    }
+    pub const fn encode(&self) -> MetadataRecordRaw {
+        MetadataRecordRaw::new_full(
+            self.server_version(),
+            self.driver_version(),
+            self.file_scope(),
+            self.file_spec(),
+            self.file_spec_id(),
+        )
+    }
+}
+
+pub struct MetadataRecordRaw {
+    data: ByteStack<32>,
+}
+
+impl MetadataRecordRaw {
     /// Decodes a given metadata record, validating all data for correctness.
     ///
     /// WARNING: That means you need to do contextual validation! This function is not aware of any context
-    pub fn decode(data: [u8; 32]) -> Option<Self> {
-        let slf = Self {
-            data: ByteStack::new(data),
-        };
+    pub fn decode_from_bytes(data: [u8; 32]) -> Option<MetadataRecord> {
+        let data = ByteStack::new(data);
         let server_version =
-            ServerVersion::__new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P0)));
+            ServerVersion::__new(u64::from_le(data.read_qword(Self::MDR_OFFSET_P0)));
         let driver_version =
-            DriverVersion::__new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P1)));
-        let file_scope =
-            FileScope::try_new(u64::from_le(slf.data.read_qword(Self::MDR_OFFSET_P2)))?;
-        let file_spec =
-            FileSpecifier::try_new(u32::from_le(slf.data.read_dword(Self::MDR_OFFSET_P3)))?;
+            DriverVersion::__new(u64::from_le(data.read_qword(Self::MDR_OFFSET_P1)));
+        let file_scope = FileScope::try_new(u64::from_le(data.read_qword(Self::MDR_OFFSET_P2)))?;
+        let file_spec = FileSpecifier::try_new(u32::from_le(data.read_dword(Self::MDR_OFFSET_P3)))?;
         let file_spec_id =
-            FileSpecifierVersion::__new(u32::from_le(slf.data.read_dword(Self::MDR_OFFSET_P4)));
-        Some(Self::new_full(
+            FileSpecifierVersion::__new(u32::from_le(data.read_dword(Self::MDR_OFFSET_P4)));
+        Some(MetadataRecord::new(
             server_version,
             driver_version,
             file_scope,
@@ -169,13 +243,16 @@ impl MetadataRecord {
     }
 }
 
-impl MetadataRecord {
+impl MetadataRecordRaw {
     const MDR_OFFSET_P0: usize = 0;
     const MDR_OFFSET_P1: usize = sizeof!(u64);
     const MDR_OFFSET_P2: usize = Self::MDR_OFFSET_P1 + sizeof!(u64);
     const MDR_OFFSET_P3: usize = Self::MDR_OFFSET_P2 + sizeof!(u64);
     const MDR_OFFSET_P4: usize = Self::MDR_OFFSET_P3 + sizeof!(u32);
     const _ENSURE: () = assert!(Self::MDR_OFFSET_P4 == (sizeof!(Self) - sizeof!(u32)));
+    pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
+        [0u8; sizeof!(Self)]
+    }
     pub const fn new_full(
         server_version: ServerVersion,
         driver_version: DriverVersion,
@@ -224,7 +301,7 @@ impl MetadataRecord {
     }
 }
 
-impl MetadataRecord {
+impl MetadataRecordRaw {
     pub const fn read_p0_server_version(&self) -> ServerVersion {
         ServerVersion::__new(self.data.read_qword(Self::MDR_OFFSET_P0))
     }
@@ -245,7 +322,7 @@ impl MetadataRecord {
 /*
     Dynamic Record (2/2)
     ---
-    Variable record (?B; > 56B):
+    Host record (?B; > 56B):
     - 16B: Host epoch time in nanoseconds
     - 16B: Host uptime in nanoseconds
     - 08B:
@@ -264,14 +341,14 @@ pub enum HostRunMode {
 }
 
 impl HostRunMode {
-    pub const fn try_new_with_val(v: u8) -> Option<Self> {
+    pub const fn try_new_with_val(v: u32) -> Option<Self> {
         Some(match v {
             0 => Self::Dev,
             1 => Self::Prod,
             _ => return None,
         })
     }
-    pub const fn new_with_val(v: u8) -> Self {
+    pub const fn new_with_val(v: u32) -> Self {
         match Self::try_new_with_val(v) {
             Some(v) => v,
             None => panic!("unknown hostrunmode"),
@@ -279,45 +356,138 @@ impl HostRunMode {
     }
 }
 
-type VHRConstSection = [u8; 56];
+type HRConstSectionRaw = [u8; 56];
 
-pub struct VariableHostRecord {
-    data: ByteStack<{ sizeof!(VHRConstSection) }>,
+#[derive(Debug, PartialEq, Clone)]
+pub struct HostRecord {
+    hr_cr: HRConstSection,
     host_name: Box<[u8]>,
 }
 
-impl VariableHostRecord {
-    /// Decodes and validates the [`VHRConstSection`] of a [`VariableHostRecord`]. Use the returned result to construct this
-    pub fn decode(
-        data: VHRConstSection,
-    ) -> Option<(ByteStack<{ sizeof!(VHRConstSection) }>, usize)> {
+impl HostRecord {
+    pub fn new(hr_cr: HRConstSection, host_name: Box<[u8]>) -> Self {
+        Self { hr_cr, host_name }
+    }
+    pub fn hr_cr(&self) -> &HRConstSection {
+        &self.hr_cr
+    }
+    pub fn host_name(&self) -> &[u8] {
+        self.host_name.as_ref()
+    }
+    pub fn encode(&self) -> HostRecordRaw {
+        HostRecordRaw::new(
+            self.hr_cr().host_epoch_time(),
+            self.hr_cr().host_uptime(),
+            self.hr_cr().host_setting_version_id(),
+            self.hr_cr().host_run_mode(),
+            self.hr_cr().host_startup_counter(),
+            self.host_name().into(),
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct HRConstSection {
+    host_epoch_time: u128,
+    host_uptime: u128,
+    host_setting_version_id: u32,
+    host_run_mode: HostRunMode,
+    host_startup_counter: u64,
+}
+
+impl HRConstSection {
+    pub const fn new(
+        host_epoch_time: u128,
+        host_uptime: u128,
+        host_setting_version_id: u32,
+        host_run_mode: HostRunMode,
+        host_startup_counter: u64,
+    ) -> Self {
+        Self {
+            host_epoch_time,
+            host_uptime,
+            host_setting_version_id,
+            host_run_mode,
+            host_startup_counter,
+        }
+    }
+    pub const fn host_epoch_time(&self) -> u128 {
+        self.host_epoch_time
+    }
+    pub const fn host_uptime(&self) -> u128 {
+        self.host_uptime
+    }
+    pub const fn host_setting_version_id(&self) -> u32 {
+        self.host_setting_version_id
+    }
+    pub const fn host_run_mode(&self) -> HostRunMode {
+        self.host_run_mode
+    }
+    pub const fn host_startup_counter(&self) -> u64 {
+        self.host_startup_counter
+    }
+}
+
+pub struct HostRecordRaw {
+    data: ByteStack<{ sizeof!(HRConstSectionRaw) }>,
+    host_name: Box<[u8]>,
+}
+
+impl HostRecordRaw {
+    pub const fn empty_buffer_const_section() -> [u8; sizeof!(HRConstSectionRaw)] {
+        [0u8; sizeof!(HRConstSectionRaw)]
+    }
+    /// Decodes and validates the [`HRConstSection`] of a [`HostRecord`]. Use the returned result to construct this
+    pub fn decode_from_bytes_const_sec(data: HRConstSectionRaw) -> Option<(HRConstSection, usize)> {
         let s = ByteStack::new(data);
-        let host_epoch_time = s.read_xmmword(Self::VHR_OFFSET_P0);
+        let host_epoch_time = s.read_xmmword(Self::HR_OFFSET_P0);
         if host_epoch_time > crate::util::os::get_epoch_time() {
             // and what? we have a file from the future. Einstein says hi. (ok, maybe the host time is incorrect)
             return None;
         }
-        let _host_uptime = s.read_xmmword(Self::VHR_OFFSET_P1);
-        let _host_setting_version_id = s.read_dword(Self::VHR_OFFSET_P2A);
-        let _host_setting_run_mode = s.read_dword(Self::VHR_OFFSET_P2B);
-        let _host_startup_counter = s.read_qword(Self::VHR_OFFSET_P3);
-        let host_name_length = s.read_qword(Self::VHR_OFFSET_P4);
+        let host_uptime = s.read_xmmword(Self::HR_OFFSET_P1);
+        let host_setting_version_id = s.read_dword(Self::HR_OFFSET_P2A);
+        let host_setting_run_mode =
+            HostRunMode::try_new_with_val(s.read_dword(Self::HR_OFFSET_P2B))?;
+        let host_startup_counter = s.read_qword(Self::HR_OFFSET_P3);
+        let host_name_length = s.read_qword(Self::HR_OFFSET_P4);
         if host_name_length as usize > usize::MAX {
             // too large for us to load. per DNS standards this shouldn't be more than 255 but who knows, some people like it wild
             return None;
         }
-        Some((s, host_name_length as usize))
+        Some((
+            HRConstSection::new(
+                host_epoch_time,
+                host_uptime,
+                host_setting_version_id,
+                host_setting_run_mode,
+                host_startup_counter,
+            ),
+            host_name_length as usize,
+        ))
+    }
+    pub fn decoded(&self) -> HostRecord {
+        HostRecord::new(
+            HRConstSection::new(
+                self.read_p0_epoch_time(),
+                self.read_p1_uptime(),
+                self.read_p2a_setting_version_id(),
+                self.read_p2b_run_mode(),
+                self.read_p3_startup_counter(),
+            ),
+            self.host_name.clone(),
+        )
     }
 }
 
-impl VariableHostRecord {
-    const VHR_OFFSET_P0: usize = 0;
-    const VHR_OFFSET_P1: usize = sizeof!(u128);
-    const VHR_OFFSET_P2A: usize = Self::VHR_OFFSET_P1 + sizeof!(u128);
-    const VHR_OFFSET_P2B: usize = Self::VHR_OFFSET_P2A + sizeof!(u32);
-    const VHR_OFFSET_P3: usize = Self::VHR_OFFSET_P2B + sizeof!(u32);
-    const VHR_OFFSET_P4: usize = Self::VHR_OFFSET_P3 + sizeof!(u64);
-    const _ENSURE: () = assert!(Self::VHR_OFFSET_P4 == sizeof!(VHRConstSection) - sizeof!(u64));
+impl HostRecordRaw {
+    const HR_OFFSET_P0: usize = 0;
+    const HR_OFFSET_P1: usize = sizeof!(u128);
+    const HR_OFFSET_P2A: usize = Self::HR_OFFSET_P1 + sizeof!(u128);
+    const HR_OFFSET_P2B: usize = Self::HR_OFFSET_P2A + sizeof!(u32);
+    const HR_OFFSET_P3: usize = Self::HR_OFFSET_P2B + sizeof!(u32);
+    const HR_OFFSET_P4: usize = Self::HR_OFFSET_P3 + sizeof!(u64);
+    const _ENSURE: () = assert!(Self::HR_OFFSET_P4 == sizeof!(HRConstSectionRaw) - sizeof!(u64));
     pub fn new(
         p0_host_epoch_time: u128,
         p1_host_uptime: u128,
@@ -328,16 +498,16 @@ impl VariableHostRecord {
     ) -> Self {
         let _ = Self::_ENSURE;
         let p4_host_name_length = p5_host_name.len();
-        let mut variable_record_fl = [0u8; 56];
-        variable_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_le_bytes());
-        variable_record_fl[16..32].copy_from_slice(&p1_host_uptime.to_le_bytes());
-        variable_record_fl[32..36].copy_from_slice(&p2a_host_setting_version_id.to_le_bytes());
-        variable_record_fl[36..40]
+        let mut host_record_fl = [0u8; 56];
+        host_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_le_bytes());
+        host_record_fl[16..32].copy_from_slice(&p1_host_uptime.to_le_bytes());
+        host_record_fl[32..36].copy_from_slice(&p2a_host_setting_version_id.to_le_bytes());
+        host_record_fl[36..40]
             .copy_from_slice(&(p2b_host_run_mode.value_u8() as u32).to_le_bytes());
-        variable_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_le_bytes());
-        variable_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
+        host_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_le_bytes());
+        host_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
         Self {
-            data: ByteStack::new(variable_record_fl),
+            data: ByteStack::new(host_record_fl),
             host_name: p5_host_name,
         }
     }
@@ -360,24 +530,24 @@ impl VariableHostRecord {
     }
 }
 
-impl VariableHostRecord {
+impl HostRecordRaw {
     pub const fn read_p0_epoch_time(&self) -> u128 {
-        self.data.read_xmmword(Self::VHR_OFFSET_P0)
+        self.data.read_xmmword(Self::HR_OFFSET_P0)
     }
     pub const fn read_p1_uptime(&self) -> u128 {
-        self.data.read_xmmword(Self::VHR_OFFSET_P1)
+        self.data.read_xmmword(Self::HR_OFFSET_P1)
     }
     pub const fn read_p2a_setting_version_id(&self) -> u32 {
-        self.data.read_dword(Self::VHR_OFFSET_P2A)
+        self.data.read_dword(Self::HR_OFFSET_P2A)
     }
     pub const fn read_p2b_run_mode(&self) -> HostRunMode {
-        HostRunMode::new_with_val(self.data.read_dword(Self::VHR_OFFSET_P2B) as u8)
+        HostRunMode::new_with_val(self.data.read_dword(Self::HR_OFFSET_P2B))
     }
     pub const fn read_p3_startup_counter(&self) -> u64 {
-        self.data.read_qword(Self::VHR_OFFSET_P3)
+        self.data.read_qword(Self::HR_OFFSET_P3)
     }
     pub const fn read_p4_host_name_length(&self) -> u64 {
-        self.data.read_qword(Self::VHR_OFFSET_P4)
+        self.data.read_qword(Self::HR_OFFSET_P4)
     }
     pub fn read_p5_host_name(&self) -> &[u8] {
         &self.host_name
@@ -386,23 +556,54 @@ impl VariableHostRecord {
 
 pub struct SDSSHeader {
     sr: StaticRecord,
-    dr_0_mdr: MetadataRecord,
-    dr_1_vhr: VariableHostRecord,
+    mdr: MetadataRecord,
+    hr: HostRecord,
 }
 
 impl SDSSHeader {
+    pub const fn new(sr: StaticRecord, mdr: MetadataRecord, hr: HostRecord) -> Self {
+        Self { sr, mdr, hr }
+    }
+    pub const fn sr(&self) -> &StaticRecord {
+        &self.sr
+    }
+    pub const fn mdr(&self) -> &MetadataRecord {
+        &self.mdr
+    }
+    pub const fn hr(&self) -> &HostRecord {
+        &self.hr
+    }
+    pub fn encode(&self) -> SDSSHeaderRaw {
+        SDSSHeaderRaw::new_full(self.sr.encode(), self.mdr.encode(), self.hr.encode())
+    }
+}
+
+pub struct SDSSHeaderRaw {
+    sr: StaticRecordRaw,
+    dr_0_mdr: MetadataRecordRaw,
+    dr_1_hr: HostRecordRaw,
+}
+
+impl SDSSHeaderRaw {
+    pub fn new_full(sr: StaticRecordRaw, mdr: MetadataRecordRaw, hr: HostRecordRaw) -> Self {
+        Self {
+            sr,
+            dr_0_mdr: mdr,
+            dr_1_hr: hr,
+        }
+    }
     pub fn new(
-        sr: StaticRecord,
-        dr_0_mdr: MetadataRecord,
-        dr_1_vhr_const_section: VHRConstSection,
-        dr_1_vhr_host_name: Box<[u8]>,
+        sr: StaticRecordRaw,
+        dr_0_mdr: MetadataRecordRaw,
+        dr_1_hr_const_section: HRConstSectionRaw,
+        dr_1_hr_host_name: Box<[u8]>,
     ) -> Self {
         Self {
             sr,
             dr_0_mdr,
-            dr_1_vhr: VariableHostRecord {
-                data: ByteStack::new(dr_1_vhr_const_section),
-                host_name: dr_1_vhr_host_name,
+            dr_1_hr: HostRecordRaw {
+                data: ByteStack::new(dr_1_hr_const_section),
+                host_name: dr_1_hr_host_name,
             },
         }
     }
@@ -410,23 +611,23 @@ impl SDSSHeader {
         mdr_file_scope: FileScope,
         mdr_file_specifier: FileSpecifier,
         mdr_file_specifier_id: FileSpecifierVersion,
-        vhr_host_setting_id: u32,
-        vhr_host_run_mode: HostRunMode,
-        vhr_host_startup_counter: u64,
-        vhr_host_name: Box<[u8]>,
+        hr_host_setting_id: u32,
+        hr_host_run_mode: HostRunMode,
+        hr_host_startup_counter: u64,
+        hr_host_name: Box<[u8]>,
     ) -> Self {
         Self {
-            sr: StaticRecord::new(),
-            dr_0_mdr: MetadataRecord::new(
+            sr: StaticRecordRaw::new(),
+            dr_0_mdr: MetadataRecordRaw::new(
                 mdr_file_scope,
                 mdr_file_specifier,
                 mdr_file_specifier_id,
             ),
-            dr_1_vhr: VariableHostRecord::new_auto(
-                vhr_host_setting_id,
-                vhr_host_run_mode,
-                vhr_host_startup_counter,
-                vhr_host_name,
+            dr_1_hr: HostRecordRaw::new_auto(
+                hr_host_setting_id,
+                hr_host_run_mode,
+                hr_host_startup_counter,
+                hr_host_name,
             ),
         }
     }
@@ -436,23 +637,23 @@ impl SDSSHeader {
     pub fn get1_dr_0_mdr(&self) -> &[u8] {
         self.dr_0_mdr.data.slice()
     }
-    pub fn get1_dr_1_vhr_0(&self) -> &[u8] {
-        self.dr_1_vhr.data.slice()
+    pub fn get1_dr_1_hr_0(&self) -> &[u8] {
+        self.dr_1_hr.data.slice()
     }
-    pub fn get1_dr_1_vhr_1(&self) -> &[u8] {
-        self.dr_1_vhr.host_name.as_ref()
+    pub fn get1_dr_1_hr_1(&self) -> &[u8] {
+        self.dr_1_hr.host_name.as_ref()
     }
     pub fn calculate_header_size(&self) -> usize {
-        Self::calculate_fixed_header_size() + self.dr_1_vhr.host_name.len()
+        Self::calculate_fixed_header_size() + self.dr_1_hr.host_name.len()
     }
     pub const fn calculate_fixed_header_size() -> usize {
-        sizeof!(StaticRecord) + sizeof!(MetadataRecord) + sizeof!(VHRConstSection)
+        sizeof!(StaticRecordRaw) + sizeof!(MetadataRecordRaw) + sizeof!(HRConstSectionRaw)
     }
 }
 
 #[test]
 fn test_metadata_record_encode_decode() {
-    let md = MetadataRecord::new(
+    let md = MetadataRecordRaw::new(
         FileScope::TransactionLog,
         FileSpecifier::GNSTxnLog,
         FileSpecifierVersion(1),
@@ -465,7 +666,7 @@ fn test_metadata_record_encode_decode() {
 }
 
 #[test]
-fn test_variable_host_record_encode_decode() {
+fn test_host_record_encode_decode() {
     const HOST_UPTIME: u128 = u128::MAX - 434324903;
     const HOST_SETTING_VERSION_ID: u32 = 245;
     const HOST_RUN_MODE: HostRunMode = HostRunMode::Prod;
@@ -476,7 +677,7 @@ fn test_variable_host_record_encode_decode() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let vhr = VariableHostRecord::new(
+    let hr = HostRecordRaw::new(
         time,
         HOST_UPTIME,
         HOST_SETTING_VERSION_ID,
@@ -484,11 +685,11 @@ fn test_variable_host_record_encode_decode() {
         HOST_STARTUP_COUNTER,
         HOST_NAME.as_bytes().to_owned().into_boxed_slice(),
     );
-    assert_eq!(vhr.read_p0_epoch_time(), time);
-    assert_eq!(vhr.read_p1_uptime(), HOST_UPTIME);
-    assert_eq!(vhr.read_p2a_setting_version_id(), HOST_SETTING_VERSION_ID);
-    assert_eq!(vhr.read_p2b_run_mode(), HOST_RUN_MODE);
-    assert_eq!(vhr.read_p3_startup_counter(), HOST_STARTUP_COUNTER);
-    assert_eq!(vhr.read_p4_host_name_length(), HOST_NAME.len() as u64);
-    assert_eq!(vhr.read_p5_host_name(), HOST_NAME.as_bytes());
+    assert_eq!(hr.read_p0_epoch_time(), time);
+    assert_eq!(hr.read_p1_uptime(), HOST_UPTIME);
+    assert_eq!(hr.read_p2a_setting_version_id(), HOST_SETTING_VERSION_ID);
+    assert_eq!(hr.read_p2b_run_mode(), HOST_RUN_MODE);
+    assert_eq!(hr.read_p3_startup_counter(), HOST_STARTUP_COUNTER);
+    assert_eq!(hr.read_p4_host_name_length(), HOST_NAME.len() as u64);
+    assert_eq!(hr.read_p5_host_name(), HOST_NAME.as_bytes());
 }
