@@ -1,5 +1,5 @@
 /*
- * Created on Fri May 19 2023
+ * Created on Thu May 25 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -23,3 +23,46 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
 */
+
+use crate::engine::storage::{
+    header::{StaticRecordUV, StaticRecordUVRaw},
+    versions,
+};
+
+#[derive(Debug, PartialEq)]
+pub struct StaticRecord {
+    sr: StaticRecordUV,
+}
+
+impl StaticRecord {
+    pub const fn new(sr: StaticRecordUV) -> Self {
+        Self { sr }
+    }
+    pub const fn encode(&self) -> StaticRecordRaw {
+        StaticRecordRaw {
+            base: self.sr.encode(),
+        }
+    }
+    pub const fn sr(&self) -> &StaticRecordUV {
+        &self.sr
+    }
+}
+
+/// Static record
+pub struct StaticRecordRaw {
+    pub(super) base: StaticRecordUVRaw,
+}
+
+impl StaticRecordRaw {
+    pub const fn new() -> Self {
+        Self {
+            base: StaticRecordUVRaw::create(versions::v1::V1_HEADER_VERSION),
+        }
+    }
+    pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
+        [0u8; sizeof!(Self)]
+    }
+    pub fn decode_from_bytes(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
+        StaticRecordUVRaw::decode_from_bytes(buf).map(StaticRecord::new)
+    }
+}

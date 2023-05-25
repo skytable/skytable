@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Thu May 25 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,85 +24,16 @@
  *
 */
 
-/*
- * SDSS Header layout:
- *
- * +--------------------------------------------------------------+
- * |                                                              |
- * |                        STATIC RECORD                         |
- * |                            128B                              |
- * +--------------------------------------------------------------+
- * +--------------------------------------------------------------+
- * |                                                              |
- * |                                                              |
- * |                       DYNAMIC RECORD                         |
- * |                         (256+56+?)B                          |
- * |        +--------------------------------------------+        |
- * |        |                                            |        |
- * |        |              METADATA RECORD               |        |
- * |        |                   256B                     |        |
- * |        +--------------------------------------------+        |
- * |        +--------------------------------------------+        |
- * |        |                                            |        |
- * |        |             GENESIS HOST RECORD            |        |
- * |        |                  >56B                      |        |
- * |        +--------------------------------------------+        |
- * |                                                              |
- * +--------------------------------------------------------------+
- * +--------------------------------------------------------------+
- * |                     RUNTIME HOST RECORD                      |
- * |                           >56B                               |
- * +--------------------------------------------------------------+
- * Note: The entire part of the header is little endian encoded
-*/
-
 use crate::engine::{
     mem::ByteStack,
     storage::{
-        header::{StaticRecordUV, StaticRecordUVRaw},
+        v1::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
         versions::{self, DriverVersion, ServerVersion},
     },
 };
 
-pub struct StaticRecord {
-    sr: StaticRecordUV,
-}
-
-impl StaticRecord {
-    pub const fn new(sr: StaticRecordUV) -> Self {
-        Self { sr }
-    }
-    pub const fn encode(&self) -> StaticRecordRaw {
-        StaticRecordRaw {
-            base: self.sr.encode(),
-        }
-    }
-    pub const fn sr(&self) -> &StaticRecordUV {
-        &self.sr
-    }
-}
-
-/// Static record
-pub struct StaticRecordRaw {
-    base: StaticRecordUVRaw,
-}
-
-impl StaticRecordRaw {
-    pub const fn new() -> Self {
-        Self {
-            base: StaticRecordUVRaw::create(versions::v1::V1_HEADER_VERSION),
-        }
-    }
-    pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
-        [0u8; sizeof!(Self)]
-    }
-    pub fn decode_from_bytes(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
-        StaticRecordUVRaw::decode_from_bytes(buf).map(StaticRecord::new)
-    }
-}
-
 /*
-    Dynamic record (1/2)
+    Genesis record (1/2)
     ---
     Metadata record (8B x 3 + (4B x 2)):
     +----------+----------+----------+---------+
@@ -112,59 +43,7 @@ impl StaticRecordRaw {
     0, 63
 */
 
-/// The file scope
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-pub enum FileScope {
-    TransactionLog = 0,
-    TransactionLogCompacted = 1,
-}
-
-impl FileScope {
-    pub const fn try_new(id: u64) -> Option<Self> {
-        Some(match id {
-            0 => Self::TransactionLog,
-            1 => Self::TransactionLogCompacted,
-            _ => return None,
-        })
-    }
-    pub const fn new(id: u64) -> Self {
-        match Self::try_new(id) {
-            Some(v) => v,
-            None => panic!("unknown filescope"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-#[repr(u8)]
-pub enum FileSpecifier {
-    GNSTxnLog = 0,
-}
-
-impl FileSpecifier {
-    pub const fn try_new(v: u32) -> Option<Self> {
-        Some(match v {
-            0 => Self::GNSTxnLog,
-            _ => return None,
-        })
-    }
-    pub const fn new(v: u32) -> Self {
-        match Self::try_new(v) {
-            Some(v) => v,
-            _ => panic!("unknown filespecifier"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FileSpecifierVersion(u32);
-impl FileSpecifierVersion {
-    pub const fn __new(v: u32) -> Self {
-        Self(v)
-    }
-}
-
+#[derive(Debug, PartialEq)]
 pub struct MetadataRecord {
     server_version: ServerVersion,
     driver_version: DriverVersion,
@@ -216,7 +95,7 @@ impl MetadataRecord {
 }
 
 pub struct MetadataRecordRaw {
-    data: ByteStack<32>,
+    pub(super) data: ByteStack<32>,
 }
 
 impl MetadataRecordRaw {
@@ -320,7 +199,7 @@ impl MetadataRecordRaw {
 }
 
 /*
-    Dynamic Record (2/2)
+    Genesis Record (2/2)
     ---
     Host record (?B; > 56B):
     - 16B: Host epoch time in nanoseconds
@@ -333,30 +212,7 @@ impl MetadataRecordRaw {
     - ??B: Host name
 */
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
-#[repr(u8)]
-pub enum HostRunMode {
-    Dev = 0,
-    Prod = 1,
-}
-
-impl HostRunMode {
-    pub const fn try_new_with_val(v: u32) -> Option<Self> {
-        Some(match v {
-            0 => Self::Dev,
-            1 => Self::Prod,
-            _ => return None,
-        })
-    }
-    pub const fn new_with_val(v: u32) -> Self {
-        match Self::try_new_with_val(v) {
-            Some(v) => v,
-            None => panic!("unknown hostrunmode"),
-        }
-    }
-}
-
-type HRConstSectionRaw = [u8; 56];
+pub type HRConstSectionRaw = [u8; 56];
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct HostRecord {
@@ -429,8 +285,8 @@ impl HRConstSection {
 }
 
 pub struct HostRecordRaw {
-    data: ByteStack<{ sizeof!(HRConstSectionRaw) }>,
-    host_name: Box<[u8]>,
+    pub(super) data: ByteStack<{ sizeof!(HRConstSectionRaw) }>,
+    pub(super) host_name: Box<[u8]>,
 }
 
 impl HostRecordRaw {
@@ -499,13 +355,18 @@ impl HostRecordRaw {
         let _ = Self::_ENSURE;
         let p4_host_name_length = p5_host_name.len();
         let mut host_record_fl = [0u8; 56];
-        host_record_fl[0..16].copy_from_slice(&p0_host_epoch_time.to_le_bytes());
-        host_record_fl[16..32].copy_from_slice(&p1_host_uptime.to_le_bytes());
-        host_record_fl[32..36].copy_from_slice(&p2a_host_setting_version_id.to_le_bytes());
-        host_record_fl[36..40]
+        host_record_fl[Self::HR_OFFSET_P0..Self::HR_OFFSET_P1]
+            .copy_from_slice(&p0_host_epoch_time.to_le_bytes());
+        host_record_fl[Self::HR_OFFSET_P1..Self::HR_OFFSET_P2A]
+            .copy_from_slice(&p1_host_uptime.to_le_bytes());
+        host_record_fl[Self::HR_OFFSET_P2A..Self::HR_OFFSET_P2B]
+            .copy_from_slice(&p2a_host_setting_version_id.to_le_bytes());
+        host_record_fl[Self::HR_OFFSET_P2B..Self::HR_OFFSET_P3]
             .copy_from_slice(&(p2b_host_run_mode.value_u8() as u32).to_le_bytes());
-        host_record_fl[40..48].copy_from_slice(&p3_host_startup_counter.to_le_bytes());
-        host_record_fl[48..56].copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
+        host_record_fl[Self::HR_OFFSET_P3..Self::HR_OFFSET_P4]
+            .copy_from_slice(&p3_host_startup_counter.to_le_bytes());
+        host_record_fl[Self::HR_OFFSET_P4..]
+            .copy_from_slice(&(p4_host_name_length as u64).to_le_bytes());
         Self {
             data: ByteStack::new(host_record_fl),
             host_name: p5_host_name,
@@ -551,103 +412,6 @@ impl HostRecordRaw {
     }
     pub fn read_p5_host_name(&self) -> &[u8] {
         &self.host_name
-    }
-}
-
-pub struct SDSSHeader {
-    sr: StaticRecord,
-    mdr: MetadataRecord,
-    hr: HostRecord,
-}
-
-impl SDSSHeader {
-    pub const fn new(sr: StaticRecord, mdr: MetadataRecord, hr: HostRecord) -> Self {
-        Self { sr, mdr, hr }
-    }
-    pub const fn sr(&self) -> &StaticRecord {
-        &self.sr
-    }
-    pub const fn mdr(&self) -> &MetadataRecord {
-        &self.mdr
-    }
-    pub const fn hr(&self) -> &HostRecord {
-        &self.hr
-    }
-    pub fn encode(&self) -> SDSSHeaderRaw {
-        SDSSHeaderRaw::new_full(self.sr.encode(), self.mdr.encode(), self.hr.encode())
-    }
-}
-
-pub struct SDSSHeaderRaw {
-    sr: StaticRecordRaw,
-    dr_0_mdr: MetadataRecordRaw,
-    dr_1_hr: HostRecordRaw,
-}
-
-impl SDSSHeaderRaw {
-    pub fn new_full(sr: StaticRecordRaw, mdr: MetadataRecordRaw, hr: HostRecordRaw) -> Self {
-        Self {
-            sr,
-            dr_0_mdr: mdr,
-            dr_1_hr: hr,
-        }
-    }
-    pub fn new(
-        sr: StaticRecordRaw,
-        dr_0_mdr: MetadataRecordRaw,
-        dr_1_hr_const_section: HRConstSectionRaw,
-        dr_1_hr_host_name: Box<[u8]>,
-    ) -> Self {
-        Self {
-            sr,
-            dr_0_mdr,
-            dr_1_hr: HostRecordRaw {
-                data: ByteStack::new(dr_1_hr_const_section),
-                host_name: dr_1_hr_host_name,
-            },
-        }
-    }
-    pub fn init(
-        mdr_file_scope: FileScope,
-        mdr_file_specifier: FileSpecifier,
-        mdr_file_specifier_id: FileSpecifierVersion,
-        hr_host_setting_id: u32,
-        hr_host_run_mode: HostRunMode,
-        hr_host_startup_counter: u64,
-        hr_host_name: Box<[u8]>,
-    ) -> Self {
-        Self {
-            sr: StaticRecordRaw::new(),
-            dr_0_mdr: MetadataRecordRaw::new(
-                mdr_file_scope,
-                mdr_file_specifier,
-                mdr_file_specifier_id,
-            ),
-            dr_1_hr: HostRecordRaw::new_auto(
-                hr_host_setting_id,
-                hr_host_run_mode,
-                hr_host_startup_counter,
-                hr_host_name,
-            ),
-        }
-    }
-    pub fn get0_sr(&self) -> &[u8] {
-        self.sr.base.get_ref()
-    }
-    pub fn get1_dr_0_mdr(&self) -> &[u8] {
-        self.dr_0_mdr.data.slice()
-    }
-    pub fn get1_dr_1_hr_0(&self) -> &[u8] {
-        self.dr_1_hr.data.slice()
-    }
-    pub fn get1_dr_1_hr_1(&self) -> &[u8] {
-        self.dr_1_hr.host_name.as_ref()
-    }
-    pub fn calculate_header_size(&self) -> usize {
-        Self::calculate_fixed_header_size() + self.dr_1_hr.host_name.len()
-    }
-    pub const fn calculate_fixed_header_size() -> usize {
-        sizeof!(StaticRecordRaw) + sizeof!(MetadataRecordRaw) + sizeof!(HRConstSectionRaw)
     }
 }
 
