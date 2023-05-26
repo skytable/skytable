@@ -24,13 +24,16 @@
  *
 */
 
-use crate::engine::{
-    mem::ByteStack,
-    storage::{
-        header::{HostArch, HostEndian, HostOS, HostPointerWidth},
-        v1::header_impl::FileSpecifierVersion,
-        versions::{DriverVersion, ServerVersion},
+use crate::{
+    engine::{
+        mem::ByteStack,
+        storage::{
+            header::{HostArch, HostEndian, HostOS, HostPointerWidth},
+            v1::header_impl::FileSpecifierVersion,
+            versions::{DriverVersion, ServerVersion},
+        },
     },
+    util,
 };
 
 /*
@@ -54,6 +57,39 @@ pub struct DRHostSignature {
     ptr_width: HostPointerWidth,
     arch: HostArch,
     os: HostOS,
+}
+
+impl DRHostSignature {
+    /// Decode the [`DRHostSignature`] from the given bytes
+    ///
+    /// **☢ WARNING ☢: This only decodes; it doesn't validate expected values!**
+    pub fn decode(bytes: [u8; sizeof!(DRHostSignatureRaw)]) -> Option<Self> {
+        let ns = ByteStack::new(bytes);
+        let server_version = ServerVersion::__new(u64::from_le(
+            ns.read_qword(DRHostSignatureRaw::DRHS_OFFSET_P0),
+        ));
+        let driver_version = DriverVersion::__new(u64::from_le(
+            ns.read_qword(DRHostSignatureRaw::DRHS_OFFSET_P1),
+        ));
+        let file_specifier_id = FileSpecifierVersion::__new(u32::from_le(
+            ns.read_dword(DRHostSignatureRaw::DRHS_OFFSET_P2),
+        ));
+        let endian =
+            HostEndian::try_new_with_val(ns.read_byte(DRHostSignatureRaw::DRHS_OFFSET_P3))?;
+        let ptr_width =
+            HostPointerWidth::try_new_with_val(ns.read_byte(DRHostSignatureRaw::DRHS_OFFSET_P4))?;
+        let arch = HostArch::try_new_with_val(ns.read_byte(DRHostSignatureRaw::DRHS_OFFSET_P5))?;
+        let os = HostOS::try_new_with_val(ns.read_byte(DRHostSignatureRaw::DRHS_OFFSET_P6))?;
+        Some(Self::new(
+            server_version,
+            driver_version,
+            file_specifier_id,
+            endian,
+            ptr_width,
+            arch,
+            os,
+        ))
+    }
 }
 
 impl DRHostSignature {
@@ -191,7 +227,7 @@ impl DRHostSignatureRaw {
     pub const fn read_p6_os(&self) -> HostOS {
         HostOS::new_with_val(self.data.read_byte(Self::DRHS_OFFSET_P6))
     }
-    pub const fn encoded(&self) -> DRHostSignature {
+    pub const fn decoded(&self) -> DRHostSignature {
         DRHostSignature::new(
             self.read_p0_server_version(),
             self.read_p1_driver_version(),
@@ -210,99 +246,60 @@ impl DRHostSignatureRaw {
     - 8B: Dynamic record modify count
     - 16B: Host epoch time
     - 16B: Host uptime
-    - 8B: Host name length
-    - ?B: Host name
+    - 1B: Host name length
+    - 255B: Host name (nulled)
+    = 296B
 */
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct DRRuntimeSignature {
-    rt_signature_fixed: DRRuntimeSignatureFixed,
-    host_name: Box<[u8]>,
+    modify_count: u64,
+    epoch_time: u128,
+    host_uptime: u128,
+    host_name_length: u8,
+    host_name_raw: [u8; 255],
 }
 
 impl DRRuntimeSignature {
-    pub fn new(fixed: DRRuntimeSignatureFixed, host_name: Box<[u8]>) -> Self {
-        Self {
-            rt_signature_fixed: fixed,
-            host_name,
+    pub fn decode(bytes: [u8; sizeof!(DRRuntimeSignatureRaw)]) -> Option<Self> {
+        let bytes = ByteStack::new(bytes);
+        // check
+        let modify_count = u64::from_le(bytes.read_qword(DRRuntimeSignatureRaw::DRRS_OFFSET_P0));
+        let epoch_time = u128::from_le(bytes.read_xmmword(DRRuntimeSignatureRaw::DRRS_OFFSET_P1));
+        let host_uptime = u128::from_le(bytes.read_xmmword(DRRuntimeSignatureRaw::DRRS_OFFSET_P2));
+        let host_name_length = bytes.read_byte(DRRuntimeSignatureRaw::DRRS_OFFSET_P3);
+        let host_name_raw =
+            util::copy_slice_to_array(&bytes.slice()[DRRuntimeSignatureRaw::DRRS_OFFSET_P4..]);
+        if cfg!(debug_assertions) {
+            assert_eq!(
+                255 - host_name_raw.iter().filter(|b| **b == 0u8).count(),
+                host_name_length as _
+            );
         }
-    }
-    pub const fn rt_signature_fixed(&self) -> &DRRuntimeSignatureFixed {
-        &self.rt_signature_fixed
-    }
-    pub fn host_name(&self) -> &[u8] {
-        self.host_name.as_ref()
-    }
-    pub fn into_encoded(self) -> DRRuntimeSignatureRaw {
-        let len = self.host_name.len();
-        DRRuntimeSignatureRaw::new_with_sections(
-            self.host_name,
-            self.rt_signature_fixed.encoded(len),
-        )
-    }
-    pub fn encoded(&self) -> DRRuntimeSignatureRaw {
-        self.clone().into_encoded()
+        Some(Self {
+            modify_count,
+            epoch_time,
+            host_uptime,
+            host_name_length,
+            host_name_raw,
+        })
     }
 }
 
-pub struct DRRuntimeSignatureRaw {
-    rt_signature: DRRuntimeSignatureFixedRaw,
-    pub(super) host_name: Box<[u8]>,
-}
-
-impl DRRuntimeSignatureRaw {
-    pub fn new(host_name: Box<[u8]>, modify_count: u64) -> Self {
-        Self {
-            rt_signature: DRRuntimeSignatureFixedRaw::new(modify_count, host_name.len()),
-            host_name,
-        }
-    }
-    pub fn new_with_sections(host_name: Box<[u8]>, fixed: DRRuntimeSignatureFixedRaw) -> Self {
-        Self {
-            rt_signature: fixed,
-            host_name,
-        }
-    }
-    pub fn decode(
-        data: [u8; sizeof!(DRRuntimeSignatureFixedRaw)],
-    ) -> Option<(usize, DRRuntimeSignatureFixed)> {
-        let s = ByteStack::new(data);
-        let modify_count = u64::from_le(s.read_qword(DRRuntimeSignatureFixedRaw::DRRS_OFFSET_P0));
-        let epoch_time = u128::from_le(s.read_xmmword(DRRuntimeSignatureFixedRaw::DRRS_OFFSET_P1));
-        let uptime = u128::from_le(s.read_xmmword(DRRuntimeSignatureFixedRaw::DRRS_OFFSET_P2));
-        let host_name_length =
-            u64::from_le(s.read_qword(DRRuntimeSignatureFixedRaw::DRRS_OFFSET_P3));
-        if epoch_time > crate::util::os::get_epoch_time() || host_name_length > usize::MAX as u64 {
-            // damn, this file is from the future; I WISH EVERYONE HAD NTP SYNC GRRRR
-            // or, we have a bad host name. like, what?
-            return None;
-        }
-        Some((
-            host_name_length as _,
-            DRRuntimeSignatureFixed::new(modify_count, epoch_time, uptime),
-        ))
-    }
-    pub const fn runtime_signature(&self) -> &DRRuntimeSignatureFixedRaw {
-        &self.rt_signature
-    }
-    pub fn name(&self) -> &[u8] {
-        &self.host_name
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct DRRuntimeSignatureFixed {
-    modify_count: u64,
-    epoch_time: u128,
-    uptime: u128,
-}
-
-impl DRRuntimeSignatureFixed {
-    pub const fn new(modify_count: u64, epoch_time: u128, uptime: u128) -> Self {
+impl DRRuntimeSignature {
+    pub const fn new(
+        modify_count: u64,
+        epoch_time: u128,
+        host_uptime: u128,
+        host_name_length: u8,
+        host_name_raw: [u8; 255],
+    ) -> Self {
         Self {
             modify_count,
             epoch_time,
-            uptime,
+            host_uptime,
+            host_name_length,
+            host_name_raw,
         }
     }
     pub const fn modify_count(&self) -> u64 {
@@ -311,51 +308,69 @@ impl DRRuntimeSignatureFixed {
     pub const fn epoch_time(&self) -> u128 {
         self.epoch_time
     }
-    pub const fn uptime(&self) -> u128 {
-        self.uptime
+    pub const fn host_uptime(&self) -> u128 {
+        self.host_uptime
     }
-    pub fn encoded(&self, host_name_length: usize) -> DRRuntimeSignatureFixedRaw {
-        DRRuntimeSignatureFixedRaw::new_full(
+    pub const fn host_name_length(&self) -> u8 {
+        self.host_name_length
+    }
+    pub const fn host_name_raw(&self) -> [u8; 255] {
+        self.host_name_raw
+    }
+    pub fn host_name(&self) -> &[u8] {
+        &self.host_name_raw[..self.host_name_length() as usize]
+    }
+    pub fn encoded(&self) -> DRRuntimeSignatureRaw {
+        DRRuntimeSignatureRaw::new(
             self.modify_count(),
             self.epoch_time(),
-            self.uptime(),
-            host_name_length,
+            self.host_uptime(),
+            self.host_name_length(),
+            self.host_name_raw(),
         )
     }
 }
 
-pub struct DRRuntimeSignatureFixedRaw {
-    data: ByteStack<48>,
+#[derive(Debug, PartialEq, Clone)]
+pub struct DRRuntimeSignatureRaw {
+    data: ByteStack<296>,
 }
 
-impl DRRuntimeSignatureFixedRaw {
+impl DRRuntimeSignatureRaw {
     const DRRS_OFFSET_P0: usize = 0;
     const DRRS_OFFSET_P1: usize = sizeof!(u64);
     const DRRS_OFFSET_P2: usize = Self::DRRS_OFFSET_P1 + sizeof!(u128);
     const DRRS_OFFSET_P3: usize = Self::DRRS_OFFSET_P2 + sizeof!(u128);
-    const _ENSURE: () = assert!(Self::DRRS_OFFSET_P3 == sizeof!(Self) - 8);
-    pub fn new_full(
+    const DRRS_OFFSET_P4: usize = Self::DRRS_OFFSET_P3 + 1;
+    const _ENSURE: () = assert!(Self::DRRS_OFFSET_P4 == sizeof!(Self) - 255);
+    pub fn new(
         modify_count: u64,
-        epoch_time: u128,
-        uptime: u128,
-        host_name_length: usize,
+        host_epoch_time: u128,
+        host_uptime: u128,
+        host_name_length: u8,
+        host_name: [u8; 255],
     ) -> Self {
         let _ = Self::_ENSURE;
-        let mut data = [0u8; sizeof!(Self)];
-        data[0..8].copy_from_slice(&modify_count.to_le_bytes());
-        data[8..24].copy_from_slice(&epoch_time.to_le_bytes());
-        data[24..40].copy_from_slice(&uptime.to_le_bytes());
-        data[40..48].copy_from_slice(&(host_name_length as u64).to_le_bytes());
+        let mut data = [0u8; 296];
+        data[Self::DRRS_OFFSET_P0..Self::DRRS_OFFSET_P1]
+            .copy_from_slice(&modify_count.to_le_bytes());
+        data[Self::DRRS_OFFSET_P1..Self::DRRS_OFFSET_P2]
+            .copy_from_slice(&host_epoch_time.to_le_bytes());
+        data[Self::DRRS_OFFSET_P2..Self::DRRS_OFFSET_P3]
+            .copy_from_slice(&host_uptime.to_le_bytes());
+        data[Self::DRRS_OFFSET_P3] = host_name_length;
+        data[Self::DRRS_OFFSET_P4..].copy_from_slice(&host_name);
         Self {
             data: ByteStack::new(data),
         }
     }
-    pub fn new(modify_count: u64, host_name_length: usize) -> Self {
-        Self::new_full(
-            modify_count,
-            crate::util::os::get_epoch_time(),
-            crate::util::os::get_uptime(),
-            host_name_length,
+    pub fn decoded(&self) -> DRRuntimeSignature {
+        DRRuntimeSignature::new(
+            self.read_p0_modify_count(),
+            self.read_p1_epoch_time(),
+            self.read_p2_uptime(),
+            self.read_p3_host_name_length() as _,
+            util::copy_slice_to_array(self.read_p4_host_name_raw_null()),
         )
     }
     pub const fn read_p0_modify_count(&self) -> u64 {
@@ -367,7 +382,45 @@ impl DRRuntimeSignatureFixedRaw {
     pub const fn read_p2_uptime(&self) -> u128 {
         self.data.read_xmmword(Self::DRRS_OFFSET_P2)
     }
-    pub const fn read_p3_host_name_length(&self) -> u64 {
-        self.data.read_qword(Self::DRRS_OFFSET_P3)
+    pub const fn read_p3_host_name_length(&self) -> usize {
+        self.data.read_byte(Self::DRRS_OFFSET_P3) as _
     }
+    pub fn read_p4_host_name_raw_null(&self) -> &[u8] {
+        &self.data.slice()[Self::DRRS_OFFSET_P4..]
+    }
+    pub fn read_host_name(&self) -> &[u8] {
+        &self.data.slice()
+            [Self::DRRS_OFFSET_P4..Self::DRRS_OFFSET_P4 + self.read_p3_host_name_length()]
+    }
+}
+
+#[test]
+fn test_dr_host_signature_encode_decode() {
+    const TARGET: DRHostSignature = DRHostSignature::new(
+        crate::engine::storage::versions::v1::V1_SERVER_VERSION,
+        crate::engine::storage::versions::v1::V1_DRIVER_VERSION,
+        FileSpecifierVersion::__new(u32::MAX - 3),
+        HostEndian::new(),
+        HostPointerWidth::new(),
+        HostArch::new(),
+        HostOS::new(),
+    );
+    let encoded = TARGET.encoded();
+    let decoded = encoded.decoded();
+    assert_eq!(decoded, TARGET);
+}
+
+#[test]
+fn test_dr_runtime_signature_encoded_decode() {
+    const TARGET: DRRuntimeSignature = DRRuntimeSignature::new(
+        u64::MAX - 3,
+        u128::MAX - u32::MAX as u128,
+        u128::MAX - u32::MAX as u128,
+        "skycloud".len() as _,
+        util::copy_str_to_array("skycloud"),
+    );
+    let encoded = TARGET.encoded();
+    let decoded = encoded.decoded();
+    assert_eq!(decoded, TARGET);
+    assert_eq!(decoded.host_name(), b"skycloud");
 }

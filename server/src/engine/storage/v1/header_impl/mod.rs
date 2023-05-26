@@ -63,8 +63,6 @@ mod gr;
 // (3) dr
 mod dr;
 
-use crate::engine::mem::ByteStack;
-
 /// The file scope
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
@@ -146,8 +144,8 @@ pub struct SDSSHeader {
     // static record
     sr: sr::StaticRecord,
     // genesis record
-    gr_mdr: gr::MetadataRecord,
-    gr_hr: gr::HostRecord,
+    gr_mdr: gr::GRMetadataRecord,
+    gr_hr: gr::GRHostRecord,
     // dynamic record
     dr_hs: dr::DRHostSignature,
     dr_rs: dr::DRRuntimeSignature,
@@ -156,8 +154,8 @@ pub struct SDSSHeader {
 impl SDSSHeader {
     pub const fn new(
         sr: sr::StaticRecord,
-        gr_mdr: gr::MetadataRecord,
-        gr_hr: gr::HostRecord,
+        gr_mdr: gr::GRMetadataRecord,
+        gr_hr: gr::GRHostRecord,
         dr_hs: dr::DRHostSignature,
         dr_rs: dr::DRRuntimeSignature,
     ) -> Self {
@@ -169,22 +167,13 @@ impl SDSSHeader {
             dr_rs,
         }
     }
-    pub fn encode(&self) -> SDSSHeaderRaw {
-        SDSSHeaderRaw::new_full(
-            self.sr.encode(),
-            self.gr_mdr.encode(),
-            self.gr_hr.encode(),
-            self.dr_hs().encoded(),
-            self.dr_rs().encoded(),
-        )
-    }
     pub fn sr(&self) -> &sr::StaticRecord {
         &self.sr
     }
-    pub fn gr_mdr(&self) -> &gr::MetadataRecord {
+    pub fn gr_mdr(&self) -> &gr::GRMetadataRecord {
         &self.gr_mdr
     }
-    pub fn gr_hr(&self) -> &gr::HostRecord {
+    pub fn gr_hr(&self) -> &gr::GRHostRecord {
         &self.gr_hr
     }
     pub fn dr_hs(&self) -> &dr::DRHostSignature {
@@ -193,12 +182,21 @@ impl SDSSHeader {
     pub fn dr_rs(&self) -> &dr::DRRuntimeSignature {
         &self.dr_rs
     }
+    pub fn encode(&self) -> SDSSHeaderRaw {
+        SDSSHeaderRaw::new_full(
+            self.sr.encode(),
+            self.gr_mdr().encoded(),
+            self.gr_hr().encoded(),
+            self.dr_hs().encoded(),
+            self.dr_rs().encoded(),
+        )
+    }
 }
 
 pub struct SDSSHeaderRaw {
     sr: sr::StaticRecordRaw,
-    gr_0_mdr: gr::MetadataRecordRaw,
-    gr_1_hr: gr::HostRecordRaw,
+    gr_0_mdr: gr::GRMetadataRecordRaw,
+    gr_1_hr: gr::GRHostRecordRaw,
     dr_0_hs: dr::DRHostSignatureRaw,
     dr_1_rs: dr::DRRuntimeSignatureRaw,
 }
@@ -206,8 +204,8 @@ pub struct SDSSHeaderRaw {
 impl SDSSHeaderRaw {
     pub fn new_full(
         sr: sr::StaticRecordRaw,
-        gr_mdr: gr::MetadataRecordRaw,
-        gr_hr: gr::HostRecordRaw,
+        gr_mdr: gr::GRMetadataRecordRaw,
+        gr_hr: gr::GRHostRecordRaw,
         dr_hs: dr::DRHostSignatureRaw,
         dr_rs: dr::DRRuntimeSignatureRaw,
     ) -> Self {
@@ -221,22 +219,17 @@ impl SDSSHeaderRaw {
     }
     pub fn new(
         sr: sr::StaticRecordRaw,
-        gr_0_mdr: gr::MetadataRecordRaw,
-        gr_1_hr_const_section: gr::HRConstSectionRaw,
-        gr_1_hr_host_name: Box<[u8]>,
+        gr_0_mdr: gr::GRMetadataRecordRaw,
+        gr_1_hr: gr::GRHostRecordRaw,
         dr_hs: dr::DRHostSignatureRaw,
-        dr_rs_const: dr::DRRuntimeSignatureFixedRaw,
-        dr_rs_host_name: Box<[u8]>,
+        dr_rs: dr::DRRuntimeSignatureRaw,
     ) -> Self {
         Self {
             sr,
             gr_0_mdr,
-            gr_1_hr: gr::HostRecordRaw {
-                data: ByteStack::new(gr_1_hr_const_section),
-                host_name: gr_1_hr_host_name,
-            },
+            gr_1_hr,
             dr_0_hs: dr_hs,
-            dr_1_rs: dr::DRRuntimeSignatureRaw::new_with_sections(dr_rs_host_name, dr_rs_const),
+            dr_1_rs: dr_rs,
         }
     }
     pub fn get0_sr(&self) -> &[u8] {
@@ -248,19 +241,11 @@ impl SDSSHeaderRaw {
     pub fn get1_dr_1_hr_0(&self) -> &[u8] {
         self.gr_1_hr.data.slice()
     }
-    pub fn get1_dr_1_hr_1(&self) -> &[u8] {
-        self.gr_1_hr.host_name.as_ref()
-    }
-    pub fn calculate_header_size(&self) -> usize {
-        Self::calculate_fixed_header_size()
-            + self.gr_1_hr.host_name.len()
-            + self.dr_1_rs.host_name.len()
-    }
     pub const fn calculate_fixed_header_size() -> usize {
         sizeof!(sr::StaticRecordRaw)
-            + sizeof!(gr::MetadataRecordRaw)
-            + sizeof!(gr::HRConstSectionRaw)
+            + sizeof!(gr::GRMetadataRecordRaw)
+            + sizeof!(gr::GRHostRecordRaw)
             + sizeof!(dr::DRHostSignatureRaw)
-            + sizeof!(dr::DRRuntimeSignatureFixedRaw)
+            + sizeof!(dr::DRRuntimeSignatureRaw)
     }
 }

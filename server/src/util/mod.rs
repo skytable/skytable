@@ -362,3 +362,17 @@ macro_rules! byte_repr_impls {
 }
 
 byte_repr_impls!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
+
+pub const fn copy_slice_to_array<const N: usize>(bytes: &[u8]) -> [u8; N] {
+    assert!(bytes.len() <= N);
+    let mut data = [0u8; N];
+    let mut i = 0;
+    while i < bytes.len() {
+        data[i] = bytes[i];
+        i += 1;
+    }
+    data
+}
+pub const fn copy_str_to_array<const N: usize>(str: &str) -> [u8; N] {
+    copy_slice_to_array(str.as_bytes())
+}

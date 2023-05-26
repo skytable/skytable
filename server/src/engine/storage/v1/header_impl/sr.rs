@@ -62,7 +62,7 @@ impl StaticRecordRaw {
     pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
         [0u8; sizeof!(Self)]
     }
-    pub fn decode_from_bytes(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
+    pub fn decode(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
         StaticRecordUVRaw::decode_from_bytes(buf).map(StaticRecord::new)
     }
 }
