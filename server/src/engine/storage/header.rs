@@ -304,7 +304,7 @@ impl StaticRecordUV {
     pub const fn os(&self) -> HostOS {
         self.os
     }
-    pub const fn encode(&self) -> StaticRecordUVRaw {
+    pub const fn encoded(&self) -> StaticRecordUVRaw {
         StaticRecordUVRaw::new(
             self.header_version(),
             self.ptr_width(),

@@ -38,9 +38,9 @@ impl StaticRecord {
     pub const fn new(sr: StaticRecordUV) -> Self {
         Self { sr }
     }
-    pub const fn encode(&self) -> StaticRecordRaw {
+    pub const fn encoded(&self) -> StaticRecordRaw {
         StaticRecordRaw {
-            base: self.sr.encode(),
+            base: self.sr.encoded(),
         }
     }
     pub const fn sr(&self) -> &StaticRecordUV {
@@ -54,10 +54,11 @@ pub struct StaticRecordRaw {
 }
 
 impl StaticRecordRaw {
-    pub const fn new() -> Self {
-        Self {
-            base: StaticRecordUVRaw::create(versions::v1::V1_HEADER_VERSION),
-        }
+    pub const fn new_auto() -> Self {
+        Self::new(StaticRecordUVRaw::create(versions::v1::V1_HEADER_VERSION))
+    }
+    pub const fn new(base: StaticRecordUVRaw) -> Self {
+        Self { base }
     }
     pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
         [0u8; sizeof!(Self)]

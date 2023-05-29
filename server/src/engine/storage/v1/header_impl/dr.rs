@@ -30,7 +30,7 @@ use crate::{
         storage::{
             header::{HostArch, HostEndian, HostOS, HostPointerWidth},
             v1::header_impl::FileSpecifierVersion,
-            versions::{DriverVersion, ServerVersion},
+            versions::{self, DriverVersion, ServerVersion},
         },
     },
     util,
@@ -160,6 +160,13 @@ impl DRHostSignatureRaw {
     const DRHS_OFFSET_P5: usize = Self::DRHS_OFFSET_P4 + 1;
     const DRHS_OFFSET_P6: usize = Self::DRHS_OFFSET_P5 + 1;
     const _ENSURE: () = assert!(Self::DRHS_OFFSET_P6 == sizeof!(Self) - 1);
+    pub const fn new_auto(file_specifier_version: FileSpecifierVersion) -> Self {
+        Self::new(
+            versions::v1::V1_SERVER_VERSION,
+            versions::v1::V1_DRIVER_VERSION,
+            file_specifier_version,
+        )
+    }
     pub const fn new(
         server_version: ServerVersion,
         driver_version: DriverVersion,
@@ -343,6 +350,16 @@ impl DRRuntimeSignatureRaw {
     const DRRS_OFFSET_P3: usize = Self::DRRS_OFFSET_P2 + sizeof!(u128);
     const DRRS_OFFSET_P4: usize = Self::DRRS_OFFSET_P3 + 1;
     const _ENSURE: () = assert!(Self::DRRS_OFFSET_P4 == sizeof!(Self) - 255);
+    pub fn new_auto(modify_count: u64) -> Self {
+        let hostname = crate::util::os::get_hostname();
+        Self::new(
+            modify_count,
+            crate::util::os::get_epoch_time(),
+            crate::util::os::get_uptime(),
+            hostname.len(),
+            hostname.raw(),
+        )
+    }
     pub fn new(
         modify_count: u64,
         host_epoch_time: u128,

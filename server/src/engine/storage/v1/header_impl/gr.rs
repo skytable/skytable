@@ -135,6 +135,19 @@ impl GRMetadataRecordRaw {
     pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
         [0u8; sizeof!(Self)]
     }
+    pub const fn new_auto(
+        scope: FileScope,
+        specifier: FileSpecifier,
+        specifier_id: FileSpecifierVersion,
+    ) -> Self {
+        Self::new_full(
+            versions::v1::V1_SERVER_VERSION,
+            versions::v1::V1_DRIVER_VERSION,
+            scope,
+            specifier,
+            specifier_id,
+        )
+    }
     pub const fn new_full(
         server_version: ServerVersion,
         driver_version: DriverVersion,
@@ -320,6 +333,18 @@ impl GRHostRecordRaw {
     const GRHR_OFFSET_P5: usize = Self::GRHR_OFFSET_P4 + sizeof!(u64);
     const GRHR_OFFSET_P6: usize = Self::GRHR_OFFSET_P5 + 1;
     const _ENSURE: () = assert!(Self::GRHR_OFFSET_P6 == sizeof!(Self) - 255);
+    pub fn new_auto(setting_version: u32, run_mode: HostRunMode, startup_counter: u64) -> Self {
+        let hostname = crate::util::os::get_hostname();
+        Self::new(
+            crate::util::os::get_epoch_time(),
+            crate::util::os::get_uptime(),
+            setting_version,
+            run_mode,
+            startup_counter,
+            hostname.len(),
+            hostname.raw(),
+        )
+    }
     pub fn new(
         p0_epoch_time: u128,
         p1_uptime: u128,

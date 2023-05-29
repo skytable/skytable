@@ -182,9 +182,9 @@ impl SDSSHeader {
     pub fn dr_rs(&self) -> &dr::DRRuntimeSignature {
         &self.dr_rs
     }
-    pub fn encode(&self) -> SDSSHeaderRaw {
+    pub fn encoded(&self) -> SDSSHeaderRaw {
         SDSSHeaderRaw::new_full(
-            self.sr.encode(),
+            self.sr.encoded(),
             self.gr_mdr().encoded(),
             self.gr_hr().encoded(),
             self.dr_hs().encoded(),
@@ -202,6 +202,27 @@ pub struct SDSSHeaderRaw {
 }
 
 impl SDSSHeaderRaw {
+    pub fn new_auto(
+        gr_mdr_scope: FileScope,
+        gr_mdr_specifier: FileSpecifier,
+        gr_mdr_specifier_id: FileSpecifierVersion,
+        gr_hr_setting_version: u32,
+        gr_hr_run_mode: HostRunMode,
+        gr_hr_startup_counter: u64,
+        dr_rts_modify_count: u64,
+    ) -> Self {
+        Self::new_full(
+            sr::StaticRecordRaw::new_auto(),
+            gr::GRMetadataRecordRaw::new_auto(gr_mdr_scope, gr_mdr_specifier, gr_mdr_specifier_id),
+            gr::GRHostRecordRaw::new_auto(
+                gr_hr_setting_version,
+                gr_hr_run_mode,
+                gr_hr_startup_counter,
+            ),
+            dr::DRHostSignatureRaw::new_auto(gr_mdr_specifier_id),
+            dr::DRRuntimeSignatureRaw::new_auto(dr_rts_modify_count),
+        )
+    }
     pub fn new_full(
         sr: sr::StaticRecordRaw,
         gr_mdr: gr::GRMetadataRecordRaw,
@@ -241,7 +262,7 @@ impl SDSSHeaderRaw {
     pub fn get1_dr_1_hr_0(&self) -> &[u8] {
         self.gr_1_hr.data.slice()
     }
-    pub const fn calculate_fixed_header_size() -> usize {
+    pub const fn header_size() -> usize {
         sizeof!(sr::StaticRecordRaw)
             + sizeof!(gr::GRMetadataRecordRaw)
             + sizeof!(gr::GRHostRecordRaw)

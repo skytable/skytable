@@ -264,7 +264,7 @@ pub fn dirsize(path: impl AsRef<Path>) -> IoResult<u64> {
 
 /// Returns the current system uptime in milliseconds
 pub fn get_uptime() -> u128 {
-    uptime().unwrap()
+    uptime_impl::uptime().unwrap()
 }
 
 /// Returns the current epoch time in nanoseconds
@@ -275,58 +275,166 @@ pub fn get_epoch_time() -> u128 {
         .as_nanos()
 }
 
-#[cfg(target_os = "linux")]
-fn uptime() -> std::io::Result<u128> {
-    let mut sysinfo: libc::sysinfo = unsafe { std::mem::zeroed() };
-    let res = unsafe { libc::sysinfo(&mut sysinfo) };
-    if res == 0 {
-        Ok(sysinfo.uptime as u128 * 1_000)
-    } else {
-        Err(std::io::Error::last_os_error())
+/// Returns the hostname
+pub fn get_hostname() -> hostname_impl::Hostname {
+    hostname_impl::Hostname::get()
+}
+
+mod uptime_impl {
+    #[cfg(target_os = "linux")]
+    pub(super) fn uptime() -> std::io::Result<u128> {
+        let mut sysinfo: libc::sysinfo = unsafe { std::mem::zeroed() };
+        let res = unsafe { libc::sysinfo(&mut sysinfo) };
+        if res == 0 {
+            Ok(sysinfo.uptime as u128 * 1_000)
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    pub(super) fn uptime() -> std::io::Result<u128> {
+        use libc::{c_void, size_t, sysctl, timeval};
+        use std::ptr;
+
+        let mib = [libc::CTL_KERN, libc::KERN_BOOTTIME];
+        let mut boottime = timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        };
+        let mut size = std::mem::size_of::<libc::timeval>() as size_t;
+
+        let result = unsafe {
+            sysctl(
+                // this cast is fine. sysctl only needs to access the ptr to array base (read)
+                &mib as *const _ as *mut _,
+                2,
+                &mut boottime as *mut timeval as *mut c_void,
+                &mut size,
+                ptr::null_mut(),
+                0,
+            )
+        };
+
+        if result == 0 {
+            let current_time = unsafe { libc::time(ptr::null_mut()) };
+            let uptime_secs = current_time - boottime.tv_sec;
+            Ok((uptime_secs as u128) * 1_000)
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(super) fn uptime() -> std::io::Result<u128> {
+        Ok(unsafe { winapi::um::sysinfoapi::GetTickCount64() } as u128)
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd"
-))]
-fn uptime() -> std::io::Result<u128> {
-    use libc::{c_void, size_t, sysctl, timeval};
-    use std::ptr;
+mod hostname_impl {
+    use std::ffi::CStr;
 
-    let mib = [libc::CTL_KERN, libc::KERN_BOOTTIME];
-    let mut boottime = timeval {
-        tv_sec: 0,
-        tv_usec: 0,
-    };
-    let mut size = std::mem::size_of::<libc::timeval>() as size_t;
-
-    let result = unsafe {
-        sysctl(
-            // this cast is fine. sysctl only needs to access the ptr to array base (read)
-            &mib as *const _ as *mut _,
-            2,
-            &mut boottime as *mut timeval as *mut c_void,
-            &mut size,
-            ptr::null_mut(),
-            0,
-        )
-    };
-
-    if result == 0 {
-        let current_time = unsafe { libc::time(ptr::null_mut()) };
-        let uptime_secs = current_time - boottime.tv_sec;
-        Ok((uptime_secs as u128) * 1_000)
-    } else {
-        Err(std::io::Error::last_os_error())
+    pub struct Hostname {
+        len: u8,
+        raw: [u8; 255],
     }
-}
 
-#[cfg(target_os = "windows")]
-fn uptime() -> std::io::Result<u128> {
-    Ok(unsafe { winapi::um::sysinfoapi::GetTickCount64() } as u128)
+    impl Hostname {
+        pub fn get() -> Self {
+            get_hostname()
+        }
+        unsafe fn new_from_raw_buf(buf: &[u8; 256]) -> Self {
+            let mut raw = [0u8; 255];
+            raw.copy_from_slice(&buf[..255]);
+            Self {
+                len: CStr::from_ptr(buf.as_ptr().cast()).to_bytes().len() as _,
+                raw,
+            }
+        }
+        pub fn as_str(&self) -> &str {
+            unsafe {
+                core::str::from_utf8_unchecked(core::slice::from_raw_parts(
+                    self.raw.as_ptr(),
+                    self.len as _,
+                ))
+            }
+        }
+        pub fn raw(&self) -> [u8; 255] {
+            self.raw
+        }
+        pub fn len(&self) -> u8 {
+            self.len
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    fn get_hostname() -> Hostname {
+        use libc::gethostname;
+
+        let mut buf: [u8; 256] = [0; 256];
+        unsafe {
+            gethostname(buf.as_mut_ptr().cast(), buf.len());
+            Hostname::new_from_raw_buf(&buf)
+        }
+    }
+
+    #[cfg(target_family = "windows")]
+    fn get_hostname() -> (usize, [u8; 255]) {
+        use winapi::shared::minwindef::DWORD;
+        use winapi::um::sysinfoapi::GetComputerNameA;
+
+        let mut buf: [u8; 256] = [0; 256];
+        let mut size: DWORD = buf.len() as u32;
+
+        unsafe {
+            GetComputerNameA(buf.as_mut_ptr().cast(), &mut size);
+            Hostname::new_from_raw_buf(&buf)
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use std::process::Command;
+
+        #[cfg(target_os = "linux")]
+        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
+            let output = Command::new("sh")
+                .arg("-c")
+                .arg("hostname")
+                .output()?;
+            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(hostname)
+        }
+        #[cfg(target_os = "windows")]
+        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
+            let output = Command::new("cmd")
+                .args(&["/C", "hostname"])
+                .output()?;
+            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(hostname)
+        }
+                
+        #[cfg(target_os = "macos")]
+        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
+            let output = Command::new("sh")
+                .arg("-c")
+                .arg("scutil --get LocalHostName")
+                .output()?;
+            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            Ok(hostname)
+        }
+        
+        #[test]
+        fn t_get_hostname() {
+            let hostname_from_cmd = test_get_hostname().unwrap();
+            assert_eq!(hostname_from_cmd.as_str(), super::Hostname::get().as_str());
+        }
+    }
 }
 
 #[test]
