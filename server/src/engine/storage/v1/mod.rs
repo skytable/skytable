@@ -26,3 +26,49 @@
 
 mod header_impl;
 mod rw;
+mod start_stop;
+
+use std::io::Error as IoError;
+
+pub type SDSSResult<T> = Result<T, SDSSError>;
+
+pub trait SDSSErrorContext {
+    type ExtraData;
+    fn with_extra(self, extra: Self::ExtraData) -> SDSSError;
+}
+
+impl SDSSErrorContext for IoError {
+    type ExtraData = &'static str;
+    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
+        SDSSError::IoErrorExtra(self, extra)
+    }
+}
+
+#[derive(Debug)]
+pub enum SDSSError {
+    IoError(IoError),
+    IoErrorExtra(IoError, &'static str),
+    CorruptedFile(&'static str),
+    StartupError(&'static str),
+}
+
+impl SDSSError {
+    pub const fn corrupted_file(fname: &'static str) -> Self {
+        Self::CorruptedFile(fname)
+    }
+    pub const fn ioerror_extra(error: IoError, extra: &'static str) -> Self {
+        Self::IoErrorExtra(error, extra)
+    }
+    pub fn with_ioerror_extra(self, extra: &'static str) -> Self {
+        match self {
+            Self::IoError(ioe) => Self::IoErrorExtra(ioe, extra),
+            x => x,
+        }
+    }
+}
+
+impl From<IoError> for SDSSError {
+    fn from(e: IoError) -> Self {
+        Self::IoError(e)
+    }
+}

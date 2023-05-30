@@ -303,3 +303,50 @@ macro_rules! is_64b {
         cfg!(target_pointer_width = "64")
     };
 }
+
+#[macro_export]
+macro_rules! concat_array_to_array {
+    ($a:expr, $b:expr) => {{
+        const BUFFER_A: [u8; $a.len()] = crate::util::copy_slice_to_array($a);
+        const BUFFER_B: [u8; $b.len()] = crate::util::copy_slice_to_array($b);
+        const BUFFER: [u8; BUFFER_A.len() + BUFFER_B.len()] = unsafe {
+            // UNSAFE(@ohsayan): safe because align = 1
+            core::mem::transmute((BUFFER_A, BUFFER_B))
+        };
+        BUFFER
+    }};
+    ($a:expr, $b:expr, $c:expr) => {{
+        const LA: usize = $a.len() + $b.len();
+        const LB: usize = LA + $c.len();
+        const S_1: [u8; LA] = concat_array_to_array!($a, $b);
+        const S_2: [u8; LB] = concat_array_to_array!(&S_1, $c);
+        S_2
+    }};
+}
+
+#[macro_export]
+macro_rules! concat_str_to_array {
+    ($a:expr, $b:expr) => {
+        concat_array_to_array!($a.as_bytes(), $b.as_bytes())
+    };
+    ($a:expr, $b:expr, $c:expr) => {{
+        concat_array_to_array!($a.as_bytes(), $b.as_bytes(), $c.as_bytes())
+    }};
+}
+
+#[macro_export]
+macro_rules! concat_str_to_str {
+    ($a:expr, $b:expr) => {{
+        const BUFFER: [u8; ::core::primitive::str::len($a) + ::core::primitive::str::len($b)] =
+            concat_str_to_array!($a, $b);
+        const STATIC_BUFFER: &[u8] = &BUFFER;
+        unsafe {
+            // UNSAFE(@ohsayan): all good because of restriction to str
+            core::str::from_utf8_unchecked(&STATIC_BUFFER)
+        }
+    }};
+    ($a:expr, $b:expr, $c:expr) => {{
+        const A: &str = concat_str_to_str!($a, $b);
+        concat_str_to_str!(A, $c)
+    }};
+}

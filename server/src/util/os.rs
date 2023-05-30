@@ -384,15 +384,19 @@ mod hostname_impl {
     }
 
     #[cfg(target_family = "windows")]
-    fn get_hostname() -> (usize, [u8; 255]) {
+    fn get_hostname() -> Hostname {
         use winapi::shared::minwindef::DWORD;
-        use winapi::um::sysinfoapi::GetComputerNameA;
+        use winapi::um::sysinfoapi::{self, GetComputerNameExA};
 
         let mut buf: [u8; 256] = [0; 256];
         let mut size: DWORD = buf.len() as u32;
 
         unsafe {
-            GetComputerNameA(buf.as_mut_ptr().cast(), &mut size);
+            GetComputerNameExA(
+                sysinfoapi::ComputerNamePhysicalDnsHostname,
+                buf.as_mut_ptr().cast(),
+                &mut size,
+            );
             Hostname::new_from_raw_buf(&buf)
         }
     }
@@ -401,38 +405,31 @@ mod hostname_impl {
     mod test {
         use std::process::Command;
 
-        #[cfg(target_os = "linux")]
-        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
-            let output = Command::new("sh")
-                .arg("-c")
-                .arg("hostname")
-                .output()?;
-            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            Ok(hostname)
+        fn test_get_hostname() -> String {
+            let x = if cfg!(target_os = "windows") {
+                // Windows command to get hostname
+                Command::new("cmd")
+                    .args(&["/C", "hostname"])
+                    .output()
+                    .expect("Failed to execute command")
+                    .stdout
+            } else {
+                // Unix command to get hostname
+                Command::new("uname")
+                    .args(&["-n"])
+                    .output()
+                    .expect("Failed to execute command")
+                    .stdout
+            };
+            String::from_utf8_lossy(&x).trim().to_string()
         }
-        #[cfg(target_os = "windows")]
-        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
-            let output = Command::new("cmd")
-                .args(&["/C", "hostname"])
-                .output()?;
-            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            Ok(hostname)
-        }
-                
-        #[cfg(target_os = "macos")]
-        fn test_get_hostname() -> Result<String, Box<dyn std::error::Error>> {
-            let output = Command::new("sh")
-                .arg("-c")
-                .arg("scutil --get LocalHostName")
-                .output()?;
-            let hostname = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            Ok(hostname)
-        }
-        
+
         #[test]
         fn t_get_hostname() {
-            let hostname_from_cmd = test_get_hostname().unwrap();
-            assert_eq!(hostname_from_cmd.as_str(), super::Hostname::get().as_str());
+            assert_eq!(
+                test_get_hostname().as_str(),
+                super::Hostname::get().as_str()
+            );
         }
     }
 }
