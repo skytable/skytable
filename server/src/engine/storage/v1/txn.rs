@@ -45,6 +45,8 @@ use {
     std::marker::PhantomData,
 };
 
+const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
+
 /// The transaction adapter
 pub trait TransactionLogAdapter {
     /// The transaction event
@@ -199,7 +201,6 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
         self.log_file.read_to_buffer(&mut payload_data_block)?;
         self._record_bytes_read(event_metadata.event_payload_len as _);
         // verify sum
-        const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
         let actual_sum = CRC.checksum(&payload_data_block);
         if compiler::likely(actual_sum == event_metadata.event_crc) {
             // great, the sums match
@@ -231,5 +232,57 @@ impl<TA, LF> TransactionLogReader<TA, LF> {
     }
     fn end_of_file(&self) -> bool {
         self.remaining_bytes == 0
+    }
+}
+
+pub struct TransactionLogWriter<LF, TA> {
+    /// the txn log file
+    log_file: SDSSFileIO<LF>,
+    /// the id of the **next** transaction
+    id: u64,
+    _m: PhantomData<TA>,
+}
+
+impl<LF: RawFileIOInterface, TA: TransactionLogAdapter> TransactionLogWriter<LF, TA> {
+    pub fn new(
+        mut log_file: SDSSFileIO<LF>,
+        last_txn_id: u64,
+        last_size: usize,
+    ) -> SDSSResult<Self> {
+        log_file.seek_ahead(last_size)?;
+        Ok(Self {
+            log_file,
+            id: last_txn_id,
+            _m: PhantomData,
+        })
+    }
+    pub fn append_event(&mut self, event: TA::TransactionEvent) -> SDSSResult<()> {
+        let encoded = TA::encode(event);
+        let md = TxnLogEntryMetadata::new(
+            self._incr_id() as u128,
+            EventSourceMarker::SERVER_STD,
+            CRC.checksum(&encoded),
+            encoded.len() as u64,
+        )
+        .encoded();
+        self.log_file.unfsynced_write(&md)?;
+        self.log_file.unfsynced_write(&encoded)?;
+        self.log_file.fsync_all()?;
+        Ok(())
+    }
+    pub fn close_log(mut self) -> SDSSResult<()> {
+        let crc = CRC.checksum(EventSourceMarker::DRIVER_CLOSED.to_le_bytes().as_ref());
+        let id = self._incr_id() as u128;
+        self.log_file.fsynced_write(
+            &TxnLogEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, crc, 0).encoded(),
+        )
+    }
+}
+
+impl<LF, TA> TransactionLogWriter<LF, TA> {
+    fn _incr_id(&mut self) -> u64 {
+        let current = self.id;
+        self.id += 1;
+        current
     }
 }

@@ -51,6 +51,7 @@ fn vfs<T>(fname: &str, mut func: impl FnMut(&mut VirtualFile) -> SDSSResult<T>) 
 }
 
 struct VirtualFile {
+    pos: u64,
     read: bool,
     write: bool,
     data: Vec<u8>,
@@ -58,7 +59,12 @@ struct VirtualFile {
 
 impl VirtualFile {
     fn new(read: bool, write: bool, data: Vec<u8>) -> Self {
-        Self { read, write, data }
+        Self {
+            read,
+            write,
+            data,
+            pos: 0,
+        }
     }
     fn rw(data: Vec<u8>) -> Self {
         Self::new(true, true, data)
@@ -68,6 +74,16 @@ impl VirtualFile {
     }
     fn r(data: Vec<u8>) -> Self {
         Self::new(true, false, data)
+    }
+    fn seek_forward(&mut self, by: usize) {
+        self.pos += by as u64;
+        assert!(self.pos <= self.data.len() as u64);
+    }
+    fn data(&self) -> &[u8] {
+        &self.data[self.pos as usize..]
+    }
+    fn data_mut(&mut self) -> &mut [u8] {
+        &mut self.data[self.pos as usize..]
     }
 }
 
@@ -86,14 +102,14 @@ impl RawFileIOInterface for VirtualFileInterface {
     fn fread_exact(&mut self, buf: &mut [u8]) -> super::SDSSResult<()> {
         vfs(&self.0, |f| {
             assert!(f.read);
-            f.data.as_slice().read_exact(buf)?;
+            f.data().read_exact(buf)?;
             Ok(())
         })
     }
     fn fwrite_all(&mut self, bytes: &[u8]) -> super::SDSSResult<()> {
         vfs(&self.0, |f| {
             assert!(f.write);
-            f.data.write_all(bytes)?;
+            f.data_mut().write_all(bytes)?;
             Ok(())
         })
     }
@@ -102,6 +118,12 @@ impl RawFileIOInterface for VirtualFileInterface {
     }
     fn flen(&self) -> SDSSResult<u64> {
         vfs(&self.0, |f| Ok(f.data.len() as _))
+    }
+    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()> {
+        vfs(&self.0, |f| {
+            f.seek_forward(by);
+            Ok(())
+        })
     }
 }
 

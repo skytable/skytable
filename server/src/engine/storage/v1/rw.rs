@@ -34,7 +34,7 @@ use {
     crate::engine::storage::v1::SDSSError,
     std::{
         fs::File,
-        io::{Read, Write},
+        io::{Read, Seek, SeekFrom, Write},
     },
 };
 
@@ -56,6 +56,7 @@ pub trait RawFileIOInterface: Sized {
     fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
     fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()>;
     fn fsync_all(&mut self) -> SDSSResult<()>;
+    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()>;
     fn flen(&self) -> SDSSResult<u64>;
 }
 
@@ -87,6 +88,10 @@ impl RawFileIOInterface for File {
     }
     fn flen(&self) -> SDSSResult<u64> {
         Ok(self.metadata()?.len())
+    }
+    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()> {
+        self.seek(SeekFrom::Start(by as _))?;
+        Ok(())
     }
 }
 
@@ -143,6 +148,13 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     fn _new(f: F) -> Self {
         Self { f }
     }
+    pub fn unfsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
+        self.f.fwrite_all(data)
+    }
+    pub fn fsync_all(&mut self) -> SDSSResult<()> {
+        self.f.fsync_all()?;
+        Ok(())
+    }
     pub fn fsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
         self.f.fwrite_all(data)?;
         self.f.fsync_all()
@@ -152,5 +164,8 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
     pub fn file_length(&self) -> SDSSResult<u64> {
         self.f.flen()
+    }
+    pub fn seek_ahead(&mut self, by: usize) -> SDSSResult<()> {
+        self.f.fseek_ahead(by)
     }
 }
