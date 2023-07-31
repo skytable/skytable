@@ -109,7 +109,11 @@ impl RawFileIOInterface for VirtualFileInterface {
     fn fwrite_all(&mut self, bytes: &[u8]) -> super::SDSSResult<()> {
         vfs(&self.0, |f| {
             assert!(f.write);
-            f.data_mut().write_all(bytes)?;
+            if f.data.len() < bytes.len() {
+                f.data.extend(bytes);
+            } else {
+                f.data_mut().write_all(bytes)?;
+            }
             Ok(())
         })
     }
