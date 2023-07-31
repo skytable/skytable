@@ -58,6 +58,8 @@
 
 use crate::util::copy_slice_to_array as cp;
 
+use super::SDSSResult;
+
 // (1) sr
 mod sr;
 // (2) gr
@@ -151,6 +153,26 @@ pub struct SDSSHeader {
     // dynamic record
     dr_hs: dr::DRHostSignature,
     dr_rs: dr::DRRuntimeSignature,
+}
+
+impl SDSSHeader {
+    pub fn verify(
+        &self,
+        expected_file_scope: FileScope,
+        expected_file_specifier: FileSpecifier,
+        expected_file_specifier_version: FileSpecifierVersion,
+    ) -> SDSSResult<()> {
+        self.sr().verify()?;
+        self.gr_mdr().verify(
+            expected_file_scope,
+            expected_file_specifier,
+            expected_file_specifier_version,
+        )?;
+        self.gr_hr().verify()?;
+        self.dr_hs().verify(expected_file_specifier_version)?;
+        self.dr_rs().verify()?;
+        Ok(())
+    }
 }
 
 impl SDSSHeader {
@@ -290,13 +312,17 @@ impl SDSSHeaderRaw {
         data
     }
     /// **☢ WARNING ☢: This only decodes; it doesn't validate expected values!**
-    pub fn decode(slice: [u8; Self::header_size()]) -> Option<SDSSHeader> {
-        let sr = sr::StaticRecordRaw::decode(cp(&slice[Self::OFFSET_SR0..Self::OFFSET_SR1]))?;
-        let gr_mdr =
-            gr::GRMetadataRecordRaw::decode(cp(&slice[Self::OFFSET_SR1..Self::OFFSET_SR2]))?;
-        let gr_hr = gr::GRHostRecord::decode(cp(&slice[Self::OFFSET_SR2..Self::OFFSET_SR3]))?;
-        let dr_sig = dr::DRHostSignature::decode(cp(&slice[Self::OFFSET_SR3..Self::OFFSET_SR4]))?;
-        let dr_rt = dr::DRRuntimeSignature::decode(cp(&slice[Self::OFFSET_SR4..]))?;
+    pub fn decode_noverify(slice: [u8; Self::header_size()]) -> Option<SDSSHeader> {
+        let sr =
+            sr::StaticRecordRaw::decode_noverify(cp(&slice[Self::OFFSET_SR0..Self::OFFSET_SR1]))?;
+        let gr_mdr = gr::GRMetadataRecordRaw::decode_noverify(cp(
+            &slice[Self::OFFSET_SR1..Self::OFFSET_SR2]
+        ))?;
+        let gr_hr =
+            gr::GRHostRecord::decode_noverify(cp(&slice[Self::OFFSET_SR2..Self::OFFSET_SR3]))?;
+        let dr_sig =
+            dr::DRHostSignature::decode_noverify(cp(&slice[Self::OFFSET_SR3..Self::OFFSET_SR4]))?;
+        let dr_rt = dr::DRRuntimeSignature::decode_noverify(cp(&slice[Self::OFFSET_SR4..]))?;
         Some(SDSSHeader::new(sr, gr_mdr, gr_hr, dr_sig, dr_rt))
     }
 }

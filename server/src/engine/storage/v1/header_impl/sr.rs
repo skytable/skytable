@@ -26,12 +26,27 @@
 
 use crate::engine::storage::{
     header::{StaticRecordUV, StaticRecordUVRaw},
+    v1::{SDSSError, SDSSResult},
     versions,
 };
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct StaticRecord {
     sr: StaticRecordUV,
+}
+
+impl StaticRecord {
+    /// Verified:
+    /// - header version
+    ///
+    /// Need to verify: N/A
+    pub fn verify(&self) -> SDSSResult<()> {
+        if self.sr().header_version() == versions::v1::V1_HEADER_VERSION {
+            Ok(())
+        } else {
+            return Err(SDSSError::HeaderVersionMismatch);
+        }
+    }
 }
 
 impl StaticRecord {
@@ -64,7 +79,7 @@ impl StaticRecordRaw {
     pub const fn empty_buffer() -> [u8; sizeof!(Self)] {
         [0u8; sizeof!(Self)]
     }
-    pub fn decode(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
+    pub fn decode_noverify(buf: [u8; sizeof!(Self)]) -> Option<StaticRecord> {
         StaticRecordUVRaw::decode_from_bytes(buf).map(StaticRecord::new)
     }
 }

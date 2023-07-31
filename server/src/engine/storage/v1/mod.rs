@@ -59,6 +59,11 @@ pub enum SDSSError {
     CorruptedHeader,
     TransactionLogEntryCorrupted,
     TransactionLogCorrupted,
+    HeaderVersionMismatch,
+    DriverVersionMismatch,
+    ServerVersionMismatch,
+    HeaderDataMismatch,
+    TimeConflict,
 }
 
 impl SDSSError {

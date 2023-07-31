@@ -28,7 +28,10 @@ use crate::{
     engine::{
         mem::ByteStack,
         storage::{
-            v1::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
+            v1::{
+                header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
+                SDSSError, SDSSResult,
+            },
             versions::{self, DriverVersion, ServerVersion},
         },
     },
@@ -53,6 +56,30 @@ pub struct GRMetadataRecord {
     file_scope: FileScope,
     file_spec: FileSpecifier,
     file_spec_id: FileSpecifierVersion,
+}
+
+impl GRMetadataRecord {
+    pub fn verify(
+        &self,
+        expected_file_scope: FileScope,
+        expected_file_specifier: FileSpecifier,
+        expected_file_specifier_version: FileSpecifierVersion,
+    ) -> SDSSResult<()> {
+        if self.server_version() != versions::v1::V1_SERVER_VERSION {
+            return Err(SDSSError::ServerVersionMismatch);
+        }
+        if self.driver_version() != versions::v1::V1_DRIVER_VERSION {
+            return Err(SDSSError::DriverVersionMismatch);
+        }
+        let okay = self.file_scope() == expected_file_scope
+            && self.file_spec() == expected_file_specifier
+            && self.file_spec_id() == expected_file_specifier_version;
+        if okay {
+            Ok(())
+        } else {
+            Err(SDSSError::HeaderDataMismatch)
+        }
+    }
 }
 
 impl GRMetadataRecord {
@@ -106,7 +133,7 @@ impl GRMetadataRecordRaw {
     /// Decodes a given metadata record, validating all data for correctness.
     ///
     /// **☢ WARNING ☢: This only decodes; it doesn't validate expected values!**
-    pub fn decode(data: [u8; 32]) -> Option<GRMetadataRecord> {
+    pub fn decode_noverify(data: [u8; 32]) -> Option<GRMetadataRecord> {
         let data = ByteStack::new(data);
         let server_version =
             ServerVersion::__new(u64::from_le(data.read_qword(Self::MDR_OFFSET_P0)));
@@ -242,7 +269,15 @@ pub struct GRHostRecord {
 }
 
 impl GRHostRecord {
-    pub fn decode(bytes: [u8; sizeof!(GRHostRecordRaw)]) -> Option<Self> {
+    /// Verified: N/A
+    /// To verify: N/A
+    pub fn verify(&self) -> SDSSResult<()> {
+        Ok(())
+    }
+}
+
+impl GRHostRecord {
+    pub fn decode_noverify(bytes: [u8; sizeof!(GRHostRecordRaw)]) -> Option<Self> {
         let ns = ByteStack::new(bytes);
         let epoch_time = u128::from_le(ns.read_xmmword(GRHostRecordRaw::GRHR_OFFSET_P0));
         let uptime = u128::from_le(ns.read_xmmword(GRHostRecordRaw::GRHR_OFFSET_P1));

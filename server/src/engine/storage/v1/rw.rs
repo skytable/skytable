@@ -56,7 +56,7 @@ pub trait RawFileIOInterface: Sized {
     fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
     fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()>;
     fn fsync_all(&mut self) -> SDSSResult<()>;
-    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()>;
+    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()>;
     fn flen(&self) -> SDSSResult<u64>;
 }
 
@@ -89,8 +89,8 @@ impl RawFileIOInterface for File {
     fn flen(&self) -> SDSSResult<u64> {
         Ok(self.metadata()?.len())
     }
-    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()> {
-        self.seek(SeekFrom::Start(by as _))?;
+    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()> {
+        self.seek(SeekFrom::Start(by))?;
         Ok(())
     }
 }
@@ -132,7 +132,10 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
                 // this is an existing file. decoded the header
                 let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
                 f.fread_exact(&mut header_raw)?;
-                let header = SDSSHeaderRaw::decode(header_raw).ok_or(SDSSError::CorruptedHeader)?;
+                let header =
+                    SDSSHeaderRaw::decode_noverify(header_raw).ok_or(SDSSError::CorruptedHeader)?;
+                // now validate the header
+                header.verify(file_scope, file_specifier, file_specifier_version)?;
                 // since we updated this file, let us update the header
                 let mut new_header = header.clone();
                 new_header.dr_rs_mut().bump_modify_count();
@@ -165,7 +168,7 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     pub fn file_length(&self) -> SDSSResult<u64> {
         self.f.flen()
     }
-    pub fn seek_ahead(&mut self, by: usize) -> SDSSResult<()> {
+    pub fn seek_ahead(&mut self, by: u64) -> SDSSResult<()> {
         self.f.fseek_ahead(by)
     }
 }

@@ -29,7 +29,7 @@ use crate::{
         mem::ByteStack,
         storage::{
             header::{HostArch, HostEndian, HostOS, HostPointerWidth},
-            v1::header_impl::FileSpecifierVersion,
+            v1::{header_impl::FileSpecifierVersion, SDSSError, SDSSResult},
             versions::{self, DriverVersion, ServerVersion},
         },
     },
@@ -60,10 +60,25 @@ pub struct DRHostSignature {
 }
 
 impl DRHostSignature {
+    pub fn verify(&self, expected_file_specifier_version: FileSpecifierVersion) -> SDSSResult<()> {
+        if self.server_version() != versions::v1::V1_SERVER_VERSION {
+            return Err(SDSSError::ServerVersionMismatch);
+        }
+        if self.driver_version() != versions::v1::V1_DRIVER_VERSION {
+            return Err(SDSSError::DriverVersionMismatch);
+        }
+        if self.file_specifier_version() != expected_file_specifier_version {
+            return Err(SDSSError::HeaderDataMismatch);
+        }
+        Ok(())
+    }
+}
+
+impl DRHostSignature {
     /// Decode the [`DRHostSignature`] from the given bytes
     ///
     /// **☢ WARNING ☢: This only decodes; it doesn't validate expected values!**
-    pub fn decode(bytes: [u8; sizeof!(DRHostSignatureRaw)]) -> Option<Self> {
+    pub fn decode_noverify(bytes: [u8; sizeof!(DRHostSignatureRaw)]) -> Option<Self> {
         let ns = ByteStack::new(bytes);
         let server_version = ServerVersion::__new(u64::from_le(
             ns.read_qword(DRHostSignatureRaw::DRHS_OFFSET_P0),
@@ -268,7 +283,15 @@ pub struct DRRuntimeSignature {
 }
 
 impl DRRuntimeSignature {
-    pub fn decode(bytes: [u8; sizeof!(DRRuntimeSignatureRaw)]) -> Option<Self> {
+    pub fn verify(&self) -> SDSSResult<()> {
+        let et = util::os::get_epoch_time();
+        if self.epoch_time() > et || self.host_uptime() > et {
+            // a file from the future?
+            return Err(SDSSError::TimeConflict);
+        }
+        Ok(())
+    }
+    pub fn decode_noverify(bytes: [u8; sizeof!(DRRuntimeSignatureRaw)]) -> Option<Self> {
         let bytes = ByteStack::new(bytes);
         // check
         let modify_count = u64::from_le(bytes.read_qword(DRRuntimeSignatureRaw::DRRS_OFFSET_P0));

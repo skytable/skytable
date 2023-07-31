@@ -75,8 +75,8 @@ impl VirtualFile {
     fn r(data: Vec<u8>) -> Self {
         Self::new(true, false, data)
     }
-    fn seek_forward(&mut self, by: usize) {
-        self.pos += by as u64;
+    fn seek_forward(&mut self, by: u64) {
+        self.pos += by;
         assert!(self.pos <= self.data.len() as u64);
     }
     fn data(&self) -> &[u8] {
@@ -123,7 +123,7 @@ impl RawFileIOInterface for VirtualFileInterface {
     fn flen(&self) -> SDSSResult<u64> {
         vfs(&self.0, |f| Ok(f.data.len() as _))
     }
-    fn fseek_ahead(&mut self, by: usize) -> SDSSResult<()> {
+    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()> {
         vfs(&self.0, |f| {
             f.seek_forward(by);
             Ok(())
