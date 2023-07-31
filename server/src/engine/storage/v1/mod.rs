@@ -24,9 +24,15 @@
  *
 */
 
+// raw
 mod header_impl;
+// impls
 mod rw;
 mod start_stop;
+mod txn;
+// test
+#[cfg(test)]
+mod tests;
 
 use std::io::Error as IoError;
 
@@ -50,6 +56,7 @@ pub enum SDSSError {
     IoErrorExtra(IoError, &'static str),
     CorruptedFile(&'static str),
     StartupError(&'static str),
+    CorruptedHeader,
 }
 
 impl SDSSError {

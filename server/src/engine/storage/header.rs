@@ -264,7 +264,7 @@ impl HostPointerWidth {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct StaticRecordUV {
     header_version: HeaderVersion,
     ptr_width: HostPointerWidth,
@@ -315,7 +315,7 @@ impl StaticRecordUV {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 /// The static record
 pub struct StaticRecordUVRaw {
     data: ByteStack<16>,

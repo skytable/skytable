@@ -29,7 +29,7 @@ use crate::engine::storage::{
     versions,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct StaticRecord {
     sr: StaticRecordUV,
 }
@@ -49,6 +49,7 @@ impl StaticRecord {
 }
 
 /// Static record
+#[derive(Clone)]
 pub struct StaticRecordRaw {
     pub(super) base: StaticRecordUVRaw,
 }

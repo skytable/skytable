@@ -56,6 +56,8 @@
  * Note: The entire part of the header is little endian encoded
 */
 
+use crate::util::copy_slice_to_array as cp;
+
 // (1) sr
 mod sr;
 // (2) gr
@@ -139,7 +141,7 @@ impl HostRunMode {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SDSSHeader {
     // static record
     sr: sr::StaticRecord,
@@ -182,6 +184,9 @@ impl SDSSHeader {
     pub fn dr_rs(&self) -> &dr::DRRuntimeSignature {
         &self.dr_rs
     }
+    pub fn dr_rs_mut(&mut self) -> &mut dr::DRRuntimeSignature {
+        &mut self.dr_rs
+    }
     pub fn encoded(&self) -> SDSSHeaderRaw {
         SDSSHeaderRaw::new_full(
             self.sr.encoded(),
@@ -193,6 +198,7 @@ impl SDSSHeader {
     }
 }
 
+#[derive(Clone)]
 pub struct SDSSHeaderRaw {
     sr: sr::StaticRecordRaw,
     gr_0_mdr: gr::GRMetadataRecordRaw,
@@ -202,6 +208,11 @@ pub struct SDSSHeaderRaw {
 }
 
 impl SDSSHeaderRaw {
+    const OFFSET_SR0: usize = 0;
+    const OFFSET_SR1: usize = sizeof!(sr::StaticRecordRaw);
+    const OFFSET_SR2: usize = Self::OFFSET_SR1 + sizeof!(gr::GRMetadataRecordRaw);
+    const OFFSET_SR3: usize = Self::OFFSET_SR2 + sizeof!(gr::GRHostRecordRaw);
+    const OFFSET_SR4: usize = Self::OFFSET_SR3 + sizeof!(dr::DRHostSignatureRaw);
     pub fn new_auto(
         gr_mdr_scope: FileScope,
         gr_mdr_specifier: FileSpecifier,
@@ -268,5 +279,24 @@ impl SDSSHeaderRaw {
             + sizeof!(gr::GRHostRecordRaw)
             + sizeof!(dr::DRHostSignatureRaw)
             + sizeof!(dr::DRRuntimeSignatureRaw)
+    }
+    pub fn array(&self) -> [u8; Self::header_size()] {
+        let mut data = [0u8; Self::header_size()];
+        data[Self::OFFSET_SR0..Self::OFFSET_SR1].copy_from_slice(self.sr.base.get_ref());
+        data[Self::OFFSET_SR1..Self::OFFSET_SR2].copy_from_slice(self.gr_0_mdr.data.slice());
+        data[Self::OFFSET_SR2..Self::OFFSET_SR3].copy_from_slice(self.gr_1_hr.data.slice());
+        data[Self::OFFSET_SR3..Self::OFFSET_SR4].copy_from_slice(self.dr_0_hs.data.slice());
+        data[Self::OFFSET_SR4..].copy_from_slice(self.dr_1_rs.data.slice());
+        data
+    }
+    /// **☢ WARNING ☢: This only decodes; it doesn't validate expected values!**
+    pub fn decode(slice: [u8; Self::header_size()]) -> Option<SDSSHeader> {
+        let sr = sr::StaticRecordRaw::decode(cp(&slice[Self::OFFSET_SR0..Self::OFFSET_SR1]))?;
+        let gr_mdr =
+            gr::GRMetadataRecordRaw::decode(cp(&slice[Self::OFFSET_SR1..Self::OFFSET_SR2]))?;
+        let gr_hr = gr::GRHostRecord::decode(cp(&slice[Self::OFFSET_SR2..Self::OFFSET_SR3]))?;
+        let dr_sig = dr::DRHostSignature::decode(cp(&slice[Self::OFFSET_SR3..Self::OFFSET_SR4]))?;
+        let dr_rt = dr::DRRuntimeSignature::decode(cp(&slice[Self::OFFSET_SR4..]))?;
+        Some(SDSSHeader::new(sr, gr_mdr, gr_hr, dr_sig, dr_rt))
     }
 }

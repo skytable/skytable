@@ -46,7 +46,7 @@ use crate::{
     0, 63
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GRMetadataRecord {
     server_version: ServerVersion,
     driver_version: DriverVersion,
@@ -97,6 +97,7 @@ impl GRMetadataRecord {
     }
 }
 
+#[derive(Clone)]
 pub struct GRMetadataRecordRaw {
     pub(super) data: ByteStack<32>,
 }
@@ -229,7 +230,7 @@ impl GRMetadataRecordRaw {
     = 304B
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GRHostRecord {
     epoch_time: u128,
     uptime: u128,
@@ -319,7 +320,7 @@ impl GRHostRecord {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GRHostRecordRaw {
     pub(super) data: ByteStack<304>,
 }

@@ -48,7 +48,7 @@ use crate::{
     - 1B: OS
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DRHostSignature {
     server_version: ServerVersion,
     driver_version: DriverVersion,
@@ -146,9 +146,9 @@ impl DRHostSignature {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DRHostSignatureRaw {
-    data: ByteStack<24>,
+    pub(super) data: ByteStack<24>,
 }
 
 impl DRHostSignatureRaw {
@@ -258,7 +258,7 @@ impl DRHostSignatureRaw {
     = 296B
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DRRuntimeSignature {
     modify_count: u64,
     epoch_time: u128,
@@ -336,11 +336,17 @@ impl DRRuntimeSignature {
             self.host_name_raw(),
         )
     }
+    pub fn set_modify_count(&mut self, new: u64) {
+        self.modify_count = new;
+    }
+    pub fn bump_modify_count(&mut self) {
+        self.modify_count += 1;
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DRRuntimeSignatureRaw {
-    data: ByteStack<296>,
+    pub(super) data: ByteStack<296>,
 }
 
 impl DRRuntimeSignatureRaw {

@@ -1,5 +1,5 @@
 /*
- * Created on Thu Jan 19 2023
+ * Created on Thu Jul 23 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,39 +24,15 @@
  *
 */
 
-pub(super) mod atm;
-pub(super) mod cell;
-pub(super) mod smart;
-
-use std::{cell::Cell, hint::spin_loop, thread};
-
-/// Type to perform exponential backoff
-pub struct Backoff {
-    cur: Cell<u8>,
-}
-
-impl Backoff {
-    const MAX_SPIN: u8 = 6;
-    const MAX_YIELD: u8 = 8;
-    pub fn new() -> Self {
-        Self { cur: Cell::new(0) }
-    }
-    /// Spin a few times, giving way to the CPU but if we have spun too many times,
-    /// then block by yielding to the OS scheduler. This will **eventually block**
-    /// if we spin more than the set `MAX_SPIN`
-    pub fn snooze(&self) {
-        if self.cur.get() <= Self::MAX_SPIN {
-            // we can still spin (exp)
-            for _ in 0..1 << self.cur.get() {
-                spin_loop();
-            }
-        } else {
-            // nope, yield to scheduler
-            thread::yield_now();
-        }
-        if self.cur.get() <= Self::MAX_YIELD {
-            // bump current step
-            self.cur.set(self.cur.get() + 1)
-        }
-    }
-}
+/*
+  +----------------+------------------------------+-----------------+------------------+--------------------+
+  | EVENT ID (16B) | EVENT SOURCE + METADATA (8B) | EVENT MD5 (16B)  | PAYLOAD LEN (8B) | EVENT PAYLOAD (?B) |
+  +----------------+------------------------------+-----------------+------------------+--------------------+
+  Event ID:
+  - The atomically incrementing event ID (for future scale we have 16B; it's like the ZFS situation haha)
+  - Event source (1B) + 7B padding (for future metadata)
+  - Event MD5; yeah, it's "not as strong as" SHA256 but I've chosen to have it here (since it's sometimes faster and further on,
+    we already sum the entire log)
+  - Payload len: the size of the pyload
+  - Payload: the payload
+*/

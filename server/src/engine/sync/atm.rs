@@ -35,6 +35,7 @@ pub const ORD_RLX: Ordering = Ordering::Relaxed;
 pub const ORD_ACQ: Ordering = Ordering::Acquire;
 pub const ORD_REL: Ordering = Ordering::Release;
 pub const ORD_ACR: Ordering = Ordering::AcqRel;
+pub const ORD_SEQ: Ordering = Ordering::SeqCst;
 
 type CxResult<'g, T, P> = Result<Shared<'g, T>, CompareExchangeError<'g, T, P>>;
 
