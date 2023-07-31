@@ -672,8 +672,8 @@ pub fn get_config() -> Result<ConfigType, ConfigError> {
 
     // get config from file
     let cfg_from_file = if let Some(file) = matches.value_of("config") {
-        let file = fs::read(file)?;
-        let cfg_file: ConfigFile = toml::from_slice(&file)?;
+        let file = fs::read_to_string(file)?;
+        let cfg_file: ConfigFile = toml::from_str(&file)?;
         Some(cfgfile::from_file(cfg_file))
     } else {
         None

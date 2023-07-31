@@ -27,10 +27,16 @@
 use {
     super::provider::{Authkey, AUTHKEY_SIZE},
     crate::corestore::array::Array,
+    base64::{
+        alphabet::BCRYPT,
+        engine::{GeneralPurpose, GeneralPurposeConfig},
+        Engine,
+    },
 };
 
 type AuthkeyArray = Array<u8, { AUTHKEY_SIZE }>;
 const RAN_BYTES_SIZE: usize = 40;
+const BASE64: GeneralPurpose = GeneralPurpose::new(&BCRYPT, GeneralPurposeConfig::new());
 
 /// Return a "human readable key" and the "authbytes" that can be stored
 /// safely. To do this:
@@ -41,7 +47,7 @@ const RAN_BYTES_SIZE: usize = 40;
 pub fn generate_full() -> (String, Authkey) {
     let mut bytes: [u8; RAN_BYTES_SIZE] = [0u8; RAN_BYTES_SIZE];
     openssl::rand::rand_bytes(&mut bytes).unwrap();
-    let ret = base64::encode_config(&bytes, base64::BCRYPT);
+    let ret = BASE64.encode(&bytes);
     let hash = rcrypt::hash(&ret, rcrypt::DEFAULT_COST).unwrap();
     let store_in_db = unsafe {
         let mut array = AuthkeyArray::new();
