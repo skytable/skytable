@@ -38,7 +38,7 @@
 
 use {
     super::{
-        header_impl::{FileSpecifierVersion, HostRunMode},
+        header_impl::{FileSpecifierVersion, HostRunMode, SDSSHeaderRaw},
         rw::{FileOpen, RawFileIOInterface, SDSSFileIO},
         SDSSError, SDSSResult,
     },
@@ -51,7 +51,10 @@ use {
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
-pub fn open_log<TA: TransactionLogAdapter, LF: RawFileIOInterface>(
+pub fn open_log<
+    TA: TransactionLogAdapter + core::fmt::Debug,
+    LF: RawFileIOInterface + core::fmt::Debug,
+>(
     log_file_name: &str,
     log_kind: FileSpecifier,
     log_kind_version: FileSpecifierVersion,
@@ -70,11 +73,11 @@ pub fn open_log<TA: TransactionLogAdapter, LF: RawFileIOInterface>(
         host_startup_counter,
     )?;
     let file = match f {
-        FileOpen::Created(f) => return TransactionLogWriter::new(f, 0, 0),
+        FileOpen::Created(f) => return TransactionLogWriter::new(f, 0),
         FileOpen::Existing(file, _) => file,
     };
-    let (file, size, last_txn) = TransactionLogReader::<TA, LF>::scroll(file, gs)?;
-    TransactionLogWriter::new(file, size, last_txn)
+    let (file, last_txn) = TransactionLogReader::<TA, LF>::scroll(file, gs)?;
+    TransactionLogWriter::new(file, last_txn)
 }
 
 /// The transaction adapter
@@ -89,6 +92,7 @@ pub trait TransactionLogAdapter {
     fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> SDSSResult<()>;
 }
 
+#[derive(Debug)]
 pub struct TxnLogEntryMetadata {
     event_id: u128,
     event_source_md: u64,
@@ -182,7 +186,7 @@ pub struct TransactionLogReader<TA, LF> {
 
 impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA, LF> {
     pub fn new(log_file: SDSSFileIO<LF>) -> SDSSResult<Self> {
-        let log_size = log_file.file_length()?;
+        let log_size = log_file.file_length()? - SDSSHeaderRaw::header_size() as u64;
         Ok(Self {
             log_file,
             log_size,
@@ -194,10 +198,10 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
     }
     /// Read the next event and apply it to the global state
     pub fn rapply_next_event(&mut self, gs: &TA::GlobalState) -> SDSSResult<()> {
-        self._incr_evid();
         // read metadata
         let mut raw_txn_log_row_md = [0u8; TxnLogEntryMetadata::SIZE];
         self.log_file.read_to_buffer(&mut raw_txn_log_row_md)?;
+        self._record_bytes_read(36);
         let event_metadata = TxnLogEntryMetadata::decode(raw_txn_log_row_md);
         /*
             verify metadata and read bytes into buffer, verify sum
@@ -226,7 +230,9 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
                     return Err(SDSSError::TransactionLogCorrupted);
                 }
             }
-            _ => return Err(SDSSError::TransactionLogEntryCorrupted),
+            EventSourceMarker::DriverClosed => {
+                return Err(SDSSError::TransactionLogEntryCorrupted);
+            }
         }
         // read bytes
         let mut payload_data_block = vec![0u8; event_metadata.event_payload_len as usize];
@@ -235,6 +241,7 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
         // verify sum
         let actual_sum = CRC.checksum(&payload_data_block);
         if compiler::likely(actual_sum == event_metadata.event_crc) {
+            self._incr_evid();
             // great, the sums match
             TA::decode_and_update_state(&payload_data_block, gs)?;
             Ok(())
@@ -242,17 +249,17 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
             Err(SDSSError::TransactionLogEntryCorrupted)
         }
     }
-    /// Read and apply all events in the given log file to the global state, returning the
-    /// (open file, log size, last event ID)
-    pub fn scroll(
-        file: SDSSFileIO<LF>,
-        gs: &TA::GlobalState,
-    ) -> SDSSResult<(SDSSFileIO<LF>, u64, u64)> {
+    /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
+    pub fn scroll(file: SDSSFileIO<LF>, gs: &TA::GlobalState) -> SDSSResult<(SDSSFileIO<LF>, u64)> {
         let mut slf = Self::new(file)?;
         while !slf.end_of_file() {
             slf.rapply_next_event(gs)?;
         }
-        Ok((slf.log_file, slf.log_size, slf.evid))
+        if slf.closed {
+            Ok((slf.log_file, slf.evid))
+        } else {
+            Err(SDSSError::TransactionLogCorrupted)
+        }
     }
 }
 
@@ -280,8 +287,9 @@ pub struct TransactionLogWriter<LF, TA> {
 }
 
 impl<LF: RawFileIOInterface, TA: TransactionLogAdapter> TransactionLogWriter<LF, TA> {
-    pub fn new(mut log_file: SDSSFileIO<LF>, last_size: u64, last_txn_id: u64) -> SDSSResult<Self> {
-        log_file.seek_ahead(last_size)?;
+    pub fn new(mut log_file: SDSSFileIO<LF>, last_txn_id: u64) -> SDSSResult<Self> {
+        let l = log_file.file_length()?;
+        log_file.seek_ahead(l)?;
         Ok(Self {
             log_file,
             id: last_txn_id,
@@ -303,10 +311,9 @@ impl<LF: RawFileIOInterface, TA: TransactionLogAdapter> TransactionLogWriter<LF,
         Ok(())
     }
     pub fn close_log(mut self) -> SDSSResult<()> {
-        let crc = CRC.checksum(EventSourceMarker::DRIVER_CLOSED.to_le_bytes().as_ref());
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(
-            &TxnLogEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, crc, 0).encoded(),
+            &TxnLogEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, 0, 0).encoded(),
         )
     }
 }

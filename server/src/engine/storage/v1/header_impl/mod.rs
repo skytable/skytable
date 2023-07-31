@@ -95,12 +95,16 @@ impl FileScope {
 #[repr(u8)]
 pub enum FileSpecifier {
     GNSTxnLog = 0,
+    #[cfg(test)]
+    TestTransactionLog = 1,
 }
 
 impl FileSpecifier {
     pub const fn try_new(v: u32) -> Option<Self> {
         Some(match v {
             0 => Self::GNSTxnLog,
+            #[cfg(test)]
+            1 => Self::TestTransactionLog,
             _ => return None,
         })
     }

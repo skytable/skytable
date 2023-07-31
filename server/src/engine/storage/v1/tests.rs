@@ -85,14 +85,34 @@ impl VirtualFile {
     fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data[self.pos as usize..]
     }
+    fn close(&mut self) {
+        self.pos = 0;
+        self.read = false;
+        self.write = false;
+    }
 }
 
 struct VirtualFileInterface(Box<str>);
 
+impl Drop for VirtualFileInterface {
+    fn drop(&mut self) {
+        vfs(&self.0, |f| {
+            f.close();
+            Ok(())
+        })
+        .unwrap();
+    }
+}
+
 impl RawFileIOInterface for VirtualFileInterface {
     fn fopen_or_create_rw(file_path: &str) -> SDSSResult<RawFileOpen<Self>> {
         match VFS.write().entry(file_path.to_owned()) {
-            Entry::Occupied(_) => Ok(RawFileOpen::Existing(Self(file_path.into()))),
+            Entry::Occupied(mut oe) => {
+                let file_md = oe.get_mut();
+                file_md.read = true;
+                file_md.write = true;
+                Ok(RawFileOpen::Existing(Self(file_path.into())))
+            }
             Entry::Vacant(ve) => {
                 ve.insert(VirtualFile::rw(vec![]));
                 Ok(RawFileOpen::Created(Self(file_path.into())))
@@ -131,18 +151,18 @@ impl RawFileIOInterface for VirtualFileInterface {
     }
 }
 
+type VirtualFS = VirtualFileInterface;
+type RealFS = std::fs::File;
+
 mod rw {
-    use {
-        super::VirtualFileInterface,
-        crate::engine::storage::v1::{
-            header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
-            rw::{FileOpen, SDSSFileIO},
-        },
+    use crate::engine::storage::v1::{
+        header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
+        rw::{FileOpen, SDSSFileIO},
     };
 
     #[test]
     fn create_delete() {
-        let f = SDSSFileIO::<VirtualFileInterface>::open_or_create_perm_rw(
+        let f = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw(
             "hello_world.db-tlog",
             FileScope::TransactionLogCompacted,
             FileSpecifier::GNSTxnLog,
@@ -156,7 +176,7 @@ mod rw {
             FileOpen::Existing(_, _) => panic!(),
             FileOpen::Created(_) => {}
         };
-        let open = SDSSFileIO::<VirtualFileInterface>::open_or_create_perm_rw(
+        let open = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw(
             "hello_world.db-tlog",
             FileScope::TransactionLogCompacted,
             FileSpecifier::GNSTxnLog,
@@ -176,5 +196,148 @@ mod rw {
         assert_eq!(h.gr_hr().run_mode(), HostRunMode::Prod);
         assert_eq!(h.gr_hr().setting_version(), 0);
         assert_eq!(h.gr_hr().startup_counter(), 0);
+    }
+}
+
+mod tx {
+    use crate::engine::storage::v1::header_impl::{
+        FileSpecifier, FileSpecifierVersion, HostRunMode,
+    };
+
+    type FileInterface = super::RealFS;
+
+    use {
+        crate::{
+            engine::storage::v1::{
+                txn::{self, TransactionLogAdapter, TransactionLogWriter},
+                SDSSError, SDSSResult,
+            },
+            util,
+        },
+        std::cell::RefCell,
+    };
+    pub struct Database {
+        data: RefCell<[u8; 10]>,
+    }
+    impl Database {
+        fn copy_data(&self) -> [u8; 10] {
+            *self.data.borrow()
+        }
+        fn new() -> Self {
+            Self {
+                data: RefCell::new([0; 10]),
+            }
+        }
+        fn reset(&self) {
+            *self.data.borrow_mut() = [0; 10];
+        }
+        fn txn_reset(
+            &self,
+            txn_writer: &mut TransactionLogWriter<FileInterface, DatabaseTxnAdapter>,
+        ) -> SDSSResult<()> {
+            self.reset();
+            txn_writer.append_event(TxEvent::Reset)
+        }
+        fn set(&self, pos: usize, val: u8) {
+            self.data.borrow_mut()[pos] = val;
+        }
+        fn txn_set(
+            &self,
+            pos: usize,
+            val: u8,
+            txn_writer: &mut TransactionLogWriter<FileInterface, DatabaseTxnAdapter>,
+        ) -> SDSSResult<()> {
+            self.set(pos, val);
+            txn_writer.append_event(TxEvent::Set(pos, val))
+        }
+    }
+    pub enum TxEvent {
+        Reset,
+        Set(usize, u8),
+    }
+    #[derive(Debug)]
+    pub struct DatabaseTxnAdapter;
+    impl TransactionLogAdapter for DatabaseTxnAdapter {
+        type TransactionEvent = TxEvent;
+
+        type GlobalState = Database;
+
+        fn encode(event: Self::TransactionEvent) -> Box<[u8]> {
+            /*
+                [1B: opcode][8B:Index][1B: New value]
+            */
+            let opcode = match event {
+                TxEvent::Reset => 0u8,
+                TxEvent::Set(_, _) => 1u8,
+            };
+            let index = match event {
+                TxEvent::Reset => 0u64,
+                TxEvent::Set(index, _) => index as u64,
+            };
+            let new_value = match event {
+                TxEvent::Reset => 0,
+                TxEvent::Set(_, val) => val,
+            };
+            let mut ret = Vec::with_capacity(10);
+            ret.push(opcode);
+            ret.extend(index.to_le_bytes());
+            ret.push(new_value);
+            ret.into_boxed_slice()
+        }
+
+        fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> SDSSResult<()> {
+            if payload.len() != 10 {
+                return Err(SDSSError::CorruptedFile("testtxn.log"));
+            }
+            let opcode = payload[0];
+            let index = u64::from_le_bytes(util::copy_slice_to_array(&payload[1..9]));
+            let new_value = payload[9];
+            match opcode {
+                0 if index == 0 && new_value == 0 => gs.reset(),
+                1 if index < 10 && index < isize::MAX as u64 => gs.set(index as usize, new_value),
+                _ => return Err(SDSSError::TransactionLogEntryCorrupted),
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn two_set() {
+        // create log
+        let db1 = Database::new();
+        let x = || -> SDSSResult<()> {
+            let mut log = txn::open_log(
+                "testtxn.log",
+                FileSpecifier::TestTransactionLog,
+                FileSpecifierVersion::__new(0),
+                0,
+                HostRunMode::Prod,
+                1,
+                &db1,
+            )?;
+            db1.txn_set(0, 20, &mut log)?;
+            db1.txn_set(9, 21, &mut log)?;
+            log.close_log()
+        };
+        x().unwrap();
+        // backup original data
+        let original_data = db1.copy_data();
+        // restore log
+        let empty_db2 = Database::new();
+        {
+            let log = txn::open_log::<DatabaseTxnAdapter, FileInterface>(
+                "testtxn.log",
+                FileSpecifier::TestTransactionLog,
+                FileSpecifierVersion::__new(0),
+                0,
+                HostRunMode::Prod,
+                1,
+                &empty_db2,
+            )
+            .unwrap();
+            log.close_log().unwrap();
+        }
+        assert_eq!(original_data, empty_db2.copy_data());
+        std::fs::remove_file("testtxn.log").unwrap();
     }
 }

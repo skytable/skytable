@@ -626,7 +626,6 @@ mod try_from_config_source_impls {
         has_mutated: bool,
     ) {
         let mut mutated = false;
-        dbg!(new.is_present(), is_present);
         assert_eq!(new.is_present(), is_present);
         assert_eq!(new.mutate_failed(&mut default, &mut mutated), mutate_failed);
         assert_eq!(mutated, has_mutated);

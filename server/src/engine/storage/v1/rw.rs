@@ -68,10 +68,10 @@ impl RawFileIOInterface for File {
             .write(true)
             .open(file_path)?;
         let md = f.metadata()?;
-        if md.created()? == md.modified()? {
-            return Ok(RawFileOpen::Created(f));
+        if md.len() == 0 {
+            Ok(RawFileOpen::Created(f))
         } else {
-            return Ok(RawFileOpen::Existing(f));
+            Ok(RawFileOpen::Existing(f))
         }
     }
     fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
@@ -101,6 +101,7 @@ pub struct SDSSFileIO<F> {
 }
 
 impl<F: RawFileIOInterface> SDSSFileIO<F> {
+    /// **IMPORTANT: File position: end-of-header-section**
     pub fn open_or_create_perm_rw(
         file_path: &str,
         file_scope: FileScope,
@@ -140,7 +141,9 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
                 let mut new_header = header.clone();
                 new_header.dr_rs_mut().bump_modify_count();
                 let mut f = Self::_new(f);
+                f.seek_ahead(0)?;
                 f.fsynced_write(new_header.encoded().array().as_ref())?;
+                f.seek_ahead(SDSSHeaderRaw::header_size() as _)?;
                 Ok(FileOpen::Existing(f, header))
             }
         }

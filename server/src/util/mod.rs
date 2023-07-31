@@ -378,17 +378,17 @@ pub const fn copy_str_to_array<const N: usize>(str: &str) -> [u8; N] {
 }
 /// Copy the elements of a into b, beginning the copy at `pos`
 pub const fn copy_a_into_b<const M: usize, const N: usize>(
-    a: [u8; M],
-    mut b: [u8; N],
+    from: [u8; M],
+    mut to: [u8; N],
     mut pos: usize,
 ) -> [u8; N] {
     assert!(M <= N);
     assert!(pos < N);
     let mut i = 0;
     while i < M {
-        b[pos] = a[pos];
+        to[pos] = from[i];
         i += 1;
         pos += 1;
     }
-    b
+    to
 }

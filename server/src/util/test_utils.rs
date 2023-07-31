@@ -24,6 +24,8 @@
  *
 */
 
+use std::io::Read;
+
 use {
     rand::{
         distributions::{uniform::SampleUniform, Alphanumeric},
@@ -35,6 +37,18 @@ use {
         hash::{BuildHasher, Hash, Hasher},
     },
 };
+
+pub fn wait_for_key(msg: &str) {
+    use std::io::{self, Write};
+    print!("{msg}");
+    let x = || -> std::io::Result<()> {
+        io::stdout().flush()?;
+        let mut key = [0u8; 1];
+        io::stdin().read_exact(&mut key)?;
+        Ok(())
+    };
+    x().unwrap();
+}
 
 // TODO(@ohsayan): Use my own PRNG algo here. Maybe my quadratic one?
 
