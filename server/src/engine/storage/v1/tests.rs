@@ -100,6 +100,9 @@ impl RawFileIOInterface for VirtualFileInterface {
     fn fsync_all(&mut self) -> super::SDSSResult<()> {
         Ok(())
     }
+    fn flen(&self) -> SDSSResult<u64> {
+        vfs(&self.0, |f| Ok(f.data.len() as _))
+    }
 }
 
 mod rw {

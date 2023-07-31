@@ -56,6 +56,7 @@ pub trait RawFileIOInterface: Sized {
     fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
     fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()>;
     fn fsync_all(&mut self) -> SDSSResult<()>;
+    fn flen(&self) -> SDSSResult<u64>;
 }
 
 impl RawFileIOInterface for File {
@@ -83,6 +84,9 @@ impl RawFileIOInterface for File {
     fn fsync_all(&mut self) -> SDSSResult<()> {
         self.sync_all()?;
         Ok(())
+    }
+    fn flen(&self) -> SDSSResult<u64> {
+        Ok(self.metadata()?.len())
     }
 }
 
@@ -145,5 +149,8 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
     pub fn read_to_buffer(&mut self, buffer: &mut [u8]) -> SDSSResult<()> {
         self.f.fread_exact(buffer)
+    }
+    pub fn file_length(&self) -> SDSSResult<u64> {
+        self.f.flen()
     }
 }

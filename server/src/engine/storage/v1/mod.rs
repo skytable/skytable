@@ -57,6 +57,8 @@ pub enum SDSSError {
     CorruptedFile(&'static str),
     StartupError(&'static str),
     CorruptedHeader,
+    TransactionLogEntryCorrupted,
+    TransactionLogCorrupted,
 }
 
 impl SDSSError {
