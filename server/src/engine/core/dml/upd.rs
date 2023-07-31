@@ -238,7 +238,7 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
         let irm = mdl.intent_read_model();
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
-            return Err(DatabaseError::DmlEntryNotFound)
+            return Err(DatabaseError::DmlEntryNotFound);
         };
         let mut row_data_wl = row.d_data().write();
         let mut rollback_now = false;

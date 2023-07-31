@@ -392,3 +392,19 @@ pub const fn copy_a_into_b<const M: usize, const N: usize>(
     }
     to
 }
+
+pub struct Threshold<const N: usize> {
+    now: usize,
+}
+
+impl<const N: usize> Threshold<N> {
+    pub const fn new() -> Self {
+        Self { now: 0 }
+    }
+    pub fn bust_one(&mut self) {
+        self.now += 1;
+    }
+    pub fn not_busted(&self) -> bool {
+        self.now < N
+    }
+}

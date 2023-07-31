@@ -448,13 +448,13 @@ impl GRHostRecordRaw {
 #[test]
 fn test_metadata_record_encode_decode() {
     let md = GRMetadataRecordRaw::new(
-        FileScope::TransactionLog,
+        FileScope::Journal,
         FileSpecifier::GNSTxnLog,
         FileSpecifierVersion(1),
     );
     assert_eq!(md.read_p0_server_version(), versions::v1::V1_SERVER_VERSION);
     assert_eq!(md.read_p1_driver_version(), versions::v1::V1_DRIVER_VERSION);
-    assert_eq!(md.read_p2_file_scope(), FileScope::TransactionLog);
+    assert_eq!(md.read_p2_file_scope(), FileScope::Journal);
     assert_eq!(md.read_p3_file_spec(), FileSpecifier::GNSTxnLog);
     assert_eq!(md.read_p4_file_spec_version(), FileSpecifierVersion(1));
 }

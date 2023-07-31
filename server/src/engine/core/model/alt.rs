@@ -214,7 +214,7 @@ impl<'a> AlterPlan<'a> {
             // actually parse the new layer
             okay &= props.is_empty();
             let Some(new_parsed_layer) = Layer::get_layer(&ty) else {
-                return Err(DatabaseError::DdlModelAlterBadTypedef)
+                return Err(DatabaseError::DdlModelAlterBadTypedef);
             };
             match (
                 current_layer.tag.tag_selector(),

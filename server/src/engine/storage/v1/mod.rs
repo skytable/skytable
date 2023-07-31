@@ -27,9 +27,9 @@
 // raw
 mod header_impl;
 // impls
+mod journal;
 mod rw;
 mod start_stop;
-mod txn;
 // test
 #[cfg(test)]
 mod tests;
@@ -57,13 +57,14 @@ pub enum SDSSError {
     CorruptedFile(&'static str),
     StartupError(&'static str),
     CorruptedHeader,
-    TransactionLogEntryCorrupted,
-    TransactionLogCorrupted,
+    JournalLogEntryCorrupted,
+    JournalCorrupted,
     HeaderVersionMismatch,
     DriverVersionMismatch,
     ServerVersionMismatch,
     HeaderDataMismatch,
     TimeConflict,
+    JournalWRecoveryStageOneFailCritical,
 }
 
 impl SDSSError {

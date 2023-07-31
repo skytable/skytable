@@ -59,6 +59,7 @@ pub trait RawFileIOInterface: Sized {
     fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()>;
     fn flen(&self) -> SDSSResult<u64>;
     fn flen_set(&mut self, to: u64) -> SDSSResult<()>;
+    fn fcursor(&mut self) -> SDSSResult<u64>;
 }
 
 impl RawFileIOInterface for File {
@@ -97,6 +98,9 @@ impl RawFileIOInterface for File {
     fn flen_set(&mut self, to: u64) -> SDSSResult<()> {
         self.set_len(to)?;
         Ok(())
+    }
+    fn fcursor(&mut self) -> SDSSResult<u64> {
+        self.stream_position().map_err(From::from)
     }
 }
 
@@ -181,5 +185,8 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
     pub fn trim_file_to(&mut self, to: u64) -> SDSSResult<()> {
         self.f.flen_set(to)
+    }
+    pub fn retrieve_cursor(&mut self) -> SDSSResult<u64> {
+        self.f.fcursor()
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Created on Thu Jul 23 2023
+ * Created on Sat Jul 29 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -155,6 +155,9 @@ impl RawFileIOInterface for VirtualFileInterface {
             Ok(())
         })
     }
+    fn fcursor(&mut self) -> SDSSResult<u64> {
+        vfs(&self.0, |f| Ok(f.pos))
+    }
 }
 
 type VirtualFS = VirtualFileInterface;
@@ -215,7 +218,7 @@ mod tx {
     use {
         crate::{
             engine::storage::v1::{
-                txn::{self, TransactionLogAdapter, TransactionLogWriter},
+                journal::{self, JournalAdapter, JournalWriter},
                 SDSSError, SDSSResult,
             },
             util,
@@ -239,7 +242,7 @@ mod tx {
         }
         fn txn_reset(
             &self,
-            txn_writer: &mut TransactionLogWriter<FileInterface, DatabaseTxnAdapter>,
+            txn_writer: &mut JournalWriter<FileInterface, DatabaseTxnAdapter>,
         ) -> SDSSResult<()> {
             self.reset();
             txn_writer.append_event(TxEvent::Reset)
@@ -251,7 +254,7 @@ mod tx {
             &self,
             pos: usize,
             val: u8,
-            txn_writer: &mut TransactionLogWriter<FileInterface, DatabaseTxnAdapter>,
+            txn_writer: &mut JournalWriter<FileInterface, DatabaseTxnAdapter>,
         ) -> SDSSResult<()> {
             self.set(pos, val);
             txn_writer.append_event(TxEvent::Set(pos, val))
@@ -263,12 +266,12 @@ mod tx {
     }
     #[derive(Debug)]
     pub struct DatabaseTxnAdapter;
-    impl TransactionLogAdapter for DatabaseTxnAdapter {
-        type TransactionEvent = TxEvent;
-
+    impl JournalAdapter for DatabaseTxnAdapter {
+        const RECOVERY_PLUGIN: bool = false;
+        type JournalEvent = TxEvent;
         type GlobalState = Database;
 
-        fn encode(event: Self::TransactionEvent) -> Box<[u8]> {
+        fn encode(event: Self::JournalEvent) -> Box<[u8]> {
             /*
                 [1B: opcode][8B:Index][1B: New value]
             */
@@ -301,7 +304,7 @@ mod tx {
             match opcode {
                 0 if index == 0 && new_value == 0 => gs.reset(),
                 1 if index < 10 && index < isize::MAX as u64 => gs.set(index as usize, new_value),
-                _ => return Err(SDSSError::TransactionLogEntryCorrupted),
+                _ => return Err(SDSSError::JournalLogEntryCorrupted),
             }
             Ok(())
         }
@@ -310,8 +313,8 @@ mod tx {
     fn open_log(
         log_name: &str,
         db: &Database,
-    ) -> SDSSResult<TransactionLogWriter<FileInterface, DatabaseTxnAdapter>> {
-        txn::open_log::<DatabaseTxnAdapter, FileInterface>(
+    ) -> SDSSResult<JournalWriter<FileInterface, DatabaseTxnAdapter>> {
+        journal::open_journal::<DatabaseTxnAdapter, FileInterface>(
             log_name,
             FileSpecifier::TestTransactionLog,
             FileSpecifierVersion::__new(0),
@@ -330,7 +333,7 @@ mod tx {
             let mut log = open_log("testtxn.log", &db1)?;
             db1.txn_set(0, 20, &mut log)?;
             db1.txn_set(9, 21, &mut log)?;
-            log.close_log()
+            log.append_journal_close_and_close()
         };
         x().unwrap();
         // backup original data
@@ -339,7 +342,7 @@ mod tx {
         let empty_db2 = Database::new();
         open_log("testtxn.log", &empty_db2)
             .unwrap()
-            .close_log()
+            .append_journal_close_and_close()
             .unwrap();
         assert_eq!(original_data, empty_db2.copy_data());
         std::fs::remove_file("testtxn.log").unwrap();
@@ -353,7 +356,7 @@ mod tx {
             for i in 0..10 {
                 db1.txn_set(i, 1, &mut log)?;
             }
-            log.close_log()
+            log.append_journal_close_and_close()
         };
         x().unwrap();
         let bkp_db1 = db1.copy_data();
@@ -367,7 +370,7 @@ mod tx {
                 let current_val = db2.data.borrow()[i];
                 db2.txn_set(i, current_val + i as u8, &mut log)?;
             }
-            log.close_log()
+            log.append_journal_close_and_close()
         };
         x().unwrap();
         let bkp_db2 = db2.copy_data();
@@ -375,7 +378,7 @@ mod tx {
         // third boot
         let db3 = Database::new();
         let log = open_log("duatxn.db-tlog", &db3).unwrap();
-        log.close_log().unwrap();
+        log.append_journal_close_and_close().unwrap();
         assert_eq!(bkp_db2, db3.copy_data());
         assert_eq!(
             db3.copy_data(),

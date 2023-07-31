@@ -71,14 +71,14 @@ mod dr;
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum FileScope {
-    TransactionLog = 0,
+    Journal = 0,
     TransactionLogCompacted = 1,
 }
 
 impl FileScope {
     pub const fn try_new(id: u64) -> Option<Self> {
         Some(match id {
-            0 => Self::TransactionLog,
+            0 => Self::Journal,
             1 => Self::TransactionLogCompacted,
             _ => return None,
         })
