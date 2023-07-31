@@ -149,6 +149,12 @@ impl RawFileIOInterface for VirtualFileInterface {
             Ok(())
         })
     }
+    fn flen_set(&mut self, to: u64) -> SDSSResult<()> {
+        vfs(&self.0, |f| {
+            f.data.drain(f.data.len() - to as usize..);
+            Ok(())
+        })
+    }
 }
 
 type VirtualFS = VirtualFileInterface;
@@ -301,20 +307,27 @@ mod tx {
         }
     }
 
+    fn open_log(
+        log_name: &str,
+        db: &Database,
+    ) -> SDSSResult<TransactionLogWriter<FileInterface, DatabaseTxnAdapter>> {
+        txn::open_log::<DatabaseTxnAdapter, FileInterface>(
+            log_name,
+            FileSpecifier::TestTransactionLog,
+            FileSpecifierVersion::__new(0),
+            0,
+            HostRunMode::Prod,
+            1,
+            &db,
+        )
+    }
+
     #[test]
-    fn two_set() {
+    fn first_boot_second_readonly() {
         // create log
         let db1 = Database::new();
         let x = || -> SDSSResult<()> {
-            let mut log = txn::open_log(
-                "testtxn.log",
-                FileSpecifier::TestTransactionLog,
-                FileSpecifierVersion::__new(0),
-                0,
-                HostRunMode::Prod,
-                1,
-                &db1,
-            )?;
+            let mut log = open_log("testtxn.log", &db1)?;
             db1.txn_set(0, 20, &mut log)?;
             db1.txn_set(9, 21, &mut log)?;
             log.close_log()
@@ -324,20 +337,54 @@ mod tx {
         let original_data = db1.copy_data();
         // restore log
         let empty_db2 = Database::new();
-        {
-            let log = txn::open_log::<DatabaseTxnAdapter, FileInterface>(
-                "testtxn.log",
-                FileSpecifier::TestTransactionLog,
-                FileSpecifierVersion::__new(0),
-                0,
-                HostRunMode::Prod,
-                1,
-                &empty_db2,
-            )
+        open_log("testtxn.log", &empty_db2)
+            .unwrap()
+            .close_log()
             .unwrap();
-            log.close_log().unwrap();
-        }
         assert_eq!(original_data, empty_db2.copy_data());
         std::fs::remove_file("testtxn.log").unwrap();
+    }
+    #[test]
+    fn oneboot_mod_twoboot_mod_thirdboot_read() {
+        // first boot: set all to 1
+        let db1 = Database::new();
+        let x = || -> SDSSResult<()> {
+            let mut log = open_log("duatxn.db-tlog", &db1)?;
+            for i in 0..10 {
+                db1.txn_set(i, 1, &mut log)?;
+            }
+            log.close_log()
+        };
+        x().unwrap();
+        let bkp_db1 = db1.copy_data();
+        drop(db1);
+        // second boot
+        let db2 = Database::new();
+        let x = || -> SDSSResult<()> {
+            let mut log = open_log("duatxn.db-tlog", &db2)?;
+            assert_eq!(bkp_db1, db2.copy_data());
+            for i in 0..10 {
+                let current_val = db2.data.borrow()[i];
+                db2.txn_set(i, current_val + i as u8, &mut log)?;
+            }
+            log.close_log()
+        };
+        x().unwrap();
+        let bkp_db2 = db2.copy_data();
+        drop(db2);
+        // third boot
+        let db3 = Database::new();
+        let log = open_log("duatxn.db-tlog", &db3).unwrap();
+        log.close_log().unwrap();
+        assert_eq!(bkp_db2, db3.copy_data());
+        assert_eq!(
+            db3.copy_data(),
+            (1..=10)
+                .into_iter()
+                .map(u8::from)
+                .collect::<Box<[u8]>>()
+                .as_ref()
+        );
+        std::fs::remove_file("duatxn.db-tlog").unwrap();
     }
 }

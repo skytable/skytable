@@ -201,7 +201,7 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
         // read metadata
         let mut raw_txn_log_row_md = [0u8; TxnLogEntryMetadata::SIZE];
         self.log_file.read_to_buffer(&mut raw_txn_log_row_md)?;
-        self._record_bytes_read(36);
+        self._record_bytes_read(TxnLogEntryMetadata::SIZE);
         let event_metadata = TxnLogEntryMetadata::decode(raw_txn_log_row_md);
         /*
             verify metadata and read bytes into buffer, verify sum
@@ -223,6 +223,16 @@ impl<TA: TransactionLogAdapter, LF: RawFileIOInterface> TransactionLogReader<TA,
             EventSourceMarker::DriverClosed if event_is_zero => {
                 // expect last entry
                 if self.end_of_file() {
+                    // remove the delete entry
+                    self.log_file.seek_from_start(
+                        self.log_size - TxnLogEntryMetadata::SIZE as u64
+                            + SDSSHeaderRaw::header_size() as u64,
+                    )?;
+                    self.log_file.trim_file_to(
+                        self.log_size - TxnLogEntryMetadata::SIZE as u64
+                            + SDSSHeaderRaw::header_size() as u64,
+                    )?;
+                    self.log_file.fsync_all()?;
                     self.closed = true;
                     // good
                     return Ok(());
@@ -284,16 +294,18 @@ pub struct TransactionLogWriter<LF, TA> {
     /// the id of the **next** transaction
     id: u64,
     _m: PhantomData<TA>,
+    closed: bool,
 }
 
 impl<LF: RawFileIOInterface, TA: TransactionLogAdapter> TransactionLogWriter<LF, TA> {
     pub fn new(mut log_file: SDSSFileIO<LF>, last_txn_id: u64) -> SDSSResult<Self> {
-        let l = log_file.file_length()?;
-        log_file.seek_ahead(l)?;
+        let log_size = log_file.file_length()?;
+        log_file.seek_from_start(log_size)?;
         Ok(Self {
             log_file,
             id: last_txn_id,
             _m: PhantomData,
+            closed: false,
         })
     }
     pub fn append_event(&mut self, event: TA::TransactionEvent) -> SDSSResult<()> {
@@ -311,10 +323,12 @@ impl<LF: RawFileIOInterface, TA: TransactionLogAdapter> TransactionLogWriter<LF,
         Ok(())
     }
     pub fn close_log(mut self) -> SDSSResult<()> {
+        self.closed = true;
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(
             &TxnLogEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, 0, 0).encoded(),
-        )
+        )?;
+        Ok(())
     }
 }
 
@@ -323,5 +337,11 @@ impl<LF, TA> TransactionLogWriter<LF, TA> {
         let current = self.id;
         self.id += 1;
         current
+    }
+}
+
+impl<LF, TA> Drop for TransactionLogWriter<LF, TA> {
+    fn drop(&mut self) {
+        assert!(self.closed, "log not closed");
     }
 }

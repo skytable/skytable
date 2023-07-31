@@ -58,6 +58,7 @@ pub trait RawFileIOInterface: Sized {
     fn fsync_all(&mut self) -> SDSSResult<()>;
     fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()>;
     fn flen(&self) -> SDSSResult<u64>;
+    fn flen_set(&mut self, to: u64) -> SDSSResult<()>;
 }
 
 impl RawFileIOInterface for File {
@@ -91,6 +92,10 @@ impl RawFileIOInterface for File {
     }
     fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()> {
         self.seek(SeekFrom::Start(by))?;
+        Ok(())
+    }
+    fn flen_set(&mut self, to: u64) -> SDSSResult<()> {
+        self.set_len(to)?;
         Ok(())
     }
 }
@@ -141,9 +146,9 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
                 let mut new_header = header.clone();
                 new_header.dr_rs_mut().bump_modify_count();
                 let mut f = Self::_new(f);
-                f.seek_ahead(0)?;
+                f.seek_from_start(0)?;
                 f.fsynced_write(new_header.encoded().array().as_ref())?;
-                f.seek_ahead(SDSSHeaderRaw::header_size() as _)?;
+                f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
                 Ok(FileOpen::Existing(f, header))
             }
         }
@@ -171,7 +176,10 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     pub fn file_length(&self) -> SDSSResult<u64> {
         self.f.flen()
     }
-    pub fn seek_ahead(&mut self, by: u64) -> SDSSResult<()> {
+    pub fn seek_from_start(&mut self, by: u64) -> SDSSResult<()> {
         self.f.fseek_ahead(by)
+    }
+    pub fn trim_file_to(&mut self, to: u64) -> SDSSResult<()> {
+        self.f.flen_set(to)
     }
 }
