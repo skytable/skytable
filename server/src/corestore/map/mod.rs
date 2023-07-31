@@ -277,7 +277,7 @@ where
                 Some(bucket) => {
                     let (kptr, vptr) = bucket.as_ref();
                     if f(kptr, vptr) {
-                        Some(lowtable.remove(bucket))
+                        Some(lowtable.remove(bucket).0)
                     } else {
                         None
                     }

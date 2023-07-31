@@ -10,5 +10,5 @@ edition = "2021"
 # external deps
 crossbeam-channel = "0.5.8"
 rayon = "1.7.0"
-log = "0.4.17"
+log = "0.4.19"
 rand = "0.8.5"

@@ -32,7 +32,7 @@ use {
         terminal::{Clear, ClearType},
     },
     libsky::{URL, VERSION},
-    rustyline::{config::Configurer, error::ReadlineError, Editor},
+    rustyline::{config::Configurer, error::ReadlineError, DefaultEditor},
     skytable::{Pipeline, Query},
     std::{io::stdout, process},
 };
@@ -110,12 +110,14 @@ pub async fn start_repl() {
         },
         None => 2003,
     };
-    let mut editor = match Editor::<()>::new() {
+    let mut editor = match DefaultEditor::new() {
         Ok(e) => e,
         Err(e) => fatal!("Editor init error: {}", e),
     };
     editor.set_auto_add_history(true);
-    editor.set_history_ignore_dups(true);
+    editor
+        .set_history_ignore_dups(true)
+        .unwrap_or_else(|_| fatal!("couldn't set up terminal"));
     editor.bind_sequence(
         rustyline::KeyEvent(
             rustyline::KeyCode::BracketedPasteStart,

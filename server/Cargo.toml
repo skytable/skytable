@@ -13,21 +13,21 @@ rcrypt = "0.4.0"
 # external deps
 ahash = "0.8.3"
 bytes = "1.4.0"
-chrono = "0.4.24"
+chrono = "0.4.26"
 clap = { version = "2", features = ["yaml"] }
 env_logger = "0.10.0"
-hashbrown = { version = "0.13.2", features = ["raw"] }
-log = "0.4.17"
-openssl = { version = "0.10.52", features = ["vendored"] }
-crossbeam-epoch = { version = "0.9.14" }
+hashbrown = { version = "0.14.0", features = ["raw"] }
+log = "0.4.19"
+openssl = { version = "0.10.55", features = ["vendored"] }
+crossbeam-epoch = { version = "0.9.15" }
 parking_lot = "0.12.1"
-regex = "1.6.0"
-serde = { version = "1.0.163", features = ["derive"] }
-tokio = { version = "1.28.1", features = ["full"] }
+regex = "1.9.1"
+serde = { version = "1.0.175", features = ["derive"] }
+tokio = { version = "1.29.1", features = ["full"] }
 tokio-openssl = "0.6.3"
-toml = "0.7.4"
+toml = "0.7.6"
 base64 = "0.21.2"
-uuid = { version = "1.3.3", features = ["v4", "fast-rng", "macro-diagnostics"] }
+uuid = { version = "1.4.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
 crc = "3.0.1"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
@@ -39,7 +39,7 @@ winapi = { version = "0.3.9", features = ["fileapi"] }
 
 [target.'cfg(unix)'.dependencies]
 # external deps
-libc = "0.2.144"
+libc = "0.2.147"
 
 [target.'cfg(unix)'.build-dependencies]
 # external deps
@@ -55,7 +55,7 @@ skytable = { git = "https://github.com/skytable/client-rust", features = [
 # external deps
 bincode = "1.3.3"
 rand = "0.8.5"
-tokio = { version = "1.28.1", features = ["test-util"] }
+tokio = { version = "1.29.1", features = ["test-util"] }
 
 [features]
 nightly = []
