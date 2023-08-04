@@ -26,19 +26,19 @@
 
 use crate::engine::data::{
     cell::Datacell,
-    md_dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
+    dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
 };
 
 #[test]
 fn t_simple_flatten() {
     let generic_dict: DictGeneric = into_dict! {
-        "a_valid_key" => Some(DictEntryGeneric::Lit(100u64.into())),
-        "a_null_key" => None,
+        "a_valid_key" => DictEntryGeneric::Lit(100u64.into()),
+        "a_null_key" => DictEntryGeneric::Null,
     };
     let expected: MetaDict = into_dict!(
         "a_valid_key" => Datacell::new_uint(100)
     );
-    let ret = md_dict::rflatten_metadata(generic_dict);
+    let ret = dict::rflatten_metadata(generic_dict);
     assert_eq!(ret, expected);
 }
 
@@ -50,15 +50,15 @@ fn t_simple_patch() {
         "z" => Datacell::new_sint(-100),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Some(Datacell::new_uint(1).into()),
-        "b" => Some(Datacell::new_uint(2).into()),
-        "z" => None,
+        "a" => Datacell::new_uint(1),
+        "b" => Datacell::new_uint(2),
+        "z" => DictEntryGeneric::Null,
     };
     let expected: MetaDict = into_dict! {
         "a" => Datacell::new_uint(1),
         "b" => Datacell::new_uint(2),
     };
-    assert!(md_dict::rmerge_metadata(&mut current, new));
+    assert!(dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, expected);
 }
 
@@ -71,11 +71,11 @@ fn t_bad_patch() {
     };
     let backup = current.clone();
     let new: DictGeneric = into_dict! {
-        "a" => Some(Datacell::new_uint(1).into()),
-        "b" => Some(Datacell::new_uint(2).into()),
-        "z" => Some(Datacell::new_str("omg".into()).into()),
+        "a" => Datacell::new_uint(1),
+        "b" => Datacell::new_uint(2),
+        "z" => Datacell::new_str("omg".into()),
     };
-    assert!(!md_dict::rmerge_metadata(&mut current, new));
+    assert!(!dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, backup);
 }
 
@@ -94,10 +94,10 @@ fn patch_null_out_dict() {
         "b" => Datacell::new_uint(3),
     };
     let new: DictGeneric = into_dict! {
-        "a" => Some(Datacell::new_uint(2).into()),
-        "b" => Some(Datacell::new_uint(3).into()),
-        "z" => None,
+        "a" => Datacell::new_uint(2),
+        "b" => Datacell::new_uint(3),
+        "z" => DictEntryGeneric::Null,
     };
-    assert!(md_dict::rmerge_metadata(&mut current, new));
+    assert!(dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, expected);
 }

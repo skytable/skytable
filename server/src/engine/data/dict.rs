@@ -37,18 +37,28 @@ use {
 
 /*
     dict kinds: one is from a generic parse while the other one is the stored metadata
+    - MetaDict -> only non-null values
+    - DictGeneric -> null allowed
 */
 
 /// A metadata dictionary
 pub type MetaDict = HashMap<Box<str>, MetaDictEntry>;
 /// A generic dictionary built from scratch from syntactical elements
-pub type DictGeneric = HashMap<Box<str>, Option<DictEntryGeneric>>;
+pub type DictGeneric = HashMap<Box<str>, DictEntryGeneric>;
 
 #[derive(Debug, PartialEq)]
 /// A generic dict entry: either a literal or a recursive dictionary
 pub enum DictEntryGeneric {
+    /// A literal
     Lit(Datacell),
+    /// A map
     Map(DictGeneric),
+    /// A null
+    ///
+    /// This distinction is important because we currently only allow [`Datacell`] to store information about the intialization state (as it should be)
+    /// and it can't distinct between "null-but-concrete-types" (that's the task of our engine: to enforce the schema but it's not DC's task). Hence this
+    /// specific flag tells us that this is null (and neither a lit nor a map)
+    Null,
 }
 
 #[derive(Debug, PartialEq)]
@@ -80,17 +90,16 @@ pub fn rflatten_metadata(new: DictGeneric) -> MetaDict {
 
 fn _rflatten_metadata(new: DictGeneric, empty: &mut MetaDict) {
     for (key, val) in new {
-        if let Some(v) = val {
-            match v {
-                DictEntryGeneric::Lit(l) => {
-                    empty.insert(key, MetaDictEntry::Data(l));
-                }
-                DictEntryGeneric::Map(m) => {
-                    let mut rnew = MetaDict::new();
-                    _rflatten_metadata(m, &mut rnew);
-                    empty.insert(key, MetaDictEntry::Map(rnew));
-                }
+        match val {
+            DictEntryGeneric::Lit(l) => {
+                empty.insert(key, MetaDictEntry::Data(l));
             }
+            DictEntryGeneric::Map(m) => {
+                let mut rnew = MetaDict::new();
+                _rflatten_metadata(m, &mut rnew);
+                empty.insert(key, MetaDictEntry::Map(rnew));
+            }
+            DictEntryGeneric::Null => {}
         }
     }
 }
@@ -144,9 +153,9 @@ fn rmerge_metadata_prepare_patch(
     let mut okay = true;
     while new.len() != 0 && okay {
         let (key, new_entry) = new.next().unwrap();
-        match (current.get(&key), new_entry) {
+        match (current.get(&key), &new_entry) {
             // non-null -> non-null: merge flatten update
-            (Some(this_current), Some(new_entry)) => {
+            (Some(this_current), DictEntryGeneric::Lit(_) | DictEntryGeneric::Map(_)) => {
                 okay &= {
                     match (this_current, new_entry) {
                         (MetaDictEntry::Data(this_data), DictEntryGeneric::Lit(new_data))
@@ -177,7 +186,7 @@ fn rmerge_metadata_prepare_patch(
                 };
             }
             // null -> non-null: flatten insert
-            (None, Some(new_entry)) => match new_entry {
+            (None, DictEntryGeneric::Lit(_) | DictEntryGeneric::Map(_)) => match new_entry {
                 DictEntryGeneric::Lit(d) => {
                     let _ = patch.0.insert(key, Some(MetaDictPatchEntry::Data(d)));
                 }
@@ -188,12 +197,13 @@ fn rmerge_metadata_prepare_patch(
                         .0
                         .insert(key, Some(MetaDictPatchEntry::Map(this_patch)));
                 }
+                _ => unreachable!(),
             },
             // non-null -> null: remove
-            (Some(_), None) => {
+            (Some(_), DictEntryGeneric::Null) => {
                 patch.0.insert(key, None);
             }
-            (None, None) => {
+            (None, DictEntryGeneric::Null) => {
                 // ignore
             }
         }

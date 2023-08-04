@@ -79,9 +79,9 @@ fn no_field(mr: &IWModel, new: &str) -> bool {
     !mr.fields().st_contains(new)
 }
 
-fn check_nullable(props: &mut HashMap<Box<str>, Option<DictEntryGeneric>>) -> DatabaseResult<bool> {
+fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> DatabaseResult<bool> {
     match props.remove("nullable") {
-        Some(Some(DictEntryGeneric::Lit(b))) if b.kind() == TagClass::Bool => Ok(b.bool()),
+        Some(DictEntryGeneric::Lit(b)) if b.kind() == TagClass::Bool => Ok(b.bool()),
         Some(_) => Err(DatabaseError::DdlModelAlterBadProperty),
         None => Ok(false),
     }

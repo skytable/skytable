@@ -27,11 +27,11 @@
 #[macro_use]
 mod macros;
 pub mod cell;
+pub mod dict;
 pub mod lit;
-pub mod md_dict;
 pub mod spec;
 pub mod tag;
 #[cfg(test)]
 mod tests;
 
-pub use md_dict::{DictEntryGeneric, DictGeneric, MetaDict};
+pub use dict::{DictEntryGeneric, DictGeneric, MetaDict};

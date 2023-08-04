@@ -46,7 +46,7 @@
 
 use crate::{
     engine::{
-        data::DictGeneric,
+        data::dict::{DictEntryGeneric, DictGeneric},
         error::{LangError, LangResult},
         ql::{
             ast::{QueryData, State},
@@ -151,10 +151,10 @@ where
             }
             (tok, DictFoldState::LIT_OR_OB) if state.can_read_lit_from(tok) => {
                 // found lit
-                let v = Some(unsafe {
+                let v = unsafe {
                     // UNSAFE(@ohsayan): verified at guard
                     state.read_lit_unchecked_from(tok).into()
-                });
+                };
                 state.poison_if_not(
                     dict.insert(
                         unsafe {
@@ -176,7 +176,7 @@ where
                             // UNSAFE(@ohsayan): we only switch to this when we've already read in a key
                             key.take().as_str().into()
                         },
-                        None,
+                        DictEntryGeneric::Null,
                     )
                     .is_none(),
                 );
@@ -193,7 +193,7 @@ where
                             // UNSAFE(@ohsayan): correct again because whenever we hit an expression position, we've already read in a key (ident)
                             key.take().as_str().into()
                         },
-                        Some(ndict.into()),
+                        DictEntryGeneric::Map(ndict),
                     )
                     .is_none(),
                 );

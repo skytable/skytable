@@ -27,7 +27,7 @@
 use {
     crate::engine::{
         core::{model::ModelData, RWLIdx},
-        data::{md_dict, DictEntryGeneric, MetaDict},
+        data::{dict, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
@@ -123,8 +123,8 @@ impl Space {
         let space_name = space_name.to_string().into_boxed_str();
         // check env
         let env = match props.remove(SpaceMeta::KEY_ENV) {
-            Some(Some(DictEntryGeneric::Map(m))) if props.is_empty() => m,
-            Some(None) | None if props.is_empty() => IndexST::default(),
+            Some(DictEntryGeneric::Map(m)) if props.is_empty() => m,
+            Some(DictEntryGeneric::Null) | None if props.is_empty() => IndexST::default(),
             _ => {
                 return Err(DatabaseError::DdlSpaceBadProperty);
             }
@@ -135,7 +135,7 @@ impl Space {
                 IndexST::default(),
                 SpaceMeta::with_env(
                     // FIXME(@ohsayan): see this is bad. attempt to do it at AST build time
-                    md_dict::rflatten_metadata(env),
+                    dict::rflatten_metadata(env),
                 ),
             ),
         })
@@ -164,12 +164,12 @@ impl Space {
         gns.with_space(&space_name, |space| {
             let mut space_env = space.meta.env.write();
             match updated_props.remove(SpaceMeta::KEY_ENV) {
-                Some(Some(DictEntryGeneric::Map(env))) if updated_props.is_empty() => {
-                    if !md_dict::rmerge_metadata(&mut space_env, env) {
+                Some(DictEntryGeneric::Map(env)) if updated_props.is_empty() => {
+                    if !dict::rmerge_metadata(&mut space_env, env) {
                         return Err(DatabaseError::DdlSpaceBadProperty);
                     }
                 }
-                Some(None) if updated_props.is_empty() => space_env.clear(),
+                Some(DictEntryGeneric::Null) if updated_props.is_empty() => space_env.clear(),
                 None => {}
                 _ => return Err(DatabaseError::DdlSpaceBadProperty),
             }

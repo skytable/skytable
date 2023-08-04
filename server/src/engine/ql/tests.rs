@@ -76,24 +76,24 @@ fn nullable_datatype(v: impl NullableData<Datacell>) -> Datacell {
 }
 
 pub trait NullableDictEntry {
-    fn data(self) -> Option<crate::engine::data::DictEntryGeneric>;
+    fn data(self) -> crate::engine::data::DictEntryGeneric;
 }
 
 impl NullableDictEntry for Null {
-    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
-        None
+    fn data(self) -> crate::engine::data::DictEntryGeneric {
+        crate::engine::data::DictEntryGeneric::Null
     }
 }
 
 impl<'a> NullableDictEntry for crate::engine::data::lit::Lit<'a> {
-    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
-        Some(crate::engine::data::DictEntryGeneric::from(self.as_ir()))
+    fn data(self) -> crate::engine::data::DictEntryGeneric {
+        crate::engine::data::DictEntryGeneric::from(self.as_ir())
     }
 }
 
 impl NullableDictEntry for crate::engine::data::DictGeneric {
-    fn data(self) -> Option<crate::engine::data::DictEntryGeneric> {
-        Some(crate::engine::data::DictEntryGeneric::Map(self))
+    fn data(self) -> crate::engine::data::DictEntryGeneric {
+        crate::engine::data::DictEntryGeneric::Map(self)
     }
 }
 
