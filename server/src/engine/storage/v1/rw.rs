@@ -35,6 +35,7 @@ use {
     std::{
         fs::File,
         io::{Read, Seek, SeekFrom, Write},
+        ptr,
     },
 };
 
@@ -142,8 +143,8 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
                 // this is an existing file. decoded the header
                 let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
                 f.fread_exact(&mut header_raw)?;
-                let header =
-                    SDSSHeaderRaw::decode_noverify(header_raw).ok_or(SDSSError::CorruptedHeader)?;
+                let header = SDSSHeaderRaw::decode_noverify(header_raw)
+                    .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
                 // now validate the header
                 header.verify(file_scope, file_specifier, file_specifier_version)?;
                 // since we updated this file, let us update the header
@@ -188,5 +189,43 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
     pub fn retrieve_cursor(&mut self) -> SDSSResult<u64> {
         self.f.fcursor()
+    }
+}
+
+pub struct BufferedScanner<'a> {
+    d: &'a [u8],
+    i: usize,
+}
+
+impl<'a> BufferedScanner<'a> {
+    pub const fn new(d: &'a [u8]) -> Self {
+        Self { d, i: 0 }
+    }
+    pub const fn remaining(&self) -> usize {
+        self.d.len() - self.i
+    }
+    pub const fn consumed(&self) -> usize {
+        self.i
+    }
+    pub const fn cursor(&self) -> usize {
+        self.i
+    }
+    pub(crate) fn has_left(&self, sizeof: usize) -> bool {
+        self.remaining() >= sizeof
+    }
+    unsafe fn _cursor(&self) -> *const u8 {
+        self.d.as_ptr().add(self.i)
+    }
+    pub fn eof(&self) -> bool {
+        self.remaining() == 0
+    }
+}
+
+impl<'a> BufferedScanner<'a> {
+    pub unsafe fn next_u64_le(&mut self) -> u64 {
+        let mut b = [0u8; sizeof!(u64)];
+        ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), sizeof!(u64));
+        self.i += sizeof!(u64);
+        u64::from_le_bytes(b)
     }
 }

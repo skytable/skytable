@@ -62,13 +62,13 @@ pub struct DRHostSignature {
 impl DRHostSignature {
     pub fn verify(&self, expected_file_specifier_version: FileSpecifierVersion) -> SDSSResult<()> {
         if self.server_version() != versions::v1::V1_SERVER_VERSION {
-            return Err(SDSSError::ServerVersionMismatch);
+            return Err(SDSSError::HeaderDecodeServerVersionMismatch);
         }
         if self.driver_version() != versions::v1::V1_DRIVER_VERSION {
-            return Err(SDSSError::DriverVersionMismatch);
+            return Err(SDSSError::HeaderDecodeDriverVersionMismatch);
         }
         if self.file_specifier_version() != expected_file_specifier_version {
-            return Err(SDSSError::HeaderDataMismatch);
+            return Err(SDSSError::HeaderDecodeDataMismatch);
         }
         Ok(())
     }
@@ -287,7 +287,7 @@ impl DRRuntimeSignature {
         let et = util::os::get_epoch_time();
         if self.epoch_time() > et || self.host_uptime() > et {
             // a file from the future?
-            return Err(SDSSError::TimeConflict);
+            return Err(SDSSError::HeaderTimeConflict);
         }
         Ok(())
     }

@@ -408,3 +408,38 @@ impl<const N: usize> Threshold<N> {
         self.now < N
     }
 }
+
+pub trait EndianQW {
+    fn u64_bytes_le(&self) -> [u8; 8];
+    fn u64_bytes_be(&self) -> [u8; 8];
+    fn u64_bytes_ne(&self) -> [u8; 8] {
+        if cfg!(target_endian = "big") {
+            self.u64_bytes_be()
+        } else {
+            self.u64_bytes_le()
+        }
+    }
+}
+
+pub trait EndianDW {
+    fn u32_bytes_le(&self) -> [u8; 8];
+    fn u32_bytes_be(&self) -> [u8; 8];
+    fn u32_bytes_ne(&self) -> [u8; 8] {
+        if cfg!(target_endian = "big") {
+            self.u32_bytes_be()
+        } else {
+            self.u32_bytes_le()
+        }
+    }
+}
+
+macro_rules! impl_endian {
+    ($($ty:ty),*) => {
+        $(impl EndianQW for $ty {
+            fn u64_bytes_le(&self) -> [u8; 8] { (*self as u64).to_le_bytes() }
+            fn u64_bytes_be(&self) -> [u8; 8] { (*self as u64).to_le_bytes() }
+        })*
+    }
+}
+
+impl_endian!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);

@@ -44,7 +44,7 @@ impl StaticRecord {
         if self.sr().header_version() == versions::v1::V1_HEADER_VERSION {
             Ok(())
         } else {
-            return Err(SDSSError::HeaderVersionMismatch);
+            return Err(SDSSError::HeaderDecodeHeaderVersionMismatch);
         }
     }
 }

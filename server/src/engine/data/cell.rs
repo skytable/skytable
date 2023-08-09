@@ -276,7 +276,7 @@ impl<const N: usize> From<[Datacell; N]> for Datacell {
 }
 
 impl Datacell {
-    pub fn tag(&self) -> CUTag {
+    pub const fn tag(&self) -> CUTag {
         self.tag
     }
     pub fn kind(&self) -> TagClass {

@@ -29,6 +29,8 @@ mod header_impl;
 // impls
 mod journal;
 mod rw;
+// hl
+mod inf;
 mod start_stop;
 // test
 #[cfg(test)]
@@ -52,19 +54,43 @@ impl SDSSErrorContext for IoError {
 
 #[derive(Debug)]
 pub enum SDSSError {
+    // IO errors
+    /// An IO err
     IoError(IoError),
+    /// An IO err with extra ctx
     IoErrorExtra(IoError, &'static str),
+    /// A corrupted file
     CorruptedFile(&'static str),
+    // process errors
     StartupError(&'static str),
-    CorruptedHeader,
-    JournalLogEntryCorrupted,
-    JournalCorrupted,
-    HeaderVersionMismatch,
-    DriverVersionMismatch,
-    ServerVersionMismatch,
-    HeaderDataMismatch,
-    TimeConflict,
+    // header
+    /// The entire header is corrupted
+    HeaderDecodeCorruptedHeader,
+    /// The header versions don't match
+    HeaderDecodeHeaderVersionMismatch,
+    /// The driver versions don't match
+    HeaderDecodeDriverVersionMismatch,
+    /// The server versions don't match
+    HeaderDecodeServerVersionMismatch,
+    /// Expected header values were not matched with the current header
+    HeaderDecodeDataMismatch,
+    /// The time in the [header/dynrec/rtsig] is in the future
+    HeaderTimeConflict,
+    // journal
+    /// While attempting to handle a basic failure (such as adding a journal entry), the recovery engine ran into an exceptional
+    /// situation where it failed to make a necessary repair the log
     JournalWRecoveryStageOneFailCritical,
+    /// An entry in the journal is corrupted
+    JournalLogEntryCorrupted,
+    /// The structure of the journal is corrupted
+    JournalCorrupted,
+    // internal file structures
+    /// While attempting to decode a structure in an internal segment of a file, the storage engine ran into a possibly irrecoverable error
+    InternalDecodeStructureCorrupted,
+    /// the payload (non-static) part of a structure in an internal segment of a file is corrupted
+    InternalDecodeStructureCorruptedPayload,
+    /// the data for an internal structure was decoded but is logically invalid
+    InternalDecodeStructureIllegalData,
 }
 
 impl SDSSError {

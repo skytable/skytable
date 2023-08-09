@@ -66,10 +66,10 @@ impl GRMetadataRecord {
         expected_file_specifier_version: FileSpecifierVersion,
     ) -> SDSSResult<()> {
         if self.server_version() != versions::v1::V1_SERVER_VERSION {
-            return Err(SDSSError::ServerVersionMismatch);
+            return Err(SDSSError::HeaderDecodeServerVersionMismatch);
         }
         if self.driver_version() != versions::v1::V1_DRIVER_VERSION {
-            return Err(SDSSError::DriverVersionMismatch);
+            return Err(SDSSError::HeaderDecodeDriverVersionMismatch);
         }
         let okay = self.file_scope() == expected_file_scope
             && self.file_spec() == expected_file_specifier
@@ -77,7 +77,7 @@ impl GRMetadataRecord {
         if okay {
             Ok(())
         } else {
-            Err(SDSSError::HeaderDataMismatch)
+            Err(SDSSError::HeaderDecodeDataMismatch)
         }
     }
 }
