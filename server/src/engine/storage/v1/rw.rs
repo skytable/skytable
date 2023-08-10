@@ -35,7 +35,7 @@ use {
     std::{
         fs::File,
         io::{Read, Seek, SeekFrom, Write},
-        ptr,
+        ptr, slice,
     },
 };
 
@@ -219,13 +219,32 @@ impl<'a> BufferedScanner<'a> {
     pub fn eof(&self) -> bool {
         self.remaining() == 0
     }
+    unsafe fn _incr(&mut self, by: usize) {
+        self.i += by;
+    }
 }
 
 impl<'a> BufferedScanner<'a> {
     pub unsafe fn next_u64_le(&mut self) -> u64 {
         let mut b = [0u8; sizeof!(u64)];
         ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), sizeof!(u64));
-        self.i += sizeof!(u64);
+        self._incr(sizeof!(u64));
         u64::from_le_bytes(b)
+    }
+    pub unsafe fn next_chunk<const N: usize>(&mut self) -> [u8; N] {
+        let mut b = [0u8; N];
+        ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), N);
+        self._incr(N);
+        b
+    }
+    pub unsafe fn next_chunk_variable(&mut self, size: usize) -> &[u8] {
+        let r = slice::from_raw_parts(self._cursor(), size);
+        self._incr(size);
+        r
+    }
+    pub unsafe fn next_byte(&mut self) -> u8 {
+        let r = *self._cursor();
+        self._incr(1);
+        r
     }
 }

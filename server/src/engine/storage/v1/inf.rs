@@ -30,15 +30,16 @@ use {
     crate::{
         engine::{
             data::{
-                dict::DictEntryGeneric,
+                cell::Datacell,
+                dict::{DictEntryGeneric, DictGeneric},
                 tag::{DataTag, TagClass},
             },
             idx::{AsKey, AsValue},
             storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
         },
-        util::EndianQW,
+        util::{copy_slice_to_array as memcpy, EndianQW},
     },
-    std::collections::HashMap,
+    std::{cmp, collections::HashMap, mem},
 };
 
 type VecU8 = Vec<u8>;
@@ -123,12 +124,15 @@ pub trait PersistDict {
     /// enc md for an entry
     fn enc_entry_metadata(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
     /// dec the entry metadata
+    /// SAFETY: Must have passed entry pretest
     unsafe fn dec_entry_metadata(scanner: &mut BufferedScanner) -> Option<Self::Metadata>;
     // entry (coupled)
     /// enc a packed entry
     fn enc_entry_coupled(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
     /// dec a packed entry
-    fn dec_entry_coupled(
+    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
+    /// flag
+    unsafe fn dec_entry_coupled(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> Option<(Self::Key, Self::Value)>;
@@ -136,11 +140,15 @@ pub trait PersistDict {
     /// enc key for a normal entry
     fn enc_key(buf: &mut VecU8, key: &Self::Key);
     /// dec normal entry key
-    fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key>;
+    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
+    /// flag
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key>;
     /// enc val for a normal entry
     fn enc_val(buf: &mut VecU8, val: &Self::Value);
     /// dec normal entry val
-    fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value>;
+    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
+    /// flag
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value>;
 }
 
 /*
@@ -148,18 +156,22 @@ pub trait PersistDict {
 */
 
 pub fn encode_dict<Pd: PersistDict>(dict: &HashMap<Pd::Key, Pd::Value>) -> Vec<u8> {
-    let mut buf = Vec::new();
+    let mut v = vec![];
+    _encode_dict::<Pd>(&mut v, dict);
+    v
+}
+
+fn _encode_dict<Pd: PersistDict>(buf: &mut VecU8, dict: &HashMap<Pd::Key, Pd::Value>) {
     buf.extend(dict.len().u64_bytes_le());
     for (key, val) in dict {
-        Pd::enc_entry_metadata(&mut buf, key, val);
+        Pd::enc_entry_metadata(buf, key, val);
         if Pd::ENC_COUPLED {
-            Pd::enc_entry_coupled(&mut buf, key, val);
+            Pd::enc_entry_coupled(buf, key, val);
         } else {
-            Pd::enc_key(&mut buf, key);
-            Pd::enc_val(&mut buf, val);
+            Pd::enc_key(buf, key);
+            Pd::enc_val(buf, val);
         }
     }
-    buf
 }
 
 pub fn decode_dict<Pd: PersistDict>(
@@ -193,7 +205,10 @@ pub fn decode_dict<Pd: PersistDict>(
         let k;
         let v;
         if Pd::DEC_COUPLED {
-            match Pd::dec_entry_coupled(scanner, md) {
+            match unsafe {
+                // UNSAFE(@ohsayan): verified metadata
+                Pd::dec_entry_coupled(scanner, md)
+            } {
                 Some((_k, _v)) => {
                     k = _k;
                     v = _v;
@@ -201,7 +216,10 @@ pub fn decode_dict<Pd: PersistDict>(
                 None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
             }
         } else {
-            match (Pd::dec_key(scanner, &md), Pd::dec_val(scanner, &md)) {
+            match unsafe {
+                // UNSAFE(@ohsayan): verified metadata
+                (Pd::dec_key(scanner, &md), Pd::dec_val(scanner, &md))
+            } {
                 (Some(_k), Some(_v)) => {
                     k = _k;
                     v = _v;
@@ -217,5 +235,130 @@ pub fn decode_dict<Pd: PersistDict>(
         Ok(dict)
     } else {
         Err(SDSSError::InternalDecodeStructureIllegalData)
+    }
+}
+
+/*
+    impls
+*/
+
+pub struct DGEntryMD {
+    klen: usize,
+    dscr: u8,
+}
+
+impl DGEntryMD {
+    fn decode(data: [u8; 9]) -> Self {
+        Self {
+            klen: u64::from_le_bytes(memcpy(&data[..8])) as usize,
+            dscr: data[8],
+        }
+    }
+    fn encode(klen: usize, dscr: u8) -> [u8; 9] {
+        let mut ret = [0u8; 9];
+        ret[..8].copy_from_slice(&klen.u64_bytes_le());
+        ret[8] = dscr;
+        ret
+    }
+}
+
+impl PersistDictEntryMetadata for DGEntryMD {
+    fn verify_with_src(&self, scanner: &BufferedScanner) -> bool {
+        static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
+        let lbound_rem = self.klen + EXPECT_ATLEAST[cmp::min(self.dscr, 4) as usize] as usize;
+        scanner.has_left(lbound_rem) & (self.dscr <= PersistDictEntryDscr::Dict.value_u8())
+    }
+}
+
+impl PersistDict for DictGeneric {
+    type Key = Box<str>;
+    type Value = DictEntryGeneric;
+    type Metadata = DGEntryMD;
+    const ENC_COUPLED: bool = true;
+    const DEC_ENTRYMD_INFALLIBLE: bool = true;
+    const DEC_COUPLED: bool = false;
+    const DEC_VERIFY_MD_WITH_SRC_STANDALONE: bool = true;
+    fn metadec_pretest_routine(_: &BufferedScanner) -> bool {
+        true
+    }
+    fn metadec_pretest_entry(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64) + 1)
+    }
+    fn enc_entry_metadata(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
+        buf.extend(key.len().u64_bytes_le());
+    }
+    unsafe fn dec_entry_metadata(scanner: &mut BufferedScanner) -> Option<Self::Metadata> {
+        Some(Self::Metadata::decode(scanner.next_chunk()))
+    }
+    fn enc_entry_coupled(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+        match val {
+            DictEntryGeneric::Null => {
+                buf.push(PersistDictEntryDscr::Null.value_u8());
+                buf.extend(key.as_bytes())
+            }
+            DictEntryGeneric::Map(map) => {
+                buf.push(PersistDictEntryDscr::Dict.value_u8());
+                buf.extend(key.as_bytes());
+                _encode_dict::<Self>(buf, map);
+            }
+            DictEntryGeneric::Lit(dc) => {
+                buf.push(
+                    PersistDictEntryDscr::translate_from_class(dc.tag().tag_class()).value_u8()
+                        * (!dc.is_null() as u8),
+                );
+                buf.extend(key.as_bytes());
+                fn encode_element(buf: &mut VecU8, dc: &Datacell) {
+                    unsafe {
+                        use TagClass::*;
+                        match dc.tag().tag_class() {
+                            Bool if dc.is_init() => buf.push(dc.read_bool() as u8),
+                            Bool => {}
+                            UnsignedInt | SignedInt | Float => {
+                                buf.extend(dc.read_uint().to_le_bytes())
+                            }
+                            Str | Bin => {
+                                let slc = dc.read_bin();
+                                buf.extend(slc.len().u64_bytes_le());
+                                buf.extend(slc);
+                            }
+                            List => {
+                                let lst = dc.read_list().read();
+                                buf.extend(lst.len().u64_bytes_le());
+                                for item in lst.iter() {
+                                    encode_element(buf, item);
+                                }
+                            }
+                        }
+                    }
+                }
+                encode_element(buf, dc);
+            }
+        }
+    }
+    unsafe fn dec_entry_coupled(
+        _: &mut BufferedScanner,
+        _: Self::Metadata,
+    ) -> Option<(Self::Key, Self::Value)> {
+        unimplemented!()
+    }
+    fn enc_key(_: &mut VecU8, _: &Self::Key) {
+        unimplemented!()
+    }
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key> {
+        String::from_utf8(scanner.next_chunk_variable(md.klen).to_owned())
+            .map(|s| s.into_boxed_str())
+            .ok()
+    }
+    fn enc_val(_: &mut VecU8, _: &Self::Value) {
+        unimplemented!()
+    }
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value> {
+        unsafe fn decode_element(
+            _: &mut BufferedScanner,
+            _: PersistDictEntryDscr,
+        ) -> Option<DictEntryGeneric> {
+            todo!()
+        }
+        decode_element(scanner, mem::transmute(md.dscr))
     }
 }
