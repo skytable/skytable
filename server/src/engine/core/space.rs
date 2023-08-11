@@ -124,7 +124,8 @@ impl Space {
         // check env
         let env = match props.remove(SpaceMeta::KEY_ENV) {
             Some(DictEntryGeneric::Map(m)) if props.is_empty() => m,
-            Some(DictEntryGeneric::Null) | None if props.is_empty() => IndexST::default(),
+            Some(DictEntryGeneric::Lit(l)) if l.is_null() => IndexST::default(),
+            None if props.is_empty() => IndexST::default(),
             _ => {
                 return Err(DatabaseError::DdlSpaceBadProperty);
             }
@@ -169,7 +170,9 @@ impl Space {
                         return Err(DatabaseError::DdlSpaceBadProperty);
                     }
                 }
-                Some(DictEntryGeneric::Null) if updated_props.is_empty() => space_env.clear(),
+                Some(DictEntryGeneric::Lit(l)) if updated_props.is_empty() & l.is_null() => {
+                    space_env.clear()
+                }
                 None => {}
                 _ => return Err(DatabaseError::DdlSpaceBadProperty),
             }

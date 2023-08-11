@@ -173,7 +173,7 @@ macro_rules! cutag {
 }
 
 impl CUTag {
-    const fn new(class: TagClass, unique: TagUnique) -> Self {
+    pub const fn new(class: TagClass, unique: TagUnique) -> Self {
         Self { class, unique }
     }
 }

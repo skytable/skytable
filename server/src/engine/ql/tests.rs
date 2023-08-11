@@ -81,7 +81,7 @@ pub trait NullableDictEntry {
 
 impl NullableDictEntry for Null {
     fn data(self) -> crate::engine::data::DictEntryGeneric {
-        crate::engine::data::DictEntryGeneric::Null
+        crate::engine::data::DictEntryGeneric::Lit(Datacell::null())
     }
 }
 

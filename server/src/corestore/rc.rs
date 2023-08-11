@@ -163,7 +163,7 @@ impl AsRef<[u8]> for SharedSlice {
 impl Borrow<[u8]> for SharedSlice {
     #[inline(always)]
     fn borrow(&self) -> &[u8] {
-        self.as_slice().borrow()
+        self.as_slice()
     }
 }
 

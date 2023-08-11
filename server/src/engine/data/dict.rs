@@ -53,12 +53,6 @@ pub enum DictEntryGeneric {
     Lit(Datacell),
     /// A map
     Map(DictGeneric),
-    /// A null
-    ///
-    /// This distinction is important because we currently only allow [`Datacell`] to store information about the intialization state (as it should be)
-    /// and it can't distinct between "null-but-concrete-types" (that's the task of our engine: to enforce the schema but it's not DC's task). Hence this
-    /// specific flag tells us that this is null (and neither a lit nor a map)
-    Null,
 }
 
 #[derive(Debug, PartialEq)]
@@ -91,15 +85,15 @@ pub fn rflatten_metadata(new: DictGeneric) -> MetaDict {
 fn _rflatten_metadata(new: DictGeneric, empty: &mut MetaDict) {
     for (key, val) in new {
         match val {
-            DictEntryGeneric::Lit(l) => {
+            DictEntryGeneric::Lit(l) if l.is_init() => {
                 empty.insert(key, MetaDictEntry::Data(l));
             }
+            DictEntryGeneric::Lit(_) => {}
             DictEntryGeneric::Map(m) => {
                 let mut rnew = MetaDict::new();
                 _rflatten_metadata(m, &mut rnew);
                 empty.insert(key, MetaDictEntry::Map(rnew));
             }
-            DictEntryGeneric::Null => {}
         }
     }
 }
@@ -153,57 +147,55 @@ fn rmerge_metadata_prepare_patch(
     let mut okay = true;
     while new.len() != 0 && okay {
         let (key, new_entry) = new.next().unwrap();
-        match (current.get(&key), &new_entry) {
+        match (current.get(&key), new_entry) {
             // non-null -> non-null: merge flatten update
-            (Some(this_current), DictEntryGeneric::Lit(_) | DictEntryGeneric::Map(_)) => {
-                okay &= {
-                    match (this_current, new_entry) {
-                        (MetaDictEntry::Data(this_data), DictEntryGeneric::Lit(new_data))
-                            if this_data.kind() == new_data.kind() =>
-                        {
-                            patch
-                                .0
-                                .insert(key, Some(MetaDictPatchEntry::Data(new_data)));
-                            true
-                        }
-                        (
-                            MetaDictEntry::Map(this_recursive_data),
-                            DictEntryGeneric::Map(new_recursive_data),
-                        ) => {
-                            let mut this_patch = MetaDictPatch::default();
-                            let okay = rmerge_metadata_prepare_patch(
-                                this_recursive_data,
-                                new_recursive_data,
-                                &mut this_patch,
-                            );
-                            patch
-                                .0
-                                .insert(key, Some(MetaDictPatchEntry::Map(this_patch)));
-                            okay
-                        }
-                        _ => false,
-                    }
-                };
+            (Some(MetaDictEntry::Data(this_data)), DictEntryGeneric::Lit(new_data))
+                if new_data.is_init() =>
+            {
+                if this_data.kind() == new_data.kind() {
+                    patch
+                        .0
+                        .insert(key, Some(MetaDictPatchEntry::Data(new_data)));
+                } else {
+                    okay = false;
+                }
+            }
+            (Some(MetaDictEntry::Data(_)), DictEntryGeneric::Map(_)) => {
+                okay = false;
+            }
+            (
+                Some(MetaDictEntry::Map(this_recursive_data)),
+                DictEntryGeneric::Map(new_recursive_data),
+            ) => {
+                let mut this_patch = MetaDictPatch::default();
+                let _okay = rmerge_metadata_prepare_patch(
+                    this_recursive_data,
+                    new_recursive_data,
+                    &mut this_patch,
+                );
+                patch
+                    .0
+                    .insert(key, Some(MetaDictPatchEntry::Map(this_patch)));
+                okay &= _okay;
             }
             // null -> non-null: flatten insert
-            (None, DictEntryGeneric::Lit(_) | DictEntryGeneric::Map(_)) => match new_entry {
-                DictEntryGeneric::Lit(d) => {
-                    let _ = patch.0.insert(key, Some(MetaDictPatchEntry::Data(d)));
-                }
-                DictEntryGeneric::Map(m) => {
-                    let mut this_patch = MetaDictPatch::default();
-                    okay &= rmerge_metadata_prepare_patch(&into_dict!(), m, &mut this_patch);
-                    let _ = patch
-                        .0
-                        .insert(key, Some(MetaDictPatchEntry::Map(this_patch)));
-                }
-                _ => unreachable!(),
-            },
+            (None, DictEntryGeneric::Lit(l)) if l.is_init() => {
+                let _ = patch.0.insert(key, Some(MetaDictPatchEntry::Data(l)));
+            }
+            (None, DictEntryGeneric::Map(m)) => {
+                let mut this_patch = MetaDictPatch::default();
+                okay &= rmerge_metadata_prepare_patch(&into_dict!(), m, &mut this_patch);
+                let _ = patch
+                    .0
+                    .insert(key, Some(MetaDictPatchEntry::Map(this_patch)));
+            }
             // non-null -> null: remove
-            (Some(_), DictEntryGeneric::Null) => {
+            (Some(_), DictEntryGeneric::Lit(l)) => {
+                debug_assert!(l.is_null());
                 patch.0.insert(key, None);
             }
-            (None, DictEntryGeneric::Null) => {
+            (None, DictEntryGeneric::Lit(l)) => {
+                debug_assert!(l.is_null());
                 // ignore
             }
         }

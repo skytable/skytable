@@ -32,7 +32,7 @@ use {
             data::{
                 cell::Datacell,
                 dict::{DictEntryGeneric, DictGeneric},
-                tag::{DataTag, TagClass},
+                tag::{CUTag, DataTag, TagClass, TagUnique},
             },
             idx::{AsKey, AsValue},
             storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
@@ -62,11 +62,13 @@ pub enum PersistDictEntryDscr {
 impl PersistDictEntryDscr {
     /// translates the tag class definition into the dscr definition
     pub const fn translate_from_class(class: TagClass) -> Self {
-        unsafe { core::mem::transmute(class.d() + 1) }
+        unsafe { Self::from_raw(class.d() + 1) }
+    }
+    pub const unsafe fn from_raw(v: u8) -> Self {
+        core::mem::transmute(v)
     }
     pub fn new_from_dict_gen_entry(e: &DictEntryGeneric) -> Self {
         match e {
-            DictEntryGeneric::Null => Self::Null,
             DictEntryGeneric::Map(_) => Self::Dict,
             DictEntryGeneric::Lit(dc) => Self::translate_from_class(dc.tag().tag_class()),
         }
@@ -86,6 +88,10 @@ impl PersistDictEntryDscr {
     /// Recursive data
     pub const fn is_recursive(&self) -> bool {
         self.value_u8() >= Self::List.value_u8()
+    }
+    fn into_class(&self) -> TagClass {
+        debug_assert!(*self != Self::Null);
+        unsafe { mem::transmute(self.value_u8() - 1) }
     }
 }
 
@@ -177,7 +183,7 @@ fn _encode_dict<Pd: PersistDict>(buf: &mut VecU8, dict: &HashMap<Pd::Key, Pd::Va
 pub fn decode_dict<Pd: PersistDict>(
     scanner: &mut BufferedScanner,
 ) -> SDSSResult<HashMap<Pd::Key, Pd::Value>> {
-    if Pd::metadec_pretest_routine(scanner) & scanner.has_left(sizeof!(u64)) {
+    if !(Pd::metadec_pretest_routine(scanner) & scanner.has_left(sizeof!(u64))) {
         return Err(SDSSError::InternalDecodeStructureCorrupted);
     }
     let dict_len = unsafe {
@@ -185,7 +191,7 @@ pub fn decode_dict<Pd: PersistDict>(
         scanner.next_u64_le() as usize
     };
     let mut dict = HashMap::with_capacity(dict_len);
-    while Pd::metadec_pretest_entry(scanner) {
+    while Pd::metadec_pretest_entry(scanner) & (dict.len() < dict_len) {
         let md = unsafe {
             // UNSAFE(@ohsayan): this is compeletely because of the entry pretest
             match Pd::dec_entry_metadata(scanner) {
@@ -224,7 +230,9 @@ pub fn decode_dict<Pd: PersistDict>(
                     k = _k;
                     v = _v;
                 }
-                _ => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
+                _ => {
+                    return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+                }
             }
         }
         if dict.insert(k, v).is_some() {
@@ -265,7 +273,7 @@ impl DGEntryMD {
 impl PersistDictEntryMetadata for DGEntryMD {
     fn verify_with_src(&self, scanner: &BufferedScanner) -> bool {
         static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
-        let lbound_rem = self.klen + EXPECT_ATLEAST[cmp::min(self.dscr, 4) as usize] as usize;
+        let lbound_rem = self.klen + EXPECT_ATLEAST[cmp::min(self.dscr, 3) as usize] as usize;
         scanner.has_left(lbound_rem) & (self.dscr <= PersistDictEntryDscr::Dict.value_u8())
     }
 }
@@ -292,10 +300,6 @@ impl PersistDict for DictGeneric {
     }
     fn enc_entry_coupled(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
         match val {
-            DictEntryGeneric::Null => {
-                buf.push(PersistDictEntryDscr::Null.value_u8());
-                buf.extend(key.as_bytes())
-            }
             DictEntryGeneric::Map(map) => {
                 buf.push(PersistDictEntryDscr::Dict.value_u8());
                 buf.extend(key.as_bytes());
@@ -354,11 +358,98 @@ impl PersistDict for DictGeneric {
     }
     unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value> {
         unsafe fn decode_element(
-            _: &mut BufferedScanner,
-            _: PersistDictEntryDscr,
+            scanner: &mut BufferedScanner,
+            dscr: PersistDictEntryDscr,
+            dg_top_element: bool,
         ) -> Option<DictEntryGeneric> {
-            todo!()
+            let r = match dscr {
+                PersistDictEntryDscr::Null => DictEntryGeneric::Lit(Datacell::null()),
+                PersistDictEntryDscr::Bool => {
+                    DictEntryGeneric::Lit(Datacell::new_bool(scanner.next_byte() == 1))
+                }
+                PersistDictEntryDscr::UnsignedInt
+                | PersistDictEntryDscr::SignedInt
+                | PersistDictEntryDscr::Float => DictEntryGeneric::Lit(Datacell::new_qw(
+                    scanner.next_u64_le(),
+                    CUTag::new(
+                        dscr.into_class(),
+                        [
+                            TagUnique::UnsignedInt,
+                            TagUnique::SignedInt,
+                            TagUnique::Illegal,
+                            TagUnique::Illegal, // pad
+                        ][(dscr.value_u8() - 2) as usize],
+                    ),
+                )),
+                PersistDictEntryDscr::Str | PersistDictEntryDscr::Bin => {
+                    let slc_len = scanner.next_u64_le() as usize;
+                    if !scanner.has_left(slc_len) {
+                        return None;
+                    }
+                    let slc = scanner.next_chunk_variable(slc_len);
+                    DictEntryGeneric::Lit(if dscr == PersistDictEntryDscr::Str {
+                        if core::str::from_utf8(slc).is_err() {
+                            return None;
+                        }
+                        Datacell::new_str(
+                            String::from_utf8_unchecked(slc.to_owned()).into_boxed_str(),
+                        )
+                    } else {
+                        Datacell::new_bin(slc.to_owned().into_boxed_slice())
+                    })
+                }
+                PersistDictEntryDscr::List => {
+                    let list_len = scanner.next_u64_le() as usize;
+                    let mut v = Vec::with_capacity(list_len);
+                    while (!scanner.eof()) & (v.len() < list_len) {
+                        let dscr = scanner.next_byte();
+                        if dscr > PersistDictEntryDscr::Dict.value_u8() {
+                            return None;
+                        }
+                        v.push(
+                            match decode_element(
+                                scanner,
+                                PersistDictEntryDscr::from_raw(dscr),
+                                false,
+                            ) {
+                                Some(DictEntryGeneric::Lit(l)) => l,
+                                None => return None,
+                                _ => unreachable!("found top-level dict item in datacell"),
+                            },
+                        );
+                    }
+                    if v.len() == list_len {
+                        DictEntryGeneric::Lit(Datacell::new_list(v))
+                    } else {
+                        return None;
+                    }
+                }
+                PersistDictEntryDscr::Dict => {
+                    if dg_top_element {
+                        DictEntryGeneric::Map(decode_dict::<DictGeneric>(scanner).ok()?)
+                    } else {
+                        unreachable!("found top-level dict item in datacell")
+                    }
+                }
+            };
+            Some(r)
         }
-        decode_element(scanner, mem::transmute(md.dscr))
+        decode_element(scanner, PersistDictEntryDscr::from_raw(md.dscr), true)
     }
+}
+
+#[test]
+fn t_dict() {
+    let dict: DictGeneric = into_dict! {
+        "hello" => Datacell::new_str("world".into()),
+        "omg a null?" => Datacell::null(),
+        "a big fat dict" => DictEntryGeneric::Map(into_dict!(
+            "with a value" => Datacell::new_uint(1002),
+            "and a null" => Datacell::null(),
+        ))
+    };
+    let encoded = encode_dict::<DictGeneric>(&dict);
+    let mut scanner = BufferedScanner::new(&encoded);
+    let decoded = decode_dict::<DictGeneric>(&mut scanner).unwrap();
+    assert_eq!(dict, decoded);
 }

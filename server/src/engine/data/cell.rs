@@ -202,6 +202,12 @@ impl Datacell {
     pub fn list(&self) -> &RwLock<Vec<Self>> {
         self.try_list().unwrap()
     }
+    pub unsafe fn new_qw(qw: u64, tag: CUTag) -> Datacell {
+        Self::new(
+            tag,
+            DataRaw::word(SpecialPaddedWord::store(qw).dwordqn_promote()),
+        )
+    }
 }
 
 direct_from! {

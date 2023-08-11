@@ -33,7 +33,7 @@ use crate::engine::data::{
 fn t_simple_flatten() {
     let generic_dict: DictGeneric = into_dict! {
         "a_valid_key" => DictEntryGeneric::Lit(100u64.into()),
-        "a_null_key" => DictEntryGeneric::Null,
+        "a_null_key" => Datacell::null(),
     };
     let expected: MetaDict = into_dict!(
         "a_valid_key" => Datacell::new_uint(100)
@@ -52,7 +52,7 @@ fn t_simple_patch() {
     let new: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(1),
         "b" => Datacell::new_uint(2),
-        "z" => DictEntryGeneric::Null,
+        "z" => Datacell::null(),
     };
     let expected: MetaDict = into_dict! {
         "a" => Datacell::new_uint(1),
@@ -96,7 +96,7 @@ fn patch_null_out_dict() {
     let new: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(2),
         "b" => Datacell::new_uint(3),
-        "z" => DictEntryGeneric::Null,
+        "z" => Datacell::null(),
     };
     assert!(dict::rmerge_metadata(&mut current, new));
     assert_eq!(current, expected);

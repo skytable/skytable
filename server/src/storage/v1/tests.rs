@@ -566,7 +566,6 @@ mod list_tests {
     use super::{de, se};
     use crate::corestore::{htable::Coremap, SharedSlice};
     use crate::kvengine::LockedVec;
-    use core::ops::Deref;
     use parking_lot::RwLock;
     #[test]
     fn test_list_se_de() {
@@ -613,13 +612,7 @@ mod list_tests {
         se::raw_serialize_list_map(&mymap, &mut v).unwrap();
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 1);
-        let mykey_value = de
-            .get("mykey".as_bytes())
-            .unwrap()
-            .value()
-            .deref()
-            .read()
-            .clone();
+        let mykey_value = de.get("mykey".as_bytes()).unwrap().value().read().clone();
         assert_eq!(
             mykey_value,
             vals.into_inner()
@@ -642,14 +635,14 @@ mod list_tests {
         let de = de::deserialize_list_map(&v).unwrap();
         assert_eq!(de.len(), 2);
         assert_eq!(
-            de.get(&key1).unwrap().value().deref().read().clone(),
+            de.get(&key1).unwrap().value().read().clone(),
             val1.into_inner()
                 .into_iter()
                 .map(SharedSlice::from)
                 .collect::<Vec<SharedSlice>>()
         );
         assert_eq!(
-            de.get(&key2).unwrap().value().deref().read().clone(),
+            de.get(&key2).unwrap().value().read().clone(),
             val2.into_inner()
                 .into_iter()
                 .map(SharedSlice::from)

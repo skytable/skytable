@@ -46,7 +46,10 @@
 
 use crate::{
     engine::{
-        data::dict::{DictEntryGeneric, DictGeneric},
+        data::{
+            cell::Datacell,
+            dict::{DictEntryGeneric, DictGeneric},
+        },
         error::{LangError, LangResult},
         ql::{
             ast::{QueryData, State},
@@ -176,7 +179,7 @@ where
                             // UNSAFE(@ohsayan): we only switch to this when we've already read in a key
                             key.take().as_str().into()
                         },
-                        DictEntryGeneric::Null,
+                        DictEntryGeneric::Lit(Datacell::null()),
                     )
                     .is_none(),
                 );
