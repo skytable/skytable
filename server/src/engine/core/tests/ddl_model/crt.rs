@@ -48,8 +48,8 @@ mod validation {
                 .cloned()
                 .collect::<Vec<Field>>(),
             [
-                Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
-                Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false)
+                Field::new([Layer::new_empty_props(FullTag::STR)].into(), false),
+                Field::new([Layer::new_empty_props(FullTag::BIN)].into(), false)
             ]
         );
         assert_eq!(
@@ -72,8 +72,8 @@ mod validation {
                 .cloned()
                 .collect::<Vec<Field>>(),
             [
-                Field::new([Layer::new_test(FullTag::BIN, [0; 2])].into(), false),
-                Field::new([Layer::new_test(FullTag::STR, [0; 2])].into(), false),
+                Field::new([Layer::new_empty_props(FullTag::BIN)].into(), false),
+                Field::new([Layer::new_empty_props(FullTag::STR)].into(), false),
             ]
         );
         assert_eq!(

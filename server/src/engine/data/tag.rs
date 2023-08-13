@@ -62,6 +62,54 @@ pub enum TagSelector {
     List = 13,
 }
 
+impl TagSelector {
+    pub const fn max_dscr() -> u8 {
+        Self::List.d()
+    }
+    pub const fn into_full(self) -> FullTag {
+        FullTag::new(self.tag_class(), self, self.tag_unique())
+    }
+    pub const unsafe fn from_raw(v: u8) -> Self {
+        core::mem::transmute(v)
+    }
+    pub const fn tag_unique(&self) -> TagUnique {
+        [
+            TagUnique::Illegal,
+            TagUnique::UnsignedInt,
+            TagUnique::UnsignedInt,
+            TagUnique::UnsignedInt,
+            TagUnique::UnsignedInt,
+            TagUnique::SignedInt,
+            TagUnique::SignedInt,
+            TagUnique::SignedInt,
+            TagUnique::SignedInt,
+            TagUnique::Illegal,
+            TagUnique::Illegal,
+            TagUnique::Bin,
+            TagUnique::Str,
+            TagUnique::Illegal,
+        ][self.d() as usize]
+    }
+    pub const fn tag_class(&self) -> TagClass {
+        [
+            TagClass::Bool,
+            TagClass::UnsignedInt,
+            TagClass::UnsignedInt,
+            TagClass::UnsignedInt,
+            TagClass::UnsignedInt,
+            TagClass::SignedInt,
+            TagClass::SignedInt,
+            TagClass::SignedInt,
+            TagClass::SignedInt,
+            TagClass::Float,
+            TagClass::Float,
+            TagClass::Bin,
+            TagClass::Str,
+            TagClass::List,
+        ][self.d() as usize]
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum TagUnique {

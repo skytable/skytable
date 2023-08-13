@@ -293,7 +293,7 @@ impl<T, const N: usize> Extend<T> for VInline<N, T> {
 }
 
 #[cfg(test)]
-impl<T, const N: usize> From<[T; N]> for VInline<N, T> {
+impl<T, const M: usize, const N: usize> From<[T; N]> for VInline<M, T> {
     fn from(a: [T; N]) -> Self {
         a.into_iter().collect()
     }

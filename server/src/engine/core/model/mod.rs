@@ -324,7 +324,6 @@ impl Field {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Layer {
     tag: FullTag,
-    config: [usize; 2],
 }
 
 impl Layer {
@@ -376,19 +375,18 @@ impl Layer {
     pub fn tag(&self) -> FullTag {
         self.tag
     }
-    #[cfg(test)]
-    pub fn new_test(tag: FullTag, config: [usize; 2]) -> Self {
-        Self::new(tag, config)
+    pub fn new_empty_props(tag: FullTag) -> Self {
+        Self::new(tag)
     }
     #[inline(always)]
     fn compute_index(&self, dc: &Datacell) -> usize {
         self.tag.tag_class().word() * (dc.is_null() as usize)
     }
-    const fn new(tag: FullTag, config: [usize; 2]) -> Self {
-        Self { tag, config }
+    const fn new(tag: FullTag) -> Self {
+        Self { tag }
     }
     const fn empty(tag: FullTag) -> Self {
-        Self::new(tag, [0; 2])
+        Self::new(tag)
     }
     fn hf(key: &[u8], v: [u8; 7]) -> u16 {
         let mut tot = 0;

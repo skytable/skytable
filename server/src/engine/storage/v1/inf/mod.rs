@@ -26,6 +26,9 @@
 
 //! High level interfaces
 
+#[cfg(test)]
+mod tests;
+
 use {
     crate::{
         engine::{
@@ -98,6 +101,37 @@ impl PersistDictEntryDscr {
 /*
     spec
 */
+
+pub fn enc<Obj: PersistObjectHlIO>(buf: &mut VecU8, obj: &Obj) {
+    obj.pe_obj_hlio_enc(buf)
+}
+
+pub fn enc_buf<Obj: PersistObjectHlIO>(obj: &Obj) -> Vec<u8> {
+    let mut buf = vec![];
+    enc(&mut buf, obj);
+    buf
+}
+
+pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::DType> {
+    if Obj::pe_obj_hlio_dec_ver(scanner) {
+        unsafe { Ok(Obj::pe_obj_hlio_dec(scanner).unwrap_unchecked()) }
+    } else {
+        Err(SDSSError::InternalDecodeStructureCorrupted)
+    }
+}
+
+pub fn dec_buf<Obj: PersistObjectHlIO>(buf: &[u8]) -> SDSSResult<Obj::DType> {
+    let mut scanner = BufferedScanner::new(buf);
+    dec::<Obj>(&mut scanner)
+}
+
+/// Any object that can persist
+pub trait PersistObjectHlIO: Sized {
+    type DType;
+    fn pe_obj_hlio_enc(&self, buf: &mut VecU8);
+    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool;
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType>;
+}
 
 /// metadata spec for a persist dict
 pub trait PersistDictEntryMetadata {
@@ -247,7 +281,7 @@ pub fn decode_dict<Pd: PersistDict>(
 }
 
 /*
-    impls
+    dict impls
 */
 
 pub struct DGEntryMD {
@@ -438,18 +472,91 @@ impl PersistDict for DictGeneric {
     }
 }
 
-#[test]
-fn t_dict() {
-    let dict: DictGeneric = into_dict! {
-        "hello" => Datacell::new_str("world".into()),
-        "omg a null?" => Datacell::null(),
-        "a big fat dict" => DictEntryGeneric::Map(into_dict!(
-            "with a value" => Datacell::new_uint(1002),
-            "and a null" => Datacell::null(),
+/*
+    persist obj impls
+*/
+
+use crate::engine::{
+    core::model::{Field, Layer},
+    data::tag::{FullTag, TagSelector},
+    mem::VInline,
+};
+
+struct POByteBlockFullTag(FullTag);
+
+impl PersistObjectHlIO for POByteBlockFullTag {
+    type DType = FullTag;
+    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
+        buf.extend(self.0.tag_selector().d().u64_bytes_le())
+    }
+    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64))
+    }
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<FullTag> {
+        let dscr = scanner.next_u64_le();
+        if dscr > TagSelector::max_dscr() as u64 {
+            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+        }
+        Ok(TagSelector::from_raw(dscr as u8).into_full())
+    }
+}
+
+impl PersistObjectHlIO for Layer {
+    type DType = Layer;
+    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
+        // [8B: type sig][8B: empty property set]
+        POByteBlockFullTag(self.tag()).pe_obj_hlio_enc(buf);
+        buf.extend(0u64.to_le_bytes());
+    }
+    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64) * 2)
+    }
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType> {
+        let type_sel = scanner.next_u64_le();
+        let prop_set_arity = scanner.next_u64_le();
+        if (type_sel > TagSelector::List.d() as u64) | (prop_set_arity != 0) {
+            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+        }
+        Ok(Layer::new_empty_props(
+            TagSelector::from_raw(type_sel as u8).into_full(),
         ))
-    };
-    let encoded = encode_dict::<DictGeneric>(&dict);
-    let mut scanner = BufferedScanner::new(&encoded);
-    let decoded = decode_dict::<DictGeneric>(&mut scanner).unwrap();
-    assert_eq!(dict, decoded);
+    }
+}
+
+impl PersistObjectHlIO for Field {
+    type DType = Self;
+    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
+        // [null][prop_c][layer_c]
+        buf.push(self.is_nullable() as u8);
+        buf.extend(0u64.to_le_bytes());
+        buf.extend(self.layers().len().u64_bytes_le());
+        for layer in self.layers() {
+            PersistObjectHlIO::pe_obj_hlio_enc(layer, buf);
+        }
+    }
+    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
+        scanner.has_left((sizeof!(u64) * 2) + 1)
+    }
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType> {
+        let nullable = scanner.next_byte();
+        let prop_c = scanner.next_u64_le();
+        let layer_cnt = scanner.next_u64_le();
+        let mut layers = VInline::new();
+        let mut fin = false;
+        while (!scanner.eof())
+            & (layers.len() as u64 != layer_cnt)
+            & (Layer::pe_obj_hlio_dec_ver(scanner))
+            & !fin
+        {
+            let l = Layer::pe_obj_hlio_dec(scanner)?;
+            fin = l.tag().tag_class() != TagClass::List;
+            layers.push(l);
+        }
+        let field = Field::new(layers, nullable == 1);
+        if (field.layers().len() as u64 == layer_cnt) & (nullable <= 1) & (prop_c == 0) & fin {
+            Ok(field)
+        } else {
+            Err(SDSSError::InternalDecodeStructureCorrupted)
+        }
+    }
 }
