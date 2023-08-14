@@ -37,6 +37,7 @@ use {
         data::{
             cell::Datacell,
             tag::{DataTag, FullTag, TagClass, TagSelector},
+            uuid::Uuid,
         },
         error::{DatabaseError, DatabaseResult},
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
@@ -55,6 +56,7 @@ pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
 pub struct ModelData {
+    uuid: Uuid,
     p_key: Box<str>,
     p_tag: FullTag,
     fields: UnsafeCell<Fields>,
@@ -68,11 +70,16 @@ impl PartialEq for ModelData {
     fn eq(&self, m: &Self) -> bool {
         let mdl1 = self.intent_read_model();
         let mdl2 = m.intent_read_model();
-        self.p_key == m.p_key && self.p_tag == m.p_tag && mdl1.fields() == mdl2.fields()
+        ((self.p_key == m.p_key) & (self.p_tag == m.p_tag))
+            && self.uuid == m.uuid
+            && mdl1.fields() == mdl2.fields()
     }
 }
 
 impl ModelData {
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
     pub fn p_key(&self) -> &str {
         &self.p_key
     }
@@ -157,6 +164,7 @@ impl ModelData {
             let tag = fields.st_get(last_pk).unwrap().layers()[0].tag;
             if tag.tag_unique().is_unique() {
                 return Ok(Self {
+                    uuid: Uuid::new(),
                     p_key: last_pk.into(),
                     p_tag: tag,
                     fields: UnsafeCell::new(fields),

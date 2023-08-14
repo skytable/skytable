@@ -32,7 +32,11 @@ use crate::engine::{
     core::{model::ModelData, space::Space, GlobalNS},
     error::DatabaseResult,
     idx::STIndex,
-    ql::{ast::parse_ast_node_full, ddl::crt::CreateModel, tests::lex_insecure},
+    ql::{
+        ast::{parse_ast_node_full, Entity},
+        ddl::crt::CreateModel,
+        tests::lex_insecure,
+    },
 };
 
 fn create(s: &str) -> DatabaseResult<ModelData> {
@@ -45,21 +49,24 @@ pub fn exec_create(
     gns: &GlobalNS,
     create_stmt: &str,
     create_new_space: bool,
-) -> DatabaseResult<()> {
+) -> DatabaseResult<String> {
     let tok = lex_insecure(create_stmt.as_bytes()).unwrap();
     let create_model = parse_ast_node_full::<CreateModel>(&tok[2..]).unwrap();
+    let name = match create_model.model_name {
+        Entity::Single(tbl) | Entity::Full(_, tbl) => tbl.to_string(),
+    };
     if create_new_space {
         gns.test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
     }
-    ModelData::exec_create(gns, create_model)
+    ModelData::exec_create(gns, create_model).map(|_| name)
 }
 
 pub fn exec_create_new_space(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, true)
+    exec_create(gns, create_stmt, true).map(|_| ())
 }
 
 pub fn exec_create_no_create(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, false)
+    exec_create(gns, create_stmt, false).map(|_| ())
 }
 
 fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {

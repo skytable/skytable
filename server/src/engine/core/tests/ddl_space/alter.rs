@@ -36,18 +36,20 @@ use crate::engine::{
 #[test]
 fn alter_add_prop_env_var() {
     let gns = GlobalNS::empty();
-    super::exec_create_empty_verify(&gns, "create space myspace");
+    let uuid = super::exec_create_empty_verify(&gns, "create space myspace").unwrap();
     super::exec_alter_and_verify(
         &gns,
         "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
+            let space = space.unwrap();
             assert_eq!(
-                space.unwrap(),
-                &Space::new(
+                space,
+                &Space::new_with_uuid(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(100)))
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(100))),
+                    uuid
                 )
-            )
+            );
         },
     )
 }
@@ -71,7 +73,7 @@ fn alter_update_prop_env_var() {
         |space| {
             assert_eq!(
                 space.unwrap(),
-                &Space::new(
+                &Space::new_auto(
                     into_dict!(),
                     SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(200)))
                 )
@@ -99,7 +101,7 @@ fn alter_remove_prop_env_var() {
         |space| {
             assert_eq!(
                 space.unwrap(),
-                &Space::new(into_dict!(), SpaceMeta::with_env(into_dict!()))
+                &Space::new_auto(into_dict!(), SpaceMeta::with_env(into_dict!()))
             )
         },
     )

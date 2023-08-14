@@ -27,7 +27,7 @@
 use {
     crate::engine::{
         core::{model::ModelData, RWLIdx},
-        data::{dict, DictEntryGeneric, MetaDict},
+        data::{dict, uuid::Uuid, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
@@ -38,6 +38,7 @@ use {
 #[derive(Debug)]
 /// A space with the model namespace
 pub struct Space {
+    uuid: Uuid,
     mns: RWLIdx<Box<str>, ModelData>,
     pub(super) meta: SpaceMeta,
 }
@@ -85,6 +86,9 @@ impl Space {
             Err(DatabaseError::DdlModelAlreadyExists)
         }
     }
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
     pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelData> {
         &self.mns
     }
@@ -103,13 +107,21 @@ impl Space {
 
 impl Space {
     pub fn empty() -> Self {
-        Space::new(Default::default(), SpaceMeta::with_env(into_dict! {}))
+        Space::new_auto(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
     #[inline(always)]
-    pub fn new(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta) -> Self {
+    pub fn new_auto(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta) -> Self {
         Self {
+            uuid: Uuid::new(),
             mns: RWLIdx::new(mns),
             meta,
+        }
+    }
+    pub fn new_with_uuid(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta, uuid: Uuid) -> Self {
+        Self {
+            uuid,
+            meta,
+            mns: RwLock::new(mns),
         }
     }
     #[inline]
@@ -132,7 +144,7 @@ impl Space {
         };
         Ok(ProcedureCreate {
             space_name,
-            space: Self::new(
+            space: Self::new_auto(
                 IndexST::default(),
                 SpaceMeta::with_env(
                     // FIXME(@ohsayan): see this is bad. attempt to do it at AST build time
@@ -211,6 +223,6 @@ impl PartialEq for Space {
     fn eq(&self, other: &Self) -> bool {
         let self_mns = self.mns.read();
         let other_mns = other.mns.read();
-        self.meta == other.meta && *self_mns == *other_mns
+        self.meta == other.meta && *self_mns == *other_mns && self.uuid == other.uuid
     }
 }

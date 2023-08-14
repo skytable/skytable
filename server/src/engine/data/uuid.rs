@@ -1,5 +1,5 @@
 /*
- * Created on Sat Feb 04 2023
+ * Created on Mon Aug 14 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,16 +24,24 @@
  *
 */
 
-#[macro_use]
-mod macros;
-pub mod cell;
-pub mod dict;
-pub mod lit;
-pub mod spec;
-pub mod tag;
-pub mod uuid;
-// test
-#[cfg(test)]
-mod tests;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Uuid {
+    data: uuid::Uuid,
+}
 
-pub use dict::{DictEntryGeneric, DictGeneric, MetaDict};
+impl Uuid {
+    pub fn new() -> Self {
+        Self {
+            data: uuid::Uuid::new_v4(),
+        }
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        self.data.as_bytes()
+    }
+}
+
+impl ToString for Uuid {
+    fn to_string(&self) -> String {
+        self.data.to_string()
+    }
+}

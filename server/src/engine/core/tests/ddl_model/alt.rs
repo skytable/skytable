@@ -53,7 +53,13 @@ fn exec_plan(
     plan: &str,
     f: impl Fn(&ModelData),
 ) -> DatabaseResult<()> {
-    exec_create(gns, model, new_space)?;
+    let mdl_name = exec_create(gns, model, new_space)?;
+    let prev_uuid = {
+        let gns = gns.spaces().read();
+        let space = gns.get("myspace").unwrap();
+        let space_read = space.models().read();
+        space_read.get(mdl_name.as_str()).unwrap().get_uuid()
+    };
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     let (_space, model_name) = alter.model.into_full().unwrap();
@@ -61,7 +67,9 @@ fn exec_plan(
     let gns_read = gns.spaces().read();
     let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();
-    f(model.st_get(model_name.as_str()).unwrap());
+    let model = model.st_get(model_name.as_str()).unwrap();
+    assert_eq!(prev_uuid, model.get_uuid());
+    f(model);
     Ok(())
 }
 

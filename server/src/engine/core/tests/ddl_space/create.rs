@@ -36,7 +36,7 @@ use crate::engine::{
 #[test]
 fn exec_create_space_simple() {
     let gns = GlobalNS::empty();
-    super::exec_create_empty_verify(&gns, "create space myspace");
+    super::exec_create_empty_verify(&gns, "create space myspace").unwrap();
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn exec_create_space_with_env() {
         |space| {
             assert_eq!(
                 space.unwrap(),
-                &Space::new(
+                &Space::new_auto(
                     into_dict! {},
                     SpaceMeta::with_env(into_dict! {
                         "MAX_MODELS" => Datacell::new_uint(100)
