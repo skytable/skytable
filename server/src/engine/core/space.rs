@@ -26,7 +26,7 @@
 
 use {
     crate::engine::{
-        core::{model::ModelData, RWLIdx},
+        core::{model::Model, RWLIdx},
         data::{dict, uuid::Uuid, DictEntryGeneric, MetaDict},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
@@ -39,7 +39,7 @@ use {
 /// A space with the model namespace
 pub struct Space {
     uuid: Uuid,
-    mns: RWLIdx<Box<str>, ModelData>,
+    mns: RWLIdx<Box<str>, Model>,
     pub(super) meta: SpaceMeta,
 }
 
@@ -75,7 +75,7 @@ impl ProcedureCreate {
 }
 
 impl Space {
-    pub fn _create_model(&self, name: &str, model: ModelData) -> DatabaseResult<()> {
+    pub fn _create_model(&self, name: &str, model: Model) -> DatabaseResult<()> {
         if self
             .mns
             .write()
@@ -89,13 +89,13 @@ impl Space {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
-    pub(super) fn models(&self) -> &RWLIdx<Box<str>, ModelData> {
+    pub(super) fn models(&self) -> &RWLIdx<Box<str>, Model> {
         &self.mns
     }
     pub fn with_model<T>(
         &self,
         model: &str,
-        f: impl FnOnce(&ModelData) -> DatabaseResult<T>,
+        f: impl FnOnce(&Model) -> DatabaseResult<T>,
     ) -> DatabaseResult<T> {
         let mread = self.mns.read();
         let Some(model) = mread.st_get(model) else {
@@ -110,14 +110,14 @@ impl Space {
         Space::new_auto(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
     #[inline(always)]
-    pub fn new_auto(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta) -> Self {
+    pub fn new_auto(mns: IndexST<Box<str>, Model>, meta: SpaceMeta) -> Self {
         Self {
             uuid: Uuid::new(),
             mns: RWLIdx::new(mns),
             meta,
         }
     }
-    pub fn new_with_uuid(mns: IndexST<Box<str>, ModelData>, meta: SpaceMeta, uuid: Uuid) -> Self {
+    pub fn new_with_uuid(mns: IndexST<Box<str>, Model>, meta: SpaceMeta, uuid: Uuid) -> Self {
         Self {
             uuid,
             meta,

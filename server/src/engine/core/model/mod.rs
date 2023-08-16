@@ -55,7 +55,7 @@ pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersio
 pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
-pub struct ModelData {
+pub struct Model {
     uuid: Uuid,
     p_key: Box<str>,
     p_tag: FullTag,
@@ -66,7 +66,7 @@ pub struct ModelData {
 }
 
 #[cfg(test)]
-impl PartialEq for ModelData {
+impl PartialEq for Model {
     fn eq(&self, m: &Self) -> bool {
         let mdl1 = self.intent_read_model();
         let mdl2 = m.intent_read_model();
@@ -76,7 +76,7 @@ impl PartialEq for ModelData {
     }
 }
 
-impl ModelData {
+impl Model {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
@@ -129,7 +129,7 @@ impl ModelData {
     }
 }
 
-impl ModelData {
+impl Model {
     pub fn process_create(
         CreateModel {
             model_name: _,
@@ -178,7 +178,7 @@ impl ModelData {
     }
 }
 
-impl ModelData {
+impl Model {
     pub fn exec_create(gns: &super::GlobalNS, stmt: CreateModel) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;

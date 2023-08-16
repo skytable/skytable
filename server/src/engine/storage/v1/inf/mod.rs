@@ -34,7 +34,7 @@ use {
         engine::{
             data::{
                 cell::Datacell,
-                dict::{DictEntryGeneric, DictGeneric},
+                dict::DictEntryGeneric,
                 tag::{CUTag, DataTag, TagClass, TagUnique},
             },
             idx::{AsKey, AsValue},
@@ -42,7 +42,7 @@ use {
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
-    std::{cmp, collections::HashMap, mem},
+    std::{cmp, collections::HashMap, marker::PhantomData, mem},
 };
 
 type VecU8 = Vec<u8>;
@@ -102,136 +102,163 @@ impl PersistDictEntryDscr {
     spec
 */
 
-pub fn enc<Obj: PersistObjectHlIO>(buf: &mut VecU8, obj: &Obj) {
-    obj.pe_obj_hlio_enc(buf)
+/// Specification for any object that can be persisted
+pub trait PersistObjectHlIO {
+    /// the actual type (we can have wrappers)
+    type Type;
+    /// enc routine
+    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type);
+    /// verify the src to see if we can atleast start the routine
+    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool;
+    /// dec routine
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Type>;
 }
 
-pub fn enc_buf<Obj: PersistObjectHlIO>(obj: &Obj) -> Vec<u8> {
+/// enc the given object into a new buffer
+pub fn enc<Obj: PersistObjectHlIO>(obj: &Obj::Type) -> VecU8 {
     let mut buf = vec![];
-    enc(&mut buf, obj);
+    Obj::pe_obj_hlio_enc(&mut buf, obj);
     buf
 }
 
-pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::DType> {
+/// enc the object into the given buffer
+pub fn enc_into_buf<Obj: PersistObjectHlIO>(buf: &mut VecU8, obj: &Obj::Type) {
+    Obj::pe_obj_hlio_enc(buf, obj)
+}
+
+/// enc the object into the given buffer
+pub fn enc_self_into_buf<Obj: PersistObjectHlIO<Type = Obj>>(buf: &mut VecU8, obj: &Obj) {
+    Obj::pe_obj_hlio_enc(buf, obj)
+}
+
+/// enc the object into a new buffer
+pub fn enc_self<Obj: PersistObjectHlIO<Type = Obj>>(obj: &Obj) -> VecU8 {
+    enc::<Obj>(obj)
+}
+
+/// dec the object
+pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::Type> {
     if Obj::pe_obj_hlio_dec_ver(scanner) {
-        unsafe { Ok(Obj::pe_obj_hlio_dec(scanner).unwrap_unchecked()) }
+        unsafe { Obj::pe_obj_hlio_dec(scanner) }
     } else {
         Err(SDSSError::InternalDecodeStructureCorrupted)
     }
 }
 
-pub fn dec_buf<Obj: PersistObjectHlIO>(buf: &[u8]) -> SDSSResult<Obj::DType> {
-    let mut scanner = BufferedScanner::new(buf);
-    dec::<Obj>(&mut scanner)
+/// dec the object
+pub fn dec_self<Obj: PersistObjectHlIO<Type = Obj>>(
+    scanner: &mut BufferedScanner,
+) -> SDSSResult<Obj> {
+    dec::<Obj>(scanner)
 }
 
-/// Any object that can persist
-pub trait PersistObjectHlIO: Sized {
-    type DType;
-    fn pe_obj_hlio_enc(&self, buf: &mut VecU8);
-    fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool;
-    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType>;
-}
-
-/// metadata spec for a persist dict
-pub trait PersistDictEntryMetadata {
-    /// Verify the state of scanner to ensure that it complies with the metadata
+/// metadata spec for a persist map entry
+pub trait PersistMapEntryMD {
     fn verify_with_src(&self, scanner: &BufferedScanner) -> bool;
 }
 
-/// spec for a persist dict
-pub trait PersistDict {
-    /// type of key
-    type Key: AsKey;
-    /// type of value
-    type Value: AsValue;
+/// specification for a persist map
+pub trait PersistMapSpec {
     /// metadata type
-    type Metadata: PersistDictEntryMetadata;
-    /// enc coupled (packed enc)
+    type Metadata: PersistMapEntryMD;
+    /// key type (NOTE: set this to the true key type; handle any differences using the spec unless you have an entirely different
+    /// wrapper type)
+    type Key: AsKey;
+    /// value type (NOTE: see [`PersistMapSpec::Key`])
+    type Value: AsValue;
+    /// coupled enc
     const ENC_COUPLED: bool;
-    /// during dec, ignore failure of the metadata parse (IMP: NOT the metadata src verification but the
-    /// validity of the metadata itself) because it is handled later
-    const DEC_ENTRYMD_INFALLIBLE: bool;
-    /// dec coupled (packed dec)
+    /// coupled dec
     const DEC_COUPLED: bool;
-    /// during dec, verify the md directly with the src instead of handing it over to the dec helpers
-    const DEC_VERIFY_MD_WITH_SRC_STANDALONE: bool;
-    // meta
-    /// pretest for pre-entry stage
-    fn metadec_pretest_routine(scanner: &BufferedScanner) -> bool;
-    /// pretest for entry stage
-    fn metadec_pretest_entry(scanner: &BufferedScanner) -> bool;
-    /// enc md for an entry
-    fn enc_entry_metadata(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
-    /// dec the entry metadata
-    /// SAFETY: Must have passed entry pretest
-    unsafe fn dec_entry_metadata(scanner: &mut BufferedScanner) -> Option<Self::Metadata>;
-    // entry (coupled)
-    /// enc a packed entry
-    fn enc_entry_coupled(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
-    /// dec a packed entry
-    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
-    /// flag
-    unsafe fn dec_entry_coupled(
+    /// once pretests pass, the metadata dec is infallible
+    const META_INFALLIBLE_MD_PARSE: bool;
+    /// verify the src using the given metadata
+    const META_VERIFY_BEFORE_DEC: bool;
+    // collection meta
+    /// pretest before jmp to routine for entire collection
+    fn meta_dec_collection_pretest(scanner: &BufferedScanner) -> bool;
+    /// pretest before jmp to entry dec routine
+    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool;
+    // entry meta
+    /// enc the entry meta
+    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
+    /// dec the entry meta
+    /// SAFETY: ensure that all pretests have passed (we expect the caller to not be stupid)
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::Metadata>;
+    // independent packing
+    /// enc key (non-packed)
+    fn enc_key(buf: &mut VecU8, key: &Self::Key);
+    /// enc val (non-packed)
+    fn enc_val(buf: &mut VecU8, key: &Self::Value);
+    /// dec key (non-packed)
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key>;
+    /// dec val (non-packed)
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value>;
+    // coupled packing
+    /// entry packed enc
+    fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
+    /// entry packed dec
+    unsafe fn dec_entry(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> Option<(Self::Key, Self::Value)>;
-    // entry (non-packed)
-    /// enc key for a normal entry
-    fn enc_key(buf: &mut VecU8, key: &Self::Key);
-    /// dec normal entry key
-    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
-    /// flag
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key>;
-    /// enc val for a normal entry
-    fn enc_val(buf: &mut VecU8, val: &Self::Value);
-    /// dec normal entry val
-    /// SAFETY: must have verified metadata with src (unless explicitly skipped with the `DEC_VERIFY_MD_WITH_SRC_STANDALONE`)
-    /// flag
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value>;
 }
 
 /*
     blanket
 */
 
-pub fn encode_dict<Pd: PersistDict>(dict: &HashMap<Pd::Key, Pd::Value>) -> Vec<u8> {
-    let mut v = vec![];
-    _encode_dict::<Pd>(&mut v, dict);
-    v
+/// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
+pub struct PersistMapImpl<M: PersistMapSpec>(PhantomData<M>);
+
+impl<M: PersistMapSpec> PersistObjectHlIO for PersistMapImpl<M> {
+    type Type = HashMap<M::Key, M::Value>;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
+        enc_dict_into_buffer::<M>(buf, v)
+    }
+    fn pe_obj_hlio_dec_ver(_: &BufferedScanner) -> bool {
+        true // handled by the dec impl
+    }
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Type> {
+        dec_dict::<M>(scanner)
+    }
 }
 
-fn _encode_dict<Pd: PersistDict>(buf: &mut VecU8, dict: &HashMap<Pd::Key, Pd::Value>) {
-    buf.extend(dict.len().u64_bytes_le());
-    for (key, val) in dict {
-        Pd::enc_entry_metadata(buf, key, val);
-        if Pd::ENC_COUPLED {
-            Pd::enc_entry_coupled(buf, key, val);
+/// Encode the dict into the given buffer
+pub fn enc_dict_into_buffer<PM: PersistMapSpec>(
+    buf: &mut VecU8,
+    map: &HashMap<PM::Key, PM::Value>,
+) {
+    buf.extend(map.len().u64_bytes_le());
+    for (key, val) in map {
+        PM::entry_md_enc(buf, key, val);
+        if PM::ENC_COUPLED {
+            PM::enc_entry(buf, key, val);
         } else {
-            Pd::enc_key(buf, key);
-            Pd::enc_val(buf, val);
+            PM::enc_key(buf, key);
+            PM::enc_val(buf, val);
         }
     }
 }
 
-pub fn decode_dict<Pd: PersistDict>(
+/// Decode the dict using the given buffered scanner
+pub fn dec_dict<PM: PersistMapSpec>(
     scanner: &mut BufferedScanner,
-) -> SDSSResult<HashMap<Pd::Key, Pd::Value>> {
-    if !(Pd::metadec_pretest_routine(scanner) & scanner.has_left(sizeof!(u64))) {
+) -> SDSSResult<HashMap<PM::Key, PM::Value>> {
+    if !(PM::meta_dec_collection_pretest(scanner) & scanner.has_left(sizeof!(u64))) {
         return Err(SDSSError::InternalDecodeStructureCorrupted);
     }
-    let dict_len = unsafe {
+    let size = unsafe {
         // UNSAFE(@ohsayan): pretest
         scanner.next_u64_le() as usize
     };
-    let mut dict = HashMap::with_capacity(dict_len);
-    while Pd::metadec_pretest_entry(scanner) & (dict.len() < dict_len) {
+    let mut dict = HashMap::with_capacity(size);
+    while PM::meta_dec_entry_pretest(scanner) & (dict.len() != size) {
         let md = unsafe {
-            // UNSAFE(@ohsayan): this is compeletely because of the entry pretest
-            match Pd::dec_entry_metadata(scanner) {
-                Some(dec) => dec,
+            match PM::entry_md_dec(scanner) {
+                Some(v) => v,
                 None => {
-                    if Pd::DEC_ENTRYMD_INFALLIBLE {
+                    if PM::META_INFALLIBLE_MD_PARSE {
                         impossible!()
                     } else {
                         return Err(SDSSError::InternalDecodeStructureCorrupted);
@@ -239,41 +266,37 @@ pub fn decode_dict<Pd: PersistDict>(
                 }
             }
         };
-        if Pd::DEC_VERIFY_MD_WITH_SRC_STANDALONE && !md.verify_with_src(scanner) {
+        if PM::META_VERIFY_BEFORE_DEC && !md.verify_with_src(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
         }
-        let k;
-        let v;
-        if Pd::DEC_COUPLED {
-            match unsafe {
-                // UNSAFE(@ohsayan): verified metadata
-                Pd::dec_entry_coupled(scanner, md)
-            } {
-                Some((_k, _v)) => {
-                    k = _k;
-                    v = _v;
+        let key;
+        let val;
+        unsafe {
+            if PM::DEC_COUPLED {
+                match PM::dec_entry(scanner, md) {
+                    Some((_k, _v)) => {
+                        key = _k;
+                        val = _v;
+                    }
+                    None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
                 }
-                None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
-            }
-        } else {
-            match unsafe {
-                // UNSAFE(@ohsayan): verified metadata
-                (Pd::dec_key(scanner, &md), Pd::dec_val(scanner, &md))
-            } {
-                (Some(_k), Some(_v)) => {
-                    k = _k;
-                    v = _v;
-                }
-                _ => {
-                    return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            } else {
+                let _k = PM::dec_key(scanner, &md);
+                let _v = PM::dec_val(scanner, &md);
+                match (_k, _v) {
+                    (Some(_k), Some(_v)) => {
+                        key = _k;
+                        val = _v;
+                    }
+                    _ => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
                 }
             }
         }
-        if dict.insert(k, v).is_some() {
+        if dict.insert(key, val).is_some() {
             return Err(SDSSError::InternalDecodeStructureIllegalData);
         }
     }
-    if dict.len() == dict_len {
+    if dict.len() == size {
         Ok(dict)
     } else {
         Err(SDSSError::InternalDecodeStructureIllegalData)
@@ -281,21 +304,27 @@ pub fn decode_dict<Pd: PersistDict>(
 }
 
 /*
-    dict impls
+    impls
 */
 
-pub struct DGEntryMD {
-    klen: usize,
+/// generic dict spec (simple spec for [DictGeneric](crate::engine::data::dict::DictGeneric))
+pub struct GenericDictSpec;
+/// generic dict entry metadata
+pub struct GenericDictEntryMD {
     dscr: u8,
+    klen: usize,
 }
 
-impl DGEntryMD {
+impl GenericDictEntryMD {
+    /// decode md (no need for any validation since that has to be handled later and can only produce incorrect results
+    /// if unsafe code is used to translate an incorrect dscr)
     fn decode(data: [u8; 9]) -> Self {
         Self {
             klen: u64::from_le_bytes(memcpy(&data[..8])) as usize,
             dscr: data[8],
         }
     }
+    /// encode md
     fn encode(klen: usize, dscr: u8) -> [u8; 9] {
         let mut ret = [0u8; 9];
         ret[..8].copy_from_slice(&klen.u64_bytes_le());
@@ -304,7 +333,7 @@ impl DGEntryMD {
     }
 }
 
-impl PersistDictEntryMetadata for DGEntryMD {
+impl PersistMapEntryMD for GenericDictEntryMD {
     fn verify_with_src(&self, scanner: &BufferedScanner) -> bool {
         static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
         let lbound_rem = self.klen + EXPECT_ATLEAST[cmp::min(self.dscr, 3) as usize] as usize;
@@ -312,32 +341,32 @@ impl PersistDictEntryMetadata for DGEntryMD {
     }
 }
 
-impl PersistDict for DictGeneric {
+impl PersistMapSpec for GenericDictSpec {
     type Key = Box<str>;
     type Value = DictEntryGeneric;
-    type Metadata = DGEntryMD;
-    const ENC_COUPLED: bool = true;
-    const DEC_ENTRYMD_INFALLIBLE: bool = true;
+    type Metadata = GenericDictEntryMD;
     const DEC_COUPLED: bool = false;
-    const DEC_VERIFY_MD_WITH_SRC_STANDALONE: bool = true;
-    fn metadec_pretest_routine(_: &BufferedScanner) -> bool {
+    const ENC_COUPLED: bool = true;
+    const META_INFALLIBLE_MD_PARSE: bool = true;
+    const META_VERIFY_BEFORE_DEC: bool = true;
+    fn meta_dec_collection_pretest(_: &BufferedScanner) -> bool {
         true
     }
-    fn metadec_pretest_entry(scanner: &BufferedScanner) -> bool {
+    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64) + 1)
     }
-    fn enc_entry_metadata(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
+    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
         buf.extend(key.len().u64_bytes_le());
     }
-    unsafe fn dec_entry_metadata(scanner: &mut BufferedScanner) -> Option<Self::Metadata> {
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::Metadata> {
         Some(Self::Metadata::decode(scanner.next_chunk()))
     }
-    fn enc_entry_coupled(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+    fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
         match val {
             DictEntryGeneric::Map(map) => {
                 buf.push(PersistDictEntryDscr::Dict.value_u8());
                 buf.extend(key.as_bytes());
-                _encode_dict::<Self>(buf, map);
+                enc_dict_into_buffer::<Self>(buf, map);
             }
             DictEntryGeneric::Lit(dc) => {
                 buf.push(
@@ -373,22 +402,10 @@ impl PersistDict for DictGeneric {
             }
         }
     }
-    unsafe fn dec_entry_coupled(
-        _: &mut BufferedScanner,
-        _: Self::Metadata,
-    ) -> Option<(Self::Key, Self::Value)> {
-        unimplemented!()
-    }
-    fn enc_key(_: &mut VecU8, _: &Self::Key) {
-        unimplemented!()
-    }
     unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key> {
         String::from_utf8(scanner.next_chunk_variable(md.klen).to_owned())
             .map(|s| s.into_boxed_str())
             .ok()
-    }
-    fn enc_val(_: &mut VecU8, _: &Self::Value) {
-        unimplemented!()
     }
     unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value> {
         unsafe fn decode_element(
@@ -460,7 +477,7 @@ impl PersistDict for DictGeneric {
                 }
                 PersistDictEntryDscr::Dict => {
                     if dg_top_element {
-                        DictEntryGeneric::Map(decode_dict::<DictGeneric>(scanner).ok()?)
+                        DictEntryGeneric::Map(dec_dict::<GenericDictSpec>(scanner).ok()?)
                     } else {
                         unreachable!("found top-level dict item in datacell")
                     }
@@ -469,6 +486,19 @@ impl PersistDict for DictGeneric {
             Some(r)
         }
         decode_element(scanner, PersistDictEntryDscr::from_raw(md.dscr), true)
+    }
+    // not implemented
+    fn enc_key(_: &mut VecU8, _: &Self::Key) {
+        unimplemented!()
+    }
+    fn enc_val(_: &mut VecU8, _: &Self::Value) {
+        unimplemented!()
+    }
+    unsafe fn dec_entry(
+        _: &mut BufferedScanner,
+        _: Self::Metadata,
+    ) -> Option<(Self::Key, Self::Value)> {
+        unimplemented!()
     }
 }
 
@@ -485,9 +515,9 @@ use crate::engine::{
 struct POByteBlockFullTag(FullTag);
 
 impl PersistObjectHlIO for POByteBlockFullTag {
-    type DType = FullTag;
-    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
-        buf.extend(self.0.tag_selector().d().u64_bytes_le())
+    type Type = FullTag;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
+        buf.extend(slf.tag_selector().d().u64_bytes_le())
     }
     fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64))
@@ -502,16 +532,16 @@ impl PersistObjectHlIO for POByteBlockFullTag {
 }
 
 impl PersistObjectHlIO for Layer {
-    type DType = Layer;
-    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
+    type Type = Layer;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
         // [8B: type sig][8B: empty property set]
-        POByteBlockFullTag(self.tag()).pe_obj_hlio_enc(buf);
+        POByteBlockFullTag::pe_obj_hlio_enc(buf, &slf.tag());
         buf.extend(0u64.to_le_bytes());
     }
     fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64) * 2)
     }
-    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType> {
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Type> {
         let type_sel = scanner.next_u64_le();
         let prop_set_arity = scanner.next_u64_le();
         if (type_sel > TagSelector::List.d() as u64) | (prop_set_arity != 0) {
@@ -524,20 +554,20 @@ impl PersistObjectHlIO for Layer {
 }
 
 impl PersistObjectHlIO for Field {
-    type DType = Self;
-    fn pe_obj_hlio_enc(&self, buf: &mut VecU8) {
+    type Type = Self;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
         // [null][prop_c][layer_c]
-        buf.push(self.is_nullable() as u8);
+        buf.push(slf.is_nullable() as u8);
         buf.extend(0u64.to_le_bytes());
-        buf.extend(self.layers().len().u64_bytes_le());
-        for layer in self.layers() {
-            PersistObjectHlIO::pe_obj_hlio_enc(layer, buf);
+        buf.extend(slf.layers().len().u64_bytes_le());
+        for layer in slf.layers() {
+            Layer::pe_obj_hlio_enc(buf, layer);
         }
     }
     fn pe_obj_hlio_dec_ver(scanner: &BufferedScanner) -> bool {
         scanner.has_left((sizeof!(u64) * 2) + 1)
     }
-    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::DType> {
+    unsafe fn pe_obj_hlio_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Type> {
         let nullable = scanner.next_byte();
         let prop_c = scanner.next_u64_le();
         let layer_cnt = scanner.next_u64_le();

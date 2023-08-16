@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{Fields, ModelData},
+    super::{Fields, Model},
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
         collections::btree_map::{BTreeMap, Range},
@@ -62,7 +62,7 @@ pub struct IRModelSMData<'a> {
 }
 
 impl<'a> IRModelSMData<'a> {
-    pub fn new(m: &'a ModelData) -> Self {
+    pub fn new(m: &'a Model) -> Self {
         let rmodel = m.sync_matrix().v_priv_model_alter.read();
         let mdata = m.sync_matrix().v_priv_data_new_or_revise.read();
         Self {
@@ -86,7 +86,7 @@ pub struct IRModel<'a> {
 }
 
 impl<'a> IRModel<'a> {
-    pub fn new(m: &'a ModelData) -> Self {
+    pub fn new(m: &'a Model) -> Self {
         Self {
             rmodel: m.sync_matrix().v_priv_model_alter.read(),
             fields: unsafe {
@@ -107,7 +107,7 @@ pub struct IWModel<'a> {
 }
 
 impl<'a> IWModel<'a> {
-    pub fn new(m: &'a ModelData) -> Self {
+    pub fn new(m: &'a Model) -> Self {
         Self {
             wmodel: m.sync_matrix().v_priv_model_alter.write(),
             fields: unsafe {

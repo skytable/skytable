@@ -43,24 +43,27 @@ fn dict() {
             "and a null" => Datacell::null(),
         ))
     };
-    let encoded = super::encode_dict::<DictGeneric>(&dict);
+    let encoded = super::enc::<super::PersistMapImpl<super::GenericDictSpec>>(&dict);
     let mut scanner = BufferedScanner::new(&encoded);
-    let decoded = super::decode_dict::<DictGeneric>(&mut scanner).unwrap();
+    let decoded =
+        super::dec::<super::PersistMapImpl<super::GenericDictSpec>>(&mut scanner).unwrap();
     assert_eq!(dict, decoded);
 }
 
 #[test]
 fn layer() {
     let layer = Layer::list();
-    let encoded = super::enc_buf(&layer);
-    let dec = super::dec_buf::<Layer>(&encoded).unwrap();
+    let encoded = super::enc_self(&layer);
+    let mut scanner = BufferedScanner::new(&encoded);
+    let dec = super::dec_self::<Layer>(&mut scanner).unwrap();
     assert_eq!(layer, dec);
 }
 
 #[test]
 fn field() {
     let field = Field::new([Layer::list(), Layer::uint64()].into(), true);
-    let encoded = super::enc_buf(&field);
-    let dec = super::dec_buf::<Field>(&encoded).unwrap();
+    let encoded = super::enc_self(&field);
+    let mut scanner = BufferedScanner::new(&encoded);
+    let dec = super::dec_self::<Field>(&mut scanner).unwrap();
     assert_eq!(field, dec);
 }

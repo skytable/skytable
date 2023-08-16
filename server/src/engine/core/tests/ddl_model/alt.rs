@@ -26,7 +26,7 @@
 
 use crate::engine::{
     core::{
-        model::{alt::AlterPlan, ModelData},
+        model::{alt::AlterPlan, Model},
         tests::ddl_model::{create, exec_create},
         GlobalNS,
     },
@@ -51,7 +51,7 @@ fn exec_plan(
     new_space: bool,
     model: &str,
     plan: &str,
-    f: impl Fn(&ModelData),
+    f: impl Fn(&Model),
 ) -> DatabaseResult<()> {
     let mdl_name = exec_create(gns, model, new_space)?;
     let prev_uuid = {
@@ -63,7 +63,7 @@ fn exec_plan(
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     let (_space, model_name) = alter.model.into_full().unwrap();
-    ModelData::exec_alter(gns, alter)?;
+    Model::exec_alter(gns, alter)?;
     let gns_read = gns.spaces().read();
     let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();

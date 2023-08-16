@@ -31,7 +31,7 @@ mod upd;
 
 use crate::{
     engine::{
-        core::model::ModelData,
+        core::model::Model,
         data::{lit::LitIR, spec::DataspecMeta1D, tag::DataTag},
         error::{DatabaseError, DatabaseResult},
         ql::dml::WhereClause,
@@ -43,7 +43,7 @@ use crate::{
 pub use upd::collect_trace_path as update_flow_trace;
 pub use {del::delete, ins::insert, sel::select_custom, upd::update};
 
-impl ModelData {
+impl Model {
     pub(self) fn resolve_where<'a>(
         &self,
         where_clause: &mut WhereClause<'a>,
