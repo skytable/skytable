@@ -222,6 +222,9 @@ impl<'a> BufferedScanner<'a> {
     unsafe fn _incr(&mut self, by: usize) {
         self.i += by;
     }
+    pub fn current(&self) -> &[u8] {
+        &self.d[self.i..]
+    }
 }
 
 impl<'a> BufferedScanner<'a> {

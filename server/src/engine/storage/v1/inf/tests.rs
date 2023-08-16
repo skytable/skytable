@@ -43,10 +43,11 @@ fn dict() {
             "and a null" => Datacell::null(),
         ))
     };
-    let encoded = super::enc::<super::PersistMapImpl<super::GenericDictSpec>>(&dict);
+    let encoded = super::enc::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(&dict);
     let mut scanner = BufferedScanner::new(&encoded);
     let decoded =
-        super::dec::<super::PersistMapImpl<super::GenericDictSpec>>(&mut scanner).unwrap();
+        super::dec::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(&mut scanner)
+            .unwrap();
     assert_eq!(dict, decoded);
 }
 
