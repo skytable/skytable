@@ -35,21 +35,26 @@ use {
                 cell::Datacell,
                 dict::DictEntryGeneric,
                 tag::{CUTag, DataTag, TagClass, TagUnique},
+                DictGeneric,
             },
+            idx::{IndexBaseSpec, STIndex},
             storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
     core::marker::PhantomData,
-    std::{cmp, collections::HashMap},
+    std::cmp,
 };
 
 /// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
 pub struct PersistMapImpl<M: PersistMapSpec>(PhantomData<M>);
 
-impl<M: PersistMapSpec> PersistObjectHlIO for PersistMapImpl<M> {
+impl<M: PersistMapSpec> PersistObjectHlIO for PersistMapImpl<M>
+where
+    M::MapType: STIndex<M::Key, M::Value>,
+{
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
-    type Type = HashMap<M::Key, M::Value>;
+    type Type = M::MapType;
     type Metadata = VoidMetadata;
     fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
         enc_dict_into_buffer::<M>(buf, v)
@@ -63,12 +68,9 @@ impl<M: PersistMapSpec> PersistObjectHlIO for PersistMapImpl<M> {
 }
 
 /// Encode the dict into the given buffer
-pub fn enc_dict_into_buffer<PM: PersistMapSpec>(
-    buf: &mut VecU8,
-    map: &HashMap<PM::Key, PM::Value>,
-) {
-    buf.extend(map.len().u64_bytes_le());
-    for (key, val) in map {
+pub fn enc_dict_into_buffer<PM: PersistMapSpec>(buf: &mut VecU8, map: &PM::MapType) {
+    buf.extend(map.st_len().u64_bytes_le());
+    for (key, val) in map.st_iter_kv() {
         PM::entry_md_enc(buf, key, val);
         if PM::ENC_COUPLED {
             PM::enc_entry(buf, key, val);
@@ -80,9 +82,10 @@ pub fn enc_dict_into_buffer<PM: PersistMapSpec>(
 }
 
 /// Decode the dict using the given buffered scanner
-pub fn dec_dict<PM: PersistMapSpec>(
-    scanner: &mut BufferedScanner,
-) -> SDSSResult<HashMap<PM::Key, PM::Value>> {
+pub fn dec_dict<PM: PersistMapSpec>(scanner: &mut BufferedScanner) -> SDSSResult<PM::MapType>
+where
+    PM::MapType: STIndex<PM::Key, PM::Value>,
+{
     if !(PM::meta_dec_collection_pretest(scanner) & scanner.has_left(sizeof!(u64))) {
         return Err(SDSSError::InternalDecodeStructureCorrupted);
     }
@@ -90,11 +93,11 @@ pub fn dec_dict<PM: PersistMapSpec>(
         // UNSAFE(@ohsayan): pretest
         scanner.next_u64_le() as usize
     };
-    let mut dict = HashMap::with_capacity(size);
-    while PM::meta_dec_entry_pretest(scanner) & (dict.len() != size) {
+    let mut dict = PM::MapType::idx_init_cap(size);
+    while PM::meta_dec_entry_pretest(scanner) & (dict.st_len() != size) {
         let md = unsafe {
             // pretest
-            dec_md::<PM::Metadata, true>(scanner)?
+            dec_md::<PM::EntryMD, true>(scanner)?
         };
         if PM::META_VERIFY_BEFORE_DEC && !md.pretest_src_for_object_dec(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
@@ -122,11 +125,11 @@ pub fn dec_dict<PM: PersistMapSpec>(
                 }
             }
         }
-        if dict.insert(key, val).is_some() {
+        if !dict.st_insert(key, val) {
             return Err(SDSSError::InternalDecodeStructureIllegalData);
         }
     }
-    if dict.len() == size {
+    if dict.st_len() == size {
         Ok(dict)
     } else {
         Err(SDSSError::InternalDecodeStructureIllegalData)
@@ -163,7 +166,7 @@ impl GenericDictEntryMD {
 impl PersistObjectMD for GenericDictEntryMD {
     const MD_DEC_INFALLIBLE: bool = true;
     fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left((sizeof!(u64) * 2) + 1)
+        scanner.has_left(sizeof!(u64, 2) + 1)
     }
     unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
         Some(Self::decode(scanner.next_chunk()))
@@ -176,9 +179,10 @@ impl PersistObjectMD for GenericDictEntryMD {
 }
 
 impl PersistMapSpec for GenericDictSpec {
+    type MapType = DictGeneric;
     type Key = Box<str>;
     type Value = DictEntryGeneric;
-    type Metadata = GenericDictEntryMD;
+    type EntryMD = GenericDictEntryMD;
     const DEC_COUPLED: bool = false;
     const ENC_COUPLED: bool = true;
     const META_VERIFY_BEFORE_DEC: bool = true;
@@ -187,13 +191,13 @@ impl PersistMapSpec for GenericDictSpec {
     }
     fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool {
         // we just need to see if we can decode the entry metadata
-        Self::Metadata::pretest_src_for_metadata_dec(scanner)
+        Self::EntryMD::pretest_src_for_metadata_dec(scanner)
     }
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
         buf.extend(key.len().u64_bytes_le());
     }
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::Metadata> {
-        Some(Self::Metadata::decode(scanner.next_chunk()))
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
+        Some(Self::EntryMD::decode(scanner.next_chunk()))
     }
     fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
         match val {
@@ -236,12 +240,12 @@ impl PersistMapSpec for GenericDictSpec {
             }
         }
     }
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key> {
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
         String::from_utf8(scanner.next_chunk_variable(md.klen).to_owned())
             .map(|s| s.into_boxed_str())
             .ok()
     }
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value> {
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
         unsafe fn decode_element(
             scanner: &mut BufferedScanner,
             dscr: PersistDictEntryDscr,
@@ -330,7 +334,7 @@ impl PersistMapSpec for GenericDictSpec {
     }
     unsafe fn dec_entry(
         _: &mut BufferedScanner,
-        _: Self::Metadata,
+        _: Self::EntryMD,
     ) -> Option<(Self::Key, Self::Value)> {
         unimplemented!()
     }

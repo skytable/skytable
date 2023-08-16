@@ -585,6 +585,10 @@ where
         self.vacuum_full();
     }
 
+    fn st_len(&self) -> usize {
+        self.len()
+    }
+
     fn st_clear(&mut self) {
         self._clear()
     }

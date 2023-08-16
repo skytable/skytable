@@ -37,6 +37,13 @@ use {
     },
 };
 
+/*
+    Full 8B tag block. Notes:
+    1. 7B at this moment is currently unused but there's a lot of additional flags that we might want to store here
+    2. If we end up deciding that this is indeed a waste of space, version this out and get rid of the 7B (or whatever we determine
+    to be the correct size.)
+*/
+
 struct POByteBlockFullTag(FullTag);
 
 impl PersistObjectHlIO for POByteBlockFullTag {
@@ -58,6 +65,10 @@ impl PersistObjectHlIO for POByteBlockFullTag {
     }
 }
 
+/*
+    layer
+*/
+
 #[derive(Debug)]
 pub struct LayerMD {
     type_selector: u64,
@@ -76,7 +87,7 @@ impl LayerMD {
 impl PersistObjectMD for LayerMD {
     const MD_DEC_INFALLIBLE: bool = true;
     fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64) * 2)
+        scanner.has_left(sizeof!(u64, 2))
     }
     fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
         true
@@ -111,6 +122,10 @@ impl PersistObjectHlIO for Layer {
     }
 }
 
+/*
+    field
+*/
+
 pub struct FieldMD {
     prop_c: u64,
     layer_c: u64,
@@ -130,7 +145,7 @@ impl FieldMD {
 impl PersistObjectMD for FieldMD {
     const MD_DEC_INFALLIBLE: bool = true;
     fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left((sizeof!(u64) * 2) + 1)
+        scanner.has_left(sizeof!(u64, 2) + 1)
     }
     fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
         // nothing here really; we can't help much with the stuff ahead

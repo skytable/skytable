@@ -26,6 +26,8 @@
 
 //! High level interfaces
 
+use crate::engine::idx::STIndex;
+
 mod map;
 mod obj;
 // tests
@@ -243,8 +245,9 @@ pub fn dec_self<Obj: PersistObjectHlIO<Type = Obj>>(
 
 /// specification for a persist map
 pub trait PersistMapSpec {
+    type MapType: STIndex<Self::Key, Self::Value>;
     /// metadata type
-    type Metadata: PersistObjectMD;
+    type EntryMD: PersistObjectMD;
     /// key type (NOTE: set this to the true key type; handle any differences using the spec unless you have an entirely different
     /// wrapper type)
     type Key: AsKey;
@@ -266,22 +269,22 @@ pub trait PersistMapSpec {
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
     /// dec the entry meta
     /// SAFETY: ensure that all pretests have passed (we expect the caller to not be stupid)
-    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::Metadata>;
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD>;
     // independent packing
     /// enc key (non-packed)
     fn enc_key(buf: &mut VecU8, key: &Self::Key);
     /// enc val (non-packed)
     fn enc_val(buf: &mut VecU8, key: &Self::Value);
     /// dec key (non-packed)
-    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Key>;
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key>;
     /// dec val (non-packed)
-    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::Metadata) -> Option<Self::Value>;
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value>;
     // coupled packing
     /// entry packed enc
     fn enc_entry(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);
     /// entry packed dec
     unsafe fn dec_entry(
         scanner: &mut BufferedScanner,
-        md: Self::Metadata,
+        md: Self::EntryMD,
     ) -> Option<(Self::Key, Self::Value)>;
 }

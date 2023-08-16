@@ -225,6 +225,8 @@ pub trait STIndex<K: ?Sized, V>: IndexBaseSpec {
     where
         Self: 'a,
         V: 'a;
+    /// returns the length of the idx
+    fn st_len(&self) -> usize;
     /// Attempts to compact the backing storage
     fn st_compact(&mut self) {}
     /// Clears all the entries in the STIndex

@@ -95,6 +95,10 @@ where
         self.shrink_to_fit()
     }
 
+    fn st_len(&self) -> usize {
+        self.len()
+    }
+
     fn st_clear(&mut self) {
         self.clear()
     }
