@@ -109,6 +109,9 @@ impl Space {
     pub fn empty() -> Self {
         Space::new_auto(Default::default(), SpaceMeta::with_env(into_dict! {}))
     }
+    pub fn empty_with_uuid(uuid: Uuid) -> Self {
+        Space::new_with_uuid(Default::default(), SpaceMeta::with_env(into_dict!()), uuid)
+    }
     #[inline(always)]
     pub fn new_auto(mns: IndexST<Box<str>, Model>, meta: SpaceMeta) -> Self {
         Self {

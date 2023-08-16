@@ -36,13 +36,16 @@ use crate::engine::{
 #[test]
 fn exec_create_space_simple() {
     let gns = GlobalNS::empty();
-    super::exec_create_empty_verify(&gns, "create space myspace").unwrap();
+    super::exec_create(&gns, "create space myspace", |spc| {
+        assert!(spc.models().read().is_empty())
+    })
+    .unwrap();
 }
 
 #[test]
 fn exec_create_space_with_env() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(
+    super::exec_create(
         &gns,
         r#"
         create space myspace with {
@@ -53,34 +56,39 @@ fn exec_create_space_with_env() {
     "#,
         |space| {
             assert_eq!(
-                space.unwrap(),
-                &Space::new_auto(
+                space,
+                &Space::new_with_uuid(
                     into_dict! {},
                     SpaceMeta::with_env(into_dict! {
                         "MAX_MODELS" => Datacell::new_uint(100)
-                    })
+                    }),
+                    space.get_uuid()
                 )
             );
         },
     )
+    .unwrap();
 }
 
 #[test]
 fn exec_create_space_with_bad_env_type() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(&gns, "create space myspace with { env: 100 }", |space| {
-        assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceBadProperty);
-    });
+    assert_eq!(
+        super::exec_create(&gns, "create space myspace with { env: 100 }", |_| {}).unwrap_err(),
+        DatabaseError::DdlSpaceBadProperty
+    );
 }
 
 #[test]
 fn exec_create_space_with_random_property() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(
-        &gns,
-        "create space myspace with { i_am_blue_da_ba_dee: 100 }",
-        |space| {
-            assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceBadProperty);
-        },
+    assert_eq!(
+        super::exec_create(
+            &gns,
+            "create space myspace with { i_am_blue_da_ba_dee: 100 }",
+            |_| {}
+        )
+        .unwrap_err(),
+        DatabaseError::DdlSpaceBadProperty
     );
 }

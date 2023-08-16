@@ -92,7 +92,10 @@ pub fn dec_dict<PM: PersistMapSpec>(
     };
     let mut dict = HashMap::with_capacity(size);
     while PM::meta_dec_entry_pretest(scanner) & (dict.len() != size) {
-        let md = dec_md::<PM::Metadata>(scanner)?;
+        let md = unsafe {
+            // pretest
+            dec_md::<PM::Metadata, true>(scanner)?
+        };
         if PM::META_VERIFY_BEFORE_DEC && !md.pretest_src_for_object_dec(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
         }

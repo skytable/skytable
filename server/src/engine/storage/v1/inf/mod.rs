@@ -113,6 +113,7 @@ pub trait PersistObjectMD: Sized {
     unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self>;
 }
 
+/// Metadata for a simple size requirement
 pub struct SimpleSizeMD<const N: usize>;
 
 impl<const N: usize> PersistObjectMD for SimpleSizeMD<N> {
@@ -144,17 +145,21 @@ impl PersistObjectMD for VoidMetadata {
     }
 }
 
-fn dec_md<Md: PersistObjectMD>(scanner: &mut BufferedScanner) -> SDSSResult<Md> {
-    if Md::pretest_src_for_metadata_dec(scanner) {
-        unsafe {
-            match Md::dec_md_payload(scanner) {
-                Some(md) => Ok(md),
-                None => {
-                    if Md::MD_DEC_INFALLIBLE {
-                        impossible!()
-                    } else {
-                        Err(SDSSError::InternalDecodeStructureCorrupted)
-                    }
+/// Decode metadata
+///
+/// ## Safety
+/// unsafe because you need to set whether you've already verified the metadata or not
+unsafe fn dec_md<Md: PersistObjectMD, const ASSUME_PRETEST_PASS: bool>(
+    scanner: &mut BufferedScanner,
+) -> SDSSResult<Md> {
+    if ASSUME_PRETEST_PASS || Md::pretest_src_for_metadata_dec(scanner) {
+        match Md::dec_md_payload(scanner) {
+            Some(md) => Ok(md),
+            None => {
+                if Md::MD_DEC_INFALLIBLE {
+                    impossible!()
+                } else {
+                    Err(SDSSError::InternalDecodeStructureCorrupted)
                 }
             }
         }
@@ -212,7 +217,10 @@ pub fn enc_self<Obj: PersistObjectHlIO<Type = Obj>>(obj: &Obj) -> VecU8 {
 /// dec the object
 pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::Type> {
     if Obj::Metadata::pretest_src_for_metadata_dec(scanner) {
-        let md = dec_md::<Obj::Metadata>(scanner)?;
+        let md = unsafe {
+            // UNSAFE(@ohsaya): pretest
+            dec_md::<Obj::Metadata, true>(scanner)?
+        };
         if Obj::ALWAYS_VERIFY_PAYLOAD_USING_MD && !md.pretest_src_for_object_dec(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
         }

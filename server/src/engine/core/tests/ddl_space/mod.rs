@@ -29,68 +29,46 @@ mod create;
 
 use crate::engine::{
     core::{space::Space, GlobalNS},
+    data::uuid::Uuid,
     error::DatabaseResult,
-    idx::STIndex,
     ql::{
-        ast::{compile_test, Statement},
+        ast::{self},
         tests::lex_insecure as lex,
     },
 };
 
-fn exec_verify(
+fn exec_create(gns: &GlobalNS, create: &str, verify: impl Fn(&Space)) -> DatabaseResult<Uuid> {
+    let tok = lex(create.as_bytes()).unwrap();
+    let ast_node =
+        ast::parse_ast_node_full::<crate::engine::ql::ddl::crt::CreateSpace>(&tok[2..]).unwrap();
+    let name = ast_node.space_name;
+    Space::exec_create(gns, ast_node)?;
+    gns.with_space(&name, |space| {
+        verify(space);
+        Ok(space.get_uuid())
+    })
+}
+
+fn exec_alter(gns: &GlobalNS, alter: &str, verify: impl Fn(&Space)) -> DatabaseResult<Uuid> {
+    let tok = lex(alter.as_bytes()).unwrap();
+    let ast_node =
+        ast::parse_ast_node_full::<crate::engine::ql::ddl::alt::AlterSpace>(&tok[2..]).unwrap();
+    let name = ast_node.space_name;
+    Space::exec_alter(gns, ast_node)?;
+    gns.with_space(&name, |space| {
+        verify(space);
+        Ok(space.get_uuid())
+    })
+}
+
+fn exec_create_alter(
     gns: &GlobalNS,
-    query: &str,
-    mut exec: impl FnMut(&GlobalNS, Statement<'_>) -> (DatabaseResult<()>, Box<str>),
-    mut verify: impl FnMut(DatabaseResult<&Space>),
-) {
-    let tok = lex(query.as_bytes()).unwrap();
-    let ast_node = compile_test(&tok).unwrap();
-    let (res, space_name) = exec(gns, ast_node);
-    let rl = gns.spaces().read();
-    let space_ref = rl.st_get(&space_name);
-    let r = res.map(|_| space_ref.unwrap());
-    verify(r);
-}
-
-/// Creates a space using the given tokens and allows the caller to verify it
-fn exec_alter_and_verify(gns: &GlobalNS, tok: &str, verify: impl Fn(DatabaseResult<&Space>)) {
-    exec_verify(
-        gns,
-        tok,
-        |gns, stmt| {
-            let space = extract_safe!(stmt, Statement::AlterSpace(s) => s);
-            let space_name = space.space_name;
-            let r = Space::exec_alter(&gns, space);
-            (r, space_name.boxed_str())
-        },
-        verify,
-    );
-}
-
-/// Creates a space using the given tokens and allows the caller to verify it
-fn exec_create_and_verify(gns: &GlobalNS, tok: &str, verify: impl FnMut(DatabaseResult<&Space>)) {
-    exec_verify(
-        gns,
-        tok,
-        |gns, stmt| {
-            let space = extract_safe!(stmt, Statement::CreateSpace(s) => s);
-            let space_name = space.space_name;
-            let r = Space::exec_create(&gns, space);
-            (r, space_name.boxed_str())
-        },
-        verify,
-    );
-}
-
-/// Creates an empty space with the given tokens
-fn exec_create_empty_verify(
-    gns: &GlobalNS,
-    tok: &str,
-) -> DatabaseResult<crate::engine::data::uuid::Uuid> {
-    let mut name = None;
-    self::exec_create_and_verify(gns, tok, |space| {
-        assert_eq!(space.unwrap(), &Space::empty());
-        name = Some(space.unwrap().get_uuid());
-    });
-    Ok(name.unwrap())
+    crt: &str,
+    alt: &str,
+    verify_post_alt: impl Fn(&Space),
+) -> DatabaseResult<Uuid> {
+    let uuid_crt = exec_create(gns, crt, |_| {})?;
+    let uuid_alt = exec_alter(gns, alt, verify_post_alt)?;
+    assert_eq!(uuid_crt, uuid_alt);
+    Ok(uuid_alt)
 }

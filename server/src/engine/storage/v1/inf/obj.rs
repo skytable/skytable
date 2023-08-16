@@ -169,7 +169,10 @@ impl PersistObjectHlIO for Field {
             & (<Layer as PersistObjectHlIO>::Metadata::pretest_src_for_metadata_dec(scanner))
             & !fin
         {
-            let layer_md = dec_md(scanner)?;
+            let layer_md = unsafe {
+                // UNSAFE(@ohsayan): pretest
+                dec_md::<_, true>(scanner)?
+            };
             let l = Layer::pe_obj_hlio_dec(scanner, layer_md)?;
             fin = l.tag().tag_class() != TagClass::List;
             layers.push(l);

@@ -36,101 +36,112 @@ use crate::engine::{
 #[test]
 fn alter_add_prop_env_var() {
     let gns = GlobalNS::empty();
-    let uuid = super::exec_create_empty_verify(&gns, "create space myspace").unwrap();
-    super::exec_alter_and_verify(
+    super::exec_create_alter(
         &gns,
+        "create space myspace",
         "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
-            let space = space.unwrap();
             assert_eq!(
                 space,
                 &Space::new_with_uuid(
                     into_dict!(),
                     SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(100))),
-                    uuid
+                    space.get_uuid()
                 )
             );
         },
     )
+    .unwrap();
 }
 
 #[test]
 fn alter_update_prop_env_var() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(
+    let uuid = super::exec_create(
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             assert_eq!(
-                space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
+                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
-    );
-    super::exec_alter_and_verify(
+    )
+    .unwrap();
+    super::exec_alter(
         &gns,
         "alter space myspace with { env: { MY_NEW_PROP: 200 } }",
         |space| {
             assert_eq!(
-                space.unwrap(),
-                &Space::new_auto(
+                space,
+                &Space::new_with_uuid(
                     into_dict!(),
-                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(200)))
+                    SpaceMeta::with_env(into_dict! ("MY_NEW_PROP" => Datacell::new_uint(200))),
+                    uuid,
                 )
             )
         },
     )
+    .unwrap();
 }
 
 #[test]
 fn alter_remove_prop_env_var() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(
+    let uuid = super::exec_create(
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             assert_eq!(
-                space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
+                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
-    );
-    super::exec_alter_and_verify(
+    )
+    .unwrap();
+    super::exec_alter(
         &gns,
         "alter space myspace with { env: { MY_NEW_PROP: null } }",
         |space| {
             assert_eq!(
-                space.unwrap(),
-                &Space::new_auto(into_dict!(), SpaceMeta::with_env(into_dict!()))
+                space,
+                &Space::new_with_uuid(into_dict!(), SpaceMeta::with_env(into_dict!()), uuid)
             )
         },
     )
+    .unwrap();
 }
 
 #[test]
 fn alter_nx() {
     let gns = GlobalNS::empty();
-    super::exec_alter_and_verify(
-        &gns,
-        "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
-        |space| assert_eq!(space.unwrap_err(), DatabaseError::DdlSpaceNotFound),
-    )
+    assert_eq!(
+        super::exec_alter(
+            &gns,
+            "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
+            |_| {},
+        )
+        .unwrap_err(),
+        DatabaseError::DdlSpaceNotFound
+    );
 }
 
 #[test]
 fn alter_remove_all_env() {
     let gns = GlobalNS::empty();
-    super::exec_create_and_verify(
+    let uuid = super::exec_create(
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             assert_eq!(
-                space.unwrap().meta.env.read().get("MY_NEW_PROP").unwrap(),
+                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
-    );
-    super::exec_alter_and_verify(&gns, "alter space myspace with { env: null }", |space| {
-        assert_eq!(space.unwrap(), &Space::empty())
+    )
+    .unwrap();
+    super::exec_alter(&gns, "alter space myspace with { env: null }", |space| {
+        assert_eq!(space, &Space::empty_with_uuid(uuid))
     })
+    .unwrap();
 }

@@ -35,6 +35,7 @@ macro_rules! extract {
 }
 
 #[cfg(test)]
+#[allow(unused_macros)]
 macro_rules! extract_safe {
     ($src:expr, $what:pat => $ret:expr) => {
         if let $what = $src {
