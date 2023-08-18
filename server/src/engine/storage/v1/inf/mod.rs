@@ -245,7 +245,12 @@ pub fn dec_self<Obj: PersistObjectHlIO<Type = Obj>>(
 
 /// specification for a persist map
 pub trait PersistMapSpec {
+    /// map type
     type MapType: STIndex<Self::Key, Self::Value>;
+    /// map iter
+    type MapIter<'a>: Iterator<Item = (&'a Self::Key, &'a Self::Value)>
+    where
+        Self: 'a;
     /// metadata type
     type EntryMD: PersistObjectMD;
     /// key type (NOTE: set this to the true key type; handle any differences using the spec unless you have an entirely different
@@ -259,6 +264,8 @@ pub trait PersistMapSpec {
     const DEC_COUPLED: bool;
     /// verify the src using the given metadata
     const META_VERIFY_BEFORE_DEC: bool;
+    // collection misc
+    fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a>;
     // collection meta
     /// pretest before jmp to routine for entire collection
     fn meta_dec_collection_pretest(scanner: &BufferedScanner) -> bool;

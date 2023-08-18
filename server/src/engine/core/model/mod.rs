@@ -77,6 +77,26 @@ impl PartialEq for Model {
 }
 
 impl Model {
+    pub fn new(
+        uuid: Uuid,
+        p_key: Box<str>,
+        p_tag: FullTag,
+        fields: UnsafeCell<Fields>,
+        sync_matrix: ISyncMatrix,
+        data: PrimaryIndex,
+        delta: DeltaState,
+    ) -> Self {
+        Self {
+            uuid,
+            p_key,
+            p_tag,
+            fields,
+            sync_matrix,
+            data,
+            delta,
+        }
+    }
+
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
@@ -130,6 +150,17 @@ impl Model {
 }
 
 impl Model {
+    pub fn new_restore(uuid: Uuid, p_key: Box<str>, p_tag: FullTag, fields: Fields) -> Self {
+        Self::new(
+            uuid,
+            p_key,
+            p_tag,
+            UnsafeCell::new(fields),
+            ISyncMatrix::new(),
+            PrimaryIndex::new_empty(),
+            DeltaState::new_resolved(),
+        )
+    }
     pub fn process_create(
         CreateModel {
             model_name: _,
@@ -163,15 +194,7 @@ impl Model {
             let last_pk = last_pk.unwrap_or(fields.stseq_ord_key().next().unwrap());
             let tag = fields.st_get(last_pk).unwrap().layers()[0].tag;
             if tag.tag_unique().is_unique() {
-                return Ok(Self {
-                    uuid: Uuid::new(),
-                    p_key: last_pk.into(),
-                    p_tag: tag,
-                    fields: UnsafeCell::new(fields),
-                    sync_matrix: ISyncMatrix::new(),
-                    data: PrimaryIndex::new_empty(),
-                    delta: DeltaState::new_resolved(),
-                });
+                return Ok(Self::new_restore(Uuid::new(), last_pk.into(), tag, fields));
             }
         }
         Err(DatabaseError::DdlModelBadDefinition)

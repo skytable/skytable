@@ -25,7 +25,7 @@
 */
 
 pub(super) mod config;
-mod iter;
+pub(super) mod iter;
 
 use {
     self::{
@@ -759,7 +759,7 @@ impl<K: AsKey, V: AsValue + PartialEq, C: Config<K, V>> PartialEq for IndexSTSeq
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len()
             && self
-                ._iter_unord_kv()
+                ._iter_ord_kv()
                 .all(|(k, v)| other._get(k).unwrap().eq(v))
     }
 }

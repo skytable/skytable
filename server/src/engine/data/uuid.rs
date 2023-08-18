@@ -38,6 +38,14 @@ impl Uuid {
     pub fn as_slice(&self) -> &[u8] {
         self.data.as_bytes()
     }
+    pub fn from_bytes(b: [u8; 16]) -> Self {
+        Self {
+            data: uuid::Uuid::from_u128_le(u128::from_le_bytes(b)),
+        }
+    }
+    pub fn to_le_bytes(self) -> [u8; 16] {
+        self.data.to_u128_le().to_le_bytes()
+    }
 }
 
 impl ToString for Uuid {

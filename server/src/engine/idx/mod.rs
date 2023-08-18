@@ -39,6 +39,8 @@ use {
     core::{borrow::Borrow, hash::Hash},
 };
 
+pub use stord::iter::IndexSTSeqDllIterOrdKV;
+
 // re-exports
 pub type IndexSTSeqCns<K, V> = stord::IndexSTSeqDll<K, V, stord::config::ConservativeConfig<K, V>>;
 pub type IndexSTSeqLib<K, V> = stord::IndexSTSeqDll<K, V, stord::config::LiberalConfig<K, V>>;

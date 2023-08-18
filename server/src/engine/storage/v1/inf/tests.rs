@@ -25,11 +25,14 @@
 */
 
 use crate::engine::{
-    core::model::{Field, Layer},
+    core::model::{Field, Layer, Model},
     data::{
         cell::Datacell,
         dict::{DictEntryGeneric, DictGeneric},
+        tag::TagSelector,
+        uuid::Uuid,
     },
+    idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
     storage::v1::rw::BufferedScanner,
 };
 
@@ -67,4 +70,42 @@ fn field() {
     let mut scanner = BufferedScanner::new(&encoded);
     let dec = super::dec_self::<Field>(&mut scanner).unwrap();
     assert_eq!(field, dec);
+}
+
+#[test]
+fn fieldmap() {
+    let mut fields = IndexSTSeqCns::<Box<str>, Field>::idx_init();
+    fields.st_insert("password".into(), Field::new([Layer::bin()].into(), false));
+    fields.st_insert(
+        "profile_pic".into(),
+        Field::new([Layer::bin()].into(), true),
+    );
+    let enc = super::enc::<super::map::PersistMapImpl<super::map::FieldMapSpec>>(&fields);
+    let mut scanner = BufferedScanner::new(&enc);
+    let dec =
+        super::dec::<super::map::PersistMapImpl<super::map::FieldMapSpec>>(&mut scanner).unwrap();
+    for ((orig_field_id, orig_field), (restored_field_id, restored_field)) in
+        fields.stseq_ord_kv().zip(dec.stseq_ord_kv())
+    {
+        assert_eq!(orig_field_id, restored_field_id);
+        assert_eq!(orig_field, restored_field);
+    }
+}
+
+#[test]
+fn model() {
+    let uuid = Uuid::new();
+    let model = Model::new_restore(
+        uuid,
+        "username".into(),
+        TagSelector::Str.into_full(),
+        into_dict! {
+            "password" => Field::new([Layer::bin()].into(), false),
+            "profile_pic" => Field::new([Layer::bin()].into(), true),
+        },
+    );
+    let enc = super::enc::<super::obj::ModelLayout>(&model);
+    let mut scanner = BufferedScanner::new(&enc);
+    let dec = super::dec::<super::obj::ModelLayout>(&mut scanner).unwrap();
+    assert_eq!(model, dec);
 }

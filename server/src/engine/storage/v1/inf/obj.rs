@@ -25,11 +25,14 @@
 */
 
 use {
-    super::{dec_md, PersistObjectHlIO, PersistObjectMD, SimpleSizeMD, VecU8},
+    super::{dec_md, map::FieldMapSpec, PersistObjectHlIO, PersistObjectMD, SimpleSizeMD, VecU8},
     crate::{
         engine::{
-            core::model::{Field, Layer},
-            data::tag::{DataTag, FullTag, TagClass, TagSelector},
+            core::model::{Field, Layer, Model},
+            data::{
+                tag::{DataTag, FullTag, TagClass, TagSelector},
+                uuid::Uuid,
+            },
             mem::VInline,
             storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
         },
@@ -133,7 +136,7 @@ pub struct FieldMD {
 }
 
 impl FieldMD {
-    const fn new(prop_c: u64, layer_c: u64, null: u8) -> Self {
+    pub(super) const fn new(prop_c: u64, layer_c: u64, null: u8) -> Self {
         Self {
             prop_c,
             layer_c,
@@ -198,5 +201,76 @@ impl PersistObjectHlIO for Field {
         } else {
             Err(SDSSError::InternalDecodeStructureCorrupted)
         }
+    }
+}
+
+pub struct ModelLayout;
+pub struct ModelLayoutMD {
+    model_uuid: Uuid,
+    p_key_len: u64,
+    p_key_tag: u64,
+}
+
+impl ModelLayoutMD {
+    pub(super) const fn new(model_uuid: Uuid, p_key_len: u64, p_key_tag: u64) -> Self {
+        Self {
+            model_uuid,
+            p_key_len,
+            p_key_tag,
+        }
+    }
+}
+
+impl PersistObjectMD for ModelLayoutMD {
+    const MD_DEC_INFALLIBLE: bool = true;
+    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64, 3) + sizeof!(u128)) // u64,3 since the fieldmap len is also there, but we don't handle it directly
+    }
+    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool {
+        scanner.has_left(self.p_key_len as usize)
+    }
+    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
+        Some(Self::new(
+            Uuid::from_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+        ))
+    }
+}
+
+impl PersistObjectHlIO for ModelLayout {
+    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = true;
+    type Type = Model;
+    type Metadata = ModelLayoutMD;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
+        let irm = v.intent_read_model();
+        buf.extend(v.get_uuid().to_le_bytes());
+        buf.extend(v.p_key().len().u64_bytes_le());
+        buf.extend(v.p_tag().tag_selector().d().u64_bytes_le());
+        buf.extend(v.p_key().as_bytes());
+        super::map::enc_dict_into_buffer::<FieldMapSpec>(buf, irm.fields())
+    }
+    unsafe fn pe_obj_hlio_dec(
+        scanner: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> SDSSResult<Self::Type> {
+        let key = String::from_utf8(
+            scanner
+                .next_chunk_variable(md.p_key_len as usize)
+                .to_owned(),
+        )
+        .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?;
+        let fieldmap = super::map::dec_dict::<FieldMapSpec>(scanner)?;
+        let ptag = if md.p_key_tag > TagSelector::max_dscr() as u64 {
+            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+        } else {
+            TagSelector::from_raw(md.p_key_tag as u8)
+        };
+        Ok(Model::new_restore(
+            md.model_uuid,
+            key.into_boxed_str(),
+            ptag.into_full(),
+            fieldmap,
+        ))
     }
 }

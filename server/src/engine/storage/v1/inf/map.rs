@@ -26,18 +26,19 @@
 
 use {
     super::{
-        dec_md, PersistDictEntryDscr, PersistMapSpec, PersistObjectHlIO, PersistObjectMD, VecU8,
-        VoidMetadata,
+        dec_md, obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObjectHlIO,
+        PersistObjectMD, VecU8, VoidMetadata,
     },
     crate::{
         engine::{
+            core::model::{Field, Layer},
             data::{
                 cell::Datacell,
                 dict::DictEntryGeneric,
                 tag::{CUTag, DataTag, TagClass, TagUnique},
                 DictGeneric,
             },
-            idx::{IndexBaseSpec, STIndex},
+            idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
             storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
@@ -70,7 +71,7 @@ where
 /// Encode the dict into the given buffer
 pub fn enc_dict_into_buffer<PM: PersistMapSpec>(buf: &mut VecU8, map: &PM::MapType) {
     buf.extend(map.st_len().u64_bytes_le());
-    for (key, val) in map.st_iter_kv() {
+    for (key, val) in PM::_get_iter(map) {
         PM::entry_md_enc(buf, key, val);
         if PM::ENC_COUPLED {
             PM::enc_entry(buf, key, val);
@@ -179,6 +180,7 @@ impl PersistObjectMD for GenericDictEntryMD {
 }
 
 impl PersistMapSpec for GenericDictSpec {
+    type MapIter<'a> = std::collections::hash_map::Iter<'a, Box<str>, DictEntryGeneric>;
     type MapType = DictGeneric;
     type Key = Box<str>;
     type Value = DictEntryGeneric;
@@ -186,6 +188,9 @@ impl PersistMapSpec for GenericDictSpec {
     const DEC_COUPLED: bool = false;
     const ENC_COUPLED: bool = true;
     const META_VERIFY_BEFORE_DEC: bool = true;
+    fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a> {
+        map.iter()
+    }
     fn meta_dec_collection_pretest(_: &BufferedScanner) -> bool {
         true
     }
@@ -330,6 +335,109 @@ impl PersistMapSpec for GenericDictSpec {
         unimplemented!()
     }
     fn enc_val(_: &mut VecU8, _: &Self::Value) {
+        unimplemented!()
+    }
+    unsafe fn dec_entry(
+        _: &mut BufferedScanner,
+        _: Self::EntryMD,
+    ) -> Option<(Self::Key, Self::Value)> {
+        unimplemented!()
+    }
+}
+
+pub struct FieldMapSpec;
+pub struct FieldMapEntryMD {
+    field_id_l: u64,
+    field_prop_c: u64,
+    field_layer_c: u64,
+    null: u8,
+}
+
+impl FieldMapEntryMD {
+    const fn new(field_id_l: u64, field_prop_c: u64, field_layer_c: u64, null: u8) -> Self {
+        Self {
+            field_id_l,
+            field_prop_c,
+            field_layer_c,
+            null,
+        }
+    }
+}
+
+impl PersistObjectMD for FieldMapEntryMD {
+    const MD_DEC_INFALLIBLE: bool = true;
+
+    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64, 3) + 1)
+    }
+
+    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool {
+        scanner.has_left(self.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
+    }
+
+    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
+        Some(Self::new(
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_byte(),
+        ))
+    }
+}
+
+impl PersistMapSpec for FieldMapSpec {
+    type MapIter<'a> = crate::engine::idx::IndexSTSeqDllIterOrdKV<'a, Box<str>, Field>;
+    type MapType = IndexSTSeqCns<Self::Key, Self::Value>;
+    type EntryMD = FieldMapEntryMD;
+    type Key = Box<str>;
+    type Value = Field;
+    const ENC_COUPLED: bool = false;
+    const DEC_COUPLED: bool = false;
+    const META_VERIFY_BEFORE_DEC: bool = true;
+    fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
+        m.stseq_ord_kv()
+    }
+    fn meta_dec_collection_pretest(_: &BufferedScanner) -> bool {
+        true
+    }
+    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool {
+        FieldMapEntryMD::pretest_src_for_metadata_dec(scanner)
+    }
+    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+        buf.extend(key.len().u64_bytes_le());
+        buf.extend(0u64.to_le_bytes()); // TODO(@ohsayan): props
+        buf.extend(val.layers().len().u64_bytes_le());
+        buf.push(val.is_nullable() as u8);
+    }
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
+        FieldMapEntryMD::dec_md_payload(scanner)
+    }
+    fn enc_key(buf: &mut VecU8, key: &Self::Key) {
+        buf.extend(key.as_bytes());
+    }
+    fn enc_val(buf: &mut VecU8, val: &Self::Value) {
+        for layer in val.layers() {
+            Layer::pe_obj_hlio_enc(buf, layer)
+        }
+    }
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
+        String::from_utf8(
+            scanner
+                .next_chunk_variable(md.field_id_l as usize)
+                .to_owned(),
+        )
+        .map(|v| v.into_boxed_str())
+        .ok()
+    }
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
+        Field::pe_obj_hlio_dec(
+            scanner,
+            FieldMD::new(md.field_prop_c, md.field_layer_c, md.null),
+        )
+        .ok()
+    }
+    // unimplemented
+    fn enc_entry(_: &mut VecU8, _: &Self::Key, _: &Self::Value) {
         unimplemented!()
     }
     unsafe fn dec_entry(
