@@ -179,7 +179,7 @@ where
                             // UNSAFE(@ohsayan): we only switch to this when we've already read in a key
                             key.take().as_str().into()
                         },
-                        DictEntryGeneric::Lit(Datacell::null()),
+                        DictEntryGeneric::Data(Datacell::null()),
                     )
                     .is_none(),
                 );

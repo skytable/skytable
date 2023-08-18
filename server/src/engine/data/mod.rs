@@ -36,4 +36,4 @@ pub mod uuid;
 #[cfg(test)]
 mod tests;
 
-pub use dict::{DictEntryGeneric, DictGeneric, MetaDict};
+pub use dict::{DictEntryGeneric, DictGeneric};

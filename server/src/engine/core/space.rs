@@ -27,7 +27,7 @@
 use {
     crate::engine::{
         core::{model::Model, RWLIdx},
-        data::{dict, uuid::Uuid, DictEntryGeneric, MetaDict},
+        data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
@@ -46,15 +46,18 @@ pub struct Space {
 #[derive(Debug, Default)]
 /// Space metadata
 pub struct SpaceMeta {
-    pub(super) env: RwLock<MetaDict>,
+    pub(super) env: RwLock<DictGeneric>,
 }
 
 impl SpaceMeta {
     pub const KEY_ENV: &str = "env";
-    pub fn with_env(env: MetaDict) -> Self {
+    pub fn with_env(env: DictGeneric) -> Self {
         Self {
             env: RWLIdx::new(env),
         }
+    }
+    pub fn env(&self) -> &RwLock<DictGeneric> {
+        &self.env
     }
 }
 
@@ -92,6 +95,9 @@ impl Space {
     pub(super) fn models(&self) -> &RWLIdx<Box<str>, Model> {
         &self.mns
     }
+    pub fn metadata(&self) -> &SpaceMeta {
+        &self.meta
+    }
     pub fn with_model<T>(
         &self,
         model: &str,
@@ -102,6 +108,9 @@ impl Space {
             return Err(DatabaseError::DdlModelNotFound);
         };
         f(model)
+    }
+    pub(crate) fn new_restore_empty(meta: SpaceMeta, uuid: Uuid) -> Space {
+        Self::new_with_uuid(Default::default(), meta, uuid)
     }
 }
 
@@ -139,7 +148,7 @@ impl Space {
         // check env
         let env = match props.remove(SpaceMeta::KEY_ENV) {
             Some(DictEntryGeneric::Map(m)) if props.is_empty() => m,
-            Some(DictEntryGeneric::Lit(l)) if l.is_null() => IndexST::default(),
+            Some(DictEntryGeneric::Data(l)) if l.is_null() => IndexST::default(),
             None if props.is_empty() => IndexST::default(),
             _ => {
                 return Err(DatabaseError::DdlSpaceBadProperty);
@@ -185,7 +194,7 @@ impl Space {
                         return Err(DatabaseError::DdlSpaceBadProperty);
                     }
                 }
-                Some(DictEntryGeneric::Lit(l)) if updated_props.is_empty() & l.is_null() => {
+                Some(DictEntryGeneric::Data(l)) if updated_props.is_empty() & l.is_null() => {
                     space_env.clear()
                 }
                 None => {}

@@ -74,7 +74,7 @@ impl PersistDictEntryDscr {
     pub fn new_from_dict_gen_entry(e: &DictEntryGeneric) -> Self {
         match e {
             DictEntryGeneric::Map(_) => Self::Dict,
-            DictEntryGeneric::Lit(dc) => Self::translate_from_class(dc.tag().tag_class()),
+            DictEntryGeneric::Data(dc) => Self::translate_from_class(dc.tag().tag_class()),
         }
     }
     /// The data in question is null (well, can we call that data afterall?)

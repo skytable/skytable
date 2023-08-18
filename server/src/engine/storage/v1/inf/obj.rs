@@ -28,7 +28,10 @@ use {
     super::{dec_md, map::FieldMapSpec, PersistObjectHlIO, PersistObjectMD, SimpleSizeMD, VecU8},
     crate::{
         engine::{
-            core::model::{Field, Layer, Model},
+            core::{
+                model::{Field, Layer, Model},
+                space::{Space, SpaceMeta},
+            },
             data::{
                 tag::{DataTag, FullTag, TagClass, TagSelector},
                 uuid::Uuid,
@@ -271,6 +274,55 @@ impl PersistObjectHlIO for ModelLayout {
             key.into_boxed_str(),
             ptag.into_full(),
             fieldmap,
+        ))
+    }
+}
+
+pub struct SpaceLayout;
+pub struct SpaceLayoutMD {
+    uuid: Uuid,
+}
+
+impl SpaceLayoutMD {
+    pub fn new(uuid: Uuid) -> Self {
+        Self { uuid }
+    }
+}
+
+impl PersistObjectMD for SpaceLayoutMD {
+    const MD_DEC_INFALLIBLE: bool = true;
+
+    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u128) + sizeof!(u64)) // u64 for props dict; we don't handle that directly
+    }
+    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
+        true
+    }
+    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
+        Some(Self::new(Uuid::from_bytes(scanner.next_chunk())))
+    }
+}
+
+impl PersistObjectHlIO for SpaceLayout {
+    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false; // no need, since the MD only handles the UUID
+    type Type = Space;
+    type Metadata = SpaceLayoutMD;
+    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
+        buf.extend(v.get_uuid().to_le_bytes());
+        super::enc_into_buf::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(
+            buf,
+            &v.metadata().env().read(),
+        );
+    }
+    unsafe fn pe_obj_hlio_dec(
+        scanner: &mut BufferedScanner,
+        md: Self::Metadata,
+    ) -> SDSSResult<Self::Type> {
+        let space_meta =
+            super::dec::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(scanner)?;
+        Ok(Space::new_restore_empty(
+            SpaceMeta::with_env(space_meta),
+            md.uuid,
         ))
     }
 }

@@ -25,7 +25,10 @@
 */
 
 use crate::engine::{
-    core::model::{Field, Layer, Model},
+    core::{
+        model::{Field, Layer, Model},
+        space::{Space, SpaceMeta},
+    },
     data::{
         cell::Datacell,
         dict::{DictEntryGeneric, DictGeneric},
@@ -108,4 +111,14 @@ fn model() {
     let mut scanner = BufferedScanner::new(&enc);
     let dec = super::dec::<super::obj::ModelLayout>(&mut scanner).unwrap();
     assert_eq!(model, dec);
+}
+
+#[test]
+fn space() {
+    let uuid = Uuid::new();
+    let space = Space::new_with_uuid(Default::default(), SpaceMeta::default(), uuid);
+    let enc = super::enc::<super::obj::SpaceLayout>(&space);
+    let mut scanner = BufferedScanner::new(&enc);
+    let dec = super::dec::<super::obj::SpaceLayout>(&mut scanner).unwrap();
+    assert_eq!(space, dec);
 }

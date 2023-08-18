@@ -28,7 +28,7 @@ mod dml;
 mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;
-mod space;
+pub mod space;
 mod util;
 // test
 #[cfg(test)]

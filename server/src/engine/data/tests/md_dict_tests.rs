@@ -26,16 +26,16 @@
 
 use crate::engine::data::{
     cell::Datacell,
-    dict::{self, DictEntryGeneric, DictGeneric, MetaDict, MetaDictEntry},
+    dict::{self, DictEntryGeneric, DictGeneric},
 };
 
 #[test]
 fn t_simple_flatten() {
     let generic_dict: DictGeneric = into_dict! {
-        "a_valid_key" => DictEntryGeneric::Lit(100u64.into()),
+        "a_valid_key" => DictEntryGeneric::Data(100u64.into()),
         "a_null_key" => Datacell::null(),
     };
-    let expected: MetaDict = into_dict!(
+    let expected: DictGeneric = into_dict!(
         "a_valid_key" => Datacell::new_uint(100)
     );
     let ret = dict::rflatten_metadata(generic_dict);
@@ -44,7 +44,7 @@ fn t_simple_flatten() {
 
 #[test]
 fn t_simple_patch() {
-    let mut current: MetaDict = into_dict! {
+    let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(2),
         "b" => Datacell::new_uint(3),
         "z" => Datacell::new_sint(-100),
@@ -54,7 +54,7 @@ fn t_simple_patch() {
         "b" => Datacell::new_uint(2),
         "z" => Datacell::null(),
     };
-    let expected: MetaDict = into_dict! {
+    let expected: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(1),
         "b" => Datacell::new_uint(2),
     };
@@ -64,7 +64,7 @@ fn t_simple_patch() {
 
 #[test]
 fn t_bad_patch() {
-    let mut current: MetaDict = into_dict! {
+    let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(2),
         "b" => Datacell::new_uint(3),
         "z" => Datacell::new_sint(-100),
@@ -81,15 +81,15 @@ fn t_bad_patch() {
 
 #[test]
 fn patch_null_out_dict() {
-    let mut current: MetaDict = into_dict! {
+    let mut current: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(2),
         "b" => Datacell::new_uint(3),
-        "z" => MetaDictEntry::Map(into_dict!(
+        "z" => DictEntryGeneric::Map(into_dict!(
             "c" => Datacell::new_uint(1),
             "d" => Datacell::new_uint(2)
         )),
     };
-    let expected: MetaDict = into_dict! {
+    let expected: DictGeneric = into_dict! {
         "a" => Datacell::new_uint(2),
         "b" => Datacell::new_uint(3),
     };

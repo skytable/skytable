@@ -211,7 +211,7 @@ impl PersistMapSpec for GenericDictSpec {
                 buf.extend(key.as_bytes());
                 enc_dict_into_buffer::<Self>(buf, map);
             }
-            DictEntryGeneric::Lit(dc) => {
+            DictEntryGeneric::Data(dc) => {
                 buf.push(
                     PersistDictEntryDscr::translate_from_class(dc.tag().tag_class()).value_u8()
                         * (!dc.is_null() as u8),
@@ -257,13 +257,13 @@ impl PersistMapSpec for GenericDictSpec {
             dg_top_element: bool,
         ) -> Option<DictEntryGeneric> {
             let r = match dscr {
-                PersistDictEntryDscr::Null => DictEntryGeneric::Lit(Datacell::null()),
+                PersistDictEntryDscr::Null => DictEntryGeneric::Data(Datacell::null()),
                 PersistDictEntryDscr::Bool => {
-                    DictEntryGeneric::Lit(Datacell::new_bool(scanner.next_byte() == 1))
+                    DictEntryGeneric::Data(Datacell::new_bool(scanner.next_byte() == 1))
                 }
                 PersistDictEntryDscr::UnsignedInt
                 | PersistDictEntryDscr::SignedInt
-                | PersistDictEntryDscr::Float => DictEntryGeneric::Lit(Datacell::new_qw(
+                | PersistDictEntryDscr::Float => DictEntryGeneric::Data(Datacell::new_qw(
                     scanner.next_u64_le(),
                     CUTag::new(
                         dscr.into_class(),
@@ -281,7 +281,7 @@ impl PersistMapSpec for GenericDictSpec {
                         return None;
                     }
                     let slc = scanner.next_chunk_variable(slc_len);
-                    DictEntryGeneric::Lit(if dscr == PersistDictEntryDscr::Str {
+                    DictEntryGeneric::Data(if dscr == PersistDictEntryDscr::Str {
                         if core::str::from_utf8(slc).is_err() {
                             return None;
                         }
@@ -306,14 +306,14 @@ impl PersistMapSpec for GenericDictSpec {
                                 PersistDictEntryDscr::from_raw(dscr),
                                 false,
                             ) {
-                                Some(DictEntryGeneric::Lit(l)) => l,
+                                Some(DictEntryGeneric::Data(l)) => l,
                                 None => return None,
                                 _ => unreachable!("found top-level dict item in datacell"),
                             },
                         );
                     }
                     if v.len() == list_len {
-                        DictEntryGeneric::Lit(Datacell::new_list(v))
+                        DictEntryGeneric::Data(Datacell::new_list(v))
                     } else {
                         return None;
                     }
