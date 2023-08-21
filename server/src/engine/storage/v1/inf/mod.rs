@@ -29,12 +29,14 @@
 use crate::engine::idx::STIndex;
 
 mod map;
+mod md;
 mod obj;
 // tests
 #[cfg(test)]
 mod tests;
 
 use {
+    self::md::PersistObjectMD,
     crate::engine::{
         data::{
             dict::DictEntryGeneric,
@@ -100,89 +102,18 @@ impl PersistDictEntryDscr {
 }
 
 /*
-    md spec
-*/
-
-/// metadata spec for a persist map entry
-pub trait PersistObjectMD: Sized {
-    /// set to true if decode is infallible once the MD payload has been verified
-    const MD_DEC_INFALLIBLE: bool;
-    /// returns true if the current buffered source can be used to decode the metadata (self)
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool;
-    /// returns true if per the metadata and the current buffered source, the target object in question can be decoded
-    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool;
-    /// decode the metadata
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self>;
-}
-
-/// Metadata for a simple size requirement
-pub struct SimpleSizeMD<const N: usize>;
-
-impl<const N: usize> PersistObjectMD for SimpleSizeMD<N> {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(N)
-    }
-    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
-        true
-    }
-    unsafe fn dec_md_payload(_: &mut BufferedScanner) -> Option<Self> {
-        Some(Self)
-    }
-}
-
-/// For wrappers and other complicated metadata handling, set this to the metadata type
-pub struct VoidMetadata;
-
-impl PersistObjectMD for VoidMetadata {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(_: &BufferedScanner) -> bool {
-        true
-    }
-    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
-        true
-    }
-    unsafe fn dec_md_payload(_: &mut BufferedScanner) -> Option<Self> {
-        Some(Self)
-    }
-}
-
-/// Decode metadata
-///
-/// ## Safety
-/// unsafe because you need to set whether you've already verified the metadata or not
-unsafe fn dec_md<Md: PersistObjectMD, const ASSUME_PRETEST_PASS: bool>(
-    scanner: &mut BufferedScanner,
-) -> SDSSResult<Md> {
-    if ASSUME_PRETEST_PASS || Md::pretest_src_for_metadata_dec(scanner) {
-        match Md::dec_md_payload(scanner) {
-            Some(md) => Ok(md),
-            None => {
-                if Md::MD_DEC_INFALLIBLE {
-                    impossible!()
-                } else {
-                    Err(SDSSError::InternalDecodeStructureCorrupted)
-                }
-            }
-        }
-    } else {
-        Err(SDSSError::InternalDecodeStructureCorrupted)
-    }
-}
-
-/*
     obj spec
 */
 
 /// Specification for any object that can be persisted
 ///
 /// To actuall enc/dec any object, use functions (and their derivatives) [`enc`] and [`dec`]
-pub trait PersistObjectHlIO {
+pub trait PersistObject {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool;
     /// the actual type (we can have wrappers)
     type Type;
     /// the metadata type (use this to verify the buffered source)
-    type Metadata: PersistObjectMD;
+    type Metadata: md::PersistObjectMD;
     /// enc routine
     ///
     /// METADATA: handle yourself
@@ -195,33 +126,33 @@ pub trait PersistObjectHlIO {
 }
 
 /// enc the given object into a new buffer
-pub fn enc<Obj: PersistObjectHlIO>(obj: &Obj::Type) -> VecU8 {
+pub fn enc<Obj: PersistObject>(obj: &Obj::Type) -> VecU8 {
     let mut buf = vec![];
     Obj::pe_obj_hlio_enc(&mut buf, obj);
     buf
 }
 
 /// enc the object into the given buffer
-pub fn enc_into_buf<Obj: PersistObjectHlIO>(buf: &mut VecU8, obj: &Obj::Type) {
+pub fn enc_into_buf<Obj: PersistObject>(buf: &mut VecU8, obj: &Obj::Type) {
     Obj::pe_obj_hlio_enc(buf, obj)
 }
 
 /// enc the object into the given buffer
-pub fn enc_self_into_buf<Obj: PersistObjectHlIO<Type = Obj>>(buf: &mut VecU8, obj: &Obj) {
+pub fn enc_self_into_buf<Obj: PersistObject<Type = Obj>>(buf: &mut VecU8, obj: &Obj) {
     Obj::pe_obj_hlio_enc(buf, obj)
 }
 
 /// enc the object into a new buffer
-pub fn enc_self<Obj: PersistObjectHlIO<Type = Obj>>(obj: &Obj) -> VecU8 {
+pub fn enc_self<Obj: PersistObject<Type = Obj>>(obj: &Obj) -> VecU8 {
     enc::<Obj>(obj)
 }
 
 /// dec the object
-pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::Type> {
+pub fn dec<Obj: PersistObject>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::Type> {
     if Obj::Metadata::pretest_src_for_metadata_dec(scanner) {
         let md = unsafe {
             // UNSAFE(@ohsaya): pretest
-            dec_md::<Obj::Metadata, true>(scanner)?
+            md::dec_md::<Obj::Metadata, true>(scanner)?
         };
         if Obj::ALWAYS_VERIFY_PAYLOAD_USING_MD && !md.pretest_src_for_object_dec(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
@@ -233,9 +164,7 @@ pub fn dec<Obj: PersistObjectHlIO>(scanner: &mut BufferedScanner) -> SDSSResult<
 }
 
 /// dec the object
-pub fn dec_self<Obj: PersistObjectHlIO<Type = Obj>>(
-    scanner: &mut BufferedScanner,
-) -> SDSSResult<Obj> {
+pub fn dec_self<Obj: PersistObject<Type = Obj>>(scanner: &mut BufferedScanner) -> SDSSResult<Obj> {
     dec::<Obj>(scanner)
 }
 
@@ -252,7 +181,7 @@ pub trait PersistMapSpec {
     where
         Self: 'a;
     /// metadata type
-    type EntryMD: PersistObjectMD;
+    type EntryMD;
     /// key type (NOTE: set this to the true key type; handle any differences using the spec unless you have an entirely different
     /// wrapper type)
     type Key: AsKey;
@@ -264,13 +193,17 @@ pub trait PersistMapSpec {
     const DEC_COUPLED: bool;
     /// verify the src using the given metadata
     const META_VERIFY_BEFORE_DEC: bool;
+    /// set to true if the entry meta, once pretested never fails to decode
+    const ENTRYMETA_DEC_INFALLIBLE: bool;
     // collection misc
     fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a>;
     // collection meta
     /// pretest before jmp to routine for entire collection
-    fn meta_dec_collection_pretest(scanner: &BufferedScanner) -> bool;
+    fn pretest_collection(scanner: &BufferedScanner) -> bool;
     /// pretest before jmp to entry dec routine
-    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool;
+    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool;
+    /// pretest the src before jmp to entry data dec routine
+    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool;
     // entry meta
     /// enc the entry meta
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value);

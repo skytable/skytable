@@ -25,7 +25,11 @@
 */
 
 use {
-    super::{dec_md, map::FieldMapSpec, PersistObjectHlIO, PersistObjectMD, SimpleSizeMD, VecU8},
+    super::{
+        map::FieldMapSpec,
+        md::{dec_md, PersistObjectMD, SimpleSizeMD},
+        PersistObject, VecU8,
+    },
     crate::{
         engine::{
             core::{
@@ -52,7 +56,7 @@ use {
 
 struct POByteBlockFullTag(FullTag);
 
-impl PersistObjectHlIO for POByteBlockFullTag {
+impl PersistObject for POByteBlockFullTag {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
     type Type = FullTag;
     type Metadata = SimpleSizeMD<{ sizeof!(u64) }>;
@@ -106,7 +110,7 @@ impl PersistObjectMD for LayerMD {
     }
 }
 
-impl PersistObjectHlIO for Layer {
+impl PersistObject for Layer {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
     type Type = Layer;
     type Metadata = LayerMD;
@@ -166,7 +170,7 @@ impl PersistObjectMD for FieldMD {
     }
 }
 
-impl PersistObjectHlIO for Field {
+impl PersistObject for Field {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
     type Type = Self;
     type Metadata = FieldMD;
@@ -187,7 +191,7 @@ impl PersistObjectHlIO for Field {
         let mut fin = false;
         while (!scanner.eof())
             & (layers.len() as u64 != md.layer_c)
-            & (<Layer as PersistObjectHlIO>::Metadata::pretest_src_for_metadata_dec(scanner))
+            & (<Layer as PersistObject>::Metadata::pretest_src_for_metadata_dec(scanner))
             & !fin
         {
             let layer_md = unsafe {
@@ -241,7 +245,7 @@ impl PersistObjectMD for ModelLayoutMD {
     }
 }
 
-impl PersistObjectHlIO for ModelLayout {
+impl PersistObject for ModelLayout {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = true;
     type Type = Model;
     type Metadata = ModelLayoutMD;
@@ -303,7 +307,7 @@ impl PersistObjectMD for SpaceLayoutMD {
     }
 }
 
-impl PersistObjectHlIO for SpaceLayout {
+impl PersistObject for SpaceLayout {
     const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false; // no need, since the MD only handles the UUID
     type Type = Space;
     type Metadata = SpaceLayoutMD;

@@ -26,8 +26,7 @@
 
 use {
     super::{
-        dec_md, obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObjectHlIO,
-        PersistObjectMD, VecU8, VoidMetadata,
+        md::VoidMetadata, obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObject, VecU8,
     },
     crate::{
         engine::{
@@ -50,7 +49,7 @@ use {
 /// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
 pub struct PersistMapImpl<M: PersistMapSpec>(PhantomData<M>);
 
-impl<M: PersistMapSpec> PersistObjectHlIO for PersistMapImpl<M>
+impl<M: PersistMapSpec> PersistObject for PersistMapImpl<M>
 where
     M::MapType: STIndex<M::Key, M::Value>,
 {
@@ -87,7 +86,7 @@ pub fn dec_dict<PM: PersistMapSpec>(scanner: &mut BufferedScanner) -> SDSSResult
 where
     PM::MapType: STIndex<PM::Key, PM::Value>,
 {
-    if !(PM::meta_dec_collection_pretest(scanner) & scanner.has_left(sizeof!(u64))) {
+    if !(PM::pretest_collection(scanner) & scanner.has_left(sizeof!(u64))) {
         return Err(SDSSError::InternalDecodeStructureCorrupted);
     }
     let size = unsafe {
@@ -95,12 +94,21 @@ where
         scanner.next_u64_le() as usize
     };
     let mut dict = PM::MapType::idx_init_cap(size);
-    while PM::meta_dec_entry_pretest(scanner) & (dict.st_len() != size) {
+    while PM::pretest_entry_metadata(scanner) & (dict.st_len() != size) {
         let md = unsafe {
             // pretest
-            dec_md::<PM::EntryMD, true>(scanner)?
+            match PM::entry_md_dec(scanner) {
+                Some(md) => md,
+                None => {
+                    if PM::ENTRYMETA_DEC_INFALLIBLE {
+                        impossible!()
+                    } else {
+                        return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+                    }
+                }
+            }
         };
-        if PM::META_VERIFY_BEFORE_DEC && !md.pretest_src_for_object_dec(scanner) {
+        if PM::META_VERIFY_BEFORE_DEC && !PM::pretest_entry_data(scanner, &md) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
         }
         let key;
@@ -164,21 +172,6 @@ impl GenericDictEntryMD {
     }
 }
 
-impl PersistObjectMD for GenericDictEntryMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 2) + 1)
-    }
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::decode(scanner.next_chunk()))
-    }
-    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool {
-        static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
-        let lbound_rem = self.klen + EXPECT_ATLEAST[cmp::min(self.dscr, 3) as usize] as usize;
-        scanner.has_left(lbound_rem) & (self.dscr <= PersistDictEntryDscr::Dict.value_u8())
-    }
-}
-
 impl PersistMapSpec for GenericDictSpec {
     type MapIter<'a> = std::collections::hash_map::Iter<'a, Box<str>, DictEntryGeneric>;
     type MapType = DictGeneric;
@@ -188,15 +181,21 @@ impl PersistMapSpec for GenericDictSpec {
     const DEC_COUPLED: bool = false;
     const ENC_COUPLED: bool = true;
     const META_VERIFY_BEFORE_DEC: bool = true;
+    const ENTRYMETA_DEC_INFALLIBLE: bool = true;
     fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a> {
         map.iter()
     }
-    fn meta_dec_collection_pretest(_: &BufferedScanner) -> bool {
+    fn pretest_collection(_: &BufferedScanner) -> bool {
         true
     }
-    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool {
+    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
         // we just need to see if we can decode the entry metadata
-        Self::EntryMD::pretest_src_for_metadata_dec(scanner)
+        scanner.has_left(9)
+    }
+    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
+        static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
+        let lbound_rem = md.klen + EXPECT_ATLEAST[cmp::min(md.dscr, 3) as usize] as usize;
+        scanner.has_left(lbound_rem) & (md.dscr <= PersistDictEntryDscr::Dict.value_u8())
     }
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
         buf.extend(key.len().u64_bytes_le());
@@ -364,44 +363,27 @@ impl FieldMapEntryMD {
     }
 }
 
-impl PersistObjectMD for FieldMapEntryMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 3) + 1)
-    }
-
-    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool {
-        scanner.has_left(self.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
-    }
-
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::new(
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            scanner.next_byte(),
-        ))
-    }
-}
-
 impl PersistMapSpec for FieldMapSpec {
     type MapIter<'a> = crate::engine::idx::IndexSTSeqDllIterOrdKV<'a, Box<str>, Field>;
     type MapType = IndexSTSeqCns<Self::Key, Self::Value>;
     type EntryMD = FieldMapEntryMD;
     type Key = Box<str>;
     type Value = Field;
+    const ENTRYMETA_DEC_INFALLIBLE: bool = true;
     const ENC_COUPLED: bool = false;
     const DEC_COUPLED: bool = false;
     const META_VERIFY_BEFORE_DEC: bool = true;
     fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
         m.stseq_ord_kv()
     }
-    fn meta_dec_collection_pretest(_: &BufferedScanner) -> bool {
+    fn pretest_collection(_: &BufferedScanner) -> bool {
         true
     }
-    fn meta_dec_entry_pretest(scanner: &BufferedScanner) -> bool {
-        FieldMapEntryMD::pretest_src_for_metadata_dec(scanner)
+    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64, 3) + 1)
+    }
+    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
+        scanner.has_left(md.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
     }
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
         buf.extend(key.len().u64_bytes_le());
@@ -410,7 +392,12 @@ impl PersistMapSpec for FieldMapSpec {
         buf.push(val.is_nullable() as u8);
     }
     unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
-        FieldMapEntryMD::dec_md_payload(scanner)
+        Some(FieldMapEntryMD::new(
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_byte(),
+        ))
     }
     fn enc_key(buf: &mut VecU8, key: &Self::Key) {
         buf.extend(key.as_bytes());
