@@ -265,9 +265,19 @@ mod tx {
         Set(usize, u8),
     }
     #[derive(Debug)]
+    pub enum TxError {
+        SDSS(SDSSError),
+    }
+    direct_from! {
+        TxError => {
+            SDSSError as SDSS
+        }
+    }
+    #[derive(Debug)]
     pub struct DatabaseTxnAdapter;
     impl JournalAdapter for DatabaseTxnAdapter {
         const RECOVERY_PLUGIN: bool = false;
+        type Error = TxError;
         type JournalEvent = TxEvent;
         type GlobalState = Database;
 
@@ -294,9 +304,9 @@ mod tx {
             ret.into_boxed_slice()
         }
 
-        fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> SDSSResult<()> {
+        fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> Result<(), TxError> {
             if payload.len() != 10 {
-                return Err(SDSSError::CorruptedFile("testtxn.log"));
+                return Err(SDSSError::CorruptedFile("testtxn.log").into());
             }
             let opcode = payload[0];
             let index = u64::from_le_bytes(util::copy_slice_to_array(&payload[1..9]));
@@ -304,7 +314,7 @@ mod tx {
             match opcode {
                 0 if index == 0 && new_value == 0 => gs.reset(),
                 1 if index < 10 && index < isize::MAX as u64 => gs.set(index as usize, new_value),
-                _ => return Err(SDSSError::JournalLogEntryCorrupted),
+                _ => return Err(SDSSError::JournalLogEntryCorrupted.into()),
             }
             Ok(())
         }

@@ -94,10 +94,12 @@ pub trait JournalAdapter {
     type JournalEvent;
     /// The global state, which we want to modify on decoding the event
     type GlobalState;
+    /// The transactional impl that makes use of this journal, should define it's error type
+    type Error;
     /// Encode a journal event into a blob
     fn encode(event: Self::JournalEvent) -> Box<[u8]>;
     /// Decode a journal event and apply it to the global state
-    fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> SDSSResult<()>;
+    fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug)]
@@ -232,7 +234,7 @@ impl<TA: JournalAdapter, LF: RawFileIOInterface> JournalReader<TA, LF> {
         if self.evid != entry_metadata.event_id as u64 {
             // the only case when this happens is when the journal faults at runtime with a write zero (or some other error when no bytes were written)
             self.remaining_bytes += JournalEntryMetadata::SIZE as u64;
-            // move back cursor
+            // move back cursor to see if we have a recovery block
             let new_cursor = self.log_file.retrieve_cursor()? - JournalEntryMetadata::SIZE as u64;
             self.log_file.seek_from_start(new_cursor)?;
             return self.try_recover_journal_strategy_simple_reverse();

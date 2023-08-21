@@ -36,7 +36,10 @@ mod start_stop;
 #[cfg(test)]
 mod tests;
 
-use std::io::Error as IoError;
+// re-exports
+pub use journal::JournalAdapter;
+
+use crate::util::os::SysIOError as IoError;
 
 pub type SDSSResult<T> = Result<T, SDSSError>;
 
@@ -52,7 +55,15 @@ impl SDSSErrorContext for IoError {
     }
 }
 
+impl SDSSErrorContext for std::io::Error {
+    type ExtraData = &'static str;
+    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
+        SDSSError::IoErrorExtra(self.into(), extra)
+    }
+}
+
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum SDSSError {
     // IO errors
     /// An IO err
@@ -111,5 +122,11 @@ impl SDSSError {
 impl From<IoError> for SDSSError {
     fn from(e: IoError) -> Self {
         Self::IoError(e)
+    }
+}
+
+impl From<std::io::Error> for SDSSError {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e.into())
     }
 }

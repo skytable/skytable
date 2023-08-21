@@ -1,5 +1,5 @@
 /*
- * Created on Mon Sep 12 2022
+ * Created on Sun Aug 20 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,16 +24,19 @@
  *
 */
 
-#![allow(dead_code)]
+pub mod gns;
 
-#[macro_use]
-mod macros;
-mod core;
-mod data;
-mod error;
-mod idx;
-mod mem;
-mod ql;
-mod storage;
-mod sync;
-mod txn;
+use super::storage::v1::SDSSError;
+pub type TransactionResult<T> = Result<T, TransactionError>;
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum TransactionError {
+    SDSSError(SDSSError),
+}
+
+direct_from! {
+    TransactionError => {
+        SDSSError as SDSSError
+    }
+}

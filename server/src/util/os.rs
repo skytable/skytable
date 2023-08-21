@@ -39,6 +39,24 @@ use {
     },
 };
 
+#[derive(Debug)]
+#[repr(transparent)]
+/// A wrapper around [`std`]'s I/O [Error](std::io::Error) type for simplicity with equality
+pub struct SysIOError(std::io::Error);
+
+impl From<std::io::Error> for SysIOError {
+    fn from(e: std::io::Error) -> Self {
+        Self(e)
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for SysIOError {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_string() == other.0.to_string()
+    }
+}
+
 #[cfg(unix)]
 mod unix {
     use {

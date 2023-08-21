@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Sun Aug 20 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,9 +24,38 @@
  *
 */
 
-//! Implementations of the Skytable Disk Storage Subsystem (SDSS)
+use {
+    super::{TransactionError, TransactionResult},
+    crate::engine::{core::GlobalNS, storage::v1::JournalAdapter},
+};
 
-mod header;
-mod versions;
-// impls
-pub mod v1;
+/*
+    journal implementor
+*/
+
+/// the journal adapter for DDL queries on the GNS
+pub struct GNSAdapter;
+
+impl JournalAdapter for GNSAdapter {
+    const RECOVERY_PLUGIN: bool = true;
+    type JournalEvent = GNSSuperEvent;
+    type GlobalState = GlobalNS;
+    type Error = TransactionError;
+    fn encode(GNSSuperEvent(b): Self::JournalEvent) -> Box<[u8]> {
+        b
+    }
+    fn decode_and_update_state(_: &[u8], _: &Self::GlobalState) -> TransactionResult<()> {
+        todo!()
+    }
+}
+
+/*
+    Events
+    ---
+    FIXME(@ohsayan): In the current impl, we unnecessarily use an intermediary buffer which we clearly don't need to (and also makes
+    pointless allocations). We need to fix this, but with a consistent API (and preferably not something like commit_*(...) unless
+    we have absolutely no other choice)
+*/
+
+// ah that stinging buffer
+pub struct GNSSuperEvent(Box<[u8]>);
