@@ -25,12 +25,10 @@
 */
 
 use {
-    super::{
-        md::VoidMetadata, obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObject, VecU8,
-    },
+    super::{obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObject, VecU8},
     crate::{
         engine::{
-            core::model::{Field, Layer},
+            core::model::Field,
             data::{
                 cell::Datacell,
                 dict::DictEntryGeneric,
@@ -46,102 +44,93 @@ use {
     std::cmp,
 };
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
+pub struct MapIndexSizeMD(pub(super) usize);
+
 /// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
-pub struct PersistMapImpl<M: PersistMapSpec>(PhantomData<M>);
+pub struct PersistMapImpl<'a, M: PersistMapSpec>(PhantomData<&'a M::MapType>);
 
-impl<M: PersistMapSpec> PersistObject for PersistMapImpl<M>
+impl<'a, M: PersistMapSpec> PersistObject for PersistMapImpl<'a, M>
 where
-    M::MapType: STIndex<M::Key, M::Value>,
+    M::MapType: 'a + STIndex<M::Key, M::Value>,
 {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
-    type Type = M::MapType;
-    type Metadata = VoidMetadata;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
-        enc_dict_into_buffer::<M>(buf, v)
+    type InputType = &'a M::MapType;
+    type OutputType = M::MapType;
+    type Metadata = MapIndexSizeMD;
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64))
     }
-    unsafe fn pe_obj_hlio_dec(
-        scanner: &mut BufferedScanner,
-        _: VoidMetadata,
-    ) -> SDSSResult<Self::Type> {
-        dec_dict::<M>(scanner)
+    fn pretest_can_dec_object(
+        s: &BufferedScanner,
+        MapIndexSizeMD(dict_size): &Self::Metadata,
+    ) -> bool {
+        M::pretest_collection_using_size(s, *dict_size)
     }
-}
-
-/// Encode the dict into the given buffer
-pub fn enc_dict_into_buffer<PM: PersistMapSpec>(buf: &mut VecU8, map: &PM::MapType) {
-    buf.extend(map.st_len().u64_bytes_le());
-    for (key, val) in PM::_get_iter(map) {
-        PM::entry_md_enc(buf, key, val);
-        if PM::ENC_COUPLED {
-            PM::enc_entry(buf, key, val);
-        } else {
-            PM::enc_key(buf, key);
-            PM::enc_val(buf, val);
-        }
+    fn meta_enc(buf: &mut VecU8, data: Self::InputType) {
+        buf.extend(data.st_len().u64_bytes_le());
     }
-}
-
-/// Decode the dict using the given buffered scanner
-pub fn dec_dict<PM: PersistMapSpec>(scanner: &mut BufferedScanner) -> SDSSResult<PM::MapType>
-where
-    PM::MapType: STIndex<PM::Key, PM::Value>,
-{
-    if !(PM::pretest_collection(scanner) & scanner.has_left(sizeof!(u64))) {
-        return Err(SDSSError::InternalDecodeStructureCorrupted);
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(MapIndexSizeMD(
+            u64::from_le_bytes(scanner.next_chunk()) as usize
+        ))
     }
-    let size = unsafe {
-        // UNSAFE(@ohsayan): pretest
-        scanner.next_u64_le() as usize
-    };
-    let mut dict = PM::MapType::idx_init_cap(size);
-    while PM::pretest_entry_metadata(scanner) & (dict.st_len() != size) {
-        let md = unsafe {
-            // pretest
-            match PM::entry_md_dec(scanner) {
-                Some(md) => md,
-                None => {
-                    if PM::ENTRYMETA_DEC_INFALLIBLE {
-                        impossible!()
-                    } else {
-                        return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
-                    }
-                }
-            }
-        };
-        if PM::META_VERIFY_BEFORE_DEC && !PM::pretest_entry_data(scanner, &md) {
-            return Err(SDSSError::InternalDecodeStructureCorrupted);
-        }
-        let key;
-        let val;
-        unsafe {
-            if PM::DEC_COUPLED {
-                match PM::dec_entry(scanner, md) {
-                    Some((_k, _v)) => {
-                        key = _k;
-                        val = _v;
-                    }
-                    None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
-                }
+    fn obj_enc(buf: &mut VecU8, map: Self::InputType) {
+        for (key, val) in M::_get_iter(map) {
+            M::entry_md_enc(buf, key, val);
+            if M::ENC_COUPLED {
+                M::enc_entry(buf, key, val);
             } else {
-                let _k = PM::dec_key(scanner, &md);
-                let _v = PM::dec_val(scanner, &md);
-                match (_k, _v) {
-                    (Some(_k), Some(_v)) => {
-                        key = _k;
-                        val = _v;
-                    }
-                    _ => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
-                }
+                M::enc_key(buf, key);
+                M::enc_val(buf, val);
             }
         }
-        if !dict.st_insert(key, val) {
-            return Err(SDSSError::InternalDecodeStructureIllegalData);
-        }
     }
-    if dict.st_len() == size {
-        Ok(dict)
-    } else {
-        Err(SDSSError::InternalDecodeStructureIllegalData)
+    unsafe fn obj_dec(
+        scanner: &mut BufferedScanner,
+        MapIndexSizeMD(dict_size): Self::Metadata,
+    ) -> SDSSResult<Self::OutputType> {
+        let mut dict = M::MapType::idx_init();
+        while M::pretest_entry_metadata(scanner) & (dict.st_len() != dict_size) {
+            let md = unsafe {
+                // UNSAFE(@ohsayan): +pretest
+                M::entry_md_dec(scanner)
+                    .ok_or(SDSSError::InternalDecodeStructureCorruptedPayload)?
+            };
+            if !M::pretest_entry_data(scanner, &md) {
+                return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            }
+            let key;
+            let val;
+            unsafe {
+                if M::DEC_COUPLED {
+                    match M::dec_entry(scanner, md) {
+                        Some((_k, _v)) => {
+                            key = _k;
+                            val = _v;
+                        }
+                        None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
+                    }
+                } else {
+                    let _k = M::dec_key(scanner, &md);
+                    let _v = M::dec_val(scanner, &md);
+                    match (_k, _v) {
+                        (Some(_k), Some(_v)) => {
+                            key = _k;
+                            val = _v;
+                        }
+                        _ => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
+                    }
+                }
+            }
+            if !dict.st_insert(key, val) {
+                return Err(SDSSError::InternalDecodeStructureIllegalData);
+            }
+        }
+        if dict.st_len() == dict_size {
+            Ok(dict)
+        } else {
+            Err(SDSSError::InternalDecodeStructureIllegalData)
+        }
     }
 }
 
@@ -180,13 +169,8 @@ impl PersistMapSpec for GenericDictSpec {
     type EntryMD = GenericDictEntryMD;
     const DEC_COUPLED: bool = false;
     const ENC_COUPLED: bool = true;
-    const META_VERIFY_BEFORE_DEC: bool = true;
-    const ENTRYMETA_DEC_INFALLIBLE: bool = true;
     fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a> {
         map.iter()
-    }
-    fn pretest_collection(_: &BufferedScanner) -> bool {
-        true
     }
     fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
         // we just need to see if we can decode the entry metadata
@@ -208,7 +192,7 @@ impl PersistMapSpec for GenericDictSpec {
             DictEntryGeneric::Map(map) => {
                 buf.push(PersistDictEntryDscr::Dict.value_u8());
                 buf.extend(key.as_bytes());
-                enc_dict_into_buffer::<Self>(buf, map);
+                <PersistMapImpl<Self> as PersistObject>::default_full_enc(buf, map);
             }
             DictEntryGeneric::Data(dc) => {
                 buf.push(
@@ -319,7 +303,12 @@ impl PersistMapSpec for GenericDictSpec {
                 }
                 PersistDictEntryDscr::Dict => {
                     if dg_top_element {
-                        DictEntryGeneric::Map(dec_dict::<GenericDictSpec>(scanner).ok()?)
+                        DictEntryGeneric::Map(
+                            <PersistMapImpl<GenericDictSpec> as PersistObject>::default_full_dec(
+                                scanner,
+                            )
+                            .ok()?,
+                        )
                     } else {
                         unreachable!("found top-level dict item in datacell")
                     }
@@ -369,15 +358,10 @@ impl PersistMapSpec for FieldMapSpec {
     type EntryMD = FieldMapEntryMD;
     type Key = Box<str>;
     type Value = Field;
-    const ENTRYMETA_DEC_INFALLIBLE: bool = true;
     const ENC_COUPLED: bool = false;
     const DEC_COUPLED: bool = false;
-    const META_VERIFY_BEFORE_DEC: bool = true;
     fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
         m.stseq_ord_kv()
-    }
-    fn pretest_collection(_: &BufferedScanner) -> bool {
-        true
     }
     fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64, 3) + 1)
@@ -404,7 +388,7 @@ impl PersistMapSpec for FieldMapSpec {
     }
     fn enc_val(buf: &mut VecU8, val: &Self::Value) {
         for layer in val.layers() {
-            Layer::pe_obj_hlio_enc(buf, layer)
+            super::obj::LayerRef::default_full_enc(buf, super::obj::LayerRef(layer))
         }
     }
     unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
@@ -417,7 +401,7 @@ impl PersistMapSpec for FieldMapSpec {
         .ok()
     }
     unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
-        Field::pe_obj_hlio_dec(
+        super::obj::FieldRef::obj_dec(
             scanner,
             FieldMD::new(md.field_prop_c, md.field_layer_c, md.null),
         )

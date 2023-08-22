@@ -29,14 +29,12 @@
 use crate::engine::idx::STIndex;
 
 mod map;
-mod md;
 mod obj;
 // tests
 #[cfg(test)]
 mod tests;
 
 use {
-    self::md::PersistObjectMD,
     crate::engine::{
         data::{
             dict::DictEntryGeneric,
@@ -105,67 +103,61 @@ impl PersistDictEntryDscr {
     obj spec
 */
 
-/// Specification for any object that can be persisted
-///
-/// To actuall enc/dec any object, use functions (and their derivatives) [`enc`] and [`dec`]
+/// Any object that can be persisted
 pub trait PersistObject {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool;
-    /// the actual type (we can have wrappers)
-    type Type;
-    /// the metadata type (use this to verify the buffered source)
-    type Metadata: md::PersistObjectMD;
-    /// enc routine
+    // types
+    /// Input type for enc operations
+    type InputType: Copy;
+    /// Output type for dec operations
+    type OutputType;
+    /// Metadata type
+    type Metadata;
+    // pretest
+    /// Pretest to see if the src has the required data for metadata dec
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool;
+    /// Pretest to see if the src has the required data for object dec
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool;
+    // meta
+    /// metadata enc
+    fn meta_enc(buf: &mut VecU8, data: Self::InputType);
+    /// metadata dec
     ///
-    /// METADATA: handle yourself
-    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type);
-    /// dec routine
-    unsafe fn pe_obj_hlio_dec(
-        scanner: &mut BufferedScanner,
-        md: Self::Metadata,
-    ) -> SDSSResult<Self::Type>;
-}
-
-/// enc the given object into a new buffer
-pub fn enc<Obj: PersistObject>(obj: &Obj::Type) -> VecU8 {
-    let mut buf = vec![];
-    Obj::pe_obj_hlio_enc(&mut buf, obj);
-    buf
-}
-
-/// enc the object into the given buffer
-pub fn enc_into_buf<Obj: PersistObject>(buf: &mut VecU8, obj: &Obj::Type) {
-    Obj::pe_obj_hlio_enc(buf, obj)
-}
-
-/// enc the object into the given buffer
-pub fn enc_self_into_buf<Obj: PersistObject<Type = Obj>>(buf: &mut VecU8, obj: &Obj) {
-    Obj::pe_obj_hlio_enc(buf, obj)
-}
-
-/// enc the object into a new buffer
-pub fn enc_self<Obj: PersistObject<Type = Obj>>(obj: &Obj) -> VecU8 {
-    enc::<Obj>(obj)
-}
-
-/// dec the object
-pub fn dec<Obj: PersistObject>(scanner: &mut BufferedScanner) -> SDSSResult<Obj::Type> {
-    if Obj::Metadata::pretest_src_for_metadata_dec(scanner) {
-        let md = unsafe {
-            // UNSAFE(@ohsaya): pretest
-            md::dec_md::<Obj::Metadata, true>(scanner)?
-        };
-        if Obj::ALWAYS_VERIFY_PAYLOAD_USING_MD && !md.pretest_src_for_object_dec(scanner) {
+    /// ## Safety
+    ///
+    /// Must pass the [`PersistObject::pretest_can_dec_metadata`] assertion
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata>;
+    // obj
+    /// obj enc
+    fn obj_enc(buf: &mut VecU8, data: Self::InputType);
+    /// obj dec
+    ///
+    /// ## Safety
+    ///
+    /// Must pass the [`PersistObject::pretest_can_dec_object`] assertion
+    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType>;
+    // default
+    /// Default routine to encode an object + its metadata
+    fn default_full_enc(buf: &mut VecU8, data: Self::InputType) {
+        Self::meta_enc(buf, data);
+        Self::obj_enc(buf, data);
+    }
+    /// Default routine to decode an object + its metadata (however, the metadata is used and not returned)
+    fn default_full_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::OutputType> {
+        if !Self::pretest_can_dec_metadata(scanner) {
             return Err(SDSSError::InternalDecodeStructureCorrupted);
         }
-        unsafe { Obj::pe_obj_hlio_dec(scanner, md) }
-    } else {
-        Err(SDSSError::InternalDecodeStructureCorrupted)
+        let md = unsafe {
+            // UNSAFE(@ohsayan): +pretest
+            Self::meta_dec(scanner)?
+        };
+        if !Self::pretest_can_dec_object(scanner, &md) {
+            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): +obj pretest
+            Self::obj_dec(scanner, md)
+        }
     }
-}
-
-/// dec the object
-pub fn dec_self<Obj: PersistObject<Type = Obj>>(scanner: &mut BufferedScanner) -> SDSSResult<Obj> {
-    dec::<Obj>(scanner)
 }
 
 /*
@@ -191,15 +183,13 @@ pub trait PersistMapSpec {
     const ENC_COUPLED: bool;
     /// coupled dec
     const DEC_COUPLED: bool;
-    /// verify the src using the given metadata
-    const META_VERIFY_BEFORE_DEC: bool;
-    /// set to true if the entry meta, once pretested never fails to decode
-    const ENTRYMETA_DEC_INFALLIBLE: bool;
     // collection misc
     fn _get_iter<'a>(map: &'a Self::MapType) -> Self::MapIter<'a>;
     // collection meta
     /// pretest before jmp to routine for entire collection
-    fn pretest_collection(scanner: &BufferedScanner) -> bool;
+    fn pretest_collection_using_size(_: &BufferedScanner, _: usize) -> bool {
+        true
+    }
     /// pretest before jmp to entry dec routine
     fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool;
     /// pretest the src before jmp to entry data dec routine
@@ -227,4 +217,51 @@ pub trait PersistMapSpec {
         scanner: &mut BufferedScanner,
         md: Self::EntryMD,
     ) -> Option<(Self::Key, Self::Value)>;
+}
+
+// enc
+pub mod enc {
+    use super::{map, PersistMapSpec, PersistObject, VecU8};
+    pub fn enc_full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
+        let mut v = vec![];
+        enc_full_into_buffer::<Obj>(&mut v, obj);
+        v
+    }
+    pub fn enc_full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
+        Obj::default_full_enc(buf, obj)
+    }
+    pub fn enc_dict_full<PM: PersistMapSpec>(dict: &PM::MapType) -> Vec<u8> {
+        let mut v = vec![];
+        enc_dict_full_into_buffer::<PM>(&mut v, dict);
+        v
+    }
+    pub fn enc_dict_full_into_buffer<PM: PersistMapSpec>(buf: &mut VecU8, dict: &PM::MapType) {
+        <map::PersistMapImpl<PM> as PersistObject>::default_full_enc(buf, dict)
+    }
+}
+
+// dec
+pub mod dec {
+    use {
+        super::{map, PersistMapSpec, PersistObject},
+        crate::engine::storage::v1::{rw::BufferedScanner, SDSSResult},
+    };
+    pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> SDSSResult<Obj::OutputType> {
+        let mut scanner = BufferedScanner::new(data);
+        dec_full_from_scanner::<Obj>(&mut scanner)
+    }
+    pub fn dec_full_from_scanner<Obj: PersistObject>(
+        scanner: &mut BufferedScanner,
+    ) -> SDSSResult<Obj::OutputType> {
+        Obj::default_full_dec(scanner)
+    }
+    pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> SDSSResult<PM::MapType> {
+        let mut scanner = BufferedScanner::new(data);
+        dec_dict_full_from_scanner::<PM>(&mut scanner)
+    }
+    fn dec_dict_full_from_scanner<PM: PersistMapSpec>(
+        scanner: &mut BufferedScanner,
+    ) -> SDSSResult<PM::MapType> {
+        <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)
+    }
 }

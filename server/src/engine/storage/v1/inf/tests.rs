@@ -24,19 +24,21 @@
  *
 */
 
-use crate::engine::{
-    core::{
-        model::{Field, Layer, Model},
-        space::{Space, SpaceMeta},
+use {
+    super::obj,
+    crate::engine::{
+        core::{
+            model::{Field, Layer, Model},
+            space::{Space, SpaceMeta},
+        },
+        data::{
+            cell::Datacell,
+            dict::{DictEntryGeneric, DictGeneric},
+            tag::TagSelector,
+            uuid::Uuid,
+        },
+        idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
     },
-    data::{
-        cell::Datacell,
-        dict::{DictEntryGeneric, DictGeneric},
-        tag::TagSelector,
-        uuid::Uuid,
-    },
-    idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
-    storage::v1::rw::BufferedScanner,
 };
 
 #[test]
@@ -49,29 +51,24 @@ fn dict() {
             "and a null" => Datacell::null(),
         ))
     };
-    let encoded = super::enc::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(&dict);
-    let mut scanner = BufferedScanner::new(&encoded);
-    let decoded =
-        super::dec::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(&mut scanner)
-            .unwrap();
+    let encoded = super::enc::enc_dict_full::<super::map::GenericDictSpec>(&dict);
+    let decoded = super::dec::dec_dict_full::<super::map::GenericDictSpec>(&encoded).unwrap();
     assert_eq!(dict, decoded);
 }
 
 #[test]
 fn layer() {
     let layer = Layer::list();
-    let encoded = super::enc_self(&layer);
-    let mut scanner = BufferedScanner::new(&encoded);
-    let dec = super::dec_self::<Layer>(&mut scanner).unwrap();
+    let encoded = super::enc::enc_full::<obj::LayerRef>(obj::LayerRef(&layer));
+    let dec = super::dec::dec_full::<obj::LayerRef>(&encoded).unwrap();
     assert_eq!(layer, dec);
 }
 
 #[test]
 fn field() {
     let field = Field::new([Layer::list(), Layer::uint64()].into(), true);
-    let encoded = super::enc_self(&field);
-    let mut scanner = BufferedScanner::new(&encoded);
-    let dec = super::dec_self::<Field>(&mut scanner).unwrap();
+    let encoded = super::enc::enc_full::<obj::FieldRef>((&field).into());
+    let dec = super::dec::dec_full::<obj::FieldRef>(&encoded).unwrap();
     assert_eq!(field, dec);
 }
 
@@ -83,10 +80,8 @@ fn fieldmap() {
         "profile_pic".into(),
         Field::new([Layer::bin()].into(), true),
     );
-    let enc = super::enc::<super::map::PersistMapImpl<super::map::FieldMapSpec>>(&fields);
-    let mut scanner = BufferedScanner::new(&enc);
-    let dec =
-        super::dec::<super::map::PersistMapImpl<super::map::FieldMapSpec>>(&mut scanner).unwrap();
+    let enc = super::enc::enc_dict_full::<super::map::FieldMapSpec>(&fields);
+    let dec = super::dec::dec_dict_full::<super::map::FieldMapSpec>(&enc).unwrap();
     for ((orig_field_id, orig_field), (restored_field_id, restored_field)) in
         fields.stseq_ord_kv().zip(dec.stseq_ord_kv())
     {
@@ -107,9 +102,9 @@ fn model() {
             "profile_pic" => Field::new([Layer::bin()].into(), true),
         },
     );
-    let enc = super::enc::<super::obj::ModelLayout>(&model);
-    let mut scanner = BufferedScanner::new(&enc);
-    let dec = super::dec::<super::obj::ModelLayout>(&mut scanner).unwrap();
+    let model_irm = model.intent_read_model();
+    let enc = super::enc::enc_full::<obj::ModelLayoutRef>(obj::ModelLayoutRef(&model, &model_irm));
+    let dec = super::dec::dec_full::<obj::ModelLayoutRef>(&enc).unwrap();
     assert_eq!(model, dec);
 }
 
@@ -117,8 +112,11 @@ fn model() {
 fn space() {
     let uuid = Uuid::new();
     let space = Space::new_with_uuid(Default::default(), SpaceMeta::default(), uuid);
-    let enc = super::enc::<super::obj::SpaceLayout>(&space);
-    let mut scanner = BufferedScanner::new(&enc);
-    let dec = super::dec::<super::obj::SpaceLayout>(&mut scanner).unwrap();
+    let space_meta_read = space.metadata().env().read();
+    let enc = super::enc::enc_full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((
+        &space,
+        &*space_meta_read,
+    )));
+    let dec = super::dec::dec_full::<obj::SpaceLayoutRef>(&enc).unwrap();
     assert_eq!(space, dec);
 }

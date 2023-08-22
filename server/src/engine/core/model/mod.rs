@@ -25,7 +25,7 @@
 */
 
 pub(super) mod alt;
-mod delta;
+pub(in crate::engine) mod delta;
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -52,7 +52,7 @@ use {
 };
 
 pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersion};
-pub(in crate::engine::core) type Fields = IndexSTSeqCns<Box<str>, Field>;
+pub(in crate::engine) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
 pub struct Model {

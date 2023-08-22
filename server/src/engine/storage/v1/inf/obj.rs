@@ -24,12 +24,10 @@
  *
 */
 
+use crate::engine::{core::model::delta::IRModel, data::DictGeneric};
+
 use {
-    super::{
-        map::FieldMapSpec,
-        md::{dec_md, PersistObjectMD, SimpleSizeMD},
-        PersistObject, VecU8,
-    },
+    super::{PersistObject, VecU8},
     crate::{
         engine::{
             core::{
@@ -37,7 +35,7 @@ use {
                 space::{Space, SpaceMeta},
             },
             data::{
-                tag::{DataTag, FullTag, TagClass, TagSelector},
+                tag::{DataTag, TagClass, TagSelector},
                 uuid::Uuid,
             },
             mem::VInline,
@@ -53,27 +51,6 @@ use {
     2. If we end up deciding that this is indeed a waste of space, version this out and get rid of the 7B (or whatever we determine
     to be the correct size.)
 */
-
-struct POByteBlockFullTag(FullTag);
-
-impl PersistObject for POByteBlockFullTag {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
-    type Type = FullTag;
-    type Metadata = SimpleSizeMD<{ sizeof!(u64) }>;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
-        buf.extend(slf.tag_selector().d().u64_bytes_le())
-    }
-    unsafe fn pe_obj_hlio_dec(
-        scanner: &mut BufferedScanner,
-        _: Self::Metadata,
-    ) -> SDSSResult<FullTag> {
-        let dscr = scanner.next_u64_le();
-        if dscr > TagSelector::max_dscr() as u64 {
-            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
-        }
-        Ok(TagSelector::from_raw(dscr as u8).into_full())
-    }
-}
 
 /*
     layer
@@ -94,35 +71,35 @@ impl LayerMD {
     }
 }
 
-impl PersistObjectMD for LayerMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
+#[derive(Clone, Copy)]
+pub struct LayerRef<'a>(pub &'a Layer);
+impl<'a> From<&'a Layer> for LayerRef<'a> {
+    fn from(value: &'a Layer) -> Self {
+        Self(value)
+    }
+}
+impl<'a> PersistObject for LayerRef<'a> {
+    type InputType = LayerRef<'a>;
+    type OutputType = Layer;
+    type Metadata = LayerMD;
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64, 2))
     }
-    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
+    fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::new(
+    fn meta_enc(buf: &mut VecU8, LayerRef(layer): Self::InputType) {
+        buf.extend(layer.tag().tag_selector().d().u64_bytes_le());
+        buf.extend(0u64.to_le_bytes());
+    }
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(LayerMD::new(
             u64::from_le_bytes(scanner.next_chunk()),
             u64::from_le_bytes(scanner.next_chunk()),
         ))
     }
-}
-
-impl PersistObject for Layer {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
-    type Type = Layer;
-    type Metadata = LayerMD;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
-        // [8B: type sig][8B: empty property set]
-        POByteBlockFullTag::pe_obj_hlio_enc(buf, &slf.tag());
-        buf.extend(0u64.to_le_bytes());
-    }
-    unsafe fn pe_obj_hlio_dec(
-        _: &mut BufferedScanner,
-        md: Self::Metadata,
-    ) -> SDSSResult<Self::Type> {
+    fn obj_enc(_: &mut VecU8, _: Self::InputType) {}
+    unsafe fn obj_dec(_: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         if (md.type_selector > TagSelector::List.d() as u64) | (md.prop_set_arity != 0) {
             return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
         }
@@ -152,53 +129,56 @@ impl FieldMD {
     }
 }
 
-impl PersistObjectMD for FieldMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
+pub struct FieldRef<'a>(&'a Field);
+impl<'a> From<&'a Field> for FieldRef<'a> {
+    fn from(f: &'a Field) -> Self {
+        Self(f)
+    }
+}
+impl<'a> PersistObject for FieldRef<'a> {
+    type InputType = &'a Field;
+    type OutputType = Field;
+    type Metadata = FieldMD;
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
         scanner.has_left(sizeof!(u64, 2) + 1)
     }
-    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
-        // nothing here really; we can't help much with the stuff ahead
+    fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::new(
+    fn meta_enc(buf: &mut VecU8, slf: Self::InputType) {
+        // [prop_c][layer_c][null]
+        buf.extend(0u64.to_le_bytes());
+        buf.extend(slf.layers().len().u64_bytes_le());
+        buf.push(slf.is_nullable() as u8);
+    }
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(FieldMD::new(
             u64::from_le_bytes(scanner.next_chunk()),
             u64::from_le_bytes(scanner.next_chunk()),
             scanner.next_byte(),
         ))
     }
-}
-
-impl PersistObject for Field {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false;
-    type Type = Self;
-    type Metadata = FieldMD;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, slf: &Self::Type) {
-        // [prop_c][layer_c][null]
-        buf.extend(0u64.to_le_bytes());
-        buf.extend(slf.layers().len().u64_bytes_le());
-        buf.push(slf.is_nullable() as u8);
+    fn obj_enc(buf: &mut VecU8, slf: Self::InputType) {
         for layer in slf.layers() {
-            Layer::pe_obj_hlio_enc(buf, layer);
+            LayerRef::default_full_enc(buf, LayerRef(layer));
         }
     }
-    unsafe fn pe_obj_hlio_dec(
+    unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::Type> {
+    ) -> SDSSResult<Self::OutputType> {
         let mut layers = VInline::new();
         let mut fin = false;
         while (!scanner.eof())
             & (layers.len() as u64 != md.layer_c)
-            & (<Layer as PersistObject>::Metadata::pretest_src_for_metadata_dec(scanner))
+            & (LayerRef::pretest_can_dec_metadata(scanner))
             & !fin
         {
             let layer_md = unsafe {
                 // UNSAFE(@ohsayan): pretest
-                dec_md::<_, true>(scanner)?
+                LayerRef::meta_dec(scanner)?
             };
-            let l = Layer::pe_obj_hlio_dec(scanner, layer_md)?;
+            let l = LayerRef::obj_dec(scanner, layer_md)?;
             fin = l.tag().tag_class() != TagClass::List;
             layers.push(l);
         }
@@ -216,58 +196,78 @@ pub struct ModelLayoutMD {
     model_uuid: Uuid,
     p_key_len: u64,
     p_key_tag: u64,
+    field_c: u64,
 }
 
 impl ModelLayoutMD {
-    pub(super) const fn new(model_uuid: Uuid, p_key_len: u64, p_key_tag: u64) -> Self {
+    pub(super) const fn new(
+        model_uuid: Uuid,
+        p_key_len: u64,
+        p_key_tag: u64,
+        field_c: u64,
+    ) -> Self {
         Self {
             model_uuid,
             p_key_len,
             p_key_tag,
+            field_c,
         }
     }
 }
 
-impl PersistObjectMD for ModelLayoutMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 3) + sizeof!(u128)) // u64,3 since the fieldmap len is also there, but we don't handle it directly
+#[derive(Clone, Copy)]
+pub struct ModelLayoutRef<'a>(pub(super) &'a Model, pub(super) &'a IRModel<'a>);
+impl<'a> From<(&'a Model, &'a IRModel<'a>)> for ModelLayoutRef<'a> {
+    fn from((mdl, irm): (&'a Model, &'a IRModel<'a>)) -> Self {
+        Self(mdl, irm)
     }
-    fn pretest_src_for_object_dec(&self, scanner: &BufferedScanner) -> bool {
-        scanner.has_left(self.p_key_len as usize)
+}
+impl<'a> PersistObject for ModelLayoutRef<'a> {
+    type InputType = ModelLayoutRef<'a>;
+    type OutputType = Model;
+    type Metadata = ModelLayoutMD;
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u128) + sizeof!(u64, 3))
     }
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::new(
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
+        scanner.has_left(md.p_key_len as usize)
+    }
+    fn meta_enc(buf: &mut VecU8, ModelLayoutRef(v, irm): Self::InputType) {
+        buf.extend(v.get_uuid().to_le_bytes());
+        buf.extend(v.p_key().len().u64_bytes_le());
+        buf.extend(v.p_tag().tag_selector().d().u64_bytes_le());
+        buf.extend(irm.fields().len().u64_bytes_le());
+    }
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(ModelLayoutMD::new(
             Uuid::from_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
             u64::from_le_bytes(scanner.next_chunk()),
             u64::from_le_bytes(scanner.next_chunk()),
         ))
     }
-}
-
-impl PersistObject for ModelLayout {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = true;
-    type Type = Model;
-    type Metadata = ModelLayoutMD;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
-        let irm = v.intent_read_model();
-        buf.extend(v.get_uuid().to_le_bytes());
-        buf.extend(v.p_key().len().u64_bytes_le());
-        buf.extend(v.p_tag().tag_selector().d().u64_bytes_le());
-        buf.extend(v.p_key().as_bytes());
-        super::map::enc_dict_into_buffer::<FieldMapSpec>(buf, irm.fields())
+    fn obj_enc(buf: &mut VecU8, ModelLayoutRef(mdl, irm): Self::InputType) {
+        buf.extend(mdl.p_key().as_bytes());
+        <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_enc(
+            buf,
+            irm.fields(),
+        )
     }
-    unsafe fn pe_obj_hlio_dec(
+    unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::Type> {
+    ) -> SDSSResult<Self::OutputType> {
         let key = String::from_utf8(
             scanner
                 .next_chunk_variable(md.p_key_len as usize)
                 .to_owned(),
         )
         .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?;
-        let fieldmap = super::map::dec_dict::<FieldMapSpec>(scanner)?;
+        let fieldmap =
+            <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_dec(
+                scanner,
+                super::map::MapIndexSizeMD(md.field_c as usize),
+            )?;
         let ptag = if md.p_key_tag > TagSelector::max_dscr() as u64 {
             return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
         } else {
@@ -285,45 +285,56 @@ impl PersistObject for ModelLayout {
 pub struct SpaceLayout;
 pub struct SpaceLayoutMD {
     uuid: Uuid,
+    prop_c: usize,
 }
 
 impl SpaceLayoutMD {
-    pub fn new(uuid: Uuid) -> Self {
-        Self { uuid }
+    pub fn new(uuid: Uuid, prop_c: usize) -> Self {
+        Self { uuid, prop_c }
     }
 }
 
-impl PersistObjectMD for SpaceLayoutMD {
-    const MD_DEC_INFALLIBLE: bool = true;
-
-    fn pretest_src_for_metadata_dec(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u128) + sizeof!(u64)) // u64 for props dict; we don't handle that directly
+#[derive(Clone, Copy)]
+pub struct SpaceLayoutRef<'a>(&'a Space, &'a DictGeneric);
+impl<'a> From<(&'a Space, &'a DictGeneric)> for SpaceLayoutRef<'a> {
+    fn from((spc, spc_meta): (&'a Space, &'a DictGeneric)) -> Self {
+        Self(spc, spc_meta)
     }
-    fn pretest_src_for_object_dec(&self, _: &BufferedScanner) -> bool {
+}
+impl<'a> PersistObject for SpaceLayoutRef<'a> {
+    type InputType = SpaceLayoutRef<'a>;
+    type OutputType = Space;
+    type Metadata = SpaceLayoutMD;
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u128) + sizeof!(u64)) // u64 for props dict
+    }
+    fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }
-    unsafe fn dec_md_payload(scanner: &mut BufferedScanner) -> Option<Self> {
-        Some(Self::new(Uuid::from_bytes(scanner.next_chunk())))
+    fn meta_enc(buf: &mut VecU8, SpaceLayoutRef(space, space_meta): Self::InputType) {
+        buf.extend(space.get_uuid().to_le_bytes());
+        buf.extend(space_meta.len().u64_bytes_le());
     }
-}
-
-impl PersistObject for SpaceLayout {
-    const ALWAYS_VERIFY_PAYLOAD_USING_MD: bool = false; // no need, since the MD only handles the UUID
-    type Type = Space;
-    type Metadata = SpaceLayoutMD;
-    fn pe_obj_hlio_enc(buf: &mut VecU8, v: &Self::Type) {
-        buf.extend(v.get_uuid().to_le_bytes());
-        super::enc_into_buf::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(
-            buf,
-            &v.metadata().env().read(),
-        );
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(SpaceLayoutMD::new(
+            Uuid::from_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()) as usize,
+        ))
     }
-    unsafe fn pe_obj_hlio_dec(
+    fn obj_enc(buf: &mut VecU8, SpaceLayoutRef(_, space_meta): Self::InputType) {
+        <super::map::PersistMapImpl<super::map::GenericDictSpec> as PersistObject>::obj_enc(
+            buf, space_meta,
+        )
+    }
+    unsafe fn obj_dec(
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
-    ) -> SDSSResult<Self::Type> {
+    ) -> SDSSResult<Self::OutputType> {
         let space_meta =
-            super::dec::<super::map::PersistMapImpl<super::map::GenericDictSpec>>(scanner)?;
+            <super::map::PersistMapImpl<super::map::GenericDictSpec> as PersistObject>::obj_dec(
+                scanner,
+                super::map::MapIndexSizeMD(md.prop_c),
+            )?;
         Ok(Space::new_restore_empty(
             SpaceMeta::with_env(space_meta),
             md.uuid,
