@@ -33,6 +33,9 @@ pub type TransactionResult<T> = Result<T, TransactionError>;
 #[cfg_attr(test, derive(PartialEq))]
 pub enum TransactionError {
     SDSSError(SDSSError),
+    /// While restoring a certain item, a non-resolvable conflict was encountered in the global state, because the item was
+    /// already present (when it was expected to not be present)
+    OnRestoreDataConflictAlreadyExists,
 }
 
 direct_from! {

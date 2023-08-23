@@ -45,7 +45,7 @@ use {
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
-pub struct MapIndexSizeMD(pub(super) usize);
+pub struct MapIndexSizeMD(pub usize);
 
 /// This is more of a lazy hack than anything sensible. Just implement a spec and then use this wrapper for any enc/dec operations
 pub struct PersistMapImpl<'a, M: PersistMapSpec>(PhantomData<&'a M::MapType>);

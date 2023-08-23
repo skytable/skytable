@@ -55,7 +55,7 @@ pub struct GlobalNS {
 }
 
 impl GlobalNS {
-    pub(self) fn spaces(&self) -> &RWLIdx<Box<str>, Space> {
+    pub fn spaces(&self) -> &RWLIdx<Box<str>, Space> {
         &self.index_space
     }
     pub fn empty() -> Self {
