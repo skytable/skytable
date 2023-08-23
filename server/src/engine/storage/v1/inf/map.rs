@@ -54,12 +54,10 @@ impl<'a, M: PersistMapSpec> PersistObject for PersistMapImpl<'a, M>
 where
     M::MapType: 'a + STIndex<M::Key, M::Value>,
 {
+    const METADATA_SIZE: usize = sizeof!(u64);
     type InputType = &'a M::MapType;
     type OutputType = M::MapType;
     type Metadata = MapIndexSizeMD;
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64))
-    }
     fn pretest_can_dec_object(
         s: &BufferedScanner,
         MapIndexSizeMD(dict_size): &Self::Metadata,

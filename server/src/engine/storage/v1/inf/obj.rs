@@ -79,12 +79,10 @@ impl<'a> From<&'a Layer> for LayerRef<'a> {
     }
 }
 impl<'a> PersistObject for LayerRef<'a> {
+    const METADATA_SIZE: usize = sizeof!(u64, 2);
     type InputType = LayerRef<'a>;
     type OutputType = Layer;
     type Metadata = LayerMD;
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 2))
-    }
     fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }
@@ -136,12 +134,10 @@ impl<'a> From<&'a Field> for FieldRef<'a> {
     }
 }
 impl<'a> PersistObject for FieldRef<'a> {
+    const METADATA_SIZE: usize = sizeof!(u64, 2) + 1;
     type InputType = &'a Field;
     type OutputType = Field;
     type Metadata = FieldMD;
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u64, 2) + 1)
-    }
     fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }
@@ -223,12 +219,10 @@ impl<'a> From<(&'a Model, &'a IRModel<'a>)> for ModelLayoutRef<'a> {
     }
 }
 impl<'a> PersistObject for ModelLayoutRef<'a> {
+    const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64, 3);
     type InputType = ModelLayoutRef<'a>;
     type OutputType = Model;
     type Metadata = ModelLayoutMD;
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u128) + sizeof!(u64, 3))
-    }
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.p_key_len as usize)
     }
@@ -302,12 +296,10 @@ impl<'a> From<(&'a Space, &'a DictGeneric)> for SpaceLayoutRef<'a> {
     }
 }
 impl<'a> PersistObject for SpaceLayoutRef<'a> {
+    const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64);
     type InputType = SpaceLayoutRef<'a>;
     type OutputType = Space;
     type Metadata = SpaceLayoutMD;
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
-        scanner.has_left(sizeof!(u128) + sizeof!(u64)) // u64 for props dict
-    }
     fn pretest_can_dec_object(_: &BufferedScanner, _: &Self::Metadata) -> bool {
         true
     }

@@ -26,7 +26,18 @@
 
 use {
     super::{TransactionError, TransactionResult},
-    crate::engine::{core::GlobalNS, storage::v1::JournalAdapter},
+    crate::{
+        engine::{
+            core::{space::Space, GlobalNS},
+            data::DictGeneric,
+            storage::v1::{
+                inf::{obj, PersistObject},
+                JournalAdapter, SDSSError,
+            },
+        },
+        util::EndianQW,
+    },
+    std::marker::PhantomData,
 };
 
 /*
@@ -55,7 +66,84 @@ impl JournalAdapter for GNSAdapter {
     FIXME(@ohsayan): In the current impl, we unnecessarily use an intermediary buffer which we clearly don't need to (and also makes
     pointless allocations). We need to fix this, but with a consistent API (and preferably not something like commit_*(...) unless
     we have absolutely no other choice)
+    ---
+    [OPC:2B][PAYLOAD]
 */
 
-// ah that stinging buffer
 pub struct GNSSuperEvent(Box<[u8]>);
+
+pub trait GNSEvent: PersistObject {
+    const OPC: u16;
+    type InputItem;
+}
+
+/*
+    create space
+*/
+
+pub struct CreateSpaceTxn<'a>(PhantomData<&'a ()>);
+#[derive(Clone, Copy)]
+pub struct CreateSpaceTxnCommitPL<'a> {
+    space_meta: &'a DictGeneric,
+    space_name: &'a str,
+    space: &'a Space,
+}
+pub struct CreateSpaceTxnRestorePL {
+    space_name: Box<str>,
+    space: Space,
+}
+pub struct CreateSpaceTxnMD {
+    space_name_l: u64,
+    space_meta: <obj::SpaceLayoutRef<'static> as PersistObject>::Metadata,
+}
+
+impl<'a> GNSEvent for CreateSpaceTxn<'a> {
+    const OPC: u16 = 0;
+    type InputItem = CreateSpaceTxnCommitPL<'a>;
+}
+
+impl<'a> PersistObject for CreateSpaceTxn<'a> {
+    const METADATA_SIZE: usize =
+        <obj::SpaceLayoutRef<'static> as PersistObject>::METADATA_SIZE + sizeof!(u64);
+    type InputType = CreateSpaceTxnCommitPL<'a>;
+    type OutputType = CreateSpaceTxnRestorePL;
+    type Metadata = CreateSpaceTxnMD;
+    fn pretest_can_dec_object(
+        scanner: &crate::engine::storage::v1::BufferedScanner,
+        md: &Self::Metadata,
+    ) -> bool {
+        scanner.has_left(md.space_name_l as usize)
+    }
+    fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        buf.extend(data.space_name.len().u64_bytes_le());
+        <obj::SpaceLayoutRef<'a> as PersistObject>::meta_enc(
+            buf,
+            obj::SpaceLayoutRef::from((data.space, data.space_meta)),
+        );
+    }
+    unsafe fn meta_dec(
+        scanner: &mut crate::engine::storage::v1::BufferedScanner,
+    ) -> crate::engine::storage::v1::SDSSResult<Self::Metadata> {
+        let space_name_l = u64::from_le_bytes(scanner.next_chunk());
+        let space_meta = <obj::SpaceLayoutRef as PersistObject>::meta_dec(scanner)?;
+        Ok(CreateSpaceTxnMD {
+            space_name_l,
+            space_meta,
+        })
+    }
+    fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        buf.extend(data.space_name.as_bytes());
+        <obj::SpaceLayoutRef as PersistObject>::meta_enc(buf, (data.space, data.space_meta).into());
+    }
+    unsafe fn obj_dec(
+        s: &mut crate::engine::storage::v1::BufferedScanner,
+        md: Self::Metadata,
+    ) -> crate::engine::storage::v1::SDSSResult<Self::OutputType> {
+        let space_name =
+            String::from_utf8(s.next_chunk_variable(md.space_name_l as usize).to_owned())
+                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?
+                .into_boxed_str();
+        let space = <obj::SpaceLayoutRef as PersistObject>::obj_dec(s, md.space_meta)?;
+        Ok(CreateSpaceTxnRestorePL { space_name, space })
+    }
+}

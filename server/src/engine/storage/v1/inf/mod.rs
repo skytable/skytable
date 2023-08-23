@@ -28,8 +28,8 @@
 
 use crate::engine::idx::STIndex;
 
-mod map;
-mod obj;
+pub mod map;
+pub mod obj;
 // tests
 #[cfg(test)]
 mod tests;
@@ -105,6 +105,9 @@ impl PersistDictEntryDscr {
 
 /// Any object that can be persisted
 pub trait PersistObject {
+    // const
+    /// Size of the metadata region
+    const METADATA_SIZE: usize;
     // types
     /// Input type for enc operations
     type InputType: Copy;
@@ -113,8 +116,10 @@ pub trait PersistObject {
     /// Metadata type
     type Metadata;
     // pretest
-    /// Pretest to see if the src has the required data for metadata dec
-    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool;
+    /// Pretest to see if the src has the required data for metadata dec. Defaults to the metadata size
+    fn pretest_can_dec_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(Self::METADATA_SIZE)
+    }
     /// Pretest to see if the src has the required data for object dec
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool;
     // meta
@@ -222,6 +227,7 @@ pub trait PersistMapSpec {
 // enc
 pub mod enc {
     use super::{map, PersistMapSpec, PersistObject, VecU8};
+    // obj
     pub fn enc_full<Obj: PersistObject>(obj: Obj::InputType) -> Vec<u8> {
         let mut v = vec![];
         enc_full_into_buffer::<Obj>(&mut v, obj);
@@ -230,6 +236,7 @@ pub mod enc {
     pub fn enc_full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
         Obj::default_full_enc(buf, obj)
     }
+    // dict
     pub fn enc_dict_full<PM: PersistMapSpec>(dict: &PM::MapType) -> Vec<u8> {
         let mut v = vec![];
         enc_dict_full_into_buffer::<PM>(&mut v, dict);

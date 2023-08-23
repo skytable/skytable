@@ -30,14 +30,17 @@ mod header_impl;
 mod journal;
 mod rw;
 // hl
-mod inf;
+pub mod inf;
 mod start_stop;
 // test
 #[cfg(test)]
 mod tests;
 
 // re-exports
-pub use journal::JournalAdapter;
+pub use {
+    journal::{open_journal, JournalAdapter, JournalWriter},
+    rw::BufferedScanner,
+};
 
 use crate::util::os::SysIOError as IoError;
 
