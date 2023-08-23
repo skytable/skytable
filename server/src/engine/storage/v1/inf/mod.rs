@@ -271,4 +271,11 @@ pub mod dec {
     ) -> SDSSResult<PM::MapType> {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)
     }
+    pub mod utils {
+        use crate::engine::storage::v1::{BufferedScanner, SDSSError, SDSSResult};
+        pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> SDSSResult<String> {
+            String::from_utf8(s.next_chunk_variable(len).to_owned())
+                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)
+        }
+    }
 }

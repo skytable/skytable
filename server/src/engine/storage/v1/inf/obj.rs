@@ -39,7 +39,7 @@ use {
                 uuid::Uuid,
             },
             mem::VInline,
-            storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
+            storage::v1::{inf, rw::BufferedScanner, SDSSError, SDSSResult},
         },
         util::EndianQW,
     },
@@ -209,6 +209,9 @@ impl ModelLayoutMD {
             field_c,
         }
     }
+    pub fn p_key_len(&self) -> u64 {
+        self.p_key_len
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -251,12 +254,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
         scanner: &mut BufferedScanner,
         md: Self::Metadata,
     ) -> SDSSResult<Self::OutputType> {
-        let key = String::from_utf8(
-            scanner
-                .next_chunk_variable(md.p_key_len as usize)
-                .to_owned(),
-        )
-        .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?;
+        let key = inf::dec::utils::decode_string(scanner, md.p_key_len as usize)?;
         let fieldmap =
             <super::map::PersistMapImpl<super::map::FieldMapSpec> as PersistObject>::obj_dec(
                 scanner,

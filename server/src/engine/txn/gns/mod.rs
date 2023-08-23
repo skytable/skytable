@@ -24,27 +24,53 @@
  *
 */
 
-use crate::engine::storage::v1::BufferedScanner;
-
 use {
     super::{TransactionError, TransactionResult},
     crate::engine::{
         core::GlobalNS,
         storage::v1::{
             inf::{self, PersistObject},
-            JournalAdapter,
+            BufferedScanner, JournalAdapter, JournalWriter,
         },
     },
+    std::fs::File,
 };
 
+mod model;
 mod space;
+
+// re-exports
+pub use {
+    model::CreateModelTxn,
+    space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
+};
+
+#[derive(Debug)]
+/// The GNS transaction driver is used to handle DDL transactions
+pub struct GNSTransactionDriver {
+    journal: JournalWriter<File, GNSAdapter>,
+}
+
+impl GNSTransactionDriver {
+    /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
+    /// errors (if any)
+    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE::CommitType) -> TransactionResult<()> {
+        let mut buf = vec![];
+        buf.extend(GE::OPC.to_le_bytes());
+        GE::encode_super_event(gns_event, &mut buf);
+        self.journal
+            .append_event_with_recovery_plugin(GNSSuperEvent(buf.into_boxed_slice()))?;
+        Ok(())
+    }
+}
 
 /*
     journal implementor
 */
 
 /// the journal adapter for DDL queries on the GNS
-pub struct GNSAdapter;
+#[derive(Debug)]
+struct GNSAdapter;
 
 impl JournalAdapter for GNSAdapter {
     const RECOVERY_PLUGIN: bool = true;
@@ -71,20 +97,27 @@ impl JournalAdapter for GNSAdapter {
 
 pub struct GNSSuperEvent(Box<[u8]>);
 
+/// Definition for an event in the GNS (DDL queries)
 pub trait GNSEvent
 where
     Self: PersistObject<InputType = Self::CommitType, OutputType = Self::RestoreType> + Sized,
 {
+    /// OPC for the event (unique)
     const OPC: u16;
+    /// Expected type for a commit
     type CommitType;
+    /// Expected type for a restore
     type RestoreType;
-    fn encode_super_event(commit: Self::CommitType) -> GNSSuperEvent {
-        GNSSuperEvent(inf::enc::enc_full::<Self>(commit).into_boxed_slice())
+    /// Encodes the event into the given buffer
+    fn encode_super_event(commit: Self::CommitType, buf: &mut Vec<u8>) {
+        inf::enc::enc_full_into_buffer::<Self>(buf, commit)
     }
+    /// Attempts to decode the event using the given scanner
     fn decode_from_super_event(
         scanner: &mut BufferedScanner,
     ) -> TransactionResult<Self::RestoreType> {
         inf::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
+    /// Update the global state from the restored event
     fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> TransactionResult<()>;
 }

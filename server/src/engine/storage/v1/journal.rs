@@ -364,6 +364,7 @@ impl<TA, LF: RawFileIOInterface> JournalReader<TA, LF> {
     }
 }
 
+#[derive(Debug)]
 pub struct JournalWriter<LF, TA> {
     /// the txn log file
     log_file: SDSSFileIO<LF>,
@@ -402,6 +403,15 @@ impl<LF: RawFileIOInterface, TA: JournalAdapter> JournalWriter<LF, TA> {
         self.log_file.unfsynced_write(&encoded)?;
         self.log_file.fsync_all()?;
         Ok(())
+    }
+    pub fn append_event_with_recovery_plugin(&mut self, event: TA::JournalEvent) -> SDSSResult<()> {
+        debug_assert!(TA::RECOVERY_PLUGIN);
+        match self.append_event(event) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                return self.appendrec_journal_reverse_entry();
+            }
+        }
     }
 }
 

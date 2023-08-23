@@ -36,6 +36,10 @@ pub enum TransactionError {
     /// While restoring a certain item, a non-resolvable conflict was encountered in the global state, because the item was
     /// already present (when it was expected to not be present)
     OnRestoreDataConflictAlreadyExists,
+    /// On restore, a certain item that was expected to be present was missing in the global state
+    OnRestoreDataMissing,
+    /// On restore, a certain item that was expected to match a certain value, has a different value
+    OnRestoreDataConflictMismatch,
 }
 
 direct_from! {

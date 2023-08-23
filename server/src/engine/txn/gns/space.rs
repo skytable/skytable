@@ -24,18 +24,18 @@
  *
 */
 
-use crate::engine::{idx::STIndex, txn::TransactionError};
-
 use {
     super::GNSEvent,
     crate::{
         engine::{
-            core::space::Space,
+            core::{space::Space, GlobalNS},
             data::{uuid::Uuid, DictGeneric},
+            idx::STIndex,
             storage::v1::{
-                inf::{map, obj, PersistObject},
-                SDSSError,
+                inf::{self, map, obj, PersistObject},
+                BufferedScanner, SDSSResult,
             },
+            txn::{TransactionError, TransactionResult},
         },
         util::EndianQW,
     },
@@ -46,7 +46,22 @@ use {
     create space
 */
 
+/// A transaction to run a `create space ...` operation
 pub struct CreateSpaceTxn<'a>(PhantomData<&'a ()>);
+
+impl<'a> CreateSpaceTxn<'a> {
+    pub const fn new_commit(
+        space_meta: &'a DictGeneric,
+        space_name: &'a str,
+        space: &'a Space,
+    ) -> CreateSpaceTxnCommitPL<'a> {
+        CreateSpaceTxnCommitPL {
+            space_meta,
+            space_name,
+            space,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct CreateSpaceTxnCommitPL<'a> {
@@ -71,10 +86,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
     type InputType = CreateSpaceTxnCommitPL<'a>;
     type OutputType = CreateSpaceTxnRestorePL;
     type Metadata = CreateSpaceTxnMD;
-    fn pretest_can_dec_object(
-        scanner: &crate::engine::storage::v1::BufferedScanner,
-        md: &Self::Metadata,
-    ) -> bool {
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
@@ -84,9 +96,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
             obj::SpaceLayoutRef::from((data.space, data.space_meta)),
         );
     }
-    unsafe fn meta_dec(
-        scanner: &mut crate::engine::storage::v1::BufferedScanner,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         let space_name_l = u64::from_le_bytes(scanner.next_chunk());
         let space_meta = <obj::SpaceLayoutRef as PersistObject>::meta_dec(scanner)?;
         Ok(CreateSpaceTxnMD {
@@ -98,14 +108,9 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
         buf.extend(data.space_name.as_bytes());
         <obj::SpaceLayoutRef as PersistObject>::meta_enc(buf, (data.space, data.space_meta).into());
     }
-    unsafe fn obj_dec(
-        s: &mut crate::engine::storage::v1::BufferedScanner,
-        md: Self::Metadata,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         let space_name =
-            String::from_utf8(s.next_chunk_variable(md.space_name_l as usize).to_owned())
-                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?
-                .into_boxed_str();
+            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
         let space = <obj::SpaceLayoutRef as PersistObject>::obj_dec(s, md.space_meta)?;
         Ok(CreateSpaceTxnRestorePL { space_name, space })
     }
@@ -134,18 +139,36 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
     for now dump the entire meta
 */
 
+/// A transaction to run `alter space ...`
 pub struct AlterSpaceTxn<'a>(PhantomData<&'a ()>);
+
+impl<'a> AlterSpaceTxn<'a> {
+    pub const fn new_commit(
+        space_uuid: Uuid,
+        space_name: &'a str,
+        space_meta: &'a DictGeneric,
+    ) -> AlterSpaceTxnCommitPL<'a> {
+        AlterSpaceTxnCommitPL {
+            space_uuid,
+            space_name,
+            space_meta,
+        }
+    }
+}
+
 pub struct AlterSpaceTxnMD {
     uuid: Uuid,
     space_name_l: u64,
     dict_len: u64,
 }
+
 #[derive(Clone, Copy)]
 pub struct AlterSpaceTxnCommitPL<'a> {
     space_uuid: Uuid,
     space_name: &'a str,
     space_meta: &'a DictGeneric,
 }
+
 pub struct AlterSpaceTxnRestorePL {
     space_name: Box<str>,
     space_meta: DictGeneric,
@@ -156,10 +179,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     type InputType = AlterSpaceTxnCommitPL<'a>;
     type OutputType = AlterSpaceTxnRestorePL;
     type Metadata = AlterSpaceTxnMD;
-    fn pretest_can_dec_object(
-        scanner: &crate::engine::storage::v1::BufferedScanner,
-        md: &Self::Metadata,
-    ) -> bool {
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
@@ -167,9 +187,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
         buf.extend(data.space_name.len().u64_bytes_le());
         buf.extend(data.space_meta.len().u64_bytes_le());
     }
-    unsafe fn meta_dec(
-        scanner: &mut crate::engine::storage::v1::BufferedScanner,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(AlterSpaceTxnMD {
             uuid: Uuid::from_bytes(scanner.next_chunk()),
             space_name_l: u64::from_le_bytes(scanner.next_chunk()),
@@ -180,14 +198,9 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
         buf.extend(data.space_name.as_bytes());
         <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_enc(buf, data.space_meta);
     }
-    unsafe fn obj_dec(
-        s: &mut crate::engine::storage::v1::BufferedScanner,
-        md: Self::Metadata,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         let space_name =
-            String::from_utf8(s.next_chunk_variable(md.space_name_l as usize).to_owned())
-                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?
-                .into_boxed_str();
+            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
         let space_meta = <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.dict_len as usize),
@@ -199,11 +212,47 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     }
 }
 
+impl<'a> GNSEvent for AlterSpaceTxn<'a> {
+    const OPC: u16 = 1;
+
+    type CommitType = AlterSpaceTxnCommitPL<'a>;
+
+    type RestoreType = AlterSpaceTxnRestorePL;
+
+    fn update_global_state(
+        AlterSpaceTxnRestorePL {
+            space_name,
+            space_meta,
+        }: Self::RestoreType,
+        gns: &crate::engine::core::GlobalNS,
+    ) -> TransactionResult<()> {
+        let gns = gns.spaces().read();
+        match gns.st_get(&space_name) {
+            Some(space) => {
+                let mut wmeta = space.metadata().env().write();
+                space_meta
+                    .into_iter()
+                    .for_each(|(k, v)| wmeta.st_upsert(k, v));
+            }
+            None => return Err(TransactionError::OnRestoreDataMissing),
+        }
+        Ok(())
+    }
+}
+
 /*
     drop space
 */
 
-pub struct DropSpace<'a>(PhantomData<&'a ()>);
+/// A transaction to run `drop space ...`
+pub struct DropSpaceTxn<'a>(PhantomData<&'a ()>);
+
+impl<'a> DropSpaceTxn<'a> {
+    pub const fn new_commit(space_name: &'a str, uuid: Uuid) -> DropSpaceTxnCommitPL<'a> {
+        DropSpaceTxnCommitPL { space_name, uuid }
+    }
+}
+
 pub struct DropSpaceTxnMD {
     space_name_l: u64,
     uuid: Uuid,
@@ -213,29 +262,25 @@ pub struct DropSpaceTxnCommitPL<'a> {
     space_name: &'a str,
     uuid: Uuid,
 }
+
 pub struct DropSpaceTxnRestorePL {
     uuid: Uuid,
     space_name: Box<str>,
 }
 
-impl<'a> PersistObject for DropSpace<'a> {
+impl<'a> PersistObject for DropSpaceTxn<'a> {
     const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64);
     type InputType = DropSpaceTxnCommitPL<'a>;
     type OutputType = DropSpaceTxnRestorePL;
     type Metadata = DropSpaceTxnMD;
-    fn pretest_can_dec_object(
-        scanner: &crate::engine::storage::v1::BufferedScanner,
-        md: &Self::Metadata,
-    ) -> bool {
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         buf.extend(data.space_name.len().u64_bytes_le());
         buf.extend(data.uuid.to_le_bytes());
     }
-    unsafe fn meta_dec(
-        scanner: &mut crate::engine::storage::v1::BufferedScanner,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::Metadata> {
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(DropSpaceTxnMD {
             space_name_l: u64::from_le_bytes(scanner.next_chunk()),
             uuid: Uuid::from_bytes(scanner.next_chunk()),
@@ -244,17 +289,37 @@ impl<'a> PersistObject for DropSpace<'a> {
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         buf.extend(data.space_name.as_bytes());
     }
-    unsafe fn obj_dec(
-        s: &mut crate::engine::storage::v1::BufferedScanner,
-        md: Self::Metadata,
-    ) -> crate::engine::storage::v1::SDSSResult<Self::OutputType> {
+    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         let space_name =
-            String::from_utf8(s.next_chunk_variable(md.space_name_l as usize).to_owned())
-                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)?
-                .into_boxed_str();
+            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
         Ok(DropSpaceTxnRestorePL {
             uuid: md.uuid,
             space_name,
         })
+    }
+}
+
+impl<'a> GNSEvent for DropSpaceTxn<'a> {
+    const OPC: u16 = 2;
+    type CommitType = DropSpaceTxnCommitPL<'a>;
+    type RestoreType = DropSpaceTxnRestorePL;
+    fn update_global_state(
+        DropSpaceTxnRestorePL { uuid, space_name }: Self::RestoreType,
+        gns: &GlobalNS,
+    ) -> TransactionResult<()> {
+        let mut wgns = gns.spaces().write();
+        match wgns.entry(space_name) {
+            std::collections::hash_map::Entry::Occupied(oe) => {
+                if oe.get().get_uuid() == uuid {
+                    oe.remove_entry();
+                    Ok(())
+                } else {
+                    return Err(TransactionError::OnRestoreDataConflictMismatch);
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(_) => {
+                return Err(TransactionError::OnRestoreDataMissing)
+            }
+        }
     }
 }

@@ -36,7 +36,7 @@ use {
                 DictGeneric,
             },
             idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
-            storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
+            storage::v1::{inf, rw::BufferedScanner, SDSSError, SDSSResult},
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
@@ -227,7 +227,7 @@ impl PersistMapSpec for GenericDictSpec {
         }
     }
     unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
-        String::from_utf8(scanner.next_chunk_variable(md.klen).to_owned())
+        inf::dec::utils::decode_string(scanner, md.klen as usize)
             .map(|s| s.into_boxed_str())
             .ok()
     }
@@ -390,13 +390,9 @@ impl PersistMapSpec for FieldMapSpec {
         }
     }
     unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
-        String::from_utf8(
-            scanner
-                .next_chunk_variable(md.field_id_l as usize)
-                .to_owned(),
-        )
-        .map(|v| v.into_boxed_str())
-        .ok()
+        inf::dec::utils::decode_string(scanner, md.field_id_l as usize)
+            .map(|s| s.into_boxed_str())
+            .ok()
     }
     unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
         super::obj::FieldRef::obj_dec(
