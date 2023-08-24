@@ -34,6 +34,8 @@ pub mod inf;
 mod start_stop;
 // test
 #[cfg(test)]
+pub mod test_util;
+#[cfg(test)]
 mod tests;
 
 // re-exports

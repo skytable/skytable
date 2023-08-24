@@ -24,144 +24,7 @@
  *
 */
 
-use {
-    super::{
-        rw::{RawFileIOInterface, RawFileOpen},
-        SDSSError, SDSSResult,
-    },
-    crate::engine::sync::cell::Lazy,
-    parking_lot::RwLock,
-    std::{
-        collections::{hash_map::Entry, HashMap},
-        io::{ErrorKind, Read, Write},
-    },
-};
-
-static VFS: Lazy<
-    RwLock<HashMap<String, VirtualFile>>,
-    fn() -> RwLock<HashMap<String, VirtualFile>>,
-> = Lazy::new(|| RwLock::new(HashMap::new()));
-
-fn vfs<T>(fname: &str, mut func: impl FnMut(&mut VirtualFile) -> SDSSResult<T>) -> SDSSResult<T> {
-    let mut vfs = VFS.write();
-    let f = vfs
-        .get_mut(fname)
-        .ok_or(SDSSError::from(std::io::Error::from(ErrorKind::NotFound)))?;
-    func(f)
-}
-
-struct VirtualFile {
-    pos: u64,
-    read: bool,
-    write: bool,
-    data: Vec<u8>,
-}
-
-impl VirtualFile {
-    fn new(read: bool, write: bool, data: Vec<u8>) -> Self {
-        Self {
-            read,
-            write,
-            data,
-            pos: 0,
-        }
-    }
-    fn rw(data: Vec<u8>) -> Self {
-        Self::new(true, true, data)
-    }
-    fn w(data: Vec<u8>) -> Self {
-        Self::new(false, true, data)
-    }
-    fn r(data: Vec<u8>) -> Self {
-        Self::new(true, false, data)
-    }
-    fn seek_forward(&mut self, by: u64) {
-        self.pos += by;
-        assert!(self.pos <= self.data.len() as u64);
-    }
-    fn data(&self) -> &[u8] {
-        &self.data[self.pos as usize..]
-    }
-    fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[self.pos as usize..]
-    }
-    fn close(&mut self) {
-        self.pos = 0;
-        self.read = false;
-        self.write = false;
-    }
-}
-
-struct VirtualFileInterface(Box<str>);
-
-impl Drop for VirtualFileInterface {
-    fn drop(&mut self) {
-        vfs(&self.0, |f| {
-            f.close();
-            Ok(())
-        })
-        .unwrap();
-    }
-}
-
-impl RawFileIOInterface for VirtualFileInterface {
-    fn fopen_or_create_rw(file_path: &str) -> SDSSResult<RawFileOpen<Self>> {
-        match VFS.write().entry(file_path.to_owned()) {
-            Entry::Occupied(mut oe) => {
-                let file_md = oe.get_mut();
-                file_md.read = true;
-                file_md.write = true;
-                Ok(RawFileOpen::Existing(Self(file_path.into())))
-            }
-            Entry::Vacant(ve) => {
-                ve.insert(VirtualFile::rw(vec![]));
-                Ok(RawFileOpen::Created(Self(file_path.into())))
-            }
-        }
-    }
-    fn fread_exact(&mut self, buf: &mut [u8]) -> super::SDSSResult<()> {
-        vfs(&self.0, |f| {
-            assert!(f.read);
-            f.data().read_exact(buf)?;
-            Ok(())
-        })
-    }
-    fn fwrite_all(&mut self, bytes: &[u8]) -> super::SDSSResult<()> {
-        vfs(&self.0, |f| {
-            assert!(f.write);
-            if f.data.len() < bytes.len() {
-                f.data.extend(bytes);
-            } else {
-                f.data_mut().write_all(bytes)?;
-            }
-            Ok(())
-        })
-    }
-    fn fsync_all(&mut self) -> super::SDSSResult<()> {
-        Ok(())
-    }
-    fn flen(&self) -> SDSSResult<u64> {
-        vfs(&self.0, |f| Ok(f.data.len() as _))
-    }
-    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()> {
-        vfs(&self.0, |f| {
-            f.seek_forward(by);
-            Ok(())
-        })
-    }
-    fn flen_set(&mut self, to: u64) -> SDSSResult<()> {
-        vfs(&self.0, |f| {
-            f.data.drain(f.data.len() - to as usize..);
-            Ok(())
-        })
-    }
-    fn fcursor(&mut self) -> SDSSResult<u64> {
-        vfs(&self.0, |f| Ok(f.pos))
-    }
-}
-
-type VirtualFS = VirtualFileInterface;
-type RealFS = std::fs::File;
+type VirtualFS = super::test_util::VirtualFS;
 
 mod rw {
     use crate::engine::storage::v1::{
@@ -213,8 +76,6 @@ mod tx {
         FileSpecifier, FileSpecifierVersion, HostRunMode,
     };
 
-    type FileInterface = super::RealFS;
-
     use {
         crate::{
             engine::storage::v1::{
@@ -242,7 +103,7 @@ mod tx {
         }
         fn txn_reset(
             &self,
-            txn_writer: &mut JournalWriter<FileInterface, DatabaseTxnAdapter>,
+            txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
         ) -> SDSSResult<()> {
             self.reset();
             txn_writer.append_event(TxEvent::Reset)
@@ -254,7 +115,7 @@ mod tx {
             &self,
             pos: usize,
             val: u8,
-            txn_writer: &mut JournalWriter<FileInterface, DatabaseTxnAdapter>,
+            txn_writer: &mut JournalWriter<super::VirtualFS, DatabaseTxnAdapter>,
         ) -> SDSSResult<()> {
             self.set(pos, val);
             txn_writer.append_event(TxEvent::Set(pos, val))
@@ -323,8 +184,8 @@ mod tx {
     fn open_log(
         log_name: &str,
         db: &Database,
-    ) -> SDSSResult<JournalWriter<FileInterface, DatabaseTxnAdapter>> {
-        journal::open_journal::<DatabaseTxnAdapter, FileInterface>(
+    ) -> SDSSResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
+        journal::open_journal::<DatabaseTxnAdapter, super::VirtualFS>(
             log_name,
             FileSpecifier::TestTransactionLog,
             FileSpecifierVersion::__new(0),
@@ -355,7 +216,6 @@ mod tx {
             .append_journal_close_and_close()
             .unwrap();
         assert_eq!(original_data, empty_db2.copy_data());
-        std::fs::remove_file("testtxn.log").unwrap();
     }
     #[test]
     fn oneboot_mod_twoboot_mod_thirdboot_read() {
@@ -398,6 +258,5 @@ mod tx {
                 .collect::<Box<[u8]>>()
                 .as_ref()
         );
-        std::fs::remove_file("duatxn.db-tlog").unwrap();
     }
 }
