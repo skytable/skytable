@@ -97,7 +97,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
         );
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        let space_name_l = u64::from_le_bytes(scanner.next_chunk());
+        let space_name_l = scanner.next_u64_le();
         let space_meta = <obj::SpaceLayoutRef as PersistObject>::meta_dec(scanner)?;
         Ok(CreateSpaceTxnMD {
             space_name_l,
@@ -186,7 +186,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(AlterSpaceTxnMD {
             space_id_meta: <super::SpaceID as PersistObject>::meta_dec(scanner)?,
-            dict_len: u64::from_le_bytes(scanner.next_chunk()),
+            dict_len: scanner.next_u64_le(),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {

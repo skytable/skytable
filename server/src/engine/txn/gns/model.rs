@@ -50,46 +50,54 @@ use {
 pub struct ModelID<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
 pub struct ModelIDRef<'a> {
+    space_id: super::SpaceIDRef<'a>,
     model_name: &'a str,
     model_uuid: Uuid,
     model_version: u64,
 }
 pub struct ModelIDRes {
+    space_id: super::SpaceIDRes,
     model_name: Box<str>,
     model_uuid: Uuid,
     model_version: u64,
 }
 pub struct ModelIDMD {
+    space_id: super::SpaceIDMD,
     model_name_l: u64,
     model_version: u64,
     model_uuid: Uuid,
 }
 
 impl<'a> PersistObject for ModelID<'a> {
-    const METADATA_SIZE: usize = sizeof!(u64, 2) + sizeof!(u128);
+    const METADATA_SIZE: usize =
+        sizeof!(u64, 2) + sizeof!(u128) + <super::SpaceID as PersistObject>::METADATA_SIZE;
     type InputType = ModelIDRef<'a>;
     type OutputType = ModelIDRes;
     type Metadata = ModelIDMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner.has_left(md.model_name_l as usize)
+        scanner.has_left(md.model_name_l as usize + md.space_id.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         buf.extend(data.model_name.len().u64_bytes_le());
         buf.extend(data.model_version.to_le_bytes());
         buf.extend(data.model_uuid.to_le_bytes());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(ModelIDMD {
-            model_name_l: u64::from_le_bytes(scanner.next_chunk()),
-            model_version: u64::from_le_bytes(scanner.next_chunk()),
+            space_id: <super::SpaceID as PersistObject>::meta_dec(scanner)?,
+            model_name_l: scanner.next_u64_le(),
+            model_version: scanner.next_u64_le(),
             model_uuid: Uuid::from_bytes(scanner.next_chunk()),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         buf.extend(data.model_name.as_bytes());
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         Ok(ModelIDRes {
+            space_id: <super::SpaceID as PersistObject>::obj_dec(s, md.space_id)?,
             model_name: inf::dec::utils::decode_string(s, md.model_name_l as usize)?
                 .into_boxed_str(),
             model_uuid: md.model_uuid,
@@ -202,7 +210,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         let space_id = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
-        let model_name_l = u64::from_le_bytes(scanner.next_chunk());
+        let model_name_l = scanner.next_u64_le();
         let model_meta = <obj::ModelLayoutRef as PersistObject>::meta_dec(scanner)?;
         Ok(CreateModelTxnMD {
             space_id_meta: space_id,
@@ -276,59 +284,50 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
 pub struct AlterModelAddTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
 pub struct AlterModelAddTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
     model_id: ModelIDRef<'a>,
     new_fields: &'a IndexSTSeqCns<Box<str>, Field>,
 }
 pub struct AlterModelAddTxnMD {
-    space_id_meta: super::SpaceIDMD,
     model_id_meta: ModelIDMD,
     new_field_c: u64,
 }
 pub struct AlterModelAddTxnRestorePL {
-    space_id: super::SpaceIDRes,
     model_id: ModelIDRes,
     new_fields: IndexSTSeqCns<Box<str>, Field>,
 }
 impl<'a> PersistObject for AlterModelAddTxn<'a> {
-    const METADATA_SIZE: usize = <super::SpaceID as PersistObject>::METADATA_SIZE
-        + <ModelID as PersistObject>::METADATA_SIZE
-        + sizeof!(u64);
+    const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
     type InputType = AlterModelAddTxnCommitPL<'a>;
     type OutputType = AlterModelAddTxnRestorePL;
     type Metadata = AlterModelAddTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner.has_left((md.space_id_meta.space_name_l + md.model_id_meta.model_name_l) as usize)
+        scanner.has_left(
+            (md.model_id_meta.space_id.space_name_l + md.model_id_meta.model_name_l) as usize,
+        )
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.new_fields.st_len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        let space_id_meta = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
         let model_id_meta = <ModelID as PersistObject>::meta_dec(scanner)?;
-        let new_field_c = u64::from_le_bytes(scanner.next_chunk());
+        let new_field_c = scanner.next_u64_le();
         Ok(AlterModelAddTxnMD {
-            space_id_meta,
             model_id_meta,
             new_field_c,
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
         <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_enc(buf, data.new_fields);
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
         let new_fields = <map::PersistMapImpl<map::FieldMapSpec> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.new_field_c as usize),
         )?;
         Ok(AlterModelAddTxnRestorePL {
-            space_id,
             model_id,
             new_fields,
         })
@@ -341,13 +340,12 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
     type RestoreType = AlterModelAddTxnRestorePL;
     fn update_global_state(
         AlterModelAddTxnRestorePL {
-            space_id,
             model_id,
             new_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> crate::engine::txn::TransactionResult<()> {
-        with_model(gns, &space_id, &model_id, |model| {
+        with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut wmodel = model.intent_write_model();
             for (i, (field_name, field)) in new_fields.stseq_ord_kv().enumerate() {
                 if !wmodel
@@ -373,47 +371,40 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
 pub struct AlterModelRemoveTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
 pub struct AlterModelRemoveTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
     model_id: ModelIDRef<'a>,
     removed_fields: &'a [Ident<'a>],
 }
 pub struct AlterModelRemoveTxnMD {
-    space_id_meta: super::SpaceIDMD,
     model_id_meta: ModelIDMD,
     remove_field_c: u64,
 }
 pub struct AlterModelRemoveTxnRestorePL {
-    space_id: super::SpaceIDRes,
     model_id: ModelIDRes,
     removed_fields: Box<[Box<str>]>,
 }
 
 impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
-    const METADATA_SIZE: usize = <super::SpaceID as PersistObject>::METADATA_SIZE
-        + <ModelID as PersistObject>::METADATA_SIZE
-        + sizeof!(u64);
+    const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
     type InputType = AlterModelRemoveTxnCommitPL<'a>;
     type OutputType = AlterModelRemoveTxnRestorePL;
     type Metadata = AlterModelRemoveTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner.has_left((md.space_id_meta.space_name_l + md.model_id_meta.model_name_l) as usize)
+        scanner.has_left(
+            (md.model_id_meta.space_id.space_name_l + md.model_id_meta.model_name_l) as usize,
+        )
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.removed_fields.len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        let space_id_meta = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
         let model_id_meta = <ModelID as PersistObject>::meta_dec(scanner)?;
         Ok(AlterModelRemoveTxnMD {
-            space_id_meta,
             model_id_meta,
-            remove_field_c: u64::from_le_bytes(scanner.next_chunk()),
+            remove_field_c: scanner.next_u64_le(),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
         for field in data.removed_fields {
             buf.extend(field.len().u64_bytes_le());
@@ -421,14 +412,13 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
         }
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_meta)?;
         let mut removed_fields = Vec::with_capacity(md.remove_field_c as usize);
         while !s.eof()
             & (removed_fields.len() as u64 != md.remove_field_c)
             & s.has_left(sizeof!(u64))
         {
-            let len = u64::from_le_bytes(s.next_chunk()) as usize;
+            let len = s.next_u64_le() as usize;
             if !s.has_left(len) {
                 break;
             }
@@ -438,7 +428,6 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
         }
         Ok(AlterModelRemoveTxnRestorePL {
-            space_id,
             model_id,
             removed_fields: removed_fields.into_boxed_slice(),
         })
@@ -451,13 +440,12 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
     type RestoreType = AlterModelRemoveTxnRestorePL;
     fn update_global_state(
         AlterModelRemoveTxnRestorePL {
-            space_id,
             model_id,
             removed_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> crate::engine::txn::TransactionResult<()> {
-        with_model(gns, &space_id, &model_id, |model| {
+        with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut iwm = model.intent_write_model();
             let mut removed_fields_rb = vec![];
             for removed_field in removed_fields.iter() {
@@ -486,48 +474,40 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
 pub struct AlterModelUpdateTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
 pub struct AlterModelUpdateTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
     model_id: ModelIDRef<'a>,
     updated_fields: &'a IndexST<Box<str>, Field>,
 }
 pub struct AlterModelUpdateTxnMD {
-    space_id_md: super::SpaceIDMD,
     model_id_md: ModelIDMD,
     updated_field_c: u64,
 }
 pub struct AlterModelUpdateTxnRestorePL {
-    space_id: super::SpaceIDRes,
     model_id: ModelIDRes,
     updated_fields: IndexST<Box<str>, Field>,
 }
 
 impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
-    const METADATA_SIZE: usize = <super::SpaceID as PersistObject>::METADATA_SIZE
-        + <ModelID as PersistObject>::METADATA_SIZE
-        + sizeof!(u64);
+    const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
     type InputType = AlterModelUpdateTxnCommitPL<'a>;
     type OutputType = AlterModelUpdateTxnRestorePL;
     type Metadata = AlterModelUpdateTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner
-            .has_left(md.space_id_md.space_name_l as usize + md.model_id_md.model_name_l as usize)
+        scanner.has_left(
+            md.model_id_md.space_id.space_name_l as usize + md.model_id_md.model_name_l as usize,
+        )
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
         buf.extend(data.updated_fields.st_len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        let space_id_md = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
         let model_id_md = <ModelID as PersistObject>::meta_dec(scanner)?;
         Ok(AlterModelUpdateTxnMD {
-            space_id_md,
             model_id_md,
-            updated_field_c: u64::from_le_bytes(scanner.next_chunk()),
+            updated_field_c: scanner.next_u64_le(),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
         <map::PersistMapImpl<map::FieldMapSpecST> as PersistObject>::obj_enc(
             buf,
@@ -535,14 +515,12 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
         );
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_md)?;
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
         let updated_fields = <map::PersistMapImpl<map::FieldMapSpecST> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.updated_field_c as usize),
         )?;
         Ok(AlterModelUpdateTxnRestorePL {
-            space_id,
             model_id,
             updated_fields,
         })
@@ -555,13 +533,12 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
     type RestoreType = AlterModelUpdateTxnRestorePL;
     fn update_global_state(
         AlterModelUpdateTxnRestorePL {
-            space_id,
             model_id,
             updated_fields,
         }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> TransactionResult<()> {
-        with_model(gns, &space_id, &model_id, |model| {
+        with_model(gns, &model_id.space_id, &model_id, |model| {
             let mut iwm = model.intent_write_model();
             let mut fields_rb = vec![];
             for (field_id, field) in updated_fields.iter() {
@@ -588,47 +565,37 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
 pub struct DropModelTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
 pub struct DropModelTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
     model_id: ModelIDRef<'a>,
 }
 pub struct DropModelTxnMD {
-    space_id_md: super::SpaceIDMD,
     model_id_md: ModelIDMD,
 }
 pub struct DropModelTxnRestorePL {
-    space_id: super::SpaceIDRes,
     model_id: ModelIDRes,
 }
 impl<'a> PersistObject for DropModelTxn<'a> {
-    const METADATA_SIZE: usize = <super::SpaceID as PersistObject>::METADATA_SIZE
-        + <ModelID as PersistObject>::METADATA_SIZE;
+    const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE;
     type InputType = DropModelTxnCommitPL<'a>;
     type OutputType = DropModelTxnRestorePL;
     type Metadata = DropModelTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner
-            .has_left(md.space_id_md.space_name_l as usize + md.model_id_md.model_name_l as usize)
+        scanner.has_left(
+            md.model_id_md.space_id.space_name_l as usize + md.model_id_md.model_name_l as usize,
+        )
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         <ModelID as PersistObject>::meta_enc(buf, data.model_id);
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        let space_id_md = <super::SpaceID as PersistObject>::meta_dec(scanner)?;
         let model_id_md = <ModelID as PersistObject>::meta_dec(scanner)?;
-        Ok(DropModelTxnMD {
-            space_id_md,
-            model_id_md,
-        })
+        Ok(DropModelTxnMD { model_id_md })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_md)?;
         let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
-        Ok(DropModelTxnRestorePL { space_id, model_id })
+        Ok(DropModelTxnRestorePL { model_id })
     }
 }
 
@@ -637,10 +604,10 @@ impl<'a> GNSEvent for DropModelTxn<'a> {
     type CommitType = DropModelTxnCommitPL<'a>;
     type RestoreType = DropModelTxnRestorePL;
     fn update_global_state(
-        DropModelTxnRestorePL { space_id, model_id }: Self::RestoreType,
+        DropModelTxnRestorePL { model_id }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> TransactionResult<()> {
-        with_space(gns, &space_id, |space| {
+        with_space(gns, &model_id.space_id, |space| {
             let mut wgns = space.models().write();
             match wgns.st_delete_if(&model_id.model_name, |mdl| {
                 mdl.get_uuid() == model_id.model_uuid

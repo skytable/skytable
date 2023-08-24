@@ -91,10 +91,7 @@ impl<'a> PersistObject for LayerRef<'a> {
         buf.extend(0u64.to_le_bytes());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        Ok(LayerMD::new(
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-        ))
+        Ok(LayerMD::new(scanner.next_u64_le(), scanner.next_u64_le()))
     }
     fn obj_enc(_: &mut VecU8, _: Self::InputType) {}
     unsafe fn obj_dec(_: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
@@ -149,8 +146,8 @@ impl<'a> PersistObject for FieldRef<'a> {
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(FieldMD::new(
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
             scanner.next_byte(),
         ))
     }
@@ -238,9 +235,9 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(ModelLayoutMD::new(
             Uuid::from_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
         ))
     }
     fn obj_enc(buf: &mut VecU8, ModelLayoutRef(mdl, irm): Self::InputType) {
@@ -308,7 +305,7 @@ impl<'a> PersistObject for SpaceLayoutRef<'a> {
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(SpaceLayoutMD::new(
             Uuid::from_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()) as usize,
+            scanner.next_u64_le() as usize,
         ))
     }
     fn obj_enc(buf: &mut VecU8, SpaceLayoutRef(_, space_meta): Self::InputType) {

@@ -68,9 +68,7 @@ where
         buf.extend(data.st_len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        Ok(MapIndexSizeMD(
-            u64::from_le_bytes(scanner.next_chunk()) as usize
-        ))
+        Ok(MapIndexSizeMD(scanner.next_u64_le() as usize))
     }
     fn obj_enc(buf: &mut VecU8, map: Self::InputType) {
         for (key, val) in M::_get_iter(map) {
@@ -375,9 +373,9 @@ impl PersistMapSpec for FieldMapSpec {
     }
     unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
         Some(FieldMapEntryMD::new(
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
             scanner.next_byte(),
         ))
     }
@@ -440,9 +438,9 @@ impl PersistMapSpec for FieldMapSpecST {
     }
     unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
         Some(FieldMapEntryMD::new(
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
-            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
+            scanner.next_u64_le(),
             scanner.next_byte(),
         ))
     }

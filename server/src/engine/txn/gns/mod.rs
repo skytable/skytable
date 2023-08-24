@@ -156,7 +156,7 @@ impl<'a> PersistObject for SpaceID<'a> {
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(SpaceIDMD {
             uuid: Uuid::from_bytes(scanner.next_chunk()),
-            space_name_l: u64::from_le_bytes(scanner.next_chunk()),
+            space_name_l: scanner.next_u64_le(),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {

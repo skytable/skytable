@@ -229,10 +229,7 @@ impl<'a> BufferedScanner<'a> {
 
 impl<'a> BufferedScanner<'a> {
     pub unsafe fn next_u64_le(&mut self) -> u64 {
-        let mut b = [0u8; sizeof!(u64)];
-        ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), sizeof!(u64));
-        self._incr(sizeof!(u64));
-        u64::from_le_bytes(b)
+        u64::from_le_bytes(self.next_chunk())
     }
     pub unsafe fn next_chunk<const N: usize>(&mut self) -> [u8; N] {
         let mut b = [0u8; N];
