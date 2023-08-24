@@ -197,6 +197,9 @@ impl DeltaVersion {
     fn step(&self) -> Self {
         Self(self.0 + 1)
     }
+    pub const fn value_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl DeltaState {

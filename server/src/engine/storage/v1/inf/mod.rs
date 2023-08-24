@@ -236,6 +236,9 @@ pub mod enc {
     pub fn enc_full_into_buffer<Obj: PersistObject>(buf: &mut VecU8, obj: Obj::InputType) {
         Obj::default_full_enc(buf, obj)
     }
+    pub fn enc_full_self<Obj: PersistObject<InputType = Obj>>(obj: Obj) -> Vec<u8> {
+        enc_full::<Obj>(obj)
+    }
     // dict
     pub fn enc_dict_full<PM: PersistMapSpec>(dict: &PM::MapType) -> Vec<u8> {
         let mut v = vec![];
@@ -253,6 +256,7 @@ pub mod dec {
         super::{map, PersistMapSpec, PersistObject},
         crate::engine::storage::v1::{rw::BufferedScanner, SDSSResult},
     };
+    // obj
     pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> SDSSResult<Obj::OutputType> {
         let mut scanner = BufferedScanner::new(data);
         dec_full_from_scanner::<Obj>(&mut scanner)
@@ -262,6 +266,10 @@ pub mod dec {
     ) -> SDSSResult<Obj::OutputType> {
         Obj::default_full_dec(scanner)
     }
+    pub fn dec_full_self<Obj: PersistObject<OutputType = Obj>>(data: &[u8]) -> SDSSResult<Obj> {
+        dec_full::<Obj>(data)
+    }
+    // dec
     pub fn dec_dict_full<PM: PersistMapSpec>(data: &[u8]) -> SDSSResult<PM::MapType> {
         let mut scanner = BufferedScanner::new(data);
         dec_dict_full_from_scanner::<PM>(&mut scanner)

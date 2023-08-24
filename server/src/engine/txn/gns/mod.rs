@@ -28,7 +28,7 @@ use {
     super::{TransactionError, TransactionResult},
     crate::{
         engine::{
-            core::GlobalNS,
+            core::{space::Space, GlobalNS},
             data::uuid::Uuid,
             storage::v1::{
                 inf::{self, PersistObject},
@@ -136,9 +136,26 @@ pub struct SpaceIDRef<'a> {
     uuid: Uuid,
     name: &'a str,
 }
+
+impl<'a> SpaceIDRef<'a> {
+    pub fn new(name: &'a str, space: &Space) -> Self {
+        Self {
+            uuid: space.get_uuid(),
+            name,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct SpaceIDRes {
     uuid: Uuid,
     name: Box<str>,
+}
+
+impl SpaceIDRes {
+    pub fn new(uuid: Uuid, name: Box<str>) -> Self {
+        Self { uuid, name }
+    }
 }
 struct SpaceID<'a>(PhantomData<SpaceIDRef<'a>>);
 pub struct SpaceIDMD {

@@ -48,9 +48,9 @@ use {
 #[derive(Clone, Copy)]
 /// Transaction commit payload for a `create space ...` query
 pub struct CreateSpaceTxn<'a> {
-    pub(crate) space_meta: &'a DictGeneric,
-    pub(crate) space_name: &'a str,
-    pub(crate) space: &'a Space,
+    pub(super) space_meta: &'a DictGeneric,
+    pub(super) space_name: &'a str,
+    pub(super) space: &'a Space,
 }
 
 impl<'a> CreateSpaceTxn<'a> {
@@ -63,14 +63,16 @@ impl<'a> CreateSpaceTxn<'a> {
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct CreateSpaceTxnRestorePL {
-    pub(crate) space_name: Box<str>,
-    pub(crate) space: Space,
+    pub(super) space_name: Box<str>,
+    pub(super) space: Space,
 }
 
 pub struct CreateSpaceTxnMD {
-    pub(crate) space_name_l: u64,
-    pub(crate) space_meta: <obj::SpaceLayoutRef<'static> as PersistObject>::Metadata,
+    pub(super) space_name_l: u64,
+    pub(super) space_meta: <obj::SpaceLayoutRef<'static> as PersistObject>::Metadata,
 }
 
 impl<'a> PersistObject for CreateSpaceTxn<'a> {
@@ -153,9 +155,10 @@ pub struct AlterSpaceTxnMD {
     dict_len: u64,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct AlterSpaceTxnRestorePL {
-    space_id: super::SpaceIDRes,
-    space_meta: DictGeneric,
+    pub(super) space_id: super::SpaceIDRes,
+    pub(super) space_meta: DictGeneric,
 }
 
 impl<'a> PersistObject for AlterSpaceTxn<'a> {

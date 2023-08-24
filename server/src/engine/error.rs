@@ -24,6 +24,8 @@
  *
 */
 
+use super::txn::TransactionError;
+
 pub type LangResult<T> = Result<T, LangError>;
 pub type LexResult<T> = Result<T, LexError>;
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
@@ -133,4 +135,11 @@ pub enum DatabaseError {
     /// field definition violation
     DmlConstraintViolationFieldTypedef,
     ServerError,
+    TransactionalError,
+}
+
+impl From<TransactionError> for DatabaseError {
+    fn from(_: TransactionError) -> Self {
+        Self::TransactionalError
+    }
 }

@@ -55,11 +55,44 @@ pub struct ModelIDRef<'a> {
     model_uuid: Uuid,
     model_version: u64,
 }
+
+impl<'a> ModelIDRef<'a> {
+    pub fn new(
+        space_id: super::SpaceIDRef<'a>,
+        model_name: &'a str,
+        model_uuid: Uuid,
+        model_version: u64,
+    ) -> Self {
+        Self {
+            space_id,
+            model_name,
+            model_uuid,
+            model_version,
+        }
+    }
+}
+#[derive(Debug, PartialEq)]
 pub struct ModelIDRes {
     space_id: super::SpaceIDRes,
     model_name: Box<str>,
     model_uuid: Uuid,
     model_version: u64,
+}
+
+impl ModelIDRes {
+    pub fn new(
+        space_id: super::SpaceIDRes,
+        model_name: Box<str>,
+        model_uuid: Uuid,
+        model_version: u64,
+    ) -> Self {
+        Self {
+            space_id,
+            model_name,
+            model_uuid,
+            model_version,
+        }
+    }
 }
 pub struct ModelIDMD {
     space_id: super::SpaceIDMD,
@@ -169,10 +202,12 @@ impl<'a> CreateModelTxn<'a> {
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct CreateModelTxnRestorePL {
-    space_id: super::SpaceIDRes,
-    model_name: Box<str>,
-    model: Model,
+    pub(super) space_id: super::SpaceIDRes,
+    pub(super) model_name: Box<str>,
+    pub(super) model: Model,
 }
 
 pub struct CreateModelTxnMD {
@@ -297,9 +332,11 @@ pub struct AlterModelAddTxnMD {
     model_id_meta: ModelIDMD,
     new_field_c: u64,
 }
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct AlterModelAddTxnRestorePL {
-    model_id: ModelIDRes,
-    new_fields: IndexSTSeqCns<Box<str>, Field>,
+    pub(super) model_id: ModelIDRes,
+    pub(super) new_fields: IndexSTSeqCns<Box<str>, Field>,
 }
 impl<'a> PersistObject for AlterModelAddTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
@@ -392,9 +429,10 @@ pub struct AlterModelRemoveTxnMD {
     model_id_meta: ModelIDMD,
     remove_field_c: u64,
 }
+#[derive(Debug, PartialEq)]
 pub struct AlterModelRemoveTxnRestorePL {
-    model_id: ModelIDRes,
-    removed_fields: Box<[Box<str>]>,
+    pub(super) model_id: ModelIDRes,
+    pub(super) removed_fields: Box<[Box<str>]>,
 }
 
 impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
@@ -507,9 +545,10 @@ pub struct AlterModelUpdateTxnMD {
     model_id_md: ModelIDMD,
     updated_field_c: u64,
 }
+#[derive(Debug, PartialEq)]
 pub struct AlterModelUpdateTxnRestorePL {
-    model_id: ModelIDRes,
-    updated_fields: IndexST<Box<str>, Field>,
+    pub(super) model_id: ModelIDRes,
+    pub(super) updated_fields: IndexST<Box<str>, Field>,
 }
 
 impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
@@ -602,13 +641,10 @@ impl<'a> DropModelTxn<'a> {
 pub struct DropModelTxnMD {
     model_id_md: ModelIDMD,
 }
-pub struct DropModelTxnRestorePL {
-    model_id: ModelIDRes,
-}
 impl<'a> PersistObject for DropModelTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE;
     type InputType = DropModelTxn<'a>;
-    type OutputType = DropModelTxnRestorePL;
+    type OutputType = ModelIDRes;
     type Metadata = DropModelTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(
@@ -626,24 +662,26 @@ impl<'a> PersistObject for DropModelTxn<'a> {
         <ModelID as PersistObject>::obj_enc(buf, data.model_id);
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let model_id = <ModelID as PersistObject>::obj_dec(s, md.model_id_md)?;
-        Ok(DropModelTxnRestorePL { model_id })
+        <ModelID as PersistObject>::obj_dec(s, md.model_id_md)
     }
 }
 
 impl<'a> GNSEvent for DropModelTxn<'a> {
     const OPC: u16 = 7;
     type CommitType = DropModelTxn<'a>;
-    type RestoreType = DropModelTxnRestorePL;
+    type RestoreType = ModelIDRes;
     fn update_global_state(
-        DropModelTxnRestorePL { model_id }: Self::RestoreType,
+        ModelIDRes {
+            space_id,
+            model_name,
+            model_uuid,
+            model_version: _,
+        }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> TransactionResult<()> {
-        with_space(gns, &model_id.space_id, |space| {
+        with_space(gns, &space_id, |space| {
             let mut wgns = space.models().write();
-            match wgns.st_delete_if(&model_id.model_name, |mdl| {
-                mdl.get_uuid() == model_id.model_uuid
-            }) {
+            match wgns.st_delete_if(&model_name, |mdl| mdl.get_uuid() == model_uuid) {
                 Some(true) => Ok(()),
                 Some(false) => return Err(TransactionError::OnRestoreDataConflictMismatch),
                 None => Err(TransactionError::OnRestoreDataMissing),
