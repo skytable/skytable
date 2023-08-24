@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             core::{space::Space, GlobalNS},
-            data::{uuid::Uuid, DictGeneric},
+            data::DictGeneric,
             idx::STIndex,
             storage::v1::{
                 inf::{self, map, obj, PersistObject},
@@ -39,35 +39,28 @@ use {
         },
         util::EndianQW,
     },
-    std::marker::PhantomData,
 };
 
 /*
     create space
 */
 
-/// A transaction to run a `create space ...` operation
-pub struct CreateSpaceTxn<'a>(PhantomData<&'a ()>);
+#[derive(Clone, Copy)]
+/// Transaction commit payload for a `create space ...` query
+pub struct CreateSpaceTxn<'a> {
+    pub(crate) space_meta: &'a DictGeneric,
+    pub(crate) space_name: &'a str,
+    pub(crate) space: &'a Space,
+}
 
 impl<'a> CreateSpaceTxn<'a> {
-    pub const fn new_commit(
-        space_meta: &'a DictGeneric,
-        space_name: &'a str,
-        space: &'a Space,
-    ) -> CreateSpaceTxnCommitPL<'a> {
-        CreateSpaceTxnCommitPL {
+    pub const fn new(space_meta: &'a DictGeneric, space_name: &'a str, space: &'a Space) -> Self {
+        Self {
             space_meta,
             space_name,
             space,
         }
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct CreateSpaceTxnCommitPL<'a> {
-    pub(crate) space_meta: &'a DictGeneric,
-    pub(crate) space_name: &'a str,
-    pub(crate) space: &'a Space,
 }
 
 pub struct CreateSpaceTxnRestorePL {
@@ -83,7 +76,7 @@ pub struct CreateSpaceTxnMD {
 impl<'a> PersistObject for CreateSpaceTxn<'a> {
     const METADATA_SIZE: usize =
         <obj::SpaceLayoutRef<'static> as PersistObject>::METADATA_SIZE + sizeof!(u64);
-    type InputType = CreateSpaceTxnCommitPL<'a>;
+    type InputType = CreateSpaceTxn<'a>;
     type OutputType = CreateSpaceTxnRestorePL;
     type Metadata = CreateSpaceTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -118,7 +111,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
 
 impl<'a> GNSEvent for CreateSpaceTxn<'a> {
     const OPC: u16 = 0;
-    type CommitType = CreateSpaceTxnCommitPL<'a>;
+    type CommitType = CreateSpaceTxn<'a>;
     type RestoreType = CreateSpaceTxnRestorePL;
     fn update_global_state(
         CreateSpaceTxnRestorePL { space_name, space }: CreateSpaceTxnRestorePL,
@@ -139,17 +132,17 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
     for now dump the entire meta
 */
 
-/// A transaction to run `alter space ...`
-pub struct AlterSpaceTxn<'a>(PhantomData<&'a ()>);
+#[derive(Clone, Copy)]
+/// Transaction payload for an `alter space ...` query
+pub struct AlterSpaceTxn<'a> {
+    space_id: super::SpaceIDRef<'a>,
+    space_meta: &'a DictGeneric,
+}
 
 impl<'a> AlterSpaceTxn<'a> {
-    pub const fn new_commit(
-        uuid: Uuid,
-        name: &'a str,
-        space_meta: &'a DictGeneric,
-    ) -> AlterSpaceTxnCommitPL<'a> {
-        AlterSpaceTxnCommitPL {
-            space_id: super::SpaceIDRef { uuid, name },
+    pub const fn new(space_id: super::SpaceIDRef<'a>, space_meta: &'a DictGeneric) -> Self {
+        Self {
+            space_id,
             space_meta,
         }
     }
@@ -160,12 +153,6 @@ pub struct AlterSpaceTxnMD {
     dict_len: u64,
 }
 
-#[derive(Clone, Copy)]
-pub struct AlterSpaceTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
-    space_meta: &'a DictGeneric,
-}
-
 pub struct AlterSpaceTxnRestorePL {
     space_id: super::SpaceIDRes,
     space_meta: DictGeneric,
@@ -173,7 +160,7 @@ pub struct AlterSpaceTxnRestorePL {
 
 impl<'a> PersistObject for AlterSpaceTxn<'a> {
     const METADATA_SIZE: usize = sizeof!(u64, 2) + sizeof!(u128);
-    type InputType = AlterSpaceTxnCommitPL<'a>;
+    type InputType = AlterSpaceTxn<'a>;
     type OutputType = AlterSpaceTxnRestorePL;
     type Metadata = AlterSpaceTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -208,9 +195,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
 
 impl<'a> GNSEvent for AlterSpaceTxn<'a> {
     const OPC: u16 = 1;
-
-    type CommitType = AlterSpaceTxnCommitPL<'a>;
-
+    type CommitType = AlterSpaceTxn<'a>;
     type RestoreType = AlterSpaceTxnRestorePL;
 
     fn update_global_state(
@@ -238,25 +223,21 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
     drop space
 */
 
-/// A transaction to run `drop space ...`
-pub struct DropSpaceTxn<'a>(PhantomData<&'a ()>);
-
-impl<'a> DropSpaceTxn<'a> {
-    pub const fn new_commit(name: &'a str, uuid: Uuid) -> DropSpaceTxnCommitPL<'a> {
-        DropSpaceTxnCommitPL {
-            space_id: super::SpaceIDRef { uuid, name },
-        }
-    }
+#[derive(Clone, Copy)]
+/// Transaction commit payload for a `drop space ...` query
+pub struct DropSpaceTxn<'a> {
+    space_id: super::SpaceIDRef<'a>,
 }
 
-#[derive(Clone, Copy)]
-pub struct DropSpaceTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
+impl<'a> DropSpaceTxn<'a> {
+    pub const fn new(space_id: super::SpaceIDRef<'a>) -> Self {
+        Self { space_id }
+    }
 }
 
 impl<'a> PersistObject for DropSpaceTxn<'a> {
     const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64);
-    type InputType = DropSpaceTxnCommitPL<'a>;
+    type InputType = DropSpaceTxn<'a>;
     type OutputType = super::SpaceIDRes;
     type Metadata = super::SpaceIDMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -278,7 +259,7 @@ impl<'a> PersistObject for DropSpaceTxn<'a> {
 
 impl<'a> GNSEvent for DropSpaceTxn<'a> {
     const OPC: u16 = 2;
-    type CommitType = DropSpaceTxnCommitPL<'a>;
+    type CommitType = DropSpaceTxn<'a>;
     type RestoreType = super::SpaceIDRes;
     fn update_global_state(
         super::SpaceIDRes { uuid, name }: Self::RestoreType,

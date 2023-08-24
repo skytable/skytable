@@ -144,35 +144,29 @@ fn with_model<T>(
     create model
 */
 
-/// Transaction for running a `create model ... (...) with {..}` query
-pub struct CreateModelTxn<'a>(PhantomData<&'a ()>);
+#[derive(Clone, Copy)]
+/// The commit payload for a `create model ... (...) with {...}` txn
+pub struct CreateModelTxn<'a> {
+    space_id: super::SpaceIDRef<'a>,
+    model_name: &'a str,
+    model: &'a Model,
+    model_read: &'a IRModel<'a>,
+}
 
 impl<'a> CreateModelTxn<'a> {
-    pub const fn new_commit(
-        space_name: &'a str,
-        space_uuid: Uuid,
+    pub const fn new(
+        space_id: super::SpaceIDRef<'a>,
         model_name: &'a str,
         model: &'a Model,
         model_read: &'a IRModel<'a>,
-    ) -> CreateModelTxnCommitPL<'a> {
-        CreateModelTxnCommitPL {
-            space_id: super::SpaceIDRef {
-                uuid: space_uuid,
-                name: space_name,
-            },
+    ) -> Self {
+        Self {
+            space_id,
             model_name,
             model,
             model_read,
         }
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct CreateModelTxnCommitPL<'a> {
-    space_id: super::SpaceIDRef<'a>,
-    model_name: &'a str,
-    model: &'a Model,
-    model_read: &'a IRModel<'a>,
 }
 
 pub struct CreateModelTxnRestorePL {
@@ -191,7 +185,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
     const METADATA_SIZE: usize = <super::SpaceID as PersistObject>::METADATA_SIZE
         + sizeof!(u64)
         + <obj::ModelLayoutRef<'a> as PersistObject>::METADATA_SIZE;
-    type InputType = CreateModelTxnCommitPL<'a>;
+    type InputType = CreateModelTxn<'a>;
     type OutputType = CreateModelTxnRestorePL;
     type Metadata = CreateModelTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -244,7 +238,7 @@ impl<'a> PersistObject for CreateModelTxn<'a> {
 
 impl<'a> GNSEvent for CreateModelTxn<'a> {
     const OPC: u16 = 3;
-    type CommitType = CreateModelTxnCommitPL<'a>;
+    type CommitType = CreateModelTxn<'a>;
     type RestoreType = CreateModelTxnRestorePL;
     fn update_global_state(
         CreateModelTxnRestorePL {
@@ -281,11 +275,23 @@ impl<'a> GNSEvent for CreateModelTxn<'a> {
     alter model add
 */
 
-pub struct AlterModelAddTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
-pub struct AlterModelAddTxnCommitPL<'a> {
+/// Transaction commit payload for an `alter model add ...` query
+pub struct AlterModelAddTxn<'a> {
     model_id: ModelIDRef<'a>,
     new_fields: &'a IndexSTSeqCns<Box<str>, Field>,
+}
+
+impl<'a> AlterModelAddTxn<'a> {
+    pub const fn new(
+        model_id: ModelIDRef<'a>,
+        new_fields: &'a IndexSTSeqCns<Box<str>, Field>,
+    ) -> Self {
+        Self {
+            model_id,
+            new_fields,
+        }
+    }
 }
 pub struct AlterModelAddTxnMD {
     model_id_meta: ModelIDMD,
@@ -297,7 +303,7 @@ pub struct AlterModelAddTxnRestorePL {
 }
 impl<'a> PersistObject for AlterModelAddTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
-    type InputType = AlterModelAddTxnCommitPL<'a>;
+    type InputType = AlterModelAddTxn<'a>;
     type OutputType = AlterModelAddTxnRestorePL;
     type Metadata = AlterModelAddTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -336,7 +342,7 @@ impl<'a> PersistObject for AlterModelAddTxn<'a> {
 
 impl<'a> GNSEvent for AlterModelAddTxn<'a> {
     const OPC: u16 = 4;
-    type CommitType = AlterModelAddTxnCommitPL<'a>;
+    type CommitType = AlterModelAddTxn<'a>;
     type RestoreType = AlterModelAddTxnRestorePL;
     fn update_global_state(
         AlterModelAddTxnRestorePL {
@@ -368,11 +374,19 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
     alter model remove
 */
 
-pub struct AlterModelRemoveTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
-pub struct AlterModelRemoveTxnCommitPL<'a> {
+/// Transaction commit payload for an `alter model remove` transaction
+pub struct AlterModelRemoveTxn<'a> {
     model_id: ModelIDRef<'a>,
     removed_fields: &'a [Ident<'a>],
+}
+impl<'a> AlterModelRemoveTxn<'a> {
+    pub const fn new(model_id: ModelIDRef<'a>, removed_fields: &'a [Ident<'a>]) -> Self {
+        Self {
+            model_id,
+            removed_fields,
+        }
+    }
 }
 pub struct AlterModelRemoveTxnMD {
     model_id_meta: ModelIDMD,
@@ -385,7 +399,7 @@ pub struct AlterModelRemoveTxnRestorePL {
 
 impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
-    type InputType = AlterModelRemoveTxnCommitPL<'a>;
+    type InputType = AlterModelRemoveTxn<'a>;
     type OutputType = AlterModelRemoveTxnRestorePL;
     type Metadata = AlterModelRemoveTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -436,7 +450,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
 
 impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
     const OPC: u16 = 5;
-    type CommitType = AlterModelRemoveTxnCommitPL<'a>;
+    type CommitType = AlterModelRemoveTxn<'a>;
     type RestoreType = AlterModelRemoveTxnRestorePL;
     fn update_global_state(
         AlterModelRemoveTxnRestorePL {
@@ -471,11 +485,23 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
     alter model update
 */
 
-pub struct AlterModelUpdateTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
-pub struct AlterModelUpdateTxnCommitPL<'a> {
+/// Transaction commit payload for an `alter model update ...` query
+pub struct AlterModelUpdateTxn<'a> {
     model_id: ModelIDRef<'a>,
     updated_fields: &'a IndexST<Box<str>, Field>,
+}
+
+impl<'a> AlterModelUpdateTxn<'a> {
+    pub const fn new(
+        model_id: ModelIDRef<'a>,
+        updated_fields: &'a IndexST<Box<str>, Field>,
+    ) -> Self {
+        Self {
+            model_id,
+            updated_fields,
+        }
+    }
 }
 pub struct AlterModelUpdateTxnMD {
     model_id_md: ModelIDMD,
@@ -488,7 +514,7 @@ pub struct AlterModelUpdateTxnRestorePL {
 
 impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE + sizeof!(u64);
-    type InputType = AlterModelUpdateTxnCommitPL<'a>;
+    type InputType = AlterModelUpdateTxn<'a>;
     type OutputType = AlterModelUpdateTxnRestorePL;
     type Metadata = AlterModelUpdateTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -529,7 +555,7 @@ impl<'a> PersistObject for AlterModelUpdateTxn<'a> {
 
 impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
     const OPC: u16 = 6;
-    type CommitType = AlterModelUpdateTxnCommitPL<'a>;
+    type CommitType = AlterModelUpdateTxn<'a>;
     type RestoreType = AlterModelUpdateTxnRestorePL;
     fn update_global_state(
         AlterModelUpdateTxnRestorePL {
@@ -562,10 +588,16 @@ impl<'a> GNSEvent for AlterModelUpdateTxn<'a> {
     drop model
 */
 
-pub struct DropModelTxn<'a>(PhantomData<&'a ()>);
 #[derive(Debug, Clone, Copy)]
-pub struct DropModelTxnCommitPL<'a> {
+/// Transaction commit payload for a `drop model ...` query
+pub struct DropModelTxn<'a> {
     model_id: ModelIDRef<'a>,
+}
+
+impl<'a> DropModelTxn<'a> {
+    pub const fn new(model_id: ModelIDRef<'a>) -> Self {
+        Self { model_id }
+    }
 }
 pub struct DropModelTxnMD {
     model_id_md: ModelIDMD,
@@ -575,7 +607,7 @@ pub struct DropModelTxnRestorePL {
 }
 impl<'a> PersistObject for DropModelTxn<'a> {
     const METADATA_SIZE: usize = <ModelID as PersistObject>::METADATA_SIZE;
-    type InputType = DropModelTxnCommitPL<'a>;
+    type InputType = DropModelTxn<'a>;
     type OutputType = DropModelTxnRestorePL;
     type Metadata = DropModelTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
@@ -601,7 +633,7 @@ impl<'a> PersistObject for DropModelTxn<'a> {
 
 impl<'a> GNSEvent for DropModelTxn<'a> {
     const OPC: u16 = 7;
-    type CommitType = DropModelTxnCommitPL<'a>;
+    type CommitType = DropModelTxn<'a>;
     type RestoreType = DropModelTxnRestorePL;
     fn update_global_state(
         DropModelTxnRestorePL { model_id }: Self::RestoreType,

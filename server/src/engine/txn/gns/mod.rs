@@ -42,10 +42,15 @@ use {
 
 mod model;
 mod space;
+// test
+#[cfg(test)]
+mod tests;
 
 // re-exports
 pub use {
-    model::CreateModelTxn,
+    model::{
+        AlterModelAddTxn, AlterModelRemoveTxn, AlterModelUpdateTxn, CreateModelTxn, DropModelTxn,
+    },
     space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
 };
 
@@ -58,7 +63,7 @@ pub struct GNSTransactionDriver {
 impl GNSTransactionDriver {
     /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
     /// errors (if any)
-    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE::CommitType) -> TransactionResult<()> {
+    pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> TransactionResult<()> {
         let mut buf = vec![];
         buf.extend(GE::OPC.to_le_bytes());
         GE::encode_super_event(gns_event, &mut buf);
@@ -104,7 +109,7 @@ pub struct GNSSuperEvent(Box<[u8]>);
 /// Definition for an event in the GNS (DDL queries)
 pub trait GNSEvent
 where
-    Self: PersistObject<InputType = Self::CommitType, OutputType = Self::RestoreType> + Sized,
+    Self: PersistObject<InputType = Self, OutputType = Self::RestoreType> + Sized,
 {
     /// OPC for the event (unique)
     const OPC: u16;
@@ -113,7 +118,7 @@ where
     /// Expected type for a restore
     type RestoreType;
     /// Encodes the event into the given buffer
-    fn encode_super_event(commit: Self::CommitType, buf: &mut Vec<u8>) {
+    fn encode_super_event(commit: Self, buf: &mut Vec<u8>) {
         inf::enc::enc_full_into_buffer::<Self>(buf, commit)
     }
     /// Attempts to decode the event using the given scanner

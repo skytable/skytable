@@ -408,9 +408,7 @@ impl<LF: RawFileIOInterface, TA: JournalAdapter> JournalWriter<LF, TA> {
         debug_assert!(TA::RECOVERY_PLUGIN);
         match self.append_event(event) {
             Ok(()) => Ok(()),
-            Err(_) => {
-                return self.appendrec_journal_reverse_entry();
-            }
+            Err(_) => compiler::cold_call(|| return self.appendrec_journal_reverse_entry()),
         }
     }
 }
