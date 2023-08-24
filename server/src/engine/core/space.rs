@@ -92,7 +92,7 @@ impl Space {
     pub fn get_uuid(&self) -> Uuid {
         self.uuid
     }
-    pub(super) fn models(&self) -> &RWLIdx<Box<str>, Model> {
+    pub fn models(&self) -> &RWLIdx<Box<str>, Model> {
         &self.mns
     }
     pub fn metadata(&self) -> &SpaceMeta {

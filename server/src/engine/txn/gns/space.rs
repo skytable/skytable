@@ -144,33 +144,30 @@ pub struct AlterSpaceTxn<'a>(PhantomData<&'a ()>);
 
 impl<'a> AlterSpaceTxn<'a> {
     pub const fn new_commit(
-        space_uuid: Uuid,
-        space_name: &'a str,
+        uuid: Uuid,
+        name: &'a str,
         space_meta: &'a DictGeneric,
     ) -> AlterSpaceTxnCommitPL<'a> {
         AlterSpaceTxnCommitPL {
-            space_uuid,
-            space_name,
+            space_id: super::SpaceIDRef { uuid, name },
             space_meta,
         }
     }
 }
 
 pub struct AlterSpaceTxnMD {
-    uuid: Uuid,
-    space_name_l: u64,
+    space_id_meta: super::SpaceIDMD,
     dict_len: u64,
 }
 
 #[derive(Clone, Copy)]
 pub struct AlterSpaceTxnCommitPL<'a> {
-    space_uuid: Uuid,
-    space_name: &'a str,
+    space_id: super::SpaceIDRef<'a>,
     space_meta: &'a DictGeneric,
 }
 
 pub struct AlterSpaceTxnRestorePL {
-    space_name: Box<str>,
+    space_id: super::SpaceIDRes,
     space_meta: DictGeneric,
 }
 
@@ -180,33 +177,30 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     type OutputType = AlterSpaceTxnRestorePL;
     type Metadata = AlterSpaceTxnMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
-        scanner.has_left(md.space_name_l as usize)
+        scanner.has_left(md.space_id_meta.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        buf.extend(data.space_uuid.to_le_bytes());
-        buf.extend(data.space_name.len().u64_bytes_le());
+        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
         buf.extend(data.space_meta.len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(AlterSpaceTxnMD {
-            uuid: Uuid::from_bytes(scanner.next_chunk()),
-            space_name_l: u64::from_le_bytes(scanner.next_chunk()),
+            space_id_meta: <super::SpaceID as PersistObject>::meta_dec(scanner)?,
             dict_len: u64::from_le_bytes(scanner.next_chunk()),
         })
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        buf.extend(data.space_name.as_bytes());
+        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
         <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_enc(buf, data.space_meta);
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_name =
-            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
+        let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
         let space_meta = <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_dec(
             s,
             map::MapIndexSizeMD(md.dict_len as usize),
         )?;
         Ok(AlterSpaceTxnRestorePL {
-            space_name,
+            space_id,
             space_meta,
         })
     }
@@ -221,13 +215,13 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
 
     fn update_global_state(
         AlterSpaceTxnRestorePL {
-            space_name,
+            space_id,
             space_meta,
         }: Self::RestoreType,
         gns: &crate::engine::core::GlobalNS,
     ) -> TransactionResult<()> {
         let gns = gns.spaces().read();
-        match gns.st_get(&space_name) {
+        match gns.st_get(&space_id.name) {
             Some(space) => {
                 let mut wmeta = space.metadata().env().write();
                 space_meta
@@ -248,67 +242,50 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
 pub struct DropSpaceTxn<'a>(PhantomData<&'a ()>);
 
 impl<'a> DropSpaceTxn<'a> {
-    pub const fn new_commit(space_name: &'a str, uuid: Uuid) -> DropSpaceTxnCommitPL<'a> {
-        DropSpaceTxnCommitPL { space_name, uuid }
+    pub const fn new_commit(name: &'a str, uuid: Uuid) -> DropSpaceTxnCommitPL<'a> {
+        DropSpaceTxnCommitPL {
+            space_id: super::SpaceIDRef { uuid, name },
+        }
     }
 }
 
-pub struct DropSpaceTxnMD {
-    space_name_l: u64,
-    uuid: Uuid,
-}
 #[derive(Clone, Copy)]
 pub struct DropSpaceTxnCommitPL<'a> {
-    space_name: &'a str,
-    uuid: Uuid,
-}
-
-pub struct DropSpaceTxnRestorePL {
-    uuid: Uuid,
-    space_name: Box<str>,
+    space_id: super::SpaceIDRef<'a>,
 }
 
 impl<'a> PersistObject for DropSpaceTxn<'a> {
     const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64);
     type InputType = DropSpaceTxnCommitPL<'a>;
-    type OutputType = DropSpaceTxnRestorePL;
-    type Metadata = DropSpaceTxnMD;
+    type OutputType = super::SpaceIDRes;
+    type Metadata = super::SpaceIDMD;
     fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
         scanner.has_left(md.space_name_l as usize)
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        buf.extend(data.space_name.len().u64_bytes_le());
-        buf.extend(data.uuid.to_le_bytes());
+        <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
-        Ok(DropSpaceTxnMD {
-            space_name_l: u64::from_le_bytes(scanner.next_chunk()),
-            uuid: Uuid::from_bytes(scanner.next_chunk()),
-        })
+        <super::SpaceID as PersistObject>::meta_dec(scanner)
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
-        buf.extend(data.space_name.as_bytes());
+        <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id)
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        let space_name =
-            inf::dec::utils::decode_string(s, md.space_name_l as usize)?.into_boxed_str();
-        Ok(DropSpaceTxnRestorePL {
-            uuid: md.uuid,
-            space_name,
-        })
+        <super::SpaceID as PersistObject>::obj_dec(s, md)
     }
 }
 
 impl<'a> GNSEvent for DropSpaceTxn<'a> {
     const OPC: u16 = 2;
     type CommitType = DropSpaceTxnCommitPL<'a>;
-    type RestoreType = DropSpaceTxnRestorePL;
+    type RestoreType = super::SpaceIDRes;
     fn update_global_state(
-        DropSpaceTxnRestorePL { uuid, space_name }: Self::RestoreType,
+        super::SpaceIDRes { uuid, name }: Self::RestoreType,
         gns: &GlobalNS,
     ) -> TransactionResult<()> {
         let mut wgns = gns.spaces().write();
-        match wgns.entry(space_name) {
+        match wgns.entry(name) {
             std::collections::hash_map::Entry::Occupied(oe) => {
                 if oe.get().get_uuid() == uuid {
                     oe.remove_entry();

@@ -412,3 +412,68 @@ impl PersistMapSpec for FieldMapSpec {
         unimplemented!()
     }
 }
+
+// TODO(@ohsayan): common trait for k/v associations, independent of underlying maptype
+pub struct FieldMapSpecST;
+impl PersistMapSpec for FieldMapSpecST {
+    type MapIter<'a> = std::collections::hash_map::Iter<'a, Box<str>, Field>;
+    type MapType = std::collections::HashMap<Box<str>, Field>;
+    type EntryMD = FieldMapEntryMD;
+    type Key = Box<str>;
+    type Value = Field;
+    const ENC_COUPLED: bool = false;
+    const DEC_COUPLED: bool = false;
+    fn _get_iter<'a>(m: &'a Self::MapType) -> Self::MapIter<'a> {
+        m.iter()
+    }
+    fn pretest_entry_metadata(scanner: &BufferedScanner) -> bool {
+        scanner.has_left(sizeof!(u64, 3) + 1)
+    }
+    fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
+        scanner.has_left(md.field_id_l as usize) // TODO(@ohsayan): we can enforce way more here such as atleast one field etc
+    }
+    fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, val: &Self::Value) {
+        buf.extend(key.len().u64_bytes_le());
+        buf.extend(0u64.to_le_bytes()); // TODO(@ohsayan): props
+        buf.extend(val.layers().len().u64_bytes_le());
+        buf.push(val.is_nullable() as u8);
+    }
+    unsafe fn entry_md_dec(scanner: &mut BufferedScanner) -> Option<Self::EntryMD> {
+        Some(FieldMapEntryMD::new(
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            u64::from_le_bytes(scanner.next_chunk()),
+            scanner.next_byte(),
+        ))
+    }
+    fn enc_key(buf: &mut VecU8, key: &Self::Key) {
+        buf.extend(key.as_bytes());
+    }
+    fn enc_val(buf: &mut VecU8, val: &Self::Value) {
+        for layer in val.layers() {
+            super::obj::LayerRef::default_full_enc(buf, super::obj::LayerRef(layer))
+        }
+    }
+    unsafe fn dec_key(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Key> {
+        inf::dec::utils::decode_string(scanner, md.field_id_l as usize)
+            .map(|s| s.into_boxed_str())
+            .ok()
+    }
+    unsafe fn dec_val(scanner: &mut BufferedScanner, md: &Self::EntryMD) -> Option<Self::Value> {
+        super::obj::FieldRef::obj_dec(
+            scanner,
+            FieldMD::new(md.field_prop_c, md.field_layer_c, md.null),
+        )
+        .ok()
+    }
+    // unimplemented
+    fn enc_entry(_: &mut VecU8, _: &Self::Key, _: &Self::Value) {
+        unimplemented!()
+    }
+    unsafe fn dec_entry(
+        _: &mut BufferedScanner,
+        _: Self::EntryMD,
+    ) -> Option<(Self::Key, Self::Value)> {
+        unimplemented!()
+    }
+}

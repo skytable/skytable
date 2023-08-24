@@ -26,14 +26,18 @@
 
 use {
     super::{TransactionError, TransactionResult},
-    crate::engine::{
-        core::GlobalNS,
-        storage::v1::{
-            inf::{self, PersistObject},
-            BufferedScanner, JournalAdapter, JournalWriter,
+    crate::{
+        engine::{
+            core::GlobalNS,
+            data::uuid::Uuid,
+            storage::v1::{
+                inf::{self, PersistObject},
+                BufferedScanner, JournalAdapter, JournalWriter, SDSSResult,
+            },
         },
+        util::EndianQW,
     },
-    std::fs::File,
+    std::{fs::File, marker::PhantomData},
 };
 
 mod model;
@@ -120,4 +124,49 @@ where
     }
     /// Update the global state from the restored event
     fn update_global_state(restore: Self::RestoreType, gns: &GlobalNS) -> TransactionResult<()>;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SpaceIDRef<'a> {
+    uuid: Uuid,
+    name: &'a str,
+}
+pub struct SpaceIDRes {
+    uuid: Uuid,
+    name: Box<str>,
+}
+struct SpaceID<'a>(PhantomData<SpaceIDRef<'a>>);
+pub struct SpaceIDMD {
+    uuid: Uuid,
+    space_name_l: u64,
+}
+
+impl<'a> PersistObject for SpaceID<'a> {
+    const METADATA_SIZE: usize = sizeof!(u128) + sizeof!(u64);
+    type InputType = SpaceIDRef<'a>;
+    type OutputType = SpaceIDRes;
+    type Metadata = SpaceIDMD;
+    fn pretest_can_dec_object(scanner: &BufferedScanner, md: &Self::Metadata) -> bool {
+        scanner.has_left(md.space_name_l as usize)
+    }
+    fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        buf.extend(data.uuid.to_le_bytes());
+        buf.extend(data.name.len().u64_bytes_le());
+    }
+    unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
+        Ok(SpaceIDMD {
+            uuid: Uuid::from_bytes(scanner.next_chunk()),
+            space_name_l: u64::from_le_bytes(scanner.next_chunk()),
+        })
+    }
+    fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
+        buf.extend(data.name.as_bytes());
+    }
+    unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
+        let str = inf::dec::utils::decode_string(s, md.space_name_l as usize)?;
+        Ok(SpaceIDRes {
+            uuid: md.uuid,
+            name: str.into_boxed_str(),
+        })
+    }
 }
