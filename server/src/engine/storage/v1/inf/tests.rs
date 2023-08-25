@@ -112,7 +112,7 @@ fn model() {
 fn space() {
     let uuid = Uuid::new();
     let space = Space::new_with_uuid(Default::default(), SpaceMeta::default(), uuid);
-    let space_meta_read = space.metadata().env().read();
+    let space_meta_read = space.metadata().dict().read();
     let enc = super::enc::enc_full::<obj::SpaceLayoutRef>(obj::SpaceLayoutRef::from((
         &space,
         &*space_meta_read,

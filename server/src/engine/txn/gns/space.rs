@@ -101,7 +101,7 @@ impl<'a> PersistObject for CreateSpaceTxn<'a> {
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         buf.extend(data.space_name.as_bytes());
-        <obj::SpaceLayoutRef as PersistObject>::meta_enc(buf, (data.space, data.space_meta).into());
+        <obj::SpaceLayoutRef as PersistObject>::obj_enc(buf, (data.space, data.space_meta).into());
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         let space_name =
@@ -138,14 +138,14 @@ impl<'a> GNSEvent for CreateSpaceTxn<'a> {
 /// Transaction payload for an `alter space ...` query
 pub struct AlterSpaceTxn<'a> {
     space_id: super::SpaceIDRef<'a>,
-    space_meta: &'a DictGeneric,
+    updated_props: &'a DictGeneric,
 }
 
 impl<'a> AlterSpaceTxn<'a> {
-    pub const fn new(space_id: super::SpaceIDRef<'a>, space_meta: &'a DictGeneric) -> Self {
+    pub const fn new(space_id: super::SpaceIDRef<'a>, updated_props: &'a DictGeneric) -> Self {
         Self {
             space_id,
-            space_meta,
+            updated_props,
         }
     }
 }
@@ -171,7 +171,7 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     }
     fn meta_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <super::SpaceID as PersistObject>::meta_enc(buf, data.space_id);
-        buf.extend(data.space_meta.len().u64_bytes_le());
+        buf.extend(data.updated_props.len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
         Ok(AlterSpaceTxnMD {
@@ -181,7 +181,10 @@ impl<'a> PersistObject for AlterSpaceTxn<'a> {
     }
     fn obj_enc(buf: &mut Vec<u8>, data: Self::InputType) {
         <super::SpaceID as PersistObject>::obj_enc(buf, data.space_id);
-        <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_enc(buf, data.space_meta);
+        <map::PersistMapImpl<map::GenericDictSpec> as PersistObject>::obj_enc(
+            buf,
+            data.updated_props,
+        );
     }
     unsafe fn obj_dec(s: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         let space_id = <super::SpaceID as PersistObject>::obj_dec(s, md.space_id_meta)?;
@@ -211,10 +214,10 @@ impl<'a> GNSEvent for AlterSpaceTxn<'a> {
         let gns = gns.spaces().read();
         match gns.st_get(&space_id.name) {
             Some(space) => {
-                let mut wmeta = space.metadata().env().write();
-                space_meta
-                    .into_iter()
-                    .for_each(|(k, v)| wmeta.st_upsert(k, v));
+                let mut wmeta = space.metadata().dict().write();
+                if !crate::engine::data::dict::rmerge_metadata(&mut wmeta, space_meta) {
+                    return Err(TransactionError::OnRestoreDataConflictMismatch);
+                }
             }
             None => return Err(TransactionError::OnRestoreDataMissing),
         }

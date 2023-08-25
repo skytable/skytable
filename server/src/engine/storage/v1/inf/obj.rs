@@ -272,6 +272,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
 }
 
 pub struct SpaceLayout;
+#[derive(Debug)]
 pub struct SpaceLayoutMD {
     uuid: Uuid,
     prop_c: usize,
@@ -323,7 +324,7 @@ impl<'a> PersistObject for SpaceLayoutRef<'a> {
                 super::map::MapIndexSizeMD(md.prop_c),
             )?;
         Ok(Space::new_restore_empty(
-            SpaceMeta::with_env(space_meta),
+            SpaceMeta::new_with_meta(space_meta),
             md.uuid,
         ))
     }

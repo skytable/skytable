@@ -52,14 +52,6 @@ pub enum DictEntryGeneric {
     patchsets
 */
 
-#[derive(Debug, PartialEq, Default)]
-struct DictGenericPatch(HashMap<Box<str>, Option<DictGenericPatchEntry>>);
-#[derive(Debug, PartialEq)]
-enum DictGenericPatchEntry {
-    Data(Datacell),
-    Map(DictGenericPatch),
-}
-
 /// Accepts a dict with possible null values, and removes those null values
 pub fn rflatten_metadata(mut new: DictGeneric) -> DictGeneric {
     _rflatten_metadata(&mut new);
@@ -79,25 +71,38 @@ fn _rflatten_metadata(new: &mut DictGeneric) {
 /// Recursively merge a [`DictGeneric`] into a [`DictGeneric`] with the use of an intermediary
 /// patchset to avoid inconsistent states
 pub fn rmerge_metadata(current: &mut DictGeneric, new: DictGeneric) -> bool {
-    let mut patch = DictGenericPatch::default();
-    let current_ref = current as &_;
-    let r = rmerge_metadata_prepare_patch(current_ref, new, &mut patch);
-    if r {
-        merge_data_with_patch(current, patch);
+    match rprepare_metadata_patch(current as &_, new) {
+        Some(patch) => {
+            rmerge_data_with_patch(current, patch);
+            true
+        }
+        None => false,
     }
-    r
 }
 
-fn merge_data_with_patch(current: &mut DictGeneric, patch: DictGenericPatch) {
-    for (key, patch) in patch.0 {
+pub fn rprepare_metadata_patch(current: &DictGeneric, new: DictGeneric) -> Option<DictGeneric> {
+    let mut patch = Default::default();
+    if rmerge_metadata_prepare_patch(current, new, &mut patch) {
+        Some(patch)
+    } else {
+        None
+    }
+}
+
+fn rmerge_data_with_patch(current: &mut DictGeneric, patch: DictGeneric) {
+    for (key, patch) in patch {
         match patch {
-            Some(DictGenericPatchEntry::Data(d)) => {
+            DictEntryGeneric::Data(d) if d.is_init() => {
                 current.st_upsert(key, DictEntryGeneric::Data(d));
             }
-            Some(DictGenericPatchEntry::Map(m)) => match current.get_mut(&key) {
+            DictEntryGeneric::Data(_) => {
+                // null
+                let _ = current.remove(&key);
+            }
+            DictEntryGeneric::Map(m) => match current.get_mut(&key) {
                 Some(current_recursive) => match current_recursive {
                     DictEntryGeneric::Map(current_m) => {
-                        merge_data_with_patch(current_m, m);
+                        rmerge_data_with_patch(current_m, m);
                     }
                     _ => {
                         // can never reach here since the patch is always correct
@@ -106,12 +111,9 @@ fn merge_data_with_patch(current: &mut DictGeneric, patch: DictGenericPatch) {
                 },
                 None => {
                     let mut new = DictGeneric::new();
-                    merge_data_with_patch(&mut new, m);
+                    rmerge_data_with_patch(&mut new, m);
                 }
             },
-            None => {
-                let _ = current.remove(&key);
-            }
         }
     }
 }
@@ -119,7 +121,7 @@ fn merge_data_with_patch(current: &mut DictGeneric, patch: DictGenericPatch) {
 fn rmerge_metadata_prepare_patch(
     current: &DictGeneric,
     new: DictGeneric,
-    patch: &mut DictGenericPatch,
+    patch: &mut DictGeneric,
 ) -> bool {
     let mut new = new.into_iter();
     let mut okay = true;
@@ -131,9 +133,7 @@ fn rmerge_metadata_prepare_patch(
                 if new_data.is_init() =>
             {
                 if this_data.kind() == new_data.kind() {
-                    patch
-                        .0
-                        .insert(key, Some(DictGenericPatchEntry::Data(new_data)));
+                    patch.insert(key, DictEntryGeneric::Data(new_data));
                 } else {
                     okay = false;
                 }
@@ -145,32 +145,28 @@ fn rmerge_metadata_prepare_patch(
                 Some(DictEntryGeneric::Map(this_recursive_data)),
                 DictEntryGeneric::Map(new_recursive_data),
             ) => {
-                let mut this_patch = DictGenericPatch::default();
+                let mut this_patch = DictGeneric::new();
                 let _okay = rmerge_metadata_prepare_patch(
                     this_recursive_data,
                     new_recursive_data,
                     &mut this_patch,
                 );
-                patch
-                    .0
-                    .insert(key, Some(DictGenericPatchEntry::Map(this_patch)));
+                patch.insert(key, DictEntryGeneric::Map(this_patch));
                 okay &= _okay;
             }
             // null -> non-null: flatten insert
             (None, DictEntryGeneric::Data(l)) if l.is_init() => {
-                let _ = patch.0.insert(key, Some(DictGenericPatchEntry::Data(l)));
+                let _ = patch.insert(key, DictEntryGeneric::Data(l));
             }
             (None, DictEntryGeneric::Map(m)) => {
-                let mut this_patch = DictGenericPatch::default();
+                let mut this_patch = DictGeneric::new();
                 okay &= rmerge_metadata_prepare_patch(&into_dict!(), m, &mut this_patch);
-                let _ = patch
-                    .0
-                    .insert(key, Some(DictGenericPatchEntry::Map(this_patch)));
+                let _ = patch.insert(key, DictEntryGeneric::Map(this_patch));
             }
             // non-null -> null: remove
             (Some(_), DictEntryGeneric::Data(l)) => {
                 debug_assert!(l.is_null());
-                patch.0.insert(key, None);
+                patch.insert(key, DictEntryGeneric::Data(Datacell::null()));
             }
             (None, DictEntryGeneric::Data(l)) => {
                 debug_assert!(l.is_null());

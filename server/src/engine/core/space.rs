@@ -47,18 +47,37 @@ pub struct Space {
 #[derive(Debug, Default)]
 /// Space metadata
 pub struct SpaceMeta {
-    pub(super) env: RwLock<DictGeneric>,
+    pub(super) props: RwLock<DictGeneric>,
 }
 
 impl SpaceMeta {
     pub const KEY_ENV: &str = "env";
-    pub fn with_env(env: DictGeneric) -> Self {
+    pub fn new_with_meta(props: DictGeneric) -> Self {
         Self {
-            env: RWLIdx::new(env),
+            props: RwLock::new(props),
         }
     }
-    pub fn env(&self) -> &RwLock<DictGeneric> {
-        &self.env
+    pub fn with_env(env: DictGeneric) -> Self {
+        Self {
+            props: RwLock::new(into_dict!("env" => DictEntryGeneric::Map(env))),
+        }
+    }
+    pub fn dict(&self) -> &RwLock<DictGeneric> {
+        &self.props
+    }
+    pub fn get_env<'a>(rwl: &'a parking_lot::RwLockReadGuard<'a, DictGeneric>) -> &'a DictGeneric {
+        match rwl.get(Self::KEY_ENV).unwrap() {
+            DictEntryGeneric::Data(_) => unreachable!(),
+            DictEntryGeneric::Map(m) => m,
+        }
+    }
+    pub fn get_env_mut<'a>(
+        rwl: &'a mut parking_lot::RwLockWriteGuard<'a, DictGeneric>,
+    ) -> &'a mut DictGeneric {
+        match rwl.get_mut(Self::KEY_ENV).unwrap() {
+            DictEntryGeneric::Data(_) => unreachable!(),
+            DictEntryGeneric::Map(m) => m,
+        }
     }
 }
 
@@ -184,7 +203,7 @@ impl Space {
         // commit txn
         if TI::NONNULL {
             // prepare and commit txn
-            let s_read = space.metadata().env().read();
+            let s_read = space.metadata().dict().read();
             txn_driver.try_commit(gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space))?;
         }
         // update global state
@@ -207,15 +226,20 @@ impl Space {
         }: AlterSpace,
     ) -> DatabaseResult<()> {
         gns.with_space(&space_name, |space| {
-            let mut space_env = space.meta.env.write();
+            let mut space_props = space.meta.props.write();
+            let DictEntryGeneric::Map(space_env_mut) =
+                space_props.get_mut(SpaceMeta::KEY_ENV).unwrap()
+            else {
+                unreachable!()
+            };
             match updated_props.remove(SpaceMeta::KEY_ENV) {
                 Some(DictEntryGeneric::Map(env)) if updated_props.is_empty() => {
-                    if !dict::rmerge_metadata(&mut space_env, env) {
+                    if !dict::rmerge_metadata(space_env_mut, env) {
                         return Err(DatabaseError::DdlSpaceBadProperty);
                     }
                 }
                 Some(DictEntryGeneric::Data(l)) if updated_props.is_empty() & l.is_null() => {
-                    space_env.clear()
+                    space_env_mut.clear()
                 }
                 None => {}
                 _ => return Err(DatabaseError::DdlSpaceBadProperty),
@@ -244,8 +268,8 @@ impl Space {
 #[cfg(test)]
 impl PartialEq for SpaceMeta {
     fn eq(&self, other: &Self) -> bool {
-        let x = self.env.read();
-        let y = other.env.read();
+        let x = self.props.read();
+        let y = other.props.read();
         *x == *y
     }
 }

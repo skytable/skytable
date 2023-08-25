@@ -47,7 +47,7 @@ mod space_tests {
     #[test]
     fn create() {
         let orig_space = Space::empty();
-        let space_r = orig_space.metadata().env().read();
+        let space_r = orig_space.metadata().dict().read();
         let txn = CreateSpaceTxn::new(&space_r, "myspace", &orig_space);
         let encoded = enc::enc_full_self(txn);
         let decoded = dec::dec_full::<CreateSpaceTxn>(&encoded).unwrap();
@@ -62,7 +62,7 @@ mod space_tests {
     #[test]
     fn alter() {
         let space = Space::empty();
-        let space_r = space.metadata().env().read();
+        let space_r = space.metadata().dict().read();
         let txn = AlterSpaceTxn::new(SpaceIDRef::new("myspace", &space), &space_r);
         let encoded = enc::enc_full_self(txn);
         let decoded = dec::dec_full::<AlterSpaceTxn>(&encoded).unwrap();

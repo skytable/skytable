@@ -61,8 +61,9 @@ fn alter_update_prop_env_var() {
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
+            let rl = space.meta.dict().read();
             assert_eq!(
-                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
+                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
@@ -92,8 +93,9 @@ fn alter_remove_prop_env_var() {
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
+            let rl = space.meta.dict().read();
             assert_eq!(
-                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
+                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
@@ -133,8 +135,9 @@ fn alter_remove_all_env() {
         &gns,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
+            let rl = space.meta.dict().read();
             assert_eq!(
-                space.meta.env.read().get("MY_NEW_PROP").unwrap(),
+                SpaceMeta::get_env(&rl).get("MY_NEW_PROP").unwrap(),
                 &(Datacell::new_uint(100).into())
             )
         },
