@@ -57,10 +57,33 @@ use {
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 const RECOVERY_BLOCK_AUTO_THRESHOLD: usize = 5;
 
-pub fn open_journal<
-    TA: JournalAdapter + core::fmt::Debug,
-    LF: RawFileIOInterface + core::fmt::Debug,
->(
+/// A journal to `/dev/null` (app. level impl)
+#[cfg(test)]
+pub fn null_journal<TA: JournalAdapter>(
+    log_file_name: &str,
+    log_kind: FileSpecifier,
+    log_kind_version: FileSpecifierVersion,
+    host_setting_version: u32,
+    host_run_mode: HostRunMode,
+    host_startup_counter: u64,
+    _: &TA::GlobalState,
+) -> JournalWriter<super::rw::NullZero, TA> {
+    let FileOpen::Created(journal) = SDSSFileIO::<super::rw::NullZero>::open_or_create_perm_rw(
+        log_file_name,
+        FileScope::Journal,
+        log_kind,
+        log_kind_version,
+        host_setting_version,
+        host_run_mode,
+        host_startup_counter,
+    )
+    .unwrap() else {
+        panic!()
+    };
+    JournalWriter::new(journal, 0, true).unwrap()
+}
+
+pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
     log_file_name: &str,
     log_kind: FileSpecifier,
     log_kind_version: FileSpecifierVersion,

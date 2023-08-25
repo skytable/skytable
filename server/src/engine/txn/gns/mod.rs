@@ -24,6 +24,8 @@
  *
 */
 
+#[cfg(test)]
+use crate::engine::storage::v1::test_util::VirtualFS;
 use {
     super::{TransactionError, TransactionResult},
     crate::{
@@ -31,8 +33,9 @@ use {
             core::{space::Space, GlobalNS},
             data::uuid::Uuid,
             storage::v1::{
+                self, header_meta,
                 inf::{self, PersistObject},
-                BufferedScanner, JournalAdapter, JournalWriter, SDSSResult,
+                BufferedScanner, JournalAdapter, JournalWriter, RawFileIOInterface, SDSSResult,
             },
         },
         util::EndianQW,
@@ -54,13 +57,70 @@ pub use {
     space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
 };
 
+pub type GNSTransactionDriverNullZero =
+    GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullZero>;
+pub type GNSTransactionDriver = GNSTransactionDriverAnyFS<File>;
+#[cfg(test)]
+pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
+
+const CURRENT_LOG_VERSION: u32 = 0;
+
+pub trait GNSTransactionDriverLLInterface: RawFileIOInterface {
+    const NONNULL: bool = <Self as RawFileIOInterface>::NOTNULL;
+}
+impl<T: RawFileIOInterface> GNSTransactionDriverLLInterface for T {}
+
 #[derive(Debug)]
 /// The GNS transaction driver is used to handle DDL transactions
-pub struct GNSTransactionDriver {
-    journal: JournalWriter<File, GNSAdapter>,
+pub struct GNSTransactionDriverAnyFS<F = File> {
+    journal: JournalWriter<F, GNSAdapter>,
 }
 
-impl GNSTransactionDriver {
+impl GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullZero> {
+    pub fn nullzero(gns: &GlobalNS) -> Self {
+        let journal = v1::open_journal(
+            "gns.db-tlog",
+            header_meta::FileSpecifier::GNSTxnLog,
+            header_meta::FileSpecifierVersion::__new(CURRENT_LOG_VERSION),
+            0,
+            header_meta::HostRunMode::Dev,
+            0,
+            gns,
+        )
+        .unwrap();
+        Self { journal }
+    }
+    pub fn nullzero_create_exec<T>(gns: &GlobalNS, f: impl FnOnce(&mut Self) -> T) -> T {
+        let mut j = Self::nullzero(gns);
+        let r = f(&mut j);
+        j.close().unwrap();
+        r
+    }
+}
+
+impl<F: GNSTransactionDriverLLInterface> GNSTransactionDriverAnyFS<F> {
+    pub fn close(self) -> TransactionResult<()> {
+        self.journal
+            .append_journal_close_and_close()
+            .map_err(|e| e.into())
+    }
+    pub fn open_or_reinit(
+        gns: &GlobalNS,
+        host_setting_version: u32,
+        host_run_mode: header_meta::HostRunMode,
+        host_startup_counter: u64,
+    ) -> TransactionResult<Self> {
+        let journal = v1::open_journal(
+            "gns.db-tlog",
+            header_meta::FileSpecifier::GNSTxnLog,
+            header_meta::FileSpecifierVersion::__new(CURRENT_LOG_VERSION),
+            host_setting_version,
+            host_run_mode,
+            host_startup_counter,
+            gns,
+        )?;
+        Ok(Self { journal })
+    }
     /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
     /// errors (if any)
     pub fn try_commit<GE: GNSEvent>(&mut self, gns_event: GE) -> TransactionResult<()> {
@@ -89,8 +149,35 @@ impl JournalAdapter for GNSAdapter {
     fn encode(GNSSuperEvent(b): Self::JournalEvent) -> Box<[u8]> {
         b
     }
-    fn decode_and_update_state(_: &[u8], _: &Self::GlobalState) -> TransactionResult<()> {
-        todo!()
+    fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> TransactionResult<()> {
+        if payload.len() < 2 {
+            return Err(TransactionError::DecodedUnexpectedEof);
+        }
+        macro_rules! dispatch {
+            ($($item:ty),* $(,)?) => {
+                [$(<$item as GNSEvent>::decode_and_update_global_state),*, |_, _| Err(TransactionError::DecodeUnknownTxnOp)]
+            };
+        }
+        static DISPATCH: [fn(&mut BufferedScanner, &GlobalNS) -> TransactionResult<()>; 9] = dispatch!(
+            CreateSpaceTxn,
+            AlterSpaceTxn,
+            DropSpaceTxn,
+            CreateModelTxn,
+            AlterModelAddTxn,
+            AlterModelRemoveTxn,
+            AlterModelUpdateTxn,
+            DropModelTxn
+        );
+        let mut scanner = BufferedScanner::new(&payload);
+        let opc = unsafe {
+            // UNSAFE(@ohsayan):
+            u16::from_le_bytes(scanner.next_chunk())
+        };
+        match DISPATCH[core::cmp::min(opc as usize, DISPATCH.len())](&mut scanner, gs) {
+            Ok(()) if scanner.eof() => return Ok(()),
+            Ok(_) => Err(TransactionError::DecodeCorruptedPayloadMoreBytes),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -121,10 +208,14 @@ where
     fn encode_super_event(commit: Self, buf: &mut Vec<u8>) {
         inf::enc::enc_full_into_buffer::<Self>(buf, commit)
     }
-    /// Attempts to decode the event using the given scanner
-    fn decode_from_super_event(
+    fn decode_and_update_global_state(
         scanner: &mut BufferedScanner,
-    ) -> TransactionResult<Self::RestoreType> {
+        gns: &GlobalNS,
+    ) -> TransactionResult<()> {
+        Self::update_global_state(Self::decode(scanner)?, gns)
+    }
+    /// Attempts to decode the event using the given scanner
+    fn decode(scanner: &mut BufferedScanner) -> TransactionResult<Self::RestoreType> {
         inf::dec::dec_full_from_scanner::<Self>(scanner).map_err(|e| e.into())
     }
     /// Update the global state from the restored event

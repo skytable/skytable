@@ -32,7 +32,12 @@ pub type TransactionResult<T> = Result<T, TransactionError>;
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum TransactionError {
-    SDSSError(SDSSError),
+    /// corrupted txn payload. has more bytes than expected
+    DecodeCorruptedPayloadMoreBytes,
+    /// transaction payload is corrupted. has lesser bytes than expected
+    DecodedUnexpectedEof,
+    /// unknown transaction operation. usually indicates a corrupted payload
+    DecodeUnknownTxnOp,
     /// While restoring a certain item, a non-resolvable conflict was encountered in the global state, because the item was
     /// already present (when it was expected to not be present)
     OnRestoreDataConflictAlreadyExists,
@@ -40,6 +45,7 @@ pub enum TransactionError {
     OnRestoreDataMissing,
     /// On restore, a certain item that was expected to match a certain value, has a different value
     OnRestoreDataConflictMismatch,
+    SDSSError(SDSSError),
 }
 
 direct_from! {

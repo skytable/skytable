@@ -41,8 +41,11 @@ mod tests;
 // re-exports
 pub use {
     journal::{open_journal, JournalAdapter, JournalWriter},
-    rw::BufferedScanner,
+    rw::{BufferedScanner, NullZero, RawFileIOInterface, SDSSFileIO},
 };
+pub mod header_meta {
+    pub use super::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode};
+}
 
 use crate::util::os::SysIOError as IoError;
 

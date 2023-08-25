@@ -53,6 +53,8 @@ pub enum RawFileOpen<F> {
 }
 
 pub trait RawFileIOInterface: Sized {
+    /// Indicates that the interface is not a `/dev/null` (or related) implementation
+    const NOTNULL: bool = true;
     fn fopen_or_create_rw(file_path: &str) -> SDSSResult<RawFileOpen<Self>>;
     fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
     fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()>;
@@ -61,6 +63,37 @@ pub trait RawFileIOInterface: Sized {
     fn flen(&self) -> SDSSResult<u64>;
     fn flen_set(&mut self, to: u64) -> SDSSResult<()>;
     fn fcursor(&mut self) -> SDSSResult<u64>;
+}
+
+/// This is a kind of file like `/dev/null`. It exists in ... nothing!
+pub struct NullZero;
+
+impl RawFileIOInterface for NullZero {
+    const NOTNULL: bool = false;
+    fn fopen_or_create_rw(_: &str) -> SDSSResult<RawFileOpen<Self>> {
+        Ok(RawFileOpen::Created(Self))
+    }
+    fn fread_exact(&mut self, _: &mut [u8]) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn fwrite_all(&mut self, _: &[u8]) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn fsync_all(&mut self) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn fseek_ahead(&mut self, _: u64) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn flen(&self) -> SDSSResult<u64> {
+        Ok(0)
+    }
+    fn flen_set(&mut self, _: u64) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn fcursor(&mut self) -> SDSSResult<u64> {
+        Ok(0)
+    }
 }
 
 impl RawFileIOInterface for File {

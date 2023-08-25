@@ -24,10 +24,14 @@
  *
 */
 
+#[cfg(test)]
+use super::{
+    header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
+    rw::{FileOpen, SDSSFileIO},
+};
 use {
     super::{
-        header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
-        rw::{FileOpen, RawFileIOInterface, RawFileOpen, SDSSFileIO},
+        rw::{RawFileIOInterface, RawFileOpen},
         SDSSResult,
     },
     crate::engine::sync::cell::Lazy,

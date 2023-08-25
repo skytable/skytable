@@ -31,6 +31,7 @@ use {
         error::{DatabaseError, DatabaseResult},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
+        txn::gns as gnstxn,
     },
     parking_lot::RwLock,
 };
@@ -168,15 +169,34 @@ impl Space {
 }
 
 impl Space {
-    /// Execute a `create` stmt
-    pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
+    pub fn transactional_exec_create<TI: gnstxn::GNSTransactionDriverLLInterface>(
+        gns: &super::GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
+        space: CreateSpace,
+    ) -> DatabaseResult<()> {
+        // process create
         let ProcedureCreate { space_name, space } = Self::process_create(space)?;
+        // acquire access
         let mut wl = gns.spaces().write();
-        if wl.st_insert(space_name, space) {
-            Ok(())
-        } else {
-            Err(DatabaseError::DdlSpaceAlreadyExists)
+        if wl.st_contains(&space_name) {
+            return Err(DatabaseError::DdlSpaceAlreadyExists);
         }
+        // commit txn
+        if TI::NONNULL {
+            // prepare and commit txn
+            let s_read = space.metadata().env().read();
+            txn_driver.try_commit(gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space))?;
+        }
+        // update global state
+        let _ = wl.st_insert(space_name, space);
+        Ok(())
+    }
+    /// Execute a `create` stmt
+    #[cfg(test)]
+    pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
+            Self::transactional_exec_create(gns, driver, space)
+        })
     }
     /// Execute a `alter` stmt
     pub fn exec_alter(
