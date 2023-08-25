@@ -89,7 +89,7 @@ pub fn rprepare_metadata_patch(current: &DictGeneric, new: DictGeneric) -> Optio
     }
 }
 
-fn rmerge_data_with_patch(current: &mut DictGeneric, patch: DictGeneric) {
+pub fn rmerge_data_with_patch(current: &mut DictGeneric, patch: DictGeneric) {
     for (key, patch) in patch {
         match patch {
             DictEntryGeneric::Data(d) if d.is_init() => {

@@ -217,51 +217,84 @@ impl Space {
             Self::transactional_exec_create(gns, driver, space)
         })
     }
-    /// Execute a `alter` stmt
-    pub fn exec_alter(
+    pub fn transactional_exec_alter<TI: gnstxn::GNSTransactionDriverLLInterface>(
         gns: &super::GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
         AlterSpace {
             space_name,
-            mut updated_props,
+            updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
         gns.with_space(&space_name, |space| {
-            let mut space_props = space.meta.props.write();
-            let DictEntryGeneric::Map(space_env_mut) =
-                space_props.get_mut(SpaceMeta::KEY_ENV).unwrap()
-            else {
-                unreachable!()
-            };
-            match updated_props.remove(SpaceMeta::KEY_ENV) {
-                Some(DictEntryGeneric::Map(env)) if updated_props.is_empty() => {
-                    if !dict::rmerge_metadata(space_env_mut, env) {
-                        return Err(DatabaseError::DdlSpaceBadProperty);
-                    }
-                }
-                Some(DictEntryGeneric::Data(l)) if updated_props.is_empty() & l.is_null() => {
-                    space_env_mut.clear()
-                }
-                None => {}
+            match updated_props.get(SpaceMeta::KEY_ENV) {
+                Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
+                Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
+                None if updated_props.is_empty() => return Ok(()),
                 _ => return Err(DatabaseError::DdlSpaceBadProperty),
             }
+            let mut space_props = space.meta.dict().write();
+            // create patch
+            let patch = match dict::rprepare_metadata_patch(&space_props, updated_props) {
+                Some(patch) => patch,
+                None => return Err(DatabaseError::DdlSpaceBadProperty),
+            };
+            if TI::NONNULL {
+                // prepare txn
+                let txn =
+                    gnstxn::AlterSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space), &patch);
+                // commit
+                txn_driver.try_commit(txn)?;
+            }
+            // merge
+            dict::rmerge_data_with_patch(&mut space_props, patch);
+            // the `env` key may have been popped, so put it back (setting `env: null` removes the env key and we don't want to waste time enforcing this in the
+            // merge algorithm)
+            let _ = space_props.st_insert(
+                SpaceMeta::KEY_ENV.into(),
+                DictEntryGeneric::Map(into_dict!()),
+            );
             Ok(())
         })
     }
-    pub fn exec_drop(
+    #[cfg(test)]
+    /// Execute a `alter` stmt
+    pub fn exec_alter(gns: &super::GlobalNS, alter: AlterSpace) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
+            Self::transactional_exec_alter(gns, driver, alter)
+        })
+    }
+    pub fn transactional_exec_drop<TI: gnstxn::GNSTransactionDriverLLInterface>(
         gns: &super::GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
         DropSpace { space, force: _ }: DropSpace,
     ) -> DatabaseResult<()> {
         // TODO(@ohsayan): force remove option
         // TODO(@ohsayan): should a drop space block the entire global table?
-        match gns
-            .spaces()
-            .write()
-            .st_delete_if(space.as_str(), |space| space.mns.read().len() == 0)
-        {
-            Some(true) => Ok(()),
-            Some(false) => Err(DatabaseError::DdlSpaceRemoveNonEmpty),
-            None => Err(DatabaseError::DdlSpaceNotFound),
+        let space_name = space;
+        let mut wgns = gns.spaces().write();
+        let space = match wgns.get(space_name.as_str()) {
+            Some(space) => space,
+            None => return Err(DatabaseError::DdlSpaceNotFound),
+        };
+        let space_w = space.mns.write();
+        if space_w.st_len() != 0 {
+            return Err(DatabaseError::DdlSpaceRemoveNonEmpty);
         }
+        // we can remove this
+        if TI::NONNULL {
+            // prepare txn
+            let txn = gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space));
+            txn_driver.try_commit(txn)?;
+        }
+        drop(space_w);
+        let _ = wgns.st_delete(space_name.as_str());
+        Ok(())
+    }
+    #[cfg(test)]
+    pub fn exec_drop(gns: &super::GlobalNS, drop_space: DropSpace) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
+            Self::transactional_exec_drop(gns, driver, drop_space)
+        })
     }
 }
 

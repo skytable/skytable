@@ -66,6 +66,7 @@ pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 const CURRENT_LOG_VERSION: u32 = 0;
 
 pub trait GNSTransactionDriverLLInterface: RawFileIOInterface {
+    /// If true, this is an actual txn driver with a non-null (not `/dev/null` like) journal
     const NONNULL: bool = <Self as RawFileIOInterface>::NOTNULL;
 }
 impl<T: RawFileIOInterface> GNSTransactionDriverLLInterface for T {}
@@ -110,8 +111,23 @@ impl<F: GNSTransactionDriverLLInterface> GNSTransactionDriverAnyFS<F> {
         host_run_mode: header_meta::HostRunMode,
         host_startup_counter: u64,
     ) -> TransactionResult<Self> {
-        let journal = v1::open_journal(
+        Self::open_or_reinit_with_name(
+            gns,
             "gns.db-tlog",
+            host_setting_version,
+            host_run_mode,
+            host_startup_counter,
+        )
+    }
+    pub fn open_or_reinit_with_name(
+        gns: &GlobalNS,
+        log_file_name: &str,
+        host_setting_version: u32,
+        host_run_mode: header_meta::HostRunMode,
+        host_startup_counter: u64,
+    ) -> TransactionResult<Self> {
+        let journal = v1::open_journal(
+            log_file_name,
             header_meta::FileSpecifier::GNSTxnLog,
             header_meta::FileSpecifierVersion::__new(CURRENT_LOG_VERSION),
             host_setting_version,

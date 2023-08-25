@@ -50,6 +50,7 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 
 // FIXME(@ohsayan): Make sure we update what all structures we're making use of here
 
+#[cfg_attr(test, derive(Debug))]
 pub struct GlobalNS {
     index_space: RWLIdx<Box<str>, Space>,
 }

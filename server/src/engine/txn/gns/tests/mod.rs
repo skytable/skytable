@@ -24,4 +24,5 @@
  *
 */
 
+mod full_chain;
 mod io;
