@@ -212,7 +212,10 @@ impl Space {
     }
     /// Execute a `create` stmt
     #[cfg(test)]
-    pub fn exec_create(gns: &super::GlobalNS, space: CreateSpace) -> DatabaseResult<()> {
+    pub fn nontransactional_exec_create(
+        gns: &super::GlobalNS,
+        space: CreateSpace,
+    ) -> DatabaseResult<()> {
         gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
             Self::transactional_exec_create(gns, driver, space)
         })
@@ -258,7 +261,10 @@ impl Space {
     }
     #[cfg(test)]
     /// Execute a `alter` stmt
-    pub fn exec_alter(gns: &super::GlobalNS, alter: AlterSpace) -> DatabaseResult<()> {
+    pub fn nontransactional_exec_alter(
+        gns: &super::GlobalNS,
+        alter: AlterSpace,
+    ) -> DatabaseResult<()> {
         gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
             Self::transactional_exec_alter(gns, driver, alter)
         })
@@ -291,7 +297,10 @@ impl Space {
         Ok(())
     }
     #[cfg(test)]
-    pub fn exec_drop(gns: &super::GlobalNS, drop_space: DropSpace) -> DatabaseResult<()> {
+    pub fn nontransactional_exec_drop(
+        gns: &super::GlobalNS,
+        drop_space: DropSpace,
+    ) -> DatabaseResult<()> {
         gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
             Self::transactional_exec_drop(gns, driver, drop_space)
         })

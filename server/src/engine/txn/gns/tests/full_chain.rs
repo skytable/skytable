@@ -26,11 +26,17 @@
 
 use crate::engine::{
     core::{
+        model::{Field, Layer, Model},
         space::{Space, SpaceMeta},
         GlobalNS,
     },
-    data::{cell::Datacell, uuid::Uuid, DictEntryGeneric},
-    ql::{ast::parse_ast_node_full, ddl::crt::CreateSpace, tests::lex_insecure},
+    data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
+    idx::STIndex,
+    ql::{
+        ast::parse_ast_node_full,
+        ddl::crt::{CreateModel, CreateSpace},
+        tests::lex_insecure,
+    },
     storage::v1::header_meta::HostRunMode,
     txn::gns::GNSTransactionDriverVFS,
 };
@@ -141,5 +147,105 @@ fn drop_space() {
             assert_eq!(gns.spaces().read().get("myspace"), None);
             driver.close().unwrap();
         })
+    })
+}
+
+fn init_model(
+    gns: &GlobalNS,
+    txn_driver: &mut GNSTransactionDriverVFS,
+    space_name: &str,
+    model_name: &str,
+    decl: &str,
+) -> Uuid {
+    let query = format!("create model {space_name}.{model_name} ({decl})");
+    let stmt = lex_insecure(query.as_bytes()).unwrap();
+    let stmt = parse_ast_node_full::<CreateModel>(&stmt[2..]).unwrap();
+    let model_name = stmt.model_name;
+    Model::transactional_exec_create(&gns, txn_driver, stmt).unwrap();
+    gns.with_model(model_name, |model| Ok(model.get_uuid()))
+        .unwrap()
+}
+
+fn init_default_model(gns: &GlobalNS, driver: &mut GNSTransactionDriverVFS) -> Uuid {
+    init_model(
+        gns,
+        driver,
+        "myspace",
+        "mymodel",
+        "username: string, password: binary",
+    )
+}
+
+#[test]
+fn create_model() {
+    with_variable("create_model_test.gns.db-tlog", |log_name| {
+        let _uuid_space;
+        let uuid_model;
+        {
+            let gns = GlobalNS::empty();
+            let mut driver = init_txn_driver(&gns, log_name);
+            _uuid_space = init_space(&gns, &mut driver, "myspace", "{}");
+            uuid_model = init_default_model(&gns, &mut driver);
+            driver.close().unwrap();
+        }
+        double_run(|| {
+            let gns = GlobalNS::empty();
+            let driver = init_txn_driver(&gns, log_name);
+            gns.with_model(("myspace", "mymodel"), |model| {
+                assert_eq!(
+                    model,
+                    &Model::new_restore(
+                        uuid_model,
+                        "username".into(),
+                        TagSelector::Str.into_full(),
+                        into_dict! {
+                            "username" => Field::new([Layer::str()].into(), false),
+                            "password" => Field::new([Layer::bin()].into(), false),
+                        }
+                    )
+                );
+                Ok(())
+            })
+            .unwrap();
+            driver.close().unwrap();
+        })
+    })
+}
+
+#[test]
+fn alter_model_add() {
+    with_variable("alter_model_add_test.gns.db-tlog", |log_name| {
+        {
+            let gns = GlobalNS::empty();
+            let mut driver = init_txn_driver(&gns, log_name);
+            init_space(&gns, &mut driver, "myspace", "{}");
+            init_default_model(&gns, &mut driver);
+            let stmt = lex_insecure(
+                b"alter model myspace.mymodel add profile_pic { type: binary, nullable: true }",
+            )
+            .unwrap();
+            let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
+            Model::transactional_exec_alter(&gns, &mut driver, stmt).unwrap();
+            driver.close().unwrap();
+        }
+        {
+            double_run(|| {
+                let gns = GlobalNS::empty();
+                let driver = init_txn_driver(&gns, log_name);
+                gns.with_model(("myspace", "mymodel"), |model| {
+                    assert_eq!(
+                        model
+                            .intent_read_model()
+                            .fields()
+                            .st_get("profile_pic")
+                            .unwrap(),
+                        &Field::new([Layer::bin()].into(), true)
+                    );
+                    Ok(())
+                })
+                .unwrap();
+                driver.close().unwrap();
+            })
+        }
     })
 }

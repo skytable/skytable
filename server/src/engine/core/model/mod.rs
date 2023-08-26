@@ -47,6 +47,7 @@ use {
             drop::DropModel,
             syn::{FieldSpec, LayerSpec},
         },
+        txn::gns as gnstxn,
     },
     std::cell::UnsafeCell,
 };
@@ -202,20 +203,78 @@ impl Model {
 }
 
 impl Model {
-    pub fn exec_create(gns: &super::GlobalNS, stmt: CreateModel) -> DatabaseResult<()> {
+    pub fn transactional_exec_create<GI: gnstxn::GNSTransactionDriverLLInterface>(
+        gns: &super::GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+        stmt: CreateModel,
+    ) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;
-        gns.with_space(space_name, |space| space._create_model(model_name, model))
-    }
-    pub fn exec_drop(gns: &super::GlobalNS, stmt: DropModel) -> DatabaseResult<()> {
-        let (space, model) = stmt.entity.parse_entity()?;
-        gns.with_space(space, |space| {
+        gns.with_space(space_name, |space| {
             let mut w_space = space.models().write();
-            match w_space.st_delete_if(model, |mdl| !mdl.is_empty_atomic()) {
-                Some(true) => Ok(()),
-                Some(false) => Err(DatabaseError::DdlModelViewNotEmpty),
-                None => Err(DatabaseError::DdlModelNotFound),
+            if w_space.st_contains(model_name) {
+                return Err(DatabaseError::DdlModelAlreadyExists);
             }
+            if GI::NONNULL {
+                // prepare txn
+                let irm = model.intent_read_model();
+                let txn = gnstxn::CreateModelTxn::new(
+                    gnstxn::SpaceIDRef::new(space_name, space),
+                    model_name,
+                    &model,
+                    &irm,
+                );
+                // commit txn
+                txn_driver.try_commit(txn)?;
+            }
+            // update global state
+            let _ = w_space.st_insert(model_name.into(), model);
+            Ok(())
+        })
+    }
+    #[cfg(test)]
+    pub fn nontransactional_exec_create(
+        gns: &super::GlobalNS,
+        stmt: CreateModel,
+    ) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
+            Self::transactional_exec_create(gns, driver, stmt)
+        })
+    }
+    pub fn transactional_exec_drop<GI: gnstxn::GNSTransactionDriverLLInterface>(
+        gns: &super::GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+        stmt: DropModel,
+    ) -> DatabaseResult<()> {
+        let (space_name, model_name) = stmt.entity.parse_entity()?;
+        gns.with_space(space_name, |space| {
+            let mut w_space = space.models().write();
+            let Some(model) = w_space.get(model_name) else {
+                return Err(DatabaseError::DdlModelNotFound);
+            };
+            if GI::NONNULL {
+                // prepare txn
+                let txn = gnstxn::DropModelTxn::new(gnstxn::ModelIDRef::new(
+                    gnstxn::SpaceIDRef::new(space_name, space),
+                    model_name,
+                    model.get_uuid(),
+                    model.delta_state().current_version().value_u64(),
+                ));
+                // commit txn
+                txn_driver.try_commit(txn)?;
+            }
+            // update global state
+            let _ = w_space.st_delete(model_name);
+            Ok(())
+        })
+    }
+    #[cfg(test)]
+    pub fn nontransactional_exec_drop(
+        gns: &super::GlobalNS,
+        stmt: DropModel,
+    ) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
+            Self::transactional_exec_drop(gns, driver, stmt)
         })
     }
 }

@@ -57,6 +57,19 @@ pub struct ModelIDRef<'a> {
 }
 
 impl<'a> ModelIDRef<'a> {
+    pub fn new_ref(
+        space_name: &'a str,
+        space: &'a Space,
+        model_name: &'a str,
+        model: &'a Model,
+    ) -> ModelIDRef<'a> {
+        ModelIDRef::new(
+            super::SpaceIDRef::new(space_name, space),
+            model_name,
+            model.get_uuid(),
+            model.delta_state().current_version().value_u64(),
+        )
+    }
     pub fn new(
         space_id: super::SpaceIDRef<'a>,
         model_name: &'a str,
@@ -177,7 +190,7 @@ fn with_model<T>(
     create model
 */
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 /// The commit payload for a `create model ... (...) with {...}` txn
 pub struct CreateModelTxn<'a> {
     space_id: super::SpaceIDRef<'a>,

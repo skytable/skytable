@@ -28,7 +28,7 @@ use {
     super::{Field, IWModel, Layer, Model},
     crate::{
         engine::{
-            core::GlobalNS,
+            core::{util::EntityLocator, GlobalNS},
             data::{
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
@@ -43,6 +43,7 @@ use {
                 },
                 lex::Ident,
             },
+            txn::gns as gnstxn,
         },
         util,
     },
@@ -247,50 +248,89 @@ impl<'a> AlterPlan<'a> {
 }
 
 impl Model {
-    pub fn exec_alter(gns: &GlobalNS, alter: AlterModel) -> DatabaseResult<()> {
-        gns.with_model(alter.model, |model| {
-            // make intent
-            let iwm = model.intent_write_model();
-            // prepare plan
-            let plan = AlterPlan::fdeltas(model, &iwm, alter)?;
-            // we have a legal plan; acquire exclusive if we need it
-            if !plan.no_lock {
-                // TODO(@ohsayan): allow this later on, once we define the syntax
-                return Err(DatabaseError::NeedLock);
-            }
-            // fine, we're good
-            let mut iwm = iwm;
-            match plan.action {
-                AlterAction::Ignore => drop(iwm),
-                AlterAction::Add(new_fields) => {
-                    let mut guard = model.delta_state().wguard();
-                    // TODO(@ohsayan): this impacts lockdown duration; fix it
-                    new_fields
-                        .stseq_ord_kv()
-                        .map(|(x, y)| (x.clone(), y.clone()))
-                        .for_each(|(field_id, field)| {
+    pub fn transactional_exec_alter<GI: gnstxn::GNSTransactionDriverLLInterface>(
+        gns: &GlobalNS,
+        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+        alter: AlterModel,
+    ) -> DatabaseResult<()> {
+        let (space_name, model_name) = EntityLocator::parse_entity(alter.model)?;
+        gns.with_space(space_name, |space| {
+            space.with_model(model_name, |model| {
+                // make intent
+                let iwm = model.intent_write_model();
+                // prepare plan
+                let plan = AlterPlan::fdeltas(model, &iwm, alter)?;
+                // we have a legal plan; acquire exclusive if we need it
+                if !plan.no_lock {
+                    // TODO(@ohsayan): allow this later on, once we define the syntax
+                    return Err(DatabaseError::NeedLock);
+                }
+                // fine, we're good
+                let mut iwm = iwm;
+                match plan.action {
+                    AlterAction::Ignore => drop(iwm),
+                    AlterAction::Add(new_fields) => {
+                        let mut guard = model.delta_state().wguard();
+                        // TODO(@ohsayan): this impacts lockdown duration; fix it
+                        if GI::NONNULL {
+                            // prepare txn
+                            let txn = gnstxn::AlterModelAddTxn::new(
+                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                &new_fields,
+                            );
+                            // commit txn
+                            txn_driver.try_commit(txn)?;
+                        }
+                        new_fields
+                            .stseq_ord_kv()
+                            .map(|(x, y)| (x.clone(), y.clone()))
+                            .for_each(|(field_id, field)| {
+                                model
+                                    .delta_state()
+                                    .append_unresolved_wl_field_add(&mut guard, &field_id);
+                                iwm.fields_mut().st_insert(field_id, field);
+                            });
+                    }
+                    AlterAction::Remove(removed) => {
+                        let mut guard = model.delta_state().wguard();
+                        if GI::NONNULL {
+                            // prepare txn
+                            let txn = gnstxn::AlterModelRemoveTxn::new(
+                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                &removed,
+                            );
+                            // commit txn
+                            txn_driver.try_commit(txn)?;
+                        }
+                        removed.iter().for_each(|field_id| {
                             model
                                 .delta_state()
-                                .append_unresolved_wl_field_add(&mut guard, &field_id);
-                            iwm.fields_mut().st_insert(field_id, field);
+                                .append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
+                            iwm.fields_mut().st_delete(field_id.as_str());
                         });
+                    }
+                    AlterAction::Update(updated) => {
+                        if GI::NONNULL {
+                            // prepare txn
+                            let txn = gnstxn::AlterModelUpdateTxn::new(
+                                gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
+                                &updated,
+                            );
+                            // commit txn
+                            txn_driver.try_commit(txn)?;
+                        }
+                        updated.into_iter().for_each(|(field_id, field)| {
+                            iwm.fields_mut().st_update(&field_id, field);
+                        });
+                    }
                 }
-                AlterAction::Remove(remove) => {
-                    let mut guard = model.delta_state().wguard();
-                    remove.iter().for_each(|field_id| {
-                        model
-                            .delta_state()
-                            .append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
-                        iwm.fields_mut().st_delete(field_id.as_str());
-                    });
-                }
-                AlterAction::Update(u) => {
-                    u.into_iter().for_each(|(field_id, field)| {
-                        iwm.fields_mut().st_update(&field_id, field);
-                    });
-                }
-            }
-            Ok(())
+                Ok(())
+            })
+        })
+    }
+    pub fn exec_alter(gns: &GlobalNS, stmt: AlterModel) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
+            Self::transactional_exec_alter(gns, driver, stmt)
         })
     }
 }

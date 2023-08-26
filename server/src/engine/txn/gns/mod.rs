@@ -53,6 +53,7 @@ mod tests;
 pub use {
     model::{
         AlterModelAddTxn, AlterModelRemoveTxn, AlterModelUpdateTxn, CreateModelTxn, DropModelTxn,
+        ModelIDRef,
     },
     space::{AlterSpaceTxn, CreateSpaceTxn, DropSpaceTxn},
 };

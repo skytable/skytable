@@ -42,7 +42,7 @@ fn exec_create(gns: &GlobalNS, create: &str, verify: impl Fn(&Space)) -> Databas
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::crt::CreateSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
-    Space::exec_create(gns, ast_node)?;
+    Space::nontransactional_exec_create(gns, ast_node)?;
     gns.with_space(&name, |space| {
         verify(space);
         Ok(space.get_uuid())
@@ -54,7 +54,7 @@ fn exec_alter(gns: &GlobalNS, alter: &str, verify: impl Fn(&Space)) -> DatabaseR
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::alt::AlterSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
-    Space::exec_alter(gns, ast_node)?;
+    Space::nontransactional_exec_alter(gns, ast_node)?;
     gns.with_space(&name, |space| {
         verify(space);
         Ok(space.get_uuid())

@@ -47,7 +47,7 @@ fn _exec_only_create_space_model(gns: &GlobalNS, model: &str) -> DatabaseResult<
     }
     let lex_create_model = lex_insecure(model.as_bytes()).unwrap();
     let stmt_create_model = parse_ast_node_full(&lex_create_model[2..]).unwrap();
-    Model::exec_create(gns, stmt_create_model)
+    Model::nontransactional_exec_create(gns, stmt_create_model)
 }
 
 fn _exec_only_insert<T>(

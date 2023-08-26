@@ -58,7 +58,7 @@ pub fn exec_create(
     if create_new_space {
         gns.test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
     }
-    Model::exec_create(gns, create_model).map(|_| name)
+    Model::nontransactional_exec_create(gns, create_model).map(|_| name)
 }
 
 pub fn exec_create_new_space(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
