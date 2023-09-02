@@ -47,7 +47,13 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
         let row = Row::new(pk, data, ds.schema_current_version(), cv);
         if mdl.primary_index().__raw_index().mt_insert(row.clone(), &g) {
             // append delta for new version
-            ds.append_new_data_delta(DataDeltaKind::Insert, row, cv, &g);
+            ds.append_new_data_delta(
+                DataDeltaKind::Insert,
+                row,
+                ds.schema_current_version(),
+                cv,
+                &g,
+            );
             Ok(())
         } else {
             Err(DatabaseError::DmlConstraintViolationDuplicate)

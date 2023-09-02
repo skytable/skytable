@@ -26,7 +26,7 @@
 
 use crate::{
     engine::{
-        core::{index::PrimaryIndexKey, GlobalNS},
+        core::{index::PrimaryIndexKey, model::delta::DataDelta, GlobalNS},
         data::cell::Datacell,
         storage::v1::inf::obj,
     },
@@ -35,8 +35,16 @@ use crate::{
 
 type Buf = Vec<u8>;
 
-static mut CAP_PER_LL: usize = 0;
-static mut FREEMEM: u64 = 0;
+/*
+    memory adjustments
+*/
+
+/// free memory in bytes
+static mut FREEMEM_BYTES: u64 = 0;
+/// capacity in bytes, per linked list
+static mut CAP_PER_LL_BYTES: u64 = 0;
+/// maximum number of nodes in linked list
+static mut MAX_NODES_IN_LL_CNT: usize = 0;
 
 /// Set the free memory and cap for deltas so that we don't bust through memory
 ///
@@ -51,8 +59,18 @@ pub unsafe fn set_limits(gns: &GlobalNS) {
         .map(|space| space.models().read().len())
         .sum();
     let available_mem = os::free_memory_in_bytes();
-    FREEMEM = available_mem;
-    CAP_PER_LL = ((available_mem as usize / core::cmp::max(1, model_cnt)) as f64 * 0.01) as usize;
+    FREEMEM_BYTES = available_mem;
+    CAP_PER_LL_BYTES =
+        ((available_mem / core::cmp::max(1, model_cnt) as u64) as f64 * 0.002) as u64;
+    MAX_NODES_IN_LL_CNT = CAP_PER_LL_BYTES as usize / (sizeof!(DataDelta) + sizeof!(u64));
+}
+
+/// Returns the maximum number of nodes that can be stored inside a delta queue for a model
+///
+/// Currently hardcoded to 0.2% of free memory after all datasets have been loaded
+pub unsafe fn get_max_delta_queue_size() -> usize {
+    // TODO(@ohsayan): dynamically approximate this limit
+    MAX_NODES_IN_LL_CNT
 }
 
 /*

@@ -51,7 +51,7 @@ pub struct SpaceMeta {
 }
 
 impl SpaceMeta {
-    pub const KEY_ENV: &str = "env";
+    pub const KEY_ENV: &'static str = "env";
     pub fn new_with_meta(props: DictGeneric) -> Self {
         Self {
             props: RwLock::new(props),

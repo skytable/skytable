@@ -173,11 +173,12 @@ impl DeltaState {
         &self,
         kind: DataDeltaKind,
         row: Row,
-        version: DeltaVersion,
+        schema_version: DeltaVersion,
+        data_version: DeltaVersion,
         g: &Guard,
     ) {
         self.data_deltas
-            .blocking_enqueue(DataDelta::new(version.0, row, kind), g);
+            .blocking_enqueue(DataDelta::new(schema_version, data_version, row, kind), g);
     }
     pub fn create_new_data_delta_version(&self) -> DeltaVersion {
         DeltaVersion(self.__data_delta_step())
@@ -315,15 +316,22 @@ impl<'a> SchemaDeltaIndexRGuard<'a> {
 
 #[derive(Debug)]
 pub struct DataDelta {
-    version: u64,
+    schema_version: DeltaVersion,
+    data_version: DeltaVersion,
     row: Row,
     change: DataDeltaKind,
 }
 
 impl DataDelta {
-    pub const fn new(version: u64, row: Row, change: DataDeltaKind) -> Self {
+    pub const fn new(
+        schema_version: DeltaVersion,
+        data_version: DeltaVersion,
+        row: Row,
+        change: DataDeltaKind,
+    ) -> Self {
         Self {
-            version,
+            schema_version,
+            data_version,
             row,
             change,
         }

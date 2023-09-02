@@ -343,7 +343,13 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
             // update revised tag
             row_data_wl.set_txn_revised(cv);
             // publish delta
-            ds.append_new_data_delta(DataDeltaKind::Update, row.clone(), cv, &g);
+            ds.append_new_data_delta(
+                DataDeltaKind::Update,
+                row.clone(),
+                ds.schema_current_version(),
+                cv,
+                &g,
+            );
         }
         ret
     })
