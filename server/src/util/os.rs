@@ -28,7 +28,9 @@
 pub use unix::*;
 #[cfg(windows)]
 pub use windows::*;
+mod free_memory;
 
+pub use free_memory::free_memory_in_bytes;
 use {
     crate::IoResult,
     std::{

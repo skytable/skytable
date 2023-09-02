@@ -383,7 +383,7 @@ mod exec {
                     ]
                 );
                 assert_eq!(
-                    model.delta_state().current_version(),
+                    model.delta_state().schema_current_version(),
                     DeltaVersion::test_new(2)
                 );
             },
@@ -410,7 +410,7 @@ mod exec {
                     [("username".into(), Field::new([Layer::str()].into(), false))]
                 );
                 assert_eq!(
-                    mdl.delta_state().current_version(),
+                    mdl.delta_state().schema_current_version(),
                     DeltaVersion::test_new(4)
                 );
             }
@@ -428,7 +428,7 @@ mod exec {
                 let schema = model.intent_read_model();
                 assert!(schema.fields().st_get("password").unwrap().is_nullable());
                 assert_eq!(
-                    model.delta_state().current_version(),
+                    model.delta_state().schema_current_version(),
                     DeltaVersion::genesis()
                 );
             },

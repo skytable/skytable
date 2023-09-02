@@ -25,7 +25,7 @@
 */
 
 mod dml;
-mod index;
+pub(in crate::engine) mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;
 pub mod space;

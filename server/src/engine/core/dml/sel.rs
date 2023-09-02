@@ -56,7 +56,7 @@ where
         };
         match mdl.primary_index().select(target_key.clone(), &g) {
             Some(row) => {
-                let r = row.resolve_deltas_and_freeze(mdl.delta_state());
+                let r = row.resolve_schema_deltas_and_freeze(mdl.delta_state());
                 if select.is_wildcard() {
                     for key in irm.fields().stseq_ord_key() {
                         read_field(key.as_ref(), r.fields())?;

@@ -27,7 +27,7 @@
 use crate::engine::{core::model::delta::IRModel, data::DictGeneric};
 
 use {
-    super::{PersistObject, VecU8},
+    super::{PersistDictEntryDscr, PersistObject, VecU8},
     crate::{
         engine::{
             core::{
@@ -35,6 +35,7 @@ use {
                 space::{Space, SpaceMeta},
             },
             data::{
+                cell::Datacell,
                 tag::{DataTag, TagClass, TagSelector},
                 uuid::Uuid,
             },
@@ -45,12 +46,35 @@ use {
     },
 };
 
-/*
-    Full 8B tag block. Notes:
-    1. 7B at this moment is currently unused but there's a lot of additional flags that we might want to store here
-    2. If we end up deciding that this is indeed a waste of space, version this out and get rid of the 7B (or whatever we determine
-    to be the correct size.)
-*/
+pub fn encode_element(buf: &mut VecU8, dc: &Datacell) {
+    unsafe {
+        use TagClass::*;
+        match dc.tag().tag_class() {
+            Bool if dc.is_init() => buf.push(dc.read_bool() as u8),
+            Bool => {}
+            UnsignedInt | SignedInt | Float => buf.extend(dc.read_uint().to_le_bytes()),
+            Str | Bin => {
+                let slc = dc.read_bin();
+                buf.extend(slc.len().u64_bytes_le());
+                buf.extend(slc);
+            }
+            List => {
+                let lst = dc.read_list().read();
+                buf.extend(lst.len().u64_bytes_le());
+                for item in lst.iter() {
+                    encode_element(buf, item);
+                }
+            }
+        }
+    }
+}
+
+pub fn encode_datacell_tag(buf: &mut VecU8, dc: &Datacell) {
+    buf.push(
+        PersistDictEntryDscr::translate_from_class(dc.tag().tag_class()).value_u8()
+            * (!dc.is_null() as u8),
+    )
+}
 
 /*
     layer

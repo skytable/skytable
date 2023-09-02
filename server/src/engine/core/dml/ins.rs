@@ -26,12 +26,12 @@
 
 use crate::engine::{
     core::{
-        index::{DcFieldIndex, PrimaryIndexKey},
-        model::{Fields, Model},
+        index::{DcFieldIndex, PrimaryIndexKey, Row},
+        model::{delta::DataDeltaKind, Fields, Model},
         GlobalNS,
     },
     error::{DatabaseError, DatabaseResult},
-    idx::{IndexBaseSpec, STIndex, STIndexSeq},
+    idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
 };
@@ -41,10 +41,13 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
         let irmwd = mdl.intent_write_new_data();
         let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
         let g = cpin();
-        if mdl
-            .primary_index()
-            .insert(pk, data, mdl.delta_state().current_version(), &g)
-        {
+        let ds = mdl.delta_state();
+        // create new version
+        let cv = ds.create_new_data_delta_version();
+        let row = Row::new(pk, data, ds.schema_current_version(), cv);
+        if mdl.primary_index().__raw_index().mt_insert(row.clone(), &g) {
+            // append delta for new version
+            ds.append_new_data_delta(DataDeltaKind::Insert, row, cv, &g);
             Ok(())
         } else {
             Err(DatabaseError::DmlConstraintViolationDuplicate)

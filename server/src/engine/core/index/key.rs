@@ -51,6 +51,12 @@ pub struct PrimaryIndexKey {
 }
 
 impl PrimaryIndexKey {
+    pub fn tag(&self) -> TagUnique {
+        self.tag
+    }
+}
+
+impl PrimaryIndexKey {
     pub unsafe fn read_uint(&self) -> u64 {
         self.data.load()
     }

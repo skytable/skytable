@@ -30,7 +30,7 @@ use {
     super::{
         iter::{IterKV, IterKey, IterVal},
         meta::{Config, TreeElement},
-        patch::{VanillaInsert, VanillaUpdate, VanillaUpdateRet, VanillaUpsert},
+        patch::{DeleteRetEntry, VanillaInsert, VanillaUpdate, VanillaUpdateRet, VanillaUpsert},
         RawTree,
     },
     crate::engine::{
@@ -170,5 +170,14 @@ impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
         'g: 't + 'v,
     {
         self.remove_return(key, g)
+    }
+
+    fn mt_delete_return_entry<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E>
+    where
+        Q: ?Sized + Comparable<E::Key>,
+        't: 'v,
+        'g: 't + 'v,
+    {
+        self._remove(DeleteRetEntry::new(key), g)
     }
 }

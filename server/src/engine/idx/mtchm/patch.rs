@@ -211,6 +211,40 @@ impl<'d, T: TreeElement, U: Comparable<T::Key> + ?Sized> PatchDelete<T> for Dele
     }
 }
 
+pub struct DeleteRetEntry<'a, T: TreeElement, U: ?Sized> {
+    target: &'a U,
+    _m: PhantomData<T>,
+}
+
+impl<'a, T: TreeElement, U: ?Sized> DeleteRetEntry<'a, T, U> {
+    pub fn new(target: &'a U) -> Self {
+        Self {
+            target,
+            _m: PhantomData,
+        }
+    }
+}
+
+impl<'dr, T: TreeElement, U: Comparable<T::Key> + ?Sized> PatchDelete<T>
+    for DeleteRetEntry<'dr, T, U>
+{
+    type Ret<'a> = Option<&'a T>;
+
+    type Target = U;
+
+    fn target(&self) -> &Self::Target {
+        self.target
+    }
+
+    fn ex<'a>(v: &'a T) -> Self::Ret<'a> {
+        Some(v)
+    }
+
+    fn nx<'a>() -> Self::Ret<'a> {
+        None
+    }
+}
+
 pub struct DeleteRet<'a, T: TreeElement, U: ?Sized> {
     target: &'a U,
     _m: PhantomData<T>,

@@ -25,14 +25,17 @@
 */
 
 use {
-    super::{obj::FieldMD, PersistDictEntryDscr, PersistMapSpec, PersistObject, VecU8},
+    super::{
+        obj::{self, FieldMD},
+        PersistDictEntryDscr, PersistMapSpec, PersistObject, VecU8,
+    },
     crate::{
         engine::{
             core::model::Field,
             data::{
                 cell::Datacell,
                 dict::DictEntryGeneric,
-                tag::{CUTag, DataTag, TagClass, TagUnique},
+                tag::{CUTag, TagUnique},
                 DictGeneric,
             },
             idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
@@ -191,36 +194,9 @@ impl PersistMapSpec for GenericDictSpec {
                 <PersistMapImpl<Self> as PersistObject>::default_full_enc(buf, map);
             }
             DictEntryGeneric::Data(dc) => {
-                buf.push(
-                    PersistDictEntryDscr::translate_from_class(dc.tag().tag_class()).value_u8()
-                        * (!dc.is_null() as u8),
-                );
+                obj::encode_datacell_tag(buf, dc);
                 buf.extend(key.as_bytes());
-                fn encode_element(buf: &mut VecU8, dc: &Datacell) {
-                    unsafe {
-                        use TagClass::*;
-                        match dc.tag().tag_class() {
-                            Bool if dc.is_init() => buf.push(dc.read_bool() as u8),
-                            Bool => {}
-                            UnsignedInt | SignedInt | Float => {
-                                buf.extend(dc.read_uint().to_le_bytes())
-                            }
-                            Str | Bin => {
-                                let slc = dc.read_bin();
-                                buf.extend(slc.len().u64_bytes_le());
-                                buf.extend(slc);
-                            }
-                            List => {
-                                let lst = dc.read_list().read();
-                                buf.extend(lst.len().u64_bytes_le());
-                                for item in lst.iter() {
-                                    encode_element(buf, item);
-                                }
-                            }
-                        }
-                    }
-                }
-                encode_element(buf, dc);
+                obj::encode_element(buf, dc);
             }
         }
     }

@@ -25,8 +25,9 @@
 */
 
 use crate::engine::{
-    core::GlobalNS,
+    core::{model::delta::DataDeltaKind, GlobalNS},
     error::{DatabaseError, DatabaseResult},
+    idx::MTIndex,
     ql::dml::del::DeleteStatement,
     sync,
 };
@@ -34,13 +35,24 @@ use crate::engine::{
 pub fn delete(gns: &GlobalNS, mut delete: DeleteStatement) -> DatabaseResult<()> {
     gns.with_model(delete.entity(), |model| {
         let g = sync::atm::cpin();
-        if model
+        let delta_state = model.delta_state();
+        // create new version
+        let new_version = delta_state.create_new_data_delta_version();
+        match model
             .primary_index()
-            .remove(model.resolve_where(delete.clauses_mut())?, &g)
+            .__raw_index()
+            .mt_delete_return_entry(&model.resolve_where(delete.clauses_mut())?, &g)
         {
-            Ok(())
-        } else {
-            Err(DatabaseError::DmlEntryNotFound)
+            Some(row) => {
+                delta_state.append_new_data_delta(
+                    DataDeltaKind::Delete,
+                    row.clone(),
+                    new_version,
+                    &g,
+                );
+                Ok(())
+            }
+            None => Err(DatabaseError::DmlEntryNotFound),
         }
     })
 }

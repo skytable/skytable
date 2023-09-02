@@ -67,7 +67,7 @@ impl<'a> ModelIDRef<'a> {
             super::SpaceIDRef::new(space_name, space),
             model_name,
             model.get_uuid(),
-            model.delta_state().current_version().value_u64(),
+            model.delta_state().schema_current_version().value_u64(),
         )
     }
     pub fn new(

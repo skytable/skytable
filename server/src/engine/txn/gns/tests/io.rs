@@ -148,7 +148,7 @@ mod model_tests {
                 super::SpaceIDRef::new("myspace", &space),
                 "mymodel",
                 model.get_uuid(),
-                model.delta_state().current_version().value_u64(),
+                model.delta_state().schema_current_version().value_u64(),
             ),
             &new_fields,
         );
@@ -160,7 +160,7 @@ mod model_tests {
                     super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
                     "mymodel".into(),
                     model.get_uuid(),
-                    model.delta_state().current_version().value_u64()
+                    model.delta_state().schema_current_version().value_u64()
                 ),
                 new_fields
             },
@@ -176,7 +176,7 @@ mod model_tests {
                 super::SpaceIDRef::new("myspace", &space),
                 "mymodel",
                 model.get_uuid(),
-                model.delta_state().current_version().value_u64(),
+                model.delta_state().schema_current_version().value_u64(),
             ),
             &removed_fields,
         );
@@ -188,7 +188,7 @@ mod model_tests {
                     super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
                     "mymodel".into(),
                     model.get_uuid(),
-                    model.delta_state().current_version().value_u64()
+                    model.delta_state().schema_current_version().value_u64()
                 ),
                 removed_fields: ["profile_pic".into()].into()
             },
@@ -207,7 +207,7 @@ mod model_tests {
                 super::SpaceIDRef::new("myspace", &space),
                 "mymodel".into(),
                 model.get_uuid(),
-                model.delta_state().current_version().value_u64(),
+                model.delta_state().schema_current_version().value_u64(),
             ),
             &updated_fields,
         );
@@ -219,7 +219,7 @@ mod model_tests {
                     super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
                     "mymodel".into(),
                     model.get_uuid(),
-                    model.delta_state().current_version().value_u64()
+                    model.delta_state().schema_current_version().value_u64()
                 ),
                 updated_fields
             },
@@ -233,7 +233,7 @@ mod model_tests {
             super::SpaceIDRef::new("myspace", &space),
             "mymodel",
             model.get_uuid(),
-            model.delta_state().current_version().value_u64(),
+            model.delta_state().schema_current_version().value_u64(),
         ));
         let encoded = super::enc::enc_full_self(txn);
         let decoded = super::dec::dec_full::<DropModelTxn>(&encoded).unwrap();
@@ -242,7 +242,7 @@ mod model_tests {
                 super::SpaceIDRes::new(space.get_uuid(), "myspace".into()),
                 "mymodel".into(),
                 model.get_uuid(),
-                model.delta_state().current_version().value_u64()
+                model.delta_state().schema_current_version().value_u64()
             ),
             decoded
         );

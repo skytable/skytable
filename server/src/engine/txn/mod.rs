@@ -24,6 +24,7 @@
  *
 */
 
+pub mod data;
 pub mod gns;
 
 use super::storage::v1::SDSSError;

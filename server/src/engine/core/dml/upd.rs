@@ -26,10 +26,11 @@
 
 #[cfg(test)]
 use std::cell::RefCell;
+
 use {
     crate::{
         engine::{
-            core::{query_meta::AssignmentOperator, GlobalNS},
+            core::{model::delta::DataDeltaKind, query_meta::AssignmentOperator, GlobalNS},
             data::{
                 cell::Datacell,
                 lit::LitIR,
@@ -234,19 +235,28 @@ pub fn collect_trace_path() -> Vec<&'static str> {
 pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()> {
     gns.with_model(update.entity(), |mdl| {
         let mut ret = Ok(());
+        // prepare row fetch
         let key = mdl.resolve_where(update.clauses_mut())?;
+        // freeze schema
         let irm = mdl.intent_read_model();
+        // fetch row
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
             return Err(DatabaseError::DmlEntryNotFound);
         };
+        // lock row
         let mut row_data_wl = row.d_data().write();
+        // create new version
+        let ds = mdl.delta_state();
+        let cv = ds.create_new_data_delta_version();
+        // process changes
         let mut rollback_now = false;
         let mut rollback_data = Vec::with_capacity(update.expressions().len());
         let mut assn_expressions = update.into_expressions().into_iter();
         /*
             FIXME(@ohsayan): where's my usual magic? I'll do it once we have the SE stabilized
         */
+        // apply changes
         while (assn_expressions.len() != 0) & (!rollback_now) {
             let AssignmentExpression {
                 lhs,
@@ -329,6 +339,11 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                 .for_each(|(field_id, restored_data)| {
                     row_data_wl.fields_mut().st_update(field_id, restored_data);
                 });
+        } else {
+            // update revised tag
+            row_data_wl.set_txn_revised(cv);
+            // publish delta
+            ds.append_new_data_delta(DataDeltaKind::Update, row.clone(), cv, &g);
         }
         ret
     })

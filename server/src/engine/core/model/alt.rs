@@ -270,7 +270,7 @@ impl Model {
                 match plan.action {
                     AlterAction::Ignore => drop(iwm),
                     AlterAction::Add(new_fields) => {
-                        let mut guard = model.delta_state().wguard();
+                        let mut guard = model.delta_state().schema_delta_write();
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
                         if GI::NONNULL {
                             // prepare txn
@@ -287,12 +287,12 @@ impl Model {
                             .for_each(|(field_id, field)| {
                                 model
                                     .delta_state()
-                                    .append_unresolved_wl_field_add(&mut guard, &field_id);
+                                    .schema_append_unresolved_wl_field_add(&mut guard, &field_id);
                                 iwm.fields_mut().st_insert(field_id, field);
                             });
                     }
                     AlterAction::Remove(removed) => {
-                        let mut guard = model.delta_state().wguard();
+                        let mut guard = model.delta_state().schema_delta_write();
                         if GI::NONNULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelRemoveTxn::new(
@@ -305,7 +305,7 @@ impl Model {
                         removed.iter().for_each(|field_id| {
                             model
                                 .delta_state()
-                                .append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
+                                .schema_append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
                             iwm.fields_mut().st_delete(field_id.as_str());
                         });
                     }

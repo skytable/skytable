@@ -207,6 +207,11 @@ pub trait MTIndex<E, K, V>: IndexBaseSpec {
         Q: ?Sized + Comparable<K>,
         't: 'v,
         'g: 't + 'v;
+    fn mt_delete_return_entry<'t, 'g, 'v, Q>(&'t self, key: &Q, g: &'g Guard) -> Option<&'v E>
+    where
+        Q: ?Sized + Comparable<K>,
+        't: 'v,
+        'g: 't + 'v;
 }
 
 /// An unordered STIndex

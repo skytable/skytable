@@ -26,6 +26,7 @@
 
 pub(super) mod atm;
 pub(super) mod cell;
+pub(super) mod queue;
 pub(super) mod smart;
 
 use std::{cell::Cell, hint::spin_loop, thread};

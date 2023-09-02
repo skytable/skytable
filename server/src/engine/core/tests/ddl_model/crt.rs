@@ -53,7 +53,7 @@ mod validation {
             ]
         );
         assert_eq!(
-            model.delta_state().current_version(),
+            model.delta_state().schema_current_version(),
             DeltaVersion::genesis()
         );
     }
@@ -77,7 +77,7 @@ mod validation {
             ]
         );
         assert_eq!(
-            model.delta_state().current_version(),
+            model.delta_state().schema_current_version(),
             DeltaVersion::genesis()
         );
     }
@@ -174,7 +174,7 @@ mod exec {
                 ]
             );
             assert_eq!(
-                model.delta_state().current_version(),
+                model.delta_state().schema_current_version(),
                 DeltaVersion::genesis()
             );
         });

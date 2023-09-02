@@ -25,6 +25,7 @@
 */
 
 mod astr;
+mod ll;
 mod stackop;
 mod uarray;
 mod vinline;
@@ -35,6 +36,7 @@ mod tests;
 // re-exports
 pub use {
     astr::AStr,
+    ll::CachePadded,
     stackop::ByteStack,
     uarray::UArray,
     vinline::VInline,

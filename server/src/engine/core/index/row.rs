@@ -28,7 +28,7 @@ use {
     super::key::PrimaryIndexKey,
     crate::{
         engine::{
-            core::model::{DeltaKind, DeltaState, DeltaVersion},
+            core::model::{DeltaState, DeltaVersion, SchemaDeltaKind},
             data::cell::Datacell,
             idx::{meta::hash::HasherNativeFx, mtchm::meta::TreeElement, IndexST, STIndex},
             sync::smart::RawRC,
@@ -43,7 +43,7 @@ pub type DcFieldIndex = IndexST<Box<str>, Datacell, HasherNativeFx>;
 
 #[derive(Debug)]
 pub struct Row {
-    __txn_genesis: DeltaVersion,
+    __genesis_schema_version: DeltaVersion,
     __pk: ManuallyDrop<PrimaryIndexKey>,
     __rc: RawRC<RwLock<RowData>>,
 }
@@ -51,7 +51,8 @@ pub struct Row {
 #[derive(Debug, PartialEq)]
 pub struct RowData {
     fields: DcFieldIndex,
-    txn_revised: DeltaVersion,
+    txn_revised_data: DeltaVersion,
+    txn_revised_schema_version: DeltaVersion,
 }
 
 impl RowData {
@@ -60,6 +61,12 @@ impl RowData {
     }
     pub fn fields_mut(&mut self) -> &mut DcFieldIndex {
         &mut self.fields
+    }
+    pub fn set_txn_revised(&mut self, new: DeltaVersion) {
+        self.txn_revised_data = new;
+    }
+    pub fn get_txn_revised(&self) -> DeltaVersion {
+        self.txn_revised_data
     }
 }
 
@@ -90,17 +97,18 @@ impl Row {
     pub fn new(
         pk: PrimaryIndexKey,
         data: DcFieldIndex,
-        txn_genesis: DeltaVersion,
-        txn_revised: DeltaVersion,
+        schema_version: DeltaVersion,
+        txn_revised_data: DeltaVersion,
     ) -> Self {
         Self {
-            __txn_genesis: txn_genesis,
+            __genesis_schema_version: schema_version,
             __pk: ManuallyDrop::new(pk),
             __rc: unsafe {
                 // UNSAFE(@ohsayan): we free this up later
                 RawRC::new(RwLock::new(RowData {
                     fields: data,
-                    txn_revised,
+                    txn_revised_schema_version: schema_version,
+                    txn_revised_data,
                 }))
             },
         }
@@ -131,31 +139,32 @@ impl Row {
 }
 
 impl Row {
-    pub fn resolve_deltas_and_freeze<'g>(
+    pub fn resolve_schema_deltas_and_freeze<'g>(
         &'g self,
         delta_state: &DeltaState,
     ) -> RwLockReadGuard<'g, RowData> {
         let rwl_ug = self.d_data().upgradable_read();
-        let current_version = delta_state.current_version();
-        if compiler::likely(current_version <= rwl_ug.txn_revised) {
+        let current_version = delta_state.schema_current_version();
+        if compiler::likely(current_version <= rwl_ug.txn_revised_schema_version) {
             return RwLockUpgradableReadGuard::downgrade(rwl_ug);
         }
         // we have deltas to apply
         let mut wl = RwLockUpgradableReadGuard::upgrade(rwl_ug);
-        let delta_read = delta_state.rguard();
-        let mut max_delta = wl.txn_revised;
-        for (delta_id, delta) in delta_read.resolve_iter_since(wl.txn_revised) {
+        let delta_read = delta_state.schema_delta_read();
+        let mut max_delta = wl.txn_revised_schema_version;
+        for (delta_id, delta) in delta_read.resolve_iter_since(wl.txn_revised_schema_version) {
             match delta.kind() {
-                DeltaKind::FieldAdd(f) => {
+                SchemaDeltaKind::FieldAdd(f) => {
                     wl.fields.st_insert(f.clone(), Datacell::null());
                 }
-                DeltaKind::FieldRem(f) => {
+                SchemaDeltaKind::FieldRem(f) => {
                     wl.fields.st_delete(f);
                 }
             }
             max_delta = *delta_id;
         }
-        wl.txn_revised = max_delta;
+        // we've revised upto the most most recent delta version (that we saw at this point)
+        wl.txn_revised_schema_version = max_delta;
         return RwLockWriteGuard::downgrade(wl);
     }
 }

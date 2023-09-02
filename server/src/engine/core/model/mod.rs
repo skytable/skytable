@@ -52,7 +52,7 @@ use {
     std::cell::UnsafeCell,
 };
 
-pub(in crate::engine::core) use self::delta::{DeltaKind, DeltaState, DeltaVersion};
+pub(in crate::engine::core) use self::delta::{SchemaDeltaKind, DeltaState, DeltaVersion};
 pub(in crate::engine) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]
@@ -258,7 +258,7 @@ impl Model {
                     gnstxn::SpaceIDRef::new(space_name, space),
                     model_name,
                     model.get_uuid(),
-                    model.delta_state().current_version().value_u64(),
+                    model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
                 txn_driver.try_commit(txn)?;
