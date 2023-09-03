@@ -24,6 +24,7 @@
  *
 */
 
+use crate::engine::mem::ZERO_BLOCK;
 #[cfg(test)]
 use crate::{engine::data::spec::Dataspec1D, util::test_utils};
 use {
@@ -48,6 +49,29 @@ use {
 pub struct PrimaryIndexKey {
     tag: TagUnique,
     data: SpecialPaddedWord,
+}
+
+impl Clone for PrimaryIndexKey {
+    fn clone(&self) -> Self {
+        match self.tag {
+            TagUnique::SignedInt | TagUnique::UnsignedInt => {
+                let (qw, nw) = self.data.dwordqn_load_qw_nw();
+                unsafe {
+                    let slice = slice::from_raw_parts(nw as *const u8, qw as _);
+                    let mut data = ManuallyDrop::new(slice.to_owned().into_boxed_slice());
+                    Self {
+                        tag: self.tag,
+                        data: SpecialPaddedWord::new(qw, data.as_mut_ptr() as usize),
+                    }
+                }
+            }
+            TagUnique::Bin | TagUnique::Str => Self {
+                tag: self.tag,
+                data: unsafe { core::mem::transmute_copy(&self.data) },
+            },
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl PrimaryIndexKey {
@@ -124,6 +148,27 @@ impl PrimaryIndexKey {
             data: unsafe {
                 // UNSAFE(@ohsayan): loaded above, writing here
                 SpecialPaddedWord::new(a, b)
+            },
+        }
+    }
+    /// Create a new quadword based primary key
+    pub unsafe fn new_from_qw(tag: TagUnique, qw: u64) -> Self {
+        debug_assert!(tag == TagUnique::SignedInt || tag == TagUnique::UnsignedInt);
+        Self {
+            tag,
+            data: unsafe {
+                // UNSAFE(@ohsayan): manually choosing block
+                SpecialPaddedWord::new(qw, ZERO_BLOCK.as_ptr() as usize)
+            },
+        }
+    }
+    pub unsafe fn new_from_dual(tag: TagUnique, qw: u64, ptr: usize) -> Self {
+        debug_assert!(tag == TagUnique::Str || tag == TagUnique::Bin);
+        Self {
+            tag,
+            data: unsafe {
+                // UNSAFE(@ohsayan): manually choosing qw and nw
+                SpecialPaddedWord::new(qw, ptr)
             },
         }
     }

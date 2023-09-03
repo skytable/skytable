@@ -52,7 +52,7 @@ use {
     std::cell::UnsafeCell,
 };
 
-pub(in crate::engine::core) use self::delta::{SchemaDeltaKind, DeltaState, DeltaVersion};
+pub(in crate::engine::core) use self::delta::{DeltaState, DeltaVersion, SchemaDeltaKind};
 pub(in crate::engine) type Fields = IndexSTSeqCns<Box<str>, Field>;
 
 #[derive(Debug)]

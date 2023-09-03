@@ -51,7 +51,7 @@ type VecU8 = Vec<u8>;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
 #[repr(u8)]
 /// Disambiguation for data
-pub enum PersistDictEntryDscr {
+pub enum PersistTypeDscr {
     Null = 0,
     Bool = 1,
     UnsignedInt = 2,
@@ -63,10 +63,18 @@ pub enum PersistDictEntryDscr {
     Dict = 8,
 }
 
-impl PersistDictEntryDscr {
+impl PersistTypeDscr {
+    pub(super) const MAX: Self = Self::Dict;
     /// translates the tag class definition into the dscr definition
     pub const fn translate_from_class(class: TagClass) -> Self {
         unsafe { Self::from_raw(class.d() + 1) }
+    }
+    pub const fn try_from_raw(v: u8) -> Option<Self> {
+        if v > Self::MAX.value_u8() {
+            None
+        } else {
+            unsafe { Some(Self::from_raw(v)) }
+        }
     }
     pub const unsafe fn from_raw(v: u8) -> Self {
         core::mem::transmute(v)

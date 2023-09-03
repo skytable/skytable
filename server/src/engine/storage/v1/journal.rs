@@ -68,16 +68,18 @@ pub fn null_journal<TA: JournalAdapter>(
     host_startup_counter: u64,
     _: &TA::GlobalState,
 ) -> JournalWriter<super::rw::NullZero, TA> {
-    let FileOpen::Created(journal) = SDSSFileIO::<super::rw::NullZero>::open_or_create_perm_rw(
-        log_file_name,
-        FileScope::Journal,
-        log_kind,
-        log_kind_version,
-        host_setting_version,
-        host_run_mode,
-        host_startup_counter,
-    )
-    .unwrap() else {
+    let FileOpen::Created(journal) =
+        SDSSFileIO::<super::rw::NullZero>::open_or_create_perm_rw::<false>(
+            log_file_name,
+            FileScope::Journal,
+            log_kind,
+            log_kind_version,
+            host_setting_version,
+            host_run_mode,
+            host_startup_counter,
+        )
+        .unwrap()
+    else {
         panic!()
     };
     JournalWriter::new(journal, 0, true).unwrap()
@@ -92,15 +94,25 @@ pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
     host_startup_counter: u64,
     gs: &TA::GlobalState,
 ) -> SDSSResult<JournalWriter<LF, TA>> {
-    let f = SDSSFileIO::<LF>::open_or_create_perm_rw(
-        log_file_name,
-        FileScope::Journal,
-        log_kind,
-        log_kind_version,
-        host_setting_version,
-        host_run_mode,
-        host_startup_counter,
-    )?;
+    macro_rules! open_file {
+        ($modify:literal) => {
+            SDSSFileIO::<LF>::open_or_create_perm_rw::<$modify>(
+                log_file_name,
+                FileScope::Journal,
+                log_kind,
+                log_kind_version,
+                host_setting_version,
+                host_run_mode,
+                host_startup_counter,
+            )
+        };
+    }
+    // HACK(@ohsayan): until generic const exprs are stabilized, we're in a state of hell
+    let f = if TA::DENY_NONAPPEND {
+        open_file!(false)
+    } else {
+        open_file!(true)
+    }?;
     let file = match f {
         FileOpen::Created(f) => return JournalWriter::new(f, 0, true),
         FileOpen::Existing(file, _) => file,
@@ -111,6 +123,8 @@ pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
 
 /// The journal adapter
 pub trait JournalAdapter {
+    /// deny any SDSS file level operations that require non-append mode writes (for example, updating the SDSS header's modify count)
+    const DENY_NONAPPEND: bool = true;
     /// enable/disable automated recovery algorithms
     const RECOVERY_PLUGIN: bool;
     /// The journal event

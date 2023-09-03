@@ -27,7 +27,7 @@
 use crate::engine::{core::model::delta::IRModel, data::DictGeneric};
 
 use {
-    super::{PersistDictEntryDscr, PersistObject, VecU8},
+    super::{PersistTypeDscr, PersistObject, VecU8},
     crate::{
         engine::{
             core::{
@@ -71,7 +71,7 @@ pub fn encode_element(buf: &mut VecU8, dc: &Datacell) {
 
 pub fn encode_datacell_tag(buf: &mut VecU8, dc: &Datacell) {
     buf.push(
-        PersistDictEntryDscr::translate_from_class(dc.tag().tag_class()).value_u8()
+        PersistTypeDscr::translate_from_class(dc.tag().tag_class()).value_u8()
             * (!dc.is_null() as u8),
     )
 }

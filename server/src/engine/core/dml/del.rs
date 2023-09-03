@@ -45,7 +45,7 @@ pub fn delete(gns: &GlobalNS, mut delete: DeleteStatement) -> DatabaseResult<()>
             .mt_delete_return_entry(&model.resolve_where(delete.clauses_mut())?, &g)
         {
             Some(row) => {
-                delta_state.append_new_data_delta(
+                delta_state.append_new_data_delta_with(
                     DataDeltaKind::Delete,
                     row.clone(),
                     schema_version,

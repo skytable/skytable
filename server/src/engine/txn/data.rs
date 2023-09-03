@@ -25,12 +25,8 @@
 */
 
 use crate::{
-    engine::{
-        core::{index::PrimaryIndexKey, model::delta::DataDelta, GlobalNS},
-        data::cell::Datacell,
-        storage::v1::inf::obj,
-    },
-    util::{os, EndianQW},
+    engine::core::{model::delta::DataDelta, GlobalNS},
+    util::os,
 };
 
 type Buf = Vec<u8>;
@@ -71,29 +67,4 @@ pub unsafe fn set_limits(gns: &GlobalNS) {
 pub unsafe fn get_max_delta_queue_size() -> usize {
     // TODO(@ohsayan): dynamically approximate this limit
     MAX_NODES_IN_LL_CNT
-}
-
-/*
-    misc. methods
-*/
-
-fn encode_primary_key(buf: &mut Buf, pk: &PrimaryIndexKey) {
-    buf.push(pk.tag().d());
-    static EXEC: [unsafe fn(&mut Buf, &PrimaryIndexKey); 2] = [
-        |buf, pk| unsafe { buf.extend(pk.read_uint().to_le_bytes()) },
-        |buf, pk| unsafe {
-            let bin = pk.read_bin();
-            buf.extend(bin.len().u64_bytes_le());
-            buf.extend(bin);
-        },
-    ];
-    unsafe {
-        // UNSAFE(@ohsayan): tag map
-        assert!((pk.tag().d() / 2) < 2);
-        EXEC[(pk.tag().d() / 2) as usize](buf, pk);
-    }
-}
-
-fn encode_dc(buf: &mut Buf, dc: &Datacell) {
-    obj::encode_element(buf, dc)
 }

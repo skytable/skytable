@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Sun Sep 03 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,12 +24,35 @@
  *
 */
 
-//! Implementations of the Skytable Disk Storage Subsystem (SDSS)
+use crc::{Crc, Digest, CRC_64_XZ};
 
-mod checksum;
-mod header;
-mod versions;
-// impls
-pub mod v1;
+/*
+    NOTE(@ohsayan): we're currently using crc's impl. but the reason I decided to make a wrapper is because I have a
+    different impl in mind
+*/
 
-pub use checksum::SCrc;
+const CRC64: Crc<u64> = Crc::<u64>::new(&CRC_64_XZ);
+
+pub struct SCrc {
+    digest: Digest<'static, u64>,
+}
+
+impl SCrc {
+    pub const fn new() -> Self {
+        Self {
+            digest: CRC64.digest(),
+        }
+    }
+    pub fn recompute_with_new_byte(&mut self, b: u8) {
+        self.digest.update(&[b])
+    }
+    pub fn recompute_with_new_block<const N: usize>(&mut self, b: [u8; N]) {
+        self.digest.update(&b);
+    }
+    pub fn recompute_with_new_var_block(&mut self, b: &[u8]) {
+        self.digest.update(b)
+    }
+    pub fn finish(self) -> u64 {
+        self.digest.finalize()
+    }
+}

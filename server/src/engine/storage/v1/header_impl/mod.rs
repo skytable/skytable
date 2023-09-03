@@ -72,14 +72,14 @@ mod dr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum FileScope {
     Journal = 0,
-    TransactionLogCompacted = 1,
+    DataBatch = 1,
 }
 
 impl FileScope {
     pub const fn try_new(id: u64) -> Option<Self> {
         Some(match id {
             0 => Self::Journal,
-            1 => Self::TransactionLogCompacted,
+            1 => Self::DataBatch,
             _ => return None,
         })
     }
@@ -95,16 +95,18 @@ impl FileScope {
 #[repr(u8)]
 pub enum FileSpecifier {
     GNSTxnLog = 0,
+    TableDataBatch = 1,
     #[cfg(test)]
-    TestTransactionLog = 1,
+    TestTransactionLog = 0xFF,
 }
 
 impl FileSpecifier {
     pub const fn try_new(v: u32) -> Option<Self> {
         Some(match v {
             0 => Self::GNSTxnLog,
+            1 => Self::TableDataBatch,
             #[cfg(test)]
-            1 => Self::TestTransactionLog,
+            0xFF => Self::TestTransactionLog,
             _ => return None,
         })
     }

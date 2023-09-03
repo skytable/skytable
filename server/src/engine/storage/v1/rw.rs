@@ -31,7 +31,10 @@ use {
         },
         SDSSResult,
     },
-    crate::engine::storage::v1::SDSSError,
+    crate::{
+        engine::storage::{v1::SDSSError, SCrc},
+        util::os::SysIOError,
+    },
     std::{
         fs::File,
         io::{Read, Seek, SeekFrom, Write},
@@ -44,6 +47,21 @@ use {
 pub enum FileOpen<F> {
     Created(F),
     Existing(F, SDSSHeader),
+}
+
+impl<F> FileOpen<F> {
+    pub fn into_existing(self) -> Option<(F, SDSSHeader)> {
+        match self {
+            Self::Existing(f, h) => Some((f, h)),
+            Self::Created(_) => None,
+        }
+    }
+    pub fn into_created(self) -> Option<F> {
+        match self {
+            Self::Created(f) => Some(f),
+            Self::Existing(_, _) => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -138,6 +156,103 @@ impl RawFileIOInterface for File {
     }
 }
 
+pub struct SDSSFileTrackedWriter<F> {
+    f: SDSSFileIO<F>,
+    cs: SCrc,
+}
+
+impl<F: RawFileIOInterface> SDSSFileTrackedWriter<F> {
+    pub fn new(f: SDSSFileIO<F>) -> Self {
+        Self { f, cs: SCrc::new() }
+    }
+    pub fn unfsynced_write(&mut self, block: &[u8]) -> SDSSResult<()> {
+        match self.f.unfsynced_write(block) {
+            Ok(()) => {
+                self.cs.recompute_with_new_var_block(block);
+                Ok(())
+            }
+            e => e,
+        }
+    }
+    pub fn fsync_all(&mut self) -> SDSSResult<()> {
+        self.f.fsync_all()
+    }
+    pub fn reset_and_finish_checksum(&mut self) -> u64 {
+        let mut scrc = SCrc::new();
+        core::mem::swap(&mut self.cs, &mut scrc);
+        scrc.finish()
+    }
+    pub fn inner_file(&mut self) -> &mut SDSSFileIO<F> {
+        &mut self.f
+    }
+}
+
+/// [`SDSSFileLenTracked`] simply maintains application level length and checksum tracking to avoid frequent syscalls because we
+/// do not expect (even though it's very possible) users to randomly modify file lengths while we're reading them
+pub struct SDSSFileTrackedReader<F> {
+    f: SDSSFileIO<F>,
+    len: u64,
+    pos: u64,
+    cs: SCrc,
+}
+
+impl<F: RawFileIOInterface> SDSSFileTrackedReader<F> {
+    /// Important: this will only look at the data post the current cursor!
+    pub fn new(mut f: SDSSFileIO<F>) -> SDSSResult<Self> {
+        let len = f.file_length()?;
+        let pos = f.retrieve_cursor()?;
+        Ok(Self {
+            f,
+            len,
+            pos,
+            cs: SCrc::new(),
+        })
+    }
+    pub fn remaining(&self) -> u64 {
+        self.len - self.pos
+    }
+    pub fn is_eof(&self) -> bool {
+        self.len == self.pos
+    }
+    pub fn has_left(&self, v: u64) -> bool {
+        self.remaining() >= v
+    }
+    pub fn read_into_buffer(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
+        if self.remaining() >= buf.len() as u64 {
+            match self.f.read_to_buffer(buf) {
+                Ok(()) => {
+                    self.pos += buf.len() as u64;
+                    self.cs.recompute_with_new_var_block(buf);
+                    Ok(())
+                }
+                Err(e) => return Err(e),
+            }
+        } else {
+            Err(SDSSError::IoError(SysIOError::from(
+                std::io::ErrorKind::InvalidInput,
+            )))
+        }
+    }
+    pub fn read_byte(&mut self) -> SDSSResult<u8> {
+        let mut buf = [0u8; 1];
+        self.read_into_buffer(&mut buf).map(|_| buf[0])
+    }
+    pub fn __reset_checksum(&mut self) -> u64 {
+        let mut crc = SCrc::new();
+        core::mem::swap(&mut crc, &mut self.cs);
+        crc.finish()
+    }
+    pub fn inner_file(&mut self) -> &mut SDSSFileIO<F> {
+        &mut self.f
+    }
+    pub fn into_inner_file(self) -> SDSSFileIO<F> {
+        self.f
+    }
+    pub fn __cursor_ahead_by(&mut self, sizeof: usize) {
+        self.pos += sizeof as u64;
+    }
+}
+
 #[derive(Debug)]
 pub struct SDSSFileIO<F> {
     f: F,
@@ -145,7 +260,7 @@ pub struct SDSSFileIO<F> {
 
 impl<F: RawFileIOInterface> SDSSFileIO<F> {
     /// **IMPORTANT: File position: end-of-header-section**
-    pub fn open_or_create_perm_rw(
+    pub fn open_or_create_perm_rw<const REWRITE_MODIFY_COUNTER: bool>(
         file_path: &str,
         file_scope: FileScope,
         file_specifier: FileSpecifier,
@@ -180,13 +295,15 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
                     .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
                 // now validate the header
                 header.verify(file_scope, file_specifier, file_specifier_version)?;
-                // since we updated this file, let us update the header
-                let mut new_header = header.clone();
-                new_header.dr_rs_mut().bump_modify_count();
                 let mut f = Self::_new(f);
-                f.seek_from_start(0)?;
-                f.fsynced_write(new_header.encoded().array().as_ref())?;
-                f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
+                if REWRITE_MODIFY_COUNTER {
+                    // since we updated this file, let us update the header
+                    let mut new_header = header.clone();
+                    new_header.dr_rs_mut().bump_modify_count();
+                    f.seek_from_start(0)?;
+                    f.fsynced_write(new_header.encoded().array().as_ref())?;
+                    f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
+                }
                 Ok(FileOpen::Existing(f, header))
             }
         }
@@ -222,6 +339,10 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
     pub fn retrieve_cursor(&mut self) -> SDSSResult<u64> {
         self.f.fcursor()
+    }
+    pub fn read_byte(&mut self) -> SDSSResult<u8> {
+        let mut r = [0; 1];
+        self.read_to_buffer(&mut r).map(|_| r[0])
     }
 }
 

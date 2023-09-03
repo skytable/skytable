@@ -27,6 +27,7 @@
 // raw
 mod header_impl;
 // impls
+mod batch_jrnl;
 mod journal;
 mod rw;
 // hl
@@ -110,6 +111,16 @@ pub enum SDSSError {
     InternalDecodeStructureCorruptedPayload,
     /// the data for an internal structure was decoded but is logically invalid
     InternalDecodeStructureIllegalData,
+    /// when attempting to flush a data batch, the batch journal crashed and a recovery event was triggered. But even then,
+    /// the data batch journal could not be fixed
+    DataBatchRecoveryFailStageOne,
+    /// when attempting to restore a data batch from disk, the batch journal crashed and had a corruption, but it is irrecoverable
+    DataBatchRestoreCorruptedBatch,
+    /// when attempting to restore a data batch from disk, the driver encountered a corrupted entry
+    DataBatchRestoreCorruptedEntry,
+    /// we failed to close the data batch
+    DataBatchCloseError,
+    DataBatchRestoreCorruptedBatchFile,
 }
 
 impl SDSSError {

@@ -30,7 +30,7 @@ use {
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
         collections::btree_map::{BTreeMap, Range},
-        sync::atomic::{AtomicU64, Ordering},
+        sync::atomic::{AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -153,6 +153,7 @@ pub struct DeltaState {
     // data
     data_current_version: AtomicU64,
     data_deltas: Queue<DataDelta>,
+    data_deltas_size: AtomicUsize,
 }
 
 impl DeltaState {
@@ -163,13 +164,14 @@ impl DeltaState {
             schema_deltas: RwLock::new(BTreeMap::new()),
             data_current_version: AtomicU64::new(0),
             data_deltas: Queue::new(),
+            data_deltas_size: AtomicUsize::new(0),
         }
     }
 }
 
 // data
 impl DeltaState {
-    pub fn append_new_data_delta(
+    pub fn append_new_data_delta_with(
         &self,
         kind: DataDeltaKind,
         row: Row,
@@ -177,17 +179,26 @@ impl DeltaState {
         data_version: DeltaVersion,
         g: &Guard,
     ) {
-        self.data_deltas
-            .blocking_enqueue(DataDelta::new(schema_version, data_version, row, kind), g);
+        self.append_new_data_delta(DataDelta::new(schema_version, data_version, row, kind), g);
+    }
+    pub fn append_new_data_delta(&self, delta: DataDelta, g: &Guard) {
+        self.data_deltas.blocking_enqueue(delta, g);
+        self.data_deltas_size.fetch_add(1, Ordering::Release);
     }
     pub fn create_new_data_delta_version(&self) -> DeltaVersion {
         DeltaVersion(self.__data_delta_step())
     }
+    pub fn get_data_delta_size(&self) -> usize {
+        self.data_deltas_size.load(Ordering::Acquire)
+    }
 }
 
 impl DeltaState {
-    pub fn __data_delta_step(&self) -> u64 {
+    fn __data_delta_step(&self) -> u64 {
         self.data_current_version.fetch_add(1, Ordering::AcqRel)
+    }
+    pub fn __data_delta_queue(&self) -> &Queue<DataDelta> {
+        &self.data_deltas
     }
 }
 
@@ -314,7 +325,7 @@ impl<'a> SchemaDeltaIndexRGuard<'a> {
     data delta
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataDelta {
     schema_version: DeltaVersion,
     data_version: DeltaVersion,
@@ -336,11 +347,24 @@ impl DataDelta {
             change,
         }
     }
+    pub fn schema_version(&self) -> DeltaVersion {
+        self.schema_version
+    }
+    pub fn data_version(&self) -> DeltaVersion {
+        self.data_version
+    }
+    pub fn row(&self) -> &Row {
+        &self.row
+    }
+    pub fn change(&self) -> DataDeltaKind {
+        self.change
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, sky_macros::EnumMethods, PartialEq)]
+#[repr(u8)]
 pub enum DataDeltaKind {
-    Insert,
-    Update,
-    Delete,
+    Delete = 0,
+    Insert = 1,
+    Update = 2,
 }

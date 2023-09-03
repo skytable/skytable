@@ -43,15 +43,15 @@ pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
         let g = cpin();
         let ds = mdl.delta_state();
         // create new version
-        let cv = ds.create_new_data_delta_version();
-        let row = Row::new(pk, data, ds.schema_current_version(), cv);
+        let new_version = ds.create_new_data_delta_version();
+        let row = Row::new(pk, data, ds.schema_current_version(), new_version);
         if mdl.primary_index().__raw_index().mt_insert(row.clone(), &g) {
             // append delta for new version
-            ds.append_new_data_delta(
+            ds.append_new_data_delta_with(
                 DataDeltaKind::Insert,
                 row,
                 ds.schema_current_version(),
-                cv,
+                new_version,
                 &g,
             );
             Ok(())

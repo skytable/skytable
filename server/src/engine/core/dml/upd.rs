@@ -248,7 +248,7 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
         let mut row_data_wl = row.d_data().write();
         // create new version
         let ds = mdl.delta_state();
-        let cv = ds.create_new_data_delta_version();
+        let new_version = ds.create_new_data_delta_version();
         // process changes
         let mut rollback_now = false;
         let mut rollback_data = Vec::with_capacity(update.expressions().len());
@@ -341,13 +341,13 @@ pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()>
                 });
         } else {
             // update revised tag
-            row_data_wl.set_txn_revised(cv);
+            row_data_wl.set_txn_revised(new_version);
             // publish delta
-            ds.append_new_data_delta(
+            ds.append_new_data_delta_with(
                 DataDeltaKind::Update,
                 row.clone(),
                 ds.schema_current_version(),
-                cv,
+                new_version,
                 &g,
             );
         }

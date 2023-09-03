@@ -47,6 +47,7 @@ pub enum TransactionError {
     /// On restore, a certain item that was expected to match a certain value, has a different value
     OnRestoreDataConflictMismatch,
     SDSSError(SDSSError),
+    OutOfMemory,
 }
 
 direct_from! {

@@ -69,6 +69,11 @@ impl VFile {
 
 #[derive(Debug)]
 pub struct VirtualFS(Box<str>);
+impl VirtualFS {
+    pub fn get_file_data(f: &str) -> Option<Vec<u8>> {
+        VFS.read().get(f).map(|f| f.data.clone())
+    }
+}
 
 impl RawFileIOInterface for VirtualFS {
     fn fopen_or_create_rw(file_path: &str) -> super::SDSSResult<RawFileOpen<Self>> {
@@ -181,7 +186,7 @@ impl RawFileIOInterface for VirtualFS {
 
 #[test]
 fn sdss_file() {
-    let f = SDSSFileIO::<VirtualFS>::open_or_create_perm_rw(
+    let f = SDSSFileIO::<VirtualFS>::open_or_create_perm_rw::<false>(
         "this_is_a_test_file.db",
         FileScope::Journal,
         FileSpecifier::TestTransactionLog,
@@ -199,7 +204,7 @@ fn sdss_file() {
     f.fsynced_write(b"hello, world\n").unwrap();
     f.fsynced_write(b"hello, again\n").unwrap();
 
-    let f = SDSSFileIO::<VirtualFS>::open_or_create_perm_rw(
+    let f = SDSSFileIO::<VirtualFS>::open_or_create_perm_rw::<false>(
         "this_is_a_test_file.db",
         FileScope::Journal,
         FileSpecifier::TestTransactionLog,

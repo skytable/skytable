@@ -52,6 +52,12 @@ impl From<std::io::Error> for SysIOError {
     }
 }
 
+impl From<std::io::ErrorKind> for SysIOError {
+    fn from(e: std::io::ErrorKind) -> Self {
+        Self(e.into())
+    }
+}
+
 #[cfg(test)]
 impl PartialEq for SysIOError {
     fn eq(&self, other: &Self) -> bool {

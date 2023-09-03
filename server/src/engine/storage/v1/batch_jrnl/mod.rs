@@ -1,5 +1,5 @@
 /*
- * Created on Mon May 15 2023
+ * Created on Sun Sep 03 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,12 +24,22 @@
  *
 */
 
-//! Implementations of the Skytable Disk Storage Subsystem (SDSS)
+mod persist;
+mod restore;
 
-mod checksum;
-mod header;
-mod versions;
-// impls
-pub mod v1;
+/// the data batch file was reopened
+const MARKER_BATCH_REOPEN: u8 = 0xFB;
+/// the data batch file was closed
+const MARKER_BATCH_CLOSED: u8 = 0xFC;
+/// end of batch marker
+const MARKER_END_OF_BATCH: u8 = 0xFD;
+/// "real" batch event marker
+const MARKER_ACTUAL_BATCH_EVENT: u8 = 0xFE;
+/// recovery batch event marker
+const MARKER_RECOVERY_EVENT: u8 = 0xFF;
+/// recovery threshold
+const RECOVERY_THRESHOLD: usize = 10;
 
-pub use checksum::SCrc;
+#[cfg(test)]
+pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};
+pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};

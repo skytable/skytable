@@ -139,11 +139,16 @@ impl Row {
 }
 
 impl Row {
-    pub fn resolve_schema_deltas_and_freeze<'g>(
+    /// Only apply deltas if a certain condition is met
+    pub fn resolve_schema_deltas_and_freeze_if<'g>(
         &'g self,
         delta_state: &DeltaState,
+        iff: impl Fn(&RowData) -> bool,
     ) -> RwLockReadGuard<'g, RowData> {
         let rwl_ug = self.d_data().upgradable_read();
+        if !iff(&rwl_ug) {
+            return RwLockUpgradableReadGuard::downgrade(rwl_ug);
+        }
         let current_version = delta_state.schema_current_version();
         if compiler::likely(current_version <= rwl_ug.txn_revised_schema_version) {
             return RwLockUpgradableReadGuard::downgrade(rwl_ug);
@@ -166,6 +171,12 @@ impl Row {
         // we've revised upto the most most recent delta version (that we saw at this point)
         wl.txn_revised_schema_version = max_delta;
         return RwLockWriteGuard::downgrade(wl);
+    }
+    pub fn resolve_schema_deltas_and_freeze<'g>(
+        &'g self,
+        delta_state: &DeltaState,
+    ) -> RwLockReadGuard<'g, RowData> {
+        self.resolve_schema_deltas_and_freeze_if(delta_state, |_| true)
     }
 }
 

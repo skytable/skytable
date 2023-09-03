@@ -24,7 +24,7 @@
  *
 */
 
-mod dml;
+pub(in crate::engine) mod dml;
 pub(in crate::engine) mod index;
 pub(in crate::engine) mod model;
 pub(in crate::engine) mod query_meta;
@@ -32,7 +32,7 @@ pub mod space;
 mod util;
 // test
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 // imports
 use {
     self::{model::Model, util::EntityLocator},

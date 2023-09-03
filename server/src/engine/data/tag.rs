@@ -41,6 +41,26 @@ impl TagClass {
     pub const fn max() -> usize {
         Self::List.d() as _
     }
+    pub const fn try_from_raw(v: u8) -> Option<Self> {
+        if v > Self::List.d() {
+            return None;
+        }
+        Some(unsafe { Self::from_raw(v) })
+    }
+    pub const unsafe fn from_raw(v: u8) -> Self {
+        core::mem::transmute(v)
+    }
+    pub const fn tag_unique(&self) -> TagUnique {
+        [
+            TagUnique::Illegal,
+            TagUnique::UnsignedInt,
+            TagUnique::SignedInt,
+            TagUnique::Illegal,
+            TagUnique::Bin,
+            TagUnique::Str,
+            TagUnique::Illegal,
+        ][self.d() as usize]
+    }
 }
 
 #[repr(u8)]
@@ -123,6 +143,12 @@ pub enum TagUnique {
 impl TagUnique {
     pub const fn is_unique(&self) -> bool {
         self.d() != Self::Illegal.d()
+    }
+    pub const fn try_from_raw(raw: u8) -> Option<Self> {
+        if raw > 3 {
+            return None;
+        }
+        Some(unsafe { core::mem::transmute(raw) })
     }
 }
 
