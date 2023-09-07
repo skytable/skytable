@@ -251,6 +251,19 @@ impl<F: RawFileIOInterface> SDSSFileTrackedReader<F> {
     pub fn __cursor_ahead_by(&mut self, sizeof: usize) {
         self.pos += sizeof as u64;
     }
+    pub fn read_block<const N: usize>(&mut self) -> SDSSResult<[u8; N]> {
+        if !self.has_left(N as _) {
+            return Err(SDSSError::IoError(SysIOError::from(
+                std::io::ErrorKind::InvalidInput,
+            )));
+        }
+        let mut buf = [0; N];
+        self.read_into_buffer(&mut buf)?;
+        Ok(buf)
+    }
+    pub fn read_u64_le(&mut self) -> SDSSResult<u64> {
+        Ok(u64::from_le_bytes(self.read_block()?))
+    }
 }
 
 #[derive(Debug)]

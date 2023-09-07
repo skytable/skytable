@@ -197,8 +197,14 @@ impl DeltaState {
     fn __data_delta_step(&self) -> u64 {
         self.data_current_version.fetch_add(1, Ordering::AcqRel)
     }
-    pub fn __data_delta_queue(&self) -> &Queue<DataDelta> {
-        &self.data_deltas
+    pub fn __data_delta_dequeue(&self, g: &Guard) -> Option<DataDelta> {
+        match self.data_deltas.blocking_try_dequeue(g) {
+            Some(d) => {
+                self.data_deltas_size.fetch_sub(1, Ordering::Release);
+                Some(d)
+            }
+            None => None,
+        }
     }
 }
 

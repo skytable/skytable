@@ -83,7 +83,6 @@ impl<F: RawFileIOInterface> DataBatchPersistDriver<F> {
         // pin model
         let irm = model.intent_read_model();
         let schema_version = model.delta_state().schema_current_version();
-        let data_q = model.delta_state().__data_delta_queue();
         let g = pin();
         // init restore list
         let mut restore_list = Vec::new();
@@ -92,9 +91,14 @@ impl<F: RawFileIOInterface> DataBatchPersistDriver<F> {
         let mut inconsistent_reads = 0;
         let mut exec = || -> SDSSResult<()> {
             // write batch start
-            self.write_batch_start(observed_len, schema_version)?;
+            self.write_batch_start(
+                observed_len,
+                schema_version,
+                model.p_tag().tag_unique(),
+                irm.fields().len() - 1,
+            )?;
             while i < observed_len {
-                let delta = data_q.blocking_try_dequeue(&g).unwrap();
+                let delta = model.delta_state().__data_delta_dequeue(&g).unwrap();
                 restore_list.push(delta.clone()); // TODO(@ohsayan): avoid this
                 match delta.change() {
                     DataDeltaKind::Delete => {
@@ -140,18 +144,24 @@ impl<F: RawFileIOInterface> DataBatchPersistDriver<F> {
     }
     /// Write the batch start block:
     /// - Batch start magic
+    /// - Primary key type
     /// - Expected commit
     /// - Schema version
+    /// - Column count
     fn write_batch_start(
         &mut self,
         observed_len: usize,
         schema_version: DeltaVersion,
+        pk_tag: TagUnique,
+        col_cnt: usize,
     ) -> Result<(), SDSSError> {
-        self.f.unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT])?;
+        self.f
+            .unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.d()])?;
         let observed_len_bytes = observed_len.u64_bytes_le();
         self.f.unfsynced_write(&observed_len_bytes)?;
         self.f
             .unfsynced_write(&schema_version.value_u64().to_le_bytes())?;
+        self.f.unfsynced_write(&col_cnt.u64_bytes_le())?;
         Ok(())
     }
     /// Append a summary of this batch
@@ -266,9 +276,6 @@ impl<F: RawFileIOInterface> DataBatchPersistDriver<F> {
         irm: &IRModel,
         row_data: &RowData,
     ) -> SDSSResult<()> {
-        // nasty hack; we need to avoid the pk
-        self.f
-            .unfsynced_write(&(row_data.fields().len()).to_le_bytes())?;
         for field_name in irm.fields().stseq_ord_key() {
             match row_data.fields().get(field_name) {
                 Some(cell) => {
@@ -280,9 +287,10 @@ impl<F: RawFileIOInterface> DataBatchPersistDriver<F> {
         }
         Ok(())
     }
+    /// Write the change type and txnid
     fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> Result<(), SDSSError> {
-        let p1_dc_pk_ty = [delta.change().value_u8(), delta.row().d_key().tag().d()];
-        self.f.unfsynced_write(&p1_dc_pk_ty)?;
+        let change_type = [delta.change().value_u8()];
+        self.f.unfsynced_write(&change_type)?;
         let txn_id = delta.data_version().value_u64().to_le_bytes();
         self.f.unfsynced_write(&txn_id)?;
         Ok(())
