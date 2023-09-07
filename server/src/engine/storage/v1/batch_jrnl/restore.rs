@@ -24,30 +24,37 @@
  *
 */
 
-use super::{MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN};
-
 use {
     super::{
-        MARKER_ACTUAL_BATCH_EVENT, MARKER_END_OF_BATCH, MARKER_RECOVERY_EVENT, RECOVERY_THRESHOLD,
+        MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
+        MARKER_RECOVERY_EVENT, RECOVERY_THRESHOLD,
     },
     crate::engine::{
-        core::{index::PrimaryIndexKey, model::Model},
+        core::{
+            index::{DcFieldIndex, PrimaryIndexKey, Row},
+            model::{delta::DeltaVersion, Model},
+        },
         data::{
             cell::Datacell,
             tag::{CUTag, TagClass, TagUnique},
         },
+        idx::{MTIndex, STIndex, STIndexSeq},
         storage::v1::{
             inf::PersistTypeDscr,
             rw::{RawFileIOInterface, SDSSFileIO, SDSSFileTrackedReader},
             SDSSError, SDSSResult,
         },
     },
-    std::mem::ManuallyDrop,
+    crossbeam_epoch::pin,
+    std::{
+        collections::{hash_map::Entry as HMEntry, HashMap},
+        mem::ManuallyDrop,
+    },
 };
 
 #[derive(Debug, PartialEq)]
 pub(in crate::engine::storage::v1) struct DecodedBatchEvent {
-    txn_id: u64,
+    txn_id: DeltaVersion,
     pk: PrimaryIndexKey,
     kind: DecodedBatchEventKind,
 }
@@ -58,7 +65,11 @@ impl DecodedBatchEvent {
         pk: PrimaryIndexKey,
         kind: DecodedBatchEventKind,
     ) -> Self {
-        Self { txn_id, pk, kind }
+        Self {
+            txn_id: DeltaVersion::__new(txn_id),
+            pk,
+            kind,
+        }
     }
 }
 
@@ -196,8 +207,93 @@ impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
 }
 
 impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
-    fn apply_batch(_: &Model, _: NormalBatch) -> SDSSResult<()> {
-        todo!()
+    fn apply_batch(
+        m: &Model,
+        NormalBatch {
+            events,
+            schema_version,
+        }: NormalBatch,
+    ) -> SDSSResult<()> {
+        // NOTE(@ohsayan): current complexity is O(n) which is good enough (in the future I might revise this to a fancier impl)
+        // pin model
+        let irm = m.intent_read_model();
+        let g = pin();
+        let mut pending_delete = HashMap::new();
+        let p_index = m.primary_index().__raw_index();
+        // scan rows
+        for DecodedBatchEvent { txn_id, pk, kind } in events {
+            match kind {
+                DecodedBatchEventKind::Insert(new_row) | DecodedBatchEventKind::Update(new_row) => {
+                    // this is more like a "newrow"
+                    match p_index.mt_get_element(&pk, &g) {
+                        Some(row) if row.d_data().read().get_restored_txn_revised() > txn_id => {
+                            // skewed
+                            // resolve deltas if any
+                            let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
+                            continue;
+                        }
+                        Some(_) | None => {
+                            // new row (logically)
+                            let _ = p_index.mt_delete(&pk, &g);
+                            let mut data = DcFieldIndex::default();
+                            for (field_name, new_data) in irm
+                                .fields()
+                                .stseq_ord_key()
+                                .filter(|key| key.as_ref() != m.p_key())
+                                .zip(new_row)
+                            {
+                                data.st_insert(field_name.clone(), new_data);
+                            }
+                            let row = Row::new_restored(
+                                pk,
+                                data,
+                                DeltaVersion::__new(schema_version),
+                                DeltaVersion::__new(0),
+                                txn_id,
+                            );
+                            // resolve any deltas
+                            let _ = row.resolve_schema_deltas_and_freeze(m.delta_state());
+                            // put it back in (lol); blame @ohsayan for this joke
+                            p_index.mt_insert(row, &g);
+                        }
+                    }
+                }
+                DecodedBatchEventKind::Delete => {
+                    match pending_delete.entry(pk) {
+                        HMEntry::Occupied(mut existing_delete) => {
+                            if *existing_delete.get() > txn_id {
+                                // the existing delete "happened after" our delete, so it takes precedence
+                                continue;
+                            }
+                            // the existing delete happened before our delete, so our delete takes precedence
+                            // we have a newer delete for the same key
+                            *existing_delete.get_mut() = txn_id;
+                        }
+                        HMEntry::Vacant(new) => {
+                            // we never deleted this
+                            new.insert(txn_id);
+                        }
+                    }
+                }
+            }
+        }
+        for (pk, txn_id) in pending_delete {
+            match p_index.mt_get(&pk, &g) {
+                Some(row) => {
+                    if row.read().get_restored_txn_revised() > txn_id {
+                        // our delete "happened before" this row was inserted
+                        continue;
+                    }
+                    // yup, go ahead and chuck it
+                    let _ = p_index.mt_delete(&pk, &g);
+                }
+                None => {
+                    // since we never delete rows until here, this is quite impossible
+                    unreachable!()
+                }
+            }
+        }
+        Ok(())
     }
 }
 

@@ -25,24 +25,28 @@
 */
 
 use {
-    crate::engine::{
-        core::{
-            index::{DcFieldIndex, PrimaryIndexKey, Row},
-            model::{
-                delta::{DataDelta, DataDeltaKind, DeltaVersion},
-                Field, Layer, Model,
+    crate::{
+        engine::{
+            core::{
+                index::{DcFieldIndex, PrimaryIndexKey, Row},
+                model::{
+                    delta::{DataDelta, DataDeltaKind, DeltaVersion},
+                    Field, Layer, Model,
+                },
+            },
+            data::{cell::Datacell, tag::TagSelector, uuid::Uuid},
+            idx::MTIndex,
+            storage::v1::{
+                batch_jrnl::{
+                    DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
+                    DecodedBatchEventKind, NormalBatch,
+                },
+                header_meta::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
+                rw::{FileOpen, SDSSFileIO},
+                test_util::VirtualFS,
             },
         },
-        data::{cell::Datacell, tag::TagSelector, uuid::Uuid},
-        storage::v1::{
-            batch_jrnl::{
-                DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
-                DecodedBatchEventKind, NormalBatch,
-            },
-            header_meta::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
-            rw::{FileOpen, SDSSFileIO},
-            test_util::VirtualFS,
-        },
+        util::test_utils,
     },
     crossbeam_epoch::pin,
 };
@@ -89,8 +93,8 @@ fn new_delta(
         Row::new(
             pkey(pk),
             data,
-            DeltaVersion::test_new(schema),
-            DeltaVersion::test_new(txnid),
+            DeltaVersion::__new(schema),
+            DeltaVersion::__new(txnid),
         ),
         change,
     )
@@ -98,8 +102,8 @@ fn new_delta(
 
 fn new_delta_with_row(schema: u64, txnid: u64, row: Row, change: DataDeltaKind) -> DataDelta {
     DataDelta::new(
-        DeltaVersion::test_new(schema),
-        DeltaVersion::test_new(txnid),
+        DeltaVersion::__new(schema),
+        DeltaVersion::__new(txnid),
         row,
         change,
     )
@@ -110,6 +114,16 @@ fn flush_deltas_and_re_read<const N: usize>(
     dt: [DataDelta; N],
     fname: &str,
 ) -> Vec<NormalBatch> {
+    let mut restore_driver = flush_batches_and_return_restore_driver(dt, mdl, fname);
+    let batch = restore_driver.read_all_batches().unwrap();
+    batch
+}
+
+fn flush_batches_and_return_restore_driver<const N: usize>(
+    dt: [DataDelta; N],
+    mdl: &Model,
+    fname: &str,
+) -> DataBatchRestoreDriver<VirtualFS> {
     // delta queue
     let g = pin();
     for delta in dt {
@@ -121,10 +135,25 @@ fn flush_deltas_and_re_read<const N: usize>(
         persist_driver.write_new_batch(&mdl, N).unwrap();
         persist_driver.close().unwrap();
     }
-    let mut restore_driver =
-        DataBatchRestoreDriver::new(open_file(fname).into_existing().unwrap().0).unwrap();
-    let batch = restore_driver.read_all_batches().unwrap();
-    batch
+    DataBatchRestoreDriver::new(open_file(fname).into_existing().unwrap().0).unwrap()
+}
+
+#[test]
+fn empty_multi_open_reopen() {
+    let uuid = Uuid::new();
+    let mdl = Model::new_restore(
+        uuid,
+        "username".into(),
+        TagSelector::Str.into_full(),
+        into_dict!(
+            "username" => Field::new([Layer::str()].into(), false),
+            "password" => Field::new([Layer::bin()].into(), false)
+        ),
+    );
+    for _ in 0..100 {
+        let writer = open_batch_data("empty_multi_open_reopen.db-btlog", &mdl);
+        writer.close().unwrap();
+    }
 }
 
 #[test]
@@ -213,13 +242,13 @@ fn skewed_delta() {
     let row = Row::new(
         pkey("Schrödinger's cat"),
         into_dict!("is_good" => Datacell::new_bool(true), "magical" => Datacell::new_bool(false)),
-        DeltaVersion::test_new(0),
-        DeltaVersion::test_new(2),
+        DeltaVersion::__new(0),
+        DeltaVersion::__new(2),
     );
     {
         // update the row
         let mut wl = row.d_data().write();
-        wl.set_txn_revised(DeltaVersion::test_new(3));
+        wl.set_txn_revised(DeltaVersion::__new(3));
         *wl.fields_mut().get_mut("magical").unwrap() = Datacell::new_bool(true);
     }
     // prepare deltas
@@ -278,4 +307,91 @@ fn skewed_delta() {
             0
         )]
     )
+}
+
+#[test]
+fn skewed_shuffled_persist_restore() {
+    let uuid = Uuid::new();
+    let model = Model::new_restore(
+        uuid,
+        "username".into(),
+        TagSelector::Str.into_full(),
+        into_dict!("username" => Field::new([Layer::str()].into(), false), "password" => Field::new([Layer::str()].into(), false)),
+    );
+    let mongobongo = Row::new(
+        pkey("mongobongo"),
+        into_dict!("password" => "dumbo"),
+        DeltaVersion::__new(0),
+        DeltaVersion::__new(4),
+    );
+    let rds = Row::new(
+        pkey("rds"),
+        into_dict!("password" => "snail"),
+        DeltaVersion::__new(0),
+        DeltaVersion::__new(5),
+    );
+    let deltas = [
+        new_delta(
+            0,
+            0,
+            "sayan",
+            into_dict!("password" => "pwd123456"),
+            DataDeltaKind::Insert,
+        ),
+        new_delta(
+            0,
+            1,
+            "joseph",
+            into_dict!("password" => "pwd234567"),
+            DataDeltaKind::Insert,
+        ),
+        new_delta(
+            0,
+            2,
+            "haley",
+            into_dict!("password" => "pwd345678"),
+            DataDeltaKind::Insert,
+        ),
+        new_delta(
+            0,
+            3,
+            "charlotte",
+            into_dict!("password" => "pwd456789"),
+            DataDeltaKind::Insert,
+        ),
+        new_delta_with_row(0, 4, mongobongo.clone(), DataDeltaKind::Insert),
+        new_delta_with_row(0, 5, rds.clone(), DataDeltaKind::Insert),
+        new_delta_with_row(0, 6, mongobongo.clone(), DataDeltaKind::Delete),
+        new_delta_with_row(0, 7, rds.clone(), DataDeltaKind::Delete),
+    ];
+    for i in 0..deltas.len() {
+        // prepare pretest
+        let fname = format!("skewed_shuffled_persist_restore_round{i}.db-btlog");
+        let mut deltas = deltas.clone();
+        let mut randomizer = test_utils::randomizer();
+        test_utils::shuffle_slice(&mut deltas, &mut randomizer);
+        // restore
+        let mut restore_driver = flush_batches_and_return_restore_driver(deltas, &model, &fname);
+        restore_driver.read_data_batch_into_model(&model).unwrap();
+    }
+    let g = pin();
+    for delta in &deltas[..4] {
+        let row = model
+            .primary_index()
+            .__raw_index()
+            .mt_get(delta.row().d_key(), &g)
+            .unwrap();
+        let row_data = row.read();
+        assert_eq!(row_data.fields().len(), 1);
+        assert_eq!(
+            row_data.fields().get("password").unwrap(),
+            delta
+                .row()
+                .d_data()
+                .read()
+                .fields()
+                .get("password")
+                .unwrap()
+        );
+    }
 }

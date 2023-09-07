@@ -53,6 +53,8 @@ pub struct RowData {
     fields: DcFieldIndex,
     txn_revised_data: DeltaVersion,
     txn_revised_schema_version: DeltaVersion,
+    // pretty useless from an operational POV; only used during restore
+    restore_txn_id: DeltaVersion,
 }
 
 impl RowData {
@@ -67,6 +69,12 @@ impl RowData {
     }
     pub fn get_txn_revised(&self) -> DeltaVersion {
         self.txn_revised_data
+    }
+    pub fn set_restored_txn_revised(&mut self, new: DeltaVersion) {
+        self.restore_txn_id = new;
+    }
+    pub fn get_restored_txn_revised(&self) -> DeltaVersion {
+        self.restore_txn_id
     }
 }
 
@@ -100,6 +108,21 @@ impl Row {
         schema_version: DeltaVersion,
         txn_revised_data: DeltaVersion,
     ) -> Self {
+        Self::new_restored(
+            pk,
+            data,
+            schema_version,
+            txn_revised_data,
+            DeltaVersion::__new(0),
+        )
+    }
+    pub fn new_restored(
+        pk: PrimaryIndexKey,
+        data: DcFieldIndex,
+        schema_version: DeltaVersion,
+        txn_revised_data: DeltaVersion,
+        restore_txn_id: DeltaVersion,
+    ) -> Self {
         Self {
             __genesis_schema_version: schema_version,
             __pk: ManuallyDrop::new(pk),
@@ -109,6 +132,8 @@ impl Row {
                     fields: data,
                     txn_revised_schema_version: schema_version,
                     txn_revised_data,
+                    // pretty useless here
+                    restore_txn_id,
                 }))
             },
         }

@@ -415,6 +415,13 @@ impl<'a> GNSEvent for AlterModelAddTxn<'a> {
                     return Err(TransactionError::OnRestoreDataConflictMismatch);
                 }
             }
+            // TODO(@ohsayan): avoid double iteration
+            // publish deltas
+            for field_name in new_fields.stseq_ord_key() {
+                model
+                    .delta_state()
+                    .schema_append_unresolved_field_add(field_name);
+            }
             Ok(())
         })
     }
@@ -526,6 +533,13 @@ impl<'a> GNSEvent for AlterModelRemoveTxn<'a> {
                         return Err(TransactionError::OnRestoreDataConflictMismatch);
                     }
                 }
+            }
+            // TODO(@ohsayan): avoid double iteration
+            // publish deltas
+            for field_name in removed_fields.iter() {
+                model
+                    .delta_state()
+                    .schema_append_unresolved_field_rem(field_name);
             }
             Ok(())
         })

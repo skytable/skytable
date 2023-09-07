@@ -384,7 +384,7 @@ mod exec {
                 );
                 assert_eq!(
                     model.delta_state().schema_current_version(),
-                    DeltaVersion::test_new(2)
+                    DeltaVersion::__new(2)
                 );
             },
         )
@@ -411,7 +411,7 @@ mod exec {
                 );
                 assert_eq!(
                     mdl.delta_state().schema_current_version(),
-                    DeltaVersion::test_new(4)
+                    DeltaVersion::__new(4)
                 );
             }
         ).unwrap();

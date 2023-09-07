@@ -265,8 +265,7 @@ impl DeltaVersion {
     pub const fn genesis() -> Self {
         Self(0)
     }
-    #[cfg(test)]
-    pub fn test_new(v: u64) -> Self {
+    pub const  fn __new(v: u64) -> Self {
         Self(v)
     }
     fn step(&self) -> Self {

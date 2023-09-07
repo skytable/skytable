@@ -26,6 +26,8 @@
 
 use std::io::Read;
 
+use rand::seq::SliceRandom;
+
 use {
     rand::{
         distributions::{uniform::SampleUniform, Alphanumeric},
@@ -37,6 +39,10 @@ use {
         hash::{BuildHasher, Hash, Hasher},
     },
 };
+
+pub fn shuffle_slice<T>(slice: &mut [T], rng: &mut impl Rng) {
+    slice.shuffle(rng)
+}
 
 pub fn wait_for_key(msg: &str) {
     use std::io::{self, Write};
