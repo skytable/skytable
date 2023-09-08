@@ -34,15 +34,15 @@ mod rw;
 pub mod inf;
 mod start_stop;
 // test
-#[cfg(test)]
-pub mod test_util;
+pub mod memfs;
 #[cfg(test)]
 mod tests;
 
 // re-exports
 pub use {
     journal::{open_journal, JournalAdapter, JournalWriter},
-    rw::{BufferedScanner, NullZero, RawFileIOInterface, SDSSFileIO},
+    memfs::NullFS,
+    rw::{BufferedScanner, LocalFS, RawFSInterface, SDSSFileIO},
 };
 pub mod header_meta {
     pub use super::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode};

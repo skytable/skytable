@@ -31,20 +31,22 @@ use crate::engine::storage::v1::{
 
 #[test]
 fn create_delete() {
-    let f = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<false>(
-        "hello_world.db-tlog",
-        FileScope::Journal,
-        FileSpecifier::GNSTxnLog,
-        FileSpecifierVersion::__new(0),
-        0,
-        HostRunMode::Prod,
-        0,
-    )
-    .unwrap();
-    match f {
-        FileOpen::Existing(_, _) => panic!(),
-        FileOpen::Created(_) => {}
-    };
+    {
+        let f = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<false>(
+            "hello_world.db-tlog",
+            FileScope::Journal,
+            FileSpecifier::GNSTxnLog,
+            FileSpecifierVersion::__new(0),
+            0,
+            HostRunMode::Prod,
+            0,
+        )
+        .unwrap();
+        match f {
+            FileOpen::Existing(_, _) => panic!(),
+            FileOpen::Created(_) => {}
+        };
+    }
     let open = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<false>(
         "hello_world.db-tlog",
         FileScope::Journal,

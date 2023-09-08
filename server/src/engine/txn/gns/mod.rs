@@ -25,7 +25,7 @@
 */
 
 #[cfg(test)]
-use crate::engine::storage::v1::test_util::VirtualFS;
+use crate::engine::storage::v1::memfs::VirtualFS;
 use {
     super::{TransactionError, TransactionResult},
     crate::{
@@ -35,7 +35,8 @@ use {
             storage::v1::{
                 self, header_meta,
                 inf::{self, PersistObject},
-                BufferedScanner, JournalAdapter, JournalWriter, RawFileIOInterface, SDSSResult,
+                BufferedScanner, JournalAdapter, JournalWriter, LocalFS, RawFSInterface,
+                SDSSResult,
             },
         },
         util::EndianQW,
@@ -59,26 +60,25 @@ pub use {
 };
 
 pub type GNSTransactionDriverNullZero =
-    GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullZero>;
+    GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullFS>;
 pub type GNSTransactionDriver = GNSTransactionDriverAnyFS<File>;
 #[cfg(test)]
 pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 
 const CURRENT_LOG_VERSION: u32 = 0;
 
-pub trait GNSTransactionDriverLLInterface: RawFileIOInterface {
+pub trait GNSTransactionDriverLLInterface: RawFSInterface {
     /// If true, this is an actual txn driver with a non-null (not `/dev/null` like) journal
-    const NONNULL: bool = <Self as RawFileIOInterface>::NOTNULL;
+    const NONNULL: bool = <Self as RawFSInterface>::NOT_NULL;
 }
-impl<T: RawFileIOInterface> GNSTransactionDriverLLInterface for T {}
+impl<T: RawFSInterface> GNSTransactionDriverLLInterface for T {}
 
-#[derive(Debug)]
 /// The GNS transaction driver is used to handle DDL transactions
-pub struct GNSTransactionDriverAnyFS<F = File> {
+pub struct GNSTransactionDriverAnyFS<F: RawFSInterface = LocalFS> {
     journal: JournalWriter<F, GNSAdapter>,
 }
 
-impl GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullZero> {
+impl GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullFS> {
     pub fn nullzero(gns: &GlobalNS) -> Self {
         let journal = v1::open_journal(
             "gns.db-tlog",

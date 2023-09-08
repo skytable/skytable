@@ -41,7 +41,7 @@ use {
         idx::{MTIndex, STIndex, STIndexSeq},
         storage::v1::{
             inf::PersistTypeDscr,
-            rw::{RawFileIOInterface, SDSSFileIO, SDSSFileTrackedReader},
+            rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
             SDSSError, SDSSResult,
         },
     },
@@ -105,11 +105,11 @@ enum Batch {
     BatchClosed,
 }
 
-pub struct DataBatchRestoreDriver<F> {
+pub struct DataBatchRestoreDriver<F: RawFSInterface> {
     f: SDSSFileTrackedReader<F>,
 }
 
-impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
+impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     pub fn new(f: SDSSFileIO<F>) -> SDSSResult<Self> {
         Ok(Self {
             f: SDSSFileTrackedReader::new(f)?,
@@ -139,7 +139,7 @@ impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
+impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn read_all_batches_and_for_each(
         &mut self,
         mut f: impl FnMut(NormalBatch) -> SDSSResult<()>,
@@ -206,7 +206,7 @@ impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
+impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn apply_batch(
         m: &Model,
         NormalBatch {
@@ -297,7 +297,7 @@ impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
     }
 }
 
-impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
+impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn read_batch_summary(&mut self, finished_early: bool) -> SDSSResult<u64> {
         if !finished_early {
             // we must read the batch termination signature
@@ -468,7 +468,7 @@ impl BatchStartBlock {
     }
 }
 
-impl<F: RawFileIOInterface> DataBatchRestoreDriver<F> {
+impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn decode_primary_key(&mut self, pk_type: u8) -> SDSSResult<PrimaryIndexKey> {
         let Some(pk_type) = TagUnique::try_from_raw(pk_type) else {
             return Err(SDSSError::DataBatchRestoreCorruptedEntry);

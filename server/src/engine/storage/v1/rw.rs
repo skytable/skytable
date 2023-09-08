@@ -24,6 +24,8 @@
  *
 */
 
+use std::marker::PhantomData;
+
 use {
     super::{
         header_impl::{
@@ -36,8 +38,8 @@ use {
         util::os::SysIOError,
     },
     std::{
-        fs::File,
-        io::{Read, Seek, SeekFrom, Write},
+        fs::{self, File},
+        io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
         ptr, slice,
     },
 };
@@ -70,57 +72,94 @@ pub enum RawFileOpen<F> {
     Existing(F),
 }
 
-pub trait RawFileIOInterface: Sized {
-    /// Indicates that the interface is not a `/dev/null` (or related) implementation
-    const NOTNULL: bool = true;
-    fn fopen_or_create_rw(file_path: &str) -> SDSSResult<RawFileOpen<Self>>;
-    fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
-    fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()>;
-    fn fsync_all(&mut self) -> SDSSResult<()>;
-    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()>;
-    fn flen(&self) -> SDSSResult<u64>;
-    fn flen_set(&mut self, to: u64) -> SDSSResult<()>;
-    fn fcursor(&mut self) -> SDSSResult<u64>;
+pub trait RawFSInterface {
+    const NOT_NULL: bool = true;
+    type File: RawFileInterface;
+    fn fs_create_dir(fpath: &str) -> SDSSResult<()>;
+    fn fs_create_dir_all(fpath: &str) -> SDSSResult<()>;
+    fn fs_delete_dir(fpath: &str) -> SDSSResult<()>;
+    fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()>;
+    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<RawFileOpen<Self::File>>;
 }
 
-/// This is a kind of file like `/dev/null`. It exists in ... nothing!
-pub struct NullZero;
+/// A file (well, probably) that can be used for RW operations along with advanced write and extended operations (such as seeking)
+pub trait RawFileInterface
+where
+    Self: RawFileInterfaceRead
+        + RawFileInterfaceWrite
+        + RawFileInterfaceWriteExt
+        + RawFileInterfaceExt,
+{
+    type Reader: RawFileInterfaceRead + RawFileInterfaceExt;
+    type Writer: RawFileInterfaceWrite + RawFileInterfaceExt;
+    fn into_buffered_reader(self) -> SDSSResult<Self::Reader>;
+    fn into_buffered_writer(self) -> SDSSResult<Self::Writer>;
+}
 
-impl RawFileIOInterface for NullZero {
-    const NOTNULL: bool = false;
-    fn fopen_or_create_rw(_: &str) -> SDSSResult<RawFileOpen<Self>> {
-        Ok(RawFileOpen::Created(Self))
-    }
-    fn fread_exact(&mut self, _: &mut [u8]) -> SDSSResult<()> {
-        Ok(())
-    }
-    fn fwrite_all(&mut self, _: &[u8]) -> SDSSResult<()> {
-        Ok(())
-    }
-    fn fsync_all(&mut self) -> SDSSResult<()> {
-        Ok(())
-    }
-    fn fseek_ahead(&mut self, _: u64) -> SDSSResult<()> {
-        Ok(())
-    }
-    fn flen(&self) -> SDSSResult<u64> {
-        Ok(0)
-    }
-    fn flen_set(&mut self, _: u64) -> SDSSResult<()> {
-        Ok(())
-    }
-    fn fcursor(&mut self) -> SDSSResult<u64> {
-        Ok(0)
+/// A file interface that supports read operations
+pub trait RawFileInterfaceRead {
+    fn fr_read_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()>;
+}
+
+impl<R: Read> RawFileInterfaceRead for R {
+    fn fr_read_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
+        self.read_exact(buf).map_err(From::from)
     }
 }
 
-impl RawFileIOInterface for File {
-    fn fopen_or_create_rw(file_path: &str) -> SDSSResult<RawFileOpen<Self>> {
+/// A file interface that supports write operations
+pub trait RawFileInterfaceWrite {
+    fn fw_write_all(&mut self, buf: &[u8]) -> SDSSResult<()>;
+}
+
+impl<W: Write> RawFileInterfaceWrite for W {
+    fn fw_write_all(&mut self, buf: &[u8]) -> SDSSResult<()> {
+        self.write_all(buf).map_err(From::from)
+    }
+}
+
+/// A file interface that supports advanced write operations
+pub trait RawFileInterfaceWriteExt {
+    fn fw_fsync_all(&mut self) -> SDSSResult<()>;
+    fn fw_truncate_to(&mut self, to: u64) -> SDSSResult<()>;
+}
+
+/// A file interface that supports advanced file operations
+pub trait RawFileInterfaceExt {
+    fn fext_file_length(&self) -> SDSSResult<u64>;
+    fn fext_cursor(&mut self) -> SDSSResult<u64>;
+    fn fext_seek_ahead_from_start_by(&mut self, ahead_by: u64) -> SDSSResult<()>;
+}
+
+fn cvt<T>(v: std::io::Result<T>) -> SDSSResult<T> {
+    let r = v?;
+    Ok(r)
+}
+
+/// The actual local host file system (as an abstraction [`fs`])
+#[derive(Debug)]
+pub struct LocalFS;
+
+impl RawFSInterface for LocalFS {
+    type File = File;
+    fn fs_create_dir(fpath: &str) -> SDSSResult<()> {
+        cvt(fs::create_dir(fpath))
+    }
+    fn fs_create_dir_all(fpath: &str) -> SDSSResult<()> {
+        cvt(fs::create_dir_all(fpath))
+    }
+    fn fs_delete_dir(fpath: &str) -> SDSSResult<()> {
+        cvt(fs::remove_dir(fpath))
+    }
+    fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()> {
+        cvt(fs::remove_dir_all(fpath))
+    }
+    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<RawFileOpen<Self::File>> {
         let f = File::options()
             .create(true)
             .read(true)
             .write(true)
-            .open(file_path)?;
+            .open(fpath)?;
         let md = f.metadata()?;
         if md.len() == 0 {
             Ok(RawFileOpen::Created(f))
@@ -128,41 +167,79 @@ impl RawFileIOInterface for File {
             Ok(RawFileOpen::Existing(f))
         }
     }
-    fn fread_exact(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
-        self.read_exact(buf)?;
-        Ok(())
+}
+
+impl RawFileInterface for File {
+    type Reader = BufReader<Self>;
+    type Writer = BufWriter<Self>;
+    fn into_buffered_reader(self) -> SDSSResult<Self::Reader> {
+        Ok(BufReader::new(self))
     }
-    fn fwrite_all(&mut self, bytes: &[u8]) -> SDSSResult<()> {
-        self.write_all(bytes)?;
-        Ok(())
-    }
-    fn fsync_all(&mut self) -> SDSSResult<()> {
-        self.sync_all()?;
-        Ok(())
-    }
-    fn flen(&self) -> SDSSResult<u64> {
-        Ok(self.metadata()?.len())
-    }
-    fn fseek_ahead(&mut self, by: u64) -> SDSSResult<()> {
-        self.seek(SeekFrom::Start(by))?;
-        Ok(())
-    }
-    fn flen_set(&mut self, to: u64) -> SDSSResult<()> {
-        self.set_len(to)?;
-        Ok(())
-    }
-    fn fcursor(&mut self) -> SDSSResult<u64> {
-        self.stream_position().map_err(From::from)
+    fn into_buffered_writer(self) -> SDSSResult<Self::Writer> {
+        Ok(BufWriter::new(self))
     }
 }
 
-pub struct SDSSFileTrackedWriter<F> {
-    f: SDSSFileIO<F>,
+impl RawFileInterfaceWriteExt for File {
+    fn fw_fsync_all(&mut self) -> SDSSResult<()> {
+        cvt(self.sync_all())
+    }
+    fn fw_truncate_to(&mut self, to: u64) -> SDSSResult<()> {
+        cvt(self.set_len(to))
+    }
+}
+
+trait LocalFSFile {
+    fn file_mut(&mut self) -> &mut File;
+    fn file(&self) -> &File;
+}
+
+impl LocalFSFile for File {
+    fn file_mut(&mut self) -> &mut File {
+        self
+    }
+    fn file(&self) -> &File {
+        self
+    }
+}
+
+impl LocalFSFile for BufReader<File> {
+    fn file_mut(&mut self) -> &mut File {
+        self.get_mut()
+    }
+    fn file(&self) -> &File {
+        self.get_ref()
+    }
+}
+
+impl LocalFSFile for BufWriter<File> {
+    fn file_mut(&mut self) -> &mut File {
+        self.get_mut()
+    }
+    fn file(&self) -> &File {
+        self.get_ref()
+    }
+}
+
+impl<F: LocalFSFile> RawFileInterfaceExt for F {
+    fn fext_file_length(&self) -> SDSSResult<u64> {
+        Ok(self.file().metadata()?.len())
+    }
+    fn fext_cursor(&mut self) -> SDSSResult<u64> {
+        cvt(self.file_mut().stream_position())
+    }
+    fn fext_seek_ahead_from_start_by(&mut self, by: u64) -> SDSSResult<()> {
+        cvt(self.file_mut().seek(SeekFrom::Start(by)).map(|_| ()))
+    }
+}
+
+pub struct SDSSFileTrackedWriter<Fs: RawFSInterface> {
+    f: SDSSFileIO<Fs>,
     cs: SCrc,
 }
 
-impl<F: RawFileIOInterface> SDSSFileTrackedWriter<F> {
-    pub fn new(f: SDSSFileIO<F>) -> Self {
+impl<Fs: RawFSInterface> SDSSFileTrackedWriter<Fs> {
+    pub fn new(f: SDSSFileIO<Fs>) -> Self {
         Self { f, cs: SCrc::new() }
     }
     pub fn unfsynced_write(&mut self, block: &[u8]) -> SDSSResult<()> {
@@ -182,23 +259,23 @@ impl<F: RawFileIOInterface> SDSSFileTrackedWriter<F> {
         core::mem::swap(&mut self.cs, &mut scrc);
         scrc.finish()
     }
-    pub fn inner_file(&mut self) -> &mut SDSSFileIO<F> {
+    pub fn inner_file(&mut self) -> &mut SDSSFileIO<Fs> {
         &mut self.f
     }
 }
 
 /// [`SDSSFileLenTracked`] simply maintains application level length and checksum tracking to avoid frequent syscalls because we
 /// do not expect (even though it's very possible) users to randomly modify file lengths while we're reading them
-pub struct SDSSFileTrackedReader<F> {
-    f: SDSSFileIO<F>,
+pub struct SDSSFileTrackedReader<Fs: RawFSInterface> {
+    f: SDSSFileIO<Fs>,
     len: u64,
     pos: u64,
     cs: SCrc,
 }
 
-impl<F: RawFileIOInterface> SDSSFileTrackedReader<F> {
+impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     /// Important: this will only look at the data post the current cursor!
-    pub fn new(mut f: SDSSFileIO<F>) -> SDSSResult<Self> {
+    pub fn new(mut f: SDSSFileIO<Fs>) -> SDSSResult<Self> {
         let len = f.file_length()?;
         let pos = f.retrieve_cursor()?;
         Ok(Self {
@@ -242,10 +319,10 @@ impl<F: RawFileIOInterface> SDSSFileTrackedReader<F> {
         core::mem::swap(&mut crc, &mut self.cs);
         crc.finish()
     }
-    pub fn inner_file(&mut self) -> &mut SDSSFileIO<F> {
+    pub fn inner_file(&mut self) -> &mut SDSSFileIO<Fs> {
         &mut self.f
     }
-    pub fn into_inner_file(self) -> SDSSFileIO<F> {
+    pub fn into_inner_file(self) -> SDSSFileIO<Fs> {
         self.f
     }
     pub fn __cursor_ahead_by(&mut self, sizeof: usize) {
@@ -267,11 +344,12 @@ impl<F: RawFileIOInterface> SDSSFileTrackedReader<F> {
 }
 
 #[derive(Debug)]
-pub struct SDSSFileIO<F> {
-    f: F,
+pub struct SDSSFileIO<Fs: RawFSInterface> {
+    f: Fs::File,
+    _fs: PhantomData<Fs>,
 }
 
-impl<F: RawFileIOInterface> SDSSFileIO<F> {
+impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
     /// **IMPORTANT: File position: end-of-header-section**
     pub fn open_or_create_perm_rw<const REWRITE_MODIFY_COUNTER: bool>(
         file_path: &str,
@@ -282,7 +360,7 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
         host_run_mode: HostRunMode,
         host_startup_counter: u64,
     ) -> SDSSResult<FileOpen<Self>> {
-        let f = F::fopen_or_create_rw(file_path)?;
+        let f = Fs::fs_fopen_or_create_rw(file_path)?;
         match f {
             RawFileOpen::Created(f) => {
                 // since this file was just created, we need to append the header
@@ -303,7 +381,7 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
             RawFileOpen::Existing(mut f) => {
                 // this is an existing file. decoded the header
                 let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
-                f.fread_exact(&mut header_raw)?;
+                f.fr_read_exact(&mut header_raw)?;
                 let header = SDSSHeaderRaw::decode_noverify(header_raw)
                     .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
                 // now validate the header
@@ -323,35 +401,38 @@ impl<F: RawFileIOInterface> SDSSFileIO<F> {
     }
 }
 
-impl<F: RawFileIOInterface> SDSSFileIO<F> {
-    fn _new(f: F) -> Self {
-        Self { f }
+impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
+    fn _new(f: Fs::File) -> Self {
+        Self {
+            f,
+            _fs: PhantomData,
+        }
     }
     pub fn unfsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
-        self.f.fwrite_all(data)
+        self.f.fw_write_all(data)
     }
     pub fn fsync_all(&mut self) -> SDSSResult<()> {
-        self.f.fsync_all()?;
+        self.f.fw_fsync_all()?;
         Ok(())
     }
     pub fn fsynced_write(&mut self, data: &[u8]) -> SDSSResult<()> {
-        self.f.fwrite_all(data)?;
-        self.f.fsync_all()
+        self.f.fw_write_all(data)?;
+        self.f.fw_fsync_all()
     }
     pub fn read_to_buffer(&mut self, buffer: &mut [u8]) -> SDSSResult<()> {
-        self.f.fread_exact(buffer)
+        self.f.fr_read_exact(buffer)
     }
     pub fn file_length(&self) -> SDSSResult<u64> {
-        self.f.flen()
+        self.f.fext_file_length()
     }
     pub fn seek_from_start(&mut self, by: u64) -> SDSSResult<()> {
-        self.f.fseek_ahead(by)
+        self.f.fext_seek_ahead_from_start_by(by)
     }
     pub fn trim_file_to(&mut self, to: u64) -> SDSSResult<()> {
-        self.f.flen_set(to)
+        self.f.fw_truncate_to(to)
     }
     pub fn retrieve_cursor(&mut self) -> SDSSResult<u64> {
-        self.f.fcursor()
+        self.f.fext_cursor()
     }
     pub fn read_byte(&mut self) -> SDSSResult<u8> {
         let mut r = [0; 1];

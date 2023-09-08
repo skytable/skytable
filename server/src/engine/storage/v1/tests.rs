@@ -24,7 +24,7 @@
  *
 */
 
-type VirtualFS = super::test_util::VirtualFS;
+type VirtualFS = super::memfs::VirtualFS;
 
 mod batch;
 mod rw;

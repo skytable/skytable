@@ -41,10 +41,12 @@
   - FIXME(@ohsayan): we will probably (naively) need to dynamically reposition the cursor in case the metadata is corrupted as well
 */
 
+use super::rw::RawFSInterface;
+
 use {
     super::{
         header_impl::{FileSpecifierVersion, HostRunMode, SDSSHeaderRaw},
-        rw::{FileOpen, RawFileIOInterface, SDSSFileIO},
+        rw::{FileOpen, SDSSFileIO},
         SDSSError, SDSSResult,
     },
     crate::{
@@ -67,9 +69,9 @@ pub fn null_journal<TA: JournalAdapter>(
     host_run_mode: HostRunMode,
     host_startup_counter: u64,
     _: &TA::GlobalState,
-) -> JournalWriter<super::rw::NullZero, TA> {
+) -> JournalWriter<super::memfs::NullFS, TA> {
     let FileOpen::Created(journal) =
-        SDSSFileIO::<super::rw::NullZero>::open_or_create_perm_rw::<false>(
+        SDSSFileIO::<super::memfs::NullFS>::open_or_create_perm_rw::<false>(
             log_file_name,
             FileScope::Journal,
             log_kind,
@@ -85,7 +87,7 @@ pub fn null_journal<TA: JournalAdapter>(
     JournalWriter::new(journal, 0, true).unwrap()
 }
 
-pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
+pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface>(
     log_file_name: &str,
     log_kind: FileSpecifier,
     log_kind_version: FileSpecifierVersion,
@@ -93,10 +95,10 @@ pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
     host_run_mode: HostRunMode,
     host_startup_counter: u64,
     gs: &TA::GlobalState,
-) -> SDSSResult<JournalWriter<LF, TA>> {
+) -> SDSSResult<JournalWriter<Fs, TA>> {
     macro_rules! open_file {
         ($modify:literal) => {
-            SDSSFileIO::<LF>::open_or_create_perm_rw::<$modify>(
+            SDSSFileIO::<Fs>::open_or_create_perm_rw::<$modify>(
                 log_file_name,
                 FileScope::Journal,
                 log_kind,
@@ -117,7 +119,7 @@ pub fn open_journal<TA: JournalAdapter, LF: RawFileIOInterface>(
         FileOpen::Created(f) => return JournalWriter::new(f, 0, true),
         FileOpen::Existing(file, _) => file,
     };
-    let (file, last_txn) = JournalReader::<TA, LF>::scroll(file, gs)?;
+    let (file, last_txn) = JournalReader::<TA, Fs>::scroll(file, gs)?;
     JournalWriter::new(file, last_txn, false)
 }
 
@@ -233,9 +235,8 @@ impl JournalEntryMetadata {
     }
 }
 
-#[derive(Debug)]
-pub struct JournalReader<TA, LF> {
-    log_file: SDSSFileIO<LF>,
+pub struct JournalReader<TA, Fs: RawFSInterface> {
+    log_file: SDSSFileIO<Fs>,
     log_size: u64,
     evid: u64,
     closed: bool,
@@ -243,8 +244,8 @@ pub struct JournalReader<TA, LF> {
     _m: PhantomData<TA>,
 }
 
-impl<TA: JournalAdapter, LF: RawFileIOInterface> JournalReader<TA, LF> {
-    pub fn new(log_file: SDSSFileIO<LF>) -> SDSSResult<Self> {
+impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
+    pub fn new(log_file: SDSSFileIO<Fs>) -> SDSSResult<Self> {
         let log_size = log_file.file_length()? - SDSSHeaderRaw::header_size() as u64;
         Ok(Self {
             log_file,
@@ -361,7 +362,7 @@ impl<TA: JournalAdapter, LF: RawFileIOInterface> JournalReader<TA, LF> {
         Err(SDSSError::JournalCorrupted)
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
-    pub fn scroll(file: SDSSFileIO<LF>, gs: &TA::GlobalState) -> SDSSResult<(SDSSFileIO<LF>, u64)> {
+    pub fn scroll(file: SDSSFileIO<Fs>, gs: &TA::GlobalState) -> SDSSResult<(SDSSFileIO<Fs>, u64)> {
         let mut slf = Self::new(file)?;
         while !slf.end_of_file() {
             slf.rapply_next_event(gs)?;
@@ -374,7 +375,7 @@ impl<TA: JournalAdapter, LF: RawFileIOInterface> JournalReader<TA, LF> {
     }
 }
 
-impl<TA, LF> JournalReader<TA, LF> {
+impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
     fn _incr_evid(&mut self) {
         self.evid += 1;
     }
@@ -389,7 +390,7 @@ impl<TA, LF> JournalReader<TA, LF> {
     }
 }
 
-impl<TA, LF: RawFileIOInterface> JournalReader<TA, LF> {
+impl<TA, Fs: RawFSInterface> JournalReader<TA, Fs> {
     fn logfile_read_into_buffer(&mut self, buf: &mut [u8]) -> SDSSResult<()> {
         if !self.has_remaining_bytes(buf.len() as _) {
             // do this right here to avoid another syscall
@@ -401,18 +402,17 @@ impl<TA, LF: RawFileIOInterface> JournalReader<TA, LF> {
     }
 }
 
-#[derive(Debug)]
-pub struct JournalWriter<LF, TA> {
+pub struct JournalWriter<Fs: RawFSInterface, TA> {
     /// the txn log file
-    log_file: SDSSFileIO<LF>,
+    log_file: SDSSFileIO<Fs>,
     /// the id of the **next** journal
     id: u64,
     _m: PhantomData<TA>,
     closed: bool,
 }
 
-impl<LF: RawFileIOInterface, TA: JournalAdapter> JournalWriter<LF, TA> {
-    pub fn new(mut log_file: SDSSFileIO<LF>, last_txn_id: u64, new: bool) -> SDSSResult<Self> {
+impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
+    pub fn new(mut log_file: SDSSFileIO<Fs>, last_txn_id: u64, new: bool) -> SDSSResult<Self> {
         let log_size = log_file.file_length()?;
         log_file.seek_from_start(log_size)?; // avoid jumbling with headers
         let mut slf = Self {
@@ -450,7 +450,7 @@ impl<LF: RawFileIOInterface, TA: JournalAdapter> JournalWriter<LF, TA> {
     }
 }
 
-impl<LF: RawFileIOInterface, TA> JournalWriter<LF, TA> {
+impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     pub fn appendrec_journal_reverse_entry(&mut self) -> SDSSResult<()> {
         let mut threshold = Threshold::<RECOVERY_BLOCK_AUTO_THRESHOLD>::new();
         let mut entry =
@@ -480,7 +480,7 @@ impl<LF: RawFileIOInterface, TA> JournalWriter<LF, TA> {
     }
 }
 
-impl<LF, TA> JournalWriter<LF, TA> {
+impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     fn _incr_id(&mut self) -> u64 {
         let current = self.id;
         self.id += 1;
@@ -488,7 +488,7 @@ impl<LF, TA> JournalWriter<LF, TA> {
     }
 }
 
-impl<LF, TA> Drop for JournalWriter<LF, TA> {
+impl<Fs: RawFSInterface, TA> Drop for JournalWriter<Fs, TA> {
     fn drop(&mut self) {
         assert!(self.closed, "log not closed");
     }
