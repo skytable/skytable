@@ -41,7 +41,7 @@ use {
         },
         util::EndianQW,
     },
-    std::{fs::File, marker::PhantomData},
+    std::marker::PhantomData,
 };
 
 mod model;
@@ -61,7 +61,6 @@ pub use {
 
 pub type GNSTransactionDriverNullZero =
     GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullFS>;
-pub type GNSTransactionDriver = GNSTransactionDriverAnyFS<File>;
 #[cfg(test)]
 pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 
@@ -105,20 +104,6 @@ impl<F: GNSTransactionDriverLLInterface> GNSTransactionDriverAnyFS<F> {
         self.journal
             .append_journal_close_and_close()
             .map_err(|e| e.into())
-    }
-    pub fn open_or_reinit(
-        gns: &GlobalNS,
-        host_setting_version: u32,
-        host_run_mode: header_meta::HostRunMode,
-        host_startup_counter: u64,
-    ) -> TransactionResult<Self> {
-        Self::open_or_reinit_with_name(
-            gns,
-            "gns.db-tlog",
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-        )
     }
     pub fn open_or_reinit_with_name(
         gns: &GlobalNS,
@@ -190,7 +175,7 @@ impl JournalAdapter for GNSAdapter {
             // UNSAFE(@ohsayan):
             u16::from_le_bytes(scanner.next_chunk())
         };
-        match DISPATCH[core::cmp::min(opc as usize, DISPATCH.len())](&mut scanner, gs) {
+        match DISPATCH[(opc as usize).min(DISPATCH.len())](&mut scanner, gs) {
             Ok(()) if scanner.eof() => return Ok(()),
             Ok(_) => Err(TransactionError::DecodeCorruptedPayloadMoreBytes),
             Err(e) => Err(e),

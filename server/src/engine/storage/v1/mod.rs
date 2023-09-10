@@ -29,6 +29,7 @@ mod header_impl;
 // impls
 mod batch_jrnl;
 mod journal;
+mod loader;
 mod rw;
 // hl
 pub mod inf;
@@ -44,11 +45,14 @@ pub use {
     memfs::NullFS,
     rw::{BufferedScanner, LocalFS, RawFSInterface, SDSSFileIO},
 };
+pub mod data_batch {
+    pub use super::batch_jrnl::{DataBatchPersistDriver, DataBatchRestoreDriver};
+}
 pub mod header_meta {
     pub use super::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode};
 }
 
-use crate::util::os::SysIOError as IoError;
+use crate::{engine::txn::TransactionError, util::os::SysIOError as IoError};
 
 pub type SDSSResult<T> = Result<T, SDSSError>;
 
@@ -68,6 +72,14 @@ impl SDSSErrorContext for std::io::Error {
     type ExtraData = &'static str;
     fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
         SDSSError::IoErrorExtra(self.into(), extra)
+    }
+}
+
+impl SDSSErrorContext for SDSSError {
+    type ExtraData = String;
+
+    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
+        SDSSError::Extra(Box::new(self), extra)
     }
 }
 
@@ -121,6 +133,16 @@ pub enum SDSSError {
     /// we failed to close the data batch
     DataBatchCloseError,
     DataBatchRestoreCorruptedBatchFile,
+    JournalRestoreTxnError,
+    /// An error with more context
+    // TODO(@ohsayan): avoid the box; we'll clean this up soon
+    Extra(Box<Self>, String),
+}
+
+impl From<TransactionError> for SDSSError {
+    fn from(_: TransactionError) -> Self {
+        Self::JournalRestoreTxnError
+    }
 }
 
 impl SDSSError {

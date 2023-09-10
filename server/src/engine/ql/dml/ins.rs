@@ -36,7 +36,6 @@ use {
         },
         util::{compiler, MaybeInit},
     },
-    core::cmp,
     std::{
         collections::HashMap,
         time::{Duration, SystemTime, UNIX_EPOCH},
@@ -114,7 +113,7 @@ fn hashp(key: &[u8]) -> u32 {
 fn ldfunc(func: Ident<'_>) -> Option<ProducerFn> {
     let func = func.as_bytes();
     let ph = hashp(func) as usize;
-    let min = cmp::min(ph, PRODUCER_F.len() - 1);
+    let min = ph.min(PRODUCER_F.len() - 1);
     let data = PRODUCER_F[min];
     if data.0 == func {
         Some(data.1)

@@ -1,5 +1,5 @@
 /*
- * Created on Mon Sep 12 2022
+ * Created on Sun Sep 10 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,17 +24,24 @@
  *
 */
 
-#![allow(dead_code)]
+use crate::engine::storage::v1::header_meta::HostRunMode;
 
-#[macro_use]
-mod macros;
-mod core;
-mod data;
-mod error;
-mod fractal;
-mod idx;
-mod mem;
-mod ql;
-mod storage;
-mod sync;
-mod txn;
+pub struct ServerConfig {
+    host_settings_version: u32,
+    host_run_mode: HostRunMode,
+    host_startup_counter: u64,
+}
+
+impl ServerConfig {
+    pub fn new(
+        host_settings_version: u32,
+        host_run_mode: HostRunMode,
+        host_startup_counter: u64,
+    ) -> Self {
+        Self {
+            host_settings_version,
+            host_run_mode,
+            host_startup_counter,
+        }
+    }
+}

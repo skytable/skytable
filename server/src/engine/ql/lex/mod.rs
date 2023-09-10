@@ -38,7 +38,7 @@ use {
         },
         util::compiler,
     },
-    core::{cmp, fmt, ops::BitOr, slice, str},
+    core::{fmt, ops::BitOr, slice, str},
 };
 
 pub use self::raw::{Ident, Keyword, Symbol, Token};
@@ -484,7 +484,7 @@ impl<'a> SafeQueryData<'a> {
         while src.len() >= 3 && okay {
             let tc = src[0];
             okay &= tc <= nonpadded_offset;
-            let mx = cmp::min(ecc_offset, tc as usize);
+            let mx = ecc_offset.min(tc as usize);
             let mut i_ = 1;
             okay &= LITIR_TF[mx](&src[1..], &mut i_, &mut data);
             src = &src[i_..];
@@ -508,7 +508,7 @@ impl<'b> SafeQueryData<'b> {
         let src = &src[i..];
         // find payload
         *flag &= src.len() >= payload_len;
-        let mx_extract = cmp::min(payload_len, src.len());
+        let mx_extract = payload_len.min(src.len());
         // incr cursor
         i += mx_extract;
         *cnt += i;
@@ -534,7 +534,7 @@ impl<'b> SafeQueryData<'b> {
     #[inline(always)]
     pub(super) fn bool<'a>(src: Slice<'a>, cnt: &mut usize, data: &mut Vec<LitIR<'a>>) -> bool {
         // `true\n` or `false\n`
-        let mx = cmp::min(6, src.len());
+        let mx = 6.min(src.len());
         let slice = &src[..mx];
         let v_true = slice.starts_with(b"true\n");
         let v_false = slice.starts_with(b"false\n");

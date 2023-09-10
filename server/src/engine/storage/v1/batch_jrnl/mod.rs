@@ -43,3 +43,45 @@ const RECOVERY_THRESHOLD: usize = 10;
 #[cfg(test)]
 pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};
 pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
+
+use {
+    super::{
+        header_meta,
+        rw::{FileOpen, SDSSFileIO},
+        RawFSInterface, SDSSResult,
+    },
+    crate::engine::core::model::Model,
+};
+
+const LOG_SPECIFIER_VERSION: header_meta::FileSpecifierVersion =
+    header_meta::FileSpecifierVersion::__new(0);
+
+pub fn open_or_reinit<Fs: RawFSInterface>(
+    name: &str,
+    model: &Model,
+    host_setting_version: u32,
+    host_run_mode: header_meta::HostRunMode,
+    host_startup_counter: u64,
+) -> SDSSResult<DataBatchPersistDriver<Fs>> {
+    let f = SDSSFileIO::<Fs>::open_or_create_perm_rw::<false>(
+        name,
+        header_meta::FileScope::Journal,
+        header_meta::FileSpecifier::TableDataBatch,
+        LOG_SPECIFIER_VERSION,
+        host_setting_version,
+        host_run_mode,
+        host_startup_counter,
+    )?;
+    match f {
+        FileOpen::Created(new_file) => Ok(DataBatchPersistDriver::new(new_file, true)?),
+        FileOpen::Existing(existing, _) => {
+            // restore
+            let mut restore_driver = DataBatchRestoreDriver::new(existing)?;
+            restore_driver.read_data_batch_into_model(model)?;
+            Ok(DataBatchPersistDriver::new(
+                restore_driver.into_file(),
+                false,
+            )?)
+        }
+    }
+}

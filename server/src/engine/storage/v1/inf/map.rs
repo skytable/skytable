@@ -27,7 +27,7 @@
 use {
     super::{
         obj::{self, FieldMD},
-        PersistTypeDscr, PersistMapSpec, PersistObject, VecU8,
+        PersistMapSpec, PersistObject, PersistTypeDscr, VecU8,
     },
     crate::{
         engine::{
@@ -44,7 +44,6 @@ use {
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
     core::marker::PhantomData,
-    std::cmp,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
@@ -177,7 +176,7 @@ impl PersistMapSpec for GenericDictSpec {
     }
     fn pretest_entry_data(scanner: &BufferedScanner, md: &Self::EntryMD) -> bool {
         static EXPECT_ATLEAST: [u8; 4] = [0, 1, 8, 8]; // PAD to align
-        let lbound_rem = md.klen + EXPECT_ATLEAST[cmp::min(md.dscr, 3) as usize] as usize;
+        let lbound_rem = md.klen + EXPECT_ATLEAST[md.dscr.min(3) as usize] as usize;
         scanner.has_left(lbound_rem) & (md.dscr <= PersistTypeDscr::Dict.value_u8())
     }
     fn entry_md_enc(buf: &mut VecU8, key: &Self::Key, _: &Self::Value) {
@@ -256,11 +255,7 @@ impl PersistMapSpec for GenericDictSpec {
                             return None;
                         }
                         v.push(
-                            match decode_element(
-                                scanner,
-                                PersistTypeDscr::from_raw(dscr),
-                                false,
-                            ) {
+                            match decode_element(scanner, PersistTypeDscr::from_raw(dscr), false) {
                                 Some(DictEntryGeneric::Data(l)) => l,
                                 None => return None,
                                 _ => unreachable!("found top-level dict item in datacell"),

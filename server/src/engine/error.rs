@@ -24,7 +24,7 @@
  *
 */
 
-use super::txn::TransactionError;
+use super::{storage::v1::SDSSError, txn::TransactionError};
 
 pub type LangResult<T> = Result<T, LangError>;
 pub type LexResult<T> = Result<T, LexError>;
@@ -81,8 +81,9 @@ pub enum LangError {
     StmtUnknownDrop,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug)]
 #[repr(u8)]
+#[cfg_attr(test, derive(PartialEq))]
 /// Executor errors
 pub enum DatabaseError {
     // sys
@@ -136,6 +137,13 @@ pub enum DatabaseError {
     DmlConstraintViolationFieldTypedef,
     ServerError,
     TransactionalError,
+    StorageSubsystemErr(SDSSError),
+}
+
+impl From<SDSSError> for DatabaseError {
+    fn from(e: SDSSError) -> Self {
+        Self::StorageSubsystemErr(e)
+    }
 }
 
 impl From<TransactionError> for DatabaseError {

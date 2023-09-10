@@ -41,12 +41,11 @@ use {
         },
         util::{compiler, MaybeInit},
     },
-    core::cmp,
 };
 
 #[inline(always)]
 pub fn minidx<T>(src: &[T], index: usize) -> usize {
-    cmp::min(src.len() - 1, index)
+    (src.len() - 1).min(index)
 }
 
 #[derive(Debug, PartialEq)]

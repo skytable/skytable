@@ -45,6 +45,8 @@ use {
 static VFS: Lazy<RwLock<HashMap<Box<str>, VNode>>, fn() -> RwLock<HashMap<Box<str>, VNode>>> =
     Lazy::new(|| Default::default());
 
+type ComponentIter<'a> = std::iter::Take<std::vec::IntoIter<&'a str>>;
+
 /*
     vnode
     ---
@@ -79,6 +81,17 @@ impl VNode {
     - make child
 */
 
+fn split_parts(fpath: &str) -> Vec<&str> {
+    fpath.split("/").collect()
+}
+
+fn split_target_and_components(fpath: &str) -> (&str, ComponentIter) {
+    let parts = split_parts(fpath);
+    let target = parts.last().unwrap();
+    let component_len = parts.len() - 1;
+    (target, parts.into_iter().take(component_len))
+}
+
 #[derive(Debug)]
 pub struct VirtualFS;
 
@@ -88,14 +101,10 @@ impl RawFSInterface for VirtualFS {
         // get vfs
         let mut vfs = VFS.write();
         // get root dir
-        let path = fpath.split("/").collect::<Vec<&str>>();
-        // get target
-        let target = *path.last().unwrap();
         let mut current = &mut *vfs;
         // process components
-        let component_len = path.len() - 1;
-        let mut path = path.into_iter().take(component_len);
-        while let Some(component) = path.next() {
+        let (target, mut components) = split_target_and_components(fpath);
+        while let Some(component) = components.next() {
             match current.get_mut(component) {
                 Some(VNode::Dir(d)) => {
                     current = d;
@@ -147,7 +156,7 @@ impl RawFSInterface for VirtualFS {
                 }
             }
         }
-        let pieces: Vec<&str> = fpath.split("/").collect();
+        let pieces = split_parts(fpath);
         create_ahead(&pieces, &mut *vfs)
     }
     fn fs_delete_dir(fpath: &str) -> super::SDSSResult<()> {
@@ -159,10 +168,9 @@ impl RawFSInterface for VirtualFS {
     fn fs_fopen_or_create_rw(fpath: &str) -> super::SDSSResult<super::rw::RawFileOpen<Self::File>> {
         let mut vfs = VFS.write();
         // components
-        let components = fpath.split("/").collect::<Vec<&str>>();
-        let file = components.last().unwrap().to_owned().into();
+        let (target_file, components) = split_target_and_components(fpath);
         let target_dir = find_target_dir_mut(components, &mut vfs)?;
-        match target_dir.entry(file) {
+        match target_dir.entry(target_file.into()) {
             Entry::Occupied(mut oe) => match oe.get_mut() {
                 VNode::File(f) => {
                     f.read = true;
@@ -184,11 +192,10 @@ impl RawFSInterface for VirtualFS {
 }
 
 fn find_target_dir_mut<'a>(
-    components: Vec<&str>,
+    components: ComponentIter,
     mut current: &'a mut HashMap<Box<str>, VNode>,
 ) -> Result<&'a mut HashMap<Box<str>, VNode>, super::SDSSError> {
-    let path_len = components.len() - 1;
-    for component in components.into_iter().take(path_len) {
+    for component in components {
         match current.get_mut(component) {
             Some(VNode::Dir(d)) => current = d,
             Some(VNode::File(_)) => {
@@ -205,11 +212,10 @@ fn find_target_dir_mut<'a>(
 }
 
 fn find_target_dir<'a>(
-    components: Vec<&str>,
+    components: ComponentIter,
     mut current: &'a HashMap<Box<str>, VNode>,
 ) -> Result<&'a HashMap<Box<str>, VNode>, super::SDSSError> {
-    let path_len = components.len() - 1;
-    for component in components.into_iter().take(path_len) {
+    for component in components {
         match current.get(component) {
             Some(VNode::Dir(d)) => current = d,
             Some(VNode::File(_)) => {
@@ -229,10 +235,8 @@ fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> Result<(), super::SDSSEr
     let mut vfs = VFS.write();
     let mut current = &mut *vfs;
     // process components
-    let components = fpath.split("/").collect::<Vec<&str>>();
-    let components_len = components.len() - 1;
-    let target = *components.last().unwrap();
-    for component in components.into_iter().take(components_len) {
+    let (target, components) = split_target_and_components(fpath);
+    for component in components {
         match current.get_mut(component) {
             Some(VNode::Dir(dir)) => {
                 current = dir;
@@ -310,10 +314,9 @@ impl Drop for VFileDescriptor {
 
 fn with_file_mut<T>(fpath: &str, mut f: impl FnMut(&mut VFile) -> SDSSResult<T>) -> SDSSResult<T> {
     let mut vfs = VFS.write();
-    let components = fpath.split("/").collect::<Vec<&str>>();
-    let file = *components.last().unwrap();
+    let (target_file, components) = split_target_and_components(fpath);
     let target_dir = find_target_dir_mut(components, &mut vfs)?;
-    match target_dir.get_mut(file) {
+    match target_dir.get_mut(target_file) {
         Some(VNode::File(file)) => f(file),
         Some(VNode::Dir(_)) => {
             return Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())
@@ -324,10 +327,9 @@ fn with_file_mut<T>(fpath: &str, mut f: impl FnMut(&mut VFile) -> SDSSResult<T>)
 
 fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> SDSSResult<T>) -> SDSSResult<T> {
     let vfs = VFS.read();
-    let components = fpath.split("/").collect::<Vec<&str>>();
-    let file = *components.last().unwrap();
+    let (target_file, components) = split_target_and_components(fpath);
     let target_dir = find_target_dir(components, &vfs)?;
-    match target_dir.get(file) {
+    match target_dir.get(target_file) {
         Some(VNode::File(file)) => f(file),
         Some(VNode::Dir(_)) => {
             return Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())

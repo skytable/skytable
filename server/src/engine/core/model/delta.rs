@@ -26,7 +26,9 @@
 
 use {
     super::{Fields, Model},
-    crate::engine::{core::index::Row, sync::atm::Guard, sync::queue::Queue},
+    crate::engine::{
+        core::index::Row, fractal::FractalToken, sync::atm::Guard, sync::queue::Queue,
+    },
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
         collections::btree_map::{BTreeMap, Range},
@@ -259,13 +261,23 @@ impl DeltaState {
     }
 }
 
+// fractal
+impl DeltaState {
+    pub fn __fractal_take_from_data_delta(&self, cnt: usize, _token: FractalToken) {
+        let _ = self.data_deltas_size.fetch_sub(cnt, Ordering::Release);
+    }
+    pub fn __fractal_take_full_from_data_delta(&self, _token: FractalToken) -> usize {
+        self.data_deltas_size.swap(0, Ordering::AcqRel)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct DeltaVersion(u64);
 impl DeltaVersion {
     pub const fn genesis() -> Self {
         Self(0)
     }
-    pub const  fn __new(v: u64) -> Self {
+    pub const fn __new(v: u64) -> Self {
         Self(v)
     }
     fn step(&self) -> Self {

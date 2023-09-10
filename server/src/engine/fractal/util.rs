@@ -1,5 +1,5 @@
 /*
- * Created on Mon Aug 14 2023
+ * Created on Sat Sep 09 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -24,34 +24,55 @@
  *
 */
 
-use core::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Uuid {
-    data: uuid::Uuid,
+#[derive(Debug)]
+pub struct Status {
+    okay: AtomicBool,
 }
 
-impl Uuid {
-    pub fn new() -> Self {
+impl Status {
+    pub const fn new_okay() -> Self {
+        Self::new(true)
+    }
+    pub const fn new_iffy() -> Self {
+        Self::new(false)
+    }
+    const fn new(v: bool) -> Self {
         Self {
-            data: uuid::Uuid::new_v4(),
+            okay: AtomicBool::new(v),
         }
-    }
-    pub fn as_slice(&self) -> &[u8] {
-        self.data.as_bytes()
-    }
-    pub fn from_bytes(b: [u8; 16]) -> Self {
-        Self {
-            data: uuid::Uuid::from_u128_le(u128::from_le_bytes(b)),
-        }
-    }
-    pub fn to_le_bytes(self) -> [u8; 16] {
-        self.data.to_u128_le().to_le_bytes()
     }
 }
 
-impl fmt::Display for Uuid {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.data.fmt(f)
+impl Status {
+    pub fn is_iffy(&self) -> bool {
+        !self._get()
+    }
+    pub fn is_healthy(&self) -> bool {
+        self._get()
+    }
+    fn _get(&self) -> bool {
+        self.okay.load(Ordering::Acquire)
+    }
+}
+
+impl Status {
+    pub(super) fn set_okay(&self) {
+        self._set(true)
+    }
+    pub(super) fn set_iffy(&self) {
+        self._set(false)
+    }
+    fn _set(&self, v: bool) {
+        self.okay.store(v, Ordering::Release)
+    }
+}
+
+/// A special token for fractal calls
+pub struct FractalToken(());
+impl FractalToken {
+    pub(super) fn new() -> Self {
+        Self(())
     }
 }
