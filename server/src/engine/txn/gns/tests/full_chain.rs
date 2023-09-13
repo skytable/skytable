@@ -28,10 +28,10 @@ use crate::engine::{
     core::{
         model::{Field, Layer, Model},
         space::{Space, SpaceMeta},
-        GlobalNS,
     },
     data::{cell::Datacell, tag::TagSelector, uuid::Uuid, DictEntryGeneric},
     error::DatabaseError,
+    fractal::{test_utils::TestGlobal, GlobalInstanceLike},
     idx::STIndex,
     ql::{
         ast::parse_ast_node_full,
@@ -52,13 +52,19 @@ fn with_variable<T>(var: T, f: impl FnOnce(T)) {
     f(var);
 }
 
-fn init_txn_driver(gns: &GlobalNS, log_name: &str) -> GNSTransactionDriverVFS {
-    GNSTransactionDriverVFS::open_or_reinit_with_name(&gns, log_name, 0, HostRunMode::Prod, 0)
-        .unwrap()
+fn init_txn_driver(global: &impl GlobalInstanceLike, log_name: &str) -> GNSTransactionDriverVFS {
+    GNSTransactionDriverVFS::open_or_reinit_with_name(
+        global.namespace(),
+        log_name,
+        0,
+        HostRunMode::Prod,
+        0,
+    )
+    .unwrap()
 }
 
 fn init_space(
-    gns: &GlobalNS,
+    global: &impl GlobalInstanceLike,
     driver: &mut GNSTransactionDriverVFS,
     space_name: &str,
     env: &str,
@@ -67,26 +73,32 @@ fn init_space(
     let stmt = lex_insecure(query.as_bytes()).unwrap();
     let stmt = parse_ast_node_full::<CreateSpace>(&stmt[2..]).unwrap();
     let name = stmt.space_name;
-    Space::transactional_exec_create(&gns, driver, stmt).unwrap();
-    gns.spaces().read().get(name.as_str()).unwrap().get_uuid()
+    Space::transactional_exec_create(global, driver, stmt).unwrap();
+    global
+        .namespace()
+        .spaces()
+        .read()
+        .get(name.as_str())
+        .unwrap()
+        .get_uuid()
 }
 
 #[test]
 fn create_space() {
-    with_variable("create_space_test.gns.db-tlog", |log_name| {
+    with_variable("create_space_test.global.db-tlog", |log_name| {
         let uuid;
         // start 1
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            uuid = init_space(&gns, &mut driver, "myspace", "{ SAYAN_MAX: 65536 }"); // good lord that doesn't sound like a good variable
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            uuid = init_space(&global, &mut driver, "myspace", "{ SAYAN_MAX: 65536 }"); // good lord that doesn't sound like a good variable
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
             assert_eq!(
-                gns.spaces().read().get("myspace").unwrap(),
+                global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
                     SpaceMeta::with_env(
                         into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint(65536)))
@@ -101,24 +113,24 @@ fn create_space() {
 
 #[test]
 fn alter_space() {
-    with_variable("alter_space_test.gns.db-tlog", |log_name| {
+    with_variable("alter_space_test.global.db-tlog", |log_name| {
         let uuid;
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            uuid = init_space(&gns, &mut driver, "myspace", "{}");
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            uuid = init_space(&global, &mut driver, "myspace", "{}");
             let stmt =
                 lex_insecure("alter space myspace with { env: { SAYAN_MAX: 65536 } }".as_bytes())
                     .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Space::transactional_exec_alter(&gns, &mut driver, stmt).unwrap();
+            Space::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
             assert_eq!(
-                gns.spaces().read().get("myspace").unwrap(),
+                global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
                     SpaceMeta::with_env(
                         into_dict!("SAYAN_MAX" => DictEntryGeneric::Data(Datacell::new_uint(65536)))
@@ -133,27 +145,27 @@ fn alter_space() {
 
 #[test]
 fn drop_space() {
-    with_variable("drop_space_test.gns.db-tlog", |log_name| {
+    with_variable("drop_space_test.global.db-tlog", |log_name| {
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            let _ = init_space(&gns, &mut driver, "myspace", "{}");
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            let _ = init_space(&global, &mut driver, "myspace", "{}");
             let stmt = lex_insecure("drop space myspace".as_bytes()).unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Space::transactional_exec_drop(&gns, &mut driver, stmt).unwrap();
+            Space::transactional_exec_drop(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
-            assert_eq!(gns.spaces().read().get("myspace"), None);
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
+            assert_eq!(global.namespace().spaces().read().get("myspace"), None);
             driver.close().unwrap();
         })
     })
 }
 
 fn init_model(
-    gns: &GlobalNS,
+    global: &impl GlobalInstanceLike,
     txn_driver: &mut GNSTransactionDriverVFS,
     space_name: &str,
     model_name: &str,
@@ -163,14 +175,19 @@ fn init_model(
     let stmt = lex_insecure(query.as_bytes()).unwrap();
     let stmt = parse_ast_node_full::<CreateModel>(&stmt[2..]).unwrap();
     let model_name = stmt.model_name;
-    Model::transactional_exec_create(&gns, txn_driver, stmt).unwrap();
-    gns.with_model(model_name, |model| Ok(model.get_uuid()))
+    Model::transactional_exec_create(global, txn_driver, stmt).unwrap();
+    global
+        .namespace()
+        .with_model(model_name, |model| Ok(model.get_uuid()))
         .unwrap()
 }
 
-fn init_default_model(gns: &GlobalNS, driver: &mut GNSTransactionDriverVFS) -> Uuid {
+fn init_default_model(
+    global: &impl GlobalInstanceLike,
+    driver: &mut GNSTransactionDriverVFS,
+) -> Uuid {
     init_model(
-        gns,
+        global,
         driver,
         "myspace",
         "mymodel",
@@ -180,35 +197,37 @@ fn init_default_model(gns: &GlobalNS, driver: &mut GNSTransactionDriverVFS) -> U
 
 #[test]
 fn create_model() {
-    with_variable("create_model_test.gns.db-tlog", |log_name| {
+    with_variable("create_model_test.global.db-tlog", |log_name| {
         let _uuid_space;
         let uuid_model;
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            _uuid_space = init_space(&gns, &mut driver, "myspace", "{}");
-            uuid_model = init_default_model(&gns, &mut driver);
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            _uuid_space = init_space(&global, &mut driver, "myspace", "{}");
+            uuid_model = init_default_model(&global, &mut driver);
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
-            gns.with_model(("myspace", "mymodel"), |model| {
-                assert_eq!(
-                    model,
-                    &Model::new_restore(
-                        uuid_model,
-                        "username".into(),
-                        TagSelector::Str.into_full(),
-                        into_dict! {
-                            "username" => Field::new([Layer::str()].into(), false),
-                            "password" => Field::new([Layer::bin()].into(), false),
-                        }
-                    )
-                );
-                Ok(())
-            })
-            .unwrap();
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
+            global
+                .namespace()
+                .with_model(("myspace", "mymodel"), |model| {
+                    assert_eq!(
+                        model,
+                        &Model::new_restore(
+                            uuid_model,
+                            "username".into(),
+                            TagSelector::Str.into_full(),
+                            into_dict! {
+                                "username" => Field::new([Layer::str()].into(), false),
+                                "password" => Field::new([Layer::bin()].into(), false),
+                            }
+                        )
+                    );
+                    Ok(())
+                })
+                .unwrap();
             driver.close().unwrap();
         })
     })
@@ -216,35 +235,37 @@ fn create_model() {
 
 #[test]
 fn alter_model_add() {
-    with_variable("alter_model_add_test.gns.db-tlog", |log_name| {
+    with_variable("alter_model_add_test.global.db-tlog", |log_name| {
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            init_space(&gns, &mut driver, "myspace", "{}");
-            init_default_model(&gns, &mut driver);
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            init_space(&global, &mut driver, "myspace", "{}");
+            init_default_model(&global, &mut driver);
             let stmt = lex_insecure(
                 b"alter model myspace.mymodel add profile_pic { type: binary, nullable: true }",
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&gns, &mut driver, stmt).unwrap();
+            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
-            gns.with_model(("myspace", "mymodel"), |model| {
-                assert_eq!(
-                    model
-                        .intent_read_model()
-                        .fields()
-                        .st_get("profile_pic")
-                        .unwrap(),
-                    &Field::new([Layer::bin()].into(), true)
-                );
-                Ok(())
-            })
-            .unwrap();
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
+            global
+                .namespace()
+                .with_model(("myspace", "mymodel"), |model| {
+                    assert_eq!(
+                        model
+                            .intent_read_model()
+                            .fields()
+                            .st_get("profile_pic")
+                            .unwrap(),
+                        &Field::new([Layer::bin()].into(), true)
+                    );
+                    Ok(())
+                })
+                .unwrap();
             driver.close().unwrap();
         })
     })
@@ -252,13 +273,13 @@ fn alter_model_add() {
 
 #[test]
 fn alter_model_remove() {
-    with_variable("alter_model_remove_test.gns.db-tlog", |log_name| {
+    with_variable("alter_model_remove_test.global.db-tlog", |log_name| {
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            init_space(&gns, &mut driver, "myspace", "{}");
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            init_space(&global, &mut driver, "myspace", "{}");
             init_model(
-                &gns,
+                &global,
                 &mut driver,
                 "myspace",
                 "mymodel",
@@ -269,19 +290,21 @@ fn alter_model_remove() {
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&gns, &mut driver, stmt).unwrap();
+            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap()
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
-            gns.with_model(("myspace", "mymodel"), |model| {
-                let irm = model.intent_read_model();
-                assert!(irm.fields().st_get("has_secure_key").is_none());
-                assert!(irm.fields().st_get("is_dumb").is_none());
-                Ok(())
-            })
-            .unwrap();
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
+            global
+                .namespace()
+                .with_model(("myspace", "mymodel"), |model| {
+                    let irm = model.intent_read_model();
+                    assert!(irm.fields().st_get("has_secure_key").is_none());
+                    assert!(irm.fields().st_get("is_dumb").is_none());
+                    Ok(())
+                })
+                .unwrap();
             driver.close().unwrap()
         })
     })
@@ -289,13 +312,13 @@ fn alter_model_remove() {
 
 #[test]
 fn alter_model_update() {
-    with_variable("alter_model_update_test.gns.db-tlog", |log_name| {
+    with_variable("alter_model_update_test.global.db-tlog", |log_name| {
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            init_space(&gns, &mut driver, "myspace", "{}");
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            init_space(&global, &mut driver, "myspace", "{}");
             init_model(
-                &gns,
+                &global,
                 &mut driver,
                 "myspace",
                 "mymodel",
@@ -305,24 +328,26 @@ fn alter_model_update() {
                 lex_insecure(b"alter model myspace.mymodel update profile_pic { nullable: true }")
                     .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&gns, &mut driver, stmt).unwrap();
+            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
-            gns.with_model(("myspace", "mymodel"), |model| {
-                assert_eq!(
-                    model
-                        .intent_read_model()
-                        .fields()
-                        .st_get("profile_pic")
-                        .unwrap(),
-                    &Field::new([Layer::bin()].into(), true)
-                );
-                Ok(())
-            })
-            .unwrap();
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
+            global
+                .namespace()
+                .with_model(("myspace", "mymodel"), |model| {
+                    assert_eq!(
+                        model
+                            .intent_read_model()
+                            .fields()
+                            .st_get("profile_pic")
+                            .unwrap(),
+                        &Field::new([Layer::bin()].into(), true)
+                    );
+                    Ok(())
+                })
+                .unwrap();
             driver.close().unwrap();
         })
     })
@@ -330,22 +355,24 @@ fn alter_model_update() {
 
 #[test]
 fn drop_model() {
-    with_variable("drop_model_test.gns.db-tlog", |log_name| {
+    with_variable("drop_model_test.global.db-tlog", |log_name| {
         {
-            let gns = GlobalNS::empty();
-            let mut driver = init_txn_driver(&gns, log_name);
-            init_space(&gns, &mut driver, "myspace", "{}");
-            init_default_model(&gns, &mut driver);
+            let global = TestGlobal::empty();
+            let mut driver = init_txn_driver(&global, log_name);
+            init_space(&global, &mut driver, "myspace", "{}");
+            init_default_model(&global, &mut driver);
             let stmt = lex_insecure(b"drop model myspace.mymodel").unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_drop(&gns, &mut driver, stmt).unwrap();
+            Model::transactional_exec_drop(&global, &mut driver, stmt).unwrap();
             driver.close().unwrap();
         }
         multirun(|| {
-            let gns = GlobalNS::empty();
-            let driver = init_txn_driver(&gns, log_name);
+            let global = TestGlobal::empty();
+            let driver = init_txn_driver(&global, log_name);
             assert_eq!(
-                gns.with_model(("myspace", "mymodel"), |_| { Ok(()) })
+                global
+                    .namespace()
+                    .with_model(("myspace", "mymodel"), |_| { Ok(()) })
                     .unwrap_err(),
                 DatabaseError::DdlModelNotFound
             );

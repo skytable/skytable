@@ -25,19 +25,17 @@
 */
 
 use crate::engine::{
-    core::{
-        space::{Space, SpaceMeta},
-        GlobalNS,
-    },
+    core::space::{Space, SpaceMeta},
     data::cell::Datacell,
     error::DatabaseError,
+    fractal::test_utils::TestGlobal,
 };
 
 #[test]
 fn alter_add_prop_env_var() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_create_alter(
-        &gns,
+        &global,
         "create space myspace",
         "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
@@ -56,9 +54,9 @@ fn alter_add_prop_env_var() {
 
 #[test]
 fn alter_update_prop_env_var() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     let uuid = super::exec_create(
-        &gns,
+        &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             let rl = space.meta.dict().read();
@@ -70,7 +68,7 @@ fn alter_update_prop_env_var() {
     )
     .unwrap();
     super::exec_alter(
-        &gns,
+        &global,
         "alter space myspace with { env: { MY_NEW_PROP: 200 } }",
         |space| {
             assert_eq!(
@@ -88,9 +86,9 @@ fn alter_update_prop_env_var() {
 
 #[test]
 fn alter_remove_prop_env_var() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     let uuid = super::exec_create(
-        &gns,
+        &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             let rl = space.meta.dict().read();
@@ -102,7 +100,7 @@ fn alter_remove_prop_env_var() {
     )
     .unwrap();
     super::exec_alter(
-        &gns,
+        &global,
         "alter space myspace with { env: { MY_NEW_PROP: null } }",
         |space| {
             assert_eq!(
@@ -116,10 +114,10 @@ fn alter_remove_prop_env_var() {
 
 #[test]
 fn alter_nx() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_alter(
-            &gns,
+            &global,
             "alter space myspace with { env: { MY_NEW_PROP: 100 } }",
             |_| {},
         )
@@ -130,9 +128,9 @@ fn alter_nx() {
 
 #[test]
 fn alter_remove_all_env() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     let uuid = super::exec_create(
-        &gns,
+        &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
         |space| {
             let rl = space.meta.dict().read();
@@ -143,7 +141,7 @@ fn alter_remove_all_env() {
         },
     )
     .unwrap();
-    super::exec_alter(&gns, "alter space myspace with { env: null }", |space| {
+    super::exec_alter(&global, "alter space myspace with { env: null }", |space| {
         assert_eq!(space, &Space::empty_with_uuid(uuid))
     })
     .unwrap();

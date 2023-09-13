@@ -135,9 +135,9 @@ mod exec {
         core::{
             model::{DeltaVersion, Field, Layer},
             tests::ddl_model::{exec_create_new_space, with_model},
-            GlobalNS,
         },
         data::tag::{DataTag, FullTag},
+        fractal::test_utils::TestGlobal,
         idx::STIndexSeq,
     };
 
@@ -145,13 +145,13 @@ mod exec {
 
     #[test]
     fn simple() {
-        let gns = GlobalNS::empty();
+        let global = TestGlobal::empty();
         exec_create_new_space(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: binary)",
         )
         .unwrap();
-        with_model(&gns, SPACE, "mymodel", |model| {
+        with_model(&global, SPACE, "mymodel", |model| {
             let models: Vec<(String, Field)> = model
                 .intent_read_model()
                 .fields()

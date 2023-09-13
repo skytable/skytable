@@ -25,15 +25,16 @@
 */
 
 use crate::engine::{
-    core::{model::delta::DataDeltaKind, GlobalNS},
+    core::model::delta::DataDeltaKind,
     error::{DatabaseError, DatabaseResult},
+    fractal::GlobalInstanceLike,
     idx::MTIndex,
     ql::dml::del::DeleteStatement,
     sync,
 };
 
-pub fn delete(gns: &GlobalNS, mut delete: DeleteStatement) -> DatabaseResult<()> {
-    gns.with_model(delete.entity(), |model| {
+pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> DatabaseResult<()> {
+    global.namespace().with_model(delete.entity(), |model| {
         let g = sync::atm::cpin();
         let schema_version = model.delta_state().schema_current_version();
         let delta_state = model.delta_state();

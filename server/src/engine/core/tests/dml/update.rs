@@ -25,17 +25,15 @@
 */
 
 use crate::engine::{
-    core::{dml, GlobalNS},
-    data::cell::Datacell,
-    error::DatabaseError,
+    core::dml, data::cell::Datacell, error::DatabaseError, fractal::test_utils::TestGlobal,
 };
 
 #[test]
 fn simple() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, email: string, followers: uint64, following: uint64)",
             "insert into myspace.mymodel('sayan', 'sayan@example.com', 0, 100)",
             "update myspace.mymodel set followers += 200000, following -= 15, email = 'sn@example.com' where username = 'sayan'",
@@ -51,10 +49,10 @@ fn simple() {
 
 #[test]
 fn with_null() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string, null email: string)",
             "insert into myspace.mymodel('sayan', 'pass123', null)",
             "update myspace.mymodel set email = 'sayan@example.com' where username = 'sayan'",
@@ -68,10 +66,10 @@ fn with_null() {
 
 #[test]
 fn with_list() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(link: string, click_ids: list { type: string })",
             "insert into myspace.mymodel('example.com', [])",
             "update myspace.mymodel set click_ids += 'ios_client_uuid' where link = 'example.com'",
@@ -88,10 +86,10 @@ fn with_list() {
 
 #[test]
 fn fail_operation_on_null() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string, null email: string)",
             "insert into myspace.mymodel('sayan', 'pass123', null)",
             "update myspace.mymodel set email += '.com' where username = 'sayan'",
@@ -108,10 +106,10 @@ fn fail_operation_on_null() {
 
 #[test]
 fn fail_unknown_fields() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string, null email: string)",
             "insert into myspace.mymodel('sayan', 'pass123', null)",
             "update myspace.mymodel set email2 = 'sayan@example.com', password += '4' where username = 'sayan'",
@@ -123,18 +121,21 @@ fn fail_unknown_fields() {
     assert_eq!(dml::update_flow_trace(), ["fieldnotfound", "rollback"]);
     // verify integrity
     assert_eq!(
-        super::exec_select_only(&gns, "select * from myspace.mymodel where username='sayan'")
-            .unwrap(),
+        super::exec_select_only(
+            &global,
+            "select * from myspace.mymodel where username='sayan'"
+        )
+        .unwrap(),
         intovec!["sayan", "pass123", Datacell::null()]
     );
 }
 
 #[test]
 fn fail_typedef_violation() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_update(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string, rank: uint8)",
             "insert into myspace.mymodel('sayan', 'pass123', 1)",
             "update myspace.mymodel set password = 'pass1234', rank = 'one' where username = 'sayan'",
@@ -150,7 +151,7 @@ fn fail_typedef_violation() {
     // verify integrity
     assert_eq!(
         super::exec_select_only(
-            &gns,
+            &global,
             "select * from myspace.mymodel where username = 'sayan'"
         )
         .unwrap(),

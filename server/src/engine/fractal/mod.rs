@@ -36,6 +36,8 @@ use {
 mod config;
 mod drivers;
 mod mgr;
+#[cfg(test)]
+pub mod test_utils;
 mod util;
 pub use {
     config::ServerConfig,
@@ -94,35 +96,58 @@ pub unsafe fn enable_and_start_all(
     global access
 */
 
+/// Something that represents the global state
+pub trait GlobalInstanceLike {
+    fn namespace(&self) -> &GlobalNS;
+    fn post_high_priority_task(&self, task: Task<CriticalTask>);
+    fn post_standard_priority_task(&self, task: Task<GenericTask>);
+    fn get_max_delta_size(&self) -> usize;
+}
+
+impl GlobalInstanceLike for Global {
+    fn namespace(&self) -> &GlobalNS {
+        self._namespace()
+    }
+    fn post_high_priority_task(&self, task: Task<CriticalTask>) {
+        self._post_high_priority_task(task)
+    }
+    fn post_standard_priority_task(&self, task: Task<GenericTask>) {
+        self._post_standard_priority_task(task)
+    }
+    fn get_max_delta_size(&self) -> usize {
+        self._get_max_delta_size()
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 /// A handle to the global state
 pub struct Global(());
 
 impl Global {
-    fn new() -> Self {
+    unsafe fn new() -> Self {
         Self(())
     }
-    pub(self) fn get_state(&self) -> &'static GlobalState {
+    fn get_state(&self) -> &'static GlobalState {
         unsafe { GLOBAL.assume_init_ref() }
     }
     /// Returns a handle to the [`GlobalNS`]
-    pub fn namespace(&self) -> &'static GlobalNS {
+    fn _namespace(&self) -> &'static GlobalNS {
         &unsafe { GLOBAL.assume_init_ref() }.gns
     }
     /// Post an urgent task
-    pub fn post_high_priority_task(&self, task: Task<CriticalTask>) {
+    fn _post_high_priority_task(&self, task: Task<CriticalTask>) {
         self.get_state().fractal_mgr().post_high_priority(task)
     }
     /// Post a task with normal priority
     ///
     /// NB: It is not guaranteed that the task will remain as a low priority task because the scheduler can choose
     /// to promote the task to a high priority task, if it deems necessary.
-    pub fn post_standard_priority_task(&self, task: Task<GenericTask>) {
+    fn _post_standard_priority_task(&self, task: Task<GenericTask>) {
         self.get_state().fractal_mgr().post_low_priority(task)
     }
     /// Returns the maximum size a model's delta size can hit before it should immediately issue a batch write request
     /// to avoid memory pressure
-    pub fn get_max_delta_size(&self) -> usize {
+    fn _get_max_delta_size(&self) -> usize {
         self.get_state()
             .fractal_mgr()
             .get_rt_stat()

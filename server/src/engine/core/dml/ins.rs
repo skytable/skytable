@@ -28,16 +28,16 @@ use crate::engine::{
     core::{
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, Fields, Model},
-        GlobalNS,
     },
     error::{DatabaseError, DatabaseResult},
+    fractal::GlobalInstanceLike,
     idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
 };
 
-pub fn insert(gns: &GlobalNS, insert: InsertStatement) -> DatabaseResult<()> {
-    gns.with_model(insert.entity(), |mdl| {
+pub fn insert(gns: &impl GlobalInstanceLike, insert: InsertStatement) -> DatabaseResult<()> {
+    gns.namespace().with_model(insert.entity(), |mdl| {
         let irmwd = mdl.intent_write_new_data();
         let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
         let g = cpin();

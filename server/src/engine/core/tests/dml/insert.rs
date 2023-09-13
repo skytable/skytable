@@ -24,16 +24,16 @@
  *
 */
 
-use crate::engine::{core::GlobalNS, data::cell::Datacell, error::DatabaseError};
+use crate::engine::{data::cell::Datacell, error::DatabaseError, fractal::test_utils::TestGlobal};
 
 #[derive(sky_macros::Wrapper, Debug)]
 struct Tuple(Vec<(Box<str>, Datacell)>);
 
 #[test]
 fn insert_simple() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_insert(
-        &gns,
+        &global,
         "create model myspace.mymodel(username: string, password: string)",
         "insert into myspace.mymodel('sayan', 'pass123')",
         "sayan",
@@ -46,9 +46,9 @@ fn insert_simple() {
 
 #[test]
 fn insert_with_null() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_insert(
-        &gns,
+        &global,
         "create model myspace.mymodel(username: string, null useless_password: string, null useless_email: string, null useless_random_column: uint64)",
         "insert into myspace.mymodel('sayan', null, null, null)",
         "sayan",
@@ -69,9 +69,9 @@ fn insert_with_null() {
 
 #[test]
 fn insert_duplicate() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_insert(
-        &gns,
+        &global,
         "create model myspace.mymodel(username: string, password: string)",
         "insert into myspace.mymodel('sayan', 'pass123')",
         "sayan",
@@ -81,7 +81,7 @@ fn insert_duplicate() {
     )
     .unwrap();
     assert_eq!(
-        super::exec_insert_only(&gns, "insert into myspace.mymodel('sayan', 'pass123')")
+        super::exec_insert_only(&global, "insert into myspace.mymodel('sayan', 'pass123')")
             .unwrap_err(),
         DatabaseError::DmlConstraintViolationDuplicate
     );

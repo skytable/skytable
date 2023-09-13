@@ -24,13 +24,13 @@
  *
 */
 
-use crate::engine::{core::GlobalNS, error::DatabaseError};
+use crate::engine::{error::DatabaseError, fractal::test_utils::TestGlobal};
 
 #[test]
 fn simple_delete() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_delete(
-        &gns,
+        &global,
         "create model myspace.mymodel(username: string, password: string)",
         Some("insert into myspace.mymodel('sayan', 'pass123')"),
         "delete from myspace.mymodel where username = 'sayan'",
@@ -41,10 +41,10 @@ fn simple_delete() {
 
 #[test]
 fn delete_nonexisting() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_delete(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string)",
             None,
             "delete from myspace.mymodel where username = 'sayan'",

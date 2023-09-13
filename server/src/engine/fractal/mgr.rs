@@ -184,7 +184,7 @@ impl FractalMgr {
                         // was way behind in the queue
                         continue;
                     };
-                    let res = global.namespace().with_model(
+                    let res = global._namespace().with_model(
                         (model_id.space(), model_id.model()),
                         |model| {
                             if model.get_uuid() != model_id.uuid() {
@@ -235,7 +235,7 @@ impl FractalMgr {
                     let mdl_drivers = global.get_state().get_mdl_drivers().read();
                     for (model_id, driver) in mdl_drivers.iter() {
                         let mut observed_len = 0;
-                        let res = global.namespace().with_model((model_id.space(), model_id.model()), |model| {
+                        let res = global._namespace().with_model((model_id.space(), model_id.model()), |model| {
                             if model.get_uuid() != model_id.uuid() {
                                 // once again, throughput maximization will lead to, in extremely rare cases, this
                                 // branch returning. but it is okay

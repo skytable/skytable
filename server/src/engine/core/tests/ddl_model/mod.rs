@@ -29,8 +29,9 @@ mod crt;
 mod layer;
 
 use crate::engine::{
-    core::{model::Model, space::Space, GlobalNS},
+    core::{model::Model, space::Space},
     error::DatabaseResult,
+    fractal::GlobalInstanceLike,
     idx::STIndex,
     ql::{
         ast::{parse_ast_node_full, Entity},
@@ -46,7 +47,7 @@ fn create(s: &str) -> DatabaseResult<Model> {
 }
 
 pub fn exec_create(
-    gns: &GlobalNS,
+    global: &impl GlobalInstanceLike,
     create_stmt: &str,
     create_new_space: bool,
 ) -> DatabaseResult<String> {
@@ -56,27 +57,40 @@ pub fn exec_create(
         Entity::Single(tbl) | Entity::Full(_, tbl) => tbl.to_string(),
     };
     if create_new_space {
-        gns.test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
+        global
+            .namespace()
+            .test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
     }
-    Model::nontransactional_exec_create(gns, create_model).map(|_| name)
+    Model::nontransactional_exec_create(global, create_model).map(|_| name)
 }
 
-pub fn exec_create_new_space(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, true).map(|_| ())
+pub fn exec_create_new_space(
+    global: &impl GlobalInstanceLike,
+    create_stmt: &str,
+) -> DatabaseResult<()> {
+    exec_create(global, create_stmt, true).map(|_| ())
 }
 
-pub fn exec_create_no_create(gns: &GlobalNS, create_stmt: &str) -> DatabaseResult<()> {
-    exec_create(gns, create_stmt, false).map(|_| ())
+pub fn exec_create_no_create(
+    global: &impl GlobalInstanceLike,
+    create_stmt: &str,
+) -> DatabaseResult<()> {
+    exec_create(global, create_stmt, false).map(|_| ())
 }
 
-fn with_space(gns: &GlobalNS, space_name: &str, f: impl Fn(&Space)) {
-    let rl = gns.spaces().read();
+fn with_space(global: &impl GlobalInstanceLike, space_name: &str, f: impl Fn(&Space)) {
+    let rl = global.namespace().spaces().read();
     let space = rl.st_get(space_name).unwrap();
     f(space);
 }
 
-fn with_model(gns: &GlobalNS, space_id: &str, model_name: &str, f: impl Fn(&Model)) {
-    with_space(gns, space_id, |space| {
+fn with_model(
+    global: &impl GlobalInstanceLike,
+    space_id: &str,
+    model_name: &str,
+    f: impl Fn(&Model),
+) {
+    with_space(global, space_id, |space| {
         let space_rl = space.models().read();
         let model = space_rl.st_get(model_name).unwrap();
         f(model)

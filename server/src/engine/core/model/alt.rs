@@ -28,12 +28,13 @@ use {
     super::{Field, IWModel, Layer, Model},
     crate::{
         engine::{
-            core::{util::EntityLocator, GlobalNS},
+            core::util::EntityLocator,
             data::{
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
             },
             error::{DatabaseError, DatabaseResult},
+            fractal::GlobalInstanceLike,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             ql::{
                 ast::Entity,
@@ -249,12 +250,12 @@ impl<'a> AlterPlan<'a> {
 
 impl Model {
     pub fn transactional_exec_alter<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
         alter: AlterModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = EntityLocator::parse_entity(alter.model)?;
-        gns.with_space(space_name, |space| {
+        global.namespace().with_space(space_name, |space| {
             space.with_model(model_name, |model| {
                 // make intent
                 let iwm = model.intent_write_model();
@@ -303,9 +304,10 @@ impl Model {
                             txn_driver.try_commit(txn)?;
                         }
                         removed.iter().for_each(|field_id| {
-                            model
-                                .delta_state()
-                                .schema_append_unresolved_wl_field_rem(&mut guard, field_id.as_str());
+                            model.delta_state().schema_append_unresolved_wl_field_rem(
+                                &mut guard,
+                                field_id.as_str(),
+                            );
                             iwm.fields_mut().st_delete(field_id.as_str());
                         });
                     }
@@ -328,9 +330,9 @@ impl Model {
             })
         })
     }
-    pub fn exec_alter(gns: &GlobalNS, stmt: AlterModel) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
-            Self::transactional_exec_alter(gns, driver, stmt)
+    pub fn exec_alter(global: &impl GlobalInstanceLike, stmt: AlterModel) -> DatabaseResult<()> {
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
+            Self::transactional_exec_alter(global, driver, stmt)
         })
     }
 }

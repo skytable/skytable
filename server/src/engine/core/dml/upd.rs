@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use {
     crate::{
         engine::{
-            core::{model::delta::DataDeltaKind, query_meta::AssignmentOperator, GlobalNS},
+            core::{model::delta::DataDeltaKind, query_meta::AssignmentOperator},
             data::{
                 cell::Datacell,
                 lit::LitIR,
@@ -38,6 +38,7 @@ use {
                 tag::{DataTag, TagClass},
             },
             error::{DatabaseError, DatabaseResult},
+            fractal::GlobalInstanceLike,
             idx::STIndex,
             ql::dml::upd::{AssignmentExpression, UpdateStatement},
             sync,
@@ -232,8 +233,8 @@ pub fn collect_trace_path() -> Vec<&'static str> {
     ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
 }
 
-pub fn update(gns: &GlobalNS, mut update: UpdateStatement) -> DatabaseResult<()> {
-    gns.with_model(update.entity(), |mdl| {
+pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> DatabaseResult<()> {
+    global.namespace().with_model(update.entity(), |mdl| {
         let mut ret = Ok(());
         // prepare row fetch
         let key = mdl.resolve_where(update.clauses_mut())?;

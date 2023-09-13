@@ -24,14 +24,14 @@
  *
 */
 
-use crate::engine::{core::GlobalNS, data::cell::Datacell, error::DatabaseError};
+use crate::engine::{data::cell::Datacell, error::DatabaseError, fractal::test_utils::TestGlobal};
 
 #[test]
 fn simple_select_wildcard() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_select(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string)",
             "insert into myspace.mymodel('sayan', 'pass123')",
             "select * from myspace.mymodel where username = 'sayan'",
@@ -43,10 +43,10 @@ fn simple_select_wildcard() {
 
 #[test]
 fn simple_select_specified_same_order() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_select(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string)",
             "insert into myspace.mymodel('sayan', 'pass123')",
             "select username, password from myspace.mymodel where username = 'sayan'",
@@ -58,10 +58,10 @@ fn simple_select_specified_same_order() {
 
 #[test]
 fn simple_select_specified_reversed_order() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_select(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, password: string)",
             "insert into myspace.mymodel('sayan', 'pass123')",
             "select password, username from myspace.mymodel where username = 'sayan'",
@@ -73,10 +73,10 @@ fn simple_select_specified_reversed_order() {
 
 #[test]
 fn select_null() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_select(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, null password: string)",
             "insert into myspace.mymodel('sayan', null)",
             "select username, password from myspace.mymodel where username = 'sayan'",
@@ -88,10 +88,10 @@ fn select_null() {
 
 #[test]
 fn select_nonexisting() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_select(
-            &gns,
+            &global,
             "create model myspace.mymodel(username: string, null password: string)",
             "insert into myspace.mymodel('sayan', null)",
             "select username, password from myspace.mymodel where username = 'notsayan'",

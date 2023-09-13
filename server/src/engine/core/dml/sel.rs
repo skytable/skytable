@@ -25,23 +25,24 @@
 */
 
 use crate::engine::{
-    core::{index::DcFieldIndex, GlobalNS},
+    core::index::DcFieldIndex,
     data::cell::{Datacell, VirtualDatacell},
     error::{DatabaseError, DatabaseResult},
+    fractal::GlobalInstanceLike,
     idx::{STIndex, STIndexSeq},
     ql::dml::sel::SelectStatement,
     sync,
 };
 
 pub fn select_custom<F>(
-    gns: &GlobalNS,
+    global: &impl GlobalInstanceLike,
     mut select: SelectStatement,
     mut cellfn: F,
 ) -> DatabaseResult<()>
 where
     F: FnMut(&Datacell),
 {
-    gns.with_model(select.entity(), |mdl| {
+    global.namespace().with_model(select.entity(), |mdl| {
         let irm = mdl.intent_read_model();
         let target_key = mdl.resolve_where(select.clauses_mut())?;
         let pkdc = VirtualDatacell::new(target_key.clone());

@@ -29,6 +29,7 @@ use {
         core::{model::Model, RWLIdx},
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
         error::{DatabaseError, DatabaseResult},
+        fractal::GlobalInstanceLike,
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
         txn::gns as gnstxn,
@@ -189,14 +190,14 @@ impl Space {
 
 impl Space {
     pub fn transactional_exec_create<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
         space: CreateSpace,
     ) -> DatabaseResult<()> {
         // process create
         let ProcedureCreate { space_name, space } = Self::process_create(space)?;
         // acquire access
-        let mut wl = gns.spaces().write();
+        let mut wl = global.namespace().spaces().write();
         if wl.st_contains(&space_name) {
             return Err(DatabaseError::DdlSpaceAlreadyExists);
         }
@@ -213,22 +214,23 @@ impl Space {
     /// Execute a `create` stmt
     #[cfg(test)]
     pub fn nontransactional_exec_create(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         space: CreateSpace,
     ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
-            Self::transactional_exec_create(gns, driver, space)
-        })
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
+            global.namespace(),
+            move |driver| Self::transactional_exec_create(global, driver, space),
+        )
     }
     pub fn transactional_exec_alter<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
         AlterSpace {
             space_name,
             updated_props,
         }: AlterSpace,
     ) -> DatabaseResult<()> {
-        gns.with_space(&space_name, |space| {
+        global.namespace().with_space(&space_name, |space| {
             match updated_props.get(SpaceMeta::KEY_ENV) {
                 Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
                 Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
@@ -262,22 +264,23 @@ impl Space {
     #[cfg(test)]
     /// Execute a `alter` stmt
     pub fn nontransactional_exec_alter(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         alter: AlterSpace,
     ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
-            Self::transactional_exec_alter(gns, driver, alter)
-        })
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
+            global.namespace(),
+            move |driver| Self::transactional_exec_alter(global, driver, alter),
+        )
     }
     pub fn transactional_exec_drop<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
         DropSpace { space, force: _ }: DropSpace,
     ) -> DatabaseResult<()> {
         // TODO(@ohsayan): force remove option
         // TODO(@ohsayan): should a drop space block the entire global table?
         let space_name = space;
-        let mut wgns = gns.spaces().write();
+        let mut wgns = global.namespace().spaces().write();
         let space = match wgns.get(space_name.as_str()) {
             Some(space) => space,
             None => return Err(DatabaseError::DdlSpaceNotFound),
@@ -298,12 +301,13 @@ impl Space {
     }
     #[cfg(test)]
     pub fn nontransactional_exec_drop(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         drop_space: DropSpace,
     ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, move |driver| {
-            Self::transactional_exec_drop(gns, driver, drop_space)
-        })
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
+            global.namespace(),
+            move |driver| Self::transactional_exec_drop(global, driver, drop_space),
+        )
     }
 }
 

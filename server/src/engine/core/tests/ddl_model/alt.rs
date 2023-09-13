@@ -28,9 +28,9 @@ use crate::engine::{
     core::{
         model::{alt::AlterPlan, Model},
         tests::ddl_model::{create, exec_create},
-        GlobalNS,
     },
     error::DatabaseResult,
+    fractal::GlobalInstanceLike,
     idx::STIndex,
     ql::{ast::parse_ast_node_full, ddl::alt::AlterModel, tests::lex_insecure},
 };
@@ -47,15 +47,15 @@ fn plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) {
     with_plan(model, plan, f).unwrap()
 }
 fn exec_plan(
-    gns: &GlobalNS,
+    global: &impl GlobalInstanceLike,
     new_space: bool,
     model: &str,
     plan: &str,
     f: impl Fn(&Model),
 ) -> DatabaseResult<()> {
-    let mdl_name = exec_create(gns, model, new_space)?;
+    let mdl_name = exec_create(global, model, new_space)?;
     let prev_uuid = {
-        let gns = gns.spaces().read();
+        let gns = global.namespace().spaces().read();
         let space = gns.get("myspace").unwrap();
         let space_read = space.models().read();
         space_read.get(mdl_name.as_str()).unwrap().get_uuid()
@@ -63,8 +63,8 @@ fn exec_plan(
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     let (_space, model_name) = alter.model.into_full().unwrap();
-    Model::exec_alter(gns, alter)?;
-    let gns_read = gns.spaces().read();
+    Model::exec_alter(global, alter)?;
+    let gns_read = global.namespace().spaces().read();
     let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();
     let model = model.st_get(model_name.as_str()).unwrap();
@@ -352,18 +352,16 @@ mod plan {
 
 mod exec {
     use crate::engine::{
-        core::{
-            model::{DeltaVersion, Field, Layer},
-            GlobalNS,
-        },
+        core::model::{DeltaVersion, Field, Layer},
         error::DatabaseError,
+        fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };
     #[test]
     fn simple_add() {
-        let gns = GlobalNS::empty();
+        let global = TestGlobal::empty();
         super::exec_plan(
-            &gns,
+            &global,
             true,
             "create model myspace.mymodel(username: string, col1: uint64)",
             "alter model myspace.mymodel add (col2 { type: uint32, nullable: true }, col3 { type: uint16, nullable: true })",
@@ -392,9 +390,9 @@ mod exec {
     }
     #[test]
     fn simple_remove() {
-        let gns = GlobalNS::empty();
+        let global = TestGlobal::empty();
         super::exec_plan(
-            &gns,
+            &global,
             true,
             "create model myspace.mymodel(username: string, col1: uint64, col2: uint32, col3: uint16, col4: uint8)",
             "alter model myspace.mymodel remove (col1, col2, col3, col4)",
@@ -418,9 +416,9 @@ mod exec {
     }
     #[test]
     fn simple_update() {
-        let gns = GlobalNS::empty();
+        let global = TestGlobal::empty();
         super::exec_plan(
-            &gns,
+            &global,
             true,
             "create model myspace.mymodel(username: string, password: binary)",
             "alter model myspace.mymodel update password { nullable: true }",
@@ -437,10 +435,10 @@ mod exec {
     }
     #[test]
     fn failing_alter_nullable_switch_need_lock() {
-        let gns = GlobalNS::empty();
+        let global = TestGlobal::empty();
         assert_eq!(
             super::exec_plan(
-                &gns,
+                &global,
                 true,
                 "create model myspace.mymodel(username: string, null gh_handle: string)",
                 "alter model myspace.mymodel update gh_handle { nullable: false }",

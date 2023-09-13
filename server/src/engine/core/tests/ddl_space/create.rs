@@ -25,18 +25,16 @@
 */
 
 use crate::engine::{
-    core::{
-        space::{Space, SpaceMeta},
-        GlobalNS,
-    },
+    core::space::{Space, SpaceMeta},
     data::cell::Datacell,
     error::DatabaseError,
+    fractal::test_utils::TestGlobal,
 };
 
 #[test]
 fn exec_create_space_simple() {
-    let gns = GlobalNS::empty();
-    super::exec_create(&gns, "create space myspace", |spc| {
+    let global = TestGlobal::empty();
+    super::exec_create(&global, "create space myspace", |spc| {
         assert!(spc.models().read().is_empty())
     })
     .unwrap();
@@ -44,9 +42,9 @@ fn exec_create_space_simple() {
 
 #[test]
 fn exec_create_space_with_env() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     super::exec_create(
-        &gns,
+        &global,
         r#"
         create space myspace with {
             env: {
@@ -72,19 +70,19 @@ fn exec_create_space_with_env() {
 
 #[test]
 fn exec_create_space_with_bad_env_type() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
-        super::exec_create(&gns, "create space myspace with { env: 100 }", |_| {}).unwrap_err(),
+        super::exec_create(&global, "create space myspace with { env: 100 }", |_| {}).unwrap_err(),
         DatabaseError::DdlSpaceBadProperty
     );
 }
 
 #[test]
 fn exec_create_space_with_random_property() {
-    let gns = GlobalNS::empty();
+    let global = TestGlobal::empty();
     assert_eq!(
         super::exec_create(
-            &gns,
+            &global,
             "create space myspace with { i_am_blue_da_ba_dee: 100 }",
             |_| {}
         )

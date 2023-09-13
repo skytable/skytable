@@ -40,6 +40,7 @@ use {
             uuid::Uuid,
         },
         error::{DatabaseError, DatabaseResult},
+        fractal::GlobalInstanceLike,
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
         ql::ddl::{
@@ -204,13 +205,13 @@ impl Model {
 
 impl Model {
     pub fn transactional_exec_create<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
         stmt: CreateModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;
-        gns.with_space(space_name, |space| {
+        global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             if w_space.st_contains(model_name) {
                 return Err(DatabaseError::DdlModelAlreadyExists);
@@ -234,20 +235,20 @@ impl Model {
     }
     #[cfg(test)]
     pub fn nontransactional_exec_create(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         stmt: CreateModel,
     ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
-            Self::transactional_exec_create(gns, driver, stmt)
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
+            Self::transactional_exec_create(global, driver, stmt)
         })
     }
     pub fn transactional_exec_drop<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
         stmt: DropModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.entity.parse_entity()?;
-        gns.with_space(space_name, |space| {
+        global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             let Some(model) = w_space.get(model_name) else {
                 return Err(DatabaseError::DdlModelNotFound);
@@ -270,11 +271,11 @@ impl Model {
     }
     #[cfg(test)]
     pub fn nontransactional_exec_drop(
-        gns: &super::GlobalNS,
+        global: &impl GlobalInstanceLike,
         stmt: DropModel,
     ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(gns, |driver| {
-            Self::transactional_exec_drop(gns, driver, stmt)
+        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
+            Self::transactional_exec_drop(global, driver, stmt)
         })
     }
 }
