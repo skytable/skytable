@@ -39,6 +39,7 @@ use {
     crate::engine::{
         core::space::Space,
         error::{DatabaseError, DatabaseResult},
+        fractal::GlobalInstanceLike,
         idx::{IndexST, STIndex},
     },
     parking_lot::RwLock,
@@ -53,6 +54,28 @@ type RWLIdx<K, V> = RwLock<IndexST<K, V>>;
 #[cfg_attr(test, derive(Debug))]
 pub struct GlobalNS {
     index_space: RWLIdx<Box<str>, Space>,
+}
+
+pub(self) fn with_model_for_data_update<'a, T, E, F>(
+    global: &impl GlobalInstanceLike,
+    entity: E,
+    f: F,
+) -> DatabaseResult<T>
+where
+    F: FnOnce(&Model) -> DatabaseResult<T>,
+    E: 'a + EntityLocator<'a>,
+{
+    let (space_name, model_name) = entity.parse_entity()?;
+    global
+        .namespace()
+        .with_model((space_name, model_name), |mdl| {
+            let r = f(mdl);
+            // see if this task local delta is full
+            if r.is_ok() {
+                model::DeltaState::guard_delta_overflow(global, space_name, model_name, mdl);
+            }
+            r
+        })
 }
 
 impl GlobalNS {

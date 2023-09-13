@@ -26,6 +26,7 @@
 
 use crate::engine::{
     core::{
+        self,
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, Fields, Model},
     },
@@ -36,8 +37,8 @@ use crate::engine::{
     sync::atm::cpin,
 };
 
-pub fn insert(gns: &impl GlobalInstanceLike, insert: InsertStatement) -> DatabaseResult<()> {
-    gns.namespace().with_model(insert.entity(), |mdl| {
+pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> DatabaseResult<()> {
+    core::with_model_for_data_update(global, insert.entity(), |mdl| {
         let irmwd = mdl.intent_write_new_data();
         let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
         let g = cpin();

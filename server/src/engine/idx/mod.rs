@@ -149,6 +149,8 @@ pub trait MTIndex<E, K, V>: IndexBaseSpec {
         't: 'v,
         V: 'v,
         Self: 't;
+    /// Returns the length of the index
+    fn mt_len(&self) -> usize;
     /// Attempts to compact the backing storage
     fn mt_compact(&self) {}
     /// Clears all the entries in the MTIndex

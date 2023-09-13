@@ -102,6 +102,19 @@ pub trait GlobalInstanceLike {
     fn post_high_priority_task(&self, task: Task<CriticalTask>);
     fn post_standard_priority_task(&self, task: Task<GenericTask>);
     fn get_max_delta_size(&self) -> usize;
+    // default impls
+    fn request_batch_resolve(
+        &self,
+        space_name: &str,
+        model_name: &str,
+        model_uuid: Uuid,
+        observed_len: usize,
+    ) {
+        self.post_high_priority_task(Task::new(CriticalTask::WriteBatch(
+            ModelUniqueID::new(space_name, model_name, model_uuid),
+            observed_len,
+        )))
+    }
 }
 
 impl GlobalInstanceLike for Global {

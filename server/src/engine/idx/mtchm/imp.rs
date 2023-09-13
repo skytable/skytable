@@ -87,6 +87,9 @@ impl<E: TreeElement, C: Config> MTIndex<E, E::Key, E::Value> for Raw<E, C> {
         E::Value: 'v,
         Self: 't;
 
+    fn mt_len(&self) -> usize {
+        self.len()
+    }
     fn mt_clear(&self, g: &Guard) {
         self.nontransactional_clear(g)
     }

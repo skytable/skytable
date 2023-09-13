@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::model::delta::DataDeltaKind,
+    core::{self, model::delta::DataDeltaKind},
     error::{DatabaseError, DatabaseResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
@@ -34,7 +34,7 @@ use crate::engine::{
 };
 
 pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> DatabaseResult<()> {
-    global.namespace().with_model(delete.entity(), |model| {
+    core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();
         let schema_version = model.delta_state().schema_current_version();
         let delta_state = model.delta_state();

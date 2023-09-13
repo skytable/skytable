@@ -62,4 +62,7 @@ impl PrimaryIndex {
     pub fn __raw_index(&self) -> &IndexMTRaw<row::Row> {
         &self.data
     }
+    pub fn count(&self) -> usize {
+        self.data.mt_len()
+    }
 }

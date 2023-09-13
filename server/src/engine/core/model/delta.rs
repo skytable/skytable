@@ -26,8 +26,14 @@
 
 use {
     super::{Fields, Model},
-    crate::engine::{
-        core::index::Row, fractal::FractalToken, sync::atm::Guard, sync::queue::Queue,
+    crate::{
+        engine::{
+            core::index::Row,
+            fractal::{FractalToken, GlobalInstanceLike},
+            sync::atm::Guard,
+            sync::queue::Queue,
+        },
+        util::compiler,
     },
     parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     std::{
@@ -167,6 +173,29 @@ impl DeltaState {
             data_current_version: AtomicU64::new(0),
             data_deltas: Queue::new(),
             data_deltas_size: AtomicUsize::new(0),
+        }
+    }
+}
+
+// data direct
+impl DeltaState {
+    pub(in crate::engine::core) fn guard_delta_overflow(
+        global: &impl GlobalInstanceLike,
+        space_name: &str,
+        model_name: &str,
+        model: &Model,
+    ) {
+        let current_deltas_size = model.delta_state().data_deltas_size.load(Ordering::Acquire);
+        let max_len = global
+            .get_max_delta_size()
+            .min((model.primary_index().count() as f64 * 0.05) as usize);
+        if compiler::unlikely(current_deltas_size >= max_len) {
+            global.request_batch_resolve(
+                space_name,
+                model_name,
+                model.get_uuid(),
+                current_deltas_size,
+            );
         }
     }
 }

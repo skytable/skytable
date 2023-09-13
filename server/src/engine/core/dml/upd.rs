@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use {
     crate::{
         engine::{
-            core::{model::delta::DataDeltaKind, query_meta::AssignmentOperator},
+            core::{self, model::delta::DataDeltaKind, query_meta::AssignmentOperator},
             data::{
                 cell::Datacell,
                 lit::LitIR,
@@ -234,7 +234,7 @@ pub fn collect_trace_path() -> Vec<&'static str> {
 }
 
 pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> DatabaseResult<()> {
-    global.namespace().with_model(update.entity(), |mdl| {
+    core::with_model_for_data_update(global, update.entity(), |mdl| {
         let mut ret = Ok(());
         // prepare row fetch
         let key = mdl.resolve_where(update.clauses_mut())?;
