@@ -47,7 +47,7 @@ fn exec_create(
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::crt::CreateSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
-    Space::nontransactional_exec_create(gns, ast_node)?;
+    Space::transactional_exec_create(gns, ast_node)?;
     gns.namespace().with_space(&name, |space| {
         verify(space);
         Ok(space.get_uuid())
@@ -63,7 +63,7 @@ fn exec_alter(
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::alt::AlterSpace>(&tok[2..]).unwrap();
     let name = ast_node.space_name;
-    Space::nontransactional_exec_alter(gns, ast_node)?;
+    Space::transactional_exec_alter(gns, ast_node)?;
     gns.namespace().with_space(&name, |space| {
         verify(space);
         Ok(space.get_uuid())

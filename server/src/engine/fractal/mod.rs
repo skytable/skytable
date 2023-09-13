@@ -26,9 +26,12 @@
 
 use {
     super::{
-        core::GlobalNS, data::uuid::Uuid, storage::v1::LocalFS, txn::gns::GNSTransactionDriverAnyFS,
+        core::GlobalNS,
+        data::uuid::Uuid,
+        storage::v1::{LocalFS, RawFSInterface},
+        txn::gns::GNSTransactionDriverAnyFS,
     },
-    parking_lot::RwLock,
+    parking_lot::{Mutex, RwLock},
     std::{collections::HashMap, mem::MaybeUninit},
     tokio::sync::mpsc::unbounded_channel,
 };
@@ -98,10 +101,16 @@ pub unsafe fn enable_and_start_all(
 
 /// Something that represents the global state
 pub trait GlobalInstanceLike {
-    fn namespace(&self) -> &GlobalNS;
-    fn post_high_priority_task(&self, task: Task<CriticalTask>);
-    fn post_standard_priority_task(&self, task: Task<GenericTask>);
+    type FileSystem: RawFSInterface;
+    const FS_IS_NON_NULL: bool = Self::FileSystem::NOT_NULL;
+    // stat
     fn get_max_delta_size(&self) -> usize;
+    // global namespace
+    fn namespace(&self) -> &GlobalNS;
+    fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>>;
+    // taskmgr
+    fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
+    fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
     // default impls
     fn request_batch_resolve(
         &self,
@@ -110,7 +119,7 @@ pub trait GlobalInstanceLike {
         model_uuid: Uuid,
         observed_len: usize,
     ) {
-        self.post_high_priority_task(Task::new(CriticalTask::WriteBatch(
+        self.taskmgr_post_high_priority(Task::new(CriticalTask::WriteBatch(
             ModelUniqueID::new(space_name, model_name, model_uuid),
             observed_len,
         )))
@@ -118,15 +127,22 @@ pub trait GlobalInstanceLike {
 }
 
 impl GlobalInstanceLike for Global {
+    type FileSystem = LocalFS;
+    // ns
     fn namespace(&self) -> &GlobalNS {
         self._namespace()
     }
-    fn post_high_priority_task(&self, task: Task<CriticalTask>) {
+    fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>> {
+        self.get_state().gns_driver.txn_driver()
+    }
+    // taskmgr
+    fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>) {
         self._post_high_priority_task(task)
     }
-    fn post_standard_priority_task(&self, task: Task<GenericTask>) {
+    fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>) {
         self._post_standard_priority_task(task)
     }
+    // stat
     fn get_max_delta_size(&self) -> usize {
         self._get_max_delta_size()
     }

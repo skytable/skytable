@@ -28,7 +28,7 @@ use crate::engine::{data::cell::Datacell, error::DatabaseError, fractal::test_ut
 
 #[test]
 fn simple_select_wildcard() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_select(
             &global,
@@ -43,7 +43,7 @@ fn simple_select_wildcard() {
 
 #[test]
 fn simple_select_specified_same_order() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_select(
             &global,
@@ -58,7 +58,7 @@ fn simple_select_specified_same_order() {
 
 #[test]
 fn simple_select_specified_reversed_order() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_select(
             &global,
@@ -73,7 +73,7 @@ fn simple_select_specified_reversed_order() {
 
 #[test]
 fn select_null() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_select(
             &global,
@@ -88,7 +88,7 @@ fn select_null() {
 
 #[test]
 fn select_nonexisting() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_select(
             &global,

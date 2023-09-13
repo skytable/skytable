@@ -236,7 +236,7 @@ impl<T: TreeElement, C: Config> RawTree<T, C> {
 }
 
 impl<T: TreeElement, C: Config> RawTree<T, C> {
-    fn nontransactional_clear(&self, g: &Guard) {
+    fn transactional_clear(&self, g: &Guard) {
         self.iter_key(g).for_each(|k| {
             let _ = self.remove(k, g);
         });

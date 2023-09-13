@@ -38,8 +38,6 @@ use crate::engine::{
         ddl::crt::{CreateModel, CreateSpace},
         tests::lex_insecure,
     },
-    storage::v1::header_meta::HostRunMode,
-    txn::gns::GNSTransactionDriverVFS,
 };
 
 fn multirun(f: impl FnOnce() + Copy) {
@@ -52,28 +50,12 @@ fn with_variable<T>(var: T, f: impl FnOnce(T)) {
     f(var);
 }
 
-fn init_txn_driver(global: &impl GlobalInstanceLike, log_name: &str) -> GNSTransactionDriverVFS {
-    GNSTransactionDriverVFS::open_or_reinit_with_name(
-        global.namespace(),
-        log_name,
-        0,
-        HostRunMode::Prod,
-        0,
-    )
-    .unwrap()
-}
-
-fn init_space(
-    global: &impl GlobalInstanceLike,
-    driver: &mut GNSTransactionDriverVFS,
-    space_name: &str,
-    env: &str,
-) -> Uuid {
+fn init_space(global: &impl GlobalInstanceLike, space_name: &str, env: &str) -> Uuid {
     let query = format!("create space {space_name} with {{ env: {env} }}");
     let stmt = lex_insecure(query.as_bytes()).unwrap();
     let stmt = parse_ast_node_full::<CreateSpace>(&stmt[2..]).unwrap();
     let name = stmt.space_name;
-    Space::transactional_exec_create(global, driver, stmt).unwrap();
+    Space::transactional_exec_create(global, stmt).unwrap();
     global
         .namespace()
         .spaces()
@@ -89,14 +71,11 @@ fn create_space() {
         let uuid;
         // start 1
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            uuid = init_space(&global, &mut driver, "myspace", "{ SAYAN_MAX: 65536 }"); // good lord that doesn't sound like a good variable
-            driver.close().unwrap();
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            uuid = init_space(&global, "myspace", "{ SAYAN_MAX: 65536 }"); // good lord that doesn't sound like a good variable
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             assert_eq!(
                 global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
@@ -106,7 +85,6 @@ fn create_space() {
                     uuid
                 )
             );
-            driver.close().unwrap();
         })
     })
 }
@@ -116,19 +94,16 @@ fn alter_space() {
     with_variable("alter_space_test.global.db-tlog", |log_name| {
         let uuid;
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            uuid = init_space(&global, &mut driver, "myspace", "{}");
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            uuid = init_space(&global, "myspace", "{}");
             let stmt =
                 lex_insecure("alter space myspace with { env: { SAYAN_MAX: 65536 } }".as_bytes())
                     .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Space::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap();
+            Space::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             assert_eq!(
                 global.namespace().spaces().read().get("myspace").unwrap(),
                 &Space::new_restore_empty(
@@ -138,7 +113,6 @@ fn alter_space() {
                     uuid
                 )
             );
-            driver.close().unwrap();
         })
     })
 }
@@ -147,26 +121,21 @@ fn alter_space() {
 fn drop_space() {
     with_variable("drop_space_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            let _ = init_space(&global, &mut driver, "myspace", "{}");
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            let _ = init_space(&global, "myspace", "{}");
             let stmt = lex_insecure("drop space myspace".as_bytes()).unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Space::transactional_exec_drop(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap();
+            Space::transactional_exec_drop(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             assert_eq!(global.namespace().spaces().read().get("myspace"), None);
-            driver.close().unwrap();
         })
     })
 }
 
 fn init_model(
     global: &impl GlobalInstanceLike,
-    txn_driver: &mut GNSTransactionDriverVFS,
     space_name: &str,
     model_name: &str,
     decl: &str,
@@ -175,20 +144,16 @@ fn init_model(
     let stmt = lex_insecure(query.as_bytes()).unwrap();
     let stmt = parse_ast_node_full::<CreateModel>(&stmt[2..]).unwrap();
     let model_name = stmt.model_name;
-    Model::transactional_exec_create(global, txn_driver, stmt).unwrap();
+    Model::transactional_exec_create(global, stmt).unwrap();
     global
         .namespace()
         .with_model(model_name, |model| Ok(model.get_uuid()))
         .unwrap()
 }
 
-fn init_default_model(
-    global: &impl GlobalInstanceLike,
-    driver: &mut GNSTransactionDriverVFS,
-) -> Uuid {
+fn init_default_model(global: &impl GlobalInstanceLike) -> Uuid {
     init_model(
         global,
-        driver,
         "myspace",
         "mymodel",
         "username: string, password: binary",
@@ -201,15 +166,12 @@ fn create_model() {
         let _uuid_space;
         let uuid_model;
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            _uuid_space = init_space(&global, &mut driver, "myspace", "{}");
-            uuid_model = init_default_model(&global, &mut driver);
-            driver.close().unwrap();
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            _uuid_space = init_space(&global, "myspace", "{}");
+            uuid_model = init_default_model(&global);
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
                 .with_model(("myspace", "mymodel"), |model| {
@@ -228,7 +190,6 @@ fn create_model() {
                     Ok(())
                 })
                 .unwrap();
-            driver.close().unwrap();
         })
     })
 }
@@ -237,21 +198,18 @@ fn create_model() {
 fn alter_model_add() {
     with_variable("alter_model_add_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            init_space(&global, &mut driver, "myspace", "{}");
-            init_default_model(&global, &mut driver);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            init_space(&global, "myspace", "{}");
+            init_default_model(&global);
             let stmt = lex_insecure(
                 b"alter model myspace.mymodel add profile_pic { type: binary, nullable: true }",
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap();
+            Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
                 .with_model(("myspace", "mymodel"), |model| {
@@ -266,7 +224,6 @@ fn alter_model_add() {
                     Ok(())
                 })
                 .unwrap();
-            driver.close().unwrap();
         })
     })
 }
@@ -275,12 +232,10 @@ fn alter_model_add() {
 fn alter_model_remove() {
     with_variable("alter_model_remove_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            init_space(&global, &mut driver, "myspace", "{}");
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            init_space(&global, "myspace", "{}");
             init_model(
                 &global,
-                &mut driver,
                 "myspace",
                 "mymodel",
                 "username: string, password: binary, null profile_pic: binary, null has_2fa: bool, null has_secure_key: bool, is_dumb: bool",
@@ -290,12 +245,10 @@ fn alter_model_remove() {
             )
             .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap()
+            Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
                 .with_model(("myspace", "mymodel"), |model| {
@@ -305,7 +258,6 @@ fn alter_model_remove() {
                     Ok(())
                 })
                 .unwrap();
-            driver.close().unwrap()
         })
     })
 }
@@ -314,12 +266,10 @@ fn alter_model_remove() {
 fn alter_model_update() {
     with_variable("alter_model_update_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            init_space(&global, &mut driver, "myspace", "{}");
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            init_space(&global, "myspace", "{}");
             init_model(
                 &global,
-                &mut driver,
                 "myspace",
                 "mymodel",
                 "username: string, password: binary, profile_pic: binary",
@@ -328,12 +278,10 @@ fn alter_model_update() {
                 lex_insecure(b"alter model myspace.mymodel update profile_pic { nullable: true }")
                     .unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_alter(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap();
+            Model::transactional_exec_alter(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             global
                 .namespace()
                 .with_model(("myspace", "mymodel"), |model| {
@@ -348,7 +296,6 @@ fn alter_model_update() {
                     Ok(())
                 })
                 .unwrap();
-            driver.close().unwrap();
         })
     })
 }
@@ -357,18 +304,15 @@ fn alter_model_update() {
 fn drop_model() {
     with_variable("drop_model_test.global.db-tlog", |log_name| {
         {
-            let global = TestGlobal::empty();
-            let mut driver = init_txn_driver(&global, log_name);
-            init_space(&global, &mut driver, "myspace", "{}");
-            init_default_model(&global, &mut driver);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
+            init_space(&global, "myspace", "{}");
+            init_default_model(&global);
             let stmt = lex_insecure(b"drop model myspace.mymodel").unwrap();
             let stmt = parse_ast_node_full(&stmt[2..]).unwrap();
-            Model::transactional_exec_drop(&global, &mut driver, stmt).unwrap();
-            driver.close().unwrap();
+            Model::transactional_exec_drop(&global, stmt).unwrap();
         }
         multirun(|| {
-            let global = TestGlobal::empty();
-            let driver = init_txn_driver(&global, log_name);
+            let global = TestGlobal::new_with_vfs_driver(log_name);
             assert_eq!(
                 global
                     .namespace()
@@ -376,7 +320,6 @@ fn drop_model() {
                     .unwrap_err(),
                 DatabaseError::DdlModelNotFound
             );
-            driver.close().unwrap();
         })
     })
 }

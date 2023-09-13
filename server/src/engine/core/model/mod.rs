@@ -204,9 +204,8 @@ impl Model {
 }
 
 impl Model {
-    pub fn transactional_exec_create<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+    pub fn transactional_exec_create<G: GlobalInstanceLike>(
+        global: &G,
         stmt: CreateModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
@@ -216,9 +215,10 @@ impl Model {
             if w_space.st_contains(model_name) {
                 return Err(DatabaseError::DdlModelAlreadyExists);
             }
-            if GI::NONNULL {
+            if G::FS_IS_NON_NULL {
                 // prepare txn
                 let irm = model.intent_read_model();
+                let mut txn_driver = global.namespace_txn_driver().lock();
                 let txn = gnstxn::CreateModelTxn::new(
                     gnstxn::SpaceIDRef::new(space_name, space),
                     model_name,
@@ -233,18 +233,8 @@ impl Model {
             Ok(())
         })
     }
-    #[cfg(test)]
-    pub fn nontransactional_exec_create(
-        global: &impl GlobalInstanceLike,
-        stmt: CreateModel,
-    ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
-            Self::transactional_exec_create(global, driver, stmt)
-        })
-    }
-    pub fn transactional_exec_drop<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+    pub fn transactional_exec_drop<G: GlobalInstanceLike>(
+        global: &G,
         stmt: DropModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = stmt.entity.parse_entity()?;
@@ -253,7 +243,7 @@ impl Model {
             let Some(model) = w_space.get(model_name) else {
                 return Err(DatabaseError::DdlModelNotFound);
             };
-            if GI::NONNULL {
+            if G::FS_IS_NON_NULL {
                 // prepare txn
                 let txn = gnstxn::DropModelTxn::new(gnstxn::ModelIDRef::new(
                     gnstxn::SpaceIDRef::new(space_name, space),
@@ -262,20 +252,11 @@ impl Model {
                     model.delta_state().schema_current_version().value_u64(),
                 ));
                 // commit txn
-                txn_driver.try_commit(txn)?;
+                global.namespace_txn_driver().lock().try_commit(txn)?;
             }
             // update global state
             let _ = w_space.st_delete(model_name);
             Ok(())
-        })
-    }
-    #[cfg(test)]
-    pub fn nontransactional_exec_drop(
-        global: &impl GlobalInstanceLike,
-        stmt: DropModel,
-    ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
-            Self::transactional_exec_drop(global, driver, stmt)
         })
     }
 }

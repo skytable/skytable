@@ -61,7 +61,7 @@ pub fn exec_create(
             .namespace()
             .test_new_empty_space(&create_model.model_name.into_full().unwrap().0);
     }
-    Model::nontransactional_exec_create(global, create_model).map(|_| name)
+    Model::transactional_exec_create(global, create_model).map(|_| name)
 }
 
 pub fn exec_create_new_space(

@@ -249,9 +249,8 @@ impl<'a> AlterPlan<'a> {
 }
 
 impl Model {
-    pub fn transactional_exec_alter<GI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<GI>,
+    pub fn transactional_exec_alter<G: GlobalInstanceLike>(
+        global: &G,
         alter: AlterModel,
     ) -> DatabaseResult<()> {
         let (space_name, model_name) = EntityLocator::parse_entity(alter.model)?;
@@ -273,14 +272,14 @@ impl Model {
                     AlterAction::Add(new_fields) => {
                         let mut guard = model.delta_state().schema_delta_write();
                         // TODO(@ohsayan): this impacts lockdown duration; fix it
-                        if GI::NONNULL {
+                        if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelAddTxn::new(
                                 gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
                                 &new_fields,
                             );
                             // commit txn
-                            txn_driver.try_commit(txn)?;
+                            global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
                         new_fields
                             .stseq_ord_kv()
@@ -294,14 +293,14 @@ impl Model {
                     }
                     AlterAction::Remove(removed) => {
                         let mut guard = model.delta_state().schema_delta_write();
-                        if GI::NONNULL {
+                        if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelRemoveTxn::new(
                                 gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
                                 &removed,
                             );
                             // commit txn
-                            txn_driver.try_commit(txn)?;
+                            global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
                         removed.iter().for_each(|field_id| {
                             model.delta_state().schema_append_unresolved_wl_field_rem(
@@ -312,14 +311,14 @@ impl Model {
                         });
                     }
                     AlterAction::Update(updated) => {
-                        if GI::NONNULL {
+                        if G::FS_IS_NON_NULL {
                             // prepare txn
                             let txn = gnstxn::AlterModelUpdateTxn::new(
                                 gnstxn::ModelIDRef::new_ref(space_name, space, model_name, model),
                                 &updated,
                             );
                             // commit txn
-                            txn_driver.try_commit(txn)?;
+                            global.namespace_txn_driver().lock().try_commit(txn)?;
                         }
                         updated.into_iter().for_each(|(field_id, field)| {
                             iwm.fields_mut().st_update(&field_id, field);
@@ -328,11 +327,6 @@ impl Model {
                 }
                 Ok(())
             })
-        })
-    }
-    pub fn exec_alter(global: &impl GlobalInstanceLike, stmt: AlterModel) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(global.namespace(), |driver| {
-            Self::transactional_exec_alter(global, driver, stmt)
         })
     }
 }

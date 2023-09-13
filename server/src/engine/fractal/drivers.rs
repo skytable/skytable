@@ -47,6 +47,9 @@ impl FractalGNSDriver {
             txn_driver: Mutex::new(txn_driver),
         }
     }
+    pub fn txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<LocalFS>> {
+        &self.txn_driver
+    }
 }
 
 /// Model driver

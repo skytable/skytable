@@ -63,7 +63,7 @@ fn exec_plan(
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full::<AlterModel>(&tok[2..]).unwrap();
     let (_space, model_name) = alter.model.into_full().unwrap();
-    Model::exec_alter(global, alter)?;
+    Model::transactional_exec_alter(global, alter)?;
     let gns_read = global.namespace().spaces().read();
     let space = gns_read.st_get("myspace").unwrap();
     let model = space.models().read();
@@ -359,7 +359,7 @@ mod exec {
     };
     #[test]
     fn simple_add() {
-        let global = TestGlobal::empty();
+        let global = TestGlobal::new_with_tmp_nullfs_driver();
         super::exec_plan(
             &global,
             true,
@@ -390,7 +390,7 @@ mod exec {
     }
     #[test]
     fn simple_remove() {
-        let global = TestGlobal::empty();
+        let global = TestGlobal::new_with_tmp_nullfs_driver();
         super::exec_plan(
             &global,
             true,
@@ -416,7 +416,7 @@ mod exec {
     }
     #[test]
     fn simple_update() {
-        let global = TestGlobal::empty();
+        let global = TestGlobal::new_with_tmp_nullfs_driver();
         super::exec_plan(
             &global,
             true,
@@ -435,7 +435,7 @@ mod exec {
     }
     #[test]
     fn failing_alter_nullable_switch_need_lock() {
-        let global = TestGlobal::empty();
+        let global = TestGlobal::new_with_tmp_nullfs_driver();
         assert_eq!(
             super::exec_plan(
                 &global,

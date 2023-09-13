@@ -31,7 +31,7 @@ struct Tuple(Vec<(Box<str>, Datacell)>);
 
 #[test]
 fn insert_simple() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_insert(
         &global,
         "create model myspace.mymodel(username: string, password: string)",
@@ -46,7 +46,7 @@ fn insert_simple() {
 
 #[test]
 fn insert_with_null() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_insert(
         &global,
         "create model myspace.mymodel(username: string, null useless_password: string, null useless_email: string, null useless_random_column: uint64)",
@@ -69,7 +69,7 @@ fn insert_with_null() {
 
 #[test]
 fn insert_duplicate() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_insert(
         &global,
         "create model myspace.mymodel(username: string, password: string)",

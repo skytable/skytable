@@ -189,9 +189,8 @@ impl Space {
 }
 
 impl Space {
-    pub fn transactional_exec_create<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
+    pub fn transactional_exec_create<G: GlobalInstanceLike>(
+        global: &G,
         space: CreateSpace,
     ) -> DatabaseResult<()> {
         // process create
@@ -202,29 +201,20 @@ impl Space {
             return Err(DatabaseError::DdlSpaceAlreadyExists);
         }
         // commit txn
-        if TI::NONNULL {
+        if G::FS_IS_NON_NULL {
             // prepare and commit txn
             let s_read = space.metadata().dict().read();
-            txn_driver.try_commit(gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space))?;
+            global
+                .namespace_txn_driver()
+                .lock()
+                .try_commit(gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space))?;
         }
         // update global state
         let _ = wl.st_insert(space_name, space);
         Ok(())
     }
-    /// Execute a `create` stmt
-    #[cfg(test)]
-    pub fn nontransactional_exec_create(
-        global: &impl GlobalInstanceLike,
-        space: CreateSpace,
-    ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
-            global.namespace(),
-            move |driver| Self::transactional_exec_create(global, driver, space),
-        )
-    }
-    pub fn transactional_exec_alter<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
+    pub fn transactional_exec_alter<G: GlobalInstanceLike>(
+        global: &G,
         AlterSpace {
             space_name,
             updated_props,
@@ -243,12 +233,12 @@ impl Space {
                 Some(patch) => patch,
                 None => return Err(DatabaseError::DdlSpaceBadProperty),
             };
-            if TI::NONNULL {
+            if G::FS_IS_NON_NULL {
                 // prepare txn
                 let txn =
                     gnstxn::AlterSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space), &patch);
                 // commit
-                txn_driver.try_commit(txn)?;
+                global.namespace_txn_driver().lock().try_commit(txn)?;
             }
             // merge
             dict::rmerge_data_with_patch(&mut space_props, patch);
@@ -261,20 +251,8 @@ impl Space {
             Ok(())
         })
     }
-    #[cfg(test)]
-    /// Execute a `alter` stmt
-    pub fn nontransactional_exec_alter(
-        global: &impl GlobalInstanceLike,
-        alter: AlterSpace,
-    ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
-            global.namespace(),
-            move |driver| Self::transactional_exec_alter(global, driver, alter),
-        )
-    }
-    pub fn transactional_exec_drop<TI: gnstxn::GNSTransactionDriverLLInterface>(
-        global: &impl GlobalInstanceLike,
-        txn_driver: &mut gnstxn::GNSTransactionDriverAnyFS<TI>,
+    pub fn transactional_exec_drop<G: GlobalInstanceLike>(
+        global: &G,
         DropSpace { space, force: _ }: DropSpace,
     ) -> DatabaseResult<()> {
         // TODO(@ohsayan): force remove option
@@ -290,24 +268,14 @@ impl Space {
             return Err(DatabaseError::DdlSpaceRemoveNonEmpty);
         }
         // we can remove this
-        if TI::NONNULL {
+        if G::FS_IS_NON_NULL {
             // prepare txn
             let txn = gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space));
-            txn_driver.try_commit(txn)?;
+            global.namespace_txn_driver().lock().try_commit(txn)?;
         }
         drop(space_w);
         let _ = wgns.st_delete(space_name.as_str());
         Ok(())
-    }
-    #[cfg(test)]
-    pub fn nontransactional_exec_drop(
-        global: &impl GlobalInstanceLike,
-        drop_space: DropSpace,
-    ) -> DatabaseResult<()> {
-        gnstxn::GNSTransactionDriverNullZero::nullzero_create_exec(
-            global.namespace(),
-            move |driver| Self::transactional_exec_drop(global, driver, drop_space),
-        )
     }
 }
 

@@ -33,7 +33,7 @@ use crate::engine::{
 
 #[test]
 fn alter_add_prop_env_var() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_create_alter(
         &global,
         "create space myspace",
@@ -54,7 +54,7 @@ fn alter_add_prop_env_var() {
 
 #[test]
 fn alter_update_prop_env_var() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     let uuid = super::exec_create(
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
@@ -86,7 +86,7 @@ fn alter_update_prop_env_var() {
 
 #[test]
 fn alter_remove_prop_env_var() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     let uuid = super::exec_create(
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",
@@ -114,7 +114,7 @@ fn alter_remove_prop_env_var() {
 
 #[test]
 fn alter_nx() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_alter(
             &global,
@@ -128,7 +128,7 @@ fn alter_nx() {
 
 #[test]
 fn alter_remove_all_env() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     let uuid = super::exec_create(
         &global,
         "create space myspace with { env: { MY_NEW_PROP: 100 } }",

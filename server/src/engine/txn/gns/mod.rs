@@ -66,44 +66,14 @@ pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 
 const CURRENT_LOG_VERSION: u32 = 0;
 
-pub trait GNSTransactionDriverLLInterface: RawFSInterface {
-    /// If true, this is an actual txn driver with a non-null (not `/dev/null` like) journal
-    const NONNULL: bool = <Self as RawFSInterface>::NOT_NULL;
-}
-impl<T: RawFSInterface> GNSTransactionDriverLLInterface for T {}
-
 /// The GNS transaction driver is used to handle DDL transactions
 pub struct GNSTransactionDriverAnyFS<F: RawFSInterface = LocalFS> {
     journal: JournalWriter<F, GNSAdapter>,
 }
 
-impl GNSTransactionDriverAnyFS<crate::engine::storage::v1::NullFS> {
-    pub fn nullzero(gns: &GlobalNS) -> Self {
-        let journal = v1::open_journal(
-            "gns.db-tlog",
-            header_meta::FileSpecifier::GNSTxnLog,
-            header_meta::FileSpecifierVersion::__new(CURRENT_LOG_VERSION),
-            0,
-            header_meta::HostRunMode::Dev,
-            0,
-            gns,
-        )
-        .unwrap();
-        Self { journal }
-    }
-    pub fn nullzero_create_exec<T>(gns: &GlobalNS, f: impl FnOnce(&mut Self) -> T) -> T {
-        let mut j = Self::nullzero(gns);
-        let r = f(&mut j);
-        j.close().unwrap();
-        r
-    }
-}
-
-impl<F: GNSTransactionDriverLLInterface> GNSTransactionDriverAnyFS<F> {
-    pub fn close(self) -> TransactionResult<()> {
-        self.journal
-            .append_journal_close_and_close()
-            .map_err(|e| e.into())
+impl<Fs: RawFSInterface> GNSTransactionDriverAnyFS<Fs> {
+    pub fn __journal_mut(&mut self) -> &mut JournalWriter<Fs, GNSAdapter> {
+        &mut self.journal
     }
     pub fn open_or_reinit_with_name(
         gns: &GlobalNS,
@@ -141,7 +111,7 @@ impl<F: GNSTransactionDriverLLInterface> GNSTransactionDriverAnyFS<F> {
 
 /// the journal adapter for DDL queries on the GNS
 #[derive(Debug)]
-struct GNSAdapter;
+pub struct GNSAdapter;
 
 impl JournalAdapter for GNSAdapter {
     const RECOVERY_PLUGIN: bool = true;

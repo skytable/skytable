@@ -470,13 +470,16 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_REOPENED, 0, 0).encoded(),
         )
     }
-    pub fn append_journal_close_and_close(mut self) -> SDSSResult<()> {
+    pub fn __append_journal_close_and_close(&mut self) -> SDSSResult<()> {
         self.closed = true;
         let id = self._incr_id() as u128;
         self.log_file.fsynced_write(
             &JournalEntryMetadata::new(id, EventSourceMarker::DRIVER_CLOSED, 0, 0).encoded(),
         )?;
         Ok(())
+    }
+    pub fn append_journal_close_and_close(mut self) -> SDSSResult<()> {
+        self.__append_journal_close_and_close()
     }
 }
 

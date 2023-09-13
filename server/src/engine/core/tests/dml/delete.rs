@@ -28,7 +28,7 @@ use crate::engine::{error::DatabaseError, fractal::test_utils::TestGlobal};
 
 #[test]
 fn simple_delete() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     super::exec_delete(
         &global,
         "create model myspace.mymodel(username: string, password: string)",
@@ -41,7 +41,7 @@ fn simple_delete() {
 
 #[test]
 fn delete_nonexisting() {
-    let global = TestGlobal::empty();
+    let global = TestGlobal::new_with_tmp_nullfs_driver();
     assert_eq!(
         super::exec_delete(
             &global,
