@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    error::{LangError, LangResult},
+    error::{Error, QueryResult},
     ql::{
         ast::{Entity, QueryData, State, Statement},
         lex::{Ident, Token},
@@ -45,7 +45,7 @@ impl<'a> DropSpace<'a> {
     pub const fn new(space: Ident<'a>, force: bool) -> Self {
         Self { space, force }
     }
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<DropSpace<'a>> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<DropSpace<'a>> {
         if state.cursor_is_ident() {
             let ident = state.fw_read();
             // should we force drop?
@@ -62,7 +62,7 @@ impl<'a> DropSpace<'a> {
                 ));
             }
         }
-        Err(LangError::BadSyntax)
+        Err(Error::QLInvalidSyntax)
     }
 }
 
@@ -77,14 +77,14 @@ impl<'a> DropModel<'a> {
     pub fn new(entity: Entity<'a>, force: bool) -> Self {
         Self { entity, force }
     }
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         let e = Entity::parse_from_state_rounded_result(state)?;
         let force = state.cursor_rounded_eq(Token::Ident(Ident::from("force")));
         state.cursor_ahead_if(force);
         if state.exhausted() {
             return Ok(DropModel::new(e, force));
         } else {
-            Err(LangError::BadSyntax)
+            Err(Error::QLInvalidSyntax)
         }
     }
 }
@@ -93,11 +93,11 @@ impl<'a> DropModel<'a> {
 /// ## Panic
 ///
 /// If token stream length is < 2
-pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Statement<'a>> {
+pub fn parse_drop<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Statement<'a>> {
     match state.fw_read() {
         Token![model] => DropModel::parse(state).map(Statement::DropModel),
         Token![space] => return DropSpace::parse(state).map(Statement::DropSpace),
-        _ => Err(LangError::StmtUnknownDrop),
+        _ => Err(Error::QPUnknownStatement),
     }
 }
 
@@ -106,24 +106,24 @@ mod impls {
     use {
         super::{DropModel, DropSpace},
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State, Statement},
         },
     };
     impl<'a> ASTNode<'a> for DropModel<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for DropSpace<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct DropStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for DropStatementAST<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             super::parse_drop(state).map(Self)
         }
     }

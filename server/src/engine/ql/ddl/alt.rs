@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             data::DictGeneric,
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -55,9 +55,9 @@ impl<'a> AlterSpace<'a> {
     }
     #[inline(always)]
     /// Parse alter space from tokens
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() <= 3) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
@@ -67,7 +67,7 @@ impl<'a> AlterSpace<'a> {
         state.cursor_ahead(); // ignore errors
 
         if compiler::unlikely(!state.okay()) {
-            return Err(LangError::BadSyntax);
+            return Err(Error::QLInvalidSyntax);
         }
 
         let space_name = unsafe {
@@ -82,7 +82,7 @@ impl<'a> AlterSpace<'a> {
                 updated_props: d,
             })
         } else {
-            Err(LangError::SynBadMap)
+            Err(Error::QLInvalidCollectionSyntax)
         }
     }
 }
@@ -111,10 +111,10 @@ pub enum AlterKind<'a> {
 impl<'a> AlterModel<'a> {
     #[inline(always)]
     /// Parse an [`AlterKind`] from the given token stream
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         // alter model mymodel remove x
         if state.remaining() <= 2 || !state.cursor_has_ident_rounded() {
-            return compiler::cold_rerr(LangError::BadSyntax);
+            return compiler::cold_rerr(Error::QLInvalidSyntax);
             // FIXME(@ohsayan): bad because no specificity
         }
         let model_name = Entity::parse_from_state_rounded_result(state)?;
@@ -122,7 +122,7 @@ impl<'a> AlterModel<'a> {
             Token![add] => AlterKind::alter_add(state),
             Token![remove] => AlterKind::alter_remove(state),
             Token![update] => AlterKind::alter_update(state),
-            _ => Err(LangError::ExpectedStatement),
+            _ => Err(Error::QPExpectedStatement),
         };
         kind.map(|kind| AlterModel::new(model_name, kind))
     }
@@ -131,24 +131,24 @@ impl<'a> AlterModel<'a> {
 impl<'a> AlterKind<'a> {
     #[inline(always)]
     /// Parse the expression for `alter model <> add (..)`
-    fn alter_add<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn alter_add<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         ExpandedField::parse_multiple(state).map(Self::Add)
     }
     #[inline(always)]
     /// Parse the expression for `alter model <> add (..)`
-    fn alter_update<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn alter_update<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         ExpandedField::parse_multiple(state).map(Self::Update)
     }
     #[inline(always)]
     /// Parse the expression for `alter model <> remove (..)`
-    fn alter_remove<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn alter_remove<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         const DEFAULT_REMOVE_COL_CNT: usize = 4;
         /*
             WARNING: No trailing commas allowed
             <remove> ::= <ident> | <openparen> (<ident> <comma>)*<closeparen>
         */
         if compiler::unlikely(state.exhausted()) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
 
         let r = match state.fw_read() {
@@ -177,10 +177,10 @@ impl<'a> AlterKind<'a> {
                 if state.okay() {
                     cols.into_boxed_slice()
                 } else {
-                    return Err(LangError::BadSyntax);
+                    return Err(Error::QLInvalidSyntax);
                 }
             }
-            _ => return Err(LangError::BadSyntax),
+            _ => return Err(Error::QLInvalidSyntax),
         };
         Ok(Self::Remove(r))
     }
@@ -190,17 +190,17 @@ mod impls {
     use {
         super::{AlterModel, AlterSpace},
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for AlterModel<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for AlterSpace<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }

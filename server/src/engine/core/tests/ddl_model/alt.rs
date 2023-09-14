@@ -29,13 +29,13 @@ use crate::engine::{
         model::{alt::AlterPlan, Model},
         tests::ddl_model::{create, exec_create},
     },
-    error::DatabaseResult,
+    error::QueryResult,
     fractal::GlobalInstanceLike,
     idx::STIndex,
     ql::{ast::parse_ast_node_full, ddl::alt::AlterModel, tests::lex_insecure},
 };
 
-fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> DatabaseResult<()> {
+fn with_plan(model: &str, plan: &str, f: impl Fn(AlterPlan)) -> QueryResult<()> {
     let model = create(model)?;
     let tok = lex_insecure(plan.as_bytes()).unwrap();
     let alter = parse_ast_node_full(&tok[2..]).unwrap();
@@ -52,7 +52,7 @@ fn exec_plan(
     model: &str,
     plan: &str,
     f: impl Fn(&Model),
-) -> DatabaseResult<()> {
+) -> QueryResult<()> {
     let mdl_name = exec_create(global, model, new_space)?;
     let prev_uuid = {
         let gns = global.namespace().spaces().read();
@@ -77,7 +77,7 @@ mod plan {
     use crate::{
         engine::{
             core::model::{self, alt::AlterAction, Field, Layer},
-            error::DatabaseError,
+            error::Error,
         },
         vecfuse,
     };
@@ -164,7 +164,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::FieldNotFound
+            Error::QPUnknownField
         );
     }
     #[test]
@@ -176,7 +176,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterProtectedField
+            Error::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -188,7 +188,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterBad
+            Error::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -200,7 +200,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterBad
+            Error::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -212,7 +212,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::DdlModelAlterProtectedField
+            Error::QPDdlModelAlterIllegal
         );
     }
     #[test]
@@ -224,7 +224,7 @@ mod plan {
                 |_| {}
             )
             .unwrap_err(),
-            DatabaseError::FieldNotFound
+            Error::QPUnknownField
         );
     }
     fn bad_type_cast(orig_ty: &str, new_ty: &str) {
@@ -235,7 +235,7 @@ mod plan {
             super::with_plan(&create, &alter, |_| {}).expect_err(&format!(
                 "found no error in transformation: {orig_ty} -> {new_ty}"
             )),
-            DatabaseError::DdlModelAlterBadTypedef,
+            Error::QPDdlInvalidTypeDefinition,
             "failed to match error in transformation: {orig_ty} -> {new_ty}",
         )
     }
@@ -353,7 +353,7 @@ mod plan {
 mod exec {
     use crate::engine::{
         core::model::{DeltaVersion, Field, Layer},
-        error::DatabaseError,
+        error::Error,
         fractal::test_utils::TestGlobal,
         idx::{STIndex, STIndexSeq},
     };
@@ -445,7 +445,7 @@ mod exec {
                 |_| {},
             )
             .unwrap_err(),
-            DatabaseError::NeedLock
+            Error::QPNeedLock
         );
     }
 }

@@ -30,14 +30,14 @@ use crate::engine::{
         index::{DcFieldIndex, PrimaryIndexKey, Row},
         model::{delta::DataDeltaKind, Fields, Model},
     },
-    error::{DatabaseError, DatabaseResult},
+    error::{Error, QueryResult},
     fractal::GlobalInstanceLike,
     idx::{IndexBaseSpec, MTIndex, STIndex, STIndexSeq},
     ql::dml::ins::{InsertData, InsertStatement},
     sync::atm::cpin,
 };
 
-pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> DatabaseResult<()> {
+pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, insert.entity(), |mdl| {
         let irmwd = mdl.intent_write_new_data();
         let (pk, data) = prepare_insert(mdl, irmwd.fields(), insert.data())?;
@@ -57,7 +57,7 @@ pub fn insert(global: &impl GlobalInstanceLike, insert: InsertStatement) -> Data
             );
             Ok(())
         } else {
-            Err(DatabaseError::DmlConstraintViolationDuplicate)
+            Err(Error::QPDmlDuplicate)
         }
     })
 }
@@ -67,7 +67,7 @@ fn prepare_insert(
     model: &Model,
     fields: &Fields,
     insert: InsertData,
-) -> DatabaseResult<(PrimaryIndexKey, DcFieldIndex)> {
+) -> QueryResult<(PrimaryIndexKey, DcFieldIndex)> {
     let mut okay = fields.len() == insert.column_count();
     let mut prepared_data = DcFieldIndex::idx_init_cap(fields.len());
     match insert {
@@ -113,6 +113,6 @@ fn prepare_insert(
         };
         Ok((primary_key, prepared_data))
     } else {
-        Err(DatabaseError::DmlDataValidationError)
+        Err(Error::QPDmlValidationError)
     }
 }

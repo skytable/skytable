@@ -26,7 +26,7 @@
 
 use crate::{
     engine::{
-        error::{LangError, LangResult},
+        error::{Error, QueryResult},
         ql::{
             ast::{Entity, QueryData, State, Statement},
             lex::Token,
@@ -37,7 +37,7 @@ use crate::{
 
 pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     state: &mut State<'a, Qd>,
-) -> LangResult<Statement<'a>> {
+) -> QueryResult<Statement<'a>> {
     /*
         inpsect model <entity>
         inspect space <entity>
@@ -47,7 +47,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
     */
 
     if compiler::unlikely(state.remaining() < 1) {
-        return compiler::cold_rerr(LangError::UnexpectedEOS);
+        return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
     }
 
     match state.fw_read() {
@@ -65,7 +65,7 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
         }
         _ => {
             state.cursor_back();
-            Err(LangError::ExpectedStatement)
+            Err(Error::QPExpectedStatement)
         }
     }
 }
@@ -73,13 +73,13 @@ pub fn parse_inspect<'a, Qd: QueryData<'a>>(
 pub use impls::InspectStatementAST;
 mod impls {
     use crate::engine::{
-        error::LangResult,
+        error::QueryResult,
         ql::ast::{traits::ASTNode, QueryData, State, Statement},
     };
     #[derive(sky_macros::Wrapper, Debug)]
     pub struct InspectStatementAST<'a>(Statement<'a>);
     impl<'a> ASTNode<'a> for InspectStatementAST<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             super::parse_inspect(state).map(Self)
         }
     }

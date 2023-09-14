@@ -25,129 +25,79 @@
 */
 
 use super::{storage::v1::SDSSError, txn::TransactionError};
+pub type QueryResult<T> = Result<T, Error>;
 
-pub type LangResult<T> = Result<T, LangError>;
-pub type LexResult<T> = Result<T, LexError>;
-pub type DatabaseResult<T> = Result<T, DatabaseError>;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(u8)]
-/// Lex phase errors
-pub enum LexError {
-    // insecure lex
-    /// Invalid signed numeric literal
-    InvalidSignedNumericLit,
-    /// Invalid unsigned literal
-    InvalidUnsignedLiteral,
-    /// Invaid binary literal
-    InvalidBinaryLiteral,
-    /// Invalid string literal
-    InvalidStringLiteral,
-    // secure lex
-    /// Dataframe params are invalid
-    BadPframe,
-    // generic
-    /// Unrecognized byte in stream   
-    UnexpectedByte,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(u8)]
-/// AST errors
-pub enum LangError {
-    // generic
-    /// Unexpected end of syntax
-    UnexpectedEOS,
-    /// Last resort error kind when error specificity is hard to trace
-    BadSyntax,
-    /// Expected a token that defines a statement, found something else
-    ExpectedStatement,
-    // ast nodes: usually parents at heigher hights
-    /// Expected an entity, but found invalid tokens
-    ExpectedEntity,
-    // ast nodes: usually children wrt height
-    /// Bad syn tymeta element
-    SynBadTyMeta,
-    /// Bad syn map element
-    SynBadMap,
-    /// Bad expr: relational
-    ExprBadRel,
-    // ast nodes: usually the root
-    /// Unknown `create` statement
-    StmtUnknownCreate,
-    /// Unknown `alter` statement
-    StmtUnknownAlter,
-    /// unknown `drop` statement
-    StmtUnknownDrop,
-}
-
-#[derive(Debug)]
-#[repr(u8)]
-#[cfg_attr(test, derive(PartialEq))]
-/// Executor errors
-pub enum DatabaseError {
-    // sys
-    SysBadItemID,
-    // query generic
-    /// this needs an explicit lock
-    NeedLock,
-    /// expected a full entity, but found a single implicit entity
-    ExpectedEntity,
-    // ddl
-    /// unknown property or bad type for property
-    DdlSpaceBadProperty,
-    /// the space already exists
-    DdlSpaceAlreadyExists,
-    /// the space doesn't exist
-    DdlSpaceNotFound,
-    /// the space that we attempted to remove is non-empty
-    DdlSpaceRemoveNonEmpty,
-    /// bad definition for some typedef in a model
-    DdlModelInvalidTypeDefinition,
-    /// bad model definition; most likely an illegal primary key
-    DdlModelBadDefinition,
-    /// the model already exists
-    DdlModelAlreadyExists,
-    /// an alter attempted to remove a protected field (usually the primary key)
-    DdlModelAlterProtectedField,
-    /// an alter model attempted to modify an invalid property/a property with an illegal value
-    DdlModelAlterBadProperty,
-    /// the alter model statement is "wrong"
-    DdlModelAlterBad,
-    /// an alter attempted to update an nx field
-    FieldNotFound,
-    /// bad type definition to alter
-    DdlModelAlterBadTypedef,
-    /// didn't find the model
-    DdlModelNotFound,
-    /// attempted a remove, but the model view is nonempty
-    DdlModelViewNotEmpty,
-    // dml
-    /// Duplicate
-    DmlConstraintViolationDuplicate,
-    /// data validation error
-    DmlDataValidationError,
-    /// The expression in a where clause is not indexed (in the way the expression expects it to be)
-    DmlWhereClauseUnindexedExpr,
-    /// The entry was not found
-    DmlEntryNotFound,
-    /// illegal data
-    DmlIllegalData,
-    /// field definition violation
-    DmlConstraintViolationFieldTypedef,
-    ServerError,
+/// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
+/// about anything (as that will be a security hole). The variants correspond with their actual response codes
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Error {
+    /// I/O error
+    SysIOError,
+    /// out of memory
+    SysOutOfMemory,
+    /// unknown server error
+    SysUnknownError,
+    /// invalid protocol packet
+    NetProtocolIllegalPacket,
+    /// something like an integer that randomly has a character to attached to it like `1234q`
+    LexInvalidLiteral,
+    /// something like an invalid 'string" or a safe string with a bad length etc
+    LexInvalidEscapedLiteral,
+    /// unexpected byte
+    LexUnexpectedByte,
+    /// expected a longer statement
+    QLUnexpectedEndOfStatement,
+    /// incorrect syntax for "something"
+    QLInvalidSyntax,
+    /// expected a statement keyword found something else
+    QLExpectedStatement,
+    /// invalid collection definition definition
+    QLInvalidCollectionSyntax,
+    /// invalid type definition syntax
+    QLInvalidTypeDefinitionSyntax,
+    /// invalid relational expression
+    QLIllegalRelExp,
+    /// expected a full entity definition
+    QPExpectedEntity,
+    /// expected a statement, found something else
+    QPExpectedStatement,
+    /// unknown statement
+    QPUnknownStatement,
+    /// this query needs a lock for execution, but that wasn't explicitly allowed anywhere
+    QPNeedLock,
+    /// the object to be used as the "query container" is missing (for example, insert when the model was missing)
+    QPObjectNotFound,
+    /// an unknown field was attempted to be accessed/modified/...
+    QPUnknownField,
+    /// invalid property for an object
+    QPDdlInvalidProperties,
+    /// create space/model, but the object already exists
+    QPDdlObjectAlreadyExists,
+    /// an object that was attempted to be removed is non-empty, and for this object, removals require it to be empty
+    QPDdlNotEmpty,
+    /// invalid type definition
+    QPDdlInvalidTypeDefinition,
+    /// bad model definition
+    QPDdlModelBadDefinition,
+    /// illegal alter model query
+    QPDdlModelAlterIllegal,
+    /// violated the uniqueness property
+    QPDmlDuplicate,
+    /// the data could not be validated for being accepted into a field/function/etc.
+    QPDmlValidationError,
+    /// the where expression has an unindexed column essentially implying that we can't run this query because of perf concerns
+    QPDmlWhereHasUnindexedColumn,
+    /// the row matching the given match expression was not found
+    QPDmlRowNotFound,
+    /// transactional error
     TransactionalError,
-    StorageSubsystemErr(SDSSError),
+    /// storage subsystem error
+    StorageSubsystemError,
 }
 
-impl From<SDSSError> for DatabaseError {
-    fn from(e: SDSSError) -> Self {
-        Self::StorageSubsystemErr(e)
-    }
-}
-
-impl From<TransactionError> for DatabaseError {
-    fn from(_: TransactionError) -> Self {
-        Self::TransactionalError
+direct_from! {
+    Error[_] => {
+        SDSSError as StorageSubsystemError,
+        TransactionError as TransactionalError,
     }
 }

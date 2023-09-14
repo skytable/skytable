@@ -168,21 +168,21 @@ mod impls {
     use {
         super::{RelationalExpr, WhereClause},
         crate::engine::{
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for WhereClause<'a> {
         // important: upstream must verify this
         const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             let wh = Self::parse_where(state);
             Ok(wh)
         }
     }
     impl<'a> ASTNode<'a> for RelationalExpr<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
-            Self::try_parse(state).ok_or(LangError::ExprBadRel)
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
+            Self::try_parse(state).ok_or(Error::QLIllegalRelExp)
         }
     }
 }

@@ -28,7 +28,7 @@ use {
     super::{WhereClause, WhereClauseCollection},
     crate::{
         engine::{
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -96,7 +96,7 @@ impl<'a> SelectStatement<'a> {
 }
 
 impl<'a> SelectStatement<'a> {
-    pub fn parse_select<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub fn parse_select<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         /*
             Smallest query:
             select * from model
@@ -104,7 +104,7 @@ impl<'a> SelectStatement<'a> {
                    1 2    3
         */
         if compiler::unlikely(state.remaining() < 3) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         let mut select_fields = Vec::new();
         let is_wildcard = state.cursor_eq(Token![*]);
@@ -123,7 +123,7 @@ impl<'a> SelectStatement<'a> {
         state.poison_if_not(is_wildcard | !select_fields.is_empty());
         // we should have from + model
         if compiler::unlikely(state.remaining() < 2 || !state.okay()) {
-            return compiler::cold_rerr(LangError::BadSyntax);
+            return compiler::cold_rerr(Error::QLInvalidSyntax);
         }
         state.poison_if_not(state.cursor_eq(Token![from]));
         state.cursor_ahead(); // ignore errors
@@ -146,7 +146,7 @@ impl<'a> SelectStatement<'a> {
                 clause: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(LangError::BadSyntax)
+            compiler::cold_rerr(Error::QLInvalidSyntax)
         }
     }
 }
@@ -155,12 +155,12 @@ mod impls {
     use {
         super::SelectStatement,
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for SelectStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse_select(state)
         }
     }

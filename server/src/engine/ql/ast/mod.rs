@@ -37,7 +37,7 @@ use {
     crate::{
         engine::{
             data::{cell::Datacell, lit::LitIR},
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
         },
         util::{compiler, MaybeInit},
     },
@@ -443,7 +443,7 @@ impl<'a> Entity<'a> {
     #[inline(always)]
     /// Attempt to parse an entity using the given token stream. It also accepts a counter
     /// argument to forward the cursor
-    pub fn parse_from_tokens_len_checked(tok: &'a [Token], c: &mut usize) -> LangResult<Self> {
+    pub fn parse_from_tokens_len_checked(tok: &'a [Token], c: &mut usize) -> QueryResult<Self> {
         let is_current = Self::signature_matches_single_len_checked(tok);
         let is_full = Self::signature_matches_full_len_checked(tok);
         let r = match () {
@@ -457,14 +457,14 @@ impl<'a> Entity<'a> {
                 *c += 1;
                 Self::parse_uck_tokens_single(tok)
             },
-            _ => return Err(LangError::ExpectedEntity),
+            _ => return Err(Error::QPExpectedEntity),
         };
         Ok(r)
     }
     #[inline(always)]
     pub fn parse_from_state_rounded_result<Qd: QueryData<'a>>(
         state: &mut State<'a, Qd>,
-    ) -> LangResult<Self> {
+    ) -> QueryResult<Self> {
         let mut e = MaybeInit::uninit();
         Self::parse_from_state_rounded(state, &mut e);
         if compiler::likely(state.okay()) {
@@ -473,7 +473,7 @@ impl<'a> Entity<'a> {
                 Ok(e.assume_init())
             }
         } else {
-            Err(LangError::ExpectedEntity)
+            Err(Error::QPExpectedEntity)
         }
     }
     #[inline(always)]
@@ -560,14 +560,14 @@ pub enum Statement<'a> {
 }
 
 #[cfg(test)]
-pub fn compile_test<'a>(tok: &'a [Token<'a>]) -> LangResult<Statement<'a>> {
+pub fn compile_test<'a>(tok: &'a [Token<'a>]) -> QueryResult<Statement<'a>> {
     self::compile(tok, InplaceData::new())
 }
 
 #[inline(always)]
-pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> LangResult<Statement<'a>> {
+pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> QueryResult<Statement<'a>> {
     if compiler::unlikely(tok.len() < 2) {
-        return Err(LangError::UnexpectedEOS);
+        return Err(Error::QLUnexpectedEndOfStatement);
     }
     let mut state = State::new(tok, d);
     match state.fw_read() {
@@ -576,12 +576,12 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> LangResult
         Token![create] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::CreateModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::CreateSpace),
-            _ => compiler::cold_rerr(LangError::StmtUnknownCreate),
+            _ => compiler::cold_rerr(Error::QPUnknownStatement),
         },
         Token![alter] => match state.fw_read() {
             Token![model] => ASTNode::from_state(&mut state).map(Statement::AlterModel),
             Token![space] => ASTNode::from_state(&mut state).map(Statement::AlterSpace),
-            _ => compiler::cold_rerr(LangError::StmtUnknownAlter),
+            _ => compiler::cold_rerr(Error::QPUnknownStatement),
         },
         Token![drop] if state.remaining() >= 2 => ddl::drop::parse_drop(&mut state),
         Token::Ident(id) if id.eq_ignore_ascii_case("inspect") => {
@@ -592,6 +592,6 @@ pub fn compile<'a, Qd: QueryData<'a>>(tok: &'a [Token<'a>], d: Qd) -> LangResult
         Token![select] => ASTNode::from_state(&mut state).map(Statement::Select),
         Token![update] => ASTNode::from_state(&mut state).map(Statement::Update),
         Token![delete] => ASTNode::from_state(&mut state).map(Statement::Delete),
-        _ => compiler::cold_rerr(LangError::ExpectedStatement),
+        _ => compiler::cold_rerr(Error::QPUnknownStatement),
     }
 }

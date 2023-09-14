@@ -27,7 +27,7 @@
 #[cfg(test)]
 use crate::engine::ql::{ast::InplaceData, lex::Token};
 use crate::engine::{
-    error::{LangError, LangResult},
+    error::{Error, QueryResult},
     ql::ast::{QueryData, State},
 };
 
@@ -40,38 +40,38 @@ pub trait ASTNode<'a>: Sized {
     /// - If the implementor uses a cow style parse, then set [`ASTNode::VERIFY`] to
     /// true
     /// - Try to propagate errors via [`State`] if possible
-    fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self>;
-    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self>;
+    fn from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         let r = <Self as ASTNode>::_from_state(state);
         if Self::VERIFY {
             return if state.okay() {
                 r
             } else {
-                Err(LangError::BadSyntax)
+                Err(Error::QLInvalidSyntax)
             };
         }
         r
     }
     #[cfg(test)]
     /// Parse multiple nodes of this AST node type. Intended for the test suite.
-    fn _multiple_from_state<Qd: QueryData<'a>>(_: &mut State<'a, Qd>) -> LangResult<Vec<Self>> {
+    fn _multiple_from_state<Qd: QueryData<'a>>(_: &mut State<'a, Qd>) -> QueryResult<Vec<Self>> {
         unimplemented!()
     }
     #[cfg(test)]
-    fn multiple_from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Vec<Self>> {
+    fn multiple_from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Vec<Self>> {
         let r = <Self as ASTNode>::_multiple_from_state(state);
         if Self::VERIFY {
             return if state.okay() {
                 r
             } else {
-                Err(LangError::BadSyntax)
+                Err(Error::QLInvalidSyntax)
             };
         }
         r
     }
     #[cfg(test)]
     /// Parse this AST node utilizing the full token-stream. Intended for the test suite.
-    fn from_insecure_tokens_full(tok: &'a [Token<'a>]) -> LangResult<Self> {
+    fn from_insecure_tokens_full(tok: &'a [Token<'a>]) -> QueryResult<Self> {
         let mut state = State::new(tok, InplaceData::new());
         let r = <Self as ASTNode>::from_state(&mut state)?;
         assert!(state.exhausted());
@@ -80,24 +80,24 @@ pub trait ASTNode<'a>: Sized {
     #[cfg(test)]
     /// Parse multiple nodes of this AST node type, utilizing the full token stream.
     /// Intended for the test suite.
-    fn multiple_from_insecure_tokens_full(tok: &'a [Token<'a>]) -> LangResult<Vec<Self>> {
+    fn multiple_from_insecure_tokens_full(tok: &'a [Token<'a>]) -> QueryResult<Vec<Self>> {
         let mut state = State::new(tok, InplaceData::new());
         let r = Self::multiple_from_state(&mut state);
         if state.exhausted() && state.okay() {
             r
         } else {
-            Err(LangError::BadSyntax)
+            Err(Error::QLInvalidSyntax)
         }
     }
 }
 
 #[cfg(test)]
-pub fn parse_ast_node_full<'a, N: ASTNode<'a>>(tok: &'a [Token<'a>]) -> LangResult<N> {
+pub fn parse_ast_node_full<'a, N: ASTNode<'a>>(tok: &'a [Token<'a>]) -> QueryResult<N> {
     N::from_insecure_tokens_full(tok)
 }
 #[cfg(test)]
 pub fn parse_ast_node_multiple_full<'a, N: ASTNode<'a>>(
     tok: &'a [Token<'a>],
-) -> LangResult<Vec<N>> {
+) -> QueryResult<Vec<N>> {
     N::multiple_from_insecure_tokens_full(tok)
 }

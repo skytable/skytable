@@ -25,27 +25,27 @@
 */
 
 use crate::engine::{
-    error::{DatabaseError, DatabaseResult},
+    error::{Error, QueryResult},
     ql::ast::Entity,
 };
 
 pub trait EntityLocator<'a> {
-    fn parse_entity(self) -> DatabaseResult<(&'a str, &'a str)>
+    fn parse_entity(self) -> QueryResult<(&'a str, &'a str)>
     where
         Self: 'a;
 }
 
 impl<'a> EntityLocator<'a> for (&'a str, &'a str) {
-    fn parse_entity(self) -> DatabaseResult<(&'a str, &'a str)> {
+    fn parse_entity(self) -> QueryResult<(&'a str, &'a str)> {
         Ok(self)
     }
 }
 
 impl<'a> EntityLocator<'a> for Entity<'a> {
-    fn parse_entity(self) -> DatabaseResult<(&'a str, &'a str)>
+    fn parse_entity(self) -> QueryResult<(&'a str, &'a str)>
     where
         Self: 'a,
     {
-        self.into_full_str().ok_or(DatabaseError::ExpectedEntity)
+        self.into_full_str().ok_or(Error::QPExpectedEntity)
     }
 }

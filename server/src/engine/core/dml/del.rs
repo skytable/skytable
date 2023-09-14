@@ -26,14 +26,14 @@
 
 use crate::engine::{
     core::{self, model::delta::DataDeltaKind},
-    error::{DatabaseError, DatabaseResult},
+    error::{Error, QueryResult},
     fractal::GlobalInstanceLike,
     idx::MTIndex,
     ql::dml::del::DeleteStatement,
     sync,
 };
 
-pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> DatabaseResult<()> {
+pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, delete.entity(), |model| {
         let g = sync::atm::cpin();
         let schema_version = model.delta_state().schema_current_version();
@@ -55,7 +55,7 @@ pub fn delete(global: &impl GlobalInstanceLike, mut delete: DeleteStatement) -> 
                 );
                 Ok(())
             }
-            None => Err(DatabaseError::DmlEntryNotFound),
+            None => Err(Error::QPDmlRowNotFound),
         }
     })
 }

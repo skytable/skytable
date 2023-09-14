@@ -33,7 +33,7 @@ use crate::{
     engine::{
         core::model::Model,
         data::{lit::LitIR, spec::DataspecMeta1D, tag::DataTag},
-        error::{DatabaseError, DatabaseResult},
+        error::{Error, QueryResult},
         ql::dml::WhereClause,
     },
     util::compiler,
@@ -47,7 +47,7 @@ impl Model {
     pub(self) fn resolve_where<'a>(
         &self,
         where_clause: &mut WhereClause<'a>,
-    ) -> DatabaseResult<LitIR<'a>> {
+    ) -> QueryResult<LitIR<'a>> {
         match where_clause.clauses_mut().remove(self.p_key().as_bytes()) {
             Some(clause)
                 if clause.filter_hint_none()
@@ -55,7 +55,7 @@ impl Model {
             {
                 Ok(clause.rhs())
             }
-            _ => compiler::cold_rerr(DatabaseError::DmlWhereClauseUnindexedExpr),
+            _ => compiler::cold_rerr(Error::QPDmlWhereHasUnindexedColumn),
         }
     }
 }

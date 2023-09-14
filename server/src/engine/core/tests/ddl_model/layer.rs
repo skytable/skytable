@@ -26,23 +26,23 @@
 
 use crate::engine::{
     core::model::Field,
-    error::DatabaseResult,
+    error::QueryResult,
     ql::{ast::parse_ast_node_multiple_full, tests::lex_insecure},
 };
 
-fn layerview_nullable(layer_def: &str, nullable: bool) -> DatabaseResult<Field> {
+fn layerview_nullable(layer_def: &str, nullable: bool) -> QueryResult<Field> {
     let tok = lex_insecure(layer_def.as_bytes()).unwrap();
     let spec = parse_ast_node_multiple_full(&tok).unwrap();
     Field::parse_layers(spec, nullable)
 }
-fn layerview(layer_def: &str) -> DatabaseResult<Field> {
+fn layerview(layer_def: &str) -> QueryResult<Field> {
     layerview_nullable(layer_def, false)
 }
 
 mod layer_spec_validation {
     use {
         super::layerview,
-        crate::engine::{core::model::Layer, error::DatabaseError},
+        crate::engine::{core::model::Layer, error::Error},
     };
 
     #[test]
@@ -64,7 +64,7 @@ mod layer_spec_validation {
     fn invalid_list() {
         assert_eq!(
             layerview("list").unwrap_err(),
-            DatabaseError::DdlModelInvalidTypeDefinition
+            Error::QPDdlInvalidTypeDefinition
         );
     }
 
@@ -72,7 +72,7 @@ mod layer_spec_validation {
     fn invalid_flat() {
         assert_eq!(
             layerview("string { type: string }").unwrap_err(),
-            DatabaseError::DdlModelInvalidTypeDefinition
+            Error::QPDdlInvalidTypeDefinition
         );
     }
 }

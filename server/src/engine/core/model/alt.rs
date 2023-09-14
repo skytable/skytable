@@ -33,7 +33,7 @@ use {
                 tag::{DataTag, TagClass},
                 DictEntryGeneric,
             },
-            error::{DatabaseError, DatabaseResult},
+            error::{Error, QueryResult},
             fractal::GlobalInstanceLike,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
             ql::{
@@ -81,10 +81,10 @@ fn no_field(mr: &IWModel, new: &str) -> bool {
     !mr.fields().st_contains(new)
 }
 
-fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> DatabaseResult<bool> {
+fn check_nullable(props: &mut HashMap<Box<str>, DictEntryGeneric>) -> QueryResult<bool> {
     match props.remove("nullable") {
         Some(DictEntryGeneric::Data(b)) if b.kind() == TagClass::Bool => Ok(b.bool()),
-        Some(_) => Err(DatabaseError::DdlModelAlterBadProperty),
+        Some(_) => Err(Error::QPDdlInvalidProperties),
         None => Ok(false),
     }
 }
@@ -94,14 +94,14 @@ impl<'a> AlterPlan<'a> {
         mv: &Model,
         wm: &IWModel,
         AlterModel { model, kind }: AlterModel<'a>,
-    ) -> DatabaseResult<AlterPlan<'a>> {
+    ) -> QueryResult<AlterPlan<'a>> {
         let mut no_lock = true;
         let mut okay = true;
         let action = match kind {
             AlterKind::Remove(r) => {
                 let mut x = HashSet::new();
                 if !r.iter().all(|id| x.insert(id.as_str())) {
-                    return Err(DatabaseError::DdlModelAlterBad);
+                    return Err(Error::QPDdlModelAlterIllegal);
                 }
                 let mut not_found = false;
                 if r.iter().all(|id| {
@@ -112,9 +112,9 @@ impl<'a> AlterPlan<'a> {
                 }) {
                     can_ignore!(AlterAction::Remove(r))
                 } else if not_found {
-                    return Err(DatabaseError::FieldNotFound);
+                    return Err(Error::QPUnknownField);
                 } else {
-                    return Err(DatabaseError::DdlModelAlterProtectedField);
+                    return Err(Error::QPDdlModelAlterIllegal);
                 }
             }
             AlterKind::Add(new_fields) => {
@@ -148,7 +148,7 @@ impl<'a> AlterPlan<'a> {
                     mv.guard_pk(&field_name)?;
                     // get the current field
                     let Some(current_field) = wm.fields().st_get(field_name.as_str()) else {
-                        return Err(DatabaseError::FieldNotFound);
+                        return Err(Error::QPUnknownField);
                     };
                     // check props
                     let is_nullable = check_nullable(&mut props)?;
@@ -174,7 +174,7 @@ impl<'a> AlterPlan<'a> {
                 no_lock,
             })
         } else {
-            Err(DatabaseError::DdlModelAlterBad)
+            Err(Error::QPDdlModelAlterIllegal)
         }
     }
     fn ldeltas(
@@ -183,7 +183,7 @@ impl<'a> AlterPlan<'a> {
         nullable: bool,
         super_nlck: &mut bool,
         super_okay: &mut bool,
-    ) -> DatabaseResult<(bool, Field)> {
+    ) -> QueryResult<(bool, Field)> {
         #[inline(always)]
         fn classeq(current: &Layer, new: &Layer, class: TagClass) -> bool {
             // KIDDOS, LEARN SOME RELATIONS BEFORE WRITING CODE
@@ -197,7 +197,7 @@ impl<'a> AlterPlan<'a> {
         }
         if layers.len() > current.layers().len() {
             // simply a dumb tomato; ELIMINATE THESE DUMB TOMATOES
-            return Err(DatabaseError::DdlModelAlterBad);
+            return Err(Error::QPDdlModelAlterIllegal);
         }
         let mut no_lock = !(current.is_nullable() & !nullable);
         let mut deltasize = (current.is_nullable() ^ nullable) as usize;
@@ -216,7 +216,7 @@ impl<'a> AlterPlan<'a> {
             // actually parse the new layer
             okay &= props.is_empty();
             let Some(new_parsed_layer) = Layer::get_layer(&ty) else {
-                return Err(DatabaseError::DdlModelAlterBadTypedef);
+                return Err(Error::QPDdlInvalidTypeDefinition);
             };
             match (
                 current_layer.tag.tag_selector(),
@@ -233,7 +233,7 @@ impl<'a> AlterPlan<'a> {
                 }
                 _ => {
                     // can't cast this directly
-                    return Err(DatabaseError::DdlModelAlterBadTypedef);
+                    return Err(Error::QPDdlInvalidTypeDefinition);
                 }
             }
             *new_layer = new_parsed_layer;
@@ -243,7 +243,7 @@ impl<'a> AlterPlan<'a> {
         if okay {
             Ok((deltasize != 0, new_field))
         } else {
-            Err(DatabaseError::DdlModelAlterBad)
+            Err(Error::QPDdlModelAlterIllegal)
         }
     }
 }
@@ -252,7 +252,7 @@ impl Model {
     pub fn transactional_exec_alter<G: GlobalInstanceLike>(
         global: &G,
         alter: AlterModel,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         let (space_name, model_name) = EntityLocator::parse_entity(alter.model)?;
         global.namespace().with_space(space_name, |space| {
             space.with_model(model_name, |model| {
@@ -263,7 +263,7 @@ impl Model {
                 // we have a legal plan; acquire exclusive if we need it
                 if !plan.no_lock {
                     // TODO(@ohsayan): allow this later on, once we define the syntax
-                    return Err(DatabaseError::NeedLock);
+                    return Err(Error::QPNeedLock);
                 }
                 // fine, we're good
                 let mut iwm = iwm;

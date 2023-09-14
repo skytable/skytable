@@ -32,7 +32,7 @@ mod update;
 use crate::engine::{
     core::{dml, index::Row, model::Model},
     data::{cell::Datacell, lit::LitIR},
-    error::DatabaseResult,
+    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
         ast::{parse_ast_node_full, Entity},
@@ -42,10 +42,7 @@ use crate::engine::{
     sync,
 };
 
-fn _exec_only_create_space_model(
-    global: &impl GlobalInstanceLike,
-    model: &str,
-) -> DatabaseResult<()> {
+fn _exec_only_create_space_model(global: &impl GlobalInstanceLike, model: &str) -> QueryResult<()> {
     if !global.namespace().spaces().read().contains_key("myspace") {
         global.namespace().test_new_empty_space("myspace");
     }
@@ -58,7 +55,7 @@ fn _exec_only_insert<T>(
     global: &impl GlobalInstanceLike,
     insert: &str,
     and_then: impl Fn(Entity) -> T,
-) -> DatabaseResult<T> {
+) -> QueryResult<T> {
     let lex_insert = lex_insecure(insert.as_bytes()).unwrap();
     let stmt_insert = parse_ast_node_full::<InsertStatement>(&lex_insert[1..]).unwrap();
     let entity = stmt_insert.entity();
@@ -72,7 +69,7 @@ fn _exec_only_read_key_and_then<T>(
     entity: Entity,
     key_name: &str,
     and_then: impl Fn(Row) -> T,
-) -> DatabaseResult<T> {
+) -> QueryResult<T> {
     let guard = sync::atm::cpin();
     global.namespace().with_model(entity, |mdl| {
         let _irm = mdl.intent_read_model();
@@ -86,11 +83,7 @@ fn _exec_only_read_key_and_then<T>(
     })
 }
 
-fn _exec_delete_only(
-    global: &impl GlobalInstanceLike,
-    delete: &str,
-    key: &str,
-) -> DatabaseResult<()> {
+fn _exec_delete_only(global: &impl GlobalInstanceLike, delete: &str, key: &str) -> QueryResult<()> {
     let lex_del = lex_insecure(delete.as_bytes()).unwrap();
     let delete = parse_ast_node_full::<DeleteStatement>(&lex_del[1..]).unwrap();
     let entity = delete.entity();
@@ -106,10 +99,7 @@ fn _exec_delete_only(
     Ok(())
 }
 
-fn _exec_only_select(
-    global: &impl GlobalInstanceLike,
-    select: &str,
-) -> DatabaseResult<Vec<Datacell>> {
+fn _exec_only_select(global: &impl GlobalInstanceLike, select: &str) -> QueryResult<Vec<Datacell>> {
     let lex_sel = lex_insecure(select.as_bytes()).unwrap();
     let select = parse_ast_node_full(&lex_sel[1..]).unwrap();
     let mut r = Vec::new();
@@ -117,7 +107,7 @@ fn _exec_only_select(
     Ok(r)
 }
 
-fn _exec_only_update(global: &impl GlobalInstanceLike, update: &str) -> DatabaseResult<()> {
+fn _exec_only_update(global: &impl GlobalInstanceLike, update: &str) -> QueryResult<()> {
     let lex_upd = lex_insecure(update.as_bytes()).unwrap();
     let update = parse_ast_node_full(&lex_upd[1..]).unwrap();
     dml::update(global, update)
@@ -129,17 +119,14 @@ pub(self) fn exec_insert<T: Default>(
     insert: &str,
     key_name: &str,
     f: impl Fn(Row) -> T,
-) -> DatabaseResult<T> {
+) -> QueryResult<T> {
     _exec_only_create_space_model(global, model)?;
     _exec_only_insert(global, insert, |entity| {
         _exec_only_read_key_and_then(global, entity, key_name, |row| f(row))
     })?
 }
 
-pub(self) fn exec_insert_only(
-    global: &impl GlobalInstanceLike,
-    insert: &str,
-) -> DatabaseResult<()> {
+pub(self) fn exec_insert_only(global: &impl GlobalInstanceLike, insert: &str) -> QueryResult<()> {
     _exec_only_insert(global, insert, |_| {})
 }
 
@@ -149,7 +136,7 @@ pub(self) fn exec_delete(
     insert: Option<&str>,
     delete: &str,
     key: &str,
-) -> DatabaseResult<()> {
+) -> QueryResult<()> {
     _exec_only_create_space_model(global, model)?;
     if let Some(insert) = insert {
         _exec_only_insert(global, insert, |_| {})?;
@@ -162,7 +149,7 @@ pub(self) fn exec_select(
     model: &str,
     insert: &str,
     select: &str,
-) -> DatabaseResult<Vec<Datacell>> {
+) -> QueryResult<Vec<Datacell>> {
     _exec_only_create_space_model(global, model)?;
     _exec_only_insert(global, insert, |_| {})?;
     _exec_only_select(global, select)
@@ -171,7 +158,7 @@ pub(self) fn exec_select(
 pub(self) fn exec_select_only(
     global: &impl GlobalInstanceLike,
     select: &str,
-) -> DatabaseResult<Vec<Datacell>> {
+) -> QueryResult<Vec<Datacell>> {
     _exec_only_select(global, select)
 }
 
@@ -181,7 +168,7 @@ pub(self) fn exec_update(
     insert: &str,
     update: &str,
     select: &str,
-) -> DatabaseResult<Vec<Datacell>> {
+) -> QueryResult<Vec<Datacell>> {
     _exec_only_create_space_model(global, model)?;
     _exec_only_insert(global, insert, |_| {})?;
     _exec_only_update(global, update)?;

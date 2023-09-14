@@ -39,7 +39,7 @@ use {
             tag::{DataTag, FullTag, TagClass, TagSelector},
             uuid::Uuid,
         },
-        error::{DatabaseError, DatabaseResult},
+        error::{Error, QueryResult},
         fractal::GlobalInstanceLike,
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
@@ -132,9 +132,9 @@ impl Model {
     fn not_pk(&self, new: &str) -> bool {
         !self.is_pk(new)
     }
-    fn guard_pk(&self, new: &str) -> DatabaseResult<()> {
+    fn guard_pk(&self, new: &str) -> QueryResult<()> {
         if self.is_pk(new) {
-            Err(DatabaseError::DdlModelAlterProtectedField)
+            Err(Error::QPDdlModelAlterIllegal)
         } else {
             Ok(())
         }
@@ -169,7 +169,7 @@ impl Model {
             fields,
             props,
         }: CreateModel,
-    ) -> DatabaseResult<Self> {
+    ) -> QueryResult<Self> {
         let mut okay = props.is_empty() & !fields.is_empty();
         // validate fields
         let mut field_spec = fields.into_iter();
@@ -199,7 +199,7 @@ impl Model {
                 return Ok(Self::new_restore(Uuid::new(), last_pk.into(), tag, fields));
             }
         }
-        Err(DatabaseError::DdlModelBadDefinition)
+        Err(Error::QPDdlModelBadDefinition)
     }
 }
 
@@ -207,13 +207,13 @@ impl Model {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         stmt: CreateModel,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         let (space_name, model_name) = stmt.model_name.parse_entity()?;
         let model = Self::process_create(stmt)?;
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             if w_space.st_contains(model_name) {
-                return Err(DatabaseError::DdlModelAlreadyExists);
+                return Err(Error::QPDdlObjectAlreadyExists);
             }
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -236,12 +236,12 @@ impl Model {
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         stmt: DropModel,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         let (space_name, model_name) = stmt.entity.parse_entity()?;
         global.namespace().with_space(space_name, |space| {
             let mut w_space = space.models().write();
             let Some(model) = w_space.get(model_name) else {
-                return Err(DatabaseError::DdlModelNotFound);
+                return Err(Error::QPObjectNotFound);
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -310,7 +310,7 @@ impl Field {
     pub fn layers(&self) -> &[Layer] {
         &self.layers
     }
-    pub fn parse_layers(spec: Vec<LayerSpec>, nullable: bool) -> DatabaseResult<Self> {
+    pub fn parse_layers(spec: Vec<LayerSpec>, nullable: bool) -> QueryResult<Self> {
         let mut layers = spec.into_iter().rev();
         let mut okay = true;
         let mut fin = false;
@@ -333,7 +333,7 @@ impl Field {
                 nullable,
             })
         } else {
-            Err(DatabaseError::DdlModelInvalidTypeDefinition)
+            Err(Error::QPDdlInvalidTypeDefinition)
         }
     }
     #[inline(always)]

@@ -28,7 +28,7 @@ use {
     crate::engine::{
         core::{model::Model, RWLIdx},
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
-        error::{DatabaseError, DatabaseResult},
+        error::{Error, QueryResult},
         fractal::GlobalInstanceLike,
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
@@ -99,7 +99,7 @@ impl ProcedureCreate {
 }
 
 impl Space {
-    pub fn _create_model(&self, name: &str, model: Model) -> DatabaseResult<()> {
+    pub fn _create_model(&self, name: &str, model: Model) -> QueryResult<()> {
         if self
             .mns
             .write()
@@ -107,7 +107,7 @@ impl Space {
         {
             Ok(())
         } else {
-            Err(DatabaseError::DdlModelAlreadyExists)
+            Err(Error::QPDdlObjectAlreadyExists)
         }
     }
     pub fn get_uuid(&self) -> Uuid {
@@ -122,11 +122,11 @@ impl Space {
     pub fn with_model<T>(
         &self,
         model: &str,
-        f: impl FnOnce(&Model) -> DatabaseResult<T>,
-    ) -> DatabaseResult<T> {
+        f: impl FnOnce(&Model) -> QueryResult<T>,
+    ) -> QueryResult<T> {
         let mread = self.mns.read();
         let Some(model) = mread.st_get(model) else {
-            return Err(DatabaseError::DdlModelNotFound);
+            return Err(Error::QPObjectNotFound);
         };
         f(model)
     }
@@ -164,7 +164,7 @@ impl Space {
             space_name,
             mut props,
         }: CreateSpace,
-    ) -> DatabaseResult<ProcedureCreate> {
+    ) -> QueryResult<ProcedureCreate> {
         let space_name = space_name.to_string().into_boxed_str();
         // check env
         let env = match props.remove(SpaceMeta::KEY_ENV) {
@@ -172,7 +172,8 @@ impl Space {
             Some(DictEntryGeneric::Data(l)) if l.is_null() => IndexST::default(),
             None if props.is_empty() => IndexST::default(),
             _ => {
-                return Err(DatabaseError::DdlSpaceBadProperty);
+                // unknown properties
+                return Err(Error::QPDdlInvalidProperties);
             }
         };
         Ok(ProcedureCreate {
@@ -192,13 +193,13 @@ impl Space {
     pub fn transactional_exec_create<G: GlobalInstanceLike>(
         global: &G,
         space: CreateSpace,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         // process create
         let ProcedureCreate { space_name, space } = Self::process_create(space)?;
         // acquire access
         let mut wl = global.namespace().spaces().write();
         if wl.st_contains(&space_name) {
-            return Err(DatabaseError::DdlSpaceAlreadyExists);
+            return Err(Error::QPDdlObjectAlreadyExists);
         }
         // commit txn
         if G::FS_IS_NON_NULL {
@@ -219,19 +220,19 @@ impl Space {
             space_name,
             updated_props,
         }: AlterSpace,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         global.namespace().with_space(&space_name, |space| {
             match updated_props.get(SpaceMeta::KEY_ENV) {
                 Some(DictEntryGeneric::Map(_)) if updated_props.len() == 1 => {}
                 Some(DictEntryGeneric::Data(l)) if updated_props.len() == 1 && l.is_null() => {}
                 None if updated_props.is_empty() => return Ok(()),
-                _ => return Err(DatabaseError::DdlSpaceBadProperty),
+                _ => return Err(Error::QPDdlInvalidProperties),
             }
             let mut space_props = space.meta.dict().write();
             // create patch
             let patch = match dict::rprepare_metadata_patch(&space_props, updated_props) {
                 Some(patch) => patch,
-                None => return Err(DatabaseError::DdlSpaceBadProperty),
+                None => return Err(Error::QPDdlInvalidProperties),
             };
             if G::FS_IS_NON_NULL {
                 // prepare txn
@@ -254,18 +255,18 @@ impl Space {
     pub fn transactional_exec_drop<G: GlobalInstanceLike>(
         global: &G,
         DropSpace { space, force: _ }: DropSpace,
-    ) -> DatabaseResult<()> {
+    ) -> QueryResult<()> {
         // TODO(@ohsayan): force remove option
         // TODO(@ohsayan): should a drop space block the entire global table?
         let space_name = space;
         let mut wgns = global.namespace().spaces().write();
         let space = match wgns.get(space_name.as_str()) {
             Some(space) => space,
-            None => return Err(DatabaseError::DdlSpaceNotFound),
+            None => return Err(Error::QPObjectNotFound),
         };
         let space_w = space.mns.write();
         if space_w.st_len() != 0 {
-            return Err(DatabaseError::DdlSpaceRemoveNonEmpty);
+            return Err(Error::QPDdlNotEmpty);
         }
         // we can remove this
         if G::FS_IS_NON_NULL {

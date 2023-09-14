@@ -27,7 +27,7 @@
 use crate::engine::{
     core::space::{Space, SpaceMeta},
     data::cell::Datacell,
-    error::DatabaseError,
+    error::Error,
     fractal::test_utils::TestGlobal,
 };
 
@@ -122,7 +122,7 @@ fn alter_nx() {
             |_| {},
         )
         .unwrap_err(),
-        DatabaseError::DdlSpaceNotFound
+        Error::QPObjectNotFound
     );
 }
 

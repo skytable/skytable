@@ -29,7 +29,7 @@ use {
     crate::{
         engine::{
             data::DictGeneric,
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::Ident,
@@ -51,10 +51,10 @@ pub struct CreateSpace<'a> {
 impl<'a> CreateSpace<'a> {
     #[inline(always)]
     /// Parse space data from the given tokens
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         // smallest declaration: `create space myspace` -> >= 1 token
         if compiler::unlikely(state.remaining() < 1) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         let space_name = state.fw_read();
         state.poison_if_not(space_name.is_ident());
@@ -76,7 +76,7 @@ impl<'a> CreateSpace<'a> {
                 props: d,
             })
         } else {
-            Err(LangError::BadSyntax)
+            Err(Error::QLInvalidSyntax)
         }
     }
 }
@@ -108,9 +108,9 @@ impl<'a> CreateModel<'a> {
         }
     }
 
-    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 10) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         // model name; ignore errors
         let mut model_uninit = MaybeInit::uninit();
@@ -147,7 +147,7 @@ impl<'a> CreateModel<'a> {
                 props,
             })
         } else {
-            Err(LangError::BadSyntax)
+            Err(Error::QLInvalidSyntax)
         }
     }
 }
@@ -156,17 +156,17 @@ mod impls {
     use {
         super::{CreateModel, CreateSpace},
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for CreateSpace<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }
     impl<'a> ASTNode<'a> for CreateModel<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }

@@ -25,7 +25,7 @@
 */
 
 use crate::engine::{
-    core::dml, data::cell::Datacell, error::DatabaseError, fractal::test_utils::TestGlobal,
+    core::dml, data::cell::Datacell, error::Error, fractal::test_utils::TestGlobal,
 };
 
 #[test]
@@ -96,7 +96,7 @@ fn fail_operation_on_null() {
             "select * from myspace.mymodel where username='sayan'"
         )
         .unwrap_err(),
-        DatabaseError::DmlConstraintViolationFieldTypedef
+        Error::QPDmlValidationError
     );
     assert_eq!(
         dml::update_flow_trace(),
@@ -116,7 +116,7 @@ fn fail_unknown_fields() {
             "select * from myspace.mymodel where username='sayan'"
         )
         .unwrap_err(),
-        DatabaseError::FieldNotFound
+        Error::QPUnknownField
     );
     assert_eq!(dml::update_flow_trace(), ["fieldnotfound", "rollback"]);
     // verify integrity
@@ -142,7 +142,7 @@ fn fail_typedef_violation() {
             "select * from myspace.mymodel where username = 'sayan'"
         )
         .unwrap_err(),
-        DatabaseError::DmlConstraintViolationFieldTypedef
+        Error::QPDmlValidationError
     );
     assert_eq!(
         dml::update_flow_trace(),

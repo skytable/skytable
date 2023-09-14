@@ -37,7 +37,7 @@ use {
                 spec::{Dataspec1D, DataspecMeta1D},
                 tag::{DataTag, TagClass},
             },
-            error::{DatabaseError, DatabaseResult},
+            error::{Error, QueryResult},
             fractal::GlobalInstanceLike,
             idx::STIndex,
             ql::dml::upd::{AssignmentExpression, UpdateStatement},
@@ -233,7 +233,7 @@ pub fn collect_trace_path() -> Vec<&'static str> {
     ROUTE_TRACE.with(|v| v.borrow().iter().cloned().collect())
 }
 
-pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> DatabaseResult<()> {
+pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> QueryResult<()> {
     core::with_model_for_data_update(global, update.entity(), |mdl| {
         let mut ret = Ok(());
         // prepare row fetch
@@ -243,7 +243,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
         // fetch row
         let g = sync::atm::cpin();
         let Some(row) = mdl.primary_index().select(key, &g) else {
-            return Err(DatabaseError::DmlEntryNotFound);
+            return Err(Error::QPDmlRowNotFound);
         };
         // lock row
         let mut row_data_wl = row.d_data().write();
@@ -280,7 +280,7 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                 _ => {
                     input_trace("fieldnotfound");
                     rollback_now = true;
-                    ret = Err(DatabaseError::FieldNotFound);
+                    ret = Err(Error::QPUnknownField);
                     break;
                 }
             }
@@ -314,20 +314,20 @@ pub fn update(global: &impl GlobalInstanceLike, mut update: UpdateStatement) -> 
                                 list.push(rhs.into());
                             } else {
                                 rollback_now = true;
-                                ret = Err(DatabaseError::ServerError);
+                                ret = Err(Error::SysOutOfMemory);
                                 break;
                             }
                         }
                     } else {
                         input_trace("list;badtag");
                         rollback_now = true;
-                        ret = Err(DatabaseError::DmlConstraintViolationFieldTypedef);
+                        ret = Err(Error::QPDmlValidationError);
                         break;
                     }
                 }
                 _ => {
                     input_trace("unknown_reason;exitmainloop");
-                    ret = Err(DatabaseError::DmlConstraintViolationFieldTypedef);
+                    ret = Err(Error::QPDmlValidationError);
                     rollback_now = true;
                     break;
                 }

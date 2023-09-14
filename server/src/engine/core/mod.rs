@@ -38,7 +38,7 @@ use {
     self::{model::Model, util::EntityLocator},
     crate::engine::{
         core::space::Space,
-        error::{DatabaseError, DatabaseResult},
+        error::{Error, QueryResult},
         fractal::GlobalInstanceLike,
         idx::{IndexST, STIndex},
     },
@@ -60,9 +60,9 @@ pub(self) fn with_model_for_data_update<'a, T, E, F>(
     global: &impl GlobalInstanceLike,
     entity: E,
     f: F,
-) -> DatabaseResult<T>
+) -> QueryResult<T>
 where
-    F: FnOnce(&Model) -> DatabaseResult<T>,
+    F: FnOnce(&Model) -> QueryResult<T>,
     E: 'a + EntityLocator<'a>,
 {
     let (space_name, model_name) = entity.parse_entity()?;
@@ -96,17 +96,17 @@ impl GlobalNS {
     pub fn with_space<T>(
         &self,
         space: &str,
-        f: impl FnOnce(&Space) -> DatabaseResult<T>,
-    ) -> DatabaseResult<T> {
+        f: impl FnOnce(&Space) -> QueryResult<T>,
+    ) -> QueryResult<T> {
         let sread = self.index_space.read();
         let Some(space) = sread.st_get(space) else {
-            return Err(DatabaseError::DdlSpaceNotFound);
+            return Err(Error::QPObjectNotFound);
         };
         f(space)
     }
-    pub fn with_model<'a, T, E, F>(&self, entity: E, f: F) -> DatabaseResult<T>
+    pub fn with_model<'a, T, E, F>(&self, entity: E, f: F) -> QueryResult<T>
     where
-        F: FnOnce(&Model) -> DatabaseResult<T>,
+        F: FnOnce(&Model) -> QueryResult<T>,
         E: 'a + EntityLocator<'a>,
     {
         entity

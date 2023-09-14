@@ -30,7 +30,7 @@ mod create;
 use crate::engine::{
     core::space::Space,
     data::uuid::Uuid,
-    error::DatabaseResult,
+    error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
         ast::{self},
@@ -42,7 +42,7 @@ fn exec_create(
     gns: &impl GlobalInstanceLike,
     create: &str,
     verify: impl Fn(&Space),
-) -> DatabaseResult<Uuid> {
+) -> QueryResult<Uuid> {
     let tok = lex(create.as_bytes()).unwrap();
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::crt::CreateSpace>(&tok[2..]).unwrap();
@@ -58,7 +58,7 @@ fn exec_alter(
     gns: &impl GlobalInstanceLike,
     alter: &str,
     verify: impl Fn(&Space),
-) -> DatabaseResult<Uuid> {
+) -> QueryResult<Uuid> {
     let tok = lex(alter.as_bytes()).unwrap();
     let ast_node =
         ast::parse_ast_node_full::<crate::engine::ql::ddl::alt::AlterSpace>(&tok[2..]).unwrap();
@@ -75,7 +75,7 @@ fn exec_create_alter(
     crt: &str,
     alt: &str,
     verify_post_alt: impl Fn(&Space),
-) -> DatabaseResult<Uuid> {
+) -> QueryResult<Uuid> {
     let uuid_crt = exec_create(gns, crt, |_| {})?;
     let uuid_alt = exec_alter(gns, alt, verify_post_alt)?;
     assert_eq!(uuid_crt, uuid_alt);

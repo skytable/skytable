@@ -32,7 +32,7 @@ use {
         engine::{
             core::query_meta::AssignmentOperator,
             data::lit::LitIR,
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::Ident,
@@ -172,7 +172,7 @@ impl<'a> UpdateStatement<'a> {
         }
     }
     #[inline(always)]
-    pub fn parse_update<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub fn parse_update<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         /*
             TODO(@ohsayan): Allow volcanoes
             smallest tt:
@@ -180,7 +180,7 @@ impl<'a> UpdateStatement<'a> {
                    ^1    ^2  ^3 ^4 ^5^6    ^7^8^9
         */
         if compiler::unlikely(state.remaining() < 9) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         // parse entity
         let mut entity = MaybeInit::uninit();
@@ -218,7 +218,7 @@ impl<'a> UpdateStatement<'a> {
                 wc: WhereClause::new(clauses),
             })
         } else {
-            compiler::cold_rerr(LangError::BadSyntax)
+            compiler::cold_rerr(Error::QLInvalidSyntax)
         }
     }
 }
@@ -227,22 +227,22 @@ mod impls {
     use {
         super::UpdateStatement,
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for UpdateStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse_update(state)
         }
     }
     #[cfg(test)]
     mod test {
-        use super::{super::AssignmentExpression, ASTNode, LangResult, QueryData, State};
+        use super::{super::AssignmentExpression, ASTNode, QueryResult, QueryData, State};
         impl<'a> ASTNode<'a> for AssignmentExpression<'a> {
             // important: upstream must verify this
             const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
                 let mut expr = Vec::new();
                 AssignmentExpression::parse_and_append_expression(state, &mut expr);
                 state.poison_if_not(expr.len() == 1);
@@ -250,7 +250,7 @@ mod impls {
             }
             fn _multiple_from_state<Qd: QueryData<'a>>(
                 state: &mut State<'a, Qd>,
-            ) -> LangResult<Vec<Self>> {
+            ) -> QueryResult<Vec<Self>> {
                 let mut expr = Vec::new();
                 AssignmentExpression::parse_and_append_expression(state, &mut expr);
                 Ok(expr)

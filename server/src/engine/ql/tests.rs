@@ -27,7 +27,7 @@
 use {
     super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
     crate::{
-        engine::{data::cell::Datacell, error::LexResult},
+        engine::{data::cell::Datacell, error::QueryResult},
         util::test_utils,
     },
     rand::{self, Rng},
@@ -41,12 +41,12 @@ mod structure_syn;
 
 #[inline(always)]
 /// Uses the [`InsecureLexer`] to lex the given input
-pub fn lex_insecure(src: &[u8]) -> LexResult<Vec<Token<'_>>> {
+pub fn lex_insecure(src: &[u8]) -> QueryResult<Vec<Token<'_>>> {
     InsecureLexer::lex(src)
 }
 #[inline(always)]
 /// Uses the [`SafeLexer`] to lex the given input
-pub fn lex_secure(src: &[u8]) -> LexResult<Vec<Token>> {
+pub fn lex_secure(src: &[u8]) -> QueryResult<Vec<Token>> {
     SafeLexer::lex(src)
 }
 

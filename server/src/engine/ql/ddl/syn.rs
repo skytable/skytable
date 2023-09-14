@@ -50,7 +50,7 @@ use crate::{
             cell::Datacell,
             dict::{DictEntryGeneric, DictGeneric},
         },
-        error::{LangError, LangResult},
+        error::{Error, QueryResult},
         ql::{
             ast::{QueryData, State},
             lex::{Ident, Token},
@@ -356,10 +356,10 @@ impl<'a> FieldSpec<'a> {
             primary,
         }
     }
-    pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 2) {
             // smallest field: `ident: type`
-            return Err(LangError::UnexpectedEOS);
+            return Err(Error::QLUnexpectedEndOfStatement);
         }
         // check if primary or null
         let is_primary = state.cursor_eq(Token![primary]);
@@ -371,7 +371,7 @@ impl<'a> FieldSpec<'a> {
         // field name
         let field_name = match (state.fw_read(), state.fw_read()) {
             (Token::Ident(id), Token![:]) => id,
-            _ => return Err(LangError::BadSyntax),
+            _ => return Err(Error::QLInvalidSyntax),
         };
         // layers
         let mut layers = Vec::new();
@@ -384,7 +384,7 @@ impl<'a> FieldSpec<'a> {
                 primary: is_primary,
             })
         } else {
-            Err(LangError::SynBadTyMeta)
+            Err(Error::QLInvalidTypeDefinitionSyntax)
         }
     }
 }
@@ -407,10 +407,10 @@ impl<'a> ExpandedField<'a> {
     }
     #[inline(always)]
     /// Parse a field declared using the field syntax
-    pub(super) fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub(super) fn parse<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         if compiler::unlikely(state.remaining() < 6) {
             // smallest: fieldname { type: ident }
-            return Err(LangError::UnexpectedEOS);
+            return Err(Error::QLUnexpectedEndOfStatement);
         }
         let field_name = state.fw_read();
         state.poison_if_not(field_name.is_ident());
@@ -423,7 +423,7 @@ impl<'a> ExpandedField<'a> {
             // this has layers. fold them; but don't forget the colon
             if compiler::unlikely(state.exhausted()) {
                 // we need more tokens
-                return Err(LangError::UnexpectedEOS);
+                return Err(Error::QLUnexpectedEndOfStatement);
             }
             state.poison_if_not(state.cursor_eq(Token![:]));
             state.cursor_ahead();
@@ -450,12 +450,14 @@ impl<'a> ExpandedField<'a> {
                 layers,
             })
         } else {
-            Err(LangError::BadSyntax)
+            Err(Error::QLInvalidSyntax)
         }
     }
     #[inline(always)]
     /// Parse multiple fields declared using the field syntax. Flag setting allows or disallows reset syntax
-    pub fn parse_multiple<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Box<[Self]>> {
+    pub fn parse_multiple<Qd: QueryData<'a>>(
+        state: &mut State<'a, Qd>,
+    ) -> QueryResult<Box<[Self]>> {
         const DEFAULT_ADD_COL_CNT: usize = 4;
         /*
             WARNING: No trailing commas allowed
@@ -466,7 +468,7 @@ impl<'a> ExpandedField<'a> {
             alter model add myfield { type string }
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         match state.read() {
             Token::Ident(_) => {
@@ -498,10 +500,10 @@ impl<'a> ExpandedField<'a> {
                 if state.okay() {
                     Ok(cols.into_boxed_slice())
                 } else {
-                    Err(LangError::BadSyntax)
+                    Err(Error::QLInvalidSyntax)
                 }
             }
-            _ => Err(LangError::ExpectedStatement),
+            _ => Err(Error::QPExpectedStatement),
         }
     }
 }
@@ -516,24 +518,24 @@ mod impls {
             FieldSpec, LayerSpec,
         },
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for ExpandedField<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
         fn _multiple_from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,
-        ) -> LangResult<Vec<Self>> {
+        ) -> QueryResult<Vec<Self>> {
             Self::parse_multiple(state).map(Vec::from)
         }
     }
     impl<'a> ASTNode<'a> for LayerSpec<'a> {
         // important: upstream must verify this
         const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             let mut layers = Vec::new();
             rfold_layers(state, &mut layers);
             assert!(layers.len() == 1);
@@ -541,7 +543,7 @@ mod impls {
         }
         fn _multiple_from_state<Qd: QueryData<'a>>(
             state: &mut State<'a, Qd>,
-        ) -> LangResult<Vec<Self>> {
+        ) -> QueryResult<Vec<Self>> {
             let mut l = Vec::new();
             rfold_layers(state, &mut l);
             Ok(l)
@@ -552,7 +554,7 @@ mod impls {
     impl<'a> ASTNode<'a> for DictBasic {
         // important: upstream must verify this
         const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_dict(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
@@ -563,7 +565,7 @@ mod impls {
     impl<'a> ASTNode<'a> for DictTypeMetaSplit {
         // important: upstream must verify this
         const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::CB_OR_IDENT, state, &mut dict);
             Ok(Self(dict))
@@ -574,14 +576,14 @@ mod impls {
     impl<'a> ASTNode<'a> for DictTypeMeta {
         // important: upstream must verify this
         const VERIFY: bool = true;
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             let mut dict = DictGeneric::new();
             rfold_tymeta(DictFoldState::OB, state, &mut dict);
             Ok(Self(dict))
         }
     }
     impl<'a> ASTNode<'a> for FieldSpec<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse(state)
         }
     }

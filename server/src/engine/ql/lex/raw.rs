@@ -28,7 +28,7 @@ use {
     super::Slice,
     crate::engine::{
         data::{lit::Lit, spec::Dataspec1D},
-        error::LexError,
+        error::Error,
     },
     core::{borrow::Borrow, fmt, ops::Deref, slice, str},
 };
@@ -373,7 +373,7 @@ pub struct RawLexer<'a> {
     c: *const u8,
     e: *const u8,
     pub(super) tokens: Vec<Token<'a>>,
-    pub(super) last_error: Option<LexError>,
+    pub(super) last_error: Option<Error>,
 }
 
 // ctor
@@ -491,7 +491,7 @@ impl<'a> RawLexer<'a> {
         while self.peek_is_and_forward(|b| b == b' ' || b == b'\t' || b == b'\n') {}
     }
     #[inline(always)]
-    pub(super) fn set_error(&mut self, e: LexError) {
+    pub(super) fn set_error(&mut self, e: Error) {
         self.last_error = Some(e);
     }
     #[inline(always)]
@@ -532,7 +532,7 @@ impl<'a> RawLexer<'a> {
     pub(super) fn scan_byte(&mut self, byte: u8) {
         match symof(byte) {
             Some(tok) => self.push_token(tok),
-            None => return self.set_error(LexError::UnexpectedByte),
+            None => return self.set_error(Error::LexUnexpectedByte),
         }
         unsafe {
             // UNSAFE(@ohsayan): we are sent a byte, so fw cursor

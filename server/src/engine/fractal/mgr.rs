@@ -290,7 +290,7 @@ impl FractalMgr {
         model: &Model,
         observed_size: usize,
         mdl_driver: &super::FractalModelDriver,
-    ) -> Result<(), crate::engine::error::DatabaseError> {
+    ) -> crate::engine::error::QueryResult<()> {
         if observed_size == 0 {
             // no changes, all good
             return Ok(());

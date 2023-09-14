@@ -28,7 +28,7 @@ use {
     crate::{
         engine::{
             data::cell::Datacell,
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
                 lex::{Ident, Token},
@@ -350,14 +350,14 @@ impl<'a> InsertStatement<'a> {
 }
 
 impl<'a> InsertStatement<'a> {
-    pub fn parse_insert<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub fn parse_insert<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         /*
             smallest:
             insert into model (primarykey)
                    ^1    ^2   ^3      ^4 ^5
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         state.poison_if_not(state.cursor_eq(Token![into]));
         state.cursor_ahead(); // ignore errors
@@ -392,7 +392,7 @@ impl<'a> InsertStatement<'a> {
                 data,
             })
         } else {
-            compiler::cold_rerr(LangError::BadSyntax)
+            compiler::cold_rerr(Error::QLInvalidSyntax)
         }
     }
 }
@@ -405,12 +405,12 @@ mod impls {
     use {
         super::InsertStatement,
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for InsertStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse_insert(state)
         }
     }
@@ -421,7 +421,7 @@ mod impls {
                 parse_data_map_syntax, parse_data_tuple_syntax, parse_list, Datacell, HashMap,
             },
             crate::engine::{
-                error::LangResult,
+                error::QueryResult,
                 ql::ast::{traits::ASTNode, QueryData, State},
             },
         };
@@ -430,7 +430,7 @@ mod impls {
         impl<'a> ASTNode<'a> for List {
             // important: upstream must verify this
             const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
                 let mut l = Vec::new();
                 parse_list(state, &mut l);
                 Ok(List(l))
@@ -441,7 +441,7 @@ mod impls {
         impl<'a> ASTNode<'a> for DataTuple {
             // important: upstream must verify this
             const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
                 let r = parse_data_tuple_syntax(state);
                 Ok(Self(r))
             }
@@ -451,7 +451,7 @@ mod impls {
         impl<'a> ASTNode<'a> for DataMap {
             // important: upstream must verify this
             const VERIFY: bool = true;
-            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+            fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
                 let r = parse_data_map_syntax(state);
                 Ok(Self(
                     r.into_iter()

@@ -30,7 +30,7 @@ mod layer;
 
 use crate::engine::{
     core::{model::Model, space::Space},
-    error::DatabaseResult,
+    error::QueryResult,
     fractal::GlobalInstanceLike,
     idx::STIndex,
     ql::{
@@ -40,7 +40,7 @@ use crate::engine::{
     },
 };
 
-fn create(s: &str) -> DatabaseResult<Model> {
+fn create(s: &str) -> QueryResult<Model> {
     let tok = lex_insecure(s.as_bytes()).unwrap();
     let create_model = parse_ast_node_full(&tok[2..]).unwrap();
     Model::process_create(create_model)
@@ -50,7 +50,7 @@ pub fn exec_create(
     global: &impl GlobalInstanceLike,
     create_stmt: &str,
     create_new_space: bool,
-) -> DatabaseResult<String> {
+) -> QueryResult<String> {
     let tok = lex_insecure(create_stmt.as_bytes()).unwrap();
     let create_model = parse_ast_node_full::<CreateModel>(&tok[2..]).unwrap();
     let name = match create_model.model_name {
@@ -67,14 +67,14 @@ pub fn exec_create(
 pub fn exec_create_new_space(
     global: &impl GlobalInstanceLike,
     create_stmt: &str,
-) -> DatabaseResult<()> {
+) -> QueryResult<()> {
     exec_create(global, create_stmt, true).map(|_| ())
 }
 
 pub fn exec_create_no_create(
     global: &impl GlobalInstanceLike,
     create_stmt: &str,
-) -> DatabaseResult<()> {
+) -> QueryResult<()> {
     exec_create(global, create_stmt, false).map(|_| ())
 }
 

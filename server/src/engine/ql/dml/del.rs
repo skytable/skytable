@@ -30,7 +30,7 @@ use {
     super::WhereClause,
     crate::{
         engine::{
-            error::{LangError, LangResult},
+            error::{Error, QueryResult},
             ql::ast::{Entity, QueryData, State},
         },
         util::{compiler, MaybeInit},
@@ -73,7 +73,7 @@ impl<'a> DeleteStatement<'a> {
         Self::new(entity, WhereClause::new(wc))
     }
     #[inline(always)]
-    pub fn parse_delete<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+    pub fn parse_delete<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
         /*
             TODO(@ohsayan): Volcano
             smallest tt:
@@ -81,7 +81,7 @@ impl<'a> DeleteStatement<'a> {
                    ^1   ^2    ^3    ^4  ^5
         */
         if compiler::unlikely(state.remaining() < 5) {
-            return compiler::cold_rerr(LangError::UnexpectedEOS);
+            return compiler::cold_rerr(Error::QLUnexpectedEndOfStatement);
         }
         // from + entity
         state.poison_if_not(state.cursor_eq(Token![from]));
@@ -101,7 +101,7 @@ impl<'a> DeleteStatement<'a> {
                 wc,
             })
         } else {
-            compiler::cold_rerr(LangError::BadSyntax)
+            compiler::cold_rerr(Error::QLInvalidSyntax)
         }
     }
 }
@@ -110,12 +110,12 @@ mod impls {
     use {
         super::DeleteStatement,
         crate::engine::{
-            error::LangResult,
+            error::QueryResult,
             ql::ast::{traits::ASTNode, QueryData, State},
         },
     };
     impl<'a> ASTNode<'a> for DeleteStatement<'a> {
-        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> LangResult<Self> {
+        fn _from_state<Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> QueryResult<Self> {
             Self::parse_delete(state)
         }
     }

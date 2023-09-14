@@ -60,6 +60,9 @@ macro_rules! direct_from {
     ($for:ty => {$($other:ty as $me:ident),*$(,)?}) => {
         $(impl ::core::convert::From<$other> for $for {fn from(v: $other) -> Self {Self::$me(v.into())}})*
     };
+    ($for:ty[_] => {$($other:ty as $me:ident),*$(,)?}) => {
+        $(impl ::core::convert::From<$other> for $for {fn from(_: $other) -> Self {Self::$me}})*
+    };
 }
 
 #[allow(unused_macros)]
