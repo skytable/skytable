@@ -24,23 +24,22 @@
  *
 */
 
-use crate::engine::{core::model::delta::IRModel, data::DictGeneric};
-
 use {
-    super::{PersistTypeDscr, PersistObject, VecU8},
+    super::{PersistObject, PersistTypeDscr, VecU8},
     crate::{
         engine::{
             core::{
-                model::{Field, Layer, Model},
+                model::{delta::IRModel, Field, Layer, Model},
                 space::{Space, SpaceMeta},
             },
             data::{
                 cell::Datacell,
                 tag::{DataTag, TagClass, TagSelector},
                 uuid::Uuid,
+                DictGeneric,
             },
-            mem::VInline,
-            storage::v1::{inf, rw::BufferedScanner, SDSSError, SDSSResult},
+            mem::{BufferedScanner, VInline},
+            storage::v1::{inf, SDSSError, SDSSResult},
         },
         util::EndianQW,
     },
@@ -111,7 +110,7 @@ impl<'a> PersistObject for LayerRef<'a> {
         true
     }
     fn meta_enc(buf: &mut VecU8, LayerRef(layer): Self::InputType) {
-        buf.extend(layer.tag().tag_selector().d().u64_bytes_le());
+        buf.extend(layer.tag().tag_selector().value_qword().to_le_bytes());
         buf.extend(0u64.to_le_bytes());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
@@ -119,7 +118,7 @@ impl<'a> PersistObject for LayerRef<'a> {
     }
     fn obj_enc(_: &mut VecU8, _: Self::InputType) {}
     unsafe fn obj_dec(_: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
-        if (md.type_selector > TagSelector::List.d() as u64) | (md.prop_set_arity != 0) {
+        if (md.type_selector > TagSelector::List.value_qword()) | (md.prop_set_arity != 0) {
             return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
         }
         Ok(Layer::new_empty_props(
@@ -253,7 +252,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
     fn meta_enc(buf: &mut VecU8, ModelLayoutRef(v, irm): Self::InputType) {
         buf.extend(v.get_uuid().to_le_bytes());
         buf.extend(v.p_key().len().u64_bytes_le());
-        buf.extend(v.p_tag().tag_selector().d().u64_bytes_le());
+        buf.extend(v.p_tag().tag_selector().value_qword().to_le_bytes());
         buf.extend(irm.fields().len().u64_bytes_le());
     }
     unsafe fn meta_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::Metadata> {
@@ -281,7 +280,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
                 scanner,
                 super::map::MapIndexSizeMD(md.field_c as usize),
             )?;
-        let ptag = if md.p_key_tag > TagSelector::max_dscr() as u64 {
+        let ptag = if md.p_key_tag > TagSelector::MAX as u64 {
             return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
         } else {
             TagSelector::from_raw(md.p_key_tag as u8)

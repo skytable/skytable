@@ -41,7 +41,8 @@ use {
             tag::{DataTag, TagClass},
         },
         idx::{AsKey, AsValue},
-        storage::v1::{rw::BufferedScanner, SDSSError, SDSSResult},
+        mem::BufferedScanner,
+        storage::v1::{SDSSError, SDSSResult},
     },
     std::mem,
 };
@@ -64,13 +65,12 @@ pub enum PersistTypeDscr {
 }
 
 impl PersistTypeDscr {
-    pub(super) const MAX: Self = Self::Dict;
     /// translates the tag class definition into the dscr definition
     pub const fn translate_from_class(class: TagClass) -> Self {
-        unsafe { Self::from_raw(class.d() + 1) }
+        unsafe { Self::from_raw(class.value_u8() + 1) }
     }
     pub const fn try_from_raw(v: u8) -> Option<Self> {
-        if v > Self::MAX.value_u8() {
+        if v > Self::MAX {
             None
         } else {
             unsafe { Some(Self::from_raw(v)) }
@@ -262,7 +262,7 @@ pub mod enc {
 pub mod dec {
     use {
         super::{map, PersistMapSpec, PersistObject},
-        crate::engine::storage::v1::{rw::BufferedScanner, SDSSResult},
+        crate::engine::{mem::BufferedScanner, storage::v1::SDSSResult},
     };
     // obj
     pub fn dec_full<Obj: PersistObject>(data: &[u8]) -> SDSSResult<Obj::OutputType> {
@@ -288,7 +288,10 @@ pub mod dec {
         <map::PersistMapImpl<PM> as PersistObject>::default_full_dec(scanner)
     }
     pub mod utils {
-        use crate::engine::storage::v1::{BufferedScanner, SDSSError, SDSSResult};
+        use crate::engine::{
+            mem::BufferedScanner,
+            storage::v1::{SDSSError, SDSSResult},
+        };
         pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> SDSSResult<String> {
             String::from_utf8(s.next_chunk_variable(len).to_owned())
                 .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)

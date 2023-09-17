@@ -35,10 +35,11 @@ use {
             },
             data::uuid::Uuid,
             idx::{IndexST, IndexSTSeqCns, STIndex, STIndexSeq},
+            mem::BufferedScanner,
             ql::lex::Ident,
             storage::v1::{
                 inf::{self, map, obj, PersistObject},
-                BufferedScanner, SDSSError, SDSSResult,
+                SDSSError, SDSSResult,
             },
             txn::TransactionError,
         },

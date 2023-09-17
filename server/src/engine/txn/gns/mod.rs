@@ -32,11 +32,11 @@ use {
         engine::{
             core::{space::Space, GlobalNS},
             data::uuid::Uuid,
+            mem::BufferedScanner,
             storage::v1::{
                 self, header_meta,
                 inf::{self, PersistObject},
-                BufferedScanner, JournalAdapter, JournalWriter, LocalFS, RawFSInterface,
-                SDSSResult,
+                JournalAdapter, JournalWriter, LocalFS, RawFSInterface, SDSSResult,
             },
         },
         util::EndianQW,

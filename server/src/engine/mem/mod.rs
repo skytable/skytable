@@ -25,6 +25,7 @@
 */
 
 mod astr;
+mod buf;
 mod ll;
 mod stackop;
 mod uarray;
@@ -36,6 +37,7 @@ mod tests;
 // re-exports
 pub use {
     astr::AStr,
+    buf::BufferedScanner,
     ll::CachePadded,
     stackop::ByteStack,
     uarray::UArray,

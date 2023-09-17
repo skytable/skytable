@@ -25,7 +25,7 @@
 */
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum TagClass {
     Bool = 0,
     UnsignedInt = 1,
@@ -37,12 +37,8 @@ pub enum TagClass {
 }
 
 impl TagClass {
-    /// ☢WARNING☢: Don't forget offset
-    pub const fn max() -> usize {
-        Self::List.d() as _
-    }
     pub const fn try_from_raw(v: u8) -> Option<Self> {
-        if v > Self::List.d() {
+        if v > Self::MAX {
             return None;
         }
         Some(unsafe { Self::from_raw(v) })
@@ -59,12 +55,12 @@ impl TagClass {
             TagUnique::Bin,
             TagUnique::Str,
             TagUnique::Illegal,
-        ][self.d() as usize]
+        ][self.value_word()]
     }
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum TagSelector {
     Bool = 0,
     UInt8 = 1,
@@ -83,9 +79,6 @@ pub enum TagSelector {
 }
 
 impl TagSelector {
-    pub const fn max_dscr() -> u8 {
-        Self::List.d()
-    }
     pub const fn into_full(self) -> FullTag {
         FullTag::new(self.tag_class(), self, self.tag_unique())
     }
@@ -108,7 +101,7 @@ impl TagSelector {
             TagUnique::Bin,
             TagUnique::Str,
             TagUnique::Illegal,
-        ][self.d() as usize]
+        ][self.value_word()]
     }
     pub const fn tag_class(&self) -> TagClass {
         [
@@ -126,12 +119,12 @@ impl TagSelector {
             TagClass::Bin,
             TagClass::Str,
             TagClass::List,
-        ][self.d() as usize]
+        ][self.value_word()]
     }
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord, sky_macros::EnumMethods)]
 pub enum TagUnique {
     UnsignedInt = 0,
     SignedInt = 1,
@@ -142,7 +135,7 @@ pub enum TagUnique {
 
 impl TagUnique {
     pub const fn is_unique(&self) -> bool {
-        self.d() != Self::Illegal.d()
+        self.value_u8() != Self::Illegal.value_u8()
     }
     pub const fn try_from_raw(raw: u8) -> Option<Self> {
         if raw > 3 {
@@ -151,12 +144,6 @@ impl TagUnique {
         Some(unsafe { core::mem::transmute(raw) })
     }
 }
-
-macro_rules! d {
-    ($($ty:ty),*) => {$(impl $ty { pub const fn d(&self) -> u8 {unsafe{::core::mem::transmute(*self)}} pub const fn word(&self) -> usize {Self::d(self) as usize} } )*}
-}
-
-d!(TagClass, TagSelector, TagUnique);
 
 pub trait DataTag {
     const BOOL: Self;

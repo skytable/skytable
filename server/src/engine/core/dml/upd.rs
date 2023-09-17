@@ -167,7 +167,7 @@ unsafe fn dc_op_str_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
 }
 
 static OPERATOR: [unsafe fn(&Datacell, LitIR) -> (bool, Datacell); {
-    TagClass::max() * (AssignmentOperator::max() + 1)
+    TagClass::MAX as usize * AssignmentOperator::VARIANTS
 }] = [
     // bool
     dc_op_bool_ass,
@@ -212,7 +212,7 @@ static OPERATOR: [unsafe fn(&Datacell, LitIR) -> (bool, Datacell); {
 
 #[inline(always)]
 const fn opc(opr: TagClass, ope: AssignmentOperator) -> usize {
-    (AssignmentOperator::count() * opr.word()) + ope.word()
+    (AssignmentOperator::VARIANTS * opr.value_word()) + ope.value_word()
 }
 
 #[cfg(test)]

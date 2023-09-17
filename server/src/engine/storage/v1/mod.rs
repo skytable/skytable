@@ -43,7 +43,7 @@ mod tests;
 pub use {
     journal::{open_journal, JournalAdapter, JournalWriter},
     memfs::NullFS,
-    rw::{BufferedScanner, LocalFS, RawFSInterface, SDSSFileIO},
+    rw::{LocalFS, RawFSInterface, SDSSFileIO},
 };
 pub mod data_batch {
     pub use super::batch_jrnl::{DataBatchPersistDriver, DataBatchRestoreDriver};

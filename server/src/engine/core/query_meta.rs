@@ -24,9 +24,7 @@
  *
 */
 
-use std::mem;
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, sky_macros::EnumMethods)]
 #[repr(u8)]
 pub enum AssignmentOperator {
     Assign = 0,
@@ -34,22 +32,4 @@ pub enum AssignmentOperator {
     SubAssign = 2,
     MulAssign = 3,
     DivAssign = 4,
-}
-
-impl AssignmentOperator {
-    pub const fn disc(&self) -> u8 {
-        unsafe {
-            // UNSAFE(@ohsayan): just go back to school already; dscr
-            mem::transmute(*self)
-        }
-    }
-    pub const fn max() -> usize {
-        Self::DivAssign.disc() as _
-    }
-    pub const fn word(&self) -> usize {
-        self.disc() as _
-    }
-    pub const fn count() -> usize {
-        5
-    }
 }

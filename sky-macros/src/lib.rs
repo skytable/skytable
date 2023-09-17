@@ -243,14 +243,17 @@ pub fn derive_value_methods(input: TokenStream) -> TokenStream {
         }
     }
     let repr_type = repr_type.expect("Must have repr(u8) or repr(u16) etc.");
+    let mut dscr_expressions = vec![];
     // Ensure all variants have explicit discriminants
     if let Data::Enum(data) = &ast.data {
         for variant in &data.variants {
             match &variant.fields {
                 Fields::Unit => {
-                    if variant.discriminant.as_ref().is_none() {
-                        panic!("All enum variants must have explicit discriminants");
-                    }
+                    let (_, dscr_expr) = variant
+                        .discriminant
+                        .as_ref()
+                        .expect("All enum variants must have explicit discriminants");
+                    dscr_expressions.push(dscr_expr.clone());
                 }
                 _ => panic!("All enum variants must be unit variants"),
             }
@@ -258,6 +261,12 @@ pub fn derive_value_methods(input: TokenStream) -> TokenStream {
     } else {
         panic!("This derive macro only works on enums");
     }
+
+    let value_expressions = quote! {
+        [#(#dscr_expressions),*]
+    };
+
+    let variant_len = dscr_expressions.len();
 
     let repr_type_ident = syn::Ident::new(&repr_type, proc_macro2::Span::call_site());
     let repr_type_ident_func = syn::Ident::new(
@@ -267,9 +276,23 @@ pub fn derive_value_methods(input: TokenStream) -> TokenStream {
 
     let gen = quote! {
         impl #enum_name {
+            pub const MAX: #repr_type_ident = Self::max_value();
+            pub const VARIANTS: usize = #variant_len;
             pub const fn #repr_type_ident_func(&self) -> #repr_type_ident { unsafe { core::mem::transmute(*self) } }
             pub const fn value_word(&self) -> usize { self.#repr_type_ident_func() as usize }
             pub const fn value_qword(&self) -> u64 { self.#repr_type_ident_func() as u64 }
+            pub const fn max_value() -> #repr_type_ident {
+                let values = #value_expressions;
+                let mut i = 1;
+                let mut max = values[0];
+                while i < values.len() {
+                    if values[i] > max {
+                        max = values[i];
+                    }
+                    i = i + 1;
+                }
+                max
+            }
         }
     };
     gen.into()

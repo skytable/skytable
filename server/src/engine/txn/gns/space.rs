@@ -31,9 +31,10 @@ use {
             core::{space::Space, GlobalNS},
             data::DictGeneric,
             idx::STIndex,
+            mem::BufferedScanner,
             storage::v1::{
                 inf::{self, map, obj, PersistObject},
-                BufferedScanner, SDSSResult,
+                SDSSResult,
             },
             txn::{TransactionError, TransactionResult},
         },

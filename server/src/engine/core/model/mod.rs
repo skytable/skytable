@@ -345,7 +345,7 @@ impl Field {
             // illegal states: (1) bad null (2) tags don't match
             7
         } else {
-            dc.kind().word()
+            dc.kind().value_word()
         }
     }
     pub fn validate_data_fpath(&self, data: &Datacell) -> bool {
@@ -368,7 +368,7 @@ impl Field {
             (TagClass::List, TagClass::List) if !layers.is_empty() => {
                 let mut okay = unsafe {
                     // UNSAFE(@ohsayan): we've verified this
-                    LVERIFY[TagClass::List.word()](layer, data)
+                    LVERIFY[TagClass::List.value_word()](layer, data)
                 };
                 let list = unsafe {
                     // UNSAFE(@ohsayan): we verified tags
@@ -385,7 +385,7 @@ impl Field {
             (tag_a, tag_b) if tag_a == tag_b => {
                 unsafe {
                     // UNSAFE(@ohsayan): same tags; not-null for now so no extra handling required here
-                    LVERIFY[tag_a.word()](layer, data)
+                    LVERIFY[tag_a.value_word()](layer, data)
                 }
             }
             _ => false,
@@ -452,7 +452,7 @@ impl Layer {
     }
     #[inline(always)]
     fn compute_index(&self, dc: &Datacell) -> usize {
-        self.tag.tag_class().word() * (dc.is_null() as usize)
+        self.tag.tag_class().value_word() * (dc.is_null() as usize)
     }
     const fn new(tag: FullTag) -> Self {
         Self { tag }
@@ -523,7 +523,7 @@ unsafe fn lverify_bool(_: Layer, _: &Datacell) -> bool {
 unsafe fn lverify_uint(l: Layer, d: &Datacell) -> bool {
     layertrace("uint");
     const MX: [u64; 4] = [u8::MAX as _, u16::MAX as _, u32::MAX as _, u64::MAX];
-    d.read_uint() <= MX[l.tag.tag_selector().word() - 1]
+    d.read_uint() <= MX[l.tag.tag_selector().value_word() - 1]
 }
 unsafe fn lverify_sint(l: Layer, d: &Datacell) -> bool {
     layertrace("sint");
@@ -533,13 +533,13 @@ unsafe fn lverify_sint(l: Layer, d: &Datacell) -> bool {
         (i32::MIN as _, i32::MAX as _),
         (i64::MIN, i64::MAX),
     ];
-    let (mn, mx) = MN_MX[l.tag.tag_selector().word() - 5];
+    let (mn, mx) = MN_MX[l.tag.tag_selector().value_word() - 5];
     (d.read_sint() >= mn) & (d.read_sint() <= mx)
 }
 unsafe fn lverify_float(l: Layer, d: &Datacell) -> bool {
     layertrace("float");
     const MN_MX: [(f64, f64); 2] = [(f32::MIN as _, f32::MAX as _), (f64::MIN, f64::MAX)];
-    let (mn, mx) = MN_MX[l.tag.tag_selector().word() - 9];
+    let (mn, mx) = MN_MX[l.tag.tag_selector().value_word() - 9];
     (d.read_float() >= mn) & (d.read_float() <= mx)
 }
 unsafe fn lverify_bin(_: Layer, _: &Datacell) -> bool {

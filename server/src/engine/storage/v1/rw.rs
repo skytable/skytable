@@ -40,7 +40,6 @@ use {
     std::{
         fs::{self, File},
         io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
-        ptr, slice,
     },
 };
 
@@ -437,62 +436,5 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
     pub fn read_byte(&mut self) -> SDSSResult<u8> {
         let mut r = [0; 1];
         self.read_to_buffer(&mut r).map(|_| r[0])
-    }
-}
-
-pub struct BufferedScanner<'a> {
-    d: &'a [u8],
-    i: usize,
-}
-
-impl<'a> BufferedScanner<'a> {
-    pub const fn new(d: &'a [u8]) -> Self {
-        Self { d, i: 0 }
-    }
-    pub const fn remaining(&self) -> usize {
-        self.d.len() - self.i
-    }
-    pub const fn consumed(&self) -> usize {
-        self.i
-    }
-    pub const fn cursor(&self) -> usize {
-        self.i
-    }
-    pub(crate) fn has_left(&self, sizeof: usize) -> bool {
-        self.remaining() >= sizeof
-    }
-    unsafe fn _cursor(&self) -> *const u8 {
-        self.d.as_ptr().add(self.i)
-    }
-    pub fn eof(&self) -> bool {
-        self.remaining() == 0
-    }
-    unsafe fn _incr(&mut self, by: usize) {
-        self.i += by;
-    }
-    pub fn current(&self) -> &[u8] {
-        &self.d[self.i..]
-    }
-}
-
-impl<'a> BufferedScanner<'a> {
-    pub unsafe fn next_u64_le(&mut self) -> u64 {
-        u64::from_le_bytes(self.next_chunk())
-    }
-    pub unsafe fn next_chunk<const N: usize>(&mut self) -> [u8; N] {
-        let mut b = [0u8; N];
-        ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), N);
-        self._incr(N);
-        b
-    }
-    pub unsafe fn next_chunk_variable(&mut self, size: usize) -> &[u8] {
-        let r = slice::from_raw_parts(self._cursor(), size);
-        self._incr(size);
-        r
-    }
-    pub unsafe fn next_byte(&mut self) -> u8 {
-        let r = *self._cursor();
-        self._incr(1);
-        r
     }
 }

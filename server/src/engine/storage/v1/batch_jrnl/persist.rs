@@ -156,7 +156,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         col_cnt: usize,
     ) -> Result<(), SDSSError> {
         self.f
-            .unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.d()])?;
+            .unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.value_u8()])?;
         let observed_len_bytes = observed_len.u64_bytes_le();
         self.f.unfsynced_write(&observed_len_bytes)?;
         self.f
