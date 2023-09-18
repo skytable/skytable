@@ -24,6 +24,82 @@
  *
 */
 
+mod data_exchange;
 mod handshake;
 #[cfg(test)]
 mod tests;
+
+use {
+    self::handshake::{CHandshake, HandshakeResult, HandshakeState},
+    super::{IoResult, QLoopReturn, Socket},
+    crate::engine::mem::BufferedScanner,
+    bytes::{Buf, BytesMut},
+    tokio::io::{AsyncReadExt, BufWriter},
+};
+
+pub async fn query_loop<S: Socket>(
+    con: &mut BufWriter<S>,
+    buf: &mut BytesMut,
+) -> IoResult<QLoopReturn> {
+    // handshake
+    match do_handshake(con, buf).await? {
+        Some(ret) => return Ok(ret),
+        None => {}
+    }
+    // done handshaking
+    loop {
+        let read_many = con.read_buf(buf).await?;
+        if let Some(t) = see_if_connection_terminates(read_many, buf) {
+            return Ok(t);
+        }
+        todo!()
+    }
+}
+
+fn see_if_connection_terminates(read_many: usize, buf: &[u8]) -> Option<QLoopReturn> {
+    if read_many == 0 {
+        // that's a connection termination
+        if buf.is_empty() {
+            // nice termination
+            return Some(QLoopReturn::Fin);
+        } else {
+            return Some(QLoopReturn::ConnectionRst);
+        }
+    }
+    None
+}
+
+async fn do_handshake<S: Socket>(
+    con: &mut BufWriter<S>,
+    buf: &mut BytesMut,
+) -> IoResult<Option<QLoopReturn>> {
+    let mut expected = CHandshake::INITIAL_READ;
+    let mut state = HandshakeState::default();
+    let mut cursor = 0;
+    let handshake;
+    loop {
+        let read_many = con.read_buf(buf).await?;
+        if let Some(t) = see_if_connection_terminates(read_many, buf) {
+            return Ok(Some(t));
+        }
+        if buf.len() < expected {
+            continue;
+        }
+        let mut scanner = unsafe { BufferedScanner::new_with_cursor(buf, cursor) };
+        match handshake::CHandshake::resume_with(&mut scanner, state) {
+            HandshakeResult::Completed(hs) => {
+                handshake = hs;
+                break;
+            }
+            HandshakeResult::ChangeState { new_state, expect } => {
+                expected = expect;
+                state = new_state;
+                cursor = scanner.cursor();
+            }
+            HandshakeResult::Error(_) => todo!(),
+        }
+    }
+    dbg!(handshake);
+    buf.advance(cursor);
+    Ok(None)
+}

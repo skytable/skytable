@@ -24,11 +24,20 @@
  *
 */
 
-use crate::engine::mem::BufferedScanner;
-use crate::engine::net::protocol::handshake::{
-    AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode, HandshakeResult,
-    HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
+use crate::engine::{
+    mem::BufferedScanner,
+    net::protocol::{
+        data_exchange::{CSQuery, CSQueryExchangeResult, CSQueryState},
+        handshake::{
+            AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
+            HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
+        },
+    },
 };
+
+/*
+    client handshake
+*/
 
 const FULL_HANDSHAKE_NO_AUTH: [u8; 7] = [b'H', 0, 0, 0, 0, 0, 0];
 const FULL_HANDSHAKE_WITH_AUTH: [u8; 23] = *b"H\0\0\0\0\x015\n8\nsayanpass1234";
@@ -150,7 +159,6 @@ fn parse_staged_with_auth() {
 
 fn run_state_changes_return_rounds(src: &[u8], expected_final_handshake: CHandshake) -> usize {
     let mut rounds = 0;
-    let hs;
     let mut state = HandshakeState::default();
     let mut cursor = 0;
     let mut expect_many = CHandshake::INITIAL_READ;
@@ -164,8 +172,7 @@ fn run_state_changes_return_rounds(src: &[u8], expected_final_handshake: CHandsh
                 expect_many = expect;
                 cursor = scanner.cursor();
             }
-            HandshakeResult::Completed(c) => {
-                hs = c;
+            HandshakeResult::Completed(hs) => {
                 assert_eq!(hs, expected_final_handshake);
                 break;
             }
@@ -194,4 +201,64 @@ fn parse_auth_with_state_updates() {
         ),
     );
     assert_eq!(rounds, 3); // r1 = initial read, r2 = lengths, r3 = items
+}
+
+/*
+    QT-DEX/SQ
+*/
+
+const FULL_SQ: [u8; 116] = *b"S111\nSELECT username, email, bio, profile_pic, following, followers, FROM mysocialapp.users WHERE username = 'sayan'";
+const SQ_FULL: CSQuery<'static> = CSQuery::new(
+    b"SELECT username, email, bio, profile_pic, following, followers, FROM mysocialapp.users WHERE username = 'sayan'"
+);
+
+#[test]
+fn staged_qt_dex_sq() {
+    for i in 0..FULL_SQ.len() {
+        let buf = &FULL_SQ[..i + 1];
+        let mut scanner = BufferedScanner::new(buf);
+        let result = CSQuery::resume_with(&mut scanner, CSQueryState::default());
+        match buf.len() {
+            1..=3 => assert_eq!(
+                result,
+                CSQueryExchangeResult::ChangeState(CSQueryState::Initial, CSQuery::PREEMPTIVE_READ)
+            ),
+            4 => assert_eq!(
+                result,
+                CSQueryExchangeResult::ChangeState(CSQueryState::SizeSegmentPart(111), 2)
+            ),
+            5..=115 => assert_eq!(
+                result,
+                CSQueryExchangeResult::ChangeState(CSQueryState::WaitingForFullBlock(111), 111),
+            ),
+            116 => assert_eq!(result, CSQueryExchangeResult::Completed(SQ_FULL)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn staged_with_status_switch_qt_dex_sq() {
+    let mut cursor = 0;
+    let mut expect = CSQuery::PREEMPTIVE_READ;
+    let mut state = CSQueryState::default();
+    let mut rounds = 0;
+    loop {
+        rounds += 1;
+        let buf = &FULL_SQ[..cursor + expect];
+        let mut scanner = unsafe { BufferedScanner::new_with_cursor(buf, cursor) };
+        match CSQuery::resume_with(&mut scanner, state) {
+            CSQueryExchangeResult::Completed(c) => {
+                assert_eq!(c, SQ_FULL);
+                break;
+            }
+            CSQueryExchangeResult::ChangeState(new_state, _expect) => {
+                state = new_state;
+                expect = _expect;
+                cursor = scanner.cursor();
+            }
+            CSQueryExchangeResult::PacketError => panic!("packet error"),
+        }
+    }
+    assert_eq!(rounds, 3);
 }

@@ -58,7 +58,7 @@ impl<'a> BufferedScanner<'a> {
         self.remaining() >= sizeof
     }
     pub fn matches_cursor_rounded(&self, f: impl Fn(u8) -> bool) -> bool {
-        f(self.d[self.d.len().min(self.__cursor)])
+        f(self.d[(self.d.len() - 1).min(self.__cursor)])
     }
     pub fn matches_cursor_rounded_and_not_eof(&self, f: impl Fn(u8) -> bool) -> bool {
         self.matches_cursor_rounded(f) & !self.eof()
