@@ -25,7 +25,7 @@
 */
 
 mod astr;
-mod buf;
+pub mod buf;
 mod ll;
 mod stackop;
 mod uarray;

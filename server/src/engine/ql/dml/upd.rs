@@ -238,7 +238,7 @@ mod impls {
     }
     #[cfg(test)]
     mod test {
-        use super::{super::AssignmentExpression, ASTNode, QueryResult, QueryData, State};
+        use super::{super::AssignmentExpression, ASTNode, QueryData, QueryResult, State};
         impl<'a> ASTNode<'a> for AssignmentExpression<'a> {
             // important: upstream must verify this
             const VERIFY: bool = true;
