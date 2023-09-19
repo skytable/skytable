@@ -26,7 +26,7 @@
 
 use {
     crate::{
-        engine::mem::buf::{BufferedReadResult, BufferedScanner},
+        engine::mem::scanner::{BufferedReadResult, BufferedScanner},
         util::compiler,
     },
     std::slice,
@@ -367,7 +367,7 @@ impl<'a> CHandshake<'a> {
             AuthMode::Password => {}
         }
         // let us see if we can parse the username length
-        let uname_l = match scanner.try_next_ascii_u64_lf_separated() {
+        let uname_l = match scanner.try_next_ascii_u64_lf_separated_with_result() {
             BufferedReadResult::NeedMore => {
                 return HandshakeResult::ChangeState {
                     new_state: HandshakeState::StaticBlock(static_header),
@@ -388,7 +388,7 @@ impl<'a> CHandshake<'a> {
         uname_l: usize,
     ) -> HandshakeResult<'a> {
         // we just have to get the password len
-        let pwd_l = match scanner.try_next_ascii_u64_lf_separated() {
+        let pwd_l = match scanner.try_next_ascii_u64_lf_separated_with_result() {
             BufferedReadResult::Value(v) => v as usize,
             BufferedReadResult::NeedMore => {
                 // newline missing (or maybe there's more?)

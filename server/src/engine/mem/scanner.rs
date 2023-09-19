@@ -26,17 +26,19 @@
 
 use core::{ptr, slice};
 
-#[derive(Debug)]
-pub struct BufferedScanner<'a> {
-    d: &'a [u8],
+pub type BufferedScanner<'a> = Scanner<'a, u8>;
+
+#[derive(Debug, PartialEq)]
+pub struct Scanner<'a, T> {
+    d: &'a [T],
     __cursor: usize,
 }
 
-impl<'a> BufferedScanner<'a> {
-    pub const fn new(d: &'a [u8]) -> Self {
+impl<'a, T> Scanner<'a, T> {
+    pub const fn new(d: &'a [T]) -> Self {
         unsafe { Self::new_with_cursor(d, 0) }
     }
-    pub const unsafe fn new_with_cursor(d: &'a [u8], i: usize) -> Self {
+    pub const unsafe fn new_with_cursor(d: &'a [T], i: usize) -> Self {
         Self { d, __cursor: i }
     }
     pub const fn remaining(&self) -> usize {
@@ -48,8 +50,11 @@ impl<'a> BufferedScanner<'a> {
     pub const fn cursor(&self) -> usize {
         self.__cursor
     }
-    pub fn current(&self) -> &[u8] {
+    pub fn current(&self) -> &[T] {
         &self.d[self.__cursor..]
+    }
+    pub const fn cursor_ptr(&self) -> *const T {
+        unsafe { self.d.as_ptr().add(self.__cursor) }
     }
     pub fn eof(&self) -> bool {
         self.remaining() == 0
@@ -57,17 +62,20 @@ impl<'a> BufferedScanner<'a> {
     pub fn has_left(&self, sizeof: usize) -> bool {
         self.remaining() >= sizeof
     }
-    pub fn matches_cursor_rounded(&self, f: impl Fn(u8) -> bool) -> bool {
-        f(self.d[(self.d.len() - 1).min(self.__cursor)])
+    pub fn matches_cursor_rounded(&self, f: impl Fn(&T) -> bool) -> bool {
+        f(&self.d[(self.d.len() - 1).min(self.__cursor)])
     }
-    pub fn matches_cursor_rounded_and_not_eof(&self, f: impl Fn(u8) -> bool) -> bool {
+    pub fn matches_cursor_rounded_and_not_eof(&self, f: impl Fn(&T) -> bool) -> bool {
         self.matches_cursor_rounded(f) & !self.eof()
     }
 }
 
-impl<'a> BufferedScanner<'a> {
+impl<'a, T> Scanner<'a, T> {
     pub unsafe fn set_cursor(&mut self, i: usize) {
         self.__cursor = i;
+    }
+    pub unsafe fn move_ahead(&mut self) {
+        self.move_back_by(1)
     }
     pub unsafe fn move_ahead_by(&mut self, by: usize) {
         self._incr(by)
@@ -81,12 +89,12 @@ impl<'a> BufferedScanner<'a> {
     unsafe fn _incr(&mut self, by: usize) {
         self.__cursor += by;
     }
-    unsafe fn _cursor(&self) -> *const u8 {
+    unsafe fn _cursor(&self) -> *const T {
         self.d.as_ptr().add(self.__cursor)
     }
 }
 
-impl<'a> BufferedScanner<'a> {
+impl<'a> Scanner<'a, u8> {
     pub fn try_next_byte(&mut self) -> Option<u8> {
         if self.eof() {
             None
@@ -116,37 +124,26 @@ pub enum BufferedReadResult<T> {
     Error,
 }
 
-impl<'a> BufferedScanner<'a> {
+impl<'a> Scanner<'a, u8> {
+    pub fn trim_ahead(&mut self, f: impl Fn(u8) -> bool) {
+        while self.matches_cursor_rounded_and_not_eof(|b| f(*b)) {
+            unsafe { self.move_ahead() }
+        }
+    }
+    pub fn move_ahead_if_matches(&mut self, f: impl Fn(u8) -> bool) {
+        unsafe { self.move_back_by(self.matches_cursor_rounded_and_not_eof(|b| f(*b)) as _) }
+    }
     /// Attempt to parse a `\n` terminated (we move past the LF, so you can't see it)
     ///
     /// If we were unable to read in the integer, then the cursor will be restored to its starting position
     // TODO(@ohsayan): optimize
-    pub fn try_next_ascii_u64_lf_separated(&mut self) -> BufferedReadResult<u64> {
+    pub fn try_next_ascii_u64_lf_separated_with_result(&mut self) -> BufferedReadResult<u64> {
         let mut okay = true;
         let start = self.cursor();
-        let mut ret = 0u64;
-        while self.matches_cursor_rounded_and_not_eof(|b| b != b'\n') & okay {
-            let b = self.d[self.cursor()];
-            okay &= b.is_ascii_digit();
-            ret = match ret.checked_mul(10) {
-                Some(r) => r,
-                None => {
-                    okay = false;
-                    break;
-                }
-            };
-            ret = match ret.checked_add((b & 0x0F) as u64) {
-                Some(r) => r,
-                None => {
-                    okay = false;
-                    break;
-                }
-            };
-            unsafe { self._incr(1) }
-        }
+        let ret = self.extract_integer(&mut okay);
         let payload_ok = okay;
-        let null_ok = self.matches_cursor_rounded_and_not_eof(|b| b == b'\n');
-        okay &= null_ok;
+        let lf = self.matches_cursor_rounded_and_not_eof(|b| *b == b'\n');
+        okay &= lf;
         unsafe { self._incr(okay as _) }; // skip LF
         if okay {
             BufferedReadResult::Value(ret)
@@ -161,9 +158,44 @@ impl<'a> BufferedScanner<'a> {
             }
         }
     }
+    pub fn try_next_ascii_u64_lf_separated(&mut self) -> Option<u64> {
+        let start = self.cursor();
+        let mut okay = true;
+        let ret = self.extract_integer(&mut okay);
+        let lf = self.matches_cursor_rounded_and_not_eof(|b| *b == b'\n');
+        if okay & lf {
+            Some(ret)
+        } else {
+            unsafe { self.set_cursor(start) }
+            None
+        }
+    }
+    pub fn extract_integer(&mut self, okay: &mut bool) -> u64 {
+        let mut ret = 0u64;
+        while self.matches_cursor_rounded_and_not_eof(|b| *b != b'\n') & *okay {
+            let b = self.d[self.cursor()];
+            *okay &= b.is_ascii_digit();
+            ret = match ret.checked_mul(10) {
+                Some(r) => r,
+                None => {
+                    *okay = false;
+                    break;
+                }
+            };
+            ret = match ret.checked_add((b & 0x0F) as u64) {
+                Some(r) => r,
+                None => {
+                    *okay = false;
+                    break;
+                }
+            };
+            unsafe { self._incr(1) }
+        }
+        ret
+    }
 }
 
-impl<'a> BufferedScanner<'a> {
+impl<'a> Scanner<'a, u8> {
     pub unsafe fn next_u64_le(&mut self) -> u64 {
         u64::from_le_bytes(self.next_chunk())
     }

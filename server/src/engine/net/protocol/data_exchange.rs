@@ -98,7 +98,7 @@ fn parse_lf_separated(
 ) -> LFTIntParseResult {
     let mut ret = previously_buffered;
     let mut okay = true;
-    while scanner.matches_cursor_rounded_and_not_eof(|b| b != b'\n') & okay {
+    while scanner.matches_cursor_rounded_and_not_eof(|b| *b != b'\n') & okay {
         let b = unsafe { scanner.next_byte() };
         okay &= b.is_ascii_digit();
         ret = match ret.checked_mul(10) {
@@ -111,7 +111,7 @@ fn parse_lf_separated(
         };
     }
     let payload_ok = okay;
-    let lf_ok = scanner.matches_cursor_rounded_and_not_eof(|b| b == b'\n');
+    let lf_ok = scanner.matches_cursor_rounded_and_not_eof(|b| *b == b'\n');
     unsafe { scanner.move_ahead_by(lf_ok as usize) }
     if payload_ok & lf_ok {
         LFTIntParseResult::Value(ret)

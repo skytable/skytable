@@ -25,8 +25,8 @@
 */
 
 mod astr;
-pub mod buf;
 mod ll;
+pub mod scanner;
 mod stackop;
 mod uarray;
 mod vinline;
@@ -37,8 +37,8 @@ mod tests;
 // re-exports
 pub use {
     astr::AStr,
-    buf::BufferedScanner,
     ll::CachePadded,
+    scanner::BufferedScanner,
     stackop::ByteStack,
     uarray::UArray,
     vinline::VInline,
