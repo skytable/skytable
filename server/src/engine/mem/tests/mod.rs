@@ -25,6 +25,7 @@
 */
 
 use super::*;
+mod scanner;
 mod word;
 
 mod vinline {

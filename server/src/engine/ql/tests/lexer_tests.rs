@@ -27,12 +27,9 @@
 use {
     super::{
         super::lex::{Ident, Token},
-        lex_insecure,
+        lex_insecure, lex_secure,
     },
-    crate::engine::{
-        data::{lit::Lit, spec::Dataspec1D},
-        error::Error,
-    },
+    crate::engine::{data::lit::Lit, error::Error},
 };
 
 macro_rules! v(
@@ -59,7 +56,7 @@ fn lex_unsigned_int() {
     let number = v!("123456");
     assert_eq!(
         lex_insecure(&number).unwrap(),
-        vec![Token::Lit(Lit::UnsignedInt(123456))]
+        vec![Token::Lit(Lit::new_uint(123456))]
     );
 }
 #[test]
@@ -67,16 +64,19 @@ fn lex_signed_int() {
     let number = v!("-123456");
     assert_eq!(
         lex_insecure(&number).unwrap(),
-        vec![Token::Lit(Lit::SignedInt(-123456))]
+        vec![Token::Lit(Lit::new_sint(-123456))]
     );
 }
 #[test]
 fn lex_bool() {
     let (t, f) = v!("true", "false");
-    assert_eq!(lex_insecure(&t).unwrap(), vec![Token::Lit(Lit::Bool(true))]);
+    assert_eq!(
+        lex_insecure(&t).unwrap(),
+        vec![Token::Lit(Lit::new_bool(true))]
+    );
     assert_eq!(
         lex_insecure(&f).unwrap(),
-        vec![Token::Lit(Lit::Bool(false))]
+        vec![Token::Lit(Lit::new_bool(false))]
     );
 }
 #[test]
@@ -84,12 +84,12 @@ fn lex_string() {
     let s = br#" "hello, world" "#;
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str("hello, world".into()))]
+        vec![Token::Lit(Lit::new_string("hello, world".into()))]
     );
     let s = br#" 'hello, world' "#;
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str("hello, world".into()))]
+        vec![Token::Lit(Lit::new_string("hello, world".into()))]
     );
 }
 #[test]
@@ -97,12 +97,12 @@ fn lex_string_test_escape_quote() {
     let s = br#" "\"hello world\"" "#; // == "hello world"
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str("\"hello world\"".into()))]
+        vec![Token::Lit(Lit::new_string("\"hello world\"".into()))]
     );
     let s = br#" '\'hello world\'' "#; // == 'hello world'
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str("'hello world'".into()))]
+        vec![Token::Lit(Lit::new_string("'hello world'".into()))]
     );
 }
 #[test]
@@ -110,12 +110,12 @@ fn lex_string_use_different_quote_style() {
     let s = br#" "he's on it" "#;
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str("he's on it".into()))]
+        vec![Token::Lit(Lit::new_string("he's on it".into()))]
     );
     let s = br#" 'he thinks that "that girl" fixed it' "#;
     assert_eq!(
         lex_insecure(s).unwrap(),
-        vec![Token::Lit(Lit::Str(
+        vec![Token::Lit(Lit::new_string(
             "he thinks that \"that girl\" fixed it".into()
         ))]
     )
@@ -125,18 +125,18 @@ fn lex_string_escape_bs() {
     let s = v!(r#" "windows has c:\\" "#);
     assert_eq!(
         lex_insecure(&s).unwrap(),
-        vec![Token::Lit(Lit::Str("windows has c:\\".into()))]
+        vec![Token::Lit(Lit::new_string("windows has c:\\".into()))]
     );
     let s = v!(r#" 'windows has c:\\' "#);
     assert_eq!(
         lex_insecure(&s).unwrap(),
-        vec![Token::Lit(Lit::Str("windows has c:\\".into()))]
+        vec![Token::Lit(Lit::new_string("windows has c:\\".into()))]
     );
     let lol = v!(r#"'\\\\\\\\\\'"#);
     let lexed = lex_insecure(&lol).unwrap();
     assert_eq!(
         lexed,
-        vec![Token::Lit(Lit::Str("\\".repeat(5).into_boxed_str()))],
+        vec![Token::Lit(Lit::new_string("\\".repeat(5)))],
         "lol"
     )
 }
@@ -156,352 +156,166 @@ fn lex_string_unclosed() {
 fn lex_unsafe_literal_mini() {
     let usl = lex_insecure("\r0\n".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin(b"")), usl[0]);
+    assert_eq!(Token::Lit(Lit::new_bin(b"")), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal() {
     let usl = lex_insecure("\r9\nabcdefghi".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin(b"abcdefghi")), usl[0]);
+    assert_eq!(Token::Lit(Lit::new_bin(b"abcdefghi")), usl[0]);
 }
 #[test]
 fn lex_unsafe_literal_pro() {
     let usl = lex_insecure("\r18\nabcdefghi123456789".as_bytes()).unwrap();
     assert_eq!(usl.len(), 1);
-    assert_eq!(Token::Lit(Lit::Bin(b"abcdefghi123456789")), usl[0]);
+    assert_eq!(Token::Lit(Lit::new_bin(b"abcdefghi123456789")), usl[0]);
 }
 
-mod num_tests {
-    use crate::engine::ql::lex::decode_num_ub as ubdc;
-    mod uint8 {
-        use super::*;
-        #[test]
-        fn ndecub_u8_ok() {
-            const SRC: &[u8] = b"123\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<u8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, 123);
-        }
-        #[test]
-        fn ndecub_u8_lb() {
-            const SRC: &[u8] = b"0\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<u8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, 0);
-        }
-        #[test]
-        fn ndecub_u8_ub() {
-            const SRC: &[u8] = b"255\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<u8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, 255);
-        }
-        #[test]
-        fn ndecub_u8_ub_of() {
-            const SRC: &[u8] = b"256\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<u8>(SRC, &mut b, &mut i);
-            assert!(!b);
-            assert_eq!(i, 2);
-            assert_eq!(x, 0);
-        }
-    }
-    mod sint8 {
-        use super::*;
-        #[test]
-        pub(crate) fn ndecub_i8_ok() {
-            const SRC: &[u8] = b"-123\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<i8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, -123);
-        }
-        #[test]
-        pub(crate) fn ndecub_i8_lb() {
-            const SRC: &[u8] = b"-128\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<i8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, -128);
-        }
-        #[test]
-        pub(crate) fn ndecub_i8_lb_of() {
-            const SRC: &[u8] = b"-129\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<i8>(SRC, &mut b, &mut i);
-            assert!(!b);
-            assert_eq!(i, 3);
-            assert_eq!(x, 0);
-        }
-        #[test]
-        pub(crate) fn ndecub_i8_ub() {
-            const SRC: &[u8] = b"127\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<i8>(SRC, &mut b, &mut i);
-            assert!(b);
-            assert_eq!(i, SRC.len());
-            assert_eq!(x, 127);
-        }
-        #[test]
-        pub(crate) fn ndecub_i8_ub_of() {
-            const SRC: &[u8] = b"128\n";
-            let mut i = 0;
-            let mut b = true;
-            let x = ubdc::<i8>(SRC, &mut b, &mut i);
-            assert!(!b);
-            assert_eq!(i, 2);
-            assert_eq!(x, 0);
-        }
-    }
+/*
+    safe query tests
+*/
+
+fn make_safe_query(a: &[u8], b: &[u8]) -> (Vec<u8>, usize) {
+    let mut s = Vec::with_capacity(a.len() + b.len());
+    s.extend(a);
+    s.extend(b);
+    (s, a.len())
 }
 
-mod safequery_params {
-    use crate::engine::{
-        data::{lit::LitIR, spec::Dataspec1D},
-        ql::lex::SafeQueryData,
-    };
-    use rand::seq::SliceRandom;
-    #[test]
-    fn param_uint() {
-        let src = b"12345\n";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::uint(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::UnsignedInt(12345)]);
-    }
-    #[test]
-    fn param_sint() {
-        let src = b"-12345\n";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::sint(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::SignedInt(-12345)]);
-    }
-    #[test]
-    fn param_bool_true() {
-        let src = b"true\n";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::bool(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::Bool(true)]);
-    }
-    #[test]
-    fn param_bool_false() {
-        let src = b"false\n";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::bool(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::Bool(false)]);
-    }
-    #[test]
-    fn param_float() {
-        let src = b"4\n3.14";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::float(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::Float(3.14)]);
-    }
-    #[test]
-    fn param_bin() {
-        let src = b"5\nsayan";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::bin(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::Bin(b"sayan")]);
-    }
-    #[test]
-    fn param_str() {
-        let src = b"5\nsayan";
-        let mut d = Vec::new();
-        let mut i = 0;
-        assert!(SafeQueryData::str(src, &mut i, &mut d));
-        assert_eq!(i, src.len());
-        assert_eq!(d, vec![LitIR::Str("sayan")]);
-    }
-    #[test]
-    fn param_full_uint() {
-        let src = b"\x0012345\n";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::UnsignedInt(12345)]);
-    }
-    #[test]
-    fn param_full_sint() {
-        let src = b"\x01-12345\n";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::SignedInt(-12345)]);
-    }
-    #[test]
-    fn param_full_bool() {
-        let src = b"\x02true\n";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Bool(true)]);
-        let src = b"\x02false\n";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Bool(false)]);
-    }
-    #[test]
-    fn param_full_float() {
-        let src = b"\x034\n3.14";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Float(3.14)]);
-        let src = b"\x035\n-3.14";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Float(-3.14)]);
-    }
-    #[test]
-    fn param_full_bin() {
-        let src = b"\x0412\nhello, world";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Bin(b"hello, world")]);
-    }
-    #[test]
-    fn param_full_str() {
-        let src = b"\x0512\nhello, world";
-        let r = SafeQueryData::p_revloop(src, 1).unwrap();
-        assert_eq!(r.as_ref(), [LitIR::Str("hello, world")]);
-    }
-    #[test]
-    fn params_mix() {
-        let mut rng = rand::thread_rng();
-        const DATA: [&[u8]; 6] = [
-            b"\x0012345\n",
-            b"\x01-12345\n",
-            b"\x02true\n",
-            b"\x0311\n12345.67890",
-            b"\x0430\none two three four five binary",
-            b"\x0527\none two three four five str",
-        ];
-        let retmap: [LitIR; 6] = [
-            LitIR::UnsignedInt(12345),
-            LitIR::SignedInt(-12345),
-            LitIR::Bool(true),
-            LitIR::Float(12345.67890),
-            LitIR::Bin(b"one two three four five binary"),
-            LitIR::Str("one two three four five str"),
-        ];
-        for _ in 0..DATA.len().pow(2) {
-            let mut local_data = DATA;
-            local_data.shuffle(&mut rng);
-            let ret: Vec<LitIR> = local_data
-                .iter()
-                .map(|v| retmap[v[0] as usize].clone())
-                .collect();
-            let src: Vec<u8> = local_data.into_iter().flat_map(|v| v.to_owned()).collect();
-            let r = SafeQueryData::p_revloop(&src, 6).unwrap();
-            assert_eq!(r.as_ref(), ret);
-        }
-    }
+#[test]
+fn safe_query_all_literals() {
+    let (query, query_window) = make_safe_query(
+        b"? ? ? ? ? ? ?",
+        b"\x00\x01\x01\x021234\n\x03-1234\n\x049\n1234.5678\x0513\nbinarywithlf\n\x065\nsayan",
+    );
+    let ret = lex_secure(&query, query_window).unwrap();
+    assert_eq!(
+        ret,
+        into_vec![Token<'static> => (
+            Token![null],
+            Lit::new_bool(true),
+            Lit::new_uint(1234),
+            Lit::new_sint(-1234),
+            Lit::new_float(1234.5678),
+            Lit::new_bin(b"binarywithlf\n"),
+            Lit::new_string("sayan".into()),
+        )],
+    );
 }
 
-mod safequery_full_param {
-    use crate::engine::{
-        data::{lit::LitIR, spec::Dataspec1D},
-        ql::lex::{Ident, SafeQueryData, Token},
-    };
-    #[test]
-    fn p_mini() {
-        let query = b"select * from myapp where username = ?";
-        let params = b"\x055\nsayan";
-        let sq = SafeQueryData::parse(query, params, 1).unwrap();
+const SFQ_NULL: &[u8] = b"\x00";
+const SFQ_BOOL_FALSE: &[u8] = b"\x01\0";
+const SFQ_BOOL_TRUE: &[u8] = b"\x01\x01";
+const SFQ_UINT: &[u8] = b"\x0218446744073709551615\n";
+const SFQ_SINT: &[u8] = b"\x03-9223372036854775808\n";
+const SFQ_FLOAT: &[u8] = b"\x0411\n3.141592654";
+const SFQ_BINARY: &[u8] = "\x0546\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
+const SFQ_STRING: &[u8] = "\x0646\ncringe😃😄😁😆😅😂🤣😊😸😺".as_bytes();
+
+#[test]
+fn safe_query_null() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_NULL);
+    let r = lex_secure(&query, query_window).unwrap();
+    assert_eq!(r, vec![Token![null]])
+}
+
+#[test]
+fn safe_query_bool() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_BOOL_FALSE);
+    let b_false = lex_secure(&query, query_window).unwrap();
+    let (query, query_window) = make_safe_query(b"?", SFQ_BOOL_TRUE);
+    let b_true = lex_secure(&query, query_window).unwrap();
+    assert_eq!(
+        [b_false, b_true].concat(),
+        vec![
+            Token::from(Lit::new_bool(false)),
+            Token::from(Lit::new_bool(true))
+        ]
+    );
+}
+
+#[test]
+fn safe_query_uint() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_UINT);
+    let int = lex_secure(&query, query_window).unwrap();
+    assert_eq!(int, vec![Token::Lit(Lit::new_uint(u64::MAX))]);
+}
+
+#[test]
+fn safe_query_sint() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_SINT);
+    let int = lex_secure(&query, query_window).unwrap();
+    assert_eq!(int, vec![Token::Lit(Lit::new_sint(i64::MIN))]);
+}
+
+#[test]
+fn safe_query_float() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_FLOAT);
+    let float = lex_secure(&query, query_window).unwrap();
+    assert_eq!(float, vec![Token::Lit(Lit::new_float(3.141592654))]);
+}
+
+#[test]
+fn safe_query_binary() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_BINARY);
+    let binary = lex_secure(&query, query_window).unwrap();
+    assert_eq!(
+        binary,
+        vec![Token::Lit(Lit::new_bin(
+            "cringe😃😄😁😆😅😂🤣😊😸😺".as_bytes()
+        ))]
+    );
+}
+
+#[test]
+fn safe_query_string() {
+    let (query, query_window) = make_safe_query(b"?", SFQ_STRING);
+    let binary = lex_secure(&query, query_window).unwrap();
+    assert_eq!(
+        binary,
+        vec![Token::Lit(Lit::new_string(
+            "cringe😃😄😁😆😅😂🤣😊😸😺".to_owned().into()
+        ))]
+    );
+}
+
+#[test]
+fn safe_params_shuffled() {
+    let expected = [
+        (SFQ_NULL, Token![null]),
+        (SFQ_BOOL_FALSE, Token::Lit(Lit::new_bool(false))),
+        (SFQ_BOOL_TRUE, Token::Lit(Lit::new_bool(true))),
+        (SFQ_UINT, Token::Lit(Lit::new_uint(u64::MAX))),
+        (SFQ_SINT, Token::Lit(Lit::new_sint(i64::MIN))),
+        (SFQ_FLOAT, Token::Lit(Lit::new_float(3.141592654))),
+        (
+            SFQ_BINARY,
+            Token::Lit(Lit::new_bin("cringe😃😄😁😆😅😂🤣😊😸😺".as_bytes())),
+        ),
+        (
+            SFQ_STRING,
+            Token::Lit(Lit::new_string(
+                "cringe😃😄😁😆😅😂🤣😊😸😺".to_owned().into(),
+            )),
+        ),
+    ];
+    let mut rng = crate::util::test_utils::randomizer();
+    for _ in 0..expected.len().pow(2) {
+        let mut this_expected = expected.clone();
+        crate::util::test_utils::shuffle_slice(&mut this_expected, &mut rng);
+        let param_segment: Vec<u8> = this_expected
+            .iter()
+            .map(|(raw, _)| raw.to_vec())
+            .flatten()
+            .collect();
+        let (query, query_window) = make_safe_query(b"? ? ? ? ? ? ? ?", &param_segment);
+        let ret = lex_secure(&query, query_window).unwrap();
         assert_eq!(
-            sq,
-            SafeQueryData::new_test(
-                vec![LitIR::Str("sayan")].into_boxed_slice(),
-                vec![
-                    Token![select],
-                    Token![*],
-                    Token![from],
-                    Token::Ident(Ident::from("myapp")),
-                    Token![where],
-                    Token::Ident(Ident::from("username")),
-                    Token![=],
-                    Token![?]
-                ]
-            )
-        );
-    }
-    #[test]
-    fn p() {
-        let query = b"select * from myapp where username = ? and pass = ?";
-        let params = b"\x055\nsayan\x048\npass1234";
-        let sq = SafeQueryData::parse(query, params, 2).unwrap();
-        assert_eq!(
-            sq,
-            SafeQueryData::new_test(
-                vec![LitIR::Str("sayan"), LitIR::Bin(b"pass1234")].into_boxed_slice(),
-                vec![
-                    Token![select],
-                    Token![*],
-                    Token![from],
-                    Token::Ident(Ident::from("myapp")),
-                    Token![where],
-                    Token::Ident(Ident::from("username")),
-                    Token![=],
-                    Token![?],
-                    Token![and],
-                    Token::Ident(Ident::from("pass")),
-                    Token![=],
-                    Token![?]
-                ]
-            )
-        );
-    }
-    #[test]
-    fn p_pro() {
-        let query = b"select $notes[~?] from myapp where username = ? and pass = ?";
-        let params = b"\x00100\n\x055\nsayan\x048\npass1234";
-        let sq = SafeQueryData::parse(query, params, 3).unwrap();
-        assert_eq!(
-            sq,
-            SafeQueryData::new_test(
-                vec![
-                    LitIR::UnsignedInt(100),
-                    LitIR::Str("sayan"),
-                    LitIR::Bin(b"pass1234")
-                ]
-                .into_boxed_slice(),
-                vec![
-                    Token![select],
-                    Token![$],
-                    Token::Ident(Ident::from("notes")),
-                    Token![open []],
-                    Token![~],
-                    Token![?],
-                    Token![close []],
-                    Token![from],
-                    Token::Ident(Ident::from("myapp")),
-                    Token![where],
-                    Token::Ident(Ident::from("username")),
-                    Token![=],
-                    Token![?],
-                    Token![and],
-                    Token::Ident(Ident::from("pass")),
-                    Token![=],
-                    Token![?]
-                ]
-            )
-        );
+            ret,
+            this_expected
+                .into_iter()
+                .map(|(_, expected)| expected)
+                .collect::<Vec<_>>()
+        )
     }
 }

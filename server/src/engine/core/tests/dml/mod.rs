@@ -31,7 +31,7 @@ mod update;
 
 use crate::engine::{
     core::{dml, index::Row, model::Model},
-    data::{cell::Datacell, lit::LitIR},
+    data::{cell::Datacell, lit::Lit},
     error::QueryResult,
     fractal::GlobalInstanceLike,
     ql::{
@@ -75,7 +75,7 @@ fn _exec_only_read_key_and_then<T>(
         let _irm = mdl.intent_read_model();
         let row = mdl
             .primary_index()
-            .select(LitIR::from(key_name), &guard)
+            .select(Lit::from(key_name), &guard)
             .unwrap()
             .clone();
         drop(guard);

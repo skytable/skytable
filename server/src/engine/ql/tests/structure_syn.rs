@@ -27,7 +27,7 @@
 use {
     super::*,
     crate::engine::{
-        data::{lit::Lit, spec::Dataspec1D, DictGeneric},
+        data::{lit::Lit, DictGeneric},
         ql::{ast::parse_ast_node_full, ddl::syn::DictBasic},
     },
 };
@@ -56,7 +56,7 @@ mod dict {
             br#"{name: "sayan"}"#,
             br#"{name: "sayan",}"#,
         };
-        let r = null_dict!("name" => Lit::Str("sayan".into()));
+        let r = null_dict!("name" => Lit::new_string("sayan".into()));
         multi_assert_eq!(d1, d2 => r);
     }
     #[test]
@@ -78,9 +78,9 @@ mod dict {
             "#,
         };
         let r = null_dict! (
-            "name" => Lit::Str("sayan".into()),
-            "verified" => Lit::Bool(true),
-            "burgers" => Lit::UnsignedInt(152),
+            "name" => Lit::new_string("sayan".into()),
+            "verified" => Lit::new_bool(true),
+            "burgers" => Lit::new_uint(152),
         );
         multi_assert_eq!(d1, d2 => r);
     }
@@ -119,11 +119,11 @@ mod dict {
         };
         multi_assert_eq!(
             d1, d2, d3 => null_dict! {
-                "name" => Lit::Str("sayan".into()),
+                "name" => Lit::new_string("sayan".into()),
                 "notes" => null_dict! {
-                    "burgers" => Lit::Str("all the time, extra mayo".into()),
-                    "taco" => Lit::Bool(true),
-                    "pretzels" => Lit::UnsignedInt(1),
+                    "burgers" => Lit::new_string("all the time, extra mayo".into()),
+                    "taco" => Lit::new_bool(true),
+                    "pretzels" => Lit::new_uint(1),
                 }
             }
         );
@@ -178,7 +178,7 @@ mod dict {
                     "now" => null_dict! {
                         "this" => null_dict! {
                             "is" => null_dict! {
-                                "ridiculous" => Lit::Bool(true),
+                                "ridiculous" => Lit::new_bool(true),
                             }
                         }
                     }
@@ -207,16 +207,16 @@ mod dict {
             }
         ";
         let ret_dict = null_dict! {
-            "the_tradition_is" => Lit::Str("hello, world".into()),
+            "the_tradition_is" => Lit::new_string("hello, world".into()),
             "could_have_been" => null_dict! {
-                "this" => Lit::Bool(true),
-                "or_maybe_this" => Lit::UnsignedInt(100),
-                "even_this" => Lit::Str("hello, universe!".into()),
+                "this" => Lit::new_bool(true),
+                "or_maybe_this" => Lit::new_uint(100),
+                "even_this" => Lit::new_string("hello, universe!".into()),
             },
-            "but_oh_well" => Lit::Str("it continues to be the 'annoying' phrase".into()),
+            "but_oh_well" => Lit::new_string("it continues to be the 'annoying' phrase".into()),
             "lorem" => null_dict! {
                 "ipsum" => null_dict! {
-                    "dolor" => Lit::Str("sit amet".into())
+                    "dolor" => Lit::new_string("sit amet".into())
                 }
             }
         };
@@ -258,7 +258,7 @@ mod null_dict_tests {
             assert_eq!(
                 d,
                 null_dict! {
-                    "this_is_non_null" => Lit::Str("hello".into()),
+                    "this_is_non_null" => Lit::new_string("hello".into()),
                     "but_this_is_null" => Null,
                 }
             )
@@ -279,8 +279,8 @@ mod null_dict_tests {
             assert_eq!(
                 d,
                 null_dict! {
-                    "a_string" => Lit::Str("this is a string".into()),
-                    "num" => Lit::UnsignedInt(1234),
+                    "a_string" => Lit::new_string("this is a string".into()),
+                    "num" => Lit::new_uint(1234),
                     "a_dict" => null_dict! {
                         "a_null" => Null,
                     }
@@ -304,8 +304,8 @@ mod null_dict_tests {
             assert_eq!(
                 d,
                 null_dict! {
-                    "a_string" => Lit::Str("this is a string".into()),
-                    "num" => Lit::UnsignedInt(1234),
+                    "a_string" => Lit::new_string("this is a string".into()),
+                    "num" => Lit::new_uint(1234),
                     "a_dict" => null_dict! {
                         "a_null" => Null,
                     },

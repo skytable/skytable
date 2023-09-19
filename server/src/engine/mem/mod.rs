@@ -69,6 +69,12 @@ impl SpecialPaddedWord {
     pub const unsafe fn new(a: u64, b: usize) -> Self {
         Self { a, b }
     }
+    pub fn new_quad(a: u64) -> Self {
+        Self {
+            a,
+            b: ZERO_BLOCK.as_ptr() as usize,
+        }
+    }
 }
 
 pub trait StatelessLen {

@@ -27,13 +27,7 @@
 use super::*;
 mod list_parse {
     use super::*;
-    use crate::engine::{
-        data::{lit::LitIR, spec::Dataspec1D},
-        ql::{
-            ast::{parse_ast_node_full, traits::ASTNode, State, SubstitutedData},
-            dml::ins::List,
-        },
-    };
+    use crate::engine::ql::{ast::parse_ast_node_full, dml::ins::List};
 
     #[test]
     fn list_mini() {
@@ -56,28 +50,6 @@ mod list_parse {
         .unwrap();
         let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(r.as_slice(), into_array![1, 2, 3, 4])
-    }
-    #[test]
-    fn list_param() {
-        let tok = lex_secure(
-            b"
-                [?, ?, ?, ?]
-            ",
-        )
-        .unwrap();
-        let data = [
-            LitIR::UnsignedInt(1),
-            LitIR::UnsignedInt(2),
-            LitIR::UnsignedInt(3),
-            LitIR::UnsignedInt(4),
-        ];
-        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
-        assert_eq!(
-            <List as ASTNode>::from_state(&mut state)
-                .unwrap()
-                .into_inner(),
-            into_array![1, 2, 3, 4]
-        )
     }
     #[test]
     fn list_pro() {
@@ -104,40 +76,6 @@ mod list_parse {
         )
     }
     #[test]
-    fn list_pro_param() {
-        let tok = lex_secure(
-            b"
-                [
-                    [?, ?],
-                    [?, ?],
-                    [?, ?],
-                    []
-                ]
-            ",
-        )
-        .unwrap();
-        let data = [
-            LitIR::UnsignedInt(1),
-            LitIR::UnsignedInt(2),
-            LitIR::UnsignedInt(3),
-            LitIR::UnsignedInt(4),
-            LitIR::UnsignedInt(5),
-            LitIR::UnsignedInt(6),
-        ];
-        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
-        assert_eq!(
-            <List as ASTNode>::from_state(&mut state)
-                .unwrap()
-                .into_inner(),
-            into_array![
-                into_array![1, 2],
-                into_array![3, 4],
-                into_array![5, 6],
-                into_array![]
-            ]
-        )
-    }
-    #[test]
     fn list_pro_max() {
         let tok = lex_insecure(
             b"
@@ -153,46 +91,6 @@ mod list_parse {
         let r = parse_ast_node_full::<List>(&tok[1..]).unwrap();
         assert_eq!(
             r.as_slice(),
-            into_array![
-                into_array![into_array![1, 1], into_array![2, 2]],
-                into_array![into_array![], into_array![4, 4]],
-                into_array![into_array![5, 5], into_array![6, 6]],
-                into_array![into_array![7, 7], into_array![]],
-            ]
-        )
-    }
-    #[test]
-    fn list_pro_max_param() {
-        let tok = lex_secure(
-            b"
-                [
-                    [[?, ?], [?, ?]],
-                    [[], [?, ?]],
-                    [[?, ?], [?, ?]],
-                    [[?, ?], []]
-                ]
-            ",
-        )
-        .unwrap();
-        let data = [
-            LitIR::UnsignedInt(1),
-            LitIR::UnsignedInt(1),
-            LitIR::UnsignedInt(2),
-            LitIR::UnsignedInt(2),
-            LitIR::UnsignedInt(4),
-            LitIR::UnsignedInt(4),
-            LitIR::UnsignedInt(5),
-            LitIR::UnsignedInt(5),
-            LitIR::UnsignedInt(6),
-            LitIR::UnsignedInt(6),
-            LitIR::UnsignedInt(7),
-            LitIR::UnsignedInt(7),
-        ];
-        let mut state = State::new(&tok[1..], SubstitutedData::new(&data));
-        assert_eq!(
-            <List as ASTNode>::from_state(&mut state)
-                .unwrap()
-                .into_inner(),
             into_array![
                 into_array![into_array![1, 1], into_array![2, 2]],
                 into_array![into_array![], into_array![4, 4]],
@@ -599,7 +497,7 @@ mod stmt_select {
     use {
         super::*,
         crate::engine::{
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{
                 ast::{parse_ast_node_full, Entity},
                 dml::{sel::SelectStatement, RelationalExpr},
@@ -622,7 +520,7 @@ mod stmt_select {
             true,
             dict! {
                 Ident::from("username") => RelationalExpr::new(
-                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                    Ident::from("username"), Lit::new_str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -643,7 +541,7 @@ mod stmt_select {
             false,
             dict! {
                 Ident::from("username") => RelationalExpr::new(
-                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                    Ident::from("username"), Lit::new_str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -664,7 +562,7 @@ mod stmt_select {
             false,
             dict! {
                 Ident::from("username") => RelationalExpr::new(
-                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                    Ident::from("username"), Lit::new_str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -685,7 +583,7 @@ mod stmt_select {
             false,
             dict! {
                 Ident::from("username") => RelationalExpr::new(
-                    Ident::from("username"), LitIR::Str("sayan"), RelationalExpr::OP_EQ
+                    Ident::from("username"), Lit::new_str("sayan"), RelationalExpr::OP_EQ
                 ),
             },
         );
@@ -697,7 +595,7 @@ mod expression_tests {
         super::*,
         crate::engine::{
             core::query_meta::AssignmentOperator,
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{ast::parse_ast_node_full, dml::upd::AssignmentExpression, lex::Ident},
         },
     };
@@ -709,7 +607,7 @@ mod expression_tests {
             r,
             AssignmentExpression::new(
                 Ident::from("username"),
-                LitIR::Str("sayan"),
+                Lit::new_str("sayan"),
                 AssignmentOperator::Assign
             )
         );
@@ -722,7 +620,7 @@ mod expression_tests {
             r,
             AssignmentExpression::new(
                 Ident::from("followers"),
-                LitIR::UnsignedInt(100),
+                Lit::new_uint(100),
                 AssignmentOperator::AddAssign
             )
         );
@@ -735,7 +633,7 @@ mod expression_tests {
             r,
             AssignmentExpression::new(
                 Ident::from("following"),
-                LitIR::UnsignedInt(150),
+                Lit::new_uint(150),
                 AssignmentOperator::SubAssign
             )
         );
@@ -748,7 +646,7 @@ mod expression_tests {
             r,
             AssignmentExpression::new(
                 Ident::from("product_qty"),
-                LitIR::UnsignedInt(2),
+                Lit::new_uint(2),
                 AssignmentOperator::MulAssign
             )
         );
@@ -761,7 +659,7 @@ mod expression_tests {
             r,
             AssignmentExpression::new(
                 Ident::from("image_crop_factor"),
-                LitIR::UnsignedInt(2),
+                Lit::new_uint(2),
                 AssignmentOperator::DivAssign
             )
         );
@@ -772,7 +670,7 @@ mod update_statement {
         super::*,
         crate::engine::{
             core::query_meta::AssignmentOperator,
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{
                 ast::{parse_ast_node_full, Entity},
                 dml::{
@@ -796,13 +694,13 @@ mod update_statement {
             Entity::Single(Ident::from("app")),
             vec![AssignmentExpression::new(
                 Ident::from("notes"),
-                LitIR::Str("this is my new note"),
+                Lit::new_str("this is my new note"),
                 AssignmentOperator::AddAssign,
             )],
             WhereClause::new(dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),
-                    LitIR::Str("sayan"),
+                    Lit::new_str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             }),
@@ -829,19 +727,19 @@ mod update_statement {
             vec![
                 AssignmentExpression::new(
                     Ident::from("notes"),
-                    LitIR::Str("this is my new note"),
+                    Lit::new_str("this is my new note"),
                     AssignmentOperator::AddAssign,
                 ),
                 AssignmentExpression::new(
                     Ident::from("email"),
-                    LitIR::Str("sayan@example.com"),
+                    Lit::new_str("sayan@example.com"),
                     AssignmentOperator::Assign,
                 ),
             ],
             WhereClause::new(dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),
-                    LitIR::Str("sayan"),
+                    Lit::new_str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             }),
@@ -853,7 +751,7 @@ mod delete_stmt {
     use {
         super::*,
         crate::engine::{
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{
                 ast::{parse_ast_node_full, Entity},
                 dml::{del::DeleteStatement, RelationalExpr},
@@ -875,7 +773,7 @@ mod delete_stmt {
             dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),
-                    LitIR::Str("sayan"),
+                    Lit::new_str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             },
@@ -898,7 +796,7 @@ mod delete_stmt {
             dict! {
                 Ident::from("username") => RelationalExpr::new(
                     Ident::from("username"),
-                    LitIR::Str("sayan"),
+                    Lit::new_str("sayan"),
                     RelationalExpr::OP_EQ
                 )
             },
@@ -913,7 +811,7 @@ mod relational_expr {
     use {
         super::*,
         crate::engine::{
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{ast::parse_ast_node_full, dml::RelationalExpr, lex::Ident},
         },
     };
@@ -925,7 +823,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: LitIR::UnsignedInt(10),
+                rhs: Lit::new_uint(10),
                 lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_EQ
             }
@@ -938,7 +836,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: LitIR::UnsignedInt(10),
+                rhs: Lit::new_uint(10),
                 lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_NE
             }
@@ -951,7 +849,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: LitIR::UnsignedInt(10),
+                rhs: Lit::new_uint(10),
                 lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_GT
             }
@@ -964,7 +862,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: LitIR::UnsignedInt(10),
+                rhs: Lit::new_uint(10),
                 lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_GE
             }
@@ -977,7 +875,7 @@ mod relational_expr {
         assert_eq!(
             r,
             RelationalExpr {
-                rhs: LitIR::UnsignedInt(10),
+                rhs: Lit::new_uint(10),
                 lhs: Ident::from("primary_key"),
                 opc: RelationalExpr::OP_LT
             }
@@ -991,7 +889,7 @@ mod relational_expr {
             r,
             RelationalExpr::new(
                 Ident::from("primary_key"),
-                LitIR::UnsignedInt(10),
+                Lit::new_uint(10),
                 RelationalExpr::OP_LE
             )
         );
@@ -1001,7 +899,7 @@ mod where_clause {
     use {
         super::*,
         crate::engine::{
-            data::{lit::LitIR, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{
                 ast::parse_ast_node_full,
                 dml::{RelationalExpr, WhereClause},
@@ -1020,7 +918,7 @@ mod where_clause {
         let expected = WhereClause::new(dict! {
             Ident::from("x") => RelationalExpr::new(
                 Ident::from("x"),
-                LitIR::UnsignedInt(100),
+                Lit::new_uint(100),
                 RelationalExpr::OP_EQ
             )
         });
@@ -1037,12 +935,12 @@ mod where_clause {
         let expected = WhereClause::new(dict! {
             Ident::from("userid") => RelationalExpr::new(
                 Ident::from("userid"),
-                LitIR::UnsignedInt(100),
+                Lit::new_uint(100),
                 RelationalExpr::OP_EQ
             ),
             Ident::from("pass") => RelationalExpr::new(
                 Ident::from("pass"),
-                LitIR::Str("password"),
+                Lit::new_str("password"),
                 RelationalExpr::OP_EQ
             )
         });

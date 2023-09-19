@@ -30,8 +30,7 @@ use {
     crate::engine::{
         self,
         data::{
-            lit::{Lit, LitIR},
-            spec::{Dataspec1D, DataspecMeta1D},
+            lit::Lit,
             tag::{CUTag, DataTag, TagClass},
         },
         mem::{DwordNN, DwordQN, NativeQword, SpecialPaddedWord, WordIO},
@@ -228,8 +227,8 @@ direct_from! {
     }
 }
 
-impl<'a> From<LitIR<'a>> for Datacell {
-    fn from(l: LitIR<'a>) -> Self {
+impl<'a> From<Lit<'a>> for Datacell {
+    fn from(l: Lit<'a>) -> Self {
         match l.kind().tag_class() {
             tag if tag < TagClass::Bin => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type doesn't need any advanced construction
@@ -241,7 +240,7 @@ impl<'a> From<LitIR<'a>> for Datacell {
             },
             TagClass::Bin | TagClass::Str => unsafe {
                 // UNSAFE(@ohsayan): Correct because we are using the same tag, and in this case the type requires a new heap for construction
-                let mut bin = ManuallyDrop::new(l.read_bin_uck().to_owned().into_boxed_slice());
+                let mut bin = ManuallyDrop::new(l.bin().to_owned().into_boxed_slice());
                 Datacell::new(
                     CUTag::from(l.kind()),
                     DataRaw::word(DwordQN::dwordqn_store_qw_nw(
@@ -266,12 +265,6 @@ impl From<i32> for Datacell {
         } else {
             Self::new_uint(i as _)
         }
-    }
-}
-
-impl<'a> From<Lit<'a>> for Datacell {
-    fn from(l: Lit<'a>) -> Self {
-        Self::from(l.as_ir())
     }
 }
 
@@ -459,17 +452,17 @@ impl Clone for Datacell {
 #[derive(Debug)]
 pub struct VirtualDatacell<'a> {
     dc: ManuallyDrop<Datacell>,
-    _lt: PhantomData<LitIR<'a>>,
+    _lt: PhantomData<Lit<'a>>,
 }
 
 impl<'a> VirtualDatacell<'a> {
-    pub fn new(litir: LitIR<'a>) -> Self {
+    pub fn new(lit: Lit<'a>) -> Self {
         Self {
             dc: ManuallyDrop::new(unsafe {
                 // UNSAFE(@ohsayan): this is a "reference" to a "virtual" aka fake DC. this just works because of memory layouts
                 Datacell::new(
-                    CUTag::from(litir.kind()),
-                    DataRaw::word(litir.data().dwordqn_promote()),
+                    CUTag::from(lit.kind()),
+                    DataRaw::word(lit.data().dwordqn_promote()),
                 )
             }),
             _lt: PhantomData,
@@ -477,8 +470,8 @@ impl<'a> VirtualDatacell<'a> {
     }
 }
 
-impl<'a> From<LitIR<'a>> for VirtualDatacell<'a> {
-    fn from(l: LitIR<'a>) -> Self {
+impl<'a> From<Lit<'a>> for VirtualDatacell<'a> {
+    fn from(l: Lit<'a>) -> Self {
         Self::new(l)
     }
 }
@@ -504,6 +497,6 @@ impl<'a> Clone for VirtualDatacell<'a> {
 
 #[test]
 fn virtual_dc_damn() {
-    let dc = LitIR::Str("hello, world");
+    let dc = Lit::new_str("hello, world");
     assert_eq!(VirtualDatacell::from(dc), Datacell::from("hello, world"));
 }

@@ -28,7 +28,7 @@ mod key;
 mod row;
 
 use crate::engine::{
-    data::lit::LitIR,
+    data::lit::Lit,
     idx::{IndexBaseSpec, IndexMTRaw, MTIndex},
     sync::atm::Guard,
 };
@@ -49,12 +49,12 @@ impl PrimaryIndex {
             data: IndexMTRaw::idx_init(),
         }
     }
-    pub fn remove<'a>(&self, key: LitIR<'a>, g: &Guard) -> bool {
+    pub fn remove<'a>(&self, key: Lit<'a>, g: &Guard) -> bool {
         self.data.mt_delete(&key, g)
     }
     pub fn select<'a, 'v, 't: 'v, 'g: 't>(
         &'t self,
-        key: LitIR<'a>,
+        key: Lit<'a>,
         g: &'g Guard,
     ) -> Option<&'v Row> {
         self.data.mt_get_element(&key, g)

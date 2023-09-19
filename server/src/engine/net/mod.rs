@@ -30,7 +30,7 @@ mod protocol;
 pub trait Socket: AsyncWrite + AsyncRead + Unpin {}
 pub type IoResult<T> = Result<T, std::io::Error>;
 
-enum QLoopReturn {
+pub enum QLoopReturn {
     Fin,
     ConnectionRst,
 }

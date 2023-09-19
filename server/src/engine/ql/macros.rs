@@ -331,3 +331,11 @@ macro_rules! build_lut {
         }
     }
 }
+
+#[cfg(test)]
+macro_rules! into_vec {
+    ($ty:ty => ($($v:expr),* $(,)?)) => {{
+        let v: Vec<$ty> = std::vec![$($v.into(),)*];
+        v
+    }}
+}

@@ -36,7 +36,7 @@ use {
     },
     crate::{
         engine::{
-            data::{cell::Datacell, lit::LitIR},
+            data::{cell::Datacell, lit::Lit},
             error::{Error, QueryResult},
         },
         util::{compiler, MaybeInit},
@@ -162,7 +162,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     ///
     /// ## Safety
     /// - Must ensure that `Self::can_read_lit_rounded` is true
-    pub unsafe fn read_cursor_lit_unchecked(&mut self) -> LitIR<'a> {
+    pub unsafe fn read_cursor_lit_unchecked(&mut self) -> Lit<'a> {
         let tok = self.read();
         Qd::read_lit(&mut self.d, tok)
     }
@@ -171,7 +171,7 @@ impl<'a, Qd: QueryData<'a>> State<'a, Qd> {
     ///
     /// ## Safety
     /// - Must ensure that `Self::can_read_lit_from` is true for the token
-    pub unsafe fn read_lit_unchecked_from(&mut self, tok: &'a Token<'a>) -> LitIR<'a> {
+    pub unsafe fn read_lit_unchecked_from(&mut self, tok: &'a Token<'a>) -> Lit<'a> {
         Qd::read_lit(&mut self.d, tok)
     }
     #[inline(always)]
@@ -274,7 +274,7 @@ pub trait QueryData<'a> {
     ///
     /// ## Safety
     /// The current token **must match** the signature of a lit
-    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a>;
+    unsafe fn read_lit(&mut self, tok: &'a Token) -> Lit<'a>;
     /// Read a lit using the given token and then copy it into a [`DataType`]
     ///
     /// ## Safety
@@ -299,7 +299,7 @@ impl<'a> QueryData<'a> for InplaceData {
         tok.is_lit()
     }
     #[inline(always)]
-    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
+    unsafe fn read_lit(&mut self, tok: &'a Token) -> Lit<'a> {
         tok.uck_read_lit().as_ir()
     }
     #[inline(always)]
@@ -309,42 +309,6 @@ impl<'a> QueryData<'a> for InplaceData {
     #[inline(always)]
     fn nonzero(&self) -> bool {
         true
-    }
-}
-
-#[derive(Debug)]
-pub struct SubstitutedData<'a> {
-    data: &'a [LitIR<'a>],
-}
-impl<'a> SubstitutedData<'a> {
-    #[inline(always)]
-    pub const fn new(src: &'a [LitIR<'a>]) -> Self {
-        Self { data: src }
-    }
-}
-
-impl<'a> QueryData<'a> for SubstitutedData<'a> {
-    #[inline(always)]
-    fn can_read_lit_from(&self, tok: &Token) -> bool {
-        Token![?].eq(tok) && self.nonzero()
-    }
-    #[inline(always)]
-    unsafe fn read_lit(&mut self, tok: &'a Token) -> LitIR<'a> {
-        debug_assert!(Token![?].eq(tok));
-        let ret = self.data[0].clone();
-        self.data = &self.data[1..];
-        ret
-    }
-    #[inline(always)]
-    unsafe fn read_data_type(&mut self, tok: &'a Token) -> Datacell {
-        debug_assert!(Token![?].eq(tok));
-        let ret = self.data[0].clone();
-        self.data = &self.data[1..];
-        Datacell::from(ret)
-    }
-    #[inline(always)]
-    fn nonzero(&self) -> bool {
-        !self.data.is_empty()
     }
 }
 

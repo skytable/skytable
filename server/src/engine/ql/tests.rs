@@ -25,7 +25,7 @@
 */
 
 use {
-    super::lex::{InsecureLexer, SafeLexer, Symbol, Token},
+    super::lex::{InsecureLexer, SecureLexer, Symbol, Token},
     crate::{
         engine::{data::cell::Datacell, error::QueryResult},
         util::test_utils,
@@ -44,10 +44,8 @@ mod structure_syn;
 pub fn lex_insecure(src: &[u8]) -> QueryResult<Vec<Token<'_>>> {
     InsecureLexer::lex(src)
 }
-#[inline(always)]
-/// Uses the [`SafeLexer`] to lex the given input
-pub fn lex_secure(src: &[u8]) -> QueryResult<Vec<Token>> {
-    SafeLexer::lex(src)
+pub fn lex_secure<'a>(src: &'a [u8], query_window: usize) -> QueryResult<Vec<Token<'a>>> {
+    SecureLexer::lex(src, query_window)
 }
 
 pub trait NullableData<T> {

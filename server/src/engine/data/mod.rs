@@ -24,12 +24,9 @@
  *
 */
 
-#[macro_use]
-mod macros;
 pub mod cell;
 pub mod dict;
 pub mod lit;
-pub mod spec;
 pub mod tag;
 pub mod uuid;
 // test

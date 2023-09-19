@@ -26,7 +26,7 @@
 
 use {
     crate::{
-        engine::mem::scanner::{BufferedReadResult, BufferedScanner},
+        engine::mem::scanner::{BufferedScanner, ScannerDecodeResult},
         util::compiler,
     },
     std::slice,
@@ -320,9 +320,10 @@ impl<'a> CHandshake<'a> {
             // we're done here
             return unsafe {
                 // UNSAFE(@ohsayan): we just checked buffered size
-                let uname = slice::from_raw_parts(scanner.current().as_ptr(), uname_l);
-                let pwd = slice::from_raw_parts(scanner.current().as_ptr().add(uname_l), pwd_l);
-                scanner.move_ahead_by(uname_l + pwd_l);
+                let uname = slice::from_raw_parts(scanner.current_buffer().as_ptr(), uname_l);
+                let pwd =
+                    slice::from_raw_parts(scanner.current_buffer().as_ptr().add(uname_l), pwd_l);
+                scanner.incr_cursor_by(uname_l + pwd_l);
                 HandshakeResult::Completed(Self::new(
                     static_hs,
                     Some(CHandshakeAuth::new(uname, pwd)),
@@ -367,15 +368,16 @@ impl<'a> CHandshake<'a> {
             AuthMode::Password => {}
         }
         // let us see if we can parse the username length
-        let uname_l = match scanner.try_next_ascii_u64_lf_separated_with_result() {
-            BufferedReadResult::NeedMore => {
+        let uname_l = match scanner.try_next_ascii_u64_lf_separated_with_result_or_restore_cursor()
+        {
+            ScannerDecodeResult::NeedMore => {
                 return HandshakeResult::ChangeState {
                     new_state: HandshakeState::StaticBlock(static_header),
                     expect: AuthMode::Password.min_payload_bytes(), // 2 for uname_l and 2 for pwd_l
                 };
             }
-            BufferedReadResult::Value(v) => v as usize,
-            BufferedReadResult::Error => {
+            ScannerDecodeResult::Value(v) => v as usize,
+            ScannerDecodeResult::Error => {
                 return HandshakeResult::Error(ProtocolError::CorruptedHSPacket)
             }
         };
@@ -388,16 +390,16 @@ impl<'a> CHandshake<'a> {
         uname_l: usize,
     ) -> HandshakeResult<'a> {
         // we just have to get the password len
-        let pwd_l = match scanner.try_next_ascii_u64_lf_separated_with_result() {
-            BufferedReadResult::Value(v) => v as usize,
-            BufferedReadResult::NeedMore => {
+        let pwd_l = match scanner.try_next_ascii_u64_lf_separated_with_result_or_restore_cursor() {
+            ScannerDecodeResult::Value(v) => v as usize,
+            ScannerDecodeResult::NeedMore => {
                 // newline missing (or maybe there's more?)
                 return HandshakeResult::ChangeState {
                     new_state: HandshakeState::ExpectingMetaForVariableBlock { static_hs, uname_l },
                     expect: uname_l + 2, // space for username + password len
                 };
             }
-            BufferedReadResult::Error => {
+            ScannerDecodeResult::Error => {
                 return HandshakeResult::Error(ProtocolError::CorruptedHSPacket)
             }
         };

@@ -29,190 +29,408 @@ use core::{ptr, slice};
 pub type BufferedScanner<'a> = Scanner<'a, u8>;
 
 #[derive(Debug, PartialEq)]
+/// A scanner over a slice buffer `[T]`
 pub struct Scanner<'a, T> {
     d: &'a [T],
     __cursor: usize,
 }
 
 impl<'a, T> Scanner<'a, T> {
+    /// Create a new scanner, starting at position 0
     pub const fn new(d: &'a [T]) -> Self {
-        unsafe { Self::new_with_cursor(d, 0) }
+        unsafe {
+            // UNSAFE(@ohsayan): starting with 0 is always correct
+            Self::new_with_cursor(d, 0)
+        }
     }
+    /// Create a new scanner, starting with the given position
+    ///
+    /// ## Safety
+    ///
+    /// `i` must be a valid index into the given slice
     pub const unsafe fn new_with_cursor(d: &'a [T], i: usize) -> Self {
         Self { d, __cursor: i }
-    }
-    pub const fn remaining(&self) -> usize {
-        self.d.len() - self.__cursor
-    }
-    pub const fn consumed(&self) -> usize {
-        self.__cursor
-    }
-    pub const fn cursor(&self) -> usize {
-        self.__cursor
-    }
-    pub fn current(&self) -> &[T] {
-        &self.d[self.__cursor..]
-    }
-    pub const fn cursor_ptr(&self) -> *const T {
-        unsafe { self.d.as_ptr().add(self.__cursor) }
-    }
-    pub fn eof(&self) -> bool {
-        self.remaining() == 0
-    }
-    pub fn has_left(&self, sizeof: usize) -> bool {
-        self.remaining() >= sizeof
-    }
-    pub fn matches_cursor_rounded(&self, f: impl Fn(&T) -> bool) -> bool {
-        f(&self.d[(self.d.len() - 1).min(self.__cursor)])
-    }
-    pub fn matches_cursor_rounded_and_not_eof(&self, f: impl Fn(&T) -> bool) -> bool {
-        self.matches_cursor_rounded(f) & !self.eof()
     }
 }
 
 impl<'a, T> Scanner<'a, T> {
+    pub const fn buffer_len(&self) -> usize {
+        self.d.len()
+    }
+    /// Returns the remaining number of **items**
+    pub const fn remaining(&self) -> usize {
+        self.buffer_len() - self.__cursor
+    }
+    /// Returns the number of items consumed by the scanner
+    pub const fn consumed(&self) -> usize {
+        self.__cursor
+    }
+    /// Returns the current cursor position
+    pub const fn cursor(&self) -> usize {
+        self.__cursor
+    }
+    /// Returns the buffer from the current position
+    pub fn current_buffer(&self) -> &[T] {
+        &self.d[self.__cursor..]
+    }
+    /// Returns the ptr to the cursor
+    ///
+    /// WARNING: The pointer might be invalid!
+    pub const fn cursor_ptr(&self) -> *const T {
+        unsafe {
+            // UNSAFE(@ohsayan): assuming that the cursor is correctly initialized, this is always fine
+            self.d.as_ptr().add(self.__cursor)
+        }
+    }
+    /// Returns true if the scanner has reached eof
+    pub fn eof(&self) -> bool {
+        self.remaining() == 0
+    }
+    /// Returns true if the scanner has atleast `sizeof` bytes remaining
+    pub fn has_left(&self, sizeof: usize) -> bool {
+        self.remaining() >= sizeof
+    }
+    /// Returns true if the rounded cursor matches the predicate
+    pub fn rounded_cursor_matches(&self, f: impl Fn(&T) -> bool) -> bool {
+        f(&self.d[self.rounded_cursor()])
+    }
+    /// Same as `rounded_cursor_matches`, but with the added guarantee that no rounding was done
+    pub fn rounded_cursor_not_eof_matches(&self, f: impl Fn(&T) -> bool) -> bool {
+        self.rounded_cursor_matches(f) & !self.eof()
+    }
+    /// A shorthand for equality in `rounded_cursor_not_eof_matches`
+    pub fn rounded_cursor_not_eof_equals(&self, v_t: T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.rounded_cursor_matches(|v| v_t.eq(v)) & !self.eof()
+    }
+}
+
+impl<'a, T> Scanner<'a, T> {
+    /// Manually set the cursor position
+    ///
+    /// ## Safety
+    /// The index must be valid
     pub unsafe fn set_cursor(&mut self, i: usize) {
         self.__cursor = i;
     }
-    pub unsafe fn move_ahead(&mut self) {
-        self.move_back_by(1)
+    /// Increment the cursor
+    ///
+    /// ## Safety
+    /// The buffer must not have reached EOF
+    pub unsafe fn incr_cursor(&mut self) {
+        self.incr_cursor_by(1)
     }
-    pub unsafe fn move_ahead_by(&mut self, by: usize) {
-        self._incr(by)
-    }
-    pub unsafe fn move_back(&mut self) {
-        self.move_back_by(1)
-    }
-    pub unsafe fn move_back_by(&mut self, by: usize) {
-        self.__cursor -= by;
-    }
-    unsafe fn _incr(&mut self, by: usize) {
+    /// Increment the cursor by the given amount
+    ///
+    /// ## Safety
+    /// The buffer must have atleast `by` remaining
+    pub unsafe fn incr_cursor_by(&mut self, by: usize) {
         self.__cursor += by;
     }
-    unsafe fn _cursor(&self) -> *const T {
-        self.d.as_ptr().add(self.__cursor)
+    /// Increment the cursor if the given the condition is satisfied
+    ///
+    /// ## Safety
+    /// Custom logic should ensure only legal cursor increments
+    pub unsafe fn incr_cursor_if(&mut self, iff: bool) {
+        self.incr_cursor_by(iff as _)
+    }
+    /// Decrement the cursor
+    ///
+    /// ## Safety
+    /// The cursor must **not be at 0**
+    pub unsafe fn decr_cursor(&mut self) {
+        self.decr_cursor_by(1)
+    }
+    /// Decrement the cursor by the given amount
+    ///
+    /// ## Safety
+    /// Should not overflow (overflow safety is ... nevermind)
+    pub unsafe fn decr_cursor_by(&mut self, by: usize) {
+        self.__cursor -= by;
+    }
+    /// Returns the current cursor
+    ///
+    /// ## Safety
+    /// Buffer should NOT be at EOF
+    pub unsafe fn deref_cursor(&self) -> T
+    where
+        T: Copy,
+    {
+        *self.cursor_ptr()
+    }
+    /// Returns the rounded cursor
+    pub fn rounded_cursor(&self) -> usize {
+        (self.buffer_len() - 1).min(self.__cursor)
+    }
+    /// Returns the current cursor value with rounding
+    pub fn rounded_cursor_value(&self) -> T
+    where
+        T: Copy,
+    {
+        self.d[self.rounded_cursor()]
     }
 }
 
 impl<'a> Scanner<'a, u8> {
+    /// Attempt to parse the next byte
     pub fn try_next_byte(&mut self) -> Option<u8> {
         if self.eof() {
             None
         } else {
-            Some(unsafe { self.next_byte() })
+            Some(unsafe {
+                // UNSAFE(@ohsayan): +remaining check
+                self.next_byte()
+            })
         }
     }
+    /// Attempt to parse the next block
     pub fn try_next_block<const N: usize>(&mut self) -> Option<[u8; N]> {
         if self.has_left(N) {
-            Some(unsafe { self.next_chunk() })
+            Some(unsafe {
+                // UNSAFE(@ohsayan): +remaining check
+                self.next_chunk()
+            })
         } else {
             None
         }
     }
-    pub fn try_next_variable_block(&'a mut self, len: usize) -> Option<&'a [u8]> {
+    /// Attempt to parse the next block (variable)
+    pub fn try_next_variable_block(&mut self, len: usize) -> Option<&'a [u8]> {
         if self.has_left(len) {
-            Some(unsafe { self.next_chunk_variable(len) })
+            Some(unsafe {
+                // UNSAFE(@ohsayan): +remaining check
+                self.next_chunk_variable(len)
+            })
         } else {
             None
         }
     }
 }
 
-pub enum BufferedReadResult<T> {
+/// Incomplete buffered reads
+#[derive(Debug, PartialEq)]
+pub enum ScannerDecodeResult<T> {
+    /// The value was decoded
     Value(T),
+    /// We need more data to determine if we have the correct value
     NeedMore,
+    /// Found an error while decoding a value
     Error,
 }
 
 impl<'a> Scanner<'a, u8> {
+    /// Keep moving the cursor ahead while the predicate returns true
     pub fn trim_ahead(&mut self, f: impl Fn(u8) -> bool) {
-        while self.matches_cursor_rounded_and_not_eof(|b| f(*b)) {
-            unsafe { self.move_ahead() }
-        }
-    }
-    pub fn move_ahead_if_matches(&mut self, f: impl Fn(u8) -> bool) {
-        unsafe { self.move_back_by(self.matches_cursor_rounded_and_not_eof(|b| f(*b)) as _) }
-    }
-    /// Attempt to parse a `\n` terminated (we move past the LF, so you can't see it)
-    ///
-    /// If we were unable to read in the integer, then the cursor will be restored to its starting position
-    // TODO(@ohsayan): optimize
-    pub fn try_next_ascii_u64_lf_separated_with_result(&mut self) -> BufferedReadResult<u64> {
-        let mut okay = true;
-        let start = self.cursor();
-        let ret = self.extract_integer(&mut okay);
-        let payload_ok = okay;
-        let lf = self.matches_cursor_rounded_and_not_eof(|b| *b == b'\n');
-        okay &= lf;
-        unsafe { self._incr(okay as _) }; // skip LF
-        if okay {
-            BufferedReadResult::Value(ret)
-        } else {
-            unsafe { self.set_cursor(start) }
-            if payload_ok {
-                // payload was ok, but we missed a null
-                BufferedReadResult::NeedMore
-            } else {
-                // payload was NOT ok
-                BufferedReadResult::Error
+        while self.rounded_cursor_not_eof_matches(|b| f(*b)) {
+            unsafe {
+                // UNSAFE(@ohsayan): not eof
+                self.incr_cursor()
             }
         }
     }
+    /// Attempt to parse a `\n` terminated integer (we move past the LF, so you can't see it)
+    ///
+    /// If we were unable to read in the integer, then the cursor will be restored to its starting position
+    // TODO(@ohsayan): optimize
+    pub fn try_next_ascii_u64_lf_separated_with_result_or_restore_cursor(
+        &mut self,
+    ) -> ScannerDecodeResult<u64> {
+        self.try_next_ascii_u64_lf_separated_with_result_or::<true>()
+    }
+    pub fn try_next_ascii_u64_lf_separated_with_result(&mut self) -> ScannerDecodeResult<u64> {
+        self.try_next_ascii_u64_lf_separated_with_result_or::<false>()
+    }
+    pub fn try_next_ascii_u64_lf_separated_with_result_or<const RESTORE_CURSOR: bool>(
+        &mut self,
+    ) -> ScannerDecodeResult<u64> {
+        let mut okay = true;
+        let start = self.cursor();
+        let ret = self.try_next_ascii_u64_stop_at_lf(&mut okay);
+        let payload_ok = okay;
+        let lf = self.rounded_cursor_not_eof_matches(|b| *b == b'\n');
+        okay &= lf;
+        unsafe {
+            // UNSAFE(@ohsayan): not eof
+            // skip LF
+            self.incr_cursor_if(okay)
+        };
+        if okay {
+            ScannerDecodeResult::Value(ret)
+        } else {
+            if RESTORE_CURSOR {
+                unsafe {
+                    // UNSAFE(@ohsayan): we correctly restore the cursor
+                    self.set_cursor(start)
+                }
+            }
+            if payload_ok {
+                // payload was ok, but we missed a null
+                ScannerDecodeResult::NeedMore
+            } else {
+                // payload was NOT ok
+                ScannerDecodeResult::Error
+            }
+        }
+    }
+    /// Attempt to parse a LF terminated integer (we move past the LF)
+    /// If we were unable to read in the integer, then the cursor will be restored to its starting position
+    pub fn try_next_ascii_u64_lf_separated_or_restore_cursor(&mut self) -> Option<u64> {
+        self.try_next_ascii_u64_lf_separated_or::<true>()
+    }
     pub fn try_next_ascii_u64_lf_separated(&mut self) -> Option<u64> {
+        self.try_next_ascii_u64_lf_separated_or::<false>()
+    }
+    pub fn try_next_ascii_u64_lf_separated_or<const RESTORE_CURSOR: bool>(
+        &mut self,
+    ) -> Option<u64> {
         let start = self.cursor();
         let mut okay = true;
-        let ret = self.extract_integer(&mut okay);
-        let lf = self.matches_cursor_rounded_and_not_eof(|b| *b == b'\n');
+        let ret = self.try_next_ascii_u64_stop_at_lf(&mut okay);
+        let lf = self.rounded_cursor_not_eof_matches(|b| *b == b'\n');
+        unsafe {
+            // UNSAFE(@ohsayan): not eof
+            self.incr_cursor_if(lf & okay)
+        }
         if okay & lf {
             Some(ret)
         } else {
-            unsafe { self.set_cursor(start) }
+            if RESTORE_CURSOR {
+                unsafe {
+                    // UNSAFE(@ohsayan): we correctly restore the cursor
+                    self.set_cursor(start)
+                }
+            }
             None
         }
     }
-    pub fn extract_integer(&mut self, okay: &mut bool) -> u64 {
+    /// Extracts whatever integer is possible using the current bytestream, stopping at a LF (but **not** skipping it)
+    pub fn try_next_ascii_u64_stop_at_lf(&mut self, g_okay: &mut bool) -> u64 {
+        self.try_next_ascii_u64_stop_at::<true>(g_okay, |byte| byte != b'\n')
+    }
+    /// Extracts whatever integer is possible using the current bytestream, stopping only when either an overflow occurs or when
+    /// the closure returns false
+    pub fn try_next_ascii_u64_stop_at<const ASCII_CHECK: bool>(
+        &mut self,
+        g_okay: &mut bool,
+        keep_going_if: impl Fn(u8) -> bool,
+    ) -> u64 {
         let mut ret = 0u64;
-        while self.matches_cursor_rounded_and_not_eof(|b| *b != b'\n') & *okay {
+        let mut okay = true;
+        while self.rounded_cursor_not_eof_matches(|b| keep_going_if(*b)) & okay {
             let b = self.d[self.cursor()];
-            *okay &= b.is_ascii_digit();
+            if ASCII_CHECK {
+                okay &= b.is_ascii_digit();
+            }
             ret = match ret.checked_mul(10) {
                 Some(r) => r,
                 None => {
-                    *okay = false;
+                    okay = false;
                     break;
                 }
             };
             ret = match ret.checked_add((b & 0x0F) as u64) {
                 Some(r) => r,
                 None => {
-                    *okay = false;
+                    okay = false;
                     break;
                 }
             };
-            unsafe { self._incr(1) }
+            unsafe {
+                // UNSAFE(@ohsayan): loop invariant
+                self.incr_cursor_by(1)
+            }
         }
+        *g_okay &= okay;
         ret
     }
 }
 
 impl<'a> Scanner<'a, u8> {
+    /// Attempt to parse the next [`i64`] value, stopping and skipping the STOP_BYTE
+    ///
+    /// WARNING: The cursor is NOT reversed
+    pub fn try_next_ascii_i64_separated_by<const STOP_BYTE: u8>(&mut self) -> (bool, i64) {
+        let (okay, int) = self.try_next_ascii_i64_stop_at(|b| b == STOP_BYTE);
+        let lf = self.rounded_cursor_not_eof_equals(STOP_BYTE);
+        unsafe {
+            // UNSAFE(@ohsayan): not eof
+            self.incr_cursor_if(lf & okay)
+        }
+        (lf & okay, int)
+    }
+    /// Attempt to parse the next [`i64`] value, stopping at the stop condition or stopping if an error occurred
+    ///
+    /// WARNING: It is NOT guaranteed that the stop condition was met
+    pub fn try_next_ascii_i64_stop_at(&mut self, stop_if: impl Fn(u8) -> bool) -> (bool, i64) {
+        let mut ret = 0i64;
+        // check if we have a direction
+        let current = self.rounded_cursor_value();
+        let direction_negative = current == b'-';
+        // skip negative
+        unsafe {
+            // UNSAFE(@ohsayan): not eof
+            self.incr_cursor_if(direction_negative)
+        }
+        let mut okay = direction_negative | current.is_ascii_digit() & !self.eof();
+        while self.rounded_cursor_not_eof_matches(|b| !stop_if(*b)) & okay {
+            let byte = unsafe {
+                // UNSAFE(@ohsayan): loop invariant
+                self.next_byte()
+            };
+            okay &= byte.is_ascii_digit();
+            ret = match ret.checked_mul(10) {
+                Some(r) => r,
+                None => {
+                    okay = false;
+                    break;
+                }
+            };
+            if direction_negative {
+                ret = match ret.checked_sub((byte & 0x0f) as i64) {
+                    Some(r) => r,
+                    None => {
+                        okay = false;
+                        break;
+                    }
+                };
+            } else {
+                ret = match ret.checked_add((byte & 0x0f) as i64) {
+                    Some(r) => r,
+                    None => {
+                        okay = false;
+                        break;
+                    }
+                }
+            }
+        }
+        (okay, ret)
+    }
+}
+
+impl<'a> Scanner<'a, u8> {
+    /// Load the next [`u64`] LE
     pub unsafe fn next_u64_le(&mut self) -> u64 {
         u64::from_le_bytes(self.next_chunk())
     }
+    /// Load the next block
     pub unsafe fn next_chunk<const N: usize>(&mut self) -> [u8; N] {
         let mut b = [0u8; N];
-        ptr::copy_nonoverlapping(self._cursor(), b.as_mut_ptr(), N);
-        self._incr(N);
+        ptr::copy_nonoverlapping(self.cursor_ptr(), b.as_mut_ptr(), N);
+        self.incr_cursor_by(N);
         b
     }
-    pub unsafe fn next_chunk_variable(&mut self, size: usize) -> &[u8] {
-        let r = slice::from_raw_parts(self._cursor(), size);
-        self._incr(size);
+    /// Load the next variable-sized block
+    pub unsafe fn next_chunk_variable(&mut self, size: usize) -> &'a [u8] {
+        let r = slice::from_raw_parts(self.cursor_ptr(), size);
+        self.incr_cursor_by(size);
         r
     }
+    /// Load the next byte
     pub unsafe fn next_byte(&mut self) -> u8 {
-        let r = *self._cursor();
-        self._incr(1);
+        let r = *self.cursor_ptr();
+        self.incr_cursor_by(1);
         r
     }
 }

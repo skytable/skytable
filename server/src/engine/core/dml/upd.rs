@@ -33,8 +33,7 @@ use {
             core::{self, model::delta::DataDeltaKind, query_meta::AssignmentOperator},
             data::{
                 cell::Datacell,
-                lit::LitIR,
-                spec::{Dataspec1D, DataspecMeta1D},
+                lit::Lit,
                 tag::{DataTag, TagClass},
             },
             error::{Error, QueryResult},
@@ -49,51 +48,51 @@ use {
 };
 
 #[inline(always)]
-unsafe fn dc_op_fail(_: &Datacell, _: LitIR) -> (bool, Datacell) {
+unsafe fn dc_op_fail(_: &Datacell, _: Lit) -> (bool, Datacell) {
     (false, Datacell::null())
 }
 // bool
-unsafe fn dc_op_bool_ass(_: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    (true, Datacell::new_bool(rhs.read_bool_uck()))
+unsafe fn dc_op_bool_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    (true, Datacell::new_bool(rhs.bool()))
 }
 // uint
-unsafe fn dc_op_uint_ass(_: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    (true, Datacell::new_uint(rhs.read_uint_uck()))
+unsafe fn dc_op_uint_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    (true, Datacell::new_uint(rhs.uint()))
 }
-unsafe fn dc_op_uint_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (sum, of) = dc.read_uint().overflowing_add(rhs.read_uint_uck());
+unsafe fn dc_op_uint_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (sum, of) = dc.read_uint().overflowing_add(rhs.uint());
     (of, Datacell::new_uint(sum))
 }
-unsafe fn dc_op_uint_sub(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (diff, of) = dc.read_uint().overflowing_sub(rhs.read_uint_uck());
+unsafe fn dc_op_uint_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (diff, of) = dc.read_uint().overflowing_sub(rhs.uint());
     (of, Datacell::new_uint(diff))
 }
-unsafe fn dc_op_uint_mul(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (prod, of) = dc.read_uint().overflowing_mul(rhs.read_uint_uck());
+unsafe fn dc_op_uint_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (prod, of) = dc.read_uint().overflowing_mul(rhs.uint());
     (of, Datacell::new_uint(prod))
 }
-unsafe fn dc_op_uint_div(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (quo, of) = dc.read_uint().overflowing_div(rhs.read_uint_uck());
+unsafe fn dc_op_uint_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (quo, of) = dc.read_uint().overflowing_div(rhs.uint());
     (of, Datacell::new_uint(quo))
 }
 // sint
-unsafe fn dc_op_sint_ass(_: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    (true, Datacell::new_sint(rhs.read_sint_uck()))
+unsafe fn dc_op_sint_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    (true, Datacell::new_sint(rhs.sint()))
 }
-unsafe fn dc_op_sint_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (sum, of) = dc.read_sint().overflowing_add(rhs.read_sint_uck());
+unsafe fn dc_op_sint_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (sum, of) = dc.read_sint().overflowing_add(rhs.sint());
     (of, Datacell::new_sint(sum))
 }
-unsafe fn dc_op_sint_sub(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (diff, of) = dc.read_sint().overflowing_sub(rhs.read_sint_uck());
+unsafe fn dc_op_sint_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (diff, of) = dc.read_sint().overflowing_sub(rhs.sint());
     (of, Datacell::new_sint(diff))
 }
-unsafe fn dc_op_sint_mul(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (prod, of) = dc.read_sint().overflowing_mul(rhs.read_sint_uck());
+unsafe fn dc_op_sint_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (prod, of) = dc.read_sint().overflowing_mul(rhs.sint());
     (of, Datacell::new_sint(prod))
 }
-unsafe fn dc_op_sint_div(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let (quo, of) = dc.read_sint().overflowing_div(rhs.read_sint_uck());
+unsafe fn dc_op_sint_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let (quo, of) = dc.read_sint().overflowing_div(rhs.sint());
     (of, Datacell::new_sint(quo))
 }
 /*
@@ -106,28 +105,28 @@ unsafe fn dc_op_sint_div(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
     --
     TODO(@ohsayan): account for float32 overflow
 */
-unsafe fn dc_op_float_ass(_: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    (true, Datacell::new_float(rhs.read_float_uck()))
+unsafe fn dc_op_float_ass(_: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    (true, Datacell::new_float(rhs.float()))
 }
-unsafe fn dc_op_float_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let sum = dc.read_float() + rhs.read_float_uck();
+unsafe fn dc_op_float_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let sum = dc.read_float() + rhs.float();
     (true, Datacell::new_float(sum))
 }
-unsafe fn dc_op_float_sub(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let diff = dc.read_float() - rhs.read_float_uck();
+unsafe fn dc_op_float_sub(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let diff = dc.read_float() - rhs.float();
     (true, Datacell::new_float(diff))
 }
-unsafe fn dc_op_float_mul(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let prod = dc.read_float() - rhs.read_float_uck();
+unsafe fn dc_op_float_mul(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let prod = dc.read_float() - rhs.float();
     (true, Datacell::new_float(prod))
 }
-unsafe fn dc_op_float_div(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let quo = dc.read_float() * rhs.read_float_uck();
+unsafe fn dc_op_float_div(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let quo = dc.read_float() * rhs.float();
     (true, Datacell::new_float(quo))
 }
 // binary
-unsafe fn dc_op_bin_ass(_dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let new_bin = rhs.read_bin_uck();
+unsafe fn dc_op_bin_ass(_dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let new_bin = rhs.bin();
     let mut v = Vec::new();
     if v.try_reserve_exact(new_bin.len()).is_err() {
         return dc_op_fail(_dc, rhs);
@@ -135,8 +134,8 @@ unsafe fn dc_op_bin_ass(_dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
     v.extend_from_slice(new_bin);
     (true, Datacell::new_bin(v.into_boxed_slice()))
 }
-unsafe fn dc_op_bin_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let push_into_bin = rhs.read_bin_uck();
+unsafe fn dc_op_bin_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let push_into_bin = rhs.bin();
     let mut bin = Vec::new();
     if compiler::unlikely(bin.try_reserve_exact(push_into_bin.len()).is_err()) {
         return dc_op_fail(dc, rhs);
@@ -146,8 +145,8 @@ unsafe fn dc_op_bin_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
     (true, Datacell::new_bin(bin.into_boxed_slice()))
 }
 // string
-unsafe fn dc_op_str_ass(_dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let new_str = rhs.read_str_uck();
+unsafe fn dc_op_str_ass(_dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let new_str = rhs.str();
     let mut v = String::new();
     if v.try_reserve_exact(new_str.len()).is_err() {
         return dc_op_fail(_dc, rhs);
@@ -155,8 +154,8 @@ unsafe fn dc_op_str_ass(_dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
     v.push_str(new_str);
     (true, Datacell::new_str(v.into_boxed_str()))
 }
-unsafe fn dc_op_str_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
-    let push_into_str = rhs.read_str_uck();
+unsafe fn dc_op_str_add(dc: &Datacell, rhs: Lit) -> (bool, Datacell) {
+    let push_into_str = rhs.str();
     let mut str = String::new();
     if compiler::unlikely(str.try_reserve_exact(push_into_str.len()).is_err()) {
         return dc_op_fail(dc, rhs);
@@ -166,7 +165,7 @@ unsafe fn dc_op_str_add(dc: &Datacell, rhs: LitIR) -> (bool, Datacell) {
     (true, Datacell::new_str(str.into_boxed_str()))
 }
 
-static OPERATOR: [unsafe fn(&Datacell, LitIR) -> (bool, Datacell); {
+static OPERATOR: [unsafe fn(&Datacell, Lit) -> (bool, Datacell); {
     TagClass::MAX as usize * AssignmentOperator::VARIANTS
 }] = [
     // bool

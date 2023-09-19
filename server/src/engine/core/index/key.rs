@@ -26,13 +26,12 @@
 
 use crate::engine::mem::ZERO_BLOCK;
 #[cfg(test)]
-use crate::{engine::data::spec::Dataspec1D, util::test_utils};
+use crate::util::test_utils;
 use {
     crate::engine::{
         data::{
             cell::Datacell,
-            lit::LitIR,
-            spec::DataspecMeta1D,
+            lit::Lit,
             tag::{DataTag, TagUnique},
         },
         idx::meta::Comparable,
@@ -245,22 +244,22 @@ impl Hash for PrimaryIndexKey {
     }
 }
 
-impl<'a> PartialEq<LitIR<'a>> for PrimaryIndexKey {
-    fn eq(&self, key: &LitIR<'a>) -> bool {
+impl<'a> PartialEq<Lit<'a>> for PrimaryIndexKey {
+    fn eq(&self, key: &Lit<'a>) -> bool {
         debug_assert!(key.kind().tag_unique().is_unique());
         self.tag == key.kind().tag_unique() && self.virtual_block() == key.__vdata()
     }
 }
 
-impl<'a> Comparable<LitIR<'a>> for PrimaryIndexKey {
-    fn cmp_eq(&self, key: &LitIR<'a>) -> bool {
-        <PrimaryIndexKey as PartialEq<LitIR>>::eq(self, key)
+impl<'a> Comparable<Lit<'a>> for PrimaryIndexKey {
+    fn cmp_eq(&self, key: &Lit<'a>) -> bool {
+        <PrimaryIndexKey as PartialEq<Lit>>::eq(self, key)
     }
 }
 
-impl<'a> Comparable<PrimaryIndexKey> for LitIR<'a> {
+impl<'a> Comparable<PrimaryIndexKey> for Lit<'a> {
     fn cmp_eq(&self, key: &PrimaryIndexKey) -> bool {
-        <PrimaryIndexKey as PartialEq<LitIR>>::eq(key, self)
+        <PrimaryIndexKey as PartialEq<Lit>>::eq(key, self)
     }
 }
 
@@ -333,16 +332,16 @@ fn check_pk_eq_hash() {
 fn check_pk_lit_eq_hash() {
     let state = test_utils::randomstate();
     let data = [
-        LitIR::UnsignedInt(100),
-        LitIR::SignedInt(-100),
-        LitIR::Bin(b"binary bro"),
-        LitIR::Str("string bro"),
+        Lit::new_uint(100),
+        Lit::new_sint(-100),
+        Lit::new_bin(b"binary bro"),
+        Lit::new_str("string bro"),
     ];
-    for litir in data {
-        let pk = PrimaryIndexKey::try_from_dc(Datacell::from(litir.clone())).unwrap();
-        assert_eq!(pk, litir);
+    for lit in data {
+        let pk = PrimaryIndexKey::try_from_dc(Datacell::from(lit.clone())).unwrap();
+        assert_eq!(pk, lit);
         assert_eq!(
-            test_utils::hash_rs(&state, &litir),
+            test_utils::hash_rs(&state, &lit),
             test_utils::hash_rs(&state, &pk)
         );
     }
@@ -352,7 +351,7 @@ fn check_pk_lit_eq_hash() {
 fn check_pk_extremes() {
     let state = test_utils::randomstate();
     let d1 = PrimaryIndexKey::try_from_dc(Datacell::new_uint(u64::MAX)).unwrap();
-    let d2 = PrimaryIndexKey::try_from_dc(Datacell::from(LitIR::UnsignedInt(u64::MAX))).unwrap();
+    let d2 = PrimaryIndexKey::try_from_dc(Datacell::from(Lit::new_uint(u64::MAX))).unwrap();
     assert_eq!(d1, d2);
     assert_eq!(d1.uint().unwrap(), u64::MAX);
     assert_eq!(d2.uint().unwrap(), u64::MAX);
@@ -360,7 +359,7 @@ fn check_pk_extremes() {
         test_utils::hash_rs(&state, &d1),
         test_utils::hash_rs(&state, &d2)
     );
-    assert_eq!(d1, LitIR::UnsignedInt(u64::MAX));
-    assert_eq!(d2, LitIR::UnsignedInt(u64::MAX));
+    assert_eq!(d1, Lit::new_uint(u64::MAX));
+    assert_eq!(d2, Lit::new_uint(u64::MAX));
     assert_eq!(d1.uint().unwrap(), u64::MAX);
 }

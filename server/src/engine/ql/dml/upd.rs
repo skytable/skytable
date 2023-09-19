@@ -31,7 +31,7 @@ use {
     crate::{
         engine::{
             core::query_meta::AssignmentOperator,
-            data::lit::LitIR,
+            data::lit::Lit,
             error::{Error, QueryResult},
             ql::{
                 ast::{Entity, QueryData, State},
@@ -60,13 +60,13 @@ pub struct AssignmentExpression<'a> {
     /// the LHS ident
     pub lhs: Ident<'a>,
     /// the RHS lit
-    pub rhs: LitIR<'a>,
+    pub rhs: Lit<'a>,
     /// operator
     pub operator_fn: AssignmentOperator,
 }
 
 impl<'a> AssignmentExpression<'a> {
-    pub fn new(lhs: Ident<'a>, rhs: LitIR<'a>, operator_fn: AssignmentOperator) -> Self {
+    pub fn new(lhs: Ident<'a>, rhs: Lit<'a>, operator_fn: AssignmentOperator) -> Self {
         Self {
             lhs,
             rhs,

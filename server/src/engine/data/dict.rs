@@ -26,10 +26,7 @@
 
 use {
     crate::engine::{
-        data::{
-            cell::Datacell,
-            lit::{Lit, LitIR},
-        },
+        data::{cell::Datacell, lit::Lit},
         idx::STIndex,
     },
     std::collections::HashMap,
@@ -181,15 +178,9 @@ fn rmerge_metadata_prepare_patch(
     impls
 */
 
-impl<'a> From<LitIR<'a>> for DictEntryGeneric {
-    fn from(l: LitIR<'a>) -> Self {
-        Self::Data(Datacell::from(l))
-    }
-}
-
 impl<'a> From<Lit<'a>> for DictEntryGeneric {
-    fn from(value: Lit<'a>) -> Self {
-        Self::Data(Datacell::from(value))
+    fn from(l: Lit<'a>) -> Self {
+        Self::Data(Datacell::from(l))
     }
 }
 

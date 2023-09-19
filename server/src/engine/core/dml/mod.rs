@@ -32,7 +32,7 @@ mod upd;
 use crate::{
     engine::{
         core::model::Model,
-        data::{lit::LitIR, spec::DataspecMeta1D, tag::DataTag},
+        data::{lit::Lit, tag::DataTag},
         error::{Error, QueryResult},
         ql::dml::WhereClause,
     },
@@ -47,7 +47,7 @@ impl Model {
     pub(self) fn resolve_where<'a>(
         &self,
         where_clause: &mut WhereClause<'a>,
-    ) -> QueryResult<LitIR<'a>> {
+    ) -> QueryResult<Lit<'a>> {
         match where_clause.clauses_mut().remove(self.p_key().as_bytes()) {
             Some(clause)
                 if clause.filter_hint_none()

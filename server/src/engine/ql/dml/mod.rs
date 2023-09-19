@@ -39,7 +39,7 @@ use {
         ast::{QueryData, State},
         lex::Ident,
     },
-    crate::{engine::data::lit::LitIR, util::compiler},
+    crate::{engine::data::lit::Lit, util::compiler},
     std::collections::HashMap,
 };
 
@@ -59,13 +59,13 @@ fn u(b: bool) -> u8 {
 #[derive(Debug, PartialEq)]
 pub struct RelationalExpr<'a> {
     pub(super) lhs: Ident<'a>,
-    pub(super) rhs: LitIR<'a>,
+    pub(super) rhs: Lit<'a>,
     pub(super) opc: u8,
 }
 
 impl<'a> RelationalExpr<'a> {
     #[inline(always)]
-    pub(super) fn new(lhs: Ident<'a>, rhs: LitIR<'a>, opc: u8) -> RelationalExpr<'a> {
+    pub(super) fn new(lhs: Ident<'a>, rhs: Lit<'a>, opc: u8) -> RelationalExpr<'a> {
         Self { lhs, rhs, opc }
     }
     pub(super) const OP_EQ: u8 = 1;
@@ -77,7 +77,7 @@ impl<'a> RelationalExpr<'a> {
     pub fn filter_hint_none(&self) -> bool {
         self.opc == Self::OP_EQ
     }
-    pub fn rhs(&self) -> LitIR<'a> {
+    pub fn rhs(&self) -> Lit<'a> {
         self.rhs.clone()
     }
     #[inline(always)]

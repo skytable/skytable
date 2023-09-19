@@ -26,7 +26,7 @@
 
 use {
     super::{super::lex::Ident, lex_insecure, *},
-    crate::engine::data::{lit::Lit, spec::Dataspec1D},
+    crate::engine::data::lit::Lit,
 };
 mod inspect {
     use {
@@ -71,7 +71,7 @@ mod alter_space {
     use {
         super::*,
         crate::engine::{
-            data::{lit::Lit, spec::Dataspec1D},
+            data::lit::Lit,
             ql::{ast::parse_ast_node_full, ddl::alt::AlterSpace},
         },
     };
@@ -98,8 +98,8 @@ mod alter_space {
             AlterSpace::new(
                 Ident::from("mymodel"),
                 null_dict! {
-                    "max_entry" => Lit::UnsignedInt(1000),
-                    "driver" => Lit::Str("ts-0.8".into())
+                    "max_entry" => Lit::new_uint(1000),
+                    "driver" => Lit::new_string("ts-0.8".into())
                 }
             )
         );
@@ -130,9 +130,9 @@ mod tymeta {
         assert_eq!(
             tymeta,
             null_dict! {
-                "hello" => Lit::Str("world".into()),
-                "loading" => Lit::Bool(true),
-                "size" => Lit::UnsignedInt(100)
+                "hello" => Lit::new_string("world".into()),
+                "loading" => Lit::new_bool(true),
+                "size" => Lit::new_uint(100)
             }
         );
     }
@@ -154,8 +154,8 @@ mod tymeta {
         assert_eq!(
             final_ret,
             null_dict! {
-                "maxlen" => Lit::UnsignedInt(100),
-                "unique" => Lit::Bool(true)
+                "maxlen" => Lit::new_uint(100),
+                "unique" => Lit::new_bool(true)
             }
         )
     }
@@ -179,10 +179,10 @@ mod tymeta {
         assert_eq!(
             final_ret,
             null_dict! {
-                "maxlen" => Lit::UnsignedInt(100),
-                "unique" => Lit::Bool(true),
+                "maxlen" => Lit::new_uint(100),
+                "unique" => Lit::new_bool(true),
                 "this" => null_dict! {
-                    "is" => Lit::Str("cool".into())
+                    "is" => Lit::new_string("cool".into())
                 }
             }
         )
@@ -209,7 +209,7 @@ mod layer {
             vec![LayerSpec::new(
                 Ident::from("string"),
                 null_dict! {
-                    "maxlen" => Lit::UnsignedInt(100)
+                    "maxlen" => Lit::new_uint(100)
                 }
             )]
         );
@@ -237,8 +237,8 @@ mod layer {
                 LayerSpec::new(
                     Ident::from("list"),
                     null_dict! {
-                        "unique" => Lit::Bool(true),
-                        "maxlen" => Lit::UnsignedInt(10),
+                        "unique" => Lit::new_bool(true),
+                        "maxlen" => Lit::new_uint(10),
                     }
                 )
             ]
@@ -257,15 +257,15 @@ mod layer {
                 LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
-                        "ascii_only" => Lit::Bool(true),
-                        "maxlen" => Lit::UnsignedInt(255)
+                        "ascii_only" => Lit::new_bool(true),
+                        "maxlen" => Lit::new_uint(255)
                     }
                 ),
                 LayerSpec::new(
                     Ident::from("list"),
                     null_dict! {
-                        "unique" => Lit::Bool(true),
-                        "maxlen" => Lit::UnsignedInt(10),
+                        "unique" => Lit::new_bool(true),
+                        "maxlen" => Lit::new_uint(10),
                     }
                 )
             ]
@@ -289,10 +289,13 @@ mod layer {
             LayerSpec::new(
                 Ident::from("list"),
                 null_dict! {
-                    "maxlen" => Lit::UnsignedInt(100),
+                    "maxlen" => Lit::new_uint(100),
                 },
             ),
-            LayerSpec::new(Ident::from("list"), null_dict!("unique" => Lit::Bool(true))),
+            LayerSpec::new(
+                Ident::from("list"),
+                null_dict!("unique" => Lit::new_bool(true)),
+            ),
         ];
         fuzz_tokens(tok.as_slice(), |should_pass, new_tok| {
             let layers = parse_ast_node_multiple_full::<LayerSpec>(&new_tok);
@@ -360,8 +363,8 @@ mod fields {
                 [LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
-                        "maxlen" => Lit::UnsignedInt(10),
-                        "ascii_only" => Lit::Bool(true),
+                        "maxlen" => Lit::new_uint(10),
+                        "ascii_only" => Lit::new_bool(true),
                     }
                 )]
                 .into(),
@@ -393,14 +396,14 @@ mod fields {
                     LayerSpec::new(
                         Ident::from("string"),
                         null_dict! {
-                            "maxlen" => Lit::UnsignedInt(255),
-                            "ascii_only" => Lit::Bool(true),
+                            "maxlen" => Lit::new_uint(255),
+                            "ascii_only" => Lit::new_bool(true),
                         }
                     ),
                     LayerSpec::new(
                         Ident::from("list"),
                         null_dict! {
-                            "unique" => Lit::Bool(true)
+                            "unique" => Lit::new_bool(true)
                         }
                     ),
                 ]
@@ -555,7 +558,7 @@ mod schemas {
                             LayerSpec::new(
                                 Ident::from("list"),
                                 null_dict! {
-                                    "unique" => Lit::Bool(true)
+                                    "unique" => Lit::new_bool(true)
                                 }
                             )
                         ],
@@ -624,7 +627,7 @@ mod schemas {
                             LayerSpec::new(
                                 Ident::from("list"),
                                 null_dict! {
-                                    "unique" => Lit::Bool(true)
+                                    "unique" => Lit::new_bool(true)
                                 }
                             )
                         ],
@@ -634,9 +637,9 @@ mod schemas {
                 ],
                 null_dict! {
                     "env" => null_dict! {
-                        "free_user_limit" => Lit::UnsignedInt(100),
+                        "free_user_limit" => Lit::new_uint(100),
                     },
-                    "storage_driver" => Lit::Str("skyheap".into()),
+                    "storage_driver" => Lit::new_string("skyheap".into()),
                 }
             )
         )
@@ -679,7 +682,7 @@ mod dict_field_syntax {
                 Ident::from("username"),
                 vec![LayerSpec::new(Ident::from("string"), null_dict! {})],
                 null_dict! {
-                    "nullable" => Lit::Bool(false),
+                    "nullable" => Lit::new_bool(false),
                 },
             )
         );
@@ -707,13 +710,13 @@ mod dict_field_syntax {
                 vec![LayerSpec::new(
                     Ident::from("string"),
                     null_dict! {
-                        "minlen" => Lit::UnsignedInt(6),
-                        "maxlen" => Lit::UnsignedInt(255),
+                        "minlen" => Lit::new_uint(6),
+                        "maxlen" => Lit::new_uint(255),
                     }
                 )],
                 null_dict! {
-                    "nullable" => Lit::Bool(false),
-                    "jingle_bells" => Lit::Str("snow".into()),
+                    "nullable" => Lit::new_bool(false),
+                    "jingle_bells" => Lit::new_string("snow".into()),
                 },
             )
         );
@@ -744,19 +747,19 @@ mod dict_field_syntax {
                     LayerSpec::new(
                         Ident::from("string"),
                         null_dict! {
-                            "ascii_only" => Lit::Bool(true),
+                            "ascii_only" => Lit::new_bool(true),
                         }
                     ),
                     LayerSpec::new(
                         Ident::from("list"),
                         null_dict! {
-                            "unique" => Lit::Bool(true),
+                            "unique" => Lit::new_bool(true),
                         }
                     )
                 ],
                 null_dict! {
-                    "nullable" => Lit::Bool(true),
-                    "jingle_bells" => Lit::Str("snow".into()),
+                    "nullable" => Lit::new_bool(true),
+                    "jingle_bells" => Lit::new_string("snow".into()),
                 },
             )
         );
@@ -863,7 +866,7 @@ mod alter_model_add {
                         Ident::from("myfield"),
                         [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
-                            "nullable" => Lit::Bool(true)
+                            "nullable" => Lit::new_bool(true)
                         },
                     )]
                     .into()
@@ -889,7 +892,7 @@ mod alter_model_add {
                         Ident::from("myfield"),
                         [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
-                            "nullable" => Lit::Bool(true)
+                            "nullable" => Lit::new_bool(true)
                         },
                     )]
                     .into()
@@ -930,7 +933,7 @@ mod alter_model_add {
                             Ident::from("myfield"),
                             [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
-                                "nullable" => Lit::Bool(true)
+                                "nullable" => Lit::new_bool(true)
                             },
                         ),
                         ExpandedField::new(
@@ -939,19 +942,19 @@ mod alter_model_add {
                                 LayerSpec::new(
                                     Ident::from("string"),
                                     null_dict! {
-                                        "maxlen" => Lit::UnsignedInt(255)
+                                        "maxlen" => Lit::new_uint(255)
                                     }
                                 ),
                                 LayerSpec::new(
                                     Ident::from("list"),
                                     null_dict! {
-                                       "unique" => Lit::Bool(true)
+                                       "unique" => Lit::new_bool(true)
                                     },
                                 )
                             ]
                             .into(),
                             null_dict! {
-                                "nullable" => Lit::Bool(false)
+                                "nullable" => Lit::new_bool(false)
                             },
                         )
                     ]
@@ -1042,7 +1045,7 @@ mod alter_model_update {
                         Ident::from("myfield"),
                         [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                         null_dict! {
-                            "nullable" => Lit::Bool(true)
+                            "nullable" => Lit::new_bool(true)
                         },
                     )]
                     .into()
@@ -1077,7 +1080,7 @@ mod alter_model_update {
                             Ident::from("myfield"),
                             [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
-                                "nullable" => Lit::Bool(true)
+                                "nullable" => Lit::new_bool(true)
                             },
                         ),
                         ExpandedField::new(
@@ -1120,14 +1123,14 @@ mod alter_model_update {
                             Ident::from("myfield"),
                             [LayerSpec::new(Ident::from("string"), null_dict! {})].into(),
                             null_dict! {
-                                "nullable" => Lit::Bool(true)
+                                "nullable" => Lit::new_bool(true)
                             },
                         ),
                         ExpandedField::new(
                             Ident::from("myfield2"),
                             [LayerSpec::new(
                                 Ident::from("string"),
-                                null_dict! {"maxlen" => Lit::UnsignedInt(255)}
+                                null_dict! {"maxlen" => Lit::new_uint(255)}
                             )]
                             .into(),
                             null_dict! {},
