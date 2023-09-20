@@ -24,7 +24,7 @@
  *
 */
 
-mod data_exchange;
+mod exchange;
 mod handshake;
 #[cfg(test)]
 mod tests;

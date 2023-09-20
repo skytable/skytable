@@ -24,12 +24,9 @@
  *
 */
 
-use {
-    crate::{
-        engine::mem::scanner::{BufferedScanner, ScannerDecodeResult},
-        util::compiler,
-    },
-    std::slice,
+use crate::{
+    engine::mem::scanner::{BufferedScanner, ScannerDecodeResult},
+    util::compiler,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, sky_macros::EnumMethods)]
@@ -320,10 +317,8 @@ impl<'a> CHandshake<'a> {
             // we're done here
             return unsafe {
                 // UNSAFE(@ohsayan): we just checked buffered size
-                let uname = slice::from_raw_parts(scanner.current_buffer().as_ptr(), uname_l);
-                let pwd =
-                    slice::from_raw_parts(scanner.current_buffer().as_ptr().add(uname_l), pwd_l);
-                scanner.incr_cursor_by(uname_l + pwd_l);
+                let uname = scanner.next_chunk_variable(uname_l);
+                let pwd = scanner.next_chunk_variable(pwd_l);
                 HandshakeResult::Completed(Self::new(
                     static_hs,
                     Some(CHandshakeAuth::new(uname, pwd)),

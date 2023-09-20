@@ -45,10 +45,7 @@ use {
 mod lexer {
     use {
         super::*,
-        crate::engine::{
-            data::{lit::Lit, spec::Dataspec1D},
-            ql::lex::Token,
-        },
+        crate::engine::{data::lit::Lit, ql::lex::Token},
     };
     #[bench]
     fn lex_number(b: &mut Bencher) {

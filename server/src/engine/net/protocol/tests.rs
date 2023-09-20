@@ -27,7 +27,7 @@
 use crate::engine::{
     mem::BufferedScanner,
     net::protocol::{
-        data_exchange::{CSQuery, CSQueryExchangeResult, CSQueryState},
+        exchange::{self, create_simple_query, QueryTimeExchangeResult, QueryTimeExchangeState},
         handshake::{
             AuthMode, CHandshake, CHandshakeAuth, CHandshakeStatic, DataExchangeMode,
             HandshakeResult, HandshakeState, HandshakeVersion, ProtocolVersion, QueryMode,
@@ -207,58 +207,112 @@ fn parse_auth_with_state_updates() {
     QT-DEX/SQ
 */
 
-const FULL_SQ: [u8; 116] = *b"S111\nSELECT username, email, bio, profile_pic, following, followers, FROM mysocialapp.users WHERE username = 'sayan'";
-const SQ_FULL: CSQuery<'static> = CSQuery::new(
-    b"SELECT username, email, bio, profile_pic, following, followers, FROM mysocialapp.users WHERE username = 'sayan'"
-);
+const SQ: &str = "select * from myspace.mymodel where username = ?";
 
 #[test]
-fn staged_qt_dex_sq() {
-    for i in 0..FULL_SQ.len() {
-        let buf = &FULL_SQ[..i + 1];
-        let mut scanner = BufferedScanner::new(buf);
-        let result = CSQuery::resume_with(&mut scanner, CSQueryState::default());
-        match buf.len() {
-            1..=3 => assert_eq!(
-                result,
-                CSQueryExchangeResult::ChangeState(CSQueryState::Initial, CSQuery::PREEMPTIVE_READ)
-            ),
+fn qtdex_simple_query() {
+    let query = create_simple_query(SQ, ["sayan"]);
+    let mut fin = 52;
+    for i in 0..query.len() {
+        let mut scanner = BufferedScanner::new(&query[..i + 1]);
+        let result = exchange::resume(&mut scanner, Default::default());
+        match scanner.buffer_len() {
+            1..=3 => assert_eq!(result, exchange::STATE_READ_INITIAL),
             4 => assert_eq!(
                 result,
-                CSQueryExchangeResult::ChangeState(CSQueryState::SizeSegmentPart(111), 2)
+                QueryTimeExchangeResult::ChangeState {
+                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
+                        size_of_static_frame: 4,
+                        packet_size: 56,
+                        q_window_part: 0,
+                    },
+                    expect_more: 56,
+                }
             ),
-            5..=115 => assert_eq!(
+            5 => assert_eq!(
                 result,
-                CSQueryExchangeResult::ChangeState(CSQueryState::WaitingForFullBlock(111), 111),
+                QueryTimeExchangeResult::ChangeState {
+                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
+                        size_of_static_frame: 4,
+                        packet_size: 56,
+                        q_window_part: 4,
+                    },
+                    expect_more: 55,
+                }
             ),
-            116 => assert_eq!(result, CSQueryExchangeResult::Completed(SQ_FULL)),
+            6 => assert_eq!(
+                result,
+                QueryTimeExchangeResult::ChangeState {
+                    new_state: QueryTimeExchangeState::SQ2Meta2Partial {
+                        size_of_static_frame: 4,
+                        packet_size: 56,
+                        q_window_part: 48,
+                    },
+                    expect_more: 54,
+                }
+            ),
+            7 => assert_eq!(
+                result,
+                QueryTimeExchangeResult::ChangeState {
+                    new_state: QueryTimeExchangeState::SQ3FinalizeWaitingForBlock {
+                        dataframe_size: 53,
+                        q_window: 48,
+                    },
+                    expect_more: 53,
+                }
+            ),
+            8..=59 => {
+                assert_eq!(
+                    result,
+                    QueryTimeExchangeResult::ChangeState {
+                        new_state: QueryTimeExchangeState::SQ3FinalizeWaitingForBlock {
+                            dataframe_size: 53,
+                            q_window: 48
+                        },
+                        expect_more: fin,
+                    }
+                );
+                fin -= 1;
+            }
+            60 => match result {
+                QueryTimeExchangeResult::SQCompleted(sq) => {
+                    assert_eq!(sq.query_str().unwrap(), SQ);
+                    assert_eq!(sq.params_str().unwrap(), "sayan");
+                }
+                _ => unreachable!(),
+            },
             _ => unreachable!(),
         }
     }
 }
 
 #[test]
-fn staged_with_status_switch_qt_dex_sq() {
+fn qtdex_simple_query_update_state() {
+    let query = create_simple_query(SQ, ["sayan"]);
+    let mut state = QueryTimeExchangeState::default();
     let mut cursor = 0;
-    let mut expect = CSQuery::PREEMPTIVE_READ;
-    let mut state = CSQueryState::default();
+    let mut expected = 0;
     let mut rounds = 0;
     loop {
         rounds += 1;
-        let buf = &FULL_SQ[..cursor + expect];
+        let buf = &query[..expected + cursor];
         let mut scanner = unsafe { BufferedScanner::new_with_cursor(buf, cursor) };
-        match CSQuery::resume_with(&mut scanner, state) {
-            CSQueryExchangeResult::Completed(c) => {
-                assert_eq!(c, SQ_FULL);
+        match exchange::resume(&mut scanner, state) {
+            QueryTimeExchangeResult::SQCompleted(sq) => {
+                assert_eq!(sq.query_str().unwrap(), SQ);
+                assert_eq!(sq.params_str().unwrap(), "sayan");
                 break;
             }
-            CSQueryExchangeResult::ChangeState(new_state, _expect) => {
+            QueryTimeExchangeResult::ChangeState {
+                new_state,
+                expect_more,
+            } => {
+                expected = expect_more;
                 state = new_state;
-                expect = _expect;
-                cursor = scanner.cursor();
             }
-            CSQueryExchangeResult::PacketError => panic!("packet error"),
+            QueryTimeExchangeResult::Error => panic!("hit error!"),
         }
+        cursor = scanner.cursor();
     }
     assert_eq!(rounds, 3);
 }
