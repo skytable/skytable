@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{CriticalTask, GenericTask, GlobalInstanceLike, Task},
+    super::{CriticalTask, GenericTask, GlobalInstanceLike, SysConfig, Task},
     crate::engine::{
         core::GlobalNS,
         storage::v1::{
@@ -45,6 +45,7 @@ pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     max_delta_size: usize,
     txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    sys_cfg: super::SysConfig,
 }
 
 impl<Fs: RawFSInterface> TestGlobal<Fs> {
@@ -59,6 +60,7 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
             lp_queue: RwLock::default(),
             max_delta_size,
             txn_driver: Mutex::new(txn_driver),
+            sys_cfg: SysConfig::test_default(),
         }
     }
 }
@@ -109,6 +111,9 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     }
     fn get_max_delta_size(&self) -> usize {
         100
+    }
+    fn sys_cfg(&self) -> &super::config::SysConfig {
+        &self.sys_cfg
     }
 }
 

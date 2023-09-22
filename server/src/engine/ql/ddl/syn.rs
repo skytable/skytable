@@ -231,6 +231,16 @@ pub(super) fn rfold_dict<'a, Qd: QueryData<'a>>(
     _rfold_dict::<Qd, NoBreakpoint>(mstate, state, dict);
 }
 
+pub fn parse_dict<'a, Qd: QueryData<'a>>(state: &mut State<'a, Qd>) -> Option<DictGeneric> {
+    let mut d = DictGeneric::new();
+    rfold_dict(DictFoldState::OB, state, &mut d);
+    if state.okay() {
+        Some(d)
+    } else {
+        None
+    }
+}
+
 pub(super) fn rfold_tymeta<'a, Qd: QueryData<'a>>(
     mstate: DictFoldState,
     state: &mut State<'a, Qd>,

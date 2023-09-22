@@ -122,7 +122,7 @@ impl StartStop {
             (ReadNX::Read(_, time_start), ReadNX::Read(_, time_stop))
                 if time_start == time_stop => {}
             (ReadNX::Created(_), ReadNX::Created(_)) => {}
-            _ => return Err(SDSSError::StartupError(EMSG_FAILED_VERIFY)),
+            _ => return Err(SDSSError::OtherError(EMSG_FAILED_VERIFY)),
         }
         start_file
             .file_mut()

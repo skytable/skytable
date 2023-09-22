@@ -31,6 +31,7 @@ mod batch_jrnl;
 mod journal;
 mod loader;
 mod rw;
+mod sysdb;
 // hl
 pub mod inf;
 mod start_stop;
@@ -94,7 +95,7 @@ pub enum SDSSError {
     /// A corrupted file
     CorruptedFile(&'static str),
     // process errors
-    StartupError(&'static str),
+    OtherError(&'static str),
     // header
     /// The entire header is corrupted
     HeaderDecodeCorruptedHeader,

@@ -93,6 +93,7 @@ pub enum Error {
     TransactionalError,
     /// storage subsystem error
     StorageSubsystemError,
+    SysAuthError,
 }
 
 direct_from! {

@@ -45,6 +45,15 @@ pub enum DictEntryGeneric {
     Map(DictGeneric),
 }
 
+impl DictEntryGeneric {
+    pub fn as_dict_mut(&mut self) -> Option<&mut DictGeneric> {
+        match self {
+            Self::Map(m) => Some(m),
+            _ => None,
+        }
+    }
+}
+
 /*
     patchsets
 */

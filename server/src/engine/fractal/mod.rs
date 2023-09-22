@@ -43,7 +43,7 @@ mod mgr;
 pub mod test_utils;
 mod util;
 pub use {
-    config::ServerConfig,
+    config::SysConfig,
     drivers::FractalModelDriver,
     mgr::{CriticalTask, GenericTask, Task},
     util::FractalToken,
@@ -71,7 +71,7 @@ pub struct GlobalStateStart {
 /// Must be called iff this is the only thread calling it
 pub unsafe fn enable_and_start_all(
     gns: GlobalNS,
-    config: config::ServerConfig,
+    config: config::SysConfig,
     gns_driver: GNSTransactionDriverAnyFS<LocalFS>,
     model_drivers: ModelDrivers,
 ) -> GlobalStateStart {
@@ -124,6 +124,8 @@ pub trait GlobalInstanceLike {
             observed_len,
         )))
     }
+    // config handle
+    fn sys_cfg(&self) -> &config::SysConfig;
 }
 
 impl GlobalInstanceLike for Global {
@@ -145,6 +147,10 @@ impl GlobalInstanceLike for Global {
     // stat
     fn get_max_delta_size(&self) -> usize {
         self._get_max_delta_size()
+    }
+    // sys
+    fn sys_cfg(&self) -> &config::SysConfig {
+        &self.get_state().config
     }
 }
 
@@ -194,7 +200,7 @@ struct GlobalState {
     gns_driver: drivers::FractalGNSDriver,
     mdl_driver: RwLock<ModelDrivers>,
     task_mgr: mgr::FractalMgr,
-    config: config::ServerConfig,
+    config: config::SysConfig,
 }
 
 impl GlobalState {
@@ -203,7 +209,7 @@ impl GlobalState {
         gns_driver: drivers::FractalGNSDriver,
         mdl_driver: RwLock<ModelDrivers>,
         task_mgr: mgr::FractalMgr,
-        config: config::ServerConfig,
+        config: config::SysConfig,
     ) -> Self {
         Self {
             gns,

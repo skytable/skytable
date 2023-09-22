@@ -24,24 +24,134 @@
  *
 */
 
-use crate::engine::storage::v1::header_meta::HostRunMode;
+use {
+    crate::engine::{
+        error::{Error, QueryResult},
+        storage::v1::header_meta::HostRunMode,
+    },
+    parking_lot::RwLock,
+    std::collections::{hash_map::Entry, HashMap},
+};
 
-pub struct ServerConfig {
-    host_settings_version: u32,
-    host_run_mode: HostRunMode,
-    host_startup_counter: u64,
+#[derive(Debug)]
+/// The global system configuration
+pub struct SysConfig {
+    auth_data: RwLock<Option<SysAuth>>,
+    host_data: SysHostData,
 }
 
-impl ServerConfig {
-    pub fn new(
-        host_settings_version: u32,
-        host_run_mode: HostRunMode,
-        host_startup_counter: u64,
-    ) -> Self {
+impl SysConfig {
+    /// Initialize a new system config
+    pub fn new(auth_data: RwLock<Option<SysAuth>>, host_data: SysHostData) -> Self {
         Self {
-            host_settings_version,
-            host_run_mode,
-            host_startup_counter,
+            auth_data,
+            host_data,
         }
+    }
+    #[cfg(test)]
+    /// A test-mode default setting with auth disabled
+    pub(super) fn test_default() -> Self {
+        Self {
+            auth_data: RwLock::new(None),
+            host_data: SysHostData::new(0, HostRunMode::Prod, 0),
+        }
+    }
+    /// Returns a handle to the authentication data
+    pub fn auth_data(&self) -> &RwLock<Option<SysAuth>> {
+        &self.auth_data
+    }
+    /// Returns a reference to host data
+    pub fn host_data(&self) -> &SysHostData {
+        &self.host_data
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// The host data section (system.host)
+pub struct SysHostData {
+    startup_counter: u64,
+    run_mode: HostRunMode,
+    settings_version: u32,
+}
+
+impl SysHostData {
+    /// New [`SysHostData`]
+    pub fn new(startup_counter: u64, run_mode: HostRunMode, settings_version: u32) -> Self {
+        Self {
+            startup_counter,
+            run_mode,
+            settings_version,
+        }
+    }
+    pub fn startup_counter(&self) -> u64 {
+        self.startup_counter
+    }
+    pub fn run_mode(&self) -> HostRunMode {
+        self.run_mode
+    }
+    pub fn settings_version(&self) -> u32 {
+        self.settings_version
+    }
+}
+
+/*
+    auth
+*/
+
+#[derive(Debug, PartialEq)]
+/// The auth data section (system.auth)
+pub struct SysAuth {
+    root_key: Box<[u8]>,
+    users: HashMap<Box<str>, SysAuthUser>,
+}
+
+impl SysAuth {
+    /// New [`SysAuth`] with the given settings
+    pub fn new(root_key: Box<[u8]>, users: HashMap<Box<str>, SysAuthUser>) -> Self {
+        Self { root_key, users }
+    }
+    /// Create a new user with the given details
+    pub fn create_new_user(&mut self, username: &str, password: &str) -> QueryResult<()> {
+        match self.users.entry(username.into()) {
+            Entry::Vacant(ve) => {
+                ve.insert(SysAuthUser::new(
+                    rcrypt::hash(password, rcrypt::DEFAULT_COST)
+                        .unwrap()
+                        .into_boxed_slice(),
+                ));
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(Error::SysAuthError),
+        }
+    }
+    /// Verify the user with the given details
+    pub fn verify_user(&self, username: &str, password: &str) -> QueryResult<()> {
+        match self.users.get(username) {
+            Some(user) if rcrypt::verify(password, user.key()).unwrap() => Ok(()),
+            Some(_) | None => Err(Error::SysAuthError),
+        }
+    }
+    pub fn root_key(&self) -> &[u8] {
+        &self.root_key
+    }
+    pub fn users(&self) -> &HashMap<Box<str>, SysAuthUser> {
+        &self.users
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// The auth user
+pub struct SysAuthUser {
+    key: Box<[u8]>,
+}
+
+impl SysAuthUser {
+    /// Create a new [`SysAuthUser`]
+    fn new(key: Box<[u8]>) -> Self {
+        Self { key }
+    }
+    /// Get the key
+    pub fn key(&self) -> &[u8] {
+        self.key.as_ref()
     }
 }

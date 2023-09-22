@@ -37,7 +37,10 @@ use {
     },
     parking_lot::RwLock,
     std::{
-        collections::{hash_map::Entry, HashMap},
+        collections::{
+            hash_map::{Entry, OccupiedEntry},
+            HashMap,
+        },
         io::{Error, ErrorKind},
     },
 };
@@ -75,6 +78,23 @@ impl VNode {
 }
 
 /*
+    errors
+*/
+
+fn err_item_is_not_file<T>() -> super::SDSSResult<T> {
+    Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())
+}
+fn err_file_in_dir_path<T>() -> super::SDSSResult<T> {
+    Err(Error::new(ErrorKind::InvalidInput, "found file in directory path").into())
+}
+fn err_dir_missing_in_path<T>() -> super::SDSSResult<T> {
+    Err(Error::new(ErrorKind::InvalidInput, "could not find directory in path").into())
+}
+fn err_could_not_find_item<T>() -> super::SDSSResult<T> {
+    Err(Error::new(ErrorKind::NotFound, "could not find item").into())
+}
+
+/*
     vfs impl:
     - nested directory structure
     - make parents
@@ -97,6 +117,32 @@ pub struct VirtualFS;
 
 impl RawFSInterface for VirtualFS {
     type File = VFileDescriptor;
+    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()> {
+        // get file data
+        let data = with_file(from, |f| Ok(f.data.clone()))?;
+        // create new file
+        let file = VirtualFS::fs_fopen_or_create_rw(to)?;
+        match file {
+            RawFileOpen::Created(mut c) => {
+                c.fw_write_all(&data)?;
+            }
+            RawFileOpen::Existing(mut e) => {
+                e.fw_truncate_to(0)?;
+                e.fw_write_all(&data)?;
+            }
+        }
+        // delete old file
+        Self::fs_remove_file(from)
+    }
+    fn fs_remove_file(fpath: &str) -> SDSSResult<()> {
+        handle_item_mut(fpath, |e| match e.get() {
+            VNode::File(_) => {
+                e.remove();
+                Ok(())
+            }
+            _ => return err_item_is_not_file(),
+        })
+    }
     fn fs_create_dir(fpath: &str) -> super::SDSSResult<()> {
         // get vfs
         let mut vfs = VFS.write();
@@ -109,14 +155,8 @@ impl RawFSInterface for VirtualFS {
                 Some(VNode::Dir(d)) => {
                     current = d;
                 }
-                Some(VNode::File(_)) => {
-                    return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-                }
-                None => {
-                    return Err(
-                        Error::new(ErrorKind::NotFound, "could not find directory in path").into(),
-                    )
-                }
+                Some(VNode::File(_)) => return err_file_in_dir_path(),
+                None => return err_dir_missing_in_path(),
             }
         }
         match current.entry(target.into()) {
@@ -146,9 +186,7 @@ impl RawFSInterface for VirtualFS {
                     }
                     return create_ahead(ahead, d);
                 }
-                Some(VNode::File(_)) => {
-                    return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-                }
+                Some(VNode::File(_)) => return err_file_in_dir_path(),
                 None => {
                     let _ = current.insert(this.into(), VNode::Dir(into_dict!()));
                     let dir = current.get_mut(this).unwrap().as_dir_mut().unwrap();
@@ -177,11 +215,7 @@ impl RawFSInterface for VirtualFS {
                     f.write = true;
                     Ok(RawFileOpen::Existing(VFileDescriptor(fpath.into())))
                 }
-                VNode::Dir(_) => {
-                    return Err(
-                        Error::new(ErrorKind::InvalidInput, "found directory, not a file").into(),
-                    )
-                }
+                VNode::Dir(_) => return err_item_is_not_file(),
             },
             Entry::Vacant(v) => {
                 v.insert(VNode::File(VFile::new(true, true, vec![], 0)));
@@ -198,14 +232,8 @@ fn find_target_dir_mut<'a>(
     for component in components {
         match current.get_mut(component) {
             Some(VNode::Dir(d)) => current = d,
-            Some(VNode::File(_)) => {
-                return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-            }
-            None => {
-                return Err(
-                    Error::new(ErrorKind::NotFound, "could not find directory in path").into(),
-                )
-            }
+            Some(VNode::File(_)) => return err_file_in_dir_path(),
+            None => return err_dir_missing_in_path(),
         }
     }
     Ok(current)
@@ -218,20 +246,17 @@ fn find_target_dir<'a>(
     for component in components {
         match current.get(component) {
             Some(VNode::Dir(d)) => current = d,
-            Some(VNode::File(_)) => {
-                return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-            }
-            None => {
-                return Err(
-                    Error::new(ErrorKind::NotFound, "could not find directory in path").into(),
-                )
-            }
+            Some(VNode::File(_)) => return err_file_in_dir_path(),
+            None => return err_dir_missing_in_path(),
         }
     }
     Ok(current)
 }
 
-fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> Result<(), super::SDSSError> {
+fn handle_item_mut<T>(
+    fpath: &str,
+    f: impl Fn(OccupiedEntry<Box<str>, VNode>) -> super::SDSSResult<T>,
+) -> super::SDSSResult<T> {
     let mut vfs = VFS.write();
     let mut current = &mut *vfs;
     // process components
@@ -241,33 +266,45 @@ fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> Result<(), super::SDSSEr
             Some(VNode::Dir(dir)) => {
                 current = dir;
             }
-            Some(VNode::File(_)) => {
-                return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-            }
-            None => {
-                return Err(
-                    Error::new(ErrorKind::NotFound, "could not find directory in path").into(),
-                )
-            }
+            Some(VNode::File(_)) => return err_file_in_dir_path(),
+            None => return err_dir_missing_in_path(),
         }
     }
     match current.entry(target.into()) {
-        Entry::Occupied(dir) => match dir.get() {
-            VNode::Dir(d) => {
-                if allow_if_non_empty || d.is_empty() {
-                    dir.remove();
-                    return Ok(());
-                }
-                return Err(Error::new(ErrorKind::InvalidInput, "directory is not empty").into());
+        Entry::Occupied(item) => return f(item),
+        Entry::Vacant(_) => return err_could_not_find_item(),
+    }
+}
+fn handle_item<T>(fpath: &str, f: impl Fn(&VNode) -> super::SDSSResult<T>) -> super::SDSSResult<T> {
+    let vfs = VFS.read();
+    let mut current = &*vfs;
+    // process components
+    let (target, components) = split_target_and_components(fpath);
+    for component in components {
+        match current.get(component) {
+            Some(VNode::Dir(dir)) => {
+                current = dir;
             }
-            VNode::File(_) => {
-                return Err(Error::new(ErrorKind::InvalidInput, "found file in path").into())
-            }
-        },
-        Entry::Vacant(_) => {
-            return Err(Error::new(ErrorKind::NotFound, "could not find directory in path").into())
+            Some(VNode::File(_)) => return err_file_in_dir_path(),
+            None => return err_dir_missing_in_path(),
         }
     }
+    match current.get(target) {
+        Some(item) => return f(item),
+        None => return err_could_not_find_item(),
+    }
+}
+fn delete_dir(fpath: &str, allow_if_non_empty: bool) -> Result<(), super::SDSSError> {
+    handle_item_mut(fpath, |node| match node.get() {
+        VNode::Dir(d) => {
+            if allow_if_non_empty || d.is_empty() {
+                node.remove();
+                return Ok(());
+            }
+            return Err(Error::new(ErrorKind::InvalidInput, "directory is not empty").into());
+        }
+        VNode::File(_) => return err_file_in_dir_path(),
+    })
 }
 
 /*
@@ -318,9 +355,7 @@ fn with_file_mut<T>(fpath: &str, mut f: impl FnMut(&mut VFile) -> SDSSResult<T>)
     let target_dir = find_target_dir_mut(components, &mut vfs)?;
     match target_dir.get_mut(target_file) {
         Some(VNode::File(file)) => f(file),
-        Some(VNode::Dir(_)) => {
-            return Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())
-        }
+        Some(VNode::Dir(_)) => return err_item_is_not_file(),
         None => return Err(Error::from(ErrorKind::NotFound).into()),
     }
 }
@@ -331,9 +366,7 @@ fn with_file<T>(fpath: &str, mut f: impl FnMut(&VFile) -> SDSSResult<T>) -> SDSS
     let target_dir = find_target_dir(components, &vfs)?;
     match target_dir.get(target_file) {
         Some(VNode::File(file)) => f(file),
-        Some(VNode::Dir(_)) => {
-            return Err(Error::new(ErrorKind::InvalidInput, "found directory, not a file").into())
-        }
+        Some(VNode::Dir(_)) => return err_item_is_not_file(),
         None => return Err(Error::from(ErrorKind::NotFound).into()),
     }
 }
@@ -445,6 +478,12 @@ pub struct NullFS;
 pub struct NullFile;
 impl RawFSInterface for NullFS {
     type File = NullFile;
+    fn fs_rename_file(_: &str, _: &str) -> SDSSResult<()> {
+        Ok(())
+    }
+    fn fs_remove_file(_: &str) -> SDSSResult<()> {
+        Ok(())
+    }
     fn fs_create_dir(_: &str) -> SDSSResult<()> {
         Ok(())
     }

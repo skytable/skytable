@@ -339,3 +339,10 @@ macro_rules! into_vec {
         v
     }}
 }
+
+#[cfg(test)]
+macro_rules! lit {
+    ($lit:expr) => {
+        $crate::engine::data::lit::Lit::from($lit)
+    };
+}

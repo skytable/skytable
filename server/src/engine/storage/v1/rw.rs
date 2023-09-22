@@ -74,6 +74,8 @@ pub enum RawFileOpen<F> {
 pub trait RawFSInterface {
     const NOT_NULL: bool = true;
     type File: RawFileInterface;
+    fn fs_remove_file(fpath: &str) -> SDSSResult<()>;
+    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()>;
     fn fs_create_dir(fpath: &str) -> SDSSResult<()>;
     fn fs_create_dir_all(fpath: &str) -> SDSSResult<()>;
     fn fs_delete_dir(fpath: &str) -> SDSSResult<()>;
@@ -141,6 +143,12 @@ pub struct LocalFS;
 
 impl RawFSInterface for LocalFS {
     type File = File;
+    fn fs_remove_file(fpath: &str) -> SDSSResult<()> {
+        cvt(fs::remove_file(fpath))
+    }
+    fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()> {
+        cvt(fs::rename(from, to))
+    }
     fn fs_create_dir(fpath: &str) -> SDSSResult<()> {
         cvt(fs::create_dir(fpath))
     }

@@ -73,6 +73,7 @@ mod dr;
 pub enum FileScope {
     Journal = 0,
     DataBatch = 1,
+    FlatmapData = 2,
 }
 
 impl FileScope {
@@ -80,6 +81,7 @@ impl FileScope {
         Some(match id {
             0 => Self::Journal,
             1 => Self::DataBatch,
+            2 => Self::FlatmapData,
             _ => return None,
         })
     }
@@ -96,6 +98,7 @@ impl FileScope {
 pub enum FileSpecifier {
     GNSTxnLog = 0,
     TableDataBatch = 1,
+    SysDB = 2,
     #[cfg(test)]
     TestTransactionLog = 0xFF,
 }
@@ -105,6 +108,7 @@ impl FileSpecifier {
         Some(match v {
             0 => Self::GNSTxnLog,
             1 => Self::TableDataBatch,
+            2 => Self::SysDB,
             #[cfg(test)]
             0xFF => Self::TestTransactionLog,
             _ => return None,

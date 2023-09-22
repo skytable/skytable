@@ -1,5 +1,5 @@
 /*
- * Created on Tue Sep 13 2022
+ * Created on Fri Sep 22 2023
  *
  * This file is a part of Skytable
  * Skytable (formerly known as TerrabaseDB or Skybase) is a free and open-source
@@ -7,7 +7,7 @@
  * vision to provide flexibility in data modelling without compromising
  * on performance, queryability or scalability.
  *
- * Copyright (c) 2022, Sayan Nandan <ohsayan@outlook.com>
+ * Copyright (c) 2023, Sayan Nandan <ohsayan@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,15 +24,21 @@
  *
 */
 
-#[macro_use]
-mod macros;
-pub(super) mod ast;
-#[cfg(feature = "nightly")]
-#[cfg(test)]
-mod benches;
-pub(super) mod dcl;
-pub(super) mod ddl;
-pub(super) mod dml;
-pub(super) mod lex;
-#[cfg(test)]
-pub(in crate::engine) mod tests;
+use crate::engine::ql::{ast, dcl, tests::lex_insecure};
+
+#[test]
+fn create_user_simple() {
+    let query = lex_insecure(b"create user 'sayan' with { password: 'mypass123' }").unwrap();
+    let q = ast::parse_ast_node_full::<dcl::UserAdd>(&query[2..]).unwrap();
+    assert_eq!(
+        q,
+        dcl::UserAdd::new("sayan", into_dict!("password" => lit!("mypass123")))
+    )
+}
+
+#[test]
+fn delete_user_simple() {
+    let query = lex_insecure(b"delete user 'monster'").unwrap();
+    let q = ast::parse_ast_node_full::<dcl::UserDel>(&query[2..]).unwrap();
+    assert_eq!(q, dcl::UserDel::new("monster"))
+}

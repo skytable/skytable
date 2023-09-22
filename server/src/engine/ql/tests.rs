@@ -33,6 +33,7 @@ use {
     rand::{self, Rng},
 };
 
+mod dcl;
 mod dml_tests;
 mod entity;
 mod lexer_tests;
