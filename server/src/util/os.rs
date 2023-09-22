@@ -35,7 +35,7 @@ use {
     crate::IoResult,
     std::{
         ffi::OsStr,
-        fs,
+        fmt, fs,
         path::Path,
         time::{SystemTime, UNIX_EPOCH},
     },
@@ -55,6 +55,12 @@ impl From<std::io::Error> for SysIOError {
 impl From<std::io::ErrorKind> for SysIOError {
     fn from(e: std::io::ErrorKind) -> Self {
         Self(e.into())
+    }
+}
+
+impl fmt::Display for SysIOError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 

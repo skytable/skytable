@@ -295,11 +295,6 @@ macro_rules! dict_nullable {
 }
 
 #[cfg(test)]
-macro_rules! into_array {
-    ($($e:expr),* $(,)?) => { [$($e.into()),*] };
-}
-
-#[cfg(test)]
 macro_rules! into_array_nullable {
     ($($e:expr),* $(,)?) => { [$($crate::engine::ql::tests::nullable_datatype($e)),*] };
 }

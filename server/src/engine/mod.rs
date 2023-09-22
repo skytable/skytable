@@ -28,6 +28,7 @@
 
 #[macro_use]
 mod macros;
+mod config;
 mod core;
 mod data;
 mod error;

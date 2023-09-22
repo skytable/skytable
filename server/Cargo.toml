@@ -29,6 +29,7 @@ toml = "0.7.6"
 base64 = "0.21.2"
 uuid = { version = "1.4.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
 crc = "3.0.1"
+serde_yaml = "0.9"
 
 [target.'cfg(all(not(target_env = "msvc"), not(miri)))'.dependencies]
 # external deps
