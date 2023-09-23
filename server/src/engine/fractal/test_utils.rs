@@ -115,6 +115,15 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     fn sys_cfg(&self) -> &super::config::SysConfig {
         &self.sys_cfg
     }
+    fn initialize_model_driver(
+        &self,
+        _space_name: &str,
+        _space_uuid: crate::engine::data::uuid::Uuid,
+        _model_name: &str,
+        _model_uuid: crate::engine::data::uuid::Uuid,
+    ) -> crate::engine::storage::v1::SDSSResult<()> {
+        todo!()
+    }
 }
 
 impl<Fs: RawFSInterface> Drop for TestGlobal<Fs> {

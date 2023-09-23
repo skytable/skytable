@@ -28,7 +28,7 @@ use {
     super::{
         core::GlobalNS,
         data::uuid::Uuid,
-        storage::v1::{LocalFS, RawFSInterface},
+        storage::v1::{LocalFS, RawFSInterface, SDSSResult},
         txn::gns::GNSTransactionDriverAnyFS,
     },
     parking_lot::{Mutex, RwLock},
@@ -108,6 +108,14 @@ pub trait GlobalInstanceLike {
     // global namespace
     fn namespace(&self) -> &GlobalNS;
     fn namespace_txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Self::FileSystem>>;
+    // model drivers
+    fn initialize_model_driver(
+        &self,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) -> SDSSResult<()>;
     // taskmgr
     fn taskmgr_post_high_priority(&self, task: Task<CriticalTask>);
     fn taskmgr_post_standard_priority(&self, task: Task<GenericTask>);
@@ -151,6 +159,16 @@ impl GlobalInstanceLike for Global {
     // sys
     fn sys_cfg(&self) -> &config::SysConfig {
         &self.get_state().config
+    }
+    // model
+    fn initialize_model_driver(
+        &self,
+        _space_name: &str,
+        _space_uuid: Uuid,
+        _model_name: &str,
+        _model_uuid: Uuid,
+    ) -> SDSSResult<()> {
+        todo!()
     }
 }
 

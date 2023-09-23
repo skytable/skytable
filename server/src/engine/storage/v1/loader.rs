@@ -92,12 +92,26 @@ impl SEInitState {
         }
         Ok(SEInitState::new(gns_txn_driver, model_drivers, gns))
     }
-    fn model_path(
+    pub fn model_path(
         space_name: &str,
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
     ) -> String {
-        format!("data/{space_name}-{space_uuid}/{model_name}-{model_uuid}/data.db-btlog")
+        format!(
+            "{}/data.db-btlog",
+            Self::model_dir(space_name, space_uuid, model_name, model_uuid)
+        )
+    }
+    pub fn model_dir(
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) -> String {
+        format!("data/{space_name}-{space_uuid}/mdl_{model_name}-{model_uuid}")
+    }
+    pub fn space_dir(space_name: &str, space_uuid: Uuid) -> String {
+        format!("data/{space_name}-{space_uuid}")
     }
 }

@@ -29,7 +29,7 @@ mod header_impl;
 // impls
 mod batch_jrnl;
 mod journal;
-mod loader;
+pub(in crate::engine) mod loader;
 mod rw;
 mod sysdb;
 // hl

@@ -29,9 +29,10 @@ use {
         core::{model::Model, RWLIdx},
         data::{dict, uuid::Uuid, DictEntryGeneric, DictGeneric},
         error::{Error, QueryResult},
-        fractal::GlobalInstanceLike,
+        fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::{IndexST, STIndex},
         ql::ddl::{alt::AlterSpace, crt::CreateSpace, drop::DropSpace},
+        storage::v1::{loader::SEInitState, RawFSInterface},
         txn::gns as gnstxn,
     },
     parking_lot::RwLock,
@@ -203,12 +204,25 @@ impl Space {
         }
         // commit txn
         if G::FS_IS_NON_NULL {
-            // prepare and commit txn
+            // prepare txn
             let s_read = space.metadata().dict().read();
-            global
-                .namespace_txn_driver()
-                .lock()
-                .try_commit(gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space))?;
+            let txn = gnstxn::CreateSpaceTxn::new(&s_read, &space_name, &space);
+            // try to create space for...the space
+            G::FileSystem::fs_create_dir_all(&SEInitState::space_dir(
+                &space_name,
+                space.get_uuid(),
+            ))?;
+            // commit txn
+            match global.namespace_txn_driver().lock().try_commit(txn) {
+                Ok(()) => {}
+                Err(e) => {
+                    // tell fractal to clean it up sometime
+                    global.taskmgr_post_standard_priority(Task::new(
+                        GenericTask::delete_space_dir(&space_name, space.get_uuid()),
+                    ));
+                    return Err(e.into());
+                }
+            }
         }
         // update global state
         let _ = wl.st_insert(space_name, space);
@@ -272,7 +286,13 @@ impl Space {
         if G::FS_IS_NON_NULL {
             // prepare txn
             let txn = gnstxn::DropSpaceTxn::new(gnstxn::SpaceIDRef::new(&space_name, space));
+            // commit txn
             global.namespace_txn_driver().lock().try_commit(txn)?;
+            // ask for cleanup
+            global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_space_dir(
+                &space_name,
+                space.get_uuid(),
+            )));
         }
         drop(space_w);
         let _ = wgns.st_delete(space_name.as_str());

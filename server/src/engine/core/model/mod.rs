@@ -40,7 +40,7 @@ use {
             uuid::Uuid,
         },
         error::{Error, QueryResult},
-        fractal::GlobalInstanceLike,
+        fractal::{GenericTask, GlobalInstanceLike, Task},
         idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
         mem::VInline,
         ql::ddl::{
@@ -216,17 +216,38 @@ impl Model {
                 return Err(Error::QPDdlObjectAlreadyExists);
             }
             if G::FS_IS_NON_NULL {
-                // prepare txn
                 let irm = model.intent_read_model();
                 let mut txn_driver = global.namespace_txn_driver().lock();
+                // prepare txn
                 let txn = gnstxn::CreateModelTxn::new(
                     gnstxn::SpaceIDRef::new(space_name, space),
                     model_name,
                     &model,
                     &irm,
                 );
+                // attempt to initialize driver
+                global.initialize_model_driver(
+                    space_name,
+                    space.get_uuid(),
+                    model_name,
+                    model.get_uuid(),
+                )?;
                 // commit txn
-                txn_driver.try_commit(txn)?;
+                match txn_driver.try_commit(txn) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // failed to commit, delete this
+                        global.taskmgr_post_standard_priority(Task::new(
+                            GenericTask::delete_model_dir(
+                                space_name,
+                                space.get_uuid(),
+                                model_name,
+                                model.get_uuid(),
+                            ),
+                        ));
+                        return Err(e.into());
+                    }
+                }
             }
             // update global state
             let _ = w_space.st_insert(model_name.into(), model);
@@ -253,6 +274,13 @@ impl Model {
                 ));
                 // commit txn
                 global.namespace_txn_driver().lock().try_commit(txn)?;
+                // ask for cleanup
+                global.taskmgr_post_standard_priority(Task::new(GenericTask::delete_model_dir(
+                    space_name,
+                    space.get_uuid(),
+                    model_name,
+                    model.get_uuid(),
+                )));
             }
             // update global state
             let _ = w_space.st_delete(model_name);

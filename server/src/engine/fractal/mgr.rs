@@ -27,7 +27,10 @@
 use {
     super::ModelUniqueID,
     crate::{
-        engine::core::model::{delta::DataDelta, Model},
+        engine::{
+            core::model::{delta::DataDelta, Model},
+            data::uuid::Uuid,
+        },
         util::os,
     },
     std::path::PathBuf,
@@ -62,6 +65,28 @@ pub enum GenericTask {
     DeleteFile(PathBuf),
     /// Delete a directory (and all its children)
     DeleteDirAll(PathBuf),
+}
+
+impl GenericTask {
+    pub fn delete_model_dir(
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
+    ) -> Self {
+        Self::DeleteDirAll(
+            crate::engine::storage::v1::loader::SEInitState::model_dir(
+                space_name, space_uuid, model_name, model_uuid,
+            )
+            .into(),
+        )
+    }
+    pub fn delete_space_dir(space_name: &str, space_uuid: Uuid) -> Self {
+        Self::DeleteDirAll(
+            crate::engine::storage::v1::loader::SEInitState::space_dir(space_name, space_uuid)
+                .into(),
+        )
+    }
 }
 
 /// A critical task
