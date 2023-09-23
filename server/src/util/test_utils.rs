@@ -44,6 +44,18 @@ pub fn shuffle_slice<T>(slice: &mut [T], rng: &mut impl Rng) {
     slice.shuffle(rng)
 }
 
+pub fn with_files<const N: usize, T>(files: [&str; N], f: impl Fn([&str; N]) -> T) -> T {
+    use std::fs;
+    for file in files {
+        let _ = fs::File::create(file);
+    }
+    let r = f(files);
+    for file in files {
+        let _ = fs::remove_file(file);
+    }
+    r
+}
+
 pub fn wait_for_key(msg: &str) {
     use std::io::{self, Write};
     print!("{msg}");

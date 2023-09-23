@@ -38,6 +38,8 @@ use {
     misc
 */
 
+pub type ParsedRawArgs = std::collections::HashMap<String, Vec<String>>;
+
 #[derive(Debug, PartialEq)]
 pub struct ModifyGuard<T> {
     val: T,
@@ -86,6 +88,13 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    pub fn new(endpoints: ConfigEndpoint, mode: ConfigMode, system: ConfigSystem) -> Self {
+        Self {
+            endpoints,
+            mode,
+            system,
+        }
+    }
     const DEFAULT_HOST: &'static str = "127.0.0.1";
     const DEFAULT_PORT_TCP: u16 = 2003;
     const DEFAULT_RELIABILITY_SVC_PING: u64 = 5 * 60;
@@ -121,12 +130,28 @@ pub struct ConfigEndpointTcp {
     port: u16,
 }
 
+impl ConfigEndpointTcp {
+    pub fn new(host: String, port: u16) -> Self {
+        Self { host, port }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 /// TLS endpoint configuration
 pub struct ConfigEndpointTls {
     tcp: ConfigEndpointTcp,
     cert: String,
     private_key: String,
+}
+
+impl ConfigEndpointTls {
+    pub fn new(tcp: ConfigEndpointTcp, cert: String, private_key: String) -> Self {
+        Self {
+            tcp,
+            cert,
+            private_key,
+        }
+    }
 }
 
 /*
@@ -182,6 +207,15 @@ pub struct ConfigSystem {
     reliability_system_window: u64,
     /// if or not auth is enabled
     auth: bool,
+}
+
+impl ConfigSystem {
+    pub fn new(reliability_system_window: u64, auth: bool) -> Self {
+        Self {
+            reliability_system_window,
+            auth,
+        }
+    }
 }
 
 /**
@@ -340,7 +374,7 @@ impl From<std::io::Error> for ConfigError {
 }
 
 /// A configuration source implementation
-trait ConfigurationSource {
+pub(super) trait ConfigurationSource {
     const KEY_TLS_CERT: &'static str;
     const KEY_TLS_KEY: &'static str;
     const KEY_AUTH: &'static str;
@@ -439,21 +473,24 @@ fn decode_tls_ep(
 
 /// Helper for decoding a TLS endpoint (we read in the cert and private key)
 fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
-    args: &mut HashMap<String, Vec<String>>,
+    args: &mut ParsedRawArgs,
     host: &str,
     port: u16,
 ) -> ConfigResult<DecodedEPSecureConfig> {
-    let (Some(tls_key), Some(tls_cert)) =
-        (args.remove(CS::KEY_TLS_KEY), args.remove(CS::KEY_TLS_CERT))
-    else {
-        return Err(ConfigError::with_src(
-            ConfigSource::Cli,
-            ConfigErrorKind::ErrorString(format!(
-                "must supply values for both `{}` and `{}` when using TLS",
-                CS::KEY_TLS_CERT,
-                CS::KEY_TLS_KEY
-            )),
-        ));
+    let _cert = args.remove(CS::KEY_TLS_CERT);
+    let _key = args.remove(CS::KEY_TLS_KEY);
+    let (tls_cert, tls_key) = match (_cert, _key) {
+        (Some(cert), Some(key)) => (cert, key),
+        _ => {
+            return Err(ConfigError::with_src(
+                ConfigSource::Cli,
+                ConfigErrorKind::ErrorString(format!(
+                    "must supply values for both `{}` and `{}` when using TLS",
+                    CS::KEY_TLS_CERT,
+                    CS::KEY_TLS_KEY
+                )),
+            ));
+        }
     };
     argck_duplicate_values::<CS>(&tls_cert, CS::KEY_TLS_CERT)?;
     argck_duplicate_values::<CS>(&tls_key, CS::KEY_TLS_KEY)?;
@@ -488,11 +525,11 @@ fn arg_decode_auth<CS: ConfigurationSource>(
 
 /// Decode the endpoints (`protocol@host:port`)
 fn arg_decode_endpoints<CS: ConfigurationSource>(
-    args: &mut HashMap<String, Vec<String>>,
+    args: &mut ParsedRawArgs,
     config: &mut ModifyGuard<DecodedConfiguration>,
 ) -> ConfigResult<()> {
-    let mut insecure_ep = None;
-    let mut secure_ep = None;
+    let mut insecure = None;
+    let mut secure = None;
     let Some(endpoints) = args.remove(CS::KEY_ENDPOINTS) else {
         return Ok(());
     };
@@ -502,11 +539,11 @@ fn arg_decode_endpoints<CS: ConfigurationSource>(
     for ep in endpoints {
         let (proto, host, port) = parse_endpoint(CS::SOURCE, &ep)?;
         match proto {
-            ConnectionProtocol::Tcp if insecure_ep.is_none() => {
-                insecure_ep = Some(DecodedEPInsecureConfig::new(host, port));
+            ConnectionProtocol::Tcp if insecure.is_none() => {
+                insecure = Some(DecodedEPInsecureConfig::new(host, port));
             }
-            ConnectionProtocol::Tls if secure_ep.is_none() => {
-                secure_ep = Some(arg_decode_tls_endpoint::<CS>(args, host, port)?);
+            ConnectionProtocol::Tls if secure.is_none() => {
+                secure = Some(arg_decode_tls_endpoint::<CS>(args, host, port)?);
             }
             _ => {
                 return Err(CS::custom_err(format!(
@@ -516,12 +553,8 @@ fn arg_decode_endpoints<CS: ConfigurationSource>(
             }
         }
     }
-    match config.endpoints.as_mut() {
-        Some(ep) => {
-            ep.secure = secure_ep;
-            ep.insecure = insecure_ep;
-        }
-        None => {}
+    if insecure.is_some() | secure.is_some() {
+        config.endpoints = Some(DecodedEPConfig { secure, insecure });
     }
     Ok(())
 }
@@ -579,7 +612,7 @@ fn arg_decode_rs_window<CS: ConfigurationSource>(
 */
 
 /// CLI help message
-const CLI_HELP: &str ="\
+pub(super) const CLI_HELP: &str ="\
 Usage: skyd [OPTION]...
 
 skyd is the Skytable database server daemon and can be used to serve database requests.
@@ -602,6 +635,7 @@ Examples:
 
 Notes:
   Ensure the 'mode' is always provided, as it is essential for the application's correct functioning.
+  When either of `--help` or `--version` is provided, all other options and flags are ignored.
 
 For further assistance, refer to the official documentation here: https://docs.skytable.org
 ";
@@ -619,19 +653,30 @@ pub enum CLIConfigParseReturn<T> {
     YieldedConfig(T),
 }
 
+impl<T> CLIConfigParseReturn<T> {
+    #[cfg(test)]
+    pub fn into_config(self) -> T {
+        match self {
+            Self::YieldedConfig(yc) => yc,
+            _ => panic!(),
+        }
+    }
+}
+
 /// Parse CLI args:
 /// - `--{option} {value}`
 /// - `--{option}={value}`
-pub fn parse_cli_args(
-    src: impl Iterator<Item = String>,
-) -> ConfigResult<CLIConfigParseReturn<HashMap<String, Vec<String>>>> {
+pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
+    src: impl Iterator<Item = T>,
+) -> ConfigResult<CLIConfigParseReturn<ParsedRawArgs>> {
     let mut args_iter = src.into_iter().skip(1);
-    let mut cli_args: HashMap<String, Vec<String>> = HashMap::new();
+    let mut cli_args: ParsedRawArgs = HashMap::new();
     while let Some(arg) = args_iter.next() {
-        if arg == "--help" {
+        let arg = arg.as_ref();
+        if arg == "--help" || arg == "-h" {
             return Ok(CLIConfigParseReturn::Help);
         }
-        if arg == "--version" {
+        if arg == "--version" || arg == "-v" {
             return Ok(CLIConfigParseReturn::Version);
         }
         if !arg.starts_with("--") {
@@ -641,37 +686,37 @@ pub fn parse_cli_args(
             ));
         }
         // x=1
+        let arg_key;
+        let arg_val;
         let splits_arg_and_value = arg.split("=").collect::<Vec<&str>>();
         if (splits_arg_and_value.len() == 2) & (arg.len() >= 5) {
             // --{n}={x}; good
-            cli_args.insert(
-                splits_arg_and_value[0].into(),
-                vec![splits_arg_and_value[1].into()],
-            );
-            continue;
-        } else {
-            if splits_arg_and_value.len() != 1 {
-                // that's an invalid argument since the split is either `x=y` or `x` and we don't have any args
-                // with special characters
-                return Err(ConfigError::with_src(
-                    ConfigSource::Cli,
-                    ConfigErrorKind::ErrorString(format!("incorrectly formatted argument `{arg}`")),
-                ));
-            }
-        }
-        let Some(value) = args_iter.next() else {
+            arg_key = splits_arg_and_value[0];
+            arg_val = splits_arg_and_value[1].to_string();
+        } else if splits_arg_and_value.len() != 1 {
+            // that's an invalid argument since the split is either `x=y` or `x` and we don't have any args
+            // with special characters
             return Err(ConfigError::with_src(
                 ConfigSource::Cli,
-                ConfigErrorKind::ErrorString(format!("missing value for option `{arg}`")),
+                ConfigErrorKind::ErrorString(format!("incorrectly formatted argument `{arg}`")),
             ));
-        };
+        } else {
+            let Some(value) = args_iter.next() else {
+                return Err(ConfigError::with_src(
+                    ConfigSource::Cli,
+                    ConfigErrorKind::ErrorString(format!("missing value for option `{arg}`")),
+                ));
+            };
+            arg_key = arg;
+            arg_val = value.as_ref().to_string();
+        }
         // merge duplicates into a vec
-        match cli_args.get_mut(&arg) {
+        match cli_args.get_mut(arg_key) {
             Some(cli) => {
-                cli.push(value);
+                cli.push(arg_val.to_string());
             }
             None => {
-                cli_args.insert(arg, vec![value]);
+                cli_args.insert(arg_key.to_string(), vec![arg_val.to_string()]);
             }
         }
     }
@@ -687,12 +732,18 @@ pub fn parse_cli_args(
 */
 
 /// Parse environment variables
-pub fn parse_env_args(
-    keys: impl Iterator<Item = &'static str>,
-) -> ConfigResult<Option<HashMap<String, Vec<String>>>> {
+pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
+    const KEYS: [&str; 6] = [
+        CSEnvArgs::KEY_AUTH,
+        CSEnvArgs::KEY_ENDPOINTS,
+        CSEnvArgs::KEY_RUN_MODE,
+        CSEnvArgs::KEY_SERVICE_WINDOW,
+        CSEnvArgs::KEY_TLS_CERT,
+        CSEnvArgs::KEY_TLS_KEY,
+    ];
     let mut ret = HashMap::new();
-    for key in keys {
-        let var = match std::env::var(key) {
+    for key in KEYS {
+        let var = match get_var(key) {
             Ok(v) => v,
             Err(e) => match e {
                 std::env::VarError::NotPresent => continue,
@@ -720,7 +771,7 @@ pub fn parse_env_args(
 
 /// Apply the configuration changes to the given mutable config
 fn apply_config_changes<CS: ConfigurationSource>(
-    args: &mut HashMap<String, Vec<String>>,
+    args: &mut ParsedRawArgs,
     config: &mut ModifyGuard<DecodedConfiguration>,
 ) -> ConfigResult<()> {
     enum DecodeKind {
@@ -729,10 +780,7 @@ fn apply_config_changes<CS: ConfigurationSource>(
             f: fn(&[String], &mut ModifyGuard<DecodedConfiguration>) -> ConfigResult<()>,
         },
         Complex {
-            f: fn(
-                &mut HashMap<String, Vec<String>>,
-                &mut ModifyGuard<DecodedConfiguration>,
-            ) -> ConfigResult<()>,
+            f: fn(&mut ParsedRawArgs, &mut ModifyGuard<DecodedConfiguration>) -> ConfigResult<()>,
         },
     }
     let decode_tasks = [
@@ -759,13 +807,23 @@ fn apply_config_changes<CS: ConfigurationSource>(
     for task in decode_tasks {
         match task {
             DecodeKind::Simple { key, f } => match args.get(key) {
-                Some(args) => (f)(&args, config)?,
+                Some(values_for_arg) => {
+                    (f)(&values_for_arg, config)?;
+                    args.remove(key);
+                }
                 None => {}
             },
             DecodeKind::Complex { f } => (f)(args, config)?,
         }
     }
-    Ok(())
+    if args.is_empty() {
+        Ok(())
+    } else {
+        Err(ConfigError::with_src(
+            CS::SOURCE,
+            ConfigErrorKind::ErrorString("found unknown arguments".into()),
+        ))
+    }
 }
 
 /*
@@ -777,7 +835,7 @@ impl CSCommandLine {
     const ARG_CONFIG_FILE: &'static str = "--config";
 }
 impl ConfigurationSource for CSCommandLine {
-    const KEY_TLS_CERT: &'static str = "--tlsert";
+    const KEY_TLS_CERT: &'static str = "--tlscert";
     const KEY_TLS_KEY: &'static str = "--tlskey";
     const KEY_AUTH: &'static str = "--auth";
     const KEY_ENDPOINTS: &'static str = "--endpoint";
@@ -863,7 +921,7 @@ fn validate_configuration<CS: ConfigurationSource>(
                         // only secure EP was defined by the user
                         config.endpoints = ConfigEndpoint::Secure(secure_ep);
                     },
-                    _ => {}
+                    _ => unreachable!()
                 }
             })
         }
@@ -883,18 +941,29 @@ fn validate_configuration<CS: ConfigurationSource>(
 */
 
 /// The return from parsing a configuration file
+#[derive(Debug, PartialEq)]
 pub enum ConfigReturn {
     /// No configuration was provided. Need to use default
     Default,
     /// Don't need to do anything. We've output a message and we're good to exit
-    HelpMessage,
+    HelpMessage(String),
     /// A configuration that we have fully validated was provided
     Config(Configuration),
 }
 
+impl ConfigReturn {
+    #[cfg(test)]
+    pub fn into_config(self) -> Configuration {
+        match self {
+            Self::Config(c) => c,
+            _ => panic!(),
+        }
+    }
+}
+
 /// Apply the changes and validate the configuration
-fn apply_and_validate<CS: ConfigurationSource>(
-    mut args: HashMap<String, Vec<String>>,
+pub(super) fn apply_and_validate<CS: ConfigurationSource>(
+    mut args: ParsedRawArgs,
 ) -> ConfigResult<ConfigReturn> {
     let mut modcfg = ModifyGuard::new(DecodedConfiguration::default());
     apply_config_changes::<CS>(&mut args, &mut modcfg)?;
@@ -905,39 +974,93 @@ fn apply_and_validate<CS: ConfigurationSource>(
     }
 }
 
+/*
+    just some test hacks
+*/
+
+#[cfg(test)]
+thread_local! {
+    static CLI_SRC: std::cell::RefCell<Option<Vec<String>>> = std::cell::RefCell::new(None);
+    static ENV_SRC: std::cell::RefCell<Option<HashMap<String, String>>> = std::cell::RefCell::new(None);
+}
+#[cfg(test)]
+pub(super) fn set_cli_src(cli: Vec<String>) {
+    CLI_SRC.with(|args| *args.borrow_mut() = Some(cli))
+}
+#[cfg(test)]
+pub(super) fn set_env_src(variables: Vec<String>) {
+    ENV_SRC.with(|env| {
+        let variables = variables
+            .into_iter()
+            .map(|var| {
+                var.split("=")
+                    .map(ToString::to_string)
+                    .collect::<Vec<String>>()
+            })
+            .map(|mut vars| (vars.remove(0), vars.remove(0)))
+            .collect();
+        *env.borrow_mut() = Some(variables);
+    })
+}
+fn get_var(name: &str) -> Result<String, std::env::VarError> {
+    let var;
+    #[cfg(test)]
+    {
+        var = ENV_SRC.with(|venv| {
+            let ret = {
+                match venv.borrow_mut().as_mut() {
+                    None => return Err(std::env::VarError::NotPresent),
+                    Some(env_store) => match env_store.remove(name) {
+                        Some(var) => Ok(var),
+                        None => Err(std::env::VarError::NotPresent),
+                    },
+                }
+            };
+            ret
+        });
+    }
+    #[cfg(not(test))]
+    {
+        var = std::env::var(name);
+    }
+    var
+}
+fn get_cli_src() -> Vec<String> {
+    let src;
+    #[cfg(test)]
+    {
+        src = CLI_SRC
+            .with(|args| args.borrow_mut().take())
+            .unwrap_or(vec![]);
+    }
+    #[cfg(not(test))]
+    {
+        src = std::env::args().collect();
+    }
+    src
+}
+
 /// Check the configuration. We look through:
 /// - CLI args
 /// - ENV variables
 /// - Config file (if any)
 pub fn check_configuration() -> ConfigResult<ConfigReturn> {
     // read in our environment variables
-    let env_args = parse_env_args(
-        [
-            CSEnvArgs::KEY_AUTH,
-            CSEnvArgs::KEY_ENDPOINTS,
-            CSEnvArgs::KEY_RUN_MODE,
-            CSEnvArgs::KEY_SERVICE_WINDOW,
-            CSEnvArgs::KEY_TLS_CERT,
-            CSEnvArgs::KEY_TLS_KEY,
-        ]
-        .into_iter(),
-    )?;
+    let env_args = parse_env_args()?;
     // read in our CLI args (since that can tell us whether we need a configuration file)
-    let read_cli_args = parse_cli_args(std::env::args().skip(1))?;
+    let read_cli_args = parse_cli_args(get_cli_src().into_iter())?;
     let cli_args = match read_cli_args {
         CLIConfigParseReturn::Default => {
             // no options were provided in the CLI
             None
         }
-        CLIConfigParseReturn::Help => {
-            // just output the help menu
-            println!("{CLI_HELP}");
-            return Ok(ConfigReturn::HelpMessage);
-        }
+        CLIConfigParseReturn::Help => return Ok(ConfigReturn::HelpMessage(CLI_HELP.into())),
         CLIConfigParseReturn::Version => {
             // just output the version
-            println!("Skytable Database Server (skyd) v{}", libsky::VERSION);
-            return Ok(ConfigReturn::HelpMessage);
+            return Ok(ConfigReturn::HelpMessage(format!(
+                "Skytable Database Server (skyd) v{}",
+                libsky::VERSION
+            )));
         }
         CLIConfigParseReturn::YieldedConfig(cfg) => Some(cfg),
     };
@@ -976,8 +1099,8 @@ pub fn check_configuration() -> ConfigResult<ConfigReturn> {
 
 /// Check the configuration file
 fn check_config_file(
-    cfg_from_cli: &HashMap<String, Vec<String>>,
-    env_args: &Option<HashMap<String, Vec<String>>>,
+    cfg_from_cli: &ParsedRawArgs,
+    env_args: &Option<ParsedRawArgs>,
     cfg_file: &Vec<String>,
 ) -> ConfigResult<ConfigReturn> {
     if cfg_from_cli.len() == 1 && env_args.is_none() {

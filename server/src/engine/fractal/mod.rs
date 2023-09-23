@@ -90,7 +90,7 @@ pub unsafe fn enable_and_start_all(
     GLOBAL = MaybeUninit::new(global_state);
     let token = Global::new();
     GlobalStateStart {
-        global: token,
+        global: token.__global_clone(),
         mgr_handles: mgr::FractalMgr::start_all(token, lp_recv, hp_recv),
     }
 }
@@ -154,13 +154,19 @@ impl GlobalInstanceLike for Global {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 /// A handle to the global state
 pub struct Global(());
 
 impl Global {
     unsafe fn new() -> Self {
         Self(())
+    }
+    fn __global_clone(&self) -> Self {
+        unsafe {
+            // UNSAFE(@ohsayan): safe to call within this module
+            Self::new()
+        }
     }
     fn get_state(&self) -> &'static GlobalState {
         unsafe { GLOBAL.assume_init_ref() }

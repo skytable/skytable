@@ -37,16 +37,19 @@ const GNS_FILE_PATH: &str = "gns.db-tlog";
 pub struct SEInitState {
     pub txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
     pub model_drivers: ModelDrivers,
+    pub gns: GlobalNS,
 }
 
 impl SEInitState {
     pub fn new(
         txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
         model_drivers: ModelDrivers,
+        gns: GlobalNS,
     ) -> Self {
         Self {
             txn_driver,
             model_drivers,
+            gns,
         }
     }
     pub fn try_init(
@@ -87,7 +90,7 @@ impl SEInitState {
                 );
             }
         }
-        Ok(SEInitState::new(gns_txn_driver, model_drivers))
+        Ok(SEInitState::new(gns_txn_driver, model_drivers, gns))
     }
     fn model_path(
         space_name: &str,

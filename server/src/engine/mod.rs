@@ -40,3 +40,6 @@ mod ql;
 mod storage;
 mod sync;
 mod txn;
+// test
+#[cfg(test)]
+mod tests;
