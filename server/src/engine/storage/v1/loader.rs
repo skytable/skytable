@@ -28,13 +28,20 @@ use crate::engine::{
     core::GlobalNS,
     data::uuid::Uuid,
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
-    storage::v1::{batch_jrnl, header_meta::HostRunMode, LocalFS, SDSSErrorContext, SDSSResult},
-    txn::gns::GNSTransactionDriverAnyFS,
+    storage::v1::{
+        batch_jrnl, header_meta,
+        journal::{self, JournalWriter},
+        rw::{FileOpen, RawFSInterface},
+        LocalFS, SDSSErrorContext, SDSSResult,
+    },
+    txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
 
 const GNS_FILE_PATH: &str = "gns.db-tlog";
+const GNS_LOG_VERSION_CODE: u32 = 0;
 
 pub struct SEInitState {
+    pub new_instance: bool,
     pub txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
     pub model_drivers: ModelDrivers<LocalFS>,
     pub gns: GlobalNS,
@@ -42,11 +49,13 @@ pub struct SEInitState {
 
 impl SEInitState {
     pub fn new(
+        new_instance: bool,
         txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
         model_drivers: ModelDrivers<LocalFS>,
         gns: GlobalNS,
     ) -> Self {
         Self {
+            new_instance,
             txn_driver,
             model_drivers,
             gns,
@@ -54,37 +63,47 @@ impl SEInitState {
     }
     pub fn try_init(
         host_setting_version: u32,
-        host_run_mode: HostRunMode,
+        host_run_mode: header_meta::HostRunMode,
         host_startup_counter: u64,
     ) -> SDSSResult<Self> {
         let gns = GlobalNS::empty();
-        let gns_txn_driver = GNSTransactionDriverAnyFS::<LocalFS>::open_or_reinit_with_name(
-            &gns,
+        let gns_txn_driver = open_gns_driver(
             GNS_FILE_PATH,
             host_setting_version,
             host_run_mode,
             host_startup_counter,
+            &gns,
         )?;
+        let new_instance = gns_txn_driver.is_created();
         let mut model_drivers = ModelDrivers::new();
-        for (space_name, space) in gns.spaces().read().iter() {
-            let space_uuid = space.get_uuid();
-            for (model_name, model) in space.models().read().iter() {
-                let path = Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                let persist_driver = match batch_jrnl::reinit(&path, model) {
-                    Ok(j) => j,
-                    Err(e) => {
-                        return Err(e.with_extra(format!(
-                            "failed to restore model data from journal in `{path}`"
-                        )))
-                    }
-                };
-                let _ = model_drivers.insert(
-                    ModelUniqueID::new(space_name, model_name, model.get_uuid()),
-                    FractalModelDriver::init(persist_driver),
-                );
+        if !new_instance {
+            // this is an existing instance, so read in all data
+            for (space_name, space) in gns.spaces().read().iter() {
+                let space_uuid = space.get_uuid();
+                for (model_name, model) in space.models().read().iter() {
+                    let path =
+                        Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
+                    let persist_driver = match batch_jrnl::reinit(&path, model) {
+                        Ok(j) => j,
+                        Err(e) => {
+                            return Err(e.with_extra(format!(
+                                "failed to restore model data from journal in `{path}`"
+                            )))
+                        }
+                    };
+                    let _ = model_drivers.insert(
+                        ModelUniqueID::new(space_name, model_name, model.get_uuid()),
+                        FractalModelDriver::init(persist_driver),
+                    );
+                }
             }
         }
-        Ok(SEInitState::new(gns_txn_driver, model_drivers, gns))
+        Ok(SEInitState::new(
+            new_instance,
+            GNSTransactionDriverAnyFS::new(gns_txn_driver.into_inner()),
+            model_drivers,
+            gns,
+        ))
     }
     pub fn model_path(
         space_name: &str,
@@ -108,4 +127,22 @@ impl SEInitState {
     pub fn space_dir(space_name: &str, space_uuid: Uuid) -> String {
         format!("data/{space_name}-{space_uuid}")
     }
+}
+
+pub fn open_gns_driver<Fs: RawFSInterface>(
+    path: &str,
+    host_setting_version: u32,
+    host_run_mode: header_meta::HostRunMode,
+    host_startup_counter: u64,
+    gns: &GlobalNS,
+) -> SDSSResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
+    journal::open_journal::<GNSAdapter, Fs>(
+        path,
+        header_meta::FileSpecifier::GNSTxnLog,
+        header_meta::FileSpecifierVersion::__new(GNS_LOG_VERSION_CODE),
+        host_setting_version,
+        host_run_mode,
+        host_startup_counter,
+        gns,
+    )
 }

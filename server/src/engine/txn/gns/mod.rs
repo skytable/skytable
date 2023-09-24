@@ -34,7 +34,6 @@ use {
             data::uuid::Uuid,
             mem::BufferedScanner,
             storage::v1::{
-                self, header_meta,
                 inf::{self, PersistObject},
                 JournalAdapter, JournalWriter, LocalFS, RawFSInterface, SDSSResult,
             },
@@ -64,34 +63,17 @@ pub type GNSTransactionDriverNullZero =
 #[cfg(test)]
 pub type GNSTransactionDriverVFS = GNSTransactionDriverAnyFS<VirtualFS>;
 
-const CURRENT_LOG_VERSION: u32 = 0;
-
 /// The GNS transaction driver is used to handle DDL transactions
-pub struct GNSTransactionDriverAnyFS<F: RawFSInterface = LocalFS> {
-    journal: JournalWriter<F, GNSAdapter>,
+pub struct GNSTransactionDriverAnyFS<Fs: RawFSInterface = LocalFS> {
+    journal: JournalWriter<Fs, GNSAdapter>,
 }
 
 impl<Fs: RawFSInterface> GNSTransactionDriverAnyFS<Fs> {
+    pub fn new(journal: JournalWriter<Fs, GNSAdapter>) -> Self {
+        Self { journal }
+    }
     pub fn __journal_mut(&mut self) -> &mut JournalWriter<Fs, GNSAdapter> {
         &mut self.journal
-    }
-    pub fn open_or_reinit_with_name(
-        gns: &GlobalNS,
-        log_file_name: &str,
-        host_setting_version: u32,
-        host_run_mode: header_meta::HostRunMode,
-        host_startup_counter: u64,
-    ) -> TransactionResult<Self> {
-        let journal = v1::open_journal(
-            log_file_name,
-            header_meta::FileSpecifier::GNSTxnLog,
-            header_meta::FileSpecifierVersion::__new(CURRENT_LOG_VERSION),
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-            gns,
-        )?;
-        Ok(Self { journal })
     }
     /// Attempts to commit the given event into the journal, handling any possible recovery triggers and returning
     /// errors (if any)

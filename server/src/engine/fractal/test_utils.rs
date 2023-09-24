@@ -32,10 +32,13 @@ use {
     crate::engine::{
         core::GlobalNS,
         data::uuid::Uuid,
-        storage::v1::{
-            header_meta::HostRunMode,
-            memfs::{NullFS, VirtualFS},
-            RawFSInterface,
+        storage::{
+            self,
+            v1::{
+                header_meta::HostRunMode,
+                memfs::{NullFS, VirtualFS},
+                RawFSInterface,
+            },
         },
         txn::gns::GNSTransactionDriverAnyFS,
     },
@@ -75,15 +78,10 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
 impl<Fs: RawFSInterface> TestGlobal<Fs> {
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
-        let driver = GNSTransactionDriverAnyFS::open_or_reinit_with_name(
-            &gns,
-            log_name,
-            0,
-            HostRunMode::Prod,
-            0,
-        )
-        .unwrap();
-        Self::new(gns, 0, driver)
+        let driver = storage::v1::loader::open_gns_driver(log_name, 0, HostRunMode::Dev, 0, &gns)
+            .unwrap()
+            .into_inner();
+        Self::new(gns, 0, GNSTransactionDriverAnyFS::new(driver))
     }
 }
 
@@ -128,13 +126,13 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         space_uuid: Uuid,
         model_name: &str,
         model_uuid: Uuid,
-    ) -> crate::engine::storage::v1::SDSSResult<()> {
+    ) -> storage::v1::SDSSResult<()> {
         // create model dir
-        Fs::fs_create_dir(&crate::engine::storage::v1::loader::SEInitState::model_dir(
+        Fs::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
-        let driver = crate::engine::storage::v1::data_batch::create(
-            &crate::engine::storage::v1::loader::SEInitState::model_path(
+        let driver = storage::v1::data_batch::create(
+            &storage::v1::loader::SEInitState::model_path(
                 space_name, space_uuid, model_name, model_uuid,
             ),
             self.sys_cfg().host_data().settings_version(),

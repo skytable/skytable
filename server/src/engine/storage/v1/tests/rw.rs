@@ -43,7 +43,7 @@ fn create_delete() {
         )
         .unwrap();
         match f {
-            FileOpen::Existing(_, _) => panic!(),
+            FileOpen::Existing(_) => panic!(),
             FileOpen::Created(_) => {}
         };
     }
@@ -58,7 +58,7 @@ fn create_delete() {
     )
     .unwrap();
     let h = match open {
-        FileOpen::Existing(_, header) => header,
+        FileOpen::Existing((_, header)) => header,
         _ => panic!(),
     };
     assert_eq!(h.gr_mdr().file_scope(), FileScope::Journal);

@@ -28,8 +28,8 @@ use {
     crate::engine::{
         storage::v1::{
             rw::{
-                RawFSInterface, RawFileInterface, RawFileInterfaceExt, RawFileInterfaceRead,
-                RawFileInterfaceWrite, RawFileInterfaceWriteExt, RawFileOpen,
+                FileOpen, RawFSInterface, RawFileInterface, RawFileInterfaceExt,
+                RawFileInterfaceRead, RawFileInterfaceWrite, RawFileInterfaceWriteExt,
             },
             SDSSResult,
         },
@@ -123,10 +123,10 @@ impl RawFSInterface for VirtualFS {
         // create new file
         let file = VirtualFS::fs_fopen_or_create_rw(to)?;
         match file {
-            RawFileOpen::Created(mut c) => {
+            FileOpen::Created(mut c) => {
                 c.fw_write_all(&data)?;
             }
-            RawFileOpen::Existing(mut e) => {
+            FileOpen::Existing(mut e) => {
                 e.fw_truncate_to(0)?;
                 e.fw_write_all(&data)?;
             }
@@ -203,7 +203,7 @@ impl RawFSInterface for VirtualFS {
     fn fs_delete_dir_all(fpath: &str) -> super::SDSSResult<()> {
         delete_dir(fpath, true)
     }
-    fn fs_fopen_or_create_rw(fpath: &str) -> super::SDSSResult<super::rw::RawFileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(fpath: &str) -> super::SDSSResult<super::rw::FileOpen<Self::File>> {
         let mut vfs = VFS.write();
         // components
         let (target_file, components) = split_target_and_components(fpath);
@@ -213,13 +213,13 @@ impl RawFSInterface for VirtualFS {
                 VNode::File(f) => {
                     f.read = true;
                     f.write = true;
-                    Ok(RawFileOpen::Existing(VFileDescriptor(fpath.into())))
+                    Ok(FileOpen::Existing(VFileDescriptor(fpath.into())))
                 }
                 VNode::Dir(_) => return err_item_is_not_file(),
             },
             Entry::Vacant(v) => {
                 v.insert(VNode::File(VFile::new(true, true, vec![], 0)));
-                Ok(RawFileOpen::Created(VFileDescriptor(fpath.into())))
+                Ok(FileOpen::Created(VFileDescriptor(fpath.into())))
             }
         }
     }
@@ -535,8 +535,8 @@ impl RawFSInterface for NullFS {
     fn fs_delete_dir_all(_: &str) -> SDSSResult<()> {
         Ok(())
     }
-    fn fs_fopen_or_create_rw(_: &str) -> SDSSResult<RawFileOpen<Self::File>> {
-        Ok(RawFileOpen::Created(NullFile))
+    fn fs_fopen_or_create_rw(_: &str) -> SDSSResult<FileOpen<Self::File>> {
+        Ok(FileOpen::Created(NullFile))
     }
     fn fs_fopen_rw(_: &str) -> SDSSResult<Self::File> {
         Ok(NullFile)

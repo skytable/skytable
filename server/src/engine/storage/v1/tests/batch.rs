@@ -55,7 +55,10 @@ fn pkey(v: impl Into<Datacell>) -> PrimaryIndexKey {
     PrimaryIndexKey::try_from_dc(v.into()).unwrap()
 }
 
-fn open_file(fpath: &str) -> FileOpen<SDSSFileIO<VirtualFS>> {
+fn open_file(
+    fpath: &str,
+) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, super::super::header_impl::SDSSHeader)>
+{
     SDSSFileIO::open_or_create_perm_rw::<false>(
         fpath,
         FileScope::DataBatch,
@@ -71,7 +74,7 @@ fn open_file(fpath: &str) -> FileOpen<SDSSFileIO<VirtualFS>> {
 fn open_batch_data(fpath: &str, mdl: &Model) -> DataBatchPersistDriver<VirtualFS> {
     match open_file(fpath) {
         FileOpen::Created(f) => DataBatchPersistDriver::new(f, true),
-        FileOpen::Existing(f, _) => {
+        FileOpen::Existing((f, _header)) => {
             let mut dbr = DataBatchRestoreDriver::new(f).unwrap();
             dbr.read_data_batch_into_model(mdl).unwrap();
             DataBatchPersistDriver::new(dbr.into_file(), false)

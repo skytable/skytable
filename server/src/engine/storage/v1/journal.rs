@@ -41,12 +41,10 @@
   - FIXME(@ohsayan): we will probably (naively) need to dynamically reposition the cursor in case the metadata is corrupted as well
 */
 
-use super::rw::RawFSInterface;
-
 use {
     super::{
         header_impl::{FileSpecifierVersion, HostRunMode, SDSSHeaderRaw},
-        rw::{FileOpen, SDSSFileIO},
+        rw::{FileOpen, RawFSInterface, SDSSFileIO},
         SDSSError, SDSSResult,
     },
     crate::{
@@ -59,34 +57,6 @@ use {
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 const RECOVERY_BLOCK_AUTO_THRESHOLD: usize = 5;
 
-/// A journal to `/dev/null` (app. level impl)
-#[cfg(test)]
-pub fn null_journal<TA: JournalAdapter>(
-    log_file_name: &str,
-    log_kind: FileSpecifier,
-    log_kind_version: FileSpecifierVersion,
-    host_setting_version: u32,
-    host_run_mode: HostRunMode,
-    host_startup_counter: u64,
-    _: &TA::GlobalState,
-) -> JournalWriter<super::memfs::NullFS, TA> {
-    let FileOpen::Created(journal) =
-        SDSSFileIO::<super::memfs::NullFS>::open_or_create_perm_rw::<false>(
-            log_file_name,
-            FileScope::Journal,
-            log_kind,
-            log_kind_version,
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-        )
-        .unwrap()
-    else {
-        panic!()
-    };
-    JournalWriter::new(journal, 0, true).unwrap()
-}
-
 pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface>(
     log_file_name: &str,
     log_kind: FileSpecifier,
@@ -95,7 +65,7 @@ pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface>(
     host_run_mode: HostRunMode,
     host_startup_counter: u64,
     gs: &TA::GlobalState,
-) -> SDSSResult<JournalWriter<Fs, TA>> {
+) -> SDSSResult<FileOpen<JournalWriter<Fs, TA>>> {
     macro_rules! open_file {
         ($modify:literal) => {
             SDSSFileIO::<Fs>::open_or_create_perm_rw::<$modify>(
@@ -116,11 +86,13 @@ pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface>(
         open_file!(true)
     }?;
     let file = match f {
-        FileOpen::Created(f) => return JournalWriter::new(f, 0, true),
-        FileOpen::Existing(file, _) => file,
+        FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
+        FileOpen::Existing((file, _header)) => file,
     };
     let (file, last_txn) = JournalReader::<TA, Fs>::scroll(file, gs)?;
-    JournalWriter::new(file, last_txn, false)
+    Ok(FileOpen::Existing(JournalWriter::new(
+        file, last_txn, false,
+    )?))
 }
 
 /// The journal adapter

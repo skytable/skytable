@@ -24,8 +24,6 @@
  *
 */
 
-use std::marker::PhantomData;
-
 use {
     super::{
         header_impl::{
@@ -40,35 +38,45 @@ use {
     std::{
         fs::{self, File},
         io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
+        marker::PhantomData,
     },
 };
 
 #[derive(Debug)]
 /// Log whether
-pub enum FileOpen<F> {
-    Created(F),
-    Existing(F, SDSSHeader),
+pub enum FileOpen<CF, EF = CF> {
+    Created(CF),
+    Existing(EF),
 }
 
-impl<F> FileOpen<F> {
-    pub fn into_existing(self) -> Option<(F, SDSSHeader)> {
+impl<CF, EF> FileOpen<CF, EF> {
+    pub const fn is_created(&self) -> bool {
+        matches!(self, Self::Created(_))
+    }
+    pub const fn is_existing(&self) -> bool {
+        !self.is_created()
+    }
+    pub fn into_existing(self) -> Option<EF> {
         match self {
-            Self::Existing(f, h) => Some((f, h)),
+            Self::Existing(e) => Some(e),
             Self::Created(_) => None,
         }
     }
-    pub fn into_created(self) -> Option<F> {
+    pub fn into_created(self) -> Option<CF> {
         match self {
             Self::Created(f) => Some(f),
-            Self::Existing(_, _) => None,
+            Self::Existing(_) => None,
         }
     }
 }
 
-#[derive(Debug)]
-pub enum RawFileOpen<F> {
-    Created(F),
-    Existing(F),
+impl<F> FileOpen<F> {
+    pub fn into_inner(self) -> F {
+        match self {
+            Self::Created(f) => f,
+            Self::Existing(f) => f,
+        }
+    }
 }
 
 /// The specification for a file system interface (our own abstraction over the fs)
@@ -94,7 +102,7 @@ pub trait RawFSInterface {
     /// This will:
     /// - Create a file if it doesn't exist
     /// - Open a file it it does exist
-    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<RawFileOpen<Self::File>>;
+    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<FileOpen<Self::File>>;
     /// Open an existing file
     fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File>;
     /// Create a new file
@@ -179,7 +187,7 @@ impl RawFSInterface for LocalFS {
     fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()> {
         cvt(fs::remove_dir_all(fpath))
     }
-    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<RawFileOpen<Self::File>> {
+    fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<FileOpen<Self::File>> {
         let f = File::options()
             .create(true)
             .read(true)
@@ -187,9 +195,9 @@ impl RawFSInterface for LocalFS {
             .open(fpath)?;
         let md = f.metadata()?;
         if md.len() == 0 {
-            Ok(RawFileOpen::Created(f))
+            Ok(FileOpen::Created(f))
         } else {
-            Ok(RawFileOpen::Existing(f))
+            Ok(FileOpen::Existing(f))
         }
     }
     fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File> {
@@ -485,10 +493,10 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
         host_setting_version: u32,
         host_run_mode: HostRunMode,
         host_startup_counter: u64,
-    ) -> SDSSResult<FileOpen<Self>> {
+    ) -> SDSSResult<FileOpen<Self, (Self, SDSSHeader)>> {
         let f = Fs::fs_fopen_or_create_rw(file_path)?;
         match f {
-            RawFileOpen::Created(f) => {
+            FileOpen::Created(f) => {
                 let f = Self::_sdss_fcreate(
                     file_scope,
                     file_specifier,
@@ -500,14 +508,14 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
                 )?;
                 Ok(FileOpen::Created(f))
             }
-            RawFileOpen::Existing(f) => {
+            FileOpen::Existing(f) => {
                 let (f, header) = Self::_sdss_fopen::<REWRITE_MODIFY_COUNTER>(
                     f,
                     file_scope,
                     file_specifier,
                     file_specifier_version,
                 )?;
-                Ok(FileOpen::Existing(header, f))
+                Ok(FileOpen::Existing((header, f)))
             }
         }
     }

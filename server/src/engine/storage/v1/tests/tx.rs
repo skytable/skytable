@@ -143,6 +143,7 @@ fn open_log(
         1,
         &db,
     )
+    .map(|v| v.into_inner())
 }
 
 #[test]
