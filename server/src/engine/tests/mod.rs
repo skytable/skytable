@@ -27,8 +27,9 @@
 mod cfg {
     use crate::{
         engine::config::{
-            self, CLIConfigParseReturn, ConfigEndpoint, ConfigEndpointTcp, ConfigEndpointTls,
-            ConfigMode, ConfigReturn, ConfigSystem, Configuration, ParsedRawArgs,
+            self, AuthDriver, CLIConfigParseReturn, ConfigAuth, ConfigEndpoint, ConfigEndpointTcp,
+            ConfigEndpointTls, ConfigMode, ConfigReturn, ConfigSystem, Configuration,
+            ParsedRawArgs,
         },
         util::test_utils::with_files,
     };
@@ -98,7 +99,9 @@ mod cfg {
                 --service-window=600 \
                 --tlskey {pkey} \
                 --tlscert {cert} \
-                --auth pwd"
+                --auth-plugin pwd \
+                --auth-root-password password12345678
+                "
                 );
                 let cfg = extract_cli_args(&payload);
                 let ret = config::apply_and_validate::<config::CSCommandLine>(cfg)
@@ -116,7 +119,8 @@ mod cfg {
                             )
                         ),
                         ConfigMode::Dev,
-                        ConfigSystem::new(600, true)
+                        ConfigSystem::new(600),
+                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
                     )
                 )
             },
@@ -171,7 +175,8 @@ mod cfg {
         let variables = [
             format!("SKYDB_TLS_CERT=/var/skytable/keys/cert.pem"),
             format!("SKYDB_TLS_KEY=/var/skytable/keys/private.key"),
-            format!("SKYDB_AUTH=pwd"),
+            format!("SKYDB_AUTH_PLUGIN=pwd"),
+            format!("SKYDB_AUTH_ROOT_PASSWORD=password12345678"),
             format!("SKYDB_ENDPOINTS=tcp@localhost:8080"),
             format!("SKYDB_RUN_MODE=dev"),
             format!("SKYDB_SERVICE_WINDOW=600"),
@@ -186,7 +191,8 @@ mod cfg {
         let variables = [
             format!("SKYDB_TLS_CERT=/var/skytable/keys/cert.pem"),
             format!("SKYDB_TLS_KEY=/var/skytable/keys/private.key"),
-            format!("SKYDB_AUTH=pwd"),
+            format!("SKYDB_AUTH_PLUGIN=pwd"),
+            format!("SKYDB_AUTH_ROOT_PASSWORD=password12345678"),
             format!("SKYDB_ENDPOINTS=tcp@localhost:8080,tls@localhost:8081"),
             format!("SKYDB_RUN_MODE=dev"),
             format!("SKYDB_SERVICE_WINDOW=600"),
@@ -202,9 +208,10 @@ mod cfg {
             ["__env_args_test_cert.pem", "__env_args_test_private.key"],
             |[cert, key]| {
                 let variables = [
+                    format!("SKYDB_AUTH_PLUGIN=pwd"),
+                    format!("SKYDB_AUTH_ROOT_PASSWORD=password12345678"),
                     format!("SKYDB_TLS_CERT={cert}"),
                     format!("SKYDB_TLS_KEY={key}"),
-                    format!("SKYDB_AUTH=pwd"),
                     format!("SKYDB_ENDPOINTS=tcp@localhost:8080,tls@localhost:8081"),
                     format!("SKYDB_RUN_MODE=dev"),
                     format!("SKYDB_SERVICE_WINDOW=600"),
@@ -223,10 +230,57 @@ mod cfg {
                             )
                         ),
                         ConfigMode::Dev,
-                        ConfigSystem::new(600, true)
+                        ConfigSystem::new(600),
+                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
                     )
                 )
             },
         );
+    }
+    const CONFIG_FILE: &str = "\
+system:
+  mode: dev
+  rs_window: 600
+
+auth:
+  plugin: pwd
+  root_pass: password12345678
+
+endpoints:
+  secure:
+    host: 127.0.0.1
+    port: 2004
+    cert: ._test_sample_cert.pem
+    private_key: ._test_sample_private.key
+  insecure:
+    host: 127.0.0.1
+    port: 2003
+    ";
+    #[test]
+    fn test_config_file() {
+        with_files(
+            ["._test_sample_cert.pem", "._test_sample_private.key"],
+            |_| {
+                config::set_cli_src(vec!["skyd".into(), "--config=config.yml".into()]);
+                config::set_file_src(CONFIG_FILE);
+                let cfg = config::check_configuration().unwrap().into_config();
+                assert_eq!(
+                    cfg,
+                    Configuration::new(
+                        ConfigEndpoint::Multi(
+                            ConfigEndpointTcp::new("127.0.0.1".into(), 2003),
+                            ConfigEndpointTls::new(
+                                ConfigEndpointTcp::new("127.0.0.1".into(), 2004),
+                                "".into(),
+                                "".into()
+                            )
+                        ),
+                        ConfigMode::Dev,
+                        ConfigSystem::new(600),
+                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
+                    )
+                )
+            },
+        )
     }
 }
