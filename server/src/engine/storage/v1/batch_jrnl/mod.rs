@@ -45,26 +45,39 @@ pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};
 pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
 
 use {
-    super::{
-        header_meta,
-        rw::{FileOpen, SDSSFileIO},
-        RawFSInterface, SDSSResult,
-    },
+    super::{header_meta, rw::SDSSFileIO, RawFSInterface, SDSSResult},
     crate::engine::core::model::Model,
 };
 
 const LOG_SPECIFIER_VERSION: header_meta::FileSpecifierVersion =
     header_meta::FileSpecifierVersion::__new(0);
 
-pub fn open_or_reinit<Fs: RawFSInterface>(
+/// Re-initialize an existing batch journal and read all its data into model
+pub fn reinit<Fs: RawFSInterface>(
     name: &str,
     model: &Model,
+) -> SDSSResult<DataBatchPersistDriver<Fs>> {
+    let (_header, f) = SDSSFileIO::<Fs>::open::<false>(
+        name,
+        header_meta::FileScope::Journal,
+        header_meta::FileSpecifier::TableDataBatch,
+        LOG_SPECIFIER_VERSION,
+    )?;
+    // restore
+    let mut restore_driver = DataBatchRestoreDriver::new(f)?;
+    restore_driver.read_data_batch_into_model(model)?;
+    DataBatchPersistDriver::new(restore_driver.into_file(), false)
+}
+
+/// Create a new batch journal
+pub fn create<Fs: RawFSInterface>(
+    path: &str,
     host_setting_version: u32,
     host_run_mode: header_meta::HostRunMode,
     host_startup_counter: u64,
 ) -> SDSSResult<DataBatchPersistDriver<Fs>> {
-    let f = SDSSFileIO::<Fs>::open_or_create_perm_rw::<false>(
-        name,
+    let f = SDSSFileIO::<Fs>::create(
+        path,
         header_meta::FileScope::Journal,
         header_meta::FileSpecifier::TableDataBatch,
         LOG_SPECIFIER_VERSION,
@@ -72,16 +85,5 @@ pub fn open_or_reinit<Fs: RawFSInterface>(
         host_run_mode,
         host_startup_counter,
     )?;
-    match f {
-        FileOpen::Created(new_file) => Ok(DataBatchPersistDriver::new(new_file, true)?),
-        FileOpen::Existing(existing, _) => {
-            // restore
-            let mut restore_driver = DataBatchRestoreDriver::new(existing)?;
-            restore_driver.read_data_batch_into_model(model)?;
-            Ok(DataBatchPersistDriver::new(
-                restore_driver.into_file(),
-                false,
-            )?)
-        }
-    }
+    DataBatchPersistDriver::new(f, true)
 }

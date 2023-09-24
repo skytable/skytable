@@ -47,7 +47,7 @@ pub use {
     rw::{LocalFS, RawFSInterface, SDSSFileIO},
 };
 pub mod data_batch {
-    pub use super::batch_jrnl::{DataBatchPersistDriver, DataBatchRestoreDriver};
+    pub use super::batch_jrnl::{create, reinit, DataBatchPersistDriver, DataBatchRestoreDriver};
 }
 pub mod header_meta {
     pub use super::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode};

@@ -399,6 +399,15 @@ impl<K: AsKey, V: AsValue, C: Config<K, V>> IndexSTSeqDll<K, V, C> {
                 &(e.as_ref()).read_value().v
             })
     }
+    fn _get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
+    where
+        K: Borrow<Q>,
+        Q: AsKey,
+    {
+        self.m
+            .get_mut(unsafe { IndexSTSeqDllQref::from_ref(k) })
+            .map(|e| unsafe { &mut e.as_mut().v })
+    }
     #[inline(always)]
     fn _update<Q: ?Sized>(&mut self, k: &Q, v: V) -> Option<V>
     where
@@ -629,12 +638,12 @@ where
         self._get(key).cloned()
     }
 
-    fn st_get_mut<Q>(&mut self, _: &Q) -> Option<&mut V>
+    fn st_get_mut<Q>(&mut self, k: &Q) -> Option<&mut V>
     where
         K: AsKey + Borrow<Q>,
         Q: ?Sized + AsKey,
     {
-        todo!()
+        self._get_mut(k)
     }
 
     fn st_update<Q>(&mut self, key: &Q, val: V) -> bool

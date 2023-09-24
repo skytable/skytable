@@ -71,16 +71,34 @@ pub enum RawFileOpen<F> {
     Existing(F),
 }
 
+/// The specification for a file system interface (our own abstraction over the fs)
 pub trait RawFSInterface {
+    /// asserts that the file system is not a null filesystem (like `/dev/null` for example)
     const NOT_NULL: bool = true;
+    /// the file descriptor that is returned by the file system when a file is opened
     type File: RawFileInterface;
+    /// Remove a file
     fn fs_remove_file(fpath: &str) -> SDSSResult<()>;
+    /// Rename a file
     fn fs_rename_file(from: &str, to: &str) -> SDSSResult<()>;
+    /// Create a directory
     fn fs_create_dir(fpath: &str) -> SDSSResult<()>;
+    /// Create a directory and all corresponding path components
     fn fs_create_dir_all(fpath: &str) -> SDSSResult<()>;
+    /// Delete a directory
     fn fs_delete_dir(fpath: &str) -> SDSSResult<()>;
+    /// Delete a directory and recursively remove all (if any) children
     fn fs_delete_dir_all(fpath: &str) -> SDSSResult<()>;
+    /// Open or create a file in R/W mode
+    ///
+    /// This will:
+    /// - Create a file if it doesn't exist
+    /// - Open a file it it does exist
     fn fs_fopen_or_create_rw(fpath: &str) -> SDSSResult<RawFileOpen<Self::File>>;
+    /// Open an existing file
+    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File>;
+    /// Create a new file
+    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File>;
 }
 
 /// A file (well, probably) that can be used for RW operations along with advanced write and extended operations (such as seeking)
@@ -173,6 +191,18 @@ impl RawFSInterface for LocalFS {
         } else {
             Ok(RawFileOpen::Existing(f))
         }
+    }
+    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File> {
+        let f = File::options()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(fpath)?;
+        Ok(f)
+    }
+    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File> {
+        let f = File::options().read(true).write(true).open(fpath)?;
+        Ok(f)
     }
 }
 
@@ -357,6 +387,95 @@ pub struct SDSSFileIO<Fs: RawFSInterface> {
 }
 
 impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
+    /// Open an existing SDSS file
+    ///
+    /// **IMPORTANT: File position: end-of-header-section**
+    pub fn open<const REWRITE_MODIFY_COUNTER: bool>(
+        file_path: &str,
+        file_scope: FileScope,
+        file_specifier: FileSpecifier,
+        file_specifier_version: FileSpecifierVersion,
+    ) -> SDSSResult<(SDSSHeader, Self)> {
+        let f = Fs::fs_fopen_rw(file_path)?;
+        Self::_sdss_fopen::<REWRITE_MODIFY_COUNTER>(
+            f,
+            file_scope,
+            file_specifier,
+            file_specifier_version,
+        )
+    }
+    /// internal SDSS fopen routine
+    fn _sdss_fopen<const REWRITE_MODIFY_COUNTER: bool>(
+        mut f: <Fs as RawFSInterface>::File,
+        file_scope: FileScope,
+        file_specifier: FileSpecifier,
+        file_specifier_version: FileSpecifierVersion,
+    ) -> Result<(SDSSHeader, SDSSFileIO<Fs>), SDSSError> {
+        let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
+        f.fr_read_exact(&mut header_raw)?;
+        let header = SDSSHeaderRaw::decode_noverify(header_raw)
+            .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
+        header.verify(file_scope, file_specifier, file_specifier_version)?;
+        let mut f = Self::_new(f);
+        if REWRITE_MODIFY_COUNTER {
+            // since we updated this file, let us update the header
+            let mut new_header = header.clone();
+            new_header.dr_rs_mut().bump_modify_count();
+            f.seek_from_start(0)?;
+            f.fsynced_write(new_header.encoded().array().as_ref())?;
+            f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
+        }
+        Ok((header, f))
+    }
+    /// Create a new SDSS file
+    ///
+    /// **IMPORTANT: File position: end-of-header-section**
+    pub fn create(
+        file_path: &str,
+        file_scope: FileScope,
+        file_specifier: FileSpecifier,
+        file_specifier_version: FileSpecifierVersion,
+        host_setting_version: u32,
+        host_run_mode: HostRunMode,
+        host_startup_counter: u64,
+    ) -> SDSSResult<Self> {
+        let f = Fs::fs_fcreate_rw(file_path)?;
+        Self::_sdss_fcreate(
+            file_scope,
+            file_specifier,
+            file_specifier_version,
+            host_setting_version,
+            host_run_mode,
+            host_startup_counter,
+            f,
+        )
+    }
+    /// Internal SDSS fcreate routine
+    fn _sdss_fcreate(
+        file_scope: FileScope,
+        file_specifier: FileSpecifier,
+        file_specifier_version: FileSpecifierVersion,
+        host_setting_version: u32,
+        host_run_mode: HostRunMode,
+        host_startup_counter: u64,
+        f: <Fs as RawFSInterface>::File,
+    ) -> Result<SDSSFileIO<Fs>, SDSSError> {
+        let data = SDSSHeaderRaw::new_auto(
+            file_scope,
+            file_specifier,
+            file_specifier_version,
+            host_setting_version,
+            host_run_mode,
+            host_startup_counter,
+            0,
+        )
+        .array();
+        let mut f = Self::_new(f);
+        f.fsynced_write(&data)?;
+        Ok(f)
+    }
+    /// Create a new SDSS file or re-open an existing file and verify
+    ///
     /// **IMPORTANT: File position: end-of-header-section**
     pub fn open_or_create_perm_rw<const REWRITE_MODIFY_COUNTER: bool>(
         file_path: &str,
@@ -370,39 +489,25 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
         let f = Fs::fs_fopen_or_create_rw(file_path)?;
         match f {
             RawFileOpen::Created(f) => {
-                // since this file was just created, we need to append the header
-                let data = SDSSHeaderRaw::new_auto(
+                let f = Self::_sdss_fcreate(
                     file_scope,
                     file_specifier,
                     file_specifier_version,
                     host_setting_version,
                     host_run_mode,
                     host_startup_counter,
-                    0,
-                )
-                .array();
-                let mut f = Self::_new(f);
-                f.fsynced_write(&data)?;
+                    f,
+                )?;
                 Ok(FileOpen::Created(f))
             }
-            RawFileOpen::Existing(mut f) => {
-                // this is an existing file. decoded the header
-                let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
-                f.fr_read_exact(&mut header_raw)?;
-                let header = SDSSHeaderRaw::decode_noverify(header_raw)
-                    .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
-                // now validate the header
-                header.verify(file_scope, file_specifier, file_specifier_version)?;
-                let mut f = Self::_new(f);
-                if REWRITE_MODIFY_COUNTER {
-                    // since we updated this file, let us update the header
-                    let mut new_header = header.clone();
-                    new_header.dr_rs_mut().bump_modify_count();
-                    f.seek_from_start(0)?;
-                    f.fsynced_write(new_header.encoded().array().as_ref())?;
-                    f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
-                }
-                Ok(FileOpen::Existing(f, header))
+            RawFileOpen::Existing(f) => {
+                let (f, header) = Self::_sdss_fopen::<REWRITE_MODIFY_COUNTER>(
+                    f,
+                    file_scope,
+                    file_specifier,
+                    file_specifier_version,
+                )?;
+                Ok(FileOpen::Existing(header, f))
             }
         }
     }

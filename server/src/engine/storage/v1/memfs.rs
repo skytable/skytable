@@ -57,7 +57,7 @@ type ComponentIter<'a> = std::iter::Take<std::vec::IntoIter<&'a str>>;
 */
 
 #[derive(Debug)]
-enum VNode {
+pub(super) enum VNode {
     Dir(HashMap<Box<str>, Self>),
     File(VFile),
 }
@@ -222,6 +222,44 @@ impl RawFSInterface for VirtualFS {
                 Ok(RawFileOpen::Created(VFileDescriptor(fpath.into())))
             }
         }
+    }
+    fn fs_fcreate_rw(fpath: &str) -> SDSSResult<Self::File> {
+        let mut vfs = VFS.write();
+        let (target_file, components) = split_target_and_components(fpath);
+        let target_dir = find_target_dir_mut(components, &mut vfs)?;
+        match target_dir.entry(target_file.into()) {
+            Entry::Occupied(k) => {
+                match k.get() {
+                    VNode::Dir(_) => {
+                        return Err(Error::new(
+                            ErrorKind::AlreadyExists,
+                            "found directory with same name where file was to be created",
+                        )
+                        .into());
+                    }
+                    VNode::File(_) => {
+                        // the file already exists
+                        return Err(Error::new(
+                            ErrorKind::AlreadyExists,
+                            "the file already exists",
+                        )
+                        .into());
+                    }
+                }
+            }
+            Entry::Vacant(v) => {
+                // no file exists, we can create this
+                v.insert(VNode::File(VFile::new(true, true, vec![], 0)));
+                Ok(VFileDescriptor(fpath.into()))
+            }
+        }
+    }
+    fn fs_fopen_rw(fpath: &str) -> SDSSResult<Self::File> {
+        with_file_mut(fpath, |f| {
+            f.read = true;
+            f.write = true;
+            Ok(VFileDescriptor(fpath.into()))
+        })
     }
 }
 
@@ -477,6 +515,7 @@ impl RawFileInterfaceExt for VFileDescriptor {
 pub struct NullFS;
 pub struct NullFile;
 impl RawFSInterface for NullFS {
+    const NOT_NULL: bool = false;
     type File = NullFile;
     fn fs_rename_file(_: &str, _: &str) -> SDSSResult<()> {
         Ok(())
@@ -498,6 +537,12 @@ impl RawFSInterface for NullFS {
     }
     fn fs_fopen_or_create_rw(_: &str) -> SDSSResult<RawFileOpen<Self::File>> {
         Ok(RawFileOpen::Created(NullFile))
+    }
+    fn fs_fopen_rw(_: &str) -> SDSSResult<Self::File> {
+        Ok(NullFile)
+    }
+    fn fs_fcreate_rw(_: &str) -> SDSSResult<Self::File> {
+        Ok(NullFile)
     }
 }
 impl RawFileInterfaceRead for NullFile {

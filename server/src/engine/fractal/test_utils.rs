@@ -25,9 +25,13 @@
 */
 
 use {
-    super::{CriticalTask, GenericTask, GlobalInstanceLike, SysConfig, Task},
+    super::{
+        CriticalTask, FractalModelDriver, GenericTask, GlobalInstanceLike, ModelUniqueID,
+        SysConfig, Task,
+    },
     crate::engine::{
         core::GlobalNS,
+        data::uuid::Uuid,
         storage::v1::{
             header_meta::HostRunMode,
             memfs::{NullFS, VirtualFS},
@@ -36,6 +40,7 @@ use {
         txn::gns::GNSTransactionDriverAnyFS,
     },
     parking_lot::{Mutex, RwLock},
+    std::collections::HashMap,
 };
 
 /// A `test` mode global implementation
@@ -45,6 +50,7 @@ pub struct TestGlobal<Fs: RawFSInterface = VirtualFS> {
     lp_queue: RwLock<Vec<Task<GenericTask>>>,
     max_delta_size: usize,
     txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
+    model_drivers: RwLock<HashMap<ModelUniqueID, FractalModelDriver<Fs>>>,
     sys_cfg: super::SysConfig,
 }
 
@@ -60,6 +66,7 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
             lp_queue: RwLock::default(),
             max_delta_size,
             txn_driver: Mutex::new(txn_driver),
+            model_drivers: RwLock::default(),
             sys_cfg: SysConfig::test_default(),
         }
     }
@@ -117,12 +124,28 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
     }
     fn initialize_model_driver(
         &self,
-        _space_name: &str,
-        _space_uuid: crate::engine::data::uuid::Uuid,
-        _model_name: &str,
-        _model_uuid: crate::engine::data::uuid::Uuid,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
     ) -> crate::engine::storage::v1::SDSSResult<()> {
-        todo!()
+        // create model dir
+        Fs::fs_create_dir(&crate::engine::storage::v1::loader::SEInitState::model_dir(
+            space_name, space_uuid, model_name, model_uuid,
+        ))?;
+        let driver = crate::engine::storage::v1::data_batch::create(
+            &crate::engine::storage::v1::loader::SEInitState::model_path(
+                space_name, space_uuid, model_name, model_uuid,
+            ),
+            self.sys_cfg().host_data().settings_version(),
+            self.sys_cfg().host_data().run_mode(),
+            self.sys_cfg().host_data().startup_counter(),
+        )?;
+        self.model_drivers.write().insert(
+            ModelUniqueID::new(space_name, model_name, model_uuid),
+            FractalModelDriver::init(driver),
+        );
+        Ok(())
     }
 }
 

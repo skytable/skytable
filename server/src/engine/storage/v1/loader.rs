@@ -36,14 +36,14 @@ const GNS_FILE_PATH: &str = "gns.db-tlog";
 
 pub struct SEInitState {
     pub txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
-    pub model_drivers: ModelDrivers,
+    pub model_drivers: ModelDrivers<LocalFS>,
     pub gns: GlobalNS,
 }
 
 impl SEInitState {
     pub fn new(
         txn_driver: GNSTransactionDriverAnyFS<super::LocalFS>,
-        model_drivers: ModelDrivers,
+        model_drivers: ModelDrivers<LocalFS>,
         gns: GlobalNS,
     ) -> Self {
         Self {
@@ -70,13 +70,7 @@ impl SEInitState {
             let space_uuid = space.get_uuid();
             for (model_name, model) in space.models().read().iter() {
                 let path = Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                let persist_driver = match batch_jrnl::open_or_reinit(
-                    &path,
-                    model,
-                    host_setting_version,
-                    host_run_mode,
-                    host_startup_counter,
-                ) {
+                let persist_driver = match batch_jrnl::reinit(&path, model) {
                     Ok(j) => j,
                     Err(e) => {
                         return Err(e.with_extra(format!(

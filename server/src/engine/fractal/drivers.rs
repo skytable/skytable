@@ -27,7 +27,7 @@
 use {
     super::util,
     crate::engine::{
-        storage::v1::{data_batch::DataBatchPersistDriver, LocalFS},
+        storage::v1::{data_batch::DataBatchPersistDriver, RawFSInterface},
         txn::gns::GNSTransactionDriverAnyFS,
     },
     parking_lot::Mutex,
@@ -35,39 +35,39 @@ use {
 };
 
 /// GNS driver
-pub(super) struct FractalGNSDriver {
+pub(super) struct FractalGNSDriver<Fs: RawFSInterface> {
     status: util::Status,
-    txn_driver: Mutex<GNSTransactionDriverAnyFS<LocalFS>>,
+    txn_driver: Mutex<GNSTransactionDriverAnyFS<Fs>>,
 }
 
-impl FractalGNSDriver {
-    pub(super) fn new(txn_driver: GNSTransactionDriverAnyFS<LocalFS>) -> Self {
+impl<Fs: RawFSInterface> FractalGNSDriver<Fs> {
+    pub(super) fn new(txn_driver: GNSTransactionDriverAnyFS<Fs>) -> Self {
         Self {
             status: util::Status::new_okay(),
             txn_driver: Mutex::new(txn_driver),
         }
     }
-    pub fn txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<LocalFS>> {
+    pub fn txn_driver(&self) -> &Mutex<GNSTransactionDriverAnyFS<Fs>> {
         &self.txn_driver
     }
 }
 
 /// Model driver
-pub struct FractalModelDriver {
+pub struct FractalModelDriver<Fs: RawFSInterface> {
     hooks: Arc<FractalModelHooks>,
-    batch_driver: Mutex<DataBatchPersistDriver<LocalFS>>,
+    batch_driver: Mutex<DataBatchPersistDriver<Fs>>,
 }
 
-impl FractalModelDriver {
+impl<Fs: RawFSInterface> FractalModelDriver<Fs> {
     /// Initialize a model driver with default settings
-    pub fn init(batch_driver: DataBatchPersistDriver<LocalFS>) -> Self {
+    pub fn init(batch_driver: DataBatchPersistDriver<Fs>) -> Self {
         Self {
             hooks: Arc::new(FractalModelHooks::new()),
             batch_driver: Mutex::new(batch_driver),
         }
     }
     /// Returns a reference to the batch persist driver
-    pub fn batch_driver(&self) -> &Mutex<DataBatchPersistDriver<LocalFS>> {
+    pub fn batch_driver(&self) -> &Mutex<DataBatchPersistDriver<Fs>> {
         &self.batch_driver
     }
 }

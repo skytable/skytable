@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::storage::v1::LocalFS;
+
 use {
     super::ModelUniqueID,
     crate::{
@@ -316,7 +318,7 @@ impl FractalMgr {
     fn try_write_model_data_batch(
         model: &Model,
         observed_size: usize,
-        mdl_driver: &super::FractalModelDriver,
+        mdl_driver: &super::FractalModelDriver<LocalFS>,
     ) -> crate::engine::error::QueryResult<()> {
         if observed_size == 0 {
             // no changes, all good

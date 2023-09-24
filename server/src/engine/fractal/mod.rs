@@ -28,7 +28,10 @@ use {
     super::{
         core::GlobalNS,
         data::uuid::Uuid,
-        storage::v1::{LocalFS, RawFSInterface, SDSSResult},
+        storage::{
+            self,
+            v1::{LocalFS, RawFSInterface, SDSSResult},
+        },
         txn::gns::GNSTransactionDriverAnyFS,
     },
     parking_lot::{Mutex, RwLock},
@@ -49,7 +52,7 @@ pub use {
     util::FractalToken,
 };
 
-pub type ModelDrivers = HashMap<ModelUniqueID, drivers::FractalModelDriver>;
+pub type ModelDrivers<Fs> = HashMap<ModelUniqueID, drivers::FractalModelDriver<Fs>>;
 
 static mut GLOBAL: MaybeUninit<GlobalState> = MaybeUninit::uninit();
 
@@ -73,7 +76,7 @@ pub unsafe fn enable_and_start_all(
     gns: GlobalNS,
     config: config::SysConfig,
     gns_driver: GNSTransactionDriverAnyFS<LocalFS>,
-    model_drivers: ModelDrivers,
+    model_drivers: ModelDrivers<LocalFS>,
 ) -> GlobalStateStart {
     let model_cnt_on_boot = model_drivers.len();
     let gns_driver = drivers::FractalGNSDriver::new(gns_driver);
@@ -163,12 +166,29 @@ impl GlobalInstanceLike for Global {
     // model
     fn initialize_model_driver(
         &self,
-        _space_name: &str,
-        _space_uuid: Uuid,
-        _model_name: &str,
-        _model_uuid: Uuid,
+        space_name: &str,
+        space_uuid: Uuid,
+        model_name: &str,
+        model_uuid: Uuid,
     ) -> SDSSResult<()> {
-        todo!()
+        // create dir
+        LocalFS::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
+            space_name, space_uuid, model_name, model_uuid,
+        ))?;
+        // init driver
+        let driver = storage::v1::data_batch::create(
+            &storage::v1::loader::SEInitState::model_path(
+                space_name, space_uuid, model_name, model_uuid,
+            ),
+            self.sys_cfg().host_data().settings_version(),
+            self.sys_cfg().host_data().run_mode(),
+            self.sys_cfg().host_data().startup_counter(),
+        )?;
+        self.get_state().mdl_driver.write().insert(
+            ModelUniqueID::new(space_name, model_name, model_uuid),
+            drivers::FractalModelDriver::init(driver),
+        );
+        Ok(())
     }
 }
 
@@ -221,8 +241,8 @@ impl Global {
 /// The global state
 struct GlobalState {
     gns: GlobalNS,
-    gns_driver: drivers::FractalGNSDriver,
-    mdl_driver: RwLock<ModelDrivers>,
+    gns_driver: drivers::FractalGNSDriver<LocalFS>,
+    mdl_driver: RwLock<ModelDrivers<LocalFS>>,
     task_mgr: mgr::FractalMgr,
     config: config::SysConfig,
 }
@@ -230,8 +250,8 @@ struct GlobalState {
 impl GlobalState {
     fn new(
         gns: GlobalNS,
-        gns_driver: drivers::FractalGNSDriver,
-        mdl_driver: RwLock<ModelDrivers>,
+        gns_driver: drivers::FractalGNSDriver<LocalFS>,
+        mdl_driver: RwLock<ModelDrivers<LocalFS>>,
         task_mgr: mgr::FractalMgr,
         config: config::SysConfig,
     ) -> Self {
@@ -243,7 +263,7 @@ impl GlobalState {
             config,
         }
     }
-    pub(self) fn get_mdl_drivers(&self) -> &RwLock<ModelDrivers> {
+    pub(self) fn get_mdl_drivers(&self) -> &RwLock<ModelDrivers<LocalFS>> {
         &self.mdl_driver
     }
     pub(self) fn fractal_mgr(&self) -> &mgr::FractalMgr {
