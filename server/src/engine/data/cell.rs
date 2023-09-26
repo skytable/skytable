@@ -90,6 +90,16 @@ impl Datacell {
     pub fn uint(&self) -> u64 {
         self.try_uint().unwrap()
     }
+    pub fn into_uint(self) -> Option<u64> {
+        if self.kind() != TagClass::UnsignedInt {
+            return None;
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): +tagck
+            let md = ManuallyDrop::new(self);
+            Some(md.data.word.dwordnn_load_qw())
+        }
+    }
     // sint
     pub fn new_sint(i: i64) -> Self {
         unsafe {
@@ -158,6 +168,21 @@ impl Datacell {
     pub fn bin(&self) -> &[u8] {
         self.try_bin().unwrap()
     }
+    pub fn into_bin(self) -> Option<Vec<u8>> {
+        if self.kind() != TagClass::Bin {
+            return None;
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): no double free + tagck
+            let md = ManuallyDrop::new(self);
+            let (a, b) = md.data.word.dwordqn_load_qw_nw();
+            Some(Vec::from_raw_parts(
+                b as *const u8 as *mut u8,
+                a as usize,
+                a as usize,
+            ))
+        }
+    }
     // str
     pub fn new_str(s: Box<str>) -> Self {
         let mut md = ManuallyDrop::new(s.into_boxed_bytes());
@@ -200,6 +225,17 @@ impl Datacell {
     }
     pub fn list(&self) -> &RwLock<Vec<Self>> {
         self.try_list().unwrap()
+    }
+    pub fn into_list(self) -> Option<Vec<Datacell>> {
+        if self.kind() != TagClass::List {
+            return None;
+        }
+        unsafe {
+            // UNSAFE(@ohsayan): +tagck +avoid double free
+            let md = ManuallyDrop::new(self);
+            let rwl = core::ptr::read(&md.data.rwl);
+            Some(ManuallyDrop::into_inner(rwl).into_inner())
+        }
     }
     pub unsafe fn new_qw(qw: u64, tag: CUTag) -> Datacell {
         Self::new(

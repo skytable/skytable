@@ -197,16 +197,16 @@ impl ConfigSystem {
     config auth
 */
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone, Copy)]
 pub enum AuthDriver {
     #[serde(rename = "pwd")]
     Pwd,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct ConfigAuth {
-    plugin: AuthDriver,
-    root_key: String,
+    pub plugin: AuthDriver,
+    pub root_key: String,
 }
 
 impl ConfigAuth {

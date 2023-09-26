@@ -52,6 +52,18 @@ impl DictEntryGeneric {
             _ => None,
         }
     }
+    pub fn into_dict(self) -> Option<DictGeneric> {
+        match self {
+            Self::Map(m) => Some(m),
+            _ => None,
+        }
+    }
+    pub fn into_data(self) -> Option<Datacell> {
+        match self {
+            Self::Data(d) => Some(d),
+            _ => None,
+        }
+    }
 }
 
 /*

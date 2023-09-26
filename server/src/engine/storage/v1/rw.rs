@@ -458,4 +458,10 @@ impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
         let mut r = [0; 1];
         self.read_to_buffer(&mut r).map(|_| r[0])
     }
+    pub fn load_remaining_into_buffer(&mut self) -> SDSSResult<Vec<u8>> {
+        let len = self.file_length()? - self.retrieve_cursor()?;
+        let mut buf = vec![0; len as usize];
+        self.read_to_buffer(&mut buf)?;
+        Ok(buf)
+    }
 }

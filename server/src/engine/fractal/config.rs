@@ -24,6 +24,8 @@
  *
 */
 
+use crate::engine::config::ConfigAuth;
+
 use {
     crate::engine::error::{Error, QueryResult},
     parking_lot::RwLock,
@@ -33,28 +35,53 @@ use {
 #[derive(Debug)]
 /// The global system configuration
 pub struct SysConfig {
-    auth_data: RwLock<Option<SysAuth>>,
+    auth_data: Option<RwLock<SysAuth>>,
     host_data: SysHostData,
+}
+
+impl PartialEq for SysConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.host_data == other.host_data
+            && match (self.auth_data.as_ref(), other.auth_data.as_ref()) {
+                (None, None) => true,
+                (Some(a), Some(b)) => &*a.read() == &*b.read(),
+                _ => false,
+            }
+    }
 }
 
 impl SysConfig {
     /// Initialize a new system config
-    pub fn new(auth_data: RwLock<Option<SysAuth>>, host_data: SysHostData) -> Self {
+    pub fn new(auth_data: Option<RwLock<SysAuth>>, host_data: SysHostData) -> Self {
         Self {
             auth_data,
             host_data,
+        }
+    }
+    pub fn new_auth(new_auth: Option<ConfigAuth>, host_data: SysHostData) -> Self {
+        match new_auth {
+            Some(ConfigAuth { root_key, .. }) => Self::new(
+                Some(RwLock::new(SysAuth::new(
+                    rcrypt::hash(root_key, rcrypt::DEFAULT_COST)
+                        .unwrap()
+                        .into_boxed_slice(),
+                    Default::default(),
+                ))),
+                host_data,
+            ),
+            None => Self::new(None, host_data),
         }
     }
     #[cfg(test)]
     /// A test-mode default setting with auth disabled
     pub(super) fn test_default() -> Self {
         Self {
-            auth_data: RwLock::new(None),
+            auth_data: None,
             host_data: SysHostData::new(0, 0),
         }
     }
     /// Returns a handle to the authentication data
-    pub fn auth_data(&self) -> &RwLock<Option<SysAuth>> {
+    pub fn auth_data(&self) -> &Option<RwLock<SysAuth>> {
         &self.auth_data
     }
     /// Returns a reference to host data
@@ -78,9 +105,20 @@ impl SysHostData {
             settings_version,
         }
     }
+    /// Returns the startup counter
+    ///
+    /// Note:
+    /// - If this is `0` -> this is the first boot
+    /// - If this is `1` -> this is the second boot (... and so on)
     pub fn startup_counter(&self) -> u64 {
         self.startup_counter
     }
+    /// Returns the settings version
+    ///
+    /// Note:
+    /// - If this is `0` -> this is the initial setting (first boot)
+    ///
+    /// If it stays at 0, this means that the settings were never changed
     pub fn settings_version(&self) -> u32 {
         self.settings_version
     }
@@ -118,6 +156,13 @@ impl SysAuth {
     }
     /// Verify the user with the given details
     pub fn verify_user(&self, username: &str, password: &str) -> QueryResult<()> {
+        if username == "root" {
+            if rcrypt::verify(password, self.root_key()).unwrap() {
+                return Ok(());
+            } else {
+                return Err(Error::SysAuthError);
+            }
+        }
         match self.users.get(username) {
             Some(user) if rcrypt::verify(password, user.key()).unwrap() => Ok(()),
             Some(_) | None => Err(Error::SysAuthError),
@@ -139,7 +184,7 @@ pub struct SysAuthUser {
 
 impl SysAuthUser {
     /// Create a new [`SysAuthUser`]
-    fn new(key: Box<[u8]>) -> Self {
+    pub fn new(key: Box<[u8]>) -> Self {
         Self { key }
     }
     /// Get the key

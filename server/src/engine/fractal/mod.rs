@@ -39,14 +39,13 @@ use {
     tokio::sync::mpsc::unbounded_channel,
 };
 
-mod config;
+pub mod config;
 mod drivers;
 mod mgr;
 #[cfg(test)]
 pub mod test_utils;
 mod util;
 pub use {
-    config::SysConfig,
     drivers::FractalModelDriver,
     mgr::{CriticalTask, GenericTask, Task},
     util::FractalToken,

@@ -93,14 +93,10 @@ pub enum SDSSError {
     // process errors
     OtherError(&'static str),
     // header
+    /// version mismatch
+    HeaderDecodeVersionMismatch,
     /// The entire header is corrupted
     HeaderDecodeCorruptedHeader,
-    /// The header versions don't match
-    HeaderDecodeHeaderVersionMismatch,
-    /// The driver versions don't match
-    HeaderDecodeDriverVersionMismatch,
-    /// The server versions don't match
-    HeaderDecodeServerVersionMismatch,
     /// Expected header values were not matched with the current header
     HeaderDecodeDataMismatch,
     /// The time in the [header/dynrec/rtsig] is in the future
@@ -134,7 +130,7 @@ pub enum SDSSError {
     /// An error with more context
     // TODO(@ohsayan): avoid the box; we'll clean this up soon
     Extra(Box<Self>, String),
-    HeaderDecodeVersionMismatch,
+    SysDBCorrupted,
 }
 
 impl From<TransactionError> for SDSSError {
