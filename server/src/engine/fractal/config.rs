@@ -25,10 +25,7 @@
 */
 
 use {
-    crate::engine::{
-        error::{Error, QueryResult},
-        storage::v1::header_meta::HostRunMode,
-    },
+    crate::engine::error::{Error, QueryResult},
     parking_lot::RwLock,
     std::collections::{hash_map::Entry, HashMap},
 };
@@ -53,7 +50,7 @@ impl SysConfig {
     pub(super) fn test_default() -> Self {
         Self {
             auth_data: RwLock::new(None),
-            host_data: SysHostData::new(0, HostRunMode::Prod, 0),
+            host_data: SysHostData::new(0, 0),
         }
     }
     /// Returns a handle to the authentication data
@@ -70,24 +67,19 @@ impl SysConfig {
 /// The host data section (system.host)
 pub struct SysHostData {
     startup_counter: u64,
-    run_mode: HostRunMode,
     settings_version: u32,
 }
 
 impl SysHostData {
     /// New [`SysHostData`]
-    pub fn new(startup_counter: u64, run_mode: HostRunMode, settings_version: u32) -> Self {
+    pub fn new(startup_counter: u64, settings_version: u32) -> Self {
         Self {
             startup_counter,
-            run_mode,
             settings_version,
         }
     }
     pub fn startup_counter(&self) -> u64 {
         self.startup_counter
-    }
-    pub fn run_mode(&self) -> HostRunMode {
-        self.run_mode
     }
     pub fn settings_version(&self) -> u32 {
         self.settings_version

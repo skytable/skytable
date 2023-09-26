@@ -41,9 +41,9 @@ use {
                     DataBatchPersistDriver, DataBatchRestoreDriver, DecodedBatchEvent,
                     DecodedBatchEventKind, NormalBatch,
                 },
-                header_meta::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
                 memfs::VirtualFS,
                 rw::{FileOpen, SDSSFileIO},
+                spec,
             },
         },
         util::test_utils,
@@ -57,18 +57,8 @@ fn pkey(v: impl Into<Datacell>) -> PrimaryIndexKey {
 
 fn open_file(
     fpath: &str,
-) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, super::super::header_impl::SDSSHeader)>
-{
-    SDSSFileIO::open_or_create_perm_rw::<false>(
-        fpath,
-        FileScope::DataBatch,
-        FileSpecifier::TableDataBatch,
-        FileSpecifierVersion::__new(0),
-        0,
-        HostRunMode::Dev,
-        1,
-    )
-    .unwrap()
+) -> FileOpen<SDSSFileIO<VirtualFS>, (SDSSFileIO<VirtualFS>, spec::SDSSStaticHeaderV1Compact)> {
+    SDSSFileIO::open_or_create_perm_rw::<spec::DataBatchJournalV1>(fpath).unwrap()
 }
 
 fn open_batch_data(fpath: &str, mdl: &Model) -> DataBatchPersistDriver<VirtualFS> {

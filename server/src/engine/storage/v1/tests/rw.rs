@@ -25,21 +25,15 @@
 */
 
 use crate::engine::storage::v1::{
-    header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode},
     rw::{FileOpen, SDSSFileIO},
+    spec,
 };
 
 #[test]
 fn create_delete() {
     {
-        let f = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<false>(
+        let f = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<spec::TestFile>(
             "hello_world.db-tlog",
-            FileScope::Journal,
-            FileSpecifier::GNSTxnLog,
-            FileSpecifierVersion::__new(0),
-            0,
-            HostRunMode::Prod,
-            0,
         )
         .unwrap();
         match f {
@@ -47,24 +41,12 @@ fn create_delete() {
             FileOpen::Created(_) => {}
         };
     }
-    let open = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<false>(
+    let open = SDSSFileIO::<super::VirtualFS>::open_or_create_perm_rw::<spec::TestFile>(
         "hello_world.db-tlog",
-        FileScope::Journal,
-        FileSpecifier::GNSTxnLog,
-        FileSpecifierVersion::__new(0),
-        0,
-        HostRunMode::Prod,
-        0,
     )
     .unwrap();
-    let h = match open {
-        FileOpen::Existing((_, header)) => header,
+    let _ = match open {
+        FileOpen::Existing(_) => {}
         _ => panic!(),
     };
-    assert_eq!(h.gr_mdr().file_scope(), FileScope::Journal);
-    assert_eq!(h.gr_mdr().file_spec(), FileSpecifier::GNSTxnLog);
-    assert_eq!(h.gr_mdr().file_spec_id(), FileSpecifierVersion::__new(0));
-    assert_eq!(h.gr_hr().run_mode(), HostRunMode::Prod);
-    assert_eq!(h.gr_hr().setting_version(), 0);
-    assert_eq!(h.gr_hr().startup_counter(), 0);
 }

@@ -43,49 +43,21 @@
 
 use {
     super::{
-        header_impl::{FileSpecifierVersion, HostRunMode, SDSSHeaderRaw},
         rw::{FileOpen, RawFSInterface, SDSSFileIO},
-        SDSSError, SDSSResult,
+        spec, SDSSError, SDSSResult,
     },
-    crate::{
-        engine::storage::v1::header_impl::{FileScope, FileSpecifier},
-        util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy, Threshold},
-    },
+    crate::util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy, Threshold},
     std::marker::PhantomData,
 };
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 const RECOVERY_BLOCK_AUTO_THRESHOLD: usize = 5;
 
-pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface>(
+pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
-    log_kind: FileSpecifier,
-    log_kind_version: FileSpecifierVersion,
-    host_setting_version: u32,
-    host_run_mode: HostRunMode,
-    host_startup_counter: u64,
     gs: &TA::GlobalState,
 ) -> SDSSResult<FileOpen<JournalWriter<Fs, TA>>> {
-    macro_rules! open_file {
-        ($modify:literal) => {
-            SDSSFileIO::<Fs>::open_or_create_perm_rw::<$modify>(
-                log_file_name,
-                FileScope::Journal,
-                log_kind,
-                log_kind_version,
-                host_setting_version,
-                host_run_mode,
-                host_startup_counter,
-            )
-        };
-    }
-    // HACK(@ohsayan): until generic const exprs are stabilized, we're in a state of hell
-    let f = if TA::DENY_NONAPPEND {
-        open_file!(false)
-    } else {
-        open_file!(true)
-    }?;
-    let file = match f {
+    let file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<F>(log_file_name)? {
         FileOpen::Created(f) => return Ok(FileOpen::Created(JournalWriter::new(f, 0, true)?)),
         FileOpen::Existing((file, _header)) => file,
     };
@@ -218,7 +190,7 @@ pub struct JournalReader<TA, Fs: RawFSInterface> {
 
 impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     pub fn new(log_file: SDSSFileIO<Fs>) -> SDSSResult<Self> {
-        let log_size = log_file.file_length()? - SDSSHeaderRaw::header_size() as u64;
+        let log_size = log_file.file_length()? - spec::SDSSStaticHeaderV1Compact::SIZE as u64;
         Ok(Self {
             log_file,
             log_size,

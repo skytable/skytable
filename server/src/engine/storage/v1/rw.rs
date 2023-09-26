@@ -26,9 +26,7 @@
 
 use {
     super::{
-        header_impl::{
-            FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode, SDSSHeader, SDSSHeaderRaw,
-        },
+        spec::{FileSpec, Header},
         SDSSResult,
     },
     crate::{
@@ -395,134 +393,36 @@ pub struct SDSSFileIO<Fs: RawFSInterface> {
 }
 
 impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
-    /// Open an existing SDSS file
-    ///
-    /// **IMPORTANT: File position: end-of-header-section**
-    pub fn open<const REWRITE_MODIFY_COUNTER: bool>(
-        file_path: &str,
-        file_scope: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-    ) -> SDSSResult<(SDSSHeader, Self)> {
-        let f = Fs::fs_fopen_rw(file_path)?;
-        Self::_sdss_fopen::<REWRITE_MODIFY_COUNTER>(
-            f,
-            file_scope,
-            file_specifier,
-            file_specifier_version,
-        )
+    pub fn open<F: FileSpec>(fpath: &str) -> SDSSResult<(Self, F::Header)> {
+        let mut f = Self::_new(Fs::fs_fopen_rw(fpath)?);
+        let header = F::Header::decode_verify(&mut f, F::DECODE_DATA, F::VERIFY_DATA)?;
+        Ok((f, header))
     }
-    /// internal SDSS fopen routine
-    fn _sdss_fopen<const REWRITE_MODIFY_COUNTER: bool>(
-        mut f: <Fs as RawFSInterface>::File,
-        file_scope: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-    ) -> Result<(SDSSHeader, SDSSFileIO<Fs>), SDSSError> {
-        let mut header_raw = [0u8; SDSSHeaderRaw::header_size()];
-        f.fr_read_exact(&mut header_raw)?;
-        let header = SDSSHeaderRaw::decode_noverify(header_raw)
-            .ok_or(SDSSError::HeaderDecodeCorruptedHeader)?;
-        header.verify(file_scope, file_specifier, file_specifier_version)?;
-        let mut f = Self::_new(f);
-        if REWRITE_MODIFY_COUNTER {
-            // since we updated this file, let us update the header
-            let mut new_header = header.clone();
-            new_header.dr_rs_mut().bump_modify_count();
-            f.seek_from_start(0)?;
-            f.fsynced_write(new_header.encoded().array().as_ref())?;
-            f.seek_from_start(SDSSHeaderRaw::header_size() as _)?;
-        }
-        Ok((header, f))
-    }
-    /// Create a new SDSS file
-    ///
-    /// **IMPORTANT: File position: end-of-header-section**
-    pub fn create(
-        file_path: &str,
-        file_scope: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-        host_setting_version: u32,
-        host_run_mode: HostRunMode,
-        host_startup_counter: u64,
-    ) -> SDSSResult<Self> {
-        let f = Fs::fs_fcreate_rw(file_path)?;
-        Self::_sdss_fcreate(
-            file_scope,
-            file_specifier,
-            file_specifier_version,
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-            f,
-        )
-    }
-    /// Internal SDSS fcreate routine
-    fn _sdss_fcreate(
-        file_scope: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-        host_setting_version: u32,
-        host_run_mode: HostRunMode,
-        host_startup_counter: u64,
-        f: <Fs as RawFSInterface>::File,
-    ) -> Result<SDSSFileIO<Fs>, SDSSError> {
-        let data = SDSSHeaderRaw::new_auto(
-            file_scope,
-            file_specifier,
-            file_specifier_version,
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-            0,
-        )
-        .array();
-        let mut f = Self::_new(f);
-        f.fsynced_write(&data)?;
+    pub fn create<F: FileSpec>(fpath: &str) -> SDSSResult<Self> {
+        let mut f = Self::_new(Fs::fs_fcreate_rw(fpath)?);
+        F::Header::encode(&mut f, F::ENCODE_DATA)?;
         Ok(f)
     }
-    /// Create a new SDSS file or re-open an existing file and verify
-    ///
-    /// **IMPORTANT: File position: end-of-header-section**
-    pub fn open_or_create_perm_rw<const REWRITE_MODIFY_COUNTER: bool>(
-        file_path: &str,
-        file_scope: FileScope,
-        file_specifier: FileSpecifier,
-        file_specifier_version: FileSpecifierVersion,
-        host_setting_version: u32,
-        host_run_mode: HostRunMode,
-        host_startup_counter: u64,
-    ) -> SDSSResult<FileOpen<Self, (Self, SDSSHeader)>> {
-        let f = Fs::fs_fopen_or_create_rw(file_path)?;
-        match f {
-            FileOpen::Created(f) => {
-                let f = Self::_sdss_fcreate(
-                    file_scope,
-                    file_specifier,
-                    file_specifier_version,
-                    host_setting_version,
-                    host_run_mode,
-                    host_startup_counter,
-                    f,
-                )?;
+    pub fn open_or_create_perm_rw<F: FileSpec>(
+        fpath: &str,
+    ) -> SDSSResult<FileOpen<Self, (Self, F::Header)>> {
+        match Fs::fs_fopen_or_create_rw(fpath)? {
+            FileOpen::Created(c) => {
+                let mut f = Self::_new(c);
+                F::Header::encode(&mut f, F::ENCODE_DATA)?;
                 Ok(FileOpen::Created(f))
             }
-            FileOpen::Existing(f) => {
-                let (f, header) = Self::_sdss_fopen::<REWRITE_MODIFY_COUNTER>(
-                    f,
-                    file_scope,
-                    file_specifier,
-                    file_specifier_version,
-                )?;
-                Ok(FileOpen::Existing((header, f)))
+            FileOpen::Existing(e) => {
+                let mut f = Self::_new(e);
+                let header = F::Header::decode_verify(&mut f, F::DECODE_DATA, F::VERIFY_DATA)?;
+                Ok(FileOpen::Existing((f, header)))
             }
         }
     }
 }
 
 impl<Fs: RawFSInterface> SDSSFileIO<Fs> {
-    fn _new(f: Fs::File) -> Self {
+    pub fn _new(f: Fs::File) -> Self {
         Self {
             f,
             _fs: PhantomData,

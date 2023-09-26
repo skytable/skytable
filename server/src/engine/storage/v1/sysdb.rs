@@ -27,10 +27,7 @@
 use crate::engine::{
     data::{cell::Datacell, DictEntryGeneric, DictGeneric},
     fractal::SysConfig,
-    storage::v1::{
-        header_meta::{FileScope, FileSpecifier, FileSpecifierVersion},
-        RawFSInterface, SDSSError, SDSSFileIO, SDSSResult,
-    },
+    storage::v1::{spec, RawFSInterface, SDSSError, SDSSFileIO, SDSSResult},
 };
 
 const SYSDB_PATH: &str = "sys.db";
@@ -75,19 +72,11 @@ pub fn sync_system_database<Fs: RawFSInterface>(cfg: &SysConfig) -> SDSSResult<(
         }
     }
     // open file
-    let mut file = SDSSFileIO::<Fs>::open_or_create_perm_rw::<false>(
-        SYSDB_COW_PATH,
-        FileScope::FlatmapData,
-        FileSpecifier::SysDB,
-        FileSpecifierVersion::__new(0),
-        cfg.host_data().settings_version(),
-        cfg.host_data().run_mode(),
-        cfg.host_data().startup_counter(),
-    )?
-    .into_created()
-    .ok_or(SDSSError::OtherError(
-        "sys.db.cow already exists. please remove this file.",
-    ))?;
+    let mut file = SDSSFileIO::<Fs>::open_or_create_perm_rw::<spec::SysDBV1>(SYSDB_COW_PATH)?
+        .into_created()
+        .ok_or(SDSSError::OtherError(
+            "sys.db.cow already exists. please remove this file.",
+        ))?;
     // write
     let buf = super::inf::enc::enc_dict_full::<super::inf::map::GenericDictSpec>(&map);
     file.fsynced_write(&buf)?;

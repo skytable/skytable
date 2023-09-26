@@ -28,18 +28,22 @@
 
 pub mod server_version;
 
+pub const CURRENT_SERVER_VERSION: ServerVersion = v1::V1_SERVER_VERSION;
+pub const CURRENT_DRIVER_VERSION: DriverVersion = v1::V1_DRIVER_VERSION;
+pub const CURRENT_HEADER_VERSION: HeaderVersion = v1::V1_HEADER_VERSION;
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 /// The header version
 ///
 /// The header version is part of the static record and *barely* changes (almost like once in a light year)
-pub struct HeaderVersion(u32);
+pub struct HeaderVersion(u64);
 
 impl HeaderVersion {
-    pub const fn __new(v: u32) -> Self {
+    pub const fn __new(v: u64) -> Self {
         Self(v)
     }
     pub const fn little_endian_u64(&self) -> [u8; 8] {
-        (self.0 as u64).to_le_bytes()
+        self.0.to_le_bytes()
     }
 }
 

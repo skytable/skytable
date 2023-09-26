@@ -370,7 +370,7 @@ impl StaticRecordUVRaw {
         if u64::from_le(slf.data.read_qword(Self::OFFSET_P0)) != SR0_MAGIC {
             return None;
         }
-        let sr1_header_version = HeaderVersion::__new(slf.data.read_dword(Self::OFFSET_P1));
+        let sr1_header_version = HeaderVersion::__new(slf.data.read_dword(Self::OFFSET_P1) as _);
         let sr2_ptr = HostPointerWidth::try_new_with_val(slf.data.read_byte(Self::OFFSET_P2))?; // p2: ptr width
         let sr3_endian = HostEndian::try_new_with_val(slf.data.read_byte(Self::OFFSET_P3))?; // p3: endian
         let sr4_arch = HostArch::try_new_with_val(slf.data.read_byte(Self::OFFSET_P4))?; // p4: arch
@@ -393,7 +393,7 @@ impl StaticRecordUVRaw {
         self.data.read_qword(Self::OFFSET_P0)
     }
     pub const fn read_p1_header_version(&self) -> HeaderVersion {
-        HeaderVersion::__new(self.data.read_dword(Self::OFFSET_P1))
+        HeaderVersion::__new(self.data.read_dword(Self::OFFSET_P1) as _)
     }
     pub const fn read_p2_ptr_width(&self) -> HostPointerWidth {
         HostPointerWidth::new_with_val(self.data.read_byte(Self::OFFSET_P2))

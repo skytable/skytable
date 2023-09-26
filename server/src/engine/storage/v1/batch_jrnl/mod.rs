@@ -45,24 +45,16 @@ pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};
 pub use {persist::DataBatchPersistDriver, restore::DataBatchRestoreDriver};
 
 use {
-    super::{header_meta, rw::SDSSFileIO, RawFSInterface, SDSSResult},
+    super::{rw::SDSSFileIO, spec, RawFSInterface, SDSSResult},
     crate::engine::core::model::Model,
 };
-
-const LOG_SPECIFIER_VERSION: header_meta::FileSpecifierVersion =
-    header_meta::FileSpecifierVersion::__new(0);
 
 /// Re-initialize an existing batch journal and read all its data into model
 pub fn reinit<Fs: RawFSInterface>(
     name: &str,
     model: &Model,
 ) -> SDSSResult<DataBatchPersistDriver<Fs>> {
-    let (_header, f) = SDSSFileIO::<Fs>::open::<false>(
-        name,
-        header_meta::FileScope::Journal,
-        header_meta::FileSpecifier::TableDataBatch,
-        LOG_SPECIFIER_VERSION,
-    )?;
+    let (f, _header) = SDSSFileIO::<Fs>::open::<spec::DataBatchJournalV1>(name)?;
     // restore
     let mut restore_driver = DataBatchRestoreDriver::new(f)?;
     restore_driver.read_data_batch_into_model(model)?;
@@ -70,20 +62,7 @@ pub fn reinit<Fs: RawFSInterface>(
 }
 
 /// Create a new batch journal
-pub fn create<Fs: RawFSInterface>(
-    path: &str,
-    host_setting_version: u32,
-    host_run_mode: header_meta::HostRunMode,
-    host_startup_counter: u64,
-) -> SDSSResult<DataBatchPersistDriver<Fs>> {
-    let f = SDSSFileIO::<Fs>::create(
-        path,
-        header_meta::FileScope::Journal,
-        header_meta::FileSpecifier::TableDataBatch,
-        LOG_SPECIFIER_VERSION,
-        host_setting_version,
-        host_run_mode,
-        host_startup_counter,
-    )?;
+pub fn create<Fs: RawFSInterface>(path: &str) -> SDSSResult<DataBatchPersistDriver<Fs>> {
+    let f = SDSSFileIO::<Fs>::create::<spec::DataBatchJournalV1>(path)?;
     DataBatchPersistDriver::new(f, true)
 }

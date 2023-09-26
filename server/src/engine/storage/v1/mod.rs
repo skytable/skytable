@@ -24,13 +24,12 @@
  *
 */
 
-// raw
-mod header_impl;
 // impls
 mod batch_jrnl;
 mod journal;
 pub(in crate::engine) mod loader;
 mod rw;
+pub mod spec;
 mod sysdb;
 // hl
 pub mod inf;
@@ -48,9 +47,6 @@ pub use {
 };
 pub mod data_batch {
     pub use super::batch_jrnl::{create, reinit, DataBatchPersistDriver, DataBatchRestoreDriver};
-}
-pub mod header_meta {
-    pub use super::header_impl::{FileScope, FileSpecifier, FileSpecifierVersion, HostRunMode};
 }
 
 use crate::{engine::txn::TransactionError, util::os::SysIOError as IoError};
@@ -138,6 +134,7 @@ pub enum SDSSError {
     /// An error with more context
     // TODO(@ohsayan): avoid the box; we'll clean this up soon
     Extra(Box<Self>, String),
+    HeaderDecodeVersionMismatch,
 }
 
 impl From<TransactionError> for SDSSError {

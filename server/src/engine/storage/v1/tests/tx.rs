@@ -27,9 +27,8 @@
 use {
     crate::{
         engine::storage::v1::{
-            header_impl::{FileSpecifier, FileSpecifierVersion, HostRunMode},
             journal::{self, JournalAdapter, JournalWriter},
-            SDSSError, SDSSResult,
+            spec, SDSSError, SDSSResult,
         },
         util,
     },
@@ -134,16 +133,8 @@ fn open_log(
     log_name: &str,
     db: &Database,
 ) -> SDSSResult<JournalWriter<super::VirtualFS, DatabaseTxnAdapter>> {
-    journal::open_journal::<DatabaseTxnAdapter, super::VirtualFS>(
-        log_name,
-        FileSpecifier::TestTransactionLog,
-        FileSpecifierVersion::__new(0),
-        0,
-        HostRunMode::Prod,
-        1,
-        &db,
-    )
-    .map(|v| v.into_inner())
+    journal::open_journal::<DatabaseTxnAdapter, super::VirtualFS, spec::TestFile>(log_name, db)
+        .map(|v| v.into_inner())
 }
 
 #[test]

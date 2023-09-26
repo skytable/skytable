@@ -176,14 +176,10 @@ impl GlobalInstanceLike for Global {
             space_name, space_uuid, model_name, model_uuid,
         ))?;
         // init driver
-        let driver = storage::v1::data_batch::create(
-            &storage::v1::loader::SEInitState::model_path(
+        let driver =
+            storage::v1::data_batch::create(&storage::v1::loader::SEInitState::model_path(
                 space_name, space_uuid, model_name, model_uuid,
-            ),
-            self.sys_cfg().host_data().settings_version(),
-            self.sys_cfg().host_data().run_mode(),
-            self.sys_cfg().host_data().startup_counter(),
-        )?;
+            ))?;
         self.get_state().mdl_driver.write().insert(
             ModelUniqueID::new(space_name, model_name, model_uuid),
             drivers::FractalModelDriver::init(driver),

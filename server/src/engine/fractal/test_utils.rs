@@ -35,7 +35,6 @@ use {
         storage::{
             self,
             v1::{
-                header_meta::HostRunMode,
                 memfs::{NullFS, VirtualFS},
                 RawFSInterface,
             },
@@ -78,7 +77,7 @@ impl<Fs: RawFSInterface> TestGlobal<Fs> {
 impl<Fs: RawFSInterface> TestGlobal<Fs> {
     pub fn new_with_driver_id(log_name: &str) -> Self {
         let gns = GlobalNS::empty();
-        let driver = storage::v1::loader::open_gns_driver(log_name, 0, HostRunMode::Dev, 0, &gns)
+        let driver = storage::v1::loader::open_gns_driver(log_name, &gns)
             .unwrap()
             .into_inner();
         Self::new(gns, 0, GNSTransactionDriverAnyFS::new(driver))
@@ -131,14 +130,10 @@ impl<Fs: RawFSInterface> GlobalInstanceLike for TestGlobal<Fs> {
         Fs::fs_create_dir(&storage::v1::loader::SEInitState::model_dir(
             space_name, space_uuid, model_name, model_uuid,
         ))?;
-        let driver = storage::v1::data_batch::create(
-            &storage::v1::loader::SEInitState::model_path(
+        let driver =
+            storage::v1::data_batch::create(&storage::v1::loader::SEInitState::model_path(
                 space_name, space_uuid, model_name, model_uuid,
-            ),
-            self.sys_cfg().host_data().settings_version(),
-            self.sys_cfg().host_data().run_mode(),
-            self.sys_cfg().host_data().startup_counter(),
-        )?;
+            ))?;
         self.model_drivers.write().insert(
             ModelUniqueID::new(space_name, model_name, model_uuid),
             FractalModelDriver::init(driver),

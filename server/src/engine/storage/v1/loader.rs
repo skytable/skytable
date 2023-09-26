@@ -29,10 +29,10 @@ use crate::engine::{
     data::uuid::Uuid,
     fractal::{FractalModelDriver, ModelDrivers, ModelUniqueID},
     storage::v1::{
-        batch_jrnl, header_meta,
+        batch_jrnl,
         journal::{self, JournalWriter},
         rw::{FileOpen, RawFSInterface},
-        LocalFS, SDSSErrorContext, SDSSResult,
+        spec, LocalFS, SDSSErrorContext, SDSSResult,
     },
     txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
@@ -61,19 +61,9 @@ impl SEInitState {
             gns,
         }
     }
-    pub fn try_init(
-        host_setting_version: u32,
-        host_run_mode: header_meta::HostRunMode,
-        host_startup_counter: u64,
-    ) -> SDSSResult<Self> {
+    pub fn try_init() -> SDSSResult<Self> {
         let gns = GlobalNS::empty();
-        let gns_txn_driver = open_gns_driver(
-            GNS_FILE_PATH,
-            host_setting_version,
-            host_run_mode,
-            host_startup_counter,
-            &gns,
-        )?;
+        let gns_txn_driver = open_gns_driver(GNS_FILE_PATH, &gns)?;
         let new_instance = gns_txn_driver.is_created();
         let mut model_drivers = ModelDrivers::new();
         if !new_instance {
@@ -131,18 +121,7 @@ impl SEInitState {
 
 pub fn open_gns_driver<Fs: RawFSInterface>(
     path: &str,
-    host_setting_version: u32,
-    host_run_mode: header_meta::HostRunMode,
-    host_startup_counter: u64,
     gns: &GlobalNS,
 ) -> SDSSResult<FileOpen<JournalWriter<Fs, GNSAdapter>>> {
-    journal::open_journal::<GNSAdapter, Fs>(
-        path,
-        header_meta::FileSpecifier::GNSTxnLog,
-        header_meta::FileSpecifierVersion::__new(GNS_LOG_VERSION_CODE),
-        host_setting_version,
-        host_run_mode,
-        host_startup_counter,
-        gns,
-    )
+    journal::open_journal::<GNSAdapter, Fs, spec::GNSTransactionLogV1>(path, gns)
 }
