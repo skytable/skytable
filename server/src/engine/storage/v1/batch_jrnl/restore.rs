@@ -27,7 +27,7 @@
 use {
     super::{
         MARKER_ACTUAL_BATCH_EVENT, MARKER_BATCH_CLOSED, MARKER_BATCH_REOPEN, MARKER_END_OF_BATCH,
-        MARKER_RECOVERY_EVENT, RECOVERY_THRESHOLD,
+        MARKER_RECOVERY_EVENT,
     },
     crate::engine::{
         core::{
@@ -414,12 +414,8 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         )))
     }
     fn attempt_recover_data_batch(&mut self) -> SDSSResult<()> {
-        let mut max_threshold = RECOVERY_THRESHOLD;
-        while max_threshold != 0 && self.f.has_left(1) {
-            if let Ok(MARKER_RECOVERY_EVENT) = self.f.inner_file().read_byte() {
-                return Ok(());
-            }
-            max_threshold -= 1;
+        if let Ok(MARKER_RECOVERY_EVENT) = self.f.inner_file().read_byte() {
+            return Ok(());
         }
         Err(SDSSError::DataBatchRestoreCorruptedBatch)
     }

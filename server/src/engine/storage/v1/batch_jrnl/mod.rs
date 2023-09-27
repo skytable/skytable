@@ -37,8 +37,6 @@ const MARKER_END_OF_BATCH: u8 = 0xFD;
 const MARKER_ACTUAL_BATCH_EVENT: u8 = 0xFE;
 /// recovery batch event marker
 const MARKER_RECOVERY_EVENT: u8 = 0xFF;
-/// recovery threshold
-const RECOVERY_THRESHOLD: usize = 10;
 
 #[cfg(test)]
 pub(super) use restore::{DecodedBatchEvent, DecodedBatchEventKind, NormalBatch};

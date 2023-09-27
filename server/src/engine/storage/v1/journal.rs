@@ -46,12 +46,11 @@ use {
         rw::{FileOpen, RawFSInterface, SDSSFileIO},
         spec, SDSSError, SDSSResult,
     },
-    crate::util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy, Threshold},
+    crate::util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
     std::marker::PhantomData,
 };
 
 const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-const RECOVERY_BLOCK_AUTO_THRESHOLD: usize = 5;
 
 pub fn open_journal<TA: JournalAdapter, Fs: RawFSInterface, F: spec::FileSpec>(
     log_file_name: &str,
@@ -284,26 +283,22 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
     /// once we **sucessfully** finish processing a normal (aka server event origin) event and not a non-normal branch)
     fn try_recover_journal_strategy_simple_reverse(&mut self) -> SDSSResult<()> {
         debug_assert!(TA::RECOVERY_PLUGIN, "recovery plugin not enabled");
-        let mut threshold = Threshold::<RECOVERY_BLOCK_AUTO_THRESHOLD>::new();
-        while threshold.not_busted() & self.has_remaining_bytes(JournalEntryMetadata::SIZE as _) {
-            self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
-            let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
-            if self.log_file.read_to_buffer(&mut entry_buf).is_err() {
-                threshold.bust_one();
-                continue;
-            }
-            let entry = JournalEntryMetadata::decode(entry_buf);
-            let okay = (entry.event_id == self.evid as u128)
-                & (entry.event_crc == 0)
-                & (entry.event_payload_len == 0)
-                & (entry.event_source_md == EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL);
-            if okay {
-                return Ok(());
-            }
-            self._incr_evid();
-            threshold.bust_one();
+        self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
+        let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
+        if self.log_file.read_to_buffer(&mut entry_buf).is_err() {
+            return Err(SDSSError::JournalCorrupted);
         }
-        Err(SDSSError::JournalCorrupted)
+        let entry = JournalEntryMetadata::decode(entry_buf);
+        let okay = (entry.event_id == self.evid as u128)
+            & (entry.event_crc == 0)
+            & (entry.event_payload_len == 0)
+            & (entry.event_source_md == EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL);
+        self._incr_evid();
+        if okay {
+            return Ok(());
+        } else {
+            Err(SDSSError::JournalCorrupted)
+        }
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
     pub fn scroll(file: SDSSFileIO<Fs>, gs: &TA::GlobalState) -> SDSSResult<(SDSSFileIO<Fs>, u64)> {
@@ -396,15 +391,11 @@ impl<Fs: RawFSInterface, TA: JournalAdapter> JournalWriter<Fs, TA> {
 
 impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
     pub fn appendrec_journal_reverse_entry(&mut self) -> SDSSResult<()> {
-        let mut threshold = Threshold::<RECOVERY_BLOCK_AUTO_THRESHOLD>::new();
         let mut entry =
             JournalEntryMetadata::new(0, EventSourceMarker::RECOVERY_REVERSE_LAST_JOURNAL, 0, 0);
-        while threshold.not_busted() {
-            entry.event_id = self._incr_id() as u128;
-            if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
-                return Ok(());
-            }
-            threshold.bust_one();
+        entry.event_id = self._incr_id() as u128;
+        if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
+            return Ok(());
         }
         Err(SDSSError::JournalWRecoveryStageOneFailCritical)
     }
