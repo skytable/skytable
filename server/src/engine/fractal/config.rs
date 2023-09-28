@@ -35,53 +35,53 @@ use {
 #[derive(Debug)]
 /// The global system configuration
 pub struct SysConfig {
-    auth_data: Option<RwLock<SysAuth>>,
+    auth_data: RwLock<SysAuth>,
     host_data: SysHostData,
 }
 
 impl PartialEq for SysConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.host_data == other.host_data
-            && match (self.auth_data.as_ref(), other.auth_data.as_ref()) {
-                (None, None) => true,
-                (Some(a), Some(b)) => &*a.read() == &*b.read(),
-                _ => false,
-            }
+        self.host_data == other.host_data && self.auth_data.read().eq(&other.auth_data.read())
     }
 }
 
 impl SysConfig {
     /// Initialize a new system config
-    pub fn new(auth_data: Option<RwLock<SysAuth>>, host_data: SysHostData) -> Self {
+    pub fn new(auth_data: RwLock<SysAuth>, host_data: SysHostData) -> Self {
         Self {
             auth_data,
             host_data,
         }
     }
-    pub fn new_auth(new_auth: Option<ConfigAuth>, host_data: SysHostData) -> Self {
-        match new_auth {
-            Some(ConfigAuth { root_key, .. }) => Self::new(
-                Some(RwLock::new(SysAuth::new(
-                    rcrypt::hash(root_key, rcrypt::DEFAULT_COST)
-                        .unwrap()
-                        .into_boxed_slice(),
-                    Default::default(),
-                ))),
-                host_data,
-            ),
-            None => Self::new(None, host_data),
-        }
+    pub fn new_full(new_auth: ConfigAuth, host_data: SysHostData) -> Self {
+        Self::new(
+            RwLock::new(SysAuth::new(
+                rcrypt::hash(new_auth.root_key, rcrypt::DEFAULT_COST)
+                    .unwrap()
+                    .into_boxed_slice(),
+                Default::default(),
+            )),
+            host_data,
+        )
+    }
+    pub fn new_auth(new_auth: ConfigAuth) -> Self {
+        Self::new_full(new_auth, SysHostData::new(0, 0))
     }
     #[cfg(test)]
-    /// A test-mode default setting with auth disabled
+    /// A test-mode default setting with the root password set to `password12345678`
     pub(super) fn test_default() -> Self {
         Self {
-            auth_data: None,
+            auth_data: RwLock::new(SysAuth::new(
+                rcrypt::hash("password12345678", rcrypt::DEFAULT_COST)
+                    .unwrap()
+                    .into_boxed_slice(),
+                Default::default(),
+            )),
             host_data: SysHostData::new(0, 0),
         }
     }
     /// Returns a handle to the authentication data
-    pub fn auth_data(&self) -> &Option<RwLock<SysAuth>> {
+    pub fn auth_data(&self) -> &RwLock<SysAuth> {
         &self.auth_data
     }
     /// Returns a reference to host data

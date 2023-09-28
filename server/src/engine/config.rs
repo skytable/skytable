@@ -83,7 +83,7 @@ pub struct Configuration {
     endpoints: ConfigEndpoint,
     mode: ConfigMode,
     system: ConfigSystem,
-    auth: Option<ConfigAuth>,
+    auth: ConfigAuth,
 }
 
 impl Configuration {
@@ -91,7 +91,7 @@ impl Configuration {
         endpoints: ConfigEndpoint,
         mode: ConfigMode,
         system: ConfigSystem,
-        auth: Option<ConfigAuth>,
+        auth: ConfigAuth,
     ) -> Self {
         Self {
             endpoints,
@@ -103,7 +103,7 @@ impl Configuration {
     const DEFAULT_HOST: &'static str = "127.0.0.1";
     const DEFAULT_PORT_TCP: u16 = 2003;
     const DEFAULT_RELIABILITY_SVC_PING: u64 = 5 * 60;
-    pub fn default_dev_mode() -> Self {
+    pub fn default_dev_mode(auth: DecodedAuth) -> Self {
         Self {
             endpoints: ConfigEndpoint::Insecure(ConfigEndpointTcp {
                 host: Self::DEFAULT_HOST.to_owned(),
@@ -113,7 +113,7 @@ impl Configuration {
             system: ConfigSystem {
                 reliability_system_window: Self::DEFAULT_RELIABILITY_SVC_PING,
             },
-            auth: None,
+            auth: ConfigAuth::new(auth.plugin, auth.root_pass),
         }
     }
 }
@@ -634,7 +634,7 @@ Flags:
 
 Options:
   --tlscert <path>            Specify the path to the TLS certificate.
-  --tlskey <path>             Define the path to the TLS private key.
+  --tlskey <path>             Specify the path to the TLS private key.
   --endpoint <definition>     Designate an endpoint. Format: protocol@host:port.
                               This option can be repeated to define multiple endpoints.
   --service-window <seconds>  Establish the time window for the background service in seconds.
@@ -644,12 +644,12 @@ Options:
   --auth-root-password <pass> Set the root password
 
 Examples:
-  skyd --mode=dev --endpoint tcp@127.0.0.1:2003
+  skyd --mode=dev --auth-root-password \"password12345678\"
 
 Notes:
-  - When no mode is provided, `--mode=dev` is defaulted to
-  - When either of `-h` or `-v` is provided, all other options and flags are ignored.
-  - When `--auth-plugin` is provided, you must provide a value for `--auth-root-password`
+  - If no `--mode` is provided, we default to `dev`
+  - You must provide `--auth-root-password` to set the default root password
+  - To use TLS, you must provide both `--tlscert` and `--tlskey`
 
 For further assistance, refer to the official documentation here: https://docs.skytable.org
 ";
@@ -787,8 +787,8 @@ pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
 /// Apply the configuration changes to the given mutable config
 fn apply_config_changes<CS: ConfigurationSource>(
     args: &mut ParsedRawArgs,
-    config: &mut ModifyGuard<DecodedConfiguration>,
-) -> ConfigResult<()> {
+) -> ConfigResult<ModifyGuard<DecodedConfiguration>> {
+    let mut config = ModifyGuard::new(DecodedConfiguration::default());
     enum DecodeKind {
         Simple {
             key: &'static str,
@@ -822,21 +822,21 @@ fn apply_config_changes<CS: ConfigurationSource>(
         match task {
             DecodeKind::Simple { key, f } => match args.get(key) {
                 Some(values_for_arg) => {
-                    (f)(&values_for_arg, config)?;
+                    (f)(&values_for_arg, &mut config)?;
                     args.remove(key);
                 }
                 None => {}
             },
-            DecodeKind::Complex { f } => (f)(args, config)?,
+            DecodeKind::Complex { f } => (f)(args, &mut config)?,
         }
     }
-    if args.is_empty() {
-        Ok(())
-    } else {
+    if !args.is_empty() {
         Err(ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("found unknown arguments".into()),
         ))
+    } else {
+        Ok(config)
     }
 }
 
@@ -896,7 +896,7 @@ macro_rules! if_some {
 }
 
 macro_rules! err_if {
-    ($(if $cond:expr => $error:expr),*) => {
+    ($(if $cond:expr => $error:expr),* $(,)?) => {
         $(if $cond { return Err($error) })*
     }
 }
@@ -909,8 +909,17 @@ fn validate_configuration<CS: ConfigurationSource>(
         auth,
     }: DecodedConfiguration,
 ) -> ConfigResult<Configuration> {
+    let Some(auth) = auth else {
+        return Err(ConfigError::with_src(
+            CS::SOURCE,
+            ConfigErrorKind::ErrorString(format!(
+                "root account must be configured with {}",
+                CS::KEY_AUTH_ROOT_PASSWORD
+            )),
+        ));
+    };
     // initialize our default configuration
-    let mut config = Configuration::default_dev_mode();
+    let mut config = Configuration::default_dev_mode(auth);
     // mutate
     if_some!(
         system => |system: DecodedSystemConfig| {
@@ -946,26 +955,16 @@ fn validate_configuration<CS: ConfigurationSource>(
             })
         }
     );
-    if let Some(auth) = auth {
-        if auth.root_pass.len() < ROOT_PASSWORD_MIN_LEN {
-            return Err(ConfigError::with_src(
-                CS::SOURCE,
-                ConfigErrorKind::ErrorString(format!(
-                    "root password must have atleast {ROOT_PASSWORD_MIN_LEN} characters"
-                )),
-            ));
-        }
-        config.auth = Some(ConfigAuth {
-            plugin: auth.plugin,
-            root_key: auth.root_pass,
-        });
-    }
     // now check a few things
     err_if!(
         if config.system.reliability_system_window == 0 => ConfigError::with_src(
             CS::SOURCE,
-            ConfigErrorKind::ErrorString("invalid value for service window. must be nonzero".into())
-        )
+            ConfigErrorKind::ErrorString("invalid value for service window. must be nonzero".into()),
+        ),
+        if config.auth.root_key.len() <= ROOT_PASSWORD_MIN_LEN => ConfigError::with_src(
+            CS::SOURCE,
+            ConfigErrorKind::ErrorString("the root password must have at least 16 characters".into()),
+        ),
     );
     Ok(config)
 }
@@ -999,10 +998,9 @@ impl ConfigReturn {
 pub(super) fn apply_and_validate<CS: ConfigurationSource>(
     mut args: ParsedRawArgs,
 ) -> ConfigResult<ConfigReturn> {
-    let mut modcfg = ModifyGuard::new(DecodedConfiguration::default());
-    apply_config_changes::<CS>(&mut args, &mut modcfg)?;
-    if ModifyGuard::modified(&modcfg) {
-        validate_configuration::<CS>(modcfg.val).map(ConfigReturn::Config)
+    let cfg = apply_config_changes::<CS>(&mut args)?;
+    if ModifyGuard::modified(&cfg) {
+        validate_configuration::<CS>(cfg.val).map(ConfigReturn::Config)
     } else {
         Ok(ConfigReturn::Default)
     }

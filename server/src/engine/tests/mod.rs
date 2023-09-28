@@ -120,7 +120,7 @@ mod cfg {
                         ),
                         ConfigMode::Dev,
                         ConfigSystem::new(600),
-                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
+                        ConfigAuth::new(AuthDriver::Pwd, "password12345678".into())
                     )
                 )
             },
@@ -231,7 +231,7 @@ mod cfg {
                         ),
                         ConfigMode::Dev,
                         ConfigSystem::new(600),
-                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
+                        ConfigAuth::new(AuthDriver::Pwd, "password12345678".into())
                     )
                 )
             },
@@ -277,7 +277,7 @@ endpoints:
                         ),
                         ConfigMode::Dev,
                         ConfigSystem::new(600),
-                        Some(ConfigAuth::new(AuthDriver::Pwd, "password12345678".into()))
+                        ConfigAuth::new(AuthDriver::Pwd, "password12345678".into())
                     )
                 )
             },

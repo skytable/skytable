@@ -54,10 +54,6 @@ pub enum SystemStoreInitState {
     Unchanged,
     /// The system store was present, root settings were updated
     UpdatedRoot,
-    /// the system store was present, auth was previously enabled but is now disabled
-    UpdatedAuthDisabled,
-    /// the system store was present, auth was previously disabled but is now enabled
-    UpdatedAuthEnabled,
 }
 
 #[derive(Debug, PartialEq)]
@@ -77,56 +73,55 @@ impl SystemStoreInit {
 ///
 /// - If it doesn't exist, create it
 /// - If it exists, look for config changes and sync them
-pub fn open_system_database<Fs: RawFSInterface>(
-    auth: Option<ConfigAuth>,
-) -> SDSSResult<SystemStoreInit> {
+pub fn open_system_database<Fs: RawFSInterface>(auth: ConfigAuth) -> SDSSResult<SystemStoreInit> {
     open_or_reinit_system_database::<Fs>(auth, SYSDB_PATH, SYSDB_COW_PATH)
 }
 
 /// Open or re-initialize the system database
 pub fn open_or_reinit_system_database<Fs: RawFSInterface>(
-    auth: Option<ConfigAuth>,
+    auth: ConfigAuth,
     sysdb_path: &str,
     sysdb_path_cow: &str,
 ) -> SDSSResult<SystemStoreInit> {
-    let (ex, _) = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_path)? {
-        FileOpen::Created(new_sysdb) => {
-            let syscfg = SysConfig::new_auth(auth, SysHostData::new(0, 0));
-            sync_system_database_to(&syscfg, new_sysdb)?;
-            return Ok(SystemStoreInit::new(syscfg, SystemStoreInitState::Created));
+    let sysdb_file = match SDSSFileIO::<Fs>::open_or_create_perm_rw::<spec::SysDBV1>(sysdb_path)? {
+        FileOpen::Created(new) => {
+            // init new syscfg
+            let new_syscfg = SysConfig::new_auth(auth);
+            sync_system_database_to(&new_syscfg, new)?;
+            return Ok(SystemStoreInit::new(
+                new_syscfg,
+                SystemStoreInitState::Created,
+            ));
         }
-        FileOpen::Existing(ex) => ex,
+        FileOpen::Existing((ex, _)) => ex,
     };
-    let last_syscfg = decode_system_database(ex)?;
-    let mut state = SystemStoreInitState::Unchanged;
-    match (last_syscfg.auth_data(), &auth) {
-        (Some(last_auth), Some(new_auth)) => {
-            let last_auth = last_auth.read();
-            if last_auth.verify_user("root", &new_auth.root_key).is_err() {
-                // the root password was changed
-                state = SystemStoreInitState::UpdatedRoot;
-            }
-        }
-        (Some(_), None) => {
-            state = SystemStoreInitState::UpdatedAuthDisabled;
-        }
-        (None, Some(_)) => {
-            state = SystemStoreInitState::UpdatedAuthEnabled;
-        }
-        (None, None) => {}
+    let prev_sysdb = decode_system_database(sysdb_file)?;
+    let state;
+    // see if settings have changed
+    if prev_sysdb
+        .auth_data()
+        .read()
+        .verify_user("root", &auth.root_key)
+        .is_ok()
+    {
+        state = SystemStoreInitState::Unchanged;
+    } else {
+        state = SystemStoreInitState::UpdatedRoot;
     }
-    let new_syscfg = SysConfig::new_auth(
+    // create new config
+    let new_syscfg = SysConfig::new_full(
         auth,
         SysHostData::new(
-            last_syscfg.host_data().startup_counter() + 1,
-            last_syscfg.host_data().settings_version()
+            prev_sysdb.host_data().startup_counter() + 1,
+            prev_sysdb.host_data().settings_version()
                 + !matches!(state, SystemStoreInitState::Unchanged) as u32,
         ),
     );
     // sync
-    let cow_file = SDSSFileIO::<Fs>::create::<spec::SysDBV1>(sysdb_path_cow)?;
-    sync_system_database_to(&new_syscfg, cow_file)?;
-    // replace
+    sync_system_database_to(
+        &new_syscfg,
+        SDSSFileIO::<Fs>::create::<spec::SysDBV1>(sysdb_path_cow)?,
+    )?;
     Fs::fs_rename_file(sysdb_path_cow, sysdb_path)?;
     Ok(SystemStoreInit::new(new_syscfg, state))
 }
@@ -145,38 +140,29 @@ pub fn sync_system_database_to<Fs: RawFSInterface>(
         SYS_KEY_AUTH => DictGeneric::new(),
     );
     let auth_key = map.get_mut(SYS_KEY_AUTH).unwrap();
-    match cfg.auth_data() {
-        None => {
-            *auth_key = DictEntryGeneric::Map(
-                into_dict!(SYS_KEY_AUTH_ROOT => Datacell::null(), SYS_KEY_AUTH_USERS => Datacell::null()),
-            )
-        }
-        Some(auth) => {
-            let auth = auth.read();
-            let auth_key = auth_key.as_dict_mut().unwrap();
-            auth_key.insert(
-                SYS_KEY_AUTH_ROOT.into(),
-                DictEntryGeneric::Data(Datacell::new_bin(auth.root_key().into())),
-            );
-            auth_key.insert(
-                SYS_KEY_AUTH_USERS.into(),
-                DictEntryGeneric::Map(
-                    // username -> [..settings]
-                    auth.users()
-                        .iter()
-                        .map(|(username, user)| {
-                            (
-                                username.to_owned(),
-                                DictEntryGeneric::Data(Datacell::new_list(vec![
-                                    Datacell::new_bin(user.key().into()),
-                                ])),
-                            )
-                        })
-                        .collect(),
-                ),
-            );
-        }
-    }
+    let auth = cfg.auth_data().read();
+    let auth_key = auth_key.as_dict_mut().unwrap();
+    auth_key.insert(
+        SYS_KEY_AUTH_ROOT.into(),
+        DictEntryGeneric::Data(Datacell::new_bin(auth.root_key().into())),
+    );
+    auth_key.insert(
+        SYS_KEY_AUTH_USERS.into(),
+        DictEntryGeneric::Map(
+            // username -> [..settings]
+            auth.users()
+                .iter()
+                .map(|(username, user)| {
+                    (
+                        username.to_owned(),
+                        DictEntryGeneric::Data(Datacell::new_list(vec![Datacell::new_bin(
+                            user.key().into(),
+                        )])),
+                    )
+                })
+                .collect(),
+        ),
+    );
     // write
     let buf = super::inf::enc::enc_dict_full::<super::inf::map::GenericDictSpec>(&map);
     f.fsynced_write(&buf)
@@ -195,59 +181,49 @@ fn rkey<T>(
 
 /// Decode the system database
 pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSSResult<SysConfig> {
-    let rem = f.load_remaining_into_buffer()?;
-    let mut store = inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&rem)?;
-    // find auth and sys stores
-    let mut auth_store = rkey(&mut store, SYS_KEY_AUTH, DictEntryGeneric::into_dict)?;
-    let mut sys_store = rkey(&mut store, SYS_KEY_SYS, DictEntryGeneric::into_dict)?;
-    // get our auth
-    let auth_root = rkey(&mut auth_store, SYS_KEY_AUTH_ROOT, |dict| {
-        let data = dict.into_data()?;
-        match data.kind() {
-            _ if data.is_null() => Some(None),
-            _ => data.into_bin().map(Some),
+    let mut sysdb_data =
+        inf::dec::dec_dict_full::<inf::map::GenericDictSpec>(&f.load_remaining_into_buffer()?)?;
+    // get our auth and sys stores
+    let mut auth_store = rkey(&mut sysdb_data, SYS_KEY_AUTH, DictEntryGeneric::into_dict)?;
+    let mut sys_store = rkey(&mut sysdb_data, SYS_KEY_SYS, DictEntryGeneric::into_dict)?;
+    // load auth store
+    let root_key = rkey(&mut auth_store, SYS_KEY_AUTH_ROOT, |d| {
+        d.into_data()?.into_bin()
+    })?;
+    let users = rkey(
+        &mut auth_store,
+        SYS_KEY_AUTH_USERS,
+        DictEntryGeneric::into_dict,
+    )?;
+    // load users
+    let mut loaded_users = HashMap::new();
+    for (username, userdata) in users {
+        let mut userdata = userdata
+            .into_data()
+            .and_then(Datacell::into_list)
+            .ok_or(SDSSError::SysDBCorrupted)?;
+        if userdata.len() != 1 {
+            return Err(SDSSError::SysDBCorrupted);
         }
+        let user_password = userdata
+            .remove(0)
+            .into_bin()
+            .ok_or(SDSSError::SysDBCorrupted)?;
+        loaded_users.insert(username, SysAuthUser::new(user_password.into_boxed_slice()));
+    }
+    let sys_auth = SysAuth::new(root_key.into_boxed_slice(), loaded_users);
+    // load sys data
+    let sc = rkey(&mut sys_store, SYS_KEY_SYS_STARTUP_COUNTER, |d| {
+        d.into_data()?.into_uint()
     })?;
-    let auth_users = rkey(&mut auth_store, SYS_KEY_AUTH_USERS, |dict| match dict {
-        DictEntryGeneric::Data(dc) if dc.is_null() => Some(None),
-        DictEntryGeneric::Map(m) => Some(Some(m)),
-        _ => None,
+    let sv = rkey(&mut sys_store, SYS_KEY_SYS_SETTINGS_VERSION, |d| {
+        d.into_data()?.into_uint()
     })?;
-    let sys_auth = match (auth_root, auth_users) {
-        (Some(root_pass), Some(users)) => {
-            let mut usermap = HashMap::new();
-            for (user_name, user) in users {
-                let mut user_data = user
-                    .into_data()
-                    .and_then(|d| d.into_list())
-                    .ok_or(SDSSError::SysDBCorrupted)?;
-                if user_data.len() != 1 {
-                    return Err(SDSSError::SysDBCorrupted);
-                }
-                let password = user_data
-                    .remove(0)
-                    .into_bin()
-                    .ok_or(SDSSError::SysDBCorrupted)?;
-                usermap.insert(user_name, SysAuthUser::new(password.into_boxed_slice()));
-            }
-            Some(RwLock::new(SysAuth::new(
-                root_pass.into_boxed_slice(),
-                usermap,
-            )))
-        }
-        (None, None) => None,
-        _ => return Err(SDSSError::SysDBCorrupted),
-    };
-    // get our sys
-    let sv = rkey(&mut sys_store, SYS_KEY_SYS_SETTINGS_VERSION, |de| {
-        de.into_data()?.into_uint()
-    })?;
-    let sc = rkey(&mut sys_store, SYS_KEY_SYS_STARTUP_COUNTER, |de| {
-        de.into_data()?.into_uint()
-    })?;
-    if !(sys_store.is_empty() & auth_store.is_empty() & store.is_empty()) {
-        // the stores have more keys than we expected. something is wrong here
+    if !(sysdb_data.is_empty() & auth_store.is_empty() & sys_store.is_empty()) {
         return Err(SDSSError::SysDBCorrupted);
     }
-    Ok(SysConfig::new(sys_auth, SysHostData::new(sc, sv as u32)))
+    Ok(SysConfig::new(
+        RwLock::new(sys_auth),
+        SysHostData::new(sc, sv as u32),
+    ))
 }
