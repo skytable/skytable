@@ -44,7 +44,7 @@
 use {
     super::{
         rw::{FileOpen, RawFSInterface, SDSSFileIO},
-        spec, SDSSError, SDSSResult,
+        spec, SDSSErrorKind, SDSSResult,
     },
     crate::util::{compiler, copy_a_into_b, copy_slice_to_array as memcpy},
     std::marker::PhantomData,
@@ -222,7 +222,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         }
         match entry_metadata
             .event_source_marker()
-            .ok_or(SDSSError::JournalLogEntryCorrupted)?
+            .ok_or(SDSSErrorKind::JournalLogEntryCorrupted)?
         {
             EventSourceMarker::ServerStandard => {}
             EventSourceMarker::DriverClosed => {
@@ -237,7 +237,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
             EventSourceMarker::DriverReopened | EventSourceMarker::RecoveryReverseLastJournal => {
                 // these two are only taken in close and error paths (respectively) so we shouldn't see them here; this is bad
                 // two special directives in the middle of nowhere? incredible
-                return Err(SDSSError::JournalCorrupted);
+                return Err(SDSSErrorKind::JournalCorrupted.into());
             }
         }
         // read payload
@@ -270,10 +270,10 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
                 Ok(())
             } else {
                 // FIXME(@ohsayan): tolerate loss in this directive too
-                Err(SDSSError::JournalCorrupted)
+                Err(SDSSErrorKind::JournalCorrupted.into())
             }
         } else {
-            Err(SDSSError::JournalCorrupted)
+            Err(SDSSErrorKind::JournalCorrupted.into())
         }
     }
     #[cold] // FIXME(@ohsayan): how bad can prod systems be? (clue: pretty bad, so look for possible changes)
@@ -286,7 +286,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         self.__record_read_bytes(JournalEntryMetadata::SIZE); // FIXME(@ohsayan): don't assume read length?
         let mut entry_buf = [0u8; JournalEntryMetadata::SIZE];
         if self.log_file.read_to_buffer(&mut entry_buf).is_err() {
-            return Err(SDSSError::JournalCorrupted);
+            return Err(SDSSErrorKind::JournalCorrupted.into());
         }
         let entry = JournalEntryMetadata::decode(entry_buf);
         let okay = (entry.event_id == self.evid as u128)
@@ -297,7 +297,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         if okay {
             return Ok(());
         } else {
-            Err(SDSSError::JournalCorrupted)
+            Err(SDSSErrorKind::JournalCorrupted.into())
         }
     }
     /// Read and apply all events in the given log file to the global state, returning the (open file, last event ID)
@@ -309,7 +309,7 @@ impl<TA: JournalAdapter, Fs: RawFSInterface> JournalReader<TA, Fs> {
         if slf.closed {
             Ok((slf.log_file, slf.evid))
         } else {
-            Err(SDSSError::JournalCorrupted)
+            Err(SDSSErrorKind::JournalCorrupted.into())
         }
     }
 }
@@ -397,7 +397,7 @@ impl<Fs: RawFSInterface, TA> JournalWriter<Fs, TA> {
         if self.log_file.fsynced_write(&entry.encoded()).is_ok() {
             return Ok(());
         }
-        Err(SDSSError::JournalWRecoveryStageOneFailCritical)
+        Err(SDSSErrorKind::JournalWRecoveryStageOneFailCritical.into())
     }
     pub fn append_journal_reopen(&mut self) -> SDSSResult<()> {
         let id = self._incr_id() as u128;

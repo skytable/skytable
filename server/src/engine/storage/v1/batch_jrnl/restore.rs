@@ -42,7 +42,7 @@ use {
         storage::v1::{
             inf::PersistTypeDscr,
             rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedReader},
-            SDSSError, SDSSResult,
+            SDSSErrorKind, SDSSResult,
         },
     },
     crossbeam_epoch::pin,
@@ -187,7 +187,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
             }
         }
         // nope, this is a corrupted file
-        Err(SDSSError::DataBatchRestoreCorruptedBatchFile)
+        Err(SDSSErrorKind::DataBatchRestoreCorruptedBatchFile.into())
     }
     fn handle_reopen_is_actual_close(&mut self) -> SDSSResult<bool> {
         if self.f.is_eof() {
@@ -200,7 +200,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                 Ok(false)
             } else {
                 // that's just a nice bug
-                Err(SDSSError::DataBatchRestoreCorruptedBatchFile)
+                Err(SDSSErrorKind::DataBatchRestoreCorruptedBatchFile.into())
             }
         }
     }
@@ -303,7 +303,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
             // we must read the batch termination signature
             let b = self.f.read_byte()?;
             if b != MARKER_END_OF_BATCH {
-                return Err(SDSSError::DataBatchRestoreCorruptedBatch);
+                return Err(SDSSErrorKind::DataBatchRestoreCorruptedBatch.into());
             }
         }
         // read actual commit
@@ -320,7 +320,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         if actual_checksum == u64::from_le_bytes(hardcoded_checksum) {
             Ok(actual_commit)
         } else {
-            Err(SDSSError::DataBatchRestoreCorruptedBatch)
+            Err(SDSSErrorKind::DataBatchRestoreCorruptedBatch.into())
         }
     }
     fn read_batch(&mut self) -> SDSSResult<Batch> {
@@ -340,7 +340,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
             }
             _ => {
                 // this is the only singular byte that is expected to be intact. If this isn't intact either, I'm sorry
-                return Err(SDSSError::DataBatchRestoreCorruptedBatch);
+                return Err(SDSSErrorKind::DataBatchRestoreCorruptedBatch.into());
             }
         }
         // decode batch start block
@@ -384,7 +384,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                                 this_col_cnt -= 1;
                             }
                             if this_col_cnt != 0 {
-                                return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                                return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
                             }
                             if change_type == 1 {
                                 this_batch.push(DecodedBatchEvent::new(
@@ -402,7 +402,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                             processed_in_this_batch += 1;
                         }
                         _ => {
-                            return Err(SDSSError::DataBatchRestoreCorruptedBatch);
+                            return Err(SDSSErrorKind::DataBatchRestoreCorruptedBatch.into());
                         }
                     }
                 }
@@ -417,7 +417,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
         if let Ok(MARKER_RECOVERY_EVENT) = self.f.inner_file().read_byte() {
             return Ok(());
         }
-        Err(SDSSError::DataBatchRestoreCorruptedBatch)
+        Err(SDSSErrorKind::DataBatchRestoreCorruptedBatch.into())
     }
     fn read_start_batch_block(&mut self) -> SDSSResult<BatchStartBlock> {
         let pk_tag = self.f.read_byte()?;
@@ -467,7 +467,7 @@ impl BatchStartBlock {
 impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn decode_primary_key(&mut self, pk_type: u8) -> SDSSResult<PrimaryIndexKey> {
         let Some(pk_type) = TagUnique::try_from_raw(pk_type) else {
-            return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+            return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
         };
         Ok(match pk_type {
             TagUnique::SignedInt | TagUnique::UnsignedInt => {
@@ -483,7 +483,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                 self.f.read_into_buffer(&mut data)?;
                 if pk_type == TagUnique::Str {
                     if core::str::from_utf8(&data).is_err() {
-                        return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                        return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
                     }
                 }
                 unsafe {
@@ -501,14 +501,14 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
     fn decode_cell(&mut self) -> SDSSResult<Datacell> {
         let cell_type_sig = self.f.read_byte()?;
         let Some(cell_type) = PersistTypeDscr::try_from_raw(cell_type_sig) else {
-            return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+            return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
         };
         Ok(match cell_type {
             PersistTypeDscr::Null => Datacell::null(),
             PersistTypeDscr::Bool => {
                 let bool = self.f.read_byte()?;
                 if bool > 1 {
-                    return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                    return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
                 }
                 Datacell::new_bool(bool == 1)
             }
@@ -528,7 +528,7 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                     // UNSAFE(@ohsayan): +tagck
                     if cell_type == PersistTypeDscr::Str {
                         if core::str::from_utf8(&data).is_err() {
-                            return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                            return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
                         }
                         Datacell::new_str(String::from_utf8_unchecked(data).into_boxed_str())
                     } else {
@@ -543,13 +543,13 @@ impl<F: RawFSInterface> DataBatchRestoreDriver<F> {
                     list.push(self.decode_cell()?);
                 }
                 if len != list.len() as u64 {
-                    return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                    return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
                 }
                 Datacell::new_list(list)
             }
             PersistTypeDscr::Dict => {
                 // we don't support dicts just yet
-                return Err(SDSSError::DataBatchRestoreCorruptedEntry);
+                return Err(SDSSErrorKind::DataBatchRestoreCorruptedEntry.into());
             }
         })
     }

@@ -29,10 +29,7 @@ use {
         spec::{FileSpec, Header},
         SDSSResult,
     },
-    crate::{
-        engine::storage::{v1::SDSSError, SCrc},
-        util::os::SysIOError,
-    },
+    crate::{engine::storage::SCrc, util::os::SysIOError},
     std::{
         fs::{self, File},
         io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
@@ -348,9 +345,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
                 Err(e) => return Err(e),
             }
         } else {
-            Err(SDSSError::IoError(SysIOError::from(
-                std::io::ErrorKind::InvalidInput,
-            )))
+            Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into())
         }
     }
     pub fn read_byte(&mut self) -> SDSSResult<u8> {
@@ -373,9 +368,7 @@ impl<Fs: RawFSInterface> SDSSFileTrackedReader<Fs> {
     }
     pub fn read_block<const N: usize>(&mut self) -> SDSSResult<[u8; N]> {
         if !self.has_left(N as _) {
-            return Err(SDSSError::IoError(SysIOError::from(
-                std::io::ErrorKind::InvalidInput,
-            )));
+            return Err(SysIOError::from(std::io::ErrorKind::InvalidInput).into());
         }
         let mut buf = [0; N];
         self.read_into_buffer(&mut buf)?;

@@ -24,8 +24,20 @@
  *
 */
 
-use super::{storage::v1::SDSSError, txn::TransactionError};
+use {
+    super::{
+        storage::v1::{SDSSError, SDSSErrorKind},
+        txn::TransactionError,
+    },
+    crate::util::os::SysIOError,
+    std::fmt,
+};
+
 pub type QueryResult<T> = Result<T, Error>;
+// stack
+pub type CtxResult<T, E> = Result<T, CtxError<E>>;
+pub type RuntimeResult<T> = CtxResult<T, RuntimeErrorKind>;
+pub type RuntimeError = CtxError<RuntimeErrorKind>;
 
 /// an enumeration of 'flat' errors that the server actually responds to the client with, since we do not want to send specific information
 /// about anything (as that will be a security hole). The variants correspond with their actual response codes
@@ -100,5 +112,121 @@ direct_from! {
     Error[_] => {
         SDSSError as StorageSubsystemError,
         TransactionError as TransactionalError,
+    }
+}
+
+/*
+    contextual errors
+*/
+
+/// An error context
+pub enum CtxErrorDescription {
+    A(&'static str),
+    B(Box<str>),
+}
+
+impl CtxErrorDescription {
+    fn inner(&self) -> &str {
+        match self {
+            Self::A(a) => a,
+            Self::B(b) => &b,
+        }
+    }
+}
+
+impl PartialEq for CtxErrorDescription {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner() == other.inner()
+    }
+}
+
+impl fmt::Display for CtxErrorDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.inner())
+    }
+}
+
+impl fmt::Debug for CtxErrorDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.inner())
+    }
+}
+
+direct_from! {
+    CtxErrorDescription => {
+        &'static str as A,
+        String as B,
+        Box<str> as B,
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+/// A contextual error
+pub struct CtxError<E> {
+    kind: E,
+    ctx: Option<CtxErrorDescription>,
+}
+
+impl<E> CtxError<E> {
+    fn _new(kind: E, ctx: Option<CtxErrorDescription>) -> Self {
+        Self { kind, ctx }
+    }
+    pub fn new(kind: E) -> Self {
+        Self::_new(kind, None)
+    }
+    pub fn with_ctx(kind: E, ctx: impl Into<CtxErrorDescription>) -> Self {
+        Self::_new(kind, Some(ctx.into()))
+    }
+    pub fn add_ctx(self, ctx: impl Into<CtxErrorDescription>) -> Self {
+        Self::with_ctx(self.kind, ctx)
+    }
+    pub fn into_result<T>(self) -> CtxResult<T, E> {
+        Err(self)
+    }
+    pub fn result<T, F>(result: Result<T, F>) -> CtxResult<T, E>
+    where
+        E: From<F>,
+    {
+        result.map_err(|e| CtxError::new(e.into()))
+    }
+    pub fn result_ctx<T, F>(
+        result: Result<T, F>,
+        ctx: impl Into<CtxErrorDescription>,
+    ) -> CtxResult<T, E>
+    where
+        E: From<F>,
+    {
+        result.map_err(|e| CtxError::with_ctx(e.into(), ctx))
+    }
+}
+
+macro_rules! impl_from_hack {
+    ($($ty:ty),*) => {
+        $(impl<E> From<E> for CtxError<$ty> where E: Into<$ty> {fn from(e: E) -> Self { CtxError::new(e.into()) }})*
+    }
+}
+
+/*
+    Contextual error impls
+*/
+
+impl_from_hack!(RuntimeErrorKind, SDSSErrorKind);
+
+#[derive(Debug)]
+pub enum RuntimeErrorKind {
+    StorageSubsytem(SDSSError),
+    IoError(SysIOError),
+    OSSLErrorMulti(openssl::error::ErrorStack),
+    OSSLError(openssl::ssl::Error),
+}
+
+direct_from! {
+    RuntimeErrorKind => {
+        SDSSError as StorageSubsytem,
+        std::io::Error as IoError,
+        SysIOError as IoError,
+        openssl::error::ErrorStack as OSSLErrorMulti,
+        openssl::ssl::Error as OSSLError,
     }
 }

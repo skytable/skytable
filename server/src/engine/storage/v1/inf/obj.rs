@@ -39,7 +39,7 @@ use {
                 DictGeneric,
             },
             mem::{BufferedScanner, VInline},
-            storage::v1::{inf, SDSSError, SDSSResult},
+            storage::v1::{inf, SDSSErrorKind, SDSSResult},
         },
         util::EndianQW,
     },
@@ -119,7 +119,7 @@ impl<'a> PersistObject for LayerRef<'a> {
     fn obj_enc(_: &mut VecU8, _: Self::InputType) {}
     unsafe fn obj_dec(_: &mut BufferedScanner, md: Self::Metadata) -> SDSSResult<Self::OutputType> {
         if (md.type_selector > TagSelector::List.value_qword()) | (md.prop_set_arity != 0) {
-            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
         }
         Ok(Layer::new_empty_props(
             TagSelector::from_raw(md.type_selector as u8).into_full(),
@@ -202,7 +202,7 @@ impl<'a> PersistObject for FieldRef<'a> {
         if (field.layers().len() as u64 == md.layer_c) & (md.null <= 1) & (md.prop_c == 0) & fin {
             Ok(field)
         } else {
-            Err(SDSSError::InternalDecodeStructureCorrupted)
+            Err(SDSSErrorKind::InternalDecodeStructureCorrupted.into())
         }
     }
 }
@@ -281,7 +281,7 @@ impl<'a> PersistObject for ModelLayoutRef<'a> {
                 super::map::MapIndexSizeMD(md.field_c as usize),
             )?;
         let ptag = if md.p_key_tag > TagSelector::MAX as u64 {
-            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
         } else {
             TagSelector::from_raw(md.p_key_tag as u8)
         };

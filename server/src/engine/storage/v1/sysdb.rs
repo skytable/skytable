@@ -25,7 +25,7 @@
 */
 
 use {
-    super::{rw::FileOpen, SDSSError},
+    super::{rw::FileOpen, SDSSErrorKind},
     crate::engine::{
         config::ConfigAuth,
         data::{cell::Datacell, DictEntryGeneric, DictGeneric},
@@ -175,7 +175,7 @@ fn rkey<T>(
 ) -> SDSSResult<T> {
     match d.remove(key).map(transform) {
         Some(Some(k)) => Ok(k),
-        _ => Err(SDSSError::SysDBCorrupted),
+        _ => Err(SDSSErrorKind::SysDBCorrupted.into()),
     }
 }
 
@@ -201,14 +201,14 @@ pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSS
         let mut userdata = userdata
             .into_data()
             .and_then(Datacell::into_list)
-            .ok_or(SDSSError::SysDBCorrupted)?;
+            .ok_or(SDSSErrorKind::SysDBCorrupted)?;
         if userdata.len() != 1 {
-            return Err(SDSSError::SysDBCorrupted);
+            return Err(SDSSErrorKind::SysDBCorrupted.into());
         }
         let user_password = userdata
             .remove(0)
             .into_bin()
-            .ok_or(SDSSError::SysDBCorrupted)?;
+            .ok_or(SDSSErrorKind::SysDBCorrupted)?;
         loaded_users.insert(username, SysAuthUser::new(user_password.into_boxed_slice()));
     }
     let sys_auth = SysAuth::new(root_key.into_boxed_slice(), loaded_users);
@@ -220,7 +220,7 @@ pub fn decode_system_database<Fs: RawFSInterface>(mut f: SDSSFileIO<Fs>) -> SDSS
         d.into_data()?.into_uint()
     })?;
     if !(sysdb_data.is_empty() & auth_store.is_empty() & sys_store.is_empty()) {
-        return Err(SDSSError::SysDBCorrupted);
+        return Err(SDSSErrorKind::SysDBCorrupted.into());
     }
     Ok(SysConfig::new(
         RwLock::new(sys_auth),

@@ -40,7 +40,7 @@ use {
             },
             idx::{IndexBaseSpec, IndexSTSeqCns, STIndex, STIndexSeq},
             mem::BufferedScanner,
-            storage::v1::{inf, SDSSError, SDSSResult},
+            storage::v1::{inf, SDSSError, SDSSErrorKind, SDSSResult},
         },
         util::{copy_slice_to_array as memcpy, EndianQW},
     },
@@ -92,11 +92,12 @@ where
         while M::pretest_entry_metadata(scanner) & (dict.st_len() != dict_size) {
             let md = unsafe {
                 // UNSAFE(@ohsayan): +pretest
-                M::entry_md_dec(scanner)
-                    .ok_or(SDSSError::InternalDecodeStructureCorruptedPayload)?
+                M::entry_md_dec(scanner).ok_or::<SDSSError>(
+                    SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into(),
+                )?
             };
             if !M::pretest_entry_data(scanner, &md) {
-                return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+                return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
             }
             let key;
             let val;
@@ -107,7 +108,11 @@ where
                             key = _k;
                             val = _v;
                         }
-                        None => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
+                        None => {
+                            return Err(
+                                SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into()
+                            )
+                        }
                     }
                 } else {
                     let _k = M::dec_key(scanner, &md);
@@ -117,18 +122,22 @@ where
                             key = _k;
                             val = _v;
                         }
-                        _ => return Err(SDSSError::InternalDecodeStructureCorruptedPayload),
+                        _ => {
+                            return Err(
+                                SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into()
+                            )
+                        }
                     }
                 }
             }
             if !dict.st_insert(key, val) {
-                return Err(SDSSError::InternalDecodeStructureIllegalData);
+                return Err(SDSSErrorKind::InternalDecodeStructureIllegalData.into());
             }
         }
         if dict.st_len() == dict_size {
             Ok(dict)
         } else {
-            Err(SDSSError::InternalDecodeStructureIllegalData)
+            Err(SDSSErrorKind::InternalDecodeStructureIllegalData.into())
         }
     }
 }

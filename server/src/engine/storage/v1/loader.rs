@@ -32,7 +32,7 @@ use crate::engine::{
         batch_jrnl,
         journal::{self, JournalWriter},
         rw::{FileOpen, RawFSInterface},
-        spec, LocalFS, SDSSErrorContext, SDSSResult,
+        spec, LocalFS, SDSSResult,
     },
     txn::gns::{GNSAdapter, GNSTransactionDriverAnyFS},
 };
@@ -73,14 +73,11 @@ impl SEInitState {
                 for (model_name, model) in space.models().read().iter() {
                     let path =
                         Self::model_path(space_name, space_uuid, model_name, model.get_uuid());
-                    let persist_driver = match batch_jrnl::reinit(&path, model) {
-                        Ok(j) => j,
-                        Err(e) => {
-                            return Err(e.with_extra(format!(
-                                "failed to restore model data from journal in `{path}`"
-                            )))
-                        }
-                    };
+                    let persist_driver = batch_jrnl::reinit(&path, model).map_err(|e| {
+                        e.add_ctx(format!(
+                            "failed to restore model data from journal in `{path}`"
+                        ))
+                    })?;
                     let _ = model_drivers.insert(
                         ModelUniqueID::new(space_name, model_name, model.get_uuid()),
                         FractalModelDriver::init(persist_driver),

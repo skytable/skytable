@@ -32,7 +32,7 @@ mod tests;
 use {
     self::handshake::{CHandshake, HandshakeResult, HandshakeState},
     super::{IoResult, QLoopReturn, Socket},
-    crate::engine::mem::BufferedScanner,
+    crate::engine::{fractal::Global, mem::BufferedScanner},
     bytes::{Buf, BytesMut},
     tokio::io::{AsyncReadExt, BufWriter},
 };
@@ -40,6 +40,7 @@ use {
 pub async fn query_loop<S: Socket>(
     con: &mut BufWriter<S>,
     buf: &mut BytesMut,
+    _global: &Global,
 ) -> IoResult<QLoopReturn> {
     // handshake
     match do_handshake(con, buf).await? {
@@ -56,6 +57,7 @@ pub async fn query_loop<S: Socket>(
     }
 }
 
+#[inline(always)]
 fn see_if_connection_terminates(read_many: usize, buf: &[u8]) -> Option<QLoopReturn> {
     if read_many == 0 {
         // that's a connection termination

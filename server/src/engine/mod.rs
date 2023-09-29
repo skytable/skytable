@@ -43,3 +43,9 @@ mod txn;
 // test
 #[cfg(test)]
 mod tests;
+
+use error::RuntimeResult;
+
+pub fn load_all() -> RuntimeResult<fractal::Global> {
+    todo!()
+}

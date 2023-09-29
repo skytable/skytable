@@ -33,7 +33,6 @@ pub mod spec;
 mod sysdb;
 // hl
 pub mod inf;
-mod start_stop;
 // test
 pub mod memfs;
 #[cfg(test)]
@@ -49,49 +48,25 @@ pub mod data_batch {
     pub use super::batch_jrnl::{create, reinit, DataBatchPersistDriver, DataBatchRestoreDriver};
 }
 
-use crate::{engine::txn::TransactionError, util::os::SysIOError as IoError};
+use crate::{
+    engine::{
+        error::{CtxError, CtxResult},
+        txn::TransactionError,
+    },
+    util::os::SysIOError as IoError,
+};
 
-pub type SDSSResult<T> = Result<T, SDSSError>;
-
-pub trait SDSSErrorContext {
-    type ExtraData;
-    fn with_extra(self, extra: Self::ExtraData) -> SDSSError;
-}
-
-impl SDSSErrorContext for IoError {
-    type ExtraData = &'static str;
-    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
-        SDSSError::IoErrorExtra(self, extra)
-    }
-}
-
-impl SDSSErrorContext for std::io::Error {
-    type ExtraData = &'static str;
-    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
-        SDSSError::IoErrorExtra(self.into(), extra)
-    }
-}
-
-impl SDSSErrorContext for SDSSError {
-    type ExtraData = String;
-
-    fn with_extra(self, extra: Self::ExtraData) -> SDSSError {
-        SDSSError::Extra(Box::new(self), extra)
-    }
-}
+pub type SDSSResult<T> = CtxResult<T, SDSSErrorKind>;
+pub type SDSSError = CtxError<SDSSErrorKind>;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-pub enum SDSSError {
+pub enum SDSSErrorKind {
     // IO errors
     /// An IO err
     IoError(IoError),
-    /// An IO err with extra ctx
-    IoErrorExtra(IoError, &'static str),
-    /// A corrupted file
-    CorruptedFile(&'static str),
-    // process errors
     OtherError(&'static str),
+    CorruptedFile(&'static str),
     // header
     /// version mismatch
     HeaderDecodeVersionMismatch,
@@ -127,41 +102,18 @@ pub enum SDSSError {
     DataBatchCloseError,
     DataBatchRestoreCorruptedBatchFile,
     JournalRestoreTxnError,
-    /// An error with more context
-    // TODO(@ohsayan): avoid the box; we'll clean this up soon
-    Extra(Box<Self>, String),
     SysDBCorrupted,
 }
 
-impl From<TransactionError> for SDSSError {
+impl From<TransactionError> for SDSSErrorKind {
     fn from(_: TransactionError) -> Self {
         Self::JournalRestoreTxnError
     }
 }
 
-impl SDSSError {
-    pub const fn corrupted_file(fname: &'static str) -> Self {
-        Self::CorruptedFile(fname)
-    }
-    pub const fn ioerror_extra(error: IoError, extra: &'static str) -> Self {
-        Self::IoErrorExtra(error, extra)
-    }
-    pub fn with_ioerror_extra(self, extra: &'static str) -> Self {
-        match self {
-            Self::IoError(ioe) => Self::IoErrorExtra(ioe, extra),
-            x => x,
-        }
-    }
-}
-
-impl From<IoError> for SDSSError {
-    fn from(e: IoError) -> Self {
-        Self::IoError(e)
-    }
-}
-
-impl From<std::io::Error> for SDSSError {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e.into())
+direct_from! {
+    SDSSErrorKind => {
+        std::io::Error as IoError,
+        IoError as IoError,
     }
 }

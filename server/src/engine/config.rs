@@ -147,14 +147,21 @@ pub struct ConfigEndpointTls {
     tcp: ConfigEndpointTcp,
     cert: String,
     private_key: String,
+    pkey_pass: String,
 }
 
 impl ConfigEndpointTls {
-    pub fn new(tcp: ConfigEndpointTcp, cert: String, private_key: String) -> Self {
+    pub fn new(
+        tcp: ConfigEndpointTcp,
+        cert: String,
+        private_key: String,
+        pkey_pass: String,
+    ) -> Self {
         Self {
             tcp,
             cert,
             private_key,
+            pkey_pass,
         }
     }
 }
@@ -264,6 +271,7 @@ pub struct DecodedEPSecureConfig {
     port: u16,
     cert: String,
     private_key: String,
+    pkey_passphrase: String,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -383,6 +391,7 @@ pub(super) trait ConfigurationSource {
     const KEY_AUTH_ROOT_PASSWORD: &'static str;
     const KEY_TLS_CERT: &'static str;
     const KEY_TLS_KEY: &'static str;
+    const KEY_TLS_PKEY_PASS: &'static str;
     const KEY_ENDPOINTS: &'static str;
     const KEY_RUN_MODE: &'static str;
     const KEY_SERVICE_WINDOW: &'static str;
@@ -463,16 +472,19 @@ fn parse_endpoint(source: ConfigSource, s: &str) -> ConfigResult<(ConnectionProt
 fn decode_tls_ep(
     cert_path: &str,
     key_path: &str,
+    pkey_pass: &str,
     host: &str,
     port: u16,
 ) -> ConfigResult<DecodedEPSecureConfig> {
     let tls_key = fs::read_to_string(key_path)?;
     let tls_cert = fs::read_to_string(cert_path)?;
+    let tls_priv_key_passphrase = fs::read_to_string(pkey_pass)?;
     Ok(DecodedEPSecureConfig {
         host: host.into(),
         port,
         cert: tls_cert,
         private_key: tls_key,
+        pkey_passphrase: tls_priv_key_passphrase,
     })
 }
 
@@ -484,22 +496,31 @@ fn arg_decode_tls_endpoint<CS: ConfigurationSource>(
 ) -> ConfigResult<DecodedEPSecureConfig> {
     let _cert = args.remove(CS::KEY_TLS_CERT);
     let _key = args.remove(CS::KEY_TLS_KEY);
-    let (tls_cert, tls_key) = match (_cert, _key) {
-        (Some(cert), Some(key)) => (cert, key),
+    let _passphrase = args.remove(CS::KEY_TLS_PKEY_PASS);
+    let (tls_cert, tls_key, tls_passphrase) = match (_cert, _key, _passphrase) {
+        (Some(cert), Some(key), Some(pass)) => (cert, key, pass),
         _ => {
             return Err(ConfigError::with_src(
                 ConfigSource::Cli,
                 ConfigErrorKind::ErrorString(format!(
-                    "must supply values for both `{}` and `{}` when using TLS",
+                    "must supply values for `{}`, `{}` and `{}` when using TLS",
                     CS::KEY_TLS_CERT,
-                    CS::KEY_TLS_KEY
+                    CS::KEY_TLS_KEY,
+                    CS::KEY_TLS_PKEY_PASS,
                 )),
             ));
         }
     };
     argck_duplicate_values::<CS>(&tls_cert, CS::KEY_TLS_CERT)?;
     argck_duplicate_values::<CS>(&tls_key, CS::KEY_TLS_KEY)?;
-    Ok(decode_tls_ep(&tls_cert[0], &tls_key[0], host, port)?)
+    argck_duplicate_values::<CS>(&tls_passphrase, CS::KEY_TLS_PKEY_PASS)?;
+    Ok(decode_tls_ep(
+        &tls_cert[0],
+        &tls_key[0],
+        &tls_passphrase[0],
+        host,
+        port,
+    )?)
 }
 
 /*
@@ -747,7 +768,7 @@ pub fn parse_cli_args<'a, T: 'a + AsRef<str>>(
 
 /// Parse environment variables
 pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
-    const KEYS: [&str; 7] = [
+    const KEYS: [&str; 8] = [
         CSEnvArgs::KEY_AUTH_DRIVER,
         CSEnvArgs::KEY_AUTH_ROOT_PASSWORD,
         CSEnvArgs::KEY_ENDPOINTS,
@@ -755,6 +776,7 @@ pub fn parse_env_args() -> ConfigResult<Option<ParsedRawArgs>> {
         CSEnvArgs::KEY_SERVICE_WINDOW,
         CSEnvArgs::KEY_TLS_CERT,
         CSEnvArgs::KEY_TLS_KEY,
+        CSEnvArgs::KEY_TLS_PKEY_PASS,
     ];
     let mut ret = HashMap::new();
     for key in KEYS {
@@ -853,6 +875,7 @@ impl ConfigurationSource for CSCommandLine {
     const KEY_AUTH_ROOT_PASSWORD: &'static str = "--auth-root-password";
     const KEY_TLS_CERT: &'static str = "--tlscert";
     const KEY_TLS_KEY: &'static str = "--tlskey";
+    const KEY_TLS_PKEY_PASS: &'static str = "--tls-passphrase";
     const KEY_ENDPOINTS: &'static str = "--endpoint";
     const KEY_RUN_MODE: &'static str = "--mode";
     const KEY_SERVICE_WINDOW: &'static str = "--service-window";
@@ -865,6 +888,7 @@ impl ConfigurationSource for CSEnvArgs {
     const KEY_AUTH_ROOT_PASSWORD: &'static str = "SKYDB_AUTH_ROOT_PASSWORD";
     const KEY_TLS_CERT: &'static str = "SKYDB_TLS_CERT";
     const KEY_TLS_KEY: &'static str = "SKYDB_TLS_KEY";
+    const KEY_TLS_PKEY_PASS: &'static str = "SKYDB_TLS_PRIVATE_KEY_PASSWORD";
     const KEY_ENDPOINTS: &'static str = "SKYDB_ENDPOINTS";
     const KEY_RUN_MODE: &'static str = "SKYDB_RUN_MODE";
     const KEY_SERVICE_WINDOW: &'static str = "SKYDB_SERVICE_WINDOW";
@@ -877,6 +901,7 @@ impl ConfigurationSource for CSConfigFile {
     const KEY_AUTH_ROOT_PASSWORD: &'static str = "auth.root_password";
     const KEY_TLS_CERT: &'static str = "endpoints.secure.cert";
     const KEY_TLS_KEY: &'static str = "endpoints.secure.key";
+    const KEY_TLS_PKEY_PASS: &'static str = "endpoints.secure.pkey_passphrase";
     const KEY_ENDPOINTS: &'static str = "endpoints";
     const KEY_RUN_MODE: &'static str = "system.mode";
     const KEY_SERVICE_WINDOW: &'static str = "system.service_window";
@@ -937,10 +962,11 @@ fn validate_configuration<CS: ConfigurationSource>(
                 let secure_ep = ConfigEndpointTls {
                     tcp: ConfigEndpointTcp {
                         host: secure.host,
-                        port: secure.port
+                        port: secure.port,
                     },
                     cert: secure.cert,
-                    private_key: secure.private_key
+                    private_key: secure.private_key,
+                    pkey_pass: secure.pkey_passphrase,
                 };
                 match &config.endpoints {
                     ConfigEndpoint::Insecure(is) => if has_insecure {
@@ -961,7 +987,7 @@ fn validate_configuration<CS: ConfigurationSource>(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("invalid value for service window. must be nonzero".into()),
         ),
-        if config.auth.root_key.len() <= ROOT_PASSWORD_MIN_LEN => ConfigError::with_src(
+        if config.auth.root_key.len() < ROOT_PASSWORD_MIN_LEN => ConfigError::with_src(
             CS::SOURCE,
             ConfigErrorKind::ErrorString("the root password must have at least 16 characters".into()),
         ),
@@ -1175,8 +1201,10 @@ fn check_config_file(
                 Some(secure_ep) => {
                     let cert = fs::read_to_string(&secure_ep.cert)?;
                     let private_key = fs::read_to_string(&secure_ep.private_key)?;
+                    let private_key_passphrase = fs::read_to_string(&secure_ep.pkey_passphrase)?;
                     secure_ep.cert = cert;
                     secure_ep.private_key = private_key;
+                    secure_ep.pkey_passphrase = private_key_passphrase;
                 }
                 None => {}
             },

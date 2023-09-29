@@ -174,8 +174,8 @@ impl FractalMgr {
         hp_receiver: UnboundedReceiver<Task<CriticalTask>>,
     ) -> FractalServiceHandles {
         let fractal_mgr = global.get_state().fractal_mgr();
-        let global_1 = global.__global_clone();
-        let global_2 = global.__global_clone();
+        let global_1 = global.clone();
+        let global_2 = global.clone();
         let hp_handle = tokio::spawn(async move {
             FractalMgr::hp_executor_svc(fractal_mgr, global_1, hp_receiver).await
         });

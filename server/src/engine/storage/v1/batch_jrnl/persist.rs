@@ -46,7 +46,7 @@ use {
             storage::v1::{
                 inf::PersistTypeDscr,
                 rw::{RawFSInterface, SDSSFileIO, SDSSFileTrackedWriter},
-                SDSSError, SDSSResult,
+                SDSSErrorKind, SDSSResult,
             },
         },
         util::EndianQW,
@@ -76,7 +76,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         {
             return Ok(());
         } else {
-            return Err(SDSSError::DataBatchCloseError);
+            return Err(SDSSErrorKind::DataBatchCloseError.into());
         }
     }
     pub fn write_new_batch(&mut self, model: &Model, observed_len: usize) -> SDSSResult<()> {
@@ -154,7 +154,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         schema_version: DeltaVersion,
         pk_tag: TagUnique,
         col_cnt: usize,
-    ) -> Result<(), SDSSError> {
+    ) -> SDSSResult<()> {
         self.f
             .unfsynced_write(&[MARKER_ACTUAL_BATCH_EVENT, pk_tag.value_u8()])?;
         let observed_len_bytes = observed_len.u64_bytes_le();
@@ -169,7 +169,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         &mut self,
         observed_len: usize,
         inconsistent_reads: usize,
-    ) -> Result<(), SDSSError> {
+    ) -> SDSSResult<()> {
         // [0xFD][actual_commit][checksum]
         self.f.unfsynced_write(&[MARKER_END_OF_BATCH])?;
         let actual_commit = (observed_len - inconsistent_reads).u64_bytes_le();
@@ -189,7 +189,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         if f.fsynced_write(&[MARKER_RECOVERY_EVENT]).is_ok() {
             return Ok(());
         }
-        Err(SDSSError::DataBatchRecoveryFailStageOne)
+        Err(SDSSErrorKind::DataBatchRecoveryFailStageOne.into())
     }
 }
 
@@ -288,7 +288,7 @@ impl<Fs: RawFSInterface> DataBatchPersistDriver<Fs> {
         Ok(())
     }
     /// Write the change type and txnid
-    fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> Result<(), SDSSError> {
+    fn write_batch_item_common_row_data(&mut self, delta: &DataDelta) -> SDSSResult<()> {
         let change_type = [delta.change().value_u8()];
         self.f.unfsynced_write(&change_type)?;
         let txn_id = delta.data_version().value_u64().to_le_bytes();

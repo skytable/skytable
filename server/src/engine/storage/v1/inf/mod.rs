@@ -42,7 +42,7 @@ use {
         },
         idx::{AsKey, AsValue},
         mem::BufferedScanner,
-        storage::v1::{SDSSError, SDSSResult},
+        storage::v1::{SDSSErrorKind, SDSSResult},
     },
     std::mem,
 };
@@ -157,14 +157,14 @@ pub trait PersistObject {
     /// Default routine to decode an object + its metadata (however, the metadata is used and not returned)
     fn default_full_dec(scanner: &mut BufferedScanner) -> SDSSResult<Self::OutputType> {
         if !Self::pretest_can_dec_metadata(scanner) {
-            return Err(SDSSError::InternalDecodeStructureCorrupted);
+            return Err(SDSSErrorKind::InternalDecodeStructureCorrupted.into());
         }
         let md = unsafe {
             // UNSAFE(@ohsayan): +pretest
             Self::meta_dec(scanner)?
         };
         if !Self::pretest_can_dec_object(scanner, &md) {
-            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
         }
         unsafe {
             // UNSAFE(@ohsayan): +obj pretest
@@ -290,11 +290,11 @@ pub mod dec {
     pub mod utils {
         use crate::engine::{
             mem::BufferedScanner,
-            storage::v1::{SDSSError, SDSSResult},
+            storage::v1::{SDSSErrorKind, SDSSResult},
         };
         pub unsafe fn decode_string(s: &mut BufferedScanner, len: usize) -> SDSSResult<String> {
             String::from_utf8(s.next_chunk_variable(len).to_owned())
-                .map_err(|_| SDSSError::InternalDecodeStructureCorruptedPayload)
+                .map_err(|_| SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into())
         }
     }
 }

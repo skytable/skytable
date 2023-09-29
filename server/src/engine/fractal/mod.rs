@@ -53,8 +53,6 @@ pub use {
 
 pub type ModelDrivers<Fs> = HashMap<ModelUniqueID, drivers::FractalModelDriver<Fs>>;
 
-static mut GLOBAL: MaybeUninit<GlobalState> = MaybeUninit::uninit();
-
 /*
     global state init
 */
@@ -89,10 +87,10 @@ pub unsafe fn enable_and_start_all(
         mgr::FractalMgr::new(hp_sender, lp_sender, model_cnt_on_boot),
         config,
     );
-    GLOBAL = MaybeUninit::new(global_state);
+    *Global::__gref_raw() = MaybeUninit::new(global_state);
     let token = Global::new();
     GlobalStateStart {
-        global: token.__global_clone(),
+        global: token.clone(),
         mgr_handles: mgr::FractalMgr::start_all(token, lp_recv, hp_recv),
     }
 }
@@ -187,7 +185,7 @@ impl GlobalInstanceLike for Global {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 /// A handle to the global state
 pub struct Global(());
 
@@ -195,18 +193,12 @@ impl Global {
     unsafe fn new() -> Self {
         Self(())
     }
-    fn __global_clone(&self) -> Self {
-        unsafe {
-            // UNSAFE(@ohsayan): safe to call within this module
-            Self::new()
-        }
-    }
     fn get_state(&self) -> &'static GlobalState {
-        unsafe { GLOBAL.assume_init_ref() }
+        unsafe { self.__gref() }
     }
     /// Returns a handle to the [`GlobalNS`]
     fn _namespace(&self) -> &'static GlobalNS {
-        &unsafe { GLOBAL.assume_init_ref() }.gns
+        &unsafe { self.__gref() }.gns
     }
     /// Post an urgent task
     fn _post_high_priority_task(&self, task: Task<CriticalTask>) {
@@ -226,6 +218,16 @@ impl Global {
             .fractal_mgr()
             .get_rt_stat()
             .per_mdl_delta_max_size()
+    }
+    unsafe fn __gref_raw() -> &'static mut MaybeUninit<GlobalState> {
+        static mut G: MaybeUninit<GlobalState> = MaybeUninit::uninit();
+        &mut G
+    }
+    unsafe fn __gref(&self) -> &'static GlobalState {
+        Self::__gref_raw().assume_init_ref()
+    }
+    pub unsafe fn unload_all(self) {
+        core::ptr::drop_in_place(Self::__gref_raw().as_mut_ptr())
     }
 }
 

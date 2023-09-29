@@ -40,7 +40,7 @@ use {
     crate::{
         engine::storage::{
             header::{HostArch, HostEndian, HostOS, HostPointerWidth},
-            v1::SDSSError,
+            v1::SDSSErrorKind,
             versions::{self, DriverVersion, HeaderVersion, ServerVersion},
         },
         util::os,
@@ -375,12 +375,12 @@ impl SDSSStaticHeaderV1Compact {
         } else {
             let version_okay = okay_header_version & okay_server_version & okay_driver_version;
             let md = ManuallyDrop::new([
-                SDSSError::HeaderDecodeCorruptedHeader,
-                SDSSError::HeaderDecodeVersionMismatch,
+                SDSSErrorKind::HeaderDecodeCorruptedHeader,
+                SDSSErrorKind::HeaderDecodeVersionMismatch,
             ]);
             Err(unsafe {
                 // UNSAFE(@ohsayan): while not needed, md for drop safety + correct index
-                md.as_ptr().add(!version_okay as usize).read()
+                md.as_ptr().add(!version_okay as usize).read().into()
             })
         }
     }
@@ -511,7 +511,7 @@ impl Header for SDSSStaticHeaderV1Compact {
         {
             Ok(())
         } else {
-            Err(SDSSError::HeaderDecodeDataMismatch)
+            Err(SDSSErrorKind::HeaderDecodeDataMismatch.into())
         }
     }
 }

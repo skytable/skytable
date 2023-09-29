@@ -90,8 +90,12 @@ mod cfg {
     #[test]
     fn parse_validate_cli_args() {
         with_files(
-            ["__cli_args_test_private.key", "__cli_args_test_cert.pem"],
-            |[pkey, cert]| {
+            [
+                "__cli_args_test_private.key",
+                "__cli_args_test_cert.pem",
+                "__cli_args_test_passphrase.key",
+            ],
+            |[pkey, cert, pass]| {
                 let payload = format!(
                     "skyd --mode=dev \
                 --endpoint tcp@127.0.0.1:2003 \
@@ -99,6 +103,7 @@ mod cfg {
                 --service-window=600 \
                 --tlskey {pkey} \
                 --tlscert {cert} \
+                --tls-passphrase {pass} \
                 --auth-plugin pwd \
                 --auth-root-password password12345678
                 "
@@ -114,6 +119,7 @@ mod cfg {
                             ConfigEndpointTcp::new("127.0.0.1".into(), 2003),
                             ConfigEndpointTls::new(
                                 ConfigEndpointTcp::new("127.0.0.2".into(), 2004),
+                                "".into(),
                                 "".into(),
                                 "".into()
                             )
@@ -205,13 +211,18 @@ mod cfg {
     #[test]
     fn parse_validate_env_args() {
         with_files(
-            ["__env_args_test_cert.pem", "__env_args_test_private.key"],
-            |[cert, key]| {
+            [
+                "__env_args_test_cert.pem",
+                "__env_args_test_private.key",
+                "__env_args_test_private.passphrase.txt",
+            ],
+            |[cert, key, pass]| {
                 let variables = [
                     format!("SKYDB_AUTH_PLUGIN=pwd"),
                     format!("SKYDB_AUTH_ROOT_PASSWORD=password12345678"),
                     format!("SKYDB_TLS_CERT={cert}"),
                     format!("SKYDB_TLS_KEY={key}"),
+                    format!("SKYDB_TLS_PRIVATE_KEY_PASSWORD={pass}"),
                     format!("SKYDB_ENDPOINTS=tcp@localhost:8080,tls@localhost:8081"),
                     format!("SKYDB_RUN_MODE=dev"),
                     format!("SKYDB_SERVICE_WINDOW=600"),
@@ -225,6 +236,7 @@ mod cfg {
                             ConfigEndpointTcp::new("localhost".into(), 8080),
                             ConfigEndpointTls::new(
                                 ConfigEndpointTcp::new("localhost".into(), 8081),
+                                "".into(),
                                 "".into(),
                                 "".into()
                             )
@@ -252,6 +264,7 @@ endpoints:
     port: 2004
     cert: ._test_sample_cert.pem
     private_key: ._test_sample_private.key
+    pkey_passphrase: ._test_sample_private.pass.txt
   insecure:
     host: 127.0.0.1
     port: 2003
@@ -259,7 +272,11 @@ endpoints:
     #[test]
     fn test_config_file() {
         with_files(
-            ["._test_sample_cert.pem", "._test_sample_private.key"],
+            [
+                "._test_sample_cert.pem",
+                "._test_sample_private.key",
+                "._test_sample_private.pass.txt",
+            ],
             |_| {
                 config::set_cli_src(vec!["skyd".into(), "--config=config.yml".into()]);
                 config::set_file_src(CONFIG_FILE);
@@ -271,6 +288,7 @@ endpoints:
                             ConfigEndpointTcp::new("127.0.0.1".into(), 2003),
                             ConfigEndpointTls::new(
                                 ConfigEndpointTcp::new("127.0.0.1".into(), 2004),
+                                "".into(),
                                 "".into(),
                                 "".into()
                             )

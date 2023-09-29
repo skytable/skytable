@@ -24,13 +24,247 @@
  *
 */
 
-use tokio::io::{AsyncRead, AsyncWrite};
 mod protocol;
+
+use {
+    crate::engine::{
+        error::{RuntimeError, RuntimeResult},
+        fractal::Global,
+    },
+    bytes::BytesMut,
+    openssl::{
+        pkey::PKey,
+        ssl::Ssl,
+        ssl::{SslAcceptor, SslMethod},
+        x509::X509,
+    },
+    std::{cell::Cell, net::SocketAddr, pin::Pin, time::Duration},
+    tokio::{
+        io::{AsyncRead, AsyncWrite, BufWriter},
+        net::{TcpListener, TcpStream},
+        sync::{broadcast, mpsc, Semaphore},
+    },
+    tokio_openssl::SslStream,
+};
 
 pub trait Socket: AsyncWrite + AsyncRead + Unpin {}
 pub type IoResult<T> = Result<T, std::io::Error>;
 
+const BUF_WRITE_CAP: usize = 16384;
+const BUF_READ_CAP: usize = 16384;
+const CLIMIT: usize = 50000;
+
+static CLIM: Semaphore = Semaphore::const_new(CLIMIT);
+
+/*
+    socket definitions
+*/
+
+impl Socket for TcpStream {}
+impl Socket for SslStream<TcpStream> {}
+
 pub enum QLoopReturn {
     Fin,
     ConnectionRst,
+}
+
+struct NetBackoff {
+    at: Cell<u8>,
+}
+
+impl NetBackoff {
+    const BACKOFF_MAX: u8 = 64;
+    fn new() -> Self {
+        Self { at: Cell::new(1) }
+    }
+    async fn spin(&self) {
+        let current = self.at.get();
+        self.at.set(current << 1);
+        tokio::time::sleep(Duration::from_secs(current as _)).await
+    }
+    fn should_disconnect(&self) -> bool {
+        self.at.get() >= Self::BACKOFF_MAX
+    }
+}
+
+/*
+    listener
+*/
+
+/// Connection handler for a remote connection
+pub struct ConnectionHandler<S> {
+    socket: BufWriter<S>,
+    buffer: BytesMut,
+    global: Global,
+    sig_terminate: broadcast::Receiver<()>,
+    _sig_inflight_complete: mpsc::Sender<()>,
+}
+
+impl<S: Socket> ConnectionHandler<S> {
+    pub fn new(
+        socket: S,
+        global: Global,
+        term_sig: broadcast::Receiver<()>,
+        _inflight_complete: mpsc::Sender<()>,
+    ) -> Self {
+        Self {
+            socket: BufWriter::with_capacity(BUF_WRITE_CAP, socket),
+            buffer: BytesMut::with_capacity(BUF_READ_CAP),
+            global,
+            sig_terminate: term_sig,
+            _sig_inflight_complete: _inflight_complete,
+        }
+    }
+    pub async fn run(&mut self) -> IoResult<()> {
+        let Self {
+            socket,
+            buffer,
+            global,
+            ..
+        } = self;
+        loop {
+            tokio::select! {
+                _ = protocol::query_loop(socket, buffer, global) => {},
+                _ = self.sig_terminate.recv() => {
+                    return Ok(())
+                }
+            }
+        }
+    }
+}
+
+/// A TCP listener bound to a socket
+pub struct Listener {
+    global: Global,
+    listener: TcpListener,
+    sig_shutdown: broadcast::Sender<()>,
+    sig_inflight: mpsc::Sender<()>,
+    sig_inflight_wait: mpsc::Receiver<()>,
+}
+
+impl Listener {
+    pub async fn new(
+        binaddr: &str,
+        global: Global,
+        sig_shutdown: broadcast::Sender<()>,
+    ) -> RuntimeResult<Self> {
+        let (sig_inflight, sig_inflight_wait) = mpsc::channel(1);
+        let listener = RuntimeError::result_ctx(
+            TcpListener::bind(binaddr).await,
+            format!("failed to bind to port `{binaddr}`"),
+        )?;
+        Ok(Self {
+            global,
+            listener,
+            sig_shutdown,
+            sig_inflight,
+            sig_inflight_wait,
+        })
+    }
+    pub async fn terminate(self) {
+        let Self {
+            mut sig_inflight_wait,
+            sig_inflight,
+            sig_shutdown,
+            ..
+        } = self;
+        drop(sig_shutdown);
+        drop(sig_inflight); // could be that we are the only ones holding this lol
+        let _ = sig_inflight_wait.recv().await; // wait
+    }
+    async fn accept(&mut self) -> IoResult<(TcpStream, SocketAddr)> {
+        let backoff = NetBackoff::new();
+        loop {
+            match self.listener.accept().await {
+                Ok(s) => return Ok(s),
+                Err(e) => {
+                    if backoff.should_disconnect() {
+                        // that's enough of your crappy connection dear sir
+                        return Err(e.into());
+                    }
+                }
+            }
+            backoff.spin().await;
+        }
+    }
+    async fn listen_tcp(&mut self) -> IoResult<()> {
+        loop {
+            // acquire a permit
+            let permit = CLIM.acquire().await.unwrap();
+            let (stream, _) = match self.accept().await {
+                Ok(s) => s,
+                Err(e) => {
+                    /*
+                        SECURITY: IGNORE THIS ERROR
+                    */
+                    log::error!("failed to accept connection on TCP socket: `{e}`");
+                    continue;
+                }
+            };
+            let mut handler = ConnectionHandler::new(
+                stream,
+                self.global,
+                self.sig_shutdown.subscribe(),
+                self.sig_inflight.clone(),
+            );
+            tokio::spawn(async move {
+                if let Err(e) = handler.run().await {
+                    log::error!("error handling client connection: `{e}`");
+                }
+            });
+            // return the permit
+            drop(permit);
+        }
+    }
+    async fn listen_tls(
+        self: &mut Self,
+        tls_cert: String,
+        tls_priv_key: String,
+        tls_key_password: String,
+    ) -> RuntimeResult<()> {
+        let build_acceptor = || {
+            let cert = X509::from_pem(tls_cert.as_bytes())?;
+            let priv_key = PKey::private_key_from_pem_passphrase(
+                tls_priv_key.as_bytes(),
+                tls_key_password.as_bytes(),
+            )?;
+            let mut builder = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls())?;
+            builder.set_certificate(&cert)?;
+            builder.set_private_key(&priv_key)?;
+            builder.check_private_key()?;
+            Ok::<_, openssl::error::ErrorStack>(builder.build())
+        };
+        let acceptor =
+            RuntimeError::result_ctx(build_acceptor(), "failed to initialize TLS socket")?;
+        loop {
+            let stream = async {
+                let (stream, _) = self.accept().await?;
+                let ssl = Ssl::new(acceptor.context())?;
+                let mut stream = SslStream::new(ssl, stream)?;
+                Pin::new(&mut stream).accept().await?;
+                RuntimeResult::Ok(stream)
+            };
+            let stream = match stream.await {
+                Ok(s) => s,
+                Err(e) => {
+                    /*
+                        SECURITY: Once again, ignore this error
+                    */
+                    log::error!("failed to accept connection on TLS socket: `{e:#?}`");
+                    continue;
+                }
+            };
+            let mut handler = ConnectionHandler::new(
+                stream,
+                self.global,
+                self.sig_shutdown.subscribe(),
+                self.sig_inflight.clone(),
+            );
+            tokio::spawn(async move {
+                if let Err(e) = handler.run().await {
+                    log::error!("error handling client TLS connection: `{e}`");
+                }
+            });
+        }
+    }
 }

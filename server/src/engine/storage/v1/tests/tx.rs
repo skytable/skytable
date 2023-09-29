@@ -28,7 +28,7 @@ use {
     crate::{
         engine::storage::v1::{
             journal::{self, JournalAdapter, JournalWriter},
-            spec, SDSSError, SDSSResult,
+            spec, SDSSError, SDSSErrorKind, SDSSResult,
         },
         util,
     },
@@ -115,7 +115,9 @@ impl JournalAdapter for DatabaseTxnAdapter {
 
     fn decode_and_update_state(payload: &[u8], gs: &Self::GlobalState) -> Result<(), TxError> {
         if payload.len() != 10 {
-            return Err(SDSSError::CorruptedFile("testtxn.log").into());
+            return Err(TxError::SDSS(
+                SDSSErrorKind::CorruptedFile("testtxn.log").into(),
+            ));
         }
         let opcode = payload[0];
         let index = u64::from_le_bytes(util::copy_slice_to_array(&payload[1..9]));
@@ -123,7 +125,11 @@ impl JournalAdapter for DatabaseTxnAdapter {
         match opcode {
             0 if index == 0 && new_value == 0 => gs.reset(),
             1 if index < 10 && index < isize::MAX as u64 => gs.set(index as usize, new_value),
-            _ => return Err(SDSSError::JournalLogEntryCorrupted.into()),
+            _ => {
+                return Err(TxError::SDSS(
+                    SDSSErrorKind::JournalLogEntryCorrupted.into(),
+                ))
+            }
         }
         Ok(())
     }

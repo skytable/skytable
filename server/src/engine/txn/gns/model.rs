@@ -39,7 +39,7 @@ use {
             ql::lex::Ident,
             storage::v1::{
                 inf::{self, map, obj, PersistObject},
-                SDSSError, SDSSResult,
+                SDSSErrorKind, SDSSResult,
             },
             txn::TransactionError,
         },
@@ -498,7 +498,7 @@ impl<'a> PersistObject for AlterModelRemoveTxn<'a> {
             removed_fields.push(inf::dec::utils::decode_string(s, len)?.into_boxed_str());
         }
         if removed_fields.len() as u64 != md.remove_field_c {
-            return Err(SDSSError::InternalDecodeStructureCorruptedPayload);
+            return Err(SDSSErrorKind::InternalDecodeStructureCorruptedPayload.into());
         }
         Ok(AlterModelRemoveTxnRestorePL {
             model_id,
